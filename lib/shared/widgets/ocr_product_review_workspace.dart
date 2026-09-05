@@ -5,11 +5,15 @@ import '../../modules/inventory/models/brand_models.dart';
 import '../../modules/inventory/models/category_models.dart';
 import '../../modules/inventory/models/inventory_models.dart';
 import '../../modules/inventory/models/product_duplicate_candidate.dart';
-import '../../modules/inventory/services/product_identity/product_identity_matcher.dart';
 import '../themes/vinabike_theme_roles.dart';
+import '../services/ocr_purchase_review_flow.dart';
 import 'vb_notice.dart';
+import 'vb_money_text.dart';
+import 'ocr_review_evidence.dart';
 import 'vb_searchable_select.dart';
 import 'vb_status_badge.dart';
+
+part 'ocr_product_review_steps.dart';
 
 enum OcrProductReviewStatus {
   needsSearch,
@@ -67,6 +71,7 @@ class OcrProductReviewLine {
     this.supplierCode,
     this.sourceQuantity,
     this.sourceLineTotal,
+    this.resolutionComponents = const [],
     this.imageUrl,
     this.imageBytes,
     this.candidates = const [],
@@ -93,6 +98,11 @@ class OcrProductReviewLine {
     this.searchSummary,
     this.aiCompositeProposal,
     this.canConfirmCompositeProposal = false,
+    this.hasRememberedSuggestion = false,
+    this.isPreparingNewProduct = false,
+    this.canConfirmNewProduct = true,
+    this.newProductUnitsController,
+    this.newProductInventoryQuantity,
     this.categoryValidationMessage,
     this.brandValidationMessage,
     this.brandWarning,
@@ -105,6 +115,17 @@ class OcrProductReviewLine {
     this.canChangeResolvedDecision = true,
     this.isSelected = true,
     this.inspectionOnly = false,
+    this.identityDecision = OcrProductIdentityDecision.undecided,
+    this.inventoryProduct,
+    this.inventoryOrigin,
+    this.purchaseQuantityController,
+    this.purchaseUnitCostController,
+    this.purchaseTotalController,
+    this.purchaseUnitsController,
+    this.purchaseAmountsConfirmed = false,
+    this.purchaseAmountsValid = false,
+    this.appliedComposition = false,
+    this.productAlreadyCreated = false,
   });
 
   final String id;
@@ -113,6 +134,12 @@ class OcrProductReviewLine {
   final String? supplierCode;
   final double? sourceQuantity;
   final double? sourceLineTotal;
+  final List<OcrReviewComponent> resolutionComponents;
+  final bool hasRememberedSuggestion;
+  final bool isPreparingNewProduct;
+  final bool canConfirmNewProduct;
+  final TextEditingController? newProductUnitsController;
+  final double? newProductInventoryQuantity;
   final String? imageUrl;
   final Uint8List? imageBytes;
   final OcrProductDraftControllers controllers;
@@ -178,6 +205,22 @@ class OcrProductReviewLine {
   final bool canChangeResolvedDecision;
   final bool isSelected;
   final bool inspectionOnly;
+  final OcrProductIdentityDecision identityDecision;
+  final Product? inventoryProduct;
+  final String? inventoryOrigin;
+  final TextEditingController? purchaseQuantityController;
+  final TextEditingController? purchaseUnitCostController;
+  final TextEditingController? purchaseTotalController;
+  final TextEditingController? purchaseUnitsController;
+  final bool purchaseAmountsConfirmed;
+  final bool purchaseAmountsValid;
+  final bool productAlreadyCreated;
+  final bool appliedComposition;
+
+  bool get identityConfirmed =>
+      identityDecision == OcrProductIdentityDecision.newProduct ||
+      (identityDecision == OcrProductIdentityDecision.existing &&
+          inventoryProduct?.id != null);
 
   bool get isResolved => switch (status) {
         OcrProductReviewStatus.linked ||
@@ -191,20 +234,6 @@ class OcrProductReviewLine {
       candidates.isEmpty ? null : candidates.first;
 }
 
-String _catalogReviewSummary(OcrProductReviewLine line) {
-  final parts = <String>[
-    if (line.viableCandidateCount > 0)
-      '${line.viableCandidateCount} '
-          '${line.viableCandidateCount == 1 ? 'viable' : 'viables'}',
-    if (line.discardedCandidateCount > 0)
-      '${line.discardedCandidateCount} '
-          '${line.discardedCandidateCount == 1 ? 'descartado' : 'descartados'}',
-    if (line.categoryConflictCount > 0)
-      '${line.categoryConflictCount} en otra categoría',
-  ];
-  return parts.join(' · ');
-}
-
 @immutable
 class OcrProductReviewCallbacks {
   const OcrProductReviewCallbacks({
@@ -212,6 +241,9 @@ class OcrProductReviewCallbacks {
     this.onSelectionChanged,
     this.onLinkCandidate,
     this.onConfirmNewProduct,
+    this.onPrepareNewProduct,
+    this.onConfirmRememberedResolution,
+    this.onNewProductUnitsChanged,
     this.onConfirmCompositeProposal,
     this.onRetryLine,
     this.onRetrySkuReservation,
@@ -231,12 +263,19 @@ class OcrProductReviewCallbacks {
     this.onCostIncludesVatChanged,
     this.onBack,
     this.onPrimary,
+    this.onOpenInventoryProduct,
+    this.onEditComposition,
+    this.onConfirmAmounts,
+    this.onAmountsChanged,
   });
 
   final ValueChanged<String>? onLineSelected;
   final void Function(String lineId, bool selected)? onSelectionChanged;
   final void Function(String lineId, Product product)? onLinkCandidate;
   final ValueChanged<String>? onConfirmNewProduct;
+  final ValueChanged<String>? onPrepareNewProduct;
+  final ValueChanged<String>? onConfirmRememberedResolution;
+  final void Function(String lineId, String value)? onNewProductUnitsChanged;
   final ValueChanged<String>? onConfirmCompositeProposal;
   final ValueChanged<String>? onRetryLine;
 
@@ -265,6 +304,10 @@ class OcrProductReviewCallbacks {
 
   final VoidCallback? onBack;
   final VoidCallback? onPrimary;
+  final ValueChanged<Product>? onOpenInventoryProduct;
+  final ValueChanged<String>? onEditComposition;
+  final ValueChanged<String>? onConfirmAmounts;
+  final void Function(String lineId, String field)? onAmountsChanged;
 }
 
 @immutable
@@ -324,23 +367,9 @@ class OcrProductReviewProgress {
   }
 }
 
-/// Full-page reconciliation of the products read from one purchase invoice.
-///
-/// **One source line is one table row, and every row is the same height.**
-/// The rejected composition broke both halves of that sentence: it opened a
-/// fixed 1680 px `DataTable` inside a permanent horizontal scroll, gave each
-/// row a 108 px floor that grew when its alternatives were expanded in place,
-/// and left the operator dragging sideways to reach the decision. What repeated
-/// business fields need is a stable header and vertical comparison — the
-/// invoice read top to bottom, in invoice order, with one decision per row.
-///
-/// Three deliberate compositions, not one shrinking table:
-///
-/// * **≥1180** the full table, every column visible without sideways scroll;
-/// * **900–1180** the same table with price and sale-use folded away, which the
-///   surface registry allows explicitly for tablet;
-/// * **<900** the same controllers and commands as divider-separated line
-///   editors — not cards, not an accordion, not a wizard.
+/// One ordered purchase batch with source, inventory outcome and explicit decisions.
+/// Product editing and composition details are disclosed only for the chosen row;
+/// controllers and commands remain owned by the uploader across every host.
 class OcrProductReviewWorkspace extends StatefulWidget {
   const OcrProductReviewWorkspace({
     super.key,
@@ -354,6 +383,8 @@ class OcrProductReviewWorkspace extends StatefulWidget {
     this.costIncludesVat = true,
     this.readOnly = false,
     this.readOnlyReason,
+    this.step = OcrPurchaseReviewStep.identify,
+    this.backLabel = 'Volver a la factura',
   });
 
   final List<OcrProductReviewLine> lines;
@@ -366,6 +397,8 @@ class OcrProductReviewWorkspace extends StatefulWidget {
   final bool costIncludesVat;
   final bool readOnly;
   final String? readOnlyReason;
+  final OcrPurchaseReviewStep step;
+  final String backLabel;
 
   /// Below this the shell itself is compact and every target is 48 px.
   static const double touchBreakpoint = 900;
@@ -381,12 +414,11 @@ class OcrProductReviewWorkspace extends StatefulWidget {
 class _OcrProductReviewWorkspaceState extends State<OcrProductReviewWorkspace> {
   static const double touchTarget = kMinInteractiveDimension;
   static const double hairline = 1;
-  static const double radius = 8;
   static const double space1 = 4;
   static const double space2 = 8;
   static const double space3 = 12;
   static const double space4 = 16;
-  static const double space5 = 20;
+  static const double space5 = 16;
   static const double space6 = 24;
 
   @override
@@ -410,6 +442,7 @@ class _OcrProductReviewWorkspaceState extends State<OcrProductReviewWorkspace> {
                   child: widget.lines.isEmpty
                       ? const _EmptyWorkspace()
                       : _ReviewBatch(
+                          step: widget.step,
                           lines: widget.lines,
                           selectedLineId: widget.selectedLineId,
                           callbacks: widget.callbacks,
@@ -420,6 +453,7 @@ class _OcrProductReviewWorkspaceState extends State<OcrProductReviewWorkspace> {
                 ),
                 _WorkspaceFooter(
                   primaryLabel: widget.primaryLabel,
+                  backLabel: widget.backLabel,
                   pricingPolicyLabel: widget.pricingPolicyLabel,
                   progress: OcrProductReviewProgress.fromLines(widget.lines),
                   primaryEnabled: widget.primaryEnabled && !widget.readOnly,
@@ -462,726 +496,9 @@ class _EmptyWorkspace extends StatelessWidget {
   }
 }
 
-// ───────────────────────────────────────────────────────────────────────────
-// Column model
-// ───────────────────────────────────────────────────────────────────────────
-
-/// One column of the reconciliation table.
-///
-/// Header and body read the same list, so a column can never be added to one
-/// and forgotten in the other — which is how a table stops lining up.
-class _ReviewColumn {
-  const _ReviewColumn({
-    required this.id,
-    required this.label,
-    this.fixed,
-    this.flex = 0,
-    this.min = 0,
-    this.numeric = false,
-  });
-
-  final String id;
-  final String label;
-
-  /// A column that never grows: an index, a code, a switch.
-  final double? fixed;
-
-  /// Share of the leftover width.
-  final int flex;
-
-  /// Never narrower than this, even while sharing.
-  final double min;
-
-  final bool numeric;
-}
-
-const double _columnGap = 10;
-
-/// How much of the invoice the table shows, densest last.
-///
-/// The tier is chosen from the width the table is actually given, not from the
-/// page width. Deriving it from the page was wrong by exactly the padding the
-/// page adds: at a 900 px viewport the table receives about 836 px while the
-/// reduced column set needs 938, so it overflowed on every host between 900
-/// and roughly 1001 px — the local window sizes this shop uses most.
-enum _TableTier { full, reduced, tight }
-
-List<_ReviewColumn> _columnsFor(_TableTier tier) {
-  final reduced = tier != _TableTier.full;
-  final tight = tier == _TableTier.tight;
-  return <_ReviewColumn>[
-    const _ReviewColumn(id: 'index', label: '#', fixed: 30),
-    _ReviewColumn(
-      id: 'source',
-      label: 'Producto de la factura',
-      flex: 30,
-      min: tight ? 132 : 180,
-    ),
-    _ReviewColumn(id: 'sku', label: 'SKU', fixed: tight ? 62 : 74),
-    _ReviewColumn(
-      id: 'name',
-      label: 'Nombre',
-      flex: 20,
-      min: tight ? 104 : 130,
-    ),
-    _ReviewColumn(
-      id: 'category',
-      label: 'Categoría',
-      flex: 14,
-      min: tight ? 88 : 104,
-    ),
-    _ReviewColumn(id: 'brand', label: 'Marca', flex: 10, min: tight ? 76 : 88),
-    _ReviewColumn(
-      id: 'cost',
-      label: 'Costo',
-      fixed: tight ? 60 : 72,
-      numeric: true,
-    ),
-    if (!reduced)
-      const _ReviewColumn(
-        id: 'price',
-        label: 'Precio',
-        fixed: 72,
-        numeric: true,
-      ),
-    _ReviewColumn(
-      id: 'decision',
-      label: 'Decisión',
-      // The purpose of this screen is to turn identity evidence into an
-      // invoice decision. Give that workflow twice the relative room of a
-      // regular editable field instead of compressing its actions into an
-      // undiscoverable overflow icon.
-      flex: 40,
-      min: tight ? 160 : 190,
-    ),
-    if (!reduced) const _ReviewColumn(id: 'sold', label: 'Vende', fixed: 52),
-  ];
-}
-
-/// Narrowest width at which a column set still honours every minimum.
-double _requiredWidth(List<_ReviewColumn> columns) {
-  var total = _columnGap * (columns.length - 1);
-  for (final column in columns) {
-    total += column.fixed ?? column.min;
-  }
-  return total;
-}
-
-/// Resolves the declared columns against the real width.
-///
-/// Flexible columns share what is left after the fixed ones; a column that
-/// would fall under its minimum takes its minimum and stops sharing. The result
-/// is a table that fills its host at any width instead of a fixed canvas the
-/// operator has to drag sideways.
-List<double> _resolveWidths(List<_ReviewColumn> columns, double available) {
-  final widths = List<double>.filled(columns.length, 0);
-  var remaining = available - _columnGap * (columns.length - 1);
-  var flexTotal = 0;
-
-  for (var index = 0; index < columns.length; index++) {
-    final column = columns[index];
-    if (column.fixed != null) {
-      widths[index] = column.fixed!;
-      remaining -= column.fixed!;
-    } else {
-      flexTotal += column.flex;
-    }
-  }
-
-  if (flexTotal == 0) return widths;
-
-  // Two passes: give everyone their share, then repair anyone below its floor
-  // by taking from those still above theirs.
-  var share = remaining;
-  var pool = flexTotal;
-  final settled = List<bool>.filled(columns.length, false);
-  var changed = true;
-  while (changed) {
-    changed = false;
-    for (var index = 0; index < columns.length; index++) {
-      final column = columns[index];
-      if (column.fixed != null || settled[index]) continue;
-      final candidate = pool == 0 ? 0.0 : share * column.flex / pool;
-      if (candidate < column.min) {
-        widths[index] = column.min;
-        settled[index] = true;
-        share -= column.min;
-        pool -= column.flex;
-        changed = true;
-      }
-    }
-  }
-  for (var index = 0; index < columns.length; index++) {
-    final column = columns[index];
-    if (column.fixed != null || settled[index]) continue;
-    widths[index] = pool == 0 ? column.min : share * column.flex / pool;
-  }
-  return widths;
-}
-
-// ───────────────────────────────────────────────────────────────────────────
-// Batch
-// ───────────────────────────────────────────────────────────────────────────
-
-class _ReviewBatch extends StatelessWidget {
-  const _ReviewBatch({
-    required this.lines,
-    required this.selectedLineId,
-    required this.callbacks,
-    required this.touch,
-    required this.dense,
-    required this.readOnly,
-  });
-
-  final List<OcrProductReviewLine> lines;
-  final String? selectedLineId;
-  final OcrProductReviewCallbacks callbacks;
-  final bool touch;
-  final bool dense;
-  final bool readOnly;
-
-  @override
-  Widget build(BuildContext context) {
-    final horizontal = touch
-        ? _OcrProductReviewWorkspaceState.space3
-        : _OcrProductReviewWorkspaceState.space5;
-    final progress = OcrProductReviewProgress.fromLines(lines);
-
-    return CustomScrollView(
-      key: const Key('ocr-review-batch'),
-      slivers: [
-        SliverPadding(
-          padding: EdgeInsets.fromLTRB(
-            horizontal,
-            _OcrProductReviewWorkspaceState.space4,
-            horizontal,
-            _OcrProductReviewWorkspaceState.space3,
-          ),
-          sliver: SliverToBoxAdapter(
-            child: _ReviewHeading(
-              progress: progress,
-              onSearchPending: readOnly ? null : callbacks.onSearchPending,
-            ),
-          ),
-        ),
-        SliverPadding(
-          padding: EdgeInsets.fromLTRB(
-            horizontal,
-            0,
-            horizontal,
-            _OcrProductReviewWorkspaceState.space6,
-          ),
-          sliver: SliverToBoxAdapter(
-            child: touch
-                ? _CompactLineList(
-                    lines: lines,
-                    selectedLineId: selectedLineId,
-                    callbacks: callbacks,
-                    readOnly: readOnly,
-                  )
-                : _ReconciliationTable(
-                    lines: lines,
-                    selectedLineId: selectedLineId,
-                    callbacks: callbacks,
-                    readOnly: readOnly,
-                    dense: dense,
-                  ),
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _ReviewHeading extends StatelessWidget {
-  const _ReviewHeading({
-    required this.progress,
-    required this.onSearchPending,
-  });
-
-  final OcrProductReviewProgress progress;
-  final VoidCallback? onSearchPending;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.end,
-      children: [
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'Productos de la factura',
-                style: theme.textTheme.titleMedium?.copyWith(
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-              const SizedBox(height: _OcrProductReviewWorkspaceState.space1),
-              Text(
-                progress.label,
-                key: const Key('ocr-review-progress'),
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: theme.colorScheme.onSurfaceVariant,
-                ),
-              ),
-            ],
-          ),
-        ),
-        if (onSearchPending != null)
-          TextButton.icon(
-            key: const Key('ocr-review-search-pending'),
-            onPressed: onSearchPending,
-            icon: const Icon(Icons.manage_search, size: 18),
-            label: const Text('Buscar pendientes'),
-          ),
-      ],
-    );
-  }
-}
-
-// ───────────────────────────────────────────────────────────────────────────
-// Desktop / tablet table
-// ───────────────────────────────────────────────────────────────────────────
-
-class _ReconciliationTable extends StatelessWidget {
-  const _ReconciliationTable({
-    required this.lines,
-    required this.selectedLineId,
-    required this.callbacks,
-    required this.readOnly,
-    required this.dense,
-  });
-
-  final List<OcrProductReviewLine> lines;
-  final String? selectedLineId;
-  final OcrProductReviewCallbacks callbacks;
-  final bool readOnly;
-  final bool dense;
-
-  /// The height every ordinary row shares. Controls inside are single-line and
-  /// the same height, which is what makes a column scannable at a glance.
-  ///
-  /// It is a floor, not a cap: a row whose category is still missing, or whose
-  /// suggested brand had no evidence, must be able to *say so* under the
-  /// control. Clipping a mandatory validation message to keep a table tidy
-  /// hides the exact reason the invoice cannot be applied.
-  static const double rowHeight = 60;
-  static const double headerHeight = 38;
-
-  @override
-  Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final inner =
-            constraints.maxWidth - _OcrProductReviewWorkspaceState.space3 * 2;
-        final tier = _tierFor(inner);
-        if (tier == null) {
-          // No column set fits honestly. A divider-separated line editor is
-          // the truthful answer; a squeezed table with an overflow stripe is
-          // not.
-          return _CompactLineList(
-            lines: lines,
-            selectedLineId: selectedLineId,
-            callbacks: callbacks,
-            readOnly: readOnly,
-          );
-        }
-        return _buildTable(context, _columnsFor(tier), inner);
-      },
-    );
-  }
-
-  /// The richest column set that fits [inner], or `null` when none does.
-  _TableTier? _tierFor(double inner) {
-    for (final tier in <_TableTier>[
-      if (!dense) _TableTier.full,
-      _TableTier.reduced,
-      _TableTier.tight,
-    ]) {
-      if (_requiredWidth(_columnsFor(tier)) <= inner) return tier;
-    }
-    return null;
-  }
-
-  Widget _buildTable(
-    BuildContext context,
-    List<_ReviewColumn> columns,
-    double inner,
-  ) {
-    final theme = Theme.of(context);
-
-    return Semantics(
-      container: true,
-      label: 'Tabla de conciliación de productos',
-      child: DecoratedBox(
-        decoration: BoxDecoration(
-          border: Border.all(color: theme.colorScheme.outlineVariant),
-          borderRadius: BorderRadius.circular(
-            _OcrProductReviewWorkspaceState.radius,
-          ),
-        ),
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(
-            _OcrProductReviewWorkspaceState.radius,
-          ),
-          child: Builder(
-            builder: (context) {
-              final widths = _resolveWidths(columns, inner);
-              return Column(
-                key: const Key('ocr-review-table'),
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  _TableHeader(columns: columns, widths: widths),
-                  for (var index = 0; index < lines.length; index++) ...[
-                    if (index > 0)
-                      Divider(height: 1, color: theme.dividerColor),
-                    _TableRow(
-                      key:
-                          ValueKey<String>('ocr-review-row-${lines[index].id}'),
-                      line: lines[index],
-                      index: index,
-                      columns: columns,
-                      widths: widths,
-                      selected: lines[index].id == selectedLineId,
-                      callbacks: callbacks,
-                      readOnly: readOnly,
-                    ),
-                  ],
-                ],
-              );
-            },
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _TableHeader extends StatelessWidget {
-  const _TableHeader({required this.columns, required this.widths});
-
-  final List<_ReviewColumn> columns;
-  final List<double> widths;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Container(
-      key: const Key('ocr-review-table-header'),
-      height: _ReconciliationTable.headerHeight,
-      padding: const EdgeInsets.symmetric(
-        horizontal: _OcrProductReviewWorkspaceState.space3,
-      ),
-      decoration: BoxDecoration(
-        color: theme.colorScheme.surfaceContainerLow,
-        border: Border(
-          bottom: BorderSide(color: theme.colorScheme.outlineVariant),
-        ),
-      ),
-      child: Row(
-        children: [
-          for (var index = 0; index < columns.length; index++) ...[
-            if (index > 0) const SizedBox(width: _columnGap),
-            SizedBox(
-              width: widths[index],
-              child: Align(
-                alignment: columns[index].numeric
-                    ? Alignment.centerRight
-                    : Alignment.centerLeft,
-                child: Text(
-                  columns[index].label,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: theme.textTheme.labelSmall?.copyWith(
-                    color: theme.colorScheme.onSurfaceVariant,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-              ),
-            ),
-          ],
-        ],
-      ),
-    );
-  }
-}
-
-class _TableRow extends StatelessWidget {
-  const _TableRow({
-    super.key,
-    required this.line,
-    required this.index,
-    required this.columns,
-    required this.widths,
-    required this.selected,
-    required this.callbacks,
-    required this.readOnly,
-  });
-
-  final OcrProductReviewLine line;
-  final int index;
-  final List<_ReviewColumn> columns;
-  final List<double> widths;
-  final bool selected;
-  final OcrProductReviewCallbacks callbacks;
-  final bool readOnly;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final roles = VinabikeThemeRoles.of(context);
-    // A row whose SKU is being reserved holds an operation against the
-    // shared AE sequence. Its controls stay inert until that settles.
-    final disabled = readOnly || !line.isSelected || line.isReservingSku;
-
-    Widget cell(String id) {
-      switch (id) {
-        case 'index':
-          return _IndexCell(
-            line: line,
-            index: index,
-            enabled: !readOnly,
-            callbacks: callbacks,
-          );
-        case 'source':
-          return _SourceCell(
-            line: line,
-            index: index,
-            callbacks: callbacks,
-            readOnly: readOnly,
-          );
-        case 'sku':
-          return _SkuCell(
-            line: line,
-            enabled: !disabled,
-            callbacks: callbacks,
-          );
-        case 'name':
-          return _CompactField(
-            fieldKey: Key('ocr-review-name-${line.id}'),
-            controller: line.controllers.name,
-            enabled: !disabled,
-            origin: line.nameOrigin,
-            onChanged: callbacks.onNameChanged == null
-                ? null
-                : (value) => callbacks.onNameChanged!(line.id, value),
-          );
-        case 'category':
-          return _CategorySelector(
-            line: line,
-            enabled: !disabled,
-            showLabel: false,
-            onChanged: callbacks.onCategoryChanged == null
-                ? null
-                : (value) => callbacks.onCategoryChanged!(line.id, value),
-          );
-        case 'brand':
-          return _BrandSelector(
-            line: line,
-            enabled: !disabled,
-            showLabel: false,
-            onChanged: callbacks.onBrandChanged == null
-                ? null
-                : (value) => callbacks.onBrandChanged!(line.id, value),
-          );
-        case 'cost':
-          return _CompactField(
-            fieldKey: Key('ocr-review-cost-${line.id}'),
-            controller: line.controllers.cost,
-            enabled: !disabled,
-            numeric: true,
-            origin: line.costOrigin,
-            onChanged: callbacks.onCostChanged == null
-                ? null
-                : (value) => callbacks.onCostChanged!(line.id, value),
-          );
-        case 'price':
-          return _CompactField(
-            fieldKey: Key('ocr-review-price-${line.id}'),
-            controller: line.controllers.price,
-            enabled: !disabled,
-            numeric: true,
-            origin: line.priceOrigin,
-            onChanged: callbacks.onPriceChanged == null
-                ? null
-                : (value) => callbacks.onPriceChanged!(line.id, value),
-          );
-        case 'decision':
-          return _DecisionCell(
-            line: line,
-            callbacks: callbacks,
-            enabled: !disabled,
-          );
-        case 'sold':
-          return Align(
-            alignment: Alignment.center,
-            child: Switch(
-              key: Key('ocr-review-sold-${line.id}'),
-              value: line.isSold,
-              onChanged: disabled || callbacks.onSoldChanged == null
-                  ? null
-                  : (value) => callbacks.onSoldChanged!(line.id, value),
-            ),
-          );
-      }
-      return const SizedBox.shrink();
-    }
-
-    return Material(
-      color: selected ? roles.selectionContainer : theme.colorScheme.surface,
-      child: InkWell(
-        onTap: callbacks.onLineSelected == null
-            ? null
-            : () => callbacks.onLineSelected!(line.id),
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(
-            minHeight: _ReconciliationTable.rowHeight,
-          ),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(
-              horizontal: _OcrProductReviewWorkspaceState.space3,
-              vertical: _OcrProductReviewWorkspaceState.space1,
-            ),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: [
-                for (var i = 0; i < columns.length; i++) ...[
-                  if (i > 0) const SizedBox(width: _columnGap),
-                  SizedBox(width: widths[i], child: cell(columns[i].id)),
-                ],
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _IndexCell extends StatelessWidget {
-  const _IndexCell({
-    required this.line,
-    required this.index,
-    required this.enabled,
-    required this.callbacks,
-  });
-
-  final OcrProductReviewLine line;
-  final int index;
-  final bool enabled;
-  final OcrProductReviewCallbacks callbacks;
-
-  @override
-  Widget build(BuildContext context) {
-    // Only the checkbox. The line number rides with the source title, where it
-    // reads as «1 · WAKE-vástago…» — stacking a number under a checkbox in a
-    // 30 px column made the cell taller than the row it lives in.
-    return Align(
-      alignment: Alignment.center,
-      child: Checkbox(
-        key: Key('ocr-review-select-${line.id}'),
-        visualDensity: VisualDensity.compact,
-        materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-        value: line.isSelected,
-        onChanged: !enabled || callbacks.onSelectionChanged == null
-            ? null
-            : (selected) => callbacks.onSelectionChanged!(
-                  line.id,
-                  selected ?? false,
-                ),
-      ),
-    );
-  }
-}
-
-class _SourceCell extends StatelessWidget {
-  const _SourceCell({
-    required this.line,
-    required this.index,
-    required this.callbacks,
-    required this.readOnly,
-  });
-
-  final OcrProductReviewLine line;
-  final int index;
-  final OcrProductReviewCallbacks callbacks;
-  final bool readOnly;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final facts = <String>[
-      if ((line.supplierCode ?? '').trim().isNotEmpty)
-        line.supplierCode!.trim(),
-      if (line.sourceQuantity != null) '${_number(line.sourceQuantity!)} un.',
-    ];
-
-    final sibling = line.siblingSuggestion;
-    final siblingLineId = line.siblingLineId;
-
-    return Row(
-      children: [
-        _EditableSourceImage(
-          line: line,
-          callbacks: callbacks,
-          size: 36,
-          enabled: !readOnly,
-        ),
-        const SizedBox(width: _OcrProductReviewWorkspaceState.space2),
-        Expanded(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                '${index + 1} · ${line.originalTitle}',
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: theme.textTheme.bodySmall,
-              ),
-              if (facts.isNotEmpty)
-                Text(
-                  facts.join(' · '),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: theme.textTheme.labelSmall?.copyWith(
-                    color: theme.colorScheme.onSurfaceVariant,
-                  ),
-                ),
-            ],
-          ),
-        ),
-        // Two variants of one supplier listing may reuse family and brand
-        // without being merged. It used to be a notice card inside the row,
-        // which cost 60 px of height on every line to say something that
-        // applies to two of them. Same capability, no height.
-        if (sibling != null &&
-            siblingLineId != null &&
-            !readOnly &&
-            callbacks.onCopySibling != null)
-          IconButton(
-            key: Key('ocr-review-copy-sibling-${line.id}'),
-            tooltip: sibling,
-            iconSize: 15,
-            visualDensity: VisualDensity.compact,
-            padding: EdgeInsets.zero,
-            constraints: const BoxConstraints(minWidth: 24, minHeight: 24),
-            icon: const Icon(Icons.copy_all_outlined),
-            onPressed: () => callbacks.onCopySibling!(line.id, siblingLineId),
-          ),
-      ],
-    );
-  }
-
-  static String _number(double value) {
-    if (value == value.roundToDouble()) return value.round().toString();
-    return value.toStringAsFixed(2);
-  }
-}
-
-/// The SKU cell, which is also where a row says it is still getting its number.
+/// T-01/T-03 batch and disclosure, F-04 spacing, F-06 touch density.
+/// Values read from the canonical DesignSync component guide (cached tool result
+/// c430e08f/.../bkyc7j0gj.txt). No feature palette or independent field family.
 class _SkuCell extends StatelessWidget {
   const _SkuCell({
     required this.line,
@@ -1240,7 +557,6 @@ class _SkuCell extends StatelessWidget {
             onPressed: enabled && callbacks.onRetrySkuReservation != null
                 ? () => callbacks.onRetrySkuReservation!(line.id)
                 : null,
-            style: _tinyButtonStyle,
             child: const Text('Reintentar'),
           ),
         ],
@@ -1255,7 +571,7 @@ class _SkuCell extends StatelessWidget {
             : 'Se reserva al confirmar «Nuevo»',
         waitDuration: const Duration(milliseconds: 600),
         child: SizedBox(
-          height: 34,
+          height: MediaQuery.sizeOf(context).width < 900 ? 48 : 34,
           child: Align(
             alignment: Alignment.centerLeft,
             child: Text(
@@ -1313,7 +629,7 @@ class _CompactField extends StatelessWidget {
       message: _originLabel(origin),
       waitDuration: const Duration(milliseconds: 600),
       child: SizedBox(
-        height: 34,
+        height: MediaQuery.sizeOf(context).width < 900 ? 48 : 34,
         child: TextField(
           key: fieldKey,
           controller: controller,
@@ -1344,13 +660,11 @@ class _CategorySelector extends StatelessWidget {
     required this.line,
     required this.enabled,
     required this.onChanged,
-    this.showLabel = true,
   });
 
   final OcrProductReviewLine line;
   final bool enabled;
   final ValueChanged<Category?>? onChanged;
-  final bool showLabel;
 
   @override
   Widget build(BuildContext context) {
@@ -1374,7 +688,7 @@ class _CategorySelector extends StatelessWidget {
       key: Key('ocr-review-category-${line.id}'),
       value: selected,
       label: 'Categoría',
-      showLabel: showLabel,
+      showLabel: true,
       sheetTitle: 'Elegir categoría',
       placeholder: 'Elegir',
       semanticLabel: selectedParent == null
@@ -1413,13 +727,11 @@ class _BrandSelector extends StatelessWidget {
     required this.line,
     required this.enabled,
     required this.onChanged,
-    this.showLabel = true,
   });
 
   final OcrProductReviewLine line;
   final bool enabled;
   final ValueChanged<ProductBrand?>? onChanged;
-  final bool showLabel;
 
   @override
   Widget build(BuildContext context) {
@@ -1427,7 +739,7 @@ class _BrandSelector extends StatelessWidget {
       key: Key('ocr-review-brand-${line.id}'),
       value: line.brand,
       label: 'Marca',
-      showLabel: showLabel,
+      showLabel: true,
       sheetTitle: 'Elegir marca',
       placeholder: 'Sin marca',
       semanticLabel: 'Marca del producto',
@@ -1446,790 +758,130 @@ class _BrandSelector extends StatelessWidget {
   }
 }
 
-/// The one cell that says what happens to this line, and offers the two peer
-/// decisions. Alternatives open centred; nothing expands in place.
-class _DecisionCell extends StatelessWidget {
-  const _DecisionCell({
-    required this.line,
-    required this.callbacks,
-    required this.enabled,
-  });
-
+class _NewProductFields extends StatelessWidget {
+  const _NewProductFields(
+      {required this.line, required this.callbacks, required this.enabled});
   final OcrProductReviewLine line;
   final OcrProductReviewCallbacks callbacks;
   final bool enabled;
-
   @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final roles = VinabikeThemeRoles.of(context);
-    final canInspect = enabled || line.inspectionOnly;
-
-    switch (line.status) {
-      case OcrProductReviewStatus.searching:
-        return Row(
-          children: [
-            const SizedBox(
-              width: 14,
-              height: 14,
-              child: CircularProgressIndicator(strokeWidth: 2),
-            ),
-            const SizedBox(width: _OcrProductReviewWorkspaceState.space2),
-            Expanded(
-              child: Text(
-                'Buscando parecidos',
-                key: Key('ocr-review-searching-${line.id}'),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: theme.textTheme.labelSmall?.copyWith(
-                  color: theme.colorScheme.onSurfaceVariant,
-                ),
-              ),
-            ),
-          ],
-        );
-
-      case OcrProductReviewStatus.failed:
-        return _DecisionActions(
-          message: line.errorMessage ?? 'No se pudo revisar',
-          tone: roles.danger,
-          primaryLabel: 'Reintentar',
-          primaryKey: Key('ocr-review-retry-${line.id}'),
-          onPrimary: canInspect && callbacks.onRetryLine != null
-              ? () => callbacks.onRetryLine!(line.id)
-              : null,
-          secondaryLabel: 'Buscar catálogo',
-          secondaryKey: Key('ocr-review-alternatives-${line.id}'),
-          onSecondary: canInspect && callbacks.onOpenCandidates != null
-              ? () => callbacks.onOpenCandidates!(line.id)
-              : null,
-        );
-
-      case OcrProductReviewStatus.needsSearch:
-        return _DecisionActions(
-          message: 'Sin revisar',
-          tone: roles.neutral,
-          primaryLabel: 'Buscar',
-          primaryKey: Key('ocr-review-search-${line.id}'),
-          onPrimary: canInspect && callbacks.onRetryLine != null
-              ? () => callbacks.onRetryLine!(line.id)
-              : null,
-        );
-
-      case OcrProductReviewStatus.linked:
-      case OcrProductReviewStatus.newProductReady:
-      case OcrProductReviewStatus.readOnly:
-        final catalogIdentity = '${line.resolvedProductSku ?? ''} '
-                '${line.resolvedProductName ?? ''}'
-            .trim();
-        final outcome = line.resolvedOutcomeSummary?.trim().isNotEmpty == true
-            ? line.resolvedOutcomeSummary!.trim()
-            : catalogIdentity;
-        final resolved = line.status != OcrProductReviewStatus.linked
-            ? 'Se creará nuevo'
-            : switch (line.resolvedMode) {
-                OcrProductResolvedMode.catalogLink =>
-                  'Vinculado a $catalogIdentity'.trim(),
-                OcrProductResolvedMode.rememberedLink =>
-                  'Regla recordada · $outcome'.trim(),
-                OcrProductResolvedMode.rememberedComposite =>
-                  'Descomposición recordada · $outcome'.trim(),
-                OcrProductResolvedMode.rememberedPack =>
-                  'Pack recordado · $outcome'.trim(),
-                OcrProductResolvedMode.rememberedSet =>
-                  'Set recordado · $outcome'.trim(),
-              };
-        return Row(
-          children: [
-            Icon(Icons.check_circle, size: 15, color: roles.success.accent),
-            const SizedBox(width: _OcrProductReviewWorkspaceState.space2),
-            Expanded(
-              child: Text(
-                resolved,
-                key: Key('ocr-review-resolved-${line.id}'),
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: theme.textTheme.labelSmall,
-              ),
-            ),
-            if (enabled &&
-                line.canChangeResolvedDecision &&
-                callbacks.onChangeDecision != null)
-              TextButton(
-                key: Key('ocr-review-change-${line.id}'),
-                onPressed: () => callbacks.onChangeDecision!(line.id),
-                style: _tinyButtonStyle,
-                child: const Text('Cambiar'),
-              ),
-          ],
-        );
-
-      case OcrProductReviewStatus.noCandidates:
-        final best = line.bestCandidate;
-        if (best != null) {
-          return _candidateDecision(
-            context,
-            candidate: best,
-            // «Revisión manual» se conserva porque nombra un estado distinto:
-            // una compuerta lo descartó y sólo se ofrece para que el operador
-            // pueda desautorizarla. «Podría ser» es la palabra del contrato
-            // para el nivel más débil de evidencia.
-            label: best.isRuledOut || best.isReviewOnlyFamilyScope
-                ? 'Revisión manual'
-                : 'Podría ser',
-            tone: roles.warning,
-            canInspect: canInspect,
-          );
-        }
-        final reviewSummary = _catalogReviewSummary(line);
-        if (reviewSummary.isNotEmpty) {
-          return _DecisionActions(
-            message: reviewSummary,
-            tone: roles.warning,
-            primaryLabel: 'Ver alternativas',
-            primaryKey: Key('ocr-review-alternatives-${line.id}'),
-            onPrimary: canInspect && callbacks.onOpenCandidates != null
-                ? () => callbacks.onOpenCandidates!(line.id)
-                : null,
-            secondaryLabel: 'Crear nuevo',
-            secondaryKey: Key('ocr-review-new-${line.id}'),
-            onSecondary: enabled && callbacks.onConfirmNewProduct != null
-                ? () => callbacks.onConfirmNewProduct!(line.id)
-                : null,
-          );
-        }
-        return _DecisionActions(
-          message: 'Sin coincidencia fiable',
-          tone: roles.neutral,
-          primaryLabel: 'Crear nuevo',
-          primaryKey: Key('ocr-review-new-${line.id}'),
-          onPrimary: enabled && callbacks.onConfirmNewProduct != null
-              ? () => callbacks.onConfirmNewProduct!(line.id)
-              : null,
-          secondaryLabel: 'Buscar',
-          secondaryKey: Key('ocr-review-alternatives-${line.id}'),
-          onSecondary: canInspect && callbacks.onOpenCandidates != null
-              ? () => callbacks.onOpenCandidates!(line.id)
-              : null,
-        );
-
-      case OcrProductReviewStatus.abstained:
-        final reviewSummary = _catalogReviewSummary(line);
-        final hasCatalogRows = reviewSummary.isNotEmpty;
-        final compositeProposal = line.aiCompositeProposal?.trim();
-        final hasCompositeProposal = compositeProposal?.isNotEmpty == true;
-        if (hasCompositeProposal && line.canConfirmCompositeProposal) {
-          return _DecisionActions(
-            message: compositeProposal!,
-            tone: roles.warning,
-            primaryLabel: 'Usar descomposición',
-            primaryKey: Key('ocr-review-confirm-composite-${line.id}'),
-            onPrimary: enabled && callbacks.onConfirmCompositeProposal != null
-                ? () => callbacks.onConfirmCompositeProposal!(line.id)
-                : null,
-            secondaryLabel: 'Ver alternativas',
-            secondaryKey: Key('ocr-review-alternatives-${line.id}'),
-            onSecondary: canInspect && callbacks.onOpenCandidates != null
-                ? () => callbacks.onOpenCandidates!(line.id)
-                : null,
-            tertiaryLabel: 'Crear nuevo',
-            tertiaryKey: Key('ocr-review-new-${line.id}'),
-            onTertiary: enabled && callbacks.onConfirmNewProduct != null
-                ? () => callbacks.onConfirmNewProduct!(line.id)
-                : null,
-          );
-        }
-        final best = line.bestCandidate;
-        if (!hasCompositeProposal && best != null) {
-          return _candidateDecision(
-            context,
-            candidate: best,
-            // «Revisión manual» se conserva porque nombra un estado distinto:
-            // una compuerta lo descartó y sólo se ofrece para que el operador
-            // pueda desautorizarla. «Podría ser» es la palabra del contrato
-            // para el nivel más débil de evidencia.
-            label: best.isRuledOut || best.isReviewOnlyFamilyScope
-                ? 'Revisión manual'
-                : 'Podría ser',
-            tone: roles.warning,
-            canInspect: canInspect,
-          );
-        }
-        return _DecisionActions(
-          message: hasCompositeProposal
-              ? compositeProposal!
-              : hasCatalogRows
-                  ? 'La evidencia no alcanza · $reviewSummary'
-                  : 'La evidencia no alcanza para decidir',
-          tone: roles.warning,
-          primaryLabel: hasCompositeProposal || hasCatalogRows
-              ? 'Ver alternativas'
-              : 'Buscar catálogo',
-          primaryKey: Key('ocr-review-alternatives-${line.id}'),
-          onPrimary: canInspect && callbacks.onOpenCandidates != null
-              ? () => callbacks.onOpenCandidates!(line.id)
-              : null,
-          secondaryLabel: 'Crear nuevo',
-          secondaryKey: Key('ocr-review-new-${line.id}'),
-          onSecondary: enabled && callbacks.onConfirmNewProduct != null
-              ? () => callbacks.onConfirmNewProduct!(line.id)
-              : null,
-          tertiaryLabel: 'Reintentar IA',
-          tertiaryKey: Key('ocr-review-retry-${line.id}'),
-          onTertiary: canInspect && callbacks.onRetryLine != null
-              ? () => callbacks.onRetryLine!(line.id)
-              : null,
-        );
-
-      case OcrProductReviewStatus.ready:
-        final best = line.bestCandidate;
-        if (best == null) {
-          return _DecisionActions(
-            message: 'Sin coincidencia fiable',
-            tone: roles.neutral,
-            primaryLabel: 'Crear nuevo',
-            primaryKey: Key('ocr-review-new-${line.id}'),
-            onPrimary: enabled && callbacks.onConfirmNewProduct != null
-                ? () => callbacks.onConfirmNewProduct!(line.id)
-                : null,
-          );
-        }
-        final evidence = _EvidencePresentation.forTier(best.matchTier);
-        return _candidateDecision(
-          context,
-          candidate: best,
-          label: evidence.label,
-          tone: evidence.resolveTone(roles),
-          canInspect: canInspect,
-        );
-    }
-  }
-
-  /// El bloque de decisión de una línea, según el contrato de la superficie
-  /// (`handoff-t22/snippets/contrato-linea.txt` §3 y §4).
-  ///
-  /// **Dos acciones pares, no tres controles en fila.** Antes `Vincular`,
-  /// `Ver alternativas` y `Crear nuevo` salían con el mismo peso tipográfico en
-  /// un `Wrap`, así que la celda no decía cuál era la decisión y cuál el
-  /// desvío. El contrato lo fija: `Vincular existente` **secondary**,
-  /// `Crear nuevo` **primary**, y las alternativas como desplegable
-  /// subordinado.
-  ///
-  /// **Por qué el primario es «Crear nuevo» y no «Vincular».** Parece al revés
-  /// hasta que se mira qué cuesta cada error. Un duplicado se arregla después
-  /// fusionando. Vincular al producto equivocado corrompe el stock **y enseña
-  /// la regla equivocada**: el vínculo persiste el alias del proveedor, así que
-  /// la próxima factura repite el error sola. La acción destructiva no lleva el
-  /// peso visual.
-  ///
-  /// **Las razones que se muestran discriminan; las de ambiente no se
-  /// muestran.** El contrato es explícito: familia, marca, mismo proveedor a
-  /// secas y stock NO son evidencia de identidad. Se derivan de campos
-  /// tipados —códigos de modelo calzados, compuertas `spec:` aprobadas y
-  /// acuerdo de variante—, nunca filtrando el texto de `reasons`, que sería la
-  /// lista escrita a mano que este repositorio ya pagó dos veces.
-  Widget _candidateDecision(
-    BuildContext context, {
-    required ProductDuplicateCandidate candidate,
-    required String label,
-    required VinabikeSemanticTone tone,
-    required bool canInspect,
-  }) {
-    final theme = Theme.of(context);
-    final reasons = _discriminatingReasons(candidate);
-    final identity = <String>[
-      if (candidate.product.sku.trim().isNotEmpty) candidate.product.sku.trim(),
-      ...reasons,
-    ].join(' · ');
-
-    return Column(
-      mainAxisAlignment: MainAxisAlignment.center,
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        // El objeto propuesto manda: es lo que el operador tiene que leer para
-        // decidir, así que va primero y con el peso más alto de la celda.
-        Text(
-          candidate.product.name,
-          key: Key(
-            'ocr-review-candidate-${line.id}-${candidate.product.id ?? candidate.product.sku}',
-          ),
-          // Una línea, como antes. Con dos, la celda de decisión pasaba a ser
-          // lo más alto de la fila y subía el piso de TODAS: entonces una fila
-          // con un motivo de bloqueo ya no podía crecer más que el resto y el
-          // motivo se recortaba para dejar la tabla pareja, que es justo lo
-          // que el guard de validación prohíbe.
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: theme.textTheme.labelSmall?.copyWith(
-            fontWeight: FontWeight.w600,
-          ),
-        ),
-        const SizedBox(height: 2),
-        // E-01 y su evidencia comparten renglón: el badge dice el NIVEL y el
-        // texto de al lado dice POR QUÉ. Separarlos en dos líneas hacía de la
-        // celda de decisión lo más alto de la fila, y entonces una fila con un
-        // motivo de bloqueo ya no podía crecer por encima del resto.
-        Row(
-          children: [
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
-              decoration: BoxDecoration(
-                color: tone.container,
-                borderRadius: BorderRadius.circular(999),
-                border: Border.all(color: tone.border),
-              ),
-              child: Text(
-                label,
-                style: theme.textTheme.labelSmall?.copyWith(
-                  color: tone.onContainer,
-                  fontWeight: FontWeight.w600,
-                  fontSize: 10,
-                ),
-              ),
-            ),
-            if (identity.isNotEmpty) ...[
-              const SizedBox(width: _OcrProductReviewWorkspaceState.space1),
-              Expanded(
-                child: Text(
-                  identity,
-                  key: Key('ocr-review-evidence-${line.id}'),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: theme.textTheme.labelSmall?.copyWith(
-                    color: theme.colorScheme.onSurfaceVariant,
-                    fontSize: 10,
-                  ),
-                ),
-              ),
-            ],
-          ],
-        ),
-        const SizedBox(height: _OcrProductReviewWorkspaceState.space1),
-        // El par de decisión y, al final de la MISMA fila, el desvío.
-        //
-        // Comparte línea con los botones a propósito: darle su propio renglón
-        // subía el piso de altura de TODAS las filas y anulaba el guard que
-        // exige que una fila con un motivo de bloqueo pueda crecer más que las
-        // demás. La jerarquía acá no la da la posición sino el peso: dos
-        // controles con chrome —contorno y relleno— contra un enlace de 10 px.
-        _ActionRow(
-          children: [
-            OutlinedButton(
-              key: Key('ocr-review-link-${line.id}'),
-              onPressed: enabled && callbacks.onLinkCandidate != null
-                  ? () => callbacks.onLinkCandidate!(
-                        line.id,
-                        candidate.product,
-                      )
-                  : null,
-              style: _tinyOutlinedStyle,
-              child: const Text('Vincular existente'),
-            ),
-            FilledButton(
-              key: Key('ocr-review-new-${line.id}'),
-              onPressed: enabled && callbacks.onConfirmNewProduct != null
-                  ? () => callbacks.onConfirmNewProduct!(line.id)
-                  : null,
-              style: _tinyFilledStyle,
-              child: const Text('Crear nuevo'),
-            ),
-            TextButton(
-              key: Key('ocr-review-alternatives-${line.id}'),
-              onPressed: canInspect && callbacks.onOpenCandidates != null
-                  ? () => callbacks.onOpenCandidates!(line.id)
-                  : null,
-              style: _linkButtonStyle,
-              child: const Text('Ver alternativas'),
-            ),
-          ],
-        ),
-      ],
-    );
-  }
-
-  /// Sólo las señales que distinguen ESTE producto de otro de la misma familia.
-  ///
-  /// Salen de campos tipados, no del texto de `reasons`: ahí conviven «Modelo
-  /// G3» y «Diámetro del rotor 160mm», que discriminan, con «Es rotor» y
-  /// «Misma categoría del catálogo», que las trae cualquier candidato de la
-  /// misma estantería y que el contrato prohíbe mostrar como razón.
-  List<String> _discriminatingReasons(ProductDuplicateCandidate candidate) {
-    final out = <String>[];
-    if (candidate.matchedModelCodes.isNotEmpty) {
-      // El código de modelo se compara normalizado en minúscula, pero se
-      // MUESTRA como lo imprime el fabricante: «RT56», no «rt56». Es un
-      // identificador que el mecánico busca en la caja.
-      final codes = candidate.matchedModelCodes
-          .map((c) => c.toUpperCase())
-          .toList()
-        ..sort();
-      out.add('mismo modelo ${codes.join('/')}');
-    }
-    for (final gate in candidate.gates) {
-      if (out.length >= 3) break;
-      if (!gate.id.startsWith('spec:')) continue;
-      if (gate.outcome != IdentityGateOutcome.passed) continue;
-      final detail = gate.detail.trim();
-      if (detail.isEmpty) continue;
-      out.add('${gate.label.toLowerCase()} $detail');
-    }
-    if (candidate.variantAgreement && out.length < 3) {
-      out.add('misma variante');
-    }
-    return out;
-  }
-}
-
-class _DecisionActions extends StatelessWidget {
-  const _DecisionActions({
-    required this.message,
-    required this.tone,
-    required this.primaryLabel,
-    required this.primaryKey,
-    required this.onPrimary,
-    this.secondaryLabel,
-    this.secondaryKey,
-    this.onSecondary,
-    this.tertiaryLabel,
-    this.tertiaryKey,
-    this.onTertiary,
-  });
-
-  final String message;
-  final VinabikeSemanticTone tone;
-  final String primaryLabel;
-  final Key primaryKey;
-  final VoidCallback? onPrimary;
-  final String? secondaryLabel;
-  final Key? secondaryKey;
-  final VoidCallback? onSecondary;
-  final String? tertiaryLabel;
-  final Key? tertiaryKey;
-  final VoidCallback? onTertiary;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Column(
-      mainAxisAlignment: MainAxisAlignment.center,
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          message,
-          maxLines: 2,
-          overflow: TextOverflow.ellipsis,
-          style: theme.textTheme.labelSmall?.copyWith(color: tone.accent),
-        ),
-        const SizedBox(height: 2),
-        _ActionRow(
-          children: [
-            FilledButton(
-              key: primaryKey,
-              onPressed: onPrimary,
-              style: _tinyFilledStyle,
-              child: Text(primaryLabel),
-            ),
-            if (secondaryLabel != null) ...[
-              TextButton(
-                key: secondaryKey,
-                onPressed: onSecondary,
-                style: _tinyButtonStyle,
-                child: Text(secondaryLabel!),
-              ),
-            ],
-            if (tertiaryLabel != null)
-              TextButton(
-                key: tertiaryKey,
-                onPressed: onTertiary,
-                style: _tinyButtonStyle,
-                child: Text(tertiaryLabel!),
-              ),
-          ],
-        ),
-      ],
-    );
-  }
-}
-
-/// A row of row-level actions that stays readable instead of shrinking text.
-/// When the host cannot fit every explicit choice on one line, the actions
-/// wrap and the table row grows. Hiding or scaling down the only way to finish
-/// an invoice line is not a valid compact state.
-class _ActionRow extends StatelessWidget {
-  const _ActionRow({required this.children});
-
-  final List<Widget> children;
-
-  @override
-  Widget build(BuildContext context) {
-    return Wrap(
-      spacing: _OcrProductReviewWorkspaceState.space1,
-      runSpacing: _OcrProductReviewWorkspaceState.space1,
-      crossAxisAlignment: WrapCrossAlignment.center,
-      children: children,
-    );
-  }
-}
-
-final ButtonStyle _tinyButtonStyle = TextButton.styleFrom(
-  minimumSize: const Size(0, 26),
-  padding: const EdgeInsets.symmetric(horizontal: 8),
-  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-  textStyle: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600),
-);
-
-/// Secundario del par de decisión: mismo alto y misma tipografía que el
-/// primario, distinto peso. Un `TextButton` no servía — leído junto al
-/// primario parecía un enlace y no una de las dos opciones.
-final ButtonStyle _tinyOutlinedStyle = OutlinedButton.styleFrom(
-  minimumSize: const Size(0, 26),
-  padding: const EdgeInsets.symmetric(horizontal: 10),
-  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-  textStyle: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600),
-);
-
-/// El desvío. Va bajo el par de decisión, sin peso de botón.
-final ButtonStyle _linkButtonStyle = TextButton.styleFrom(
-  minimumSize: const Size(0, 22),
-  padding: EdgeInsets.zero,
-  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-  textStyle: const TextStyle(
-    fontSize: 10,
-    fontWeight: FontWeight.w600,
-    decoration: TextDecoration.underline,
-  ),
-);
-
-final ButtonStyle _tinyFilledStyle = FilledButton.styleFrom(
-  minimumSize: const Size(0, 26),
-  padding: const EdgeInsets.symmetric(horizontal: 10),
-  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-  textStyle: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600),
-);
-
-// ───────────────────────────────────────────────────────────────────────────
-// Compact composition
-// ───────────────────────────────────────────────────────────────────────────
-
-/// Phone and small-tablet hosts get the same controllers and commands as one
-/// divider-separated line editor per source row.
-///
-/// Not cards: a bordered box per record turned a seven-line invoice into a wall
-/// the operator had to scroll through twice to compare two prices. Dividers
-/// keep the batch readable as a single list while every field stays full width
-/// and every target stays 48 px.
-class _CompactLineList extends StatelessWidget {
-  const _CompactLineList({
-    required this.lines,
-    required this.selectedLineId,
-    required this.callbacks,
-    required this.readOnly,
-  });
-
-  final List<OcrProductReviewLine> lines;
-  final String? selectedLineId;
-  final OcrProductReviewCallbacks callbacks;
-  final bool readOnly;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        for (var index = 0; index < lines.length; index++) ...[
-          if (index > 0)
-            Divider(height: 1, thickness: 1, color: theme.dividerColor),
-          _CompactLineEditor(
-            key: ValueKey<String>('ocr-review-row-${lines[index].id}'),
-            line: lines[index],
-            index: index,
-            selected: lines[index].id == selectedLineId,
-            callbacks: callbacks,
-            readOnly: readOnly,
-          ),
-        ],
-      ],
-    );
-  }
-}
-
-class _CompactLineEditor extends StatelessWidget {
-  const _CompactLineEditor({
-    super.key,
-    required this.line,
-    required this.index,
-    required this.selected,
-    required this.callbacks,
-    required this.readOnly,
-  });
-
-  final OcrProductReviewLine line;
-  final int index;
-  final bool selected;
-  final OcrProductReviewCallbacks callbacks;
-  final bool readOnly;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final roles = VinabikeThemeRoles.of(context);
-    // A row whose SKU is being reserved holds an operation against the
-    // shared AE sequence. Its controls stay inert until that settles.
-    final disabled = readOnly || !line.isSelected || line.isReservingSku;
-    final status = _StatusPresentation.forLine(line);
-
-    return Container(
-      color: selected ? roles.selectionContainer : null,
-      padding: const EdgeInsets.symmetric(
-        vertical: _OcrProductReviewWorkspaceState.space3,
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              SizedBox(
-                width: _OcrProductReviewWorkspaceState.touchTarget,
-                height: _OcrProductReviewWorkspaceState.touchTarget,
-                child: Checkbox(
-                  key: Key('ocr-review-select-${line.id}'),
-                  value: line.isSelected,
-                  onChanged: readOnly || callbacks.onSelectionChanged == null
-                      ? null
-                      : (value) => callbacks.onSelectionChanged!(
-                            line.id,
-                            value ?? false,
-                          ),
-                ),
-              ),
-              _EditableSourceImage(
-                line: line,
-                callbacks: callbacks,
-                size: 44,
-                enabled: !readOnly,
-              ),
-              const SizedBox(width: _OcrProductReviewWorkspaceState.space3),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      '${index + 1} · ${line.originalTitle}',
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: theme.textTheme.bodySmall,
-                    ),
-                    const SizedBox(
-                      height: _OcrProductReviewWorkspaceState.space1,
-                    ),
-                    VbStatusBadge(label: status.label, tone: status.tone),
-                  ],
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: _OcrProductReviewWorkspaceState.space3),
+  Widget build(BuildContext context) =>
+      Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        if (line.newProductUnitsController != null) ...[
           _CompactFieldPair(
-            first: _LabeledField(
-              label: 'SKU',
-              origin: line.skuOrigin,
-              child: _SkuCell(
-                line: line,
-                enabled: !disabled,
-                callbacks: callbacks,
-              ),
+              first: TextField(
+                  key: Key('ocr-review-new-units-${line.id}'),
+                  controller: line.newProductUnitsController,
+                  enabled: enabled,
+                  keyboardType: TextInputType.number,
+                  inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                  decoration: const InputDecoration(
+                      labelText: 'Unidades de esta ficha por compra'),
+                  onChanged: callbacks.onNewProductUnitsChanged == null
+                      ? null
+                      : (value) =>
+                          callbacks.onNewProductUnitsChanged!(line.id, value)),
+              second: Text(
+                  line.newProductInventoryQuantity == null
+                      ? 'Cantidad de inventario por definir'
+                      : '${line.newProductInventoryQuantity! % 1 == 0 ? line.newProductInventoryQuantity!.toInt() : line.newProductInventoryQuantity} unidades al recibir',
+                  style: Theme.of(context).textTheme.bodyMedium)),
+          const SizedBox(height: 12),
+        ],
+        _CompactFieldPair(
+          first: _LabeledField(
+            label: 'SKU',
+            origin: line.skuOrigin,
+            child: _SkuCell(
+              line: line,
+              enabled: enabled,
+              callbacks: callbacks,
             ),
-            second: _LabeledField(
-              label: 'Nombre',
+          ),
+          second: _LabeledField(
+            label: 'Nombre',
+            origin: line.nameOrigin,
+            child: _CompactField(
+              fieldKey: Key('ocr-review-name-${line.id}'),
+              controller: line.controllers.name,
+              enabled: enabled,
               origin: line.nameOrigin,
-              child: _CompactField(
-                fieldKey: Key('ocr-review-name-${line.id}'),
-                controller: line.controllers.name,
-                enabled: !disabled,
-                origin: line.nameOrigin,
-                onChanged: callbacks.onNameChanged == null
-                    ? null
-                    : (value) => callbacks.onNameChanged!(line.id, value),
-              ),
+              onChanged: callbacks.onNameChanged == null
+                  ? null
+                  : (value) => callbacks.onNameChanged!(line.id, value),
             ),
           ),
-          const SizedBox(height: _OcrProductReviewWorkspaceState.space2),
-          _CompactFieldPair(
-            first: _CategorySelector(
-              line: line,
-              enabled: !disabled,
-              onChanged: callbacks.onCategoryChanged == null
-                  ? null
-                  : (value) => callbacks.onCategoryChanged!(line.id, value),
-            ),
-            second: _BrandSelector(
-              line: line,
-              enabled: !disabled,
-              onChanged: callbacks.onBrandChanged == null
-                  ? null
-                  : (value) => callbacks.onBrandChanged!(line.id, value),
-            ),
+        ),
+        const SizedBox(height: _OcrProductReviewWorkspaceState.space2),
+        _CompactFieldPair(
+          first: _CategorySelector(
+            line: line,
+            enabled: enabled,
+            onChanged: callbacks.onCategoryChanged == null
+                ? null
+                : (value) => callbacks.onCategoryChanged!(line.id, value),
           ),
-          const SizedBox(height: _OcrProductReviewWorkspaceState.space2),
-          _CompactFieldPair(
-            first: _LabeledField(
-              label: 'Costo',
+          second: _BrandSelector(
+            line: line,
+            enabled: enabled,
+            onChanged: callbacks.onBrandChanged == null
+                ? null
+                : (value) => callbacks.onBrandChanged!(line.id, value),
+          ),
+        ),
+        const SizedBox(height: _OcrProductReviewWorkspaceState.space2),
+        _CompactFieldPair(
+          first: _LabeledField(
+            label: 'Costo',
+            origin: line.costOrigin,
+            child: _CompactField(
+              fieldKey: Key('ocr-review-cost-${line.id}'),
+              controller: line.controllers.cost,
+              enabled: enabled,
+              numeric: true,
               origin: line.costOrigin,
-              child: _CompactField(
-                fieldKey: Key('ocr-review-cost-${line.id}'),
-                controller: line.controllers.cost,
-                enabled: !disabled,
-                numeric: true,
-                origin: line.costOrigin,
-                onChanged: callbacks.onCostChanged == null
-                    ? null
-                    : (value) => callbacks.onCostChanged!(line.id, value),
-              ),
+              onChanged: callbacks.onCostChanged == null
+                  ? null
+                  : (value) => callbacks.onCostChanged!(line.id, value),
             ),
-            second: _LabeledField(
-              label: 'Precio',
+          ),
+          second: _LabeledField(
+            label: 'Precio',
+            origin: line.priceOrigin,
+            child: _CompactField(
+              fieldKey: Key('ocr-review-price-${line.id}'),
+              controller: line.controllers.price,
+              enabled: enabled,
+              numeric: true,
               origin: line.priceOrigin,
-              child: _CompactField(
-                fieldKey: Key('ocr-review-price-${line.id}'),
-                controller: line.controllers.price,
-                enabled: !disabled,
-                numeric: true,
-                origin: line.priceOrigin,
-                onChanged: callbacks.onPriceChanged == null
-                    ? null
-                    : (value) => callbacks.onPriceChanged!(line.id, value),
-              ),
+              onChanged: callbacks.onPriceChanged == null
+                  ? null
+                  : (value) => callbacks.onPriceChanged!(line.id, value),
             ),
           ),
-          const SizedBox(height: _OcrProductReviewWorkspaceState.space3),
-          Row(
-            children: [
-              Expanded(
-                child: _DecisionCell(
-                  line: line,
-                  callbacks: callbacks,
-                  enabled: !disabled,
-                ),
-              ),
-              const SizedBox(width: _OcrProductReviewWorkspaceState.space2),
-              Semantics(
-                label: 'Se vende',
-                child: Switch(
-                  key: Key('ocr-review-sold-${line.id}'),
-                  value: line.isSold,
-                  onChanged: disabled || callbacks.onSoldChanged == null
-                      ? null
-                      : (value) => callbacks.onSoldChanged!(line.id, value),
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
+        ),
+        SwitchListTile(
+            contentPadding: EdgeInsets.zero,
+            title: const Text('Se vende'),
+            value: line.isSold,
+            onChanged: enabled && callbacks.onSoldChanged != null
+                ? (value) => callbacks.onSoldChanged!(line.id, value)
+                : null),
+        if (callbacks.onReplaceImage != null)
+          Row(children: [
+            _EditableSourceImage(
+                line: line, callbacks: callbacks, size: 48, enabled: enabled),
+            const SizedBox(width: 12),
+            const Text('Imagen del producto'),
+          ]),
+        if (line.siblingLineId != null && callbacks.onCopySibling != null)
+          TextButton(
+              onPressed: enabled
+                  ? () => callbacks.onCopySibling!(line.id, line.siblingLineId!)
+                  : null,
+              child: const Text(
+                  'Reutilizar categoría y marca de la otra variante')),
+      ]);
 }
 
 class _CompactFieldPair extends StatelessWidget {
@@ -2274,11 +926,13 @@ class _LabeledField extends StatelessWidget {
     required this.label,
     required this.origin,
     required this.child,
+    this.showOrigin = true,
   });
 
   final String label;
   final OcrProductFieldOrigin origin;
   final Widget child;
+  final bool showOrigin;
 
   @override
   Widget build(BuildContext context) {
@@ -2287,7 +941,9 @@ class _LabeledField extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisSize: MainAxisSize.min,
       children: [
-        Row(
+        Wrap(
+          spacing: _OcrProductReviewWorkspaceState.space1,
+          runSpacing: _OcrProductReviewWorkspaceState.space1,
           children: [
             Text(
               label,
@@ -2296,14 +952,14 @@ class _LabeledField extends StatelessWidget {
                 fontWeight: FontWeight.w500,
               ),
             ),
-            const SizedBox(width: _OcrProductReviewWorkspaceState.space1),
-            Text(
-              _originLabel(origin),
-              style: theme.textTheme.labelSmall?.copyWith(
-                color: theme.colorScheme.onSurfaceVariant,
-                fontSize: 10,
+            if (showOrigin)
+              Text(
+                _originLabel(origin),
+                style: theme.textTheme.labelSmall?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                  fontSize: 10,
+                ),
               ),
-            ),
           ],
         ),
         const SizedBox(height: 5),
@@ -2320,6 +976,7 @@ class _LabeledField extends StatelessWidget {
 class _WorkspaceFooter extends StatelessWidget {
   const _WorkspaceFooter({
     required this.primaryLabel,
+    required this.backLabel,
     required this.pricingPolicyLabel,
     required this.progress,
     required this.primaryEnabled,
@@ -2334,6 +991,7 @@ class _WorkspaceFooter extends StatelessWidget {
   });
 
   final String primaryLabel;
+  final String backLabel;
   final String pricingPolicyLabel;
   final OcrProductReviewProgress progress;
   final bool primaryEnabled;
@@ -2355,46 +1013,32 @@ class _WorkspaceFooter extends StatelessWidget {
             ? readOnlyReason!.trim()
             : 'Operación en curso. Espera a que termine antes de volver.')
         : !primaryEnabled
-            ? (primaryBlockingReason ?? progress.nextStep)
-            : progress.nextStep;
+            ? (primaryBlockingReason ?? '')
+            : '';
 
-    final policy = Semantics(
-      container: true,
-      label:
-          '$pricingPolicyLabel. ${costIncludesVat ? 'El costo incluye IVA' : 'El costo no incluye IVA'}',
-      child: ExcludeSemantics(
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Switch(
-              value: costIncludesVat,
-              onChanged: onCostIncludesVatChanged,
-            ),
-            const SizedBox(width: _OcrProductReviewWorkspaceState.space2),
-            Flexible(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    costIncludesVat ? 'Costo con IVA' : 'Costo sin IVA',
-                    style: theme.textTheme.labelMedium?.copyWith(
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                  Text(
-                    pricingPolicyLabel,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: theme.colorScheme.onSurfaceVariant,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
+    final policy = PopupMenuButton<bool>(
+      key: const Key('ocr-review-pricing'),
+      tooltip: pricingPolicyLabel,
+      enabled: onCostIncludesVatChanged != null,
+      initialValue: costIncludesVat,
+      onSelected: onCostIncludesVatChanged,
+      itemBuilder: (_) => [
+        CheckedPopupMenuItem(
+            value: true,
+            checked: costIncludesVat,
+            child: const Text('Costo con IVA')),
+        CheckedPopupMenuItem(
+            value: false,
+            checked: !costIncludesVat,
+            child: const Text('Costo sin IVA')),
+      ],
+      child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 12),
+          child: Row(mainAxisSize: MainAxisSize.min, children: [
+            Text(costIncludesVat ? 'Costo con IVA' : 'Costo sin IVA',
+                style: theme.textTheme.labelSmall),
+            const Icon(Icons.expand_more, size: 16),
+          ])),
     );
 
     final buttons = <Widget>[
@@ -2403,7 +1047,7 @@ class _WorkspaceFooter extends StatelessWidget {
           key: const Key('ocr-review-back'),
           onPressed: onBack,
           style: _footerButtonStyle(touch),
-          child: const Text('Volver a la factura'),
+          child: Text(backLabel),
         ),
       FilledButton.icon(
         key: const Key('ocr-review-primary'),
@@ -2440,11 +1084,13 @@ class _WorkspaceFooter extends StatelessWidget {
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  policy,
-                  const SizedBox(
-                    height: _OcrProductReviewWorkspaceState.space1,
-                  ),
-                  _NextStep(reason: reason, blocking: !primaryEnabled),
+                  Row(children: [
+                    Expanded(
+                        child: _NextStep(
+                            reason: reason, blocking: !primaryEnabled)),
+                    const SizedBox(width: 8),
+                    policy
+                  ]),
                   const SizedBox(
                     height: _OcrProductReviewWorkspaceState.space2,
                   ),
@@ -2674,87 +1320,6 @@ class _ProductImage extends StatelessWidget {
   }
 }
 
-@immutable
-class _StatusPresentation {
-  const _StatusPresentation(this.label, this.tone);
-
-  factory _StatusPresentation.forLine(OcrProductReviewLine line) {
-    return switch (line.status) {
-      OcrProductReviewStatus.needsSearch =>
-        const _StatusPresentation('Sin revisar', VbStatusTone.info),
-      OcrProductReviewStatus.searching =>
-        const _StatusPresentation('Buscando', VbStatusTone.info),
-      OcrProductReviewStatus.ready =>
-        const _StatusPresentation('Por decidir', VbStatusTone.warning),
-      OcrProductReviewStatus.abstained =>
-        const _StatusPresentation('Revisión necesaria', VbStatusTone.warning),
-      OcrProductReviewStatus.noCandidates =>
-        const _StatusPresentation('Sin coincidencia', VbStatusTone.info),
-      OcrProductReviewStatus.failed =>
-        const _StatusPresentation('No se pudo revisar', VbStatusTone.danger),
-      OcrProductReviewStatus.linked => switch (line.resolvedMode) {
-          OcrProductResolvedMode.catalogLink =>
-            const _StatusPresentation('Vinculado', VbStatusTone.success),
-          OcrProductResolvedMode.rememberedLink =>
-            const _StatusPresentation('Regla recordada', VbStatusTone.success),
-          OcrProductResolvedMode.rememberedComposite =>
-            const _StatusPresentation(
-                'Descomposición recordada', VbStatusTone.success),
-          OcrProductResolvedMode.rememberedPack =>
-            const _StatusPresentation('Pack recordado', VbStatusTone.success),
-          OcrProductResolvedMode.rememberedSet =>
-            const _StatusPresentation('Set recordado', VbStatusTone.success),
-        },
-      OcrProductReviewStatus.newProductReady =>
-        const _StatusPresentation('Producto nuevo', VbStatusTone.success),
-      OcrProductReviewStatus.readOnly =>
-        const _StatusPresentation('Solo lectura', VbStatusTone.neutral),
-    };
-  }
-
-  final String label;
-  final VbStatusTone tone;
-}
-
-@immutable
-class _EvidencePresentation {
-  const _EvidencePresentation(this.label, this.tone);
-
-  factory _EvidencePresentation.forTier(ProductDuplicateMatchTier tier) {
-    return switch (tier) {
-      // Las tres palabras las fija el contrato de la superficie
-      // (`handoff-t21/snippets/contrato-revision.txt` §4, heredado por t22 §3):
-      // el badge E-01 dice el nivel de evidencia y NUNCA un porcentaje.
-      // «Casi seguro» sonaba a medición sin serlo; «Muy parecido» describe lo
-      // que el matcher realmente sabe.
-      ProductDuplicateMatchTier.exact => const _EvidencePresentation(
-          'La misma publicación', VbStatusTone.success),
-      ProductDuplicateMatchTier.strong =>
-        const _EvidencePresentation('Muy parecido', VbStatusTone.warning),
-      ProductDuplicateMatchTier.possible =>
-        const _EvidencePresentation('Podría ser', VbStatusTone.neutral),
-      // A row never recommends a ruled-out product. It only reaches this
-      // surface if one is passed in by mistake, and it must still read
-      // honestly rather than borrow another tier's word.
-      ProductDuplicateMatchTier.ruledOut =>
-        const _EvidencePresentation('Descartado', VbStatusTone.warning),
-    };
-  }
-
-  final String label;
-  final VbStatusTone tone;
-
-  VinabikeSemanticTone resolveTone(VinabikeThemeRoles roles) {
-    return switch (tone) {
-      VbStatusTone.neutral => roles.neutral,
-      VbStatusTone.info => roles.info,
-      VbStatusTone.success => roles.success,
-      VbStatusTone.warning => roles.warning,
-      VbStatusTone.danger => roles.danger,
-    };
-  }
-}
-
 ButtonStyle _footerButtonStyle(bool touch) {
   return ButtonStyle(
     minimumSize: WidgetStatePropertyAll(
@@ -2774,6 +1339,6 @@ String _originLabel(OcrProductFieldOrigin origin) {
     OcrProductFieldOrigin.nameDerived => 'deducido del nombre',
     OcrProductFieldOrigin.pricePolicy => 'costo × 2',
     OcrProductFieldOrigin.reserved => 'reservado',
-    OcrProductFieldOrigin.user => 'tuyo',
+    OcrProductFieldOrigin.user => 'Revisión manual',
   };
 }

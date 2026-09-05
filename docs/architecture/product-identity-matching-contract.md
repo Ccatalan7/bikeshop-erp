@@ -311,6 +311,19 @@ components and quantities must be proved by the structured investigation. A
 plain `10PCS` option may become one homogeneous edge of ten only after the
 catalog selling unit is confirmed as one piece.
 
+2026-09-05 purchase-intake correction: recovering a confirmed supplier graph
+is evidence reuse, not a fresh AI match or a decision for the current invoice.
+OCR first exposes actual catalog Product identities beside the source article.
+Selecting one stages its primary key locally; selecting new stages a new-product
+draft. Neither operation applies a graph, quantity conversion or reservation.
+Only after all source identities are decided can a graph containing the chosen
+product be applied. Changing a decision restores the source draft without
+revoking the stored graph. New products are prepared together in the later bulk
+creation step. Grounded composition retains units and physical roles; replacement
+graphs use the observed prior revision and a content-bound idempotency key.
+A candidate click cannot flatten a package into one inventory unit. Explicit
+amount confirmation conserves the landed source total without double discounts.
+
 The document is resolved as a joint assignment rather than independent row
 argmaxes. Distinct immutable supplier variants cannot collapse onto one catalog
 row without authoritative evidence, while real repeated purchases of the same
@@ -347,7 +360,7 @@ resolution or an equivalently proven catalog/SKU identity. AI `same` is still a
 review recommendation. AI `composite` displays grounded product IDs, ordered
 roles and per-purchase quantities and offers no single-product link. When the
 line also has an immutable supplier variant and non-conflicting package
-evidence, the operator may choose `Usar descomposición`; a blocking confirmation
+evidence, the operator may review the contents and choose `Aplicar y guardar regla`; a blocking confirmation
 states the invoice-wide stock effect before the versioned writer persists and
 reads back the supplier graph. No AI opinion writes or applies itself. A failure
 remains retryable and `abstained`; it never implies `Crear nuevo`.

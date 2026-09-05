@@ -1124,3 +1124,16 @@ siguen delegando los insets al shell.
 El indicador de la ventana WhatsApp conserva reloj, barra y tiempo restante por
 preferencia explícita del dueño; sus estados consumen los tonos de éxito/atención
 del tema, sin sustituir esa lectura gráfica por una sola etiqueta.
+
+
+### Revisión OCR: conservar lote y borrador al recomponer (2026-09-05)
+
+La composición compacta conserva las tres decisiones del escritorio: identificar,
+revisar cantidades/costos y preparar productos nuevos. La primera compara origen
+y producto real; la última muestra todos los campos nuevos agrupados, sin obligar
+a abrir y cerrar cada fila. Reducir el ancho no debe convertir la edición masiva
+en una búsqueda de desplegables. Los controladores pertenecen al borrador;
+recomponer no descarta lo escrito. La regresión cruza 900 px con una edición
+pendiente y verifica el mismo valor. Etiquetas y procedencia pueden envolver
+sin desbordar sus campos. El buscador se comprueba con teclado visible y cierre
+alcanzable, no sólo con una captura sin IME.

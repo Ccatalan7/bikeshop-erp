@@ -1,12 +1,19 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../../modules/inventory/models/inventory_models.dart';
 import '../../modules/inventory/models/product_duplicate_candidate.dart';
+import '../../modules/ai_assistant/services/ai_service.dart';
+import '../../modules/inventory/services/product_identity/supplier_resolution_proposal.dart';
 import '../services/image_service.dart';
 import '../themes/vinabike_theme_roles.dart';
 import 'vb_notice.dart';
+import 'vb_status_badge.dart';
+import 'vb_money_text.dart';
+import 'ocr_review_evidence.dart';
+import 'vb_searchable_select.dart';
 
 /// What the operator decided in the picker.
 sealed class OcrCandidateDecision {
@@ -28,6 +35,11 @@ class OcrCandidateCreateNew extends OcrCandidateDecision {
 /// Confirm the cached, grounded supplier-package decomposition.
 class OcrCandidateConfirmComposition extends OcrCandidateDecision {
   const OcrCandidateConfirmComposition();
+}
+
+class OcrCandidateDefineComposition extends OcrCandidateDecision {
+  const OcrCandidateDefineComposition(this.items);
+  final List<SupplierResolutionProposalItem> items;
 }
 
 /// The line whose identity is being decided, shown so the operator never has
@@ -100,15 +112,23 @@ class OcrCandidatePicker extends StatefulWidget {
     required this.candidates,
     this.categoryConflicts = const [],
     this.aiCompositeProposal,
+    this.components = const [],
+    this.sourceTotal,
     this.canConfirmCompositeProposal = false,
     this.allowCreateNew = true,
     this.inspectionOnly = false,
     this.onSearch,
     this.isLoading = false,
     this.errorMessage,
+    this.requiresComposition = false,
+    this.compositionItems = const [],
+    this.allowComposition = true,
   });
 
   final OcrCandidateLineContext line;
+  final bool requiresComposition;
+  final bool allowComposition;
+  final List<SupplierResolutionProposalItem> compositionItems;
 
   /// The immutable decision computed for this row revision. Opening the
   /// picker must not rerun vision, matching or AI adjudication.
@@ -121,6 +141,8 @@ class OcrCandidatePicker extends StatefulWidget {
   /// The same immutable composite proposal shown in the row. It stays
   /// review-only until the host explicitly enables operator confirmation.
   final String? aiCompositeProposal;
+  final List<OcrReviewComponent> components;
+  final double? sourceTotal;
   final bool canConfirmCompositeProposal;
 
   /// False when the identity review failed. Manual catalog search remains
@@ -147,12 +169,17 @@ class OcrCandidatePicker extends StatefulWidget {
     required List<ProductDuplicateCandidate> candidates,
     List<ProductDuplicateCandidate> categoryConflicts = const [],
     String? aiCompositeProposal,
+    List<OcrReviewComponent> components = const [],
+    double? sourceTotal,
     bool canConfirmCompositeProposal = false,
     bool allowCreateNew = true,
     bool inspectionOnly = false,
     OcrCandidateSearch? onSearch,
     bool isLoading = false,
     String? errorMessage,
+    bool requiresComposition = false,
+    List<SupplierResolutionProposalItem> compositionItems = const [],
+    bool allowComposition = true,
   }) {
     return showDialog<OcrCandidateDecision>(
       context: context,
@@ -162,12 +189,17 @@ class OcrCandidatePicker extends StatefulWidget {
         candidates: candidates,
         categoryConflicts: categoryConflicts,
         aiCompositeProposal: aiCompositeProposal,
+        components: components,
+        sourceTotal: sourceTotal,
         canConfirmCompositeProposal: canConfirmCompositeProposal,
         allowCreateNew: allowCreateNew,
         inspectionOnly: inspectionOnly,
         onSearch: onSearch,
         isLoading: isLoading,
         errorMessage: errorMessage,
+        requiresComposition: requiresComposition,
+        compositionItems: compositionItems,
+        allowComposition: allowComposition,
       ),
     );
   }
@@ -181,7 +213,142 @@ class _OcrCandidatePickerState extends State<OcrCandidatePicker> {
   Timer? _debounce;
   List<Product>? _searchResults;
   bool _searching = false;
+  bool _showDiscarded = false;
+  bool _showConflicts = false;
+  bool _showComposition = true;
   String? _searchError;
+  bool _editingComposition = false;
+  final List<SupplierResolutionProposalItem> _compositionItems = [];
+  final List<int> _componentKeys = [];
+  int _nextComponentKey = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _compositionItems.addAll(widget.compositionItems);
+    _componentKeys
+        .addAll([for (final _ in _compositionItems) _nextComponentKey++]);
+    _editingComposition =
+        widget.requiresComposition && widget.compositionItems.isEmpty;
+  }
+
+  bool get _selectsComponents =>
+      widget.allowComposition &&
+      (widget.requiresComposition ||
+          _editingComposition ||
+          widget.aiCompositeProposal?.isNotEmpty == true);
+
+  void _selectProduct(Product product) {
+    if (widget.inspectionOnly) return;
+    if (!_selectsComponents) {
+      Navigator.of(context).pop(OcrCandidateLink(product));
+      return;
+    }
+    setState(() {
+      _editingComposition = true;
+      _compositionItems.add(SupplierResolutionProposalItem(
+          product: product,
+          catalogUnitsPerPurchase: 1,
+          role: AIProductMatchComponentRole.component));
+      _componentKeys.add(_nextComponentKey++);
+    });
+    FocusScope.of(context).unfocus();
+  }
+
+  Widget _compositionEditor(BuildContext context) {
+    const roles = <AIProductMatchComponentRole, String>{
+      AIProductMatchComponentRole.component: 'Componente',
+      AIProductMatchComponentRole.homogeneous: 'Unidades iguales',
+      AIProductMatchComponentRole.front: 'Delantero',
+      AIProductMatchComponentRole.rear: 'Trasero',
+      AIProductMatchComponentRole.left: 'Izquierdo',
+      AIProductMatchComponentRole.right: 'Derecho',
+    };
+    return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+      Text('Contenido de una compra',
+          style: Theme.of(context).textTheme.titleSmall),
+      if (_compositionItems.isEmpty)
+        const Padding(
+            padding: EdgeInsets.symmetric(vertical: 8),
+            child: Text('Añade productos desde los resultados.')),
+      for (var i = 0; i < _compositionItems.length; i++)
+        Padding(
+            key: ValueKey('ocr-content-${_componentKeys[i]}'),
+            padding: const EdgeInsets.symmetric(vertical: 8),
+            child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Row(children: [
+                    Expanded(
+                        child: Text(
+                            '${_compositionItems[i].product.sku} · ${_compositionItems[i].product.name}')),
+                    IconButton(
+                        tooltip: 'Quitar componente',
+                        icon: const Icon(Icons.close),
+                        onPressed: () => setState(() {
+                              _compositionItems.removeAt(i);
+                              _componentKeys.removeAt(i);
+                            }))
+                  ]),
+                  Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    Expanded(
+                        child: TextFormField(
+                            key: ValueKey(
+                                'ocr-content-units-${_componentKeys[i]}'),
+                            initialValue:
+                                '${_compositionItems[i].catalogUnitsPerPurchase}',
+                            keyboardType: TextInputType.number,
+                            inputFormatters: [
+                              FilteringTextInputFormatter.digitsOnly
+                            ],
+                            decoration: const InputDecoration(
+                                labelText: 'Unidades por compra'),
+                            onChanged: (value) => setState(() {
+                                  final item = _compositionItems[i];
+                                  _compositionItems[i] =
+                                      SupplierResolutionProposalItem(
+                                          product: item.product,
+                                          catalogUnitsPerPurchase:
+                                              int.tryParse(value) ?? 0,
+                                          role: item.role);
+                                }))),
+                    const SizedBox(width: 12),
+                    Expanded(
+                        child: VbSearchableSelect<AIProductMatchComponentRole>(
+                            sheetTitle: 'Función del componente',
+                            value: roles.containsKey(_compositionItems[i].role)
+                                ? _compositionItems[i].role
+                                : AIProductMatchComponentRole.component,
+                            options: [
+                              for (final role in roles.entries)
+                                VbSearchableSelectOption(
+                                    value: role.key, label: role.value)
+                            ],
+                            onChanged: (role) {
+                              if (role != null) {
+                                setState(() {
+                                  final item = _compositionItems[i];
+                                  _compositionItems[i] =
+                                      SupplierResolutionProposalItem(
+                                          product: item.product,
+                                          catalogUnitsPerPurchase:
+                                              item.catalogUnitsPerPurchase,
+                                          role: role);
+                                });
+                              }
+                            }))
+                  ]),
+                  if (widget.line.quantity != null &&
+                      _compositionItems[i].catalogUnitsPerPurchase > 0)
+                    Padding(
+                        padding: const EdgeInsets.only(top: 4),
+                        child: Text(
+                            '${ocrReviewNumber(widget.line.quantity!)} × ${_compositionItems[i].catalogUnitsPerPurchase} = '
+                            '${ocrReviewNumber(widget.line.quantity! * _compositionItems[i].catalogUnitsPerPurchase)} unidades al recibir',
+                            style: Theme.of(context).textTheme.bodySmall)),
+                ])),
+    ]);
+  }
 
   /// Every typed character starts a new search generation. A response only
   /// counts while it is still the newest one asked for.
@@ -325,137 +492,191 @@ class _OcrCandidatePickerState extends State<OcrCandidatePicker> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final scheme = theme.colorScheme;
-    final screenSize = MediaQuery.sizeOf(context);
-    final compact = screenSize.width < 720;
-    final horizontalInset = compact ? 12.0 : 42.0;
-    final verticalInset = screenSize.height < 720 ? 12.0 : 24.0;
-    final dialogWidth = (screenSize.width - horizontalInset * 2)
-        .clamp(320.0, OcrCandidatePicker.maxWidth)
-        .toDouble();
-    final dialogHeight = (screenSize.height - verticalInset * 2)
-        .clamp(360.0, OcrCandidatePicker.maxHeight)
-        .toDouble();
-
-    return Dialog(
-      key: const Key('ocr-candidate-picker-dialog'),
-      insetPadding: EdgeInsets.symmetric(
-        horizontal: horizontalInset,
-        vertical: verticalInset,
-      ),
-      clipBehavior: Clip.antiAlias,
-      child: SizedBox(
-        key: const Key('ocr-candidate-picker-shell'),
-        width: dialogWidth,
-        height: dialogHeight,
-        child: Column(
-          children: [
-            _Header(
-              line: widget.line,
-              compact: compact,
-              compositeReview:
-                  widget.aiCompositeProposal?.trim().isNotEmpty == true,
-              onImageTap: widget.line.imageUrl?.trim().isNotEmpty == true
-                  ? () => _openImageViewer(initialKey: 'source')
-                  : null,
-            ),
-            Divider(height: 1, color: theme.dividerColor),
-            if (widget.onSearch != null)
-              Padding(
-                padding: EdgeInsets.fromLTRB(
-                    compact ? 12 : 16, 12, compact ? 12 : 16, 8),
-                child: TextField(
-                  controller: _query,
-                  decoration: InputDecoration(
-                    isDense: true,
-                    hintText:
-                        'Buscar manualmente en todo el catálogo por nombre, SKU o marca',
-                    prefixIcon: const Icon(Icons.search, size: 18),
-                    suffixIcon: _searching
-                        ? const Padding(
-                            padding: EdgeInsets.all(12),
-                            child: SizedBox(
-                              width: 14,
-                              height: 14,
-                              child: CircularProgressIndicator(strokeWidth: 2),
-                            ),
-                          )
-                        : null,
-                  ),
-                  onChanged: _onQueryChanged,
-                ),
-              ),
-            if (widget.aiCompositeProposal?.trim().isNotEmpty == true)
-              Padding(
-                key: const Key('ocr-candidate-ai-composite-proposal'),
-                padding: EdgeInsets.fromLTRB(
-                  compact ? 12 : 16,
-                  widget.onSearch == null ? 12 : 0,
-                  compact ? 12 : 16,
-                  8,
-                ),
-                child: VbNotice(
-                  title: 'Conjunto propuesto por IA',
-                  body: widget.aiCompositeProposal!.trim(),
-                  tone: VbNoticeTone.warning,
-                ),
-              ),
-            Flexible(child: _body(context, compact)),
-            Divider(height: 1, color: theme.dividerColor),
-            Padding(
-              padding: EdgeInsets.fromLTRB(
-                compact ? 12 : 16,
-                10,
-                compact ? 12 : 16,
-                12,
-              ),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      widget.inspectionOnly
-                          ? 'Auditoría de solo lectura: ninguna opción se aplicará.'
-                          : widget.aiCompositeProposal?.trim().isNotEmpty ==
-                                  true
-                              ? 'La propuesta no se vincula ni se aprende automáticamente.'
-                              : !widget.allowCreateNew
-                                  ? 'La revisión falló: reintenta o busca manualmente.'
-                                  : 'Si ninguno es, se crea un producto nuevo con esta ficha.',
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: scheme.onSurfaceVariant,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  if (!widget.inspectionOnly &&
-                      widget.canConfirmCompositeProposal &&
-                      widget.aiCompositeProposal?.trim().isNotEmpty ==
-                          true) ...[
-                    FilledButton(
-                      key: const Key('ocr-candidate-confirm-composite'),
-                      onPressed: () => Navigator.of(context)
-                          .pop(const OcrCandidateConfirmComposition()),
-                      child: const Text('Usar descomposición'),
-                    ),
-                    const SizedBox(width: 8),
-                  ],
-                  TextButton(
+    final compact = MediaQuery.sizeOf(context).width < 900;
+    final hasComposition =
+        widget.aiCompositeProposal?.trim().isNotEmpty == true;
+    final footer = SafeArea(
+        top: false,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          child: Wrap(
+              alignment: WrapAlignment.end,
+              spacing: 8,
+              runSpacing: 4,
+              children: [
+                TextButton(
                     onPressed: () => Navigator.of(context).pop(),
-                    child: const Text('Cancelar'),
-                  ),
-                  if (!widget.inspectionOnly && widget.allowCreateNew) ...[
-                    const SizedBox(width: 8),
-                    FilledButton.tonal(
+                    child: const Text('Cancelar')),
+                if (!widget.inspectionOnly && widget.allowCreateNew)
+                  OutlinedButton(
                       key: const Key('ocr-candidate-create-new'),
                       onPressed: () => Navigator.of(context)
                           .pop(const OcrCandidateCreateNew()),
-                      child: const Text('Ninguno · crear nuevo'),
-                    ),
-                  ],
-                ],
-              ),
-            ),
-          ],
+                      child: const Text('Marcar como nuevo')),
+                if (!widget.inspectionOnly && _editingComposition)
+                  FilledButton(
+                      key: const Key('ocr-candidate-review-content'),
+                      onPressed: _compositionItems.isNotEmpty &&
+                              _compositionItems.every((item) =>
+                                  item.catalogUnitsPerPurchase > 0 &&
+                                  item.catalogUnitsPerPurchase <= 1000000)
+                          ? () => Navigator.of(context).pop(
+                              OcrCandidateDefineComposition(
+                                  List.unmodifiable(_compositionItems)))
+                          : null,
+                      child: const Text('Aplicar y guardar regla')),
+                if (!widget.inspectionOnly &&
+                    !_editingComposition &&
+                    widget.canConfirmCompositeProposal &&
+                    hasComposition)
+                  FilledButton(
+                      key: const Key('ocr-candidate-confirm-composite'),
+                      onPressed: () => Navigator.of(context)
+                          .pop(const OcrCandidateConfirmComposition()),
+                      child: const Text('Usar descomposición')),
+              ]),
+        ));
+    return Dialog(
+      key: const Key('ocr-candidate-picker-dialog'),
+      insetPadding: EdgeInsets.symmetric(
+          horizontal: compact ? 0 : 24, vertical: compact ? 0 : 24),
+      clipBehavior: Clip.antiAlias,
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(
+            maxWidth: OcrCandidatePicker.maxWidth,
+            maxHeight: OcrCandidatePicker.maxHeight),
+        child: SizedBox(
+          key: const Key('ocr-candidate-picker-shell'),
+          width: double.infinity,
+          height: double.infinity,
+          child: SafeArea(
+              bottom: false,
+              child: Column(children: [
+                Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 8, 8, 0),
+                    child: Row(children: [
+                      Expanded(
+                          child: Text(
+                              hasComposition
+                                  ? 'Revisar composición'
+                                  : 'Comparar productos',
+                              style: theme.textTheme.titleMedium)),
+                      IconButton(
+                          key: const Key('ocr-candidate-close'),
+                          tooltip: 'Cerrar comparación',
+                          onPressed: () => Navigator.of(context).pop(),
+                          icon: const Icon(Icons.close)),
+                    ])),
+                if (widget.onSearch != null)
+                  Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+                      child: TextField(
+                          key: const Key('ocr-candidate-search'),
+                          controller: _query,
+                          decoration: InputDecoration(
+                              isDense: !compact,
+                              hintText: 'Buscar nombre, SKU o marca',
+                              prefixIcon: const Icon(Icons.search),
+                              suffixIcon: _searching
+                                  ? const Padding(
+                                      padding: EdgeInsets.all(12),
+                                      child: SizedBox(
+                                          width: 16,
+                                          height: 16,
+                                          child: CircularProgressIndicator(
+                                              strokeWidth: 2)))
+                                  : _query.text.isNotEmpty
+                                      ? IconButton(
+                                          tooltip: 'Limpiar búsqueda',
+                                          onPressed: () {
+                                            _query.clear();
+                                            _onQueryChanged('');
+                                          },
+                                          icon: const Icon(Icons.close))
+                                      : null),
+                          onChanged: _onQueryChanged)),
+                Expanded(
+                    child: CustomScrollView(
+                        key: const Key('ocr-candidate-scroll'),
+                        slivers: [
+                      SliverToBoxAdapter(
+                          child: _Header(
+                              line: widget.line,
+                              compact: compact,
+                              compositeReview: hasComposition,
+                              onImageTap: widget.line.imageUrl
+                                          ?.trim()
+                                          .isNotEmpty ==
+                                      true
+                                  ? () => _openImageViewer(initialKey: 'source')
+                                  : null)),
+                      if (hasComposition)
+                        SliverToBoxAdapter(
+                            child: Padding(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 16, vertical: 8),
+                                child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.stretch,
+                                    children: [
+                                      TextButton.icon(
+                                          key: const Key(
+                                              'ocr-candidate-ai-composite-proposal'),
+                                          onPressed: () => setState(() =>
+                                              _showComposition =
+                                                  !_showComposition),
+                                          icon: Icon(_showComposition
+                                              ? Icons.expand_less
+                                              : Icons.expand_more),
+                                          label: const Text(
+                                              'Descomposición propuesta')),
+                                      if (!_editingComposition &&
+                                          _showComposition &&
+                                          widget.components.isNotEmpty)
+                                        OcrCompositionReview(
+                                            components: widget.components,
+                                            sourceQuantity:
+                                                widget.line.quantity,
+                                            sourceTotal: widget.sourceTotal)
+                                      else if (!_editingComposition &&
+                                          _showComposition)
+                                        Text(widget.aiCompositeProposal!,
+                                            style: theme.textTheme.bodySmall),
+                                    ]))),
+                      if (!widget.inspectionOnly && widget.allowComposition)
+                        SliverToBoxAdapter(
+                            child: Padding(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 16, vertical: 8),
+                                child: _editingComposition
+                                    ? _compositionEditor(context)
+                                    : Align(
+                                        alignment: Alignment.centerLeft,
+                                        child: TextButton.icon(
+                                            key: const Key(
+                                                'ocr-candidate-edit-content'),
+                                            onPressed: () => setState(() =>
+                                                _editingComposition = true),
+                                            icon:
+                                                const Icon(Icons.edit_outlined),
+                                            label: Text(
+                                                _compositionItems.isEmpty
+                                                    ? 'Definir contenido'
+                                                    : 'Editar contenido'))))),
+                      if (!widget.allowCreateNew && widget.errorMessage != null)
+                        const SliverToBoxAdapter(
+                            child: Padding(
+                                padding: EdgeInsets.all(16),
+                                child: VbNotice(
+                                    title: 'La revisión falló',
+                                    body:
+                                        'Reintenta o busca manualmente un producto. El fallo no demuestra que sea nuevo.',
+                                    tone: VbNoticeTone.warning))),
+                      SliverToBoxAdapter(child: _body(context, compact)),
+                    ])),
+                const Divider(height: 1),
+                footer,
+              ])),
         ),
       ),
     );
@@ -515,6 +736,8 @@ class _OcrCandidatePickerState extends State<OcrCandidatePicker> {
         );
       }
       return ListView.separated(
+        shrinkWrap: true,
+        physics: const NeverScrollableScrollPhysics(),
         padding: padding,
         itemCount: manual.length,
         separatorBuilder: (_, __) => const SizedBox(height: 8),
@@ -523,14 +746,15 @@ class _OcrCandidatePickerState extends State<OcrCandidatePicker> {
           reasons: const <String>[],
           objections: const <String>[],
           tier: null,
+          evidence: null,
           onImageTap: () => _openProductImage(
             manual[index],
             products: manual,
           ),
           onSelected: widget.inspectionOnly
               ? null
-              : () =>
-                  Navigator.of(context).pop(OcrCandidateLink(manual[index])),
+              : () => _selectProduct(manual[index]),
+          addsComponent: _selectsComponents,
         ),
       );
     }
@@ -577,75 +801,68 @@ class _OcrCandidatePickerState extends State<OcrCandidatePicker> {
           reasons: candidate.reasons,
           objections: candidate.objections,
           tier: candidate.matchTier,
+          evidence: OcrCandidateEvidence.forCandidate(candidate),
           onImageTap: () => _openProductImage(candidate.product),
           onSelected: widget.inspectionOnly
               ? null
-              : () => Navigator.of(context)
-                  .pop(OcrCandidateLink(candidate.product)),
+              : () => _selectProduct(candidate.product),
+          addsComponent: _selectsComponents,
         ),
       if (ruledOut.isNotEmpty) ...[
-        Padding(
-          key: const Key('ocr-candidate-ruled-out-heading'),
-          padding: const EdgeInsets.only(top: 8, bottom: 2),
-          child: Text(
-            ruledOut.any((candidate) => candidate.isReviewOnlyFamilyScope)
-                ? ruledOut.length == 1
-                    ? '1 opción para revisión manual'
-                    : '${ruledOut.length} opciones para revisión manual'
-                : ruledOut.length == 1
-                    ? '1 descartado por una diferencia'
-                    : '${ruledOut.length} descartados por una diferencia',
-            style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                  color: Theme.of(context).colorScheme.onSurfaceVariant,
-                ),
-          ),
-        ),
-        for (final candidate in ruledOut)
-          _CandidateRow(
-            product: candidate.product,
-            reasons: candidate.reasons,
-            objections: candidate.objections,
-            tier: candidate.matchTier,
-            onImageTap: () => _openProductImage(candidate.product),
-            onSelected: widget.inspectionOnly
-                ? null
-                : () => Navigator.of(context)
-                    .pop(OcrCandidateLink(candidate.product)),
-          ),
+        TextButton.icon(
+            key: const Key('ocr-candidate-ruled-out-heading'),
+            onPressed: () => setState(() => _showDiscarded = !_showDiscarded),
+            icon: Icon(_showDiscarded ? Icons.expand_less : Icons.expand_more),
+            label: Text(
+                '${_showDiscarded ? 'Ocultar' : 'Ver'} ${ruledOut.length} ${ruledOut.length == 1 ? 'descartado' : 'descartados'} y sus diferencias')),
+        if (_showDiscarded)
+          for (final candidate in ruledOut)
+            _CandidateRow(
+              product: candidate.product,
+              reasons: candidate.reasons,
+              objections: candidate.objections,
+              tier: candidate.matchTier,
+              evidence: OcrCandidateEvidence.forCandidate(candidate),
+              onImageTap: () => _openProductImage(candidate.product),
+              onSelected: widget.inspectionOnly
+                  ? null
+                  : () => _selectProduct(candidate.product),
+              addsComponent: _selectsComponents,
+            ),
       ],
       if (categoryConflicts.isNotEmpty) ...[
-        Padding(
-          key: const Key('ocr-candidate-category-conflicts-heading'),
-          padding: const EdgeInsets.only(top: 8, bottom: 2),
-          child: Text(
-            categoryConflicts.length == 1
-                ? '1 producto del mismo tipo en otra categoría'
-                : '${categoryConflicts.length} productos del mismo tipo en otra categoría',
-            style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                  color: Theme.of(context).colorScheme.onSurfaceVariant,
-                ),
-          ),
-        ),
-        for (final candidate in categoryConflicts)
-          _CandidateRow(
-            product: candidate.product,
-            reasons: candidate.reasons,
-            objections: <String>[
-              ...candidate.objections,
-              'Revisa la categoría del producto antes de vincular',
-            ],
-            tier: candidate.matchTier,
-            onImageTap: () => _openProductImage(candidate.product),
-            onSelected: widget.inspectionOnly
-                ? null
-                : () => Navigator.of(context)
-                    .pop(OcrCandidateLink(candidate.product)),
-          ),
+        TextButton.icon(
+            key: const Key('ocr-candidate-category-conflicts-heading'),
+            onPressed: () => setState(() => _showConflicts = !_showConflicts),
+            icon: Icon(_showConflicts || viable.isEmpty
+                ? Icons.expand_less
+                : Icons.expand_more),
+            label: Text(
+                '${categoryConflicts.length} ${categoryConflicts.length == 1 ? 'producto' : 'productos'} en otra categoría')),
+        if (_showConflicts || viable.isEmpty)
+          for (final candidate in categoryConflicts)
+            _CandidateRow(
+              product: candidate.product,
+              reasons: candidate.reasons,
+              objections: <String>[
+                ...candidate.objections,
+                'Revisa la categoría del producto antes de vincular',
+              ],
+              tier: candidate.matchTier,
+              evidence: OcrCandidateEvidence.forCandidate(candidate),
+              onImageTap: () => _openProductImage(candidate.product),
+              onSelected: widget.inspectionOnly
+                  ? null
+                  : () => _selectProduct(candidate.product),
+              addsComponent: _selectsComponents,
+            ),
       ],
     ];
 
     return ListView.separated(
       key: const Key('ocr-candidate-list'),
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
       padding: padding,
       itemCount: rows.length,
       separatorBuilder: (_, __) => const SizedBox(height: 8),
@@ -675,7 +892,8 @@ class _Header extends StatelessWidget {
     final facts = <String>[
       if ((line.supplierCode ?? '').isNotEmpty) 'Código ${line.supplierCode}',
       if (line.quantity != null) '${_number(line.quantity!)} un.',
-      if (line.unitCost != null) 'Costo \$${_number(line.unitCost!)}',
+      if (line.unitCost != null)
+        'Costo ${VbMoneyText.formatClp(line.unitCost!)}',
       if ((line.categoryLabel ?? '').isNotEmpty) line.categoryLabel!,
       if ((line.brandLabel ?? '').isNotEmpty) line.brandLabel!,
     ];
@@ -699,8 +917,8 @@ class _Header extends StatelessWidget {
               children: [
                 Text(
                   compositeReview
-                      ? '¿Qué productos incluye esta línea?'
-                      : '¿Cuál de estos es?',
+                      ? 'COMPRADO · presentación del proveedor'
+                      : 'COMPRADO · variante a identificar',
                   style: theme.textTheme.titleSmall
                       ?.copyWith(fontWeight: FontWeight.w700),
                 ),
@@ -715,7 +933,7 @@ class _Header extends StatelessWidget {
                   const SizedBox(height: 4),
                   Text(
                     facts.join(' · '),
-                    maxLines: 1,
+                    maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                     style: theme.textTheme.labelSmall?.copyWith(
                       color: scheme.onSurfaceVariant,
@@ -724,12 +942,6 @@ class _Header extends StatelessWidget {
                 ],
               ],
             ),
-          ),
-          IconButton(
-            key: const Key('ocr-candidate-close'),
-            tooltip: 'Cerrar',
-            icon: const Icon(Icons.close),
-            onPressed: () => Navigator.of(context).pop(),
           ),
         ],
       ),
@@ -743,163 +955,122 @@ class _Header extends StatelessWidget {
 }
 
 class _CandidateRow extends StatelessWidget {
-  const _CandidateRow({
-    required this.product,
-    required this.reasons,
-    required this.objections,
-    required this.tier,
-    required this.onSelected,
-    required this.onImageTap,
-  });
-
+  const _CandidateRow(
+      {required this.product,
+      required this.reasons,
+      required this.objections,
+      required this.tier,
+      required this.evidence,
+      required this.onSelected,
+      this.addsComponent = false,
+      required this.onImageTap});
   final Product product;
   final List<String> reasons;
   final List<String> objections;
   final ProductDuplicateMatchTier? tier;
+  final OcrCandidateEvidence? evidence;
   final VoidCallback? onSelected;
   final VoidCallback? onImageTap;
-
+  final bool addsComponent;
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final scheme = theme.colorScheme;
-    final roles = VinabikeThemeRoles.of(context);
-
-    final tone = switch (tier) {
-      ProductDuplicateMatchTier.exact => roles.success,
-      ProductDuplicateMatchTier.strong => roles.info,
-      _ => roles.neutral,
-    };
-    final tierLabel = switch (tier) {
-      ProductDuplicateMatchTier.exact => 'Es el mismo',
-      ProductDuplicateMatchTier.strong => 'Casi seguro',
-      ProductDuplicateMatchTier.possible => 'Parecido',
-      ProductDuplicateMatchTier.ruledOut => 'Descartado',
-      null => null,
-    };
-
-    return Material(
-      color: scheme.surfaceContainerLowest,
-      borderRadius: BorderRadius.circular(10),
-      child: InkWell(
-        onTap: onSelected,
-        borderRadius: BorderRadius.circular(10),
-        child: Container(
-          padding: const EdgeInsets.all(10),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(10),
-            border: Border.all(color: theme.dividerColor),
-          ),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              _ReviewThumbnail(
-                key: Key('ocr-candidate-product-image-${product.id}'),
-                imageUrl: product.imageUrlOptimized ?? product.imageUrl,
-                compact: MediaQuery.sizeOf(context).width < 720,
-                semanticLabel: 'Ampliar imagen de ${product.name}',
-                onTap: onImageTap,
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      product.name,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: theme.textTheme.bodyMedium
-                          ?.copyWith(fontWeight: FontWeight.w600),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      <String>[
-                        product.sku,
-                        product.brand ?? 'Sin marca',
-                        product.categoryName ?? 'Sin categoría',
-                      ].join(' · '),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: theme.textTheme.labelSmall?.copyWith(
-                        color: scheme.onSurfaceVariant,
-                      ),
-                    ),
-                    if (reasons.isNotEmpty) ...[
-                      const SizedBox(height: 6),
-                      Text(
-                        reasons.join(' · '),
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: theme.textTheme.labelSmall,
-                      ),
-                    ],
-                    if (objections.isNotEmpty) ...[
-                      const SizedBox(height: 4),
-                      Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Icon(
-                            Icons.error_outline,
-                            size: 13,
-                            color: roles.warning.accent,
-                          ),
-                          const SizedBox(width: 4),
-                          Expanded(
-                            child: Text(
-                              objections.join(' · '),
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
-                              style: theme.textTheme.labelSmall?.copyWith(
-                                color: roles.warning.accent,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ],
-                ),
-              ),
-              const SizedBox(width: 10),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
-                  if (tierLabel != null)
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 8,
-                        vertical: 3,
-                      ),
-                      decoration: BoxDecoration(
-                        color: tone.container,
-                        borderRadius: BorderRadius.circular(999),
-                        border: Border.all(color: tone.border),
-                      ),
-                      child: Text(
-                        tierLabel,
-                        style: theme.textTheme.labelSmall?.copyWith(
-                          color: tone.onContainer,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ),
-                  if (onSelected != null) ...[
-                    const SizedBox(height: 8),
-                    FilledButton(
-                      onPressed: onSelected,
-                      style: FilledButton.styleFrom(
-                        visualDensity: VisualDensity.compact,
-                      ),
-                      child: const Text('Es este'),
-                    ),
-                  ],
-                ],
-              ),
-            ],
-          ),
-        ),
-      ),
+    final compact = MediaQuery.sizeOf(context).width < 900;
+    final manual =
+        tier == ProductDuplicateMatchTier.ruledOut || objections.isNotEmpty;
+    final details =
+        Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Text(product.name,
+          style: theme.textTheme.bodyMedium
+              ?.copyWith(fontWeight: FontWeight.w600)),
+      const SizedBox(height: 4),
+      Text(
+          [
+            product.sku,
+            if (product.brand?.isNotEmpty == true) product.brand!,
+            if (product.categoryName?.isNotEmpty == true) product.categoryName!
+          ].join(' · '),
+          style: theme.textTheme.labelSmall
+              ?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
+      if (reasons.isNotEmpty) ...[
+        const SizedBox(height: 8),
+        LayoutBuilder(builder: (context, constraints) {
+          final visible = reasons
+              .where((reason) =>
+                  !reason.startsWith('Evidencia de IA:') &&
+                  !reason.startsWith('Es ') &&
+                  !reason.startsWith('Misma categoría') &&
+                  !reason.startsWith('Fabricante '))
+              .toList();
+          final columns = constraints.maxWidth >= 440 ? 2 : 1;
+          return Wrap(spacing: 16, runSpacing: 4, children: [
+            for (final reason in visible)
+              SizedBox(
+                  width: (constraints.maxWidth - 16 * (columns - 1)) / columns,
+                  child: Text(ocrReadableEvidence(reason),
+                      style: theme.textTheme.bodySmall))
+          ]);
+        }),
+      ],
+      if (objections.isNotEmpty) ...[
+        const SizedBox(height: 8),
+        Text('Diferencias que debes revisar',
+            style: theme.textTheme.labelSmall?.copyWith(
+                color: VinabikeThemeRoles.of(context).warning.accent)),
+        for (final objection in objections)
+          Text(ocrReadableEvidence(objection),
+              style: theme.textTheme.bodySmall),
+      ],
+    ]);
+    final actions = Wrap(
+        spacing: 12,
+        runSpacing: 8,
+        crossAxisAlignment: WrapCrossAlignment.center,
+        children: [
+          if (evidence != null)
+            VbStatusBadge(label: evidence!.label, tone: evidence!.tone),
+          if (onSelected != null)
+            OutlinedButton(
+                key: ValueKey('ocr-candidate-select-${product.id}'),
+                onPressed: onSelected,
+                child: Text(addsComponent
+                    ? 'Añadir al contenido'
+                    : manual
+                        ? 'Seleccionar con diferencias'
+                        : 'Seleccionar producto')),
+        ]);
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 12),
+      decoration: BoxDecoration(
+          border: Border(
+              bottom: BorderSide(color: theme.colorScheme.outlineVariant))),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          _ReviewThumbnail(
+              key: Key('ocr-candidate-product-image-${product.id}'),
+              imageUrl: product.imageUrlOptimized ?? product.imageUrl,
+              compact: compact,
+              semanticLabel: 'Ampliar imagen de ${product.name}',
+              onTap: onImageTap),
+          const SizedBox(width: 16),
+          Expanded(child: details),
+        ]),
+        if (reasons.any((reason) => reason.startsWith('Evidencia de IA:')))
+          ExpansionTile(
+              tilePadding: EdgeInsets.zero,
+              childrenPadding: EdgeInsets.zero,
+              title: Text('Cómo se comparó', style: theme.textTheme.labelSmall),
+              children: [
+                for (final reason in reasons
+                    .where((reason) => reason.startsWith('Evidencia de IA:')))
+                  Align(
+                      alignment: Alignment.centerLeft,
+                      child: Text(ocrReadableEvidence(reason),
+                          style: theme.textTheme.bodySmall))
+              ]),
+        const SizedBox(height: 8),
+        Align(alignment: Alignment.centerRight, child: actions),
+      ]),
     );
   }
 }

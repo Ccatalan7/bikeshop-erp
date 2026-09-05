@@ -14,8 +14,10 @@ void main() {
     'lib/shared/widgets/ocr_upload_widget.dart',
   ).readAsStringSync();
   final workspace = File(
-    'lib/shared/widgets/ocr_product_review_workspace.dart',
-  ).readAsStringSync();
+        'lib/shared/widgets/ocr_product_review_workspace.dart',
+      ).readAsStringSync() +
+      File('lib/shared/widgets/ocr_product_review_steps.dart')
+          .readAsStringSync();
   final purchaseForm = File(
     'lib/modules/purchases/pages/purchase_invoice_form_page.dart',
   ).readAsStringSync();
@@ -358,7 +360,7 @@ void main() {
     expect(manualLink, isNot(contains('_rememberAliExpressResolution(')));
     expect(
       manualLink,
-      contains('SupplierOptionEvidence.requiresExplicitCompositionFor('),
+      contains('entry.identityProduct = product'),
     );
   });
 
@@ -475,7 +477,7 @@ void main() {
       () {
     expect(source, contains('int _bulkReviewGeneration = 0;'));
     expect(source, contains('if (!_ownsBulkReview(reviewGeneration)) return;'));
-    expect(source, contains('onBack: _closeBulkReview'));
+    expect(source, contains('onBack: _backProductReviewStep'));
     expect(
       source,
       contains(
@@ -485,73 +487,23 @@ void main() {
     );
     expect(
       workspace,
-      contains("key: Key('ocr-review-copy-sibling-\${line.id}')"),
+      contains('onCopySibling'),
       reason: 'la variante hermana sigue reutilizable sin ocupar una tarjeta',
     );
     expect(
       workspace,
-      contains("label: const Text('Buscar pendientes')"),
+      contains("child: const Text('Reintentar pendientes')"),
       reason: 'la acción de lote sigue disponible en el encabezado',
     );
     expect(
       workspace,
-      contains("primaryKey: Key('ocr-review-search-\${line.id}')"),
+      contains("key: Key('ocr-review-retry-\${line.id}')"),
       reason: 'y la fila sin revisar conserva la suya',
     );
   });
 
-  test('la conciliación es una tabla fluida, no una lona de ancho fijo', () {
-    expect(workspace, contains("key: const Key('ocr-review-batch')"));
-    expect(workspace, contains("key: const Key('ocr-review-table')"));
-    expect(workspace, contains("key: const Key('ocr-review-table-header')"));
-
-    // Contratos rechazados por el dueño el 2026-08-09. No vuelven.
-    expect(workspace, isNot(contains('_minimumWidth = 1680')));
-    expect(workspace, isNot(contains('scrollDirection: Axis.horizontal')));
-    expect(workspace, isNot(contains('DataTable(')));
-    expect(workspace, isNot(contains('dataRowMaxHeight')));
-    expect(workspace, isNot(contains('class _DesktopAlternativesBand')));
-    expect(workspace, isNot(contains('_SearchableDropdown')));
-
-    // Una fila por línea, en orden de factura, de alto uniforme.
-    expect(
-      workspace,
-      contains('for (var index = 0; index < lines.length; index++)'),
-    );
-    expect(workspace, contains('static const double rowHeight = 60;'));
-    expect(
-      workspace,
-      contains("key: ValueKey<String>('ocr-review-row-\${lines[index].id}')"),
-    );
-    // Alto mínimo, no fijo: una fila con una validación pendiente crece para
-    // decirla en vez de recortarla.
-    expect(
-      workspace,
-      contains('minHeight: _ReconciliationTable.rowHeight'),
-    );
-    expect(
-        workspace,
-        isNot(contains(
-            'SizedBox(\n          height: _ReconciliationTable.rowHeight')));
-    // El nivel de columnas se decide con el ancho real que recibe la tabla.
-    expect(workspace, contains('enum _TableTier'));
-    expect(workspace, contains('double _requiredWidth('));
-    expect(workspace, contains('_TableTier? _tierFor(double inner)'));
-  });
-
-  test('el ancho decide la composición, no una tabla que se encoge', () {
-    expect(
-      workspace,
-      contains('static const double touchBreakpoint = 900;'),
-    );
-    expect(
-      workspace,
-      contains('static const double fullTableBreakpoint = 1180;'),
-    );
-    expect(workspace, contains('class _CompactLineList'));
-    // Compacto es una lista con divisores, no una pared de tarjetas.
-    expect(workspace, contains('Divider(height: 1, thickness: 1'));
-  });
+  // Responsive geometry, batch ordering and draft preservation are exercised
+  // by ocr_product_review_workspace_test.dart against rendered widgets.
 
   test('categoría y marca usan el selector canónico buscable', () {
     expect(workspace, contains('VbSearchableSelect<Category>'));
@@ -585,28 +537,32 @@ void main() {
     expect(workspace, contains("key: const Key('ocr-review-back')"));
   });
 
-  test('el pie dice la verdad sobre lo que falta, no un futuro conteo', () {
-    // El defecto que vio el dueño en runtime: «Crear 7 productos» antes de que
-    // existiera ninguna de esas siete decisiones.
-    expect(source, contains('String _bulkPrimaryLabel('));
-    expect(
-      source,
-      contains(
-        'entry.resolutionState == OcrProductResolutionState.newProduct',
-      ),
-      reason: 'sólo cuenta las filas realmente confirmadas como nuevas',
-    );
-    expect(source, contains("'Faltan \$undecidedCount '"));
-    expect(source, contains("'Completa \$incompleteCount '"));
-    expect(source, contains("if (confirmedNewCount == 0) return 'Continuar';"));
-    expect(
-      source,
-      isNot(contains("'Crear \$selectedNewCount producto")),
-      reason: 'el conteo viejo contaba filas sin decidir',
-    );
+  test('el avance separa identidad, confirmación económica y creación', () {
+    final advance = _section(source, 'void _advanceProductReviewStep()',
+        'Future<void> _assistNewProductDrafts');
+    final select = _section(source, 'Future<bool> _useExistingProductForEntry',
+        'void _changeProductDecision');
+    expect(select, contains('entry.identityProduct = product'));
+    expect(select, isNot(contains('matchedProductId:')));
+    expect(select, isNot(contains('_useSupplierVariantResolutionForEntry(')));
+    expect(advance, contains('_confirmPurchaseAmounts(entry)'));
+    expect(advance, contains('OcrPurchaseReviewFlow.amountsComplete'));
+    expect(advance, contains('OcrPurchaseReviewStep.newProducts'));
+    expect(source, contains("'Confirmar y continuar a la factura'"));
   });
 
-  test('decidir «nuevo» reserva el SKU AE de esa fila en ese momento', () {
+  test('marcar nuevo es local y crear reserva el SKU por fila', () {
+    final mark = _section(source, 'Future<void> _prepareNewProductForEntry(',
+        'Future<void> _acceptRememberedResolution(');
+    expect(mark, contains('OcrProductIdentityDecision.newProduct'));
+    expect(mark, isNot(contains('_ensureReservedSkuForEntry(')));
+    expect(mark, isNot(contains('_confirmNewProductForEntry(')));
+    final finalize = _section(
+        source,
+        'Future<void> _finalizeNewProductDrafts()',
+        'void _confirmPurchaseAmounts(');
+    expect(finalize, contains('await _confirmNewProductForEntry(entry)'));
+    expect(finalize, contains('await _createBulkProducts()'));
     expect(source, contains('Future<void> _confirmNewProductForEntry('));
     expect(source, contains('Future<void> _ensureReservedSkuForEntry('));
     expect(source, contains('await _ensureReservedSkuForEntry(entry)'));
@@ -780,13 +736,12 @@ void main() {
     expect(picker, contains('ocr-candidate-ruled-out-heading'));
     expect(picker, contains('ocr-candidate-category-conflicts-heading'));
     expect(picker, contains('widget.categoryConflicts'));
-    expect(source,
-        contains('allowCreateNew: entry.duplicateResult?.adjudicationState'));
+    expect(source, contains('allowCreateNew: !forComposition'));
     expect(picker, contains('widget.allowCreateNew'));
     expect(
       picker,
       contains(
-        'Buscar manualmente en todo el catálogo por nombre, SKU o marca',
+        'Buscar nombre, SKU o marca',
       ),
     );
   });
@@ -909,16 +864,13 @@ void main() {
   });
 
   test('el embudo de cierre devuelve a la vista previa con identidad ERP', () {
-    // Vincular escribe la identidad ERP en la línea de la factura…
-    final link = _section(
-      source,
-      'Future<bool> _useExistingProductForEntry',
-      'void _changeProductDecision',
-    );
-    expect(link, contains('matchedProductId: productId'));
-    expect(link, contains('matchedProductName: product.name'));
-    expect(link, contains('existsInDatabase: true'));
-    expect(link, contains('_parsedData = parsedData.copyWith(lineItems:'));
+    final confirm = _section(source, 'void _confirmPurchaseAmounts(',
+        'Future<void> _confirmNewProductForEntry');
+    expect(confirm, contains('entry.purchaseAmounts'));
+    expect(confirm, contains('.apply(entry.originalItem, product: product'));
+    expect(confirm,
+        contains('_parsedData = _parsedData!.copyWith(lineItems: items)'));
+    expect(confirm, contains('entry.purchaseAmountsConfirmed = true'));
 
     // …y crear hace lo mismo, y sólo entonces cierra la revisión.
     final create = _section(
@@ -926,8 +878,12 @@ void main() {
       'Future<void> _createBulkProducts() async {',
       'Future<void> _pickImage',
     );
-    expect(create, contains('matchedProductId: savedProduct.id'));
-    expect(create, contains('sku: savedProduct.sku'));
+    expect(
+        create,
+        matches(RegExp(
+            r'conversion[\s.]*applyToLine\(\s*createdEntry.originalItem')));
+    expect(create,
+        matches(RegExp(r'product: savedProduct,\s*resolution: learned')));
     expect(
       create,
       contains('_showBulkCreate = _newProductEntries.any('),
@@ -1151,15 +1107,16 @@ void main() {
   });
 
   test('critical creation blocks every OCR exit owner until it settles', () {
-    expect(
-      source,
-      contains(
-        'bool get blocksOwnerExit =>\n'
-        '      _creatingProducts || _isApplyingResult || _anyRowReservingSku;',
-      ),
-      reason:
-          'una reserva en vuelo también es una operación que no se abandona',
-    );
+    final exitStart = source.indexOf('bool get blocksOwnerExit');
+    final exit = source.substring(exitStart, source.indexOf(';', exitStart));
+    for (final flag in [
+      '_creatingProducts',
+      '_finalizingNewProducts',
+      '_isApplyingResult',
+      '_anyRowReservingSku'
+    ]) {
+      expect(exit, contains(flag));
+    }
     expect(source, contains('if (blocksOwnerExit)'));
     expect(source, contains('readOnly: _creatingProducts'));
     expect(

@@ -1235,3 +1235,19 @@ Before approving UI work, confirm:
 
 The desired UI feels calm, capable, distinctive, and alive. It does not look
 like a toy, a generic component catalog, or a legacy monochrome database form.
+
+
+### Revisión OCR: separar decisiones y edición masiva (2026-09-05)
+
+El lote de compras primero compara artículo OCR con productos reales del
+inventario. Una coincidencia o una regla recordada todavía necesita la decisión
+del operador. Las cantidades y reglas se revisan después de elegir la identidad;
+los campos obligatorios para crear no son errores de un producto existente.
+
+La primera implementación escondió cada ficha nueva tras una expansión de fila.
+Eso obligaba a localizar y abrir cada una, sin poder comparar campos del lote.
+En este flujo, todos los productos nuevos se editan en un paso propio con campos
+visibles y columnas alineadas; no se usa expansión por producto. La regresión
+comprueba selección sin escritura, reglas inaccesibles antes de identificar y
+campos visibles sólo en el lote nuevo. Son condiciones de este trabajo masivo,
+no una receta de componentes para otros módulos.

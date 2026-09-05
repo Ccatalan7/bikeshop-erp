@@ -6,6 +6,155 @@ import 'package:vinabike_erp/shared/models/supplier_variant_resolution.dart';
 
 void main() {
   group('supplier resolution proposal', () {
+    test(
+        'operator content preserves two roles of one SKU and multiplies purchases once',
+        () async {
+      final lever = _product(_frontId, 'AMB01', 'Maneta ambidiestra');
+      final proposal = await SupplierResolutionProposalBuilder.buildManual(
+          items: [
+            SupplierResolutionProposalItem(
+                product: lever,
+                catalogUnitsPerPurchase: 1,
+                role: AIProductMatchComponentRole.left),
+            SupplierResolutionProposalItem(
+                product: lever,
+                catalogUnitsPerPurchase: 1,
+                role: AIProductMatchComponentRole.right),
+          ],
+          sourcePurchaseQuantity: 3,
+          catalog: [lever],
+          lookupSetComposition: (_) async => null);
+      expect(proposal, isNotNull);
+      expect(
+          proposal!.edges.map((edge) => edge.componentRole), ['left', 'right']);
+      expect(proposal.persistedQuantity, 6);
+      expect(proposal.operatorEdited, isTrue);
+    });
+
+    test(
+        'operator can declare one catalog pair for one supplier pair without guessing two pieces',
+        () async {
+      final pair = _product(_frontId, 'PAIR01', 'Par de pastillas');
+      final proposal = await SupplierResolutionProposalBuilder.buildManual(
+          items: [
+            SupplierResolutionProposalItem(
+                product: pair,
+                catalogUnitsPerPurchase: 1,
+                role: AIProductMatchComponentRole.component)
+          ],
+          sourcePurchaseQuantity: 4,
+          catalog: [pair],
+          lookupSetComposition: (_) async => null);
+      expect(proposal!.kind, SupplierVariantResolutionKind.single);
+      expect(proposal.persistedQuantity, 4);
+    });
+
+    test(
+        'missing component costs use quantity allocation instead of near-zero cost shares',
+        () async {
+      final front = _product(_frontId, 'F', 'Delantero', cost: 100);
+      final rear = _product(_rearId, 'R', 'Trasero', cost: 0);
+      final proposal = await SupplierResolutionProposalBuilder.buildManual(
+          items: [
+            SupplierResolutionProposalItem(
+                product: front,
+                catalogUnitsPerPurchase: 1,
+                role: AIProductMatchComponentRole.front),
+            SupplierResolutionProposalItem(
+                product: rear,
+                catalogUnitsPerPurchase: 1,
+                role: AIProductMatchComponentRole.rear),
+          ],
+          sourcePurchaseQuantity: 3,
+          catalog: [front, rear],
+          lookupSetComposition: (_) async => null);
+      expect(proposal!.edges.map((edge) => edge.allocationRatio), [.5, .5]);
+    });
+
+    test('canonical set cannot reverse the declared front and rear roles',
+        () async {
+      final front = _product(_frontId, 'F', 'Delantero');
+      final rear = _product(_rearId, 'R', 'Trasero');
+      final set = _product(_setId, 'SET', 'Set', isSet: true);
+      final composition = ProductSetCompositionSnapshot(
+          setProductId: _setId,
+          fullSetsAvailable: 0,
+          components: [
+            _setItem(front, position: 1, label: 'Trasero'),
+            _setItem(rear, position: 2, label: 'Delantero')
+          ]);
+      final proposal = await SupplierResolutionProposalBuilder.buildManual(
+          items: [
+            SupplierResolutionProposalItem(
+                product: front,
+                catalogUnitsPerPurchase: 1,
+                role: AIProductMatchComponentRole.front),
+            SupplierResolutionProposalItem(
+                product: rear,
+                catalogUnitsPerPurchase: 1,
+                role: AIProductMatchComponentRole.rear),
+          ],
+          sourcePurchaseQuantity: 3,
+          catalog: [front, rear, set],
+          lookupSetComposition: (_) async => composition);
+      expect(proposal!.usesCanonicalSet, isFalse);
+      expect(proposal.edges.map((edge) => edge.productId), [_frontId, _rearId]);
+    });
+
+    test('manual content rejects zero units and ungrounded products', () async {
+      final product = _product(_frontId, 'F', 'Delantero');
+      for (final units in [0, -1]) {
+        final proposal = await SupplierResolutionProposalBuilder.buildManual(
+            items: [
+              SupplierResolutionProposalItem(
+                  product: product,
+                  catalogUnitsPerPurchase: units,
+                  role: AIProductMatchComponentRole.component)
+            ],
+            sourcePurchaseQuantity: 1,
+            catalog: [product],
+            lookupSetComposition: (_) async => null);
+        expect(proposal, isNull);
+      }
+      final missing = await SupplierResolutionProposalBuilder.buildManual(
+          items: [
+            SupplierResolutionProposalItem(
+                product: product,
+                catalogUnitsPerPurchase: 1,
+                role: AIProductMatchComponentRole.component)
+          ],
+          sourcePurchaseQuantity: 1,
+          catalog: [],
+          lookupSetComposition: (_) async => null);
+      expect(missing, isNull);
+    });
+
+    test(
+        'AI self-confidence does not hide a grounded proposal from operator review',
+        () async {
+      final product = _product(_frontId, 'F', 'Pieza');
+      final proposal = await SupplierResolutionProposalBuilder.build(
+          decision: AIProductMatchDecision(
+              decision: AIProductMatchDecisionKind.composite,
+              productId: null,
+              confidence: .6,
+              reason: 'Propuesta pendiente de revisión',
+              components: [
+                AIProductMatchComponent(
+                    productId: product.id!,
+                    quantity: 2,
+                    role: AIProductMatchComponentRole.homogeneous)
+              ]),
+          investigation: _packInvestigation(count: 2),
+          optionEvidence: SupplierOptionEvidence(
+              variantKey: 'sku:review-pack', packCount: 2, rawUnitToken: 'pcs'),
+          sourcePurchaseQuantity: 3,
+          catalog: [product],
+          lookupSetComposition: (_) async => null);
+      expect(proposal, isNotNull);
+      expect(proposal!.persistedQuantity, 6);
+    });
+
     test('3 caliper sets become 3 front + 3 rear through canonical set',
         () async {
       final front = _product(_frontId, 'AE0145', 'Caliper delantero', cost: 10);

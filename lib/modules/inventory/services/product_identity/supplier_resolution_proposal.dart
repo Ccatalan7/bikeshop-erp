@@ -35,6 +35,7 @@ class SupplierResolutionProposal {
     required this.reason,
     this.canonicalSetProduct,
     this.canonicalSetComposition,
+    this.operatorEdited = false,
   });
 
   final SupplierVariantResolutionKind kind;
@@ -45,6 +46,7 @@ class SupplierResolutionProposal {
   final String? reason;
   final Product? canonicalSetProduct;
   final ProductSetCompositionSnapshot? canonicalSetComposition;
+  final bool operatorEdited;
 
   bool get usesCanonicalSet => canonicalSetProduct != null;
 
@@ -111,8 +113,7 @@ class SupplierResolutionProposalBuilder {
     if (!sourcePurchaseQuantity.isFinite ||
         sourcePurchaseQuantity <= 0 ||
         optionEvidence.packEvidenceConflict ||
-        decision.invalidProductId ||
-        decision.confidence < 0.85) {
+        decision.invalidProductId) {
       return null;
     }
     final byId = <String, Product>{
@@ -262,6 +263,136 @@ class SupplierResolutionProposalBuilder {
     );
   }
 
+  /// The operator declares catalog units, not a guessed interpretation of
+  /// supplier pieces/pairs. This draft uses the same graph and set kernel as
+  /// AI proposals and becomes authority only after the host confirmation.
+  static Future<SupplierResolutionProposal?> buildManual({
+    required List<SupplierResolutionProposalItem> items,
+    required double sourcePurchaseQuantity,
+    required Iterable<Product> catalog,
+    required ProductSetCompositionLookup lookupSetComposition,
+  }) async {
+    if (items.isEmpty ||
+        !sourcePurchaseQuantity.isFinite ||
+        sourcePurchaseQuantity <= 0) {
+      return null;
+    }
+    final byId = {
+      for (final product in catalog)
+        if (product.id != null && product.isActive && !product.isService)
+          product.id!: product
+    };
+    final grounded = <SupplierResolutionProposalItem>[];
+    for (final item in items) {
+      final product = byId[item.product.id];
+      if (product == null ||
+          item.catalogUnitsPerPurchase <= 0 ||
+          item.catalogUnitsPerPurchase > 1000000) {
+        return null;
+      }
+      // Repeated roles remain separate even when an ambidextrous SKU is shared.
+      final duplicate = grounded.indexWhere(
+          (other) => other.product.id == product.id && other.role == item.role);
+      if (duplicate >= 0) {
+        final previous = grounded[duplicate];
+        grounded[duplicate] = SupplierResolutionProposalItem(
+            product: product,
+            catalogUnitsPerPurchase:
+                previous.catalogUnitsPerPurchase + item.catalogUnitsPerPurchase,
+            role: item.role);
+      } else {
+        grounded.add(SupplierResolutionProposalItem(
+            product: product,
+            catalogUnitsPerPurchase: item.catalogUnitsPerPurchase,
+            role: item.role));
+      }
+    }
+    final sets = grounded.where((item) => item.product.isSet).toList();
+    if (sets.isNotEmpty) {
+      if (grounded.length != 1) return null;
+      final item = sets.single;
+      final composition = await lookupSetComposition(item.product);
+      if (composition == null || composition.components.isEmpty) return null;
+      final parts = _itemsFromSetComposition(composition, byId);
+      if (parts == null) return null;
+      return SupplierResolutionProposal._(
+          kind: item.catalogUnitsPerPurchase == 1
+              ? SupplierVariantResolutionKind.single
+              : SupplierVariantResolutionKind.homogeneous,
+          items: [
+            for (final part in parts)
+              SupplierResolutionProposalItem(
+                  product: part.product,
+                  catalogUnitsPerPurchase: part.catalogUnitsPerPurchase *
+                      item.catalogUnitsPerPurchase,
+                  role: part.role)
+          ],
+          edges: [
+            SupplierVariantResolutionEdge(
+                position: 1,
+                productId: item.product.id!,
+                catalogUnitsPerPurchase: item.catalogUnitsPerPurchase,
+                allocationRatio: 1,
+                componentRole: 'catalog_set')
+          ],
+          resolutionProducts: [item.product],
+          sourcePurchaseQuantity: sourcePurchaseQuantity,
+          reason: null,
+          operatorEdited: true,
+          canonicalSetProduct: item.product,
+          canonicalSetComposition: composition);
+    }
+    final canonical = await _findExactCanonicalSet(
+        directItems: grounded,
+        catalog: byId.values,
+        lookupSetComposition: lookupSetComposition);
+    final kind = canonical != null ||
+            (grounded.length == 1 &&
+                grounded.single.catalogUnitsPerPurchase == 1)
+        ? SupplierVariantResolutionKind.single
+        : grounded.length == 1
+            ? SupplierVariantResolutionKind.homogeneous
+            : SupplierVariantResolutionKind.composite;
+    final ratios = _allocationRatios(grounded);
+    final edges = canonical != null
+        ? [
+            SupplierVariantResolutionEdge(
+                position: 1,
+                productId: canonical.$1.id!,
+                catalogUnitsPerPurchase: 1,
+                allocationRatio: 1,
+                componentRole: 'catalog_set')
+          ]
+        : [
+            for (var i = 0; i < grounded.length; i++)
+              SupplierVariantResolutionEdge(
+                  position: i + 1,
+                  productId: grounded[i].product.id!,
+                  catalogUnitsPerPurchase: grounded[i].catalogUnitsPerPurchase,
+                  allocationRatio: ratios[i],
+                  componentRole:
+                      kind == SupplierVariantResolutionKind.homogeneous
+                          ? 'homogeneous'
+                          : grounded[i].role.wireValue)
+          ];
+    if (SupplierVariantResolution.validateGraph(kind: kind, edges: edges) !=
+        null) {
+      return null;
+    }
+    return SupplierResolutionProposal._(
+        kind: kind,
+        items: List.unmodifiable(grounded),
+        edges: List.unmodifiable(edges),
+        resolutionProducts: canonical != null
+            ? [canonical.$1]
+            : List.unmodifiable(grounded.map((item) => item.product)),
+        sourcePurchaseQuantity: sourcePurchaseQuantity,
+        reason: null,
+        operatorEdited: true,
+        canonicalSetProduct: canonical?.$1,
+        canonicalSetComposition: canonical?.$2);
+  }
+
   static bool _packageCountAgrees(
     SupplierOptionEvidence evidence,
     AIProductIdentityInvestigation? investigation,
@@ -404,7 +535,11 @@ class SupplierResolutionProposalBuilder {
           ifAbsent: () => component.quantityInSet,
         );
       }
-      if (_sameTotals(expected, actual)) {
+      final recognized = _itemsFromSetComposition(
+          composition, {for (final product in catalog) product.id!: product});
+      if (_sameTotals(expected, actual) &&
+          recognized != null &&
+          _sameTotals(_roleTotals(directItems), _roleTotals(recognized))) {
         matches.add((setProduct, composition));
       }
     }
@@ -421,6 +556,25 @@ class SupplierResolutionProposalBuilder {
         (quantity) => quantity + item.catalogUnitsPerPurchase,
         ifAbsent: () => item.catalogUnitsPerPurchase,
       );
+    }
+    return totals;
+  }
+
+  static Map<String, int> _roleTotals(
+      Iterable<SupplierResolutionProposalItem> items) {
+    final totals = <String, int>{};
+    for (final item in items) {
+      final role = switch (item.role) {
+        AIProductMatchComponentRole.front ||
+        AIProductMatchComponentRole.rear ||
+        AIProductMatchComponentRole.left ||
+        AIProductMatchComponentRole.right =>
+          item.role.wireValue,
+        _ => 'component',
+      };
+      final key = '${item.product.id}:$role';
+      totals.update(key, (value) => value + item.catalogUnitsPerPurchase,
+          ifAbsent: () => item.catalogUnitsPerPurchase);
     }
     return totals;
   }
@@ -450,9 +604,12 @@ class SupplierResolutionProposalBuilder {
     List<SupplierResolutionProposalItem> items,
   ) {
     final scale = BigInt.from(_ratioPrecision);
+    final hasCompleteCosts = items
+        .every((item) => item.product.cost.isFinite && item.product.cost > 0);
     var weights = <BigInt>[
       for (final item in items)
-        BigInt.from((item.product.cost * 1000000).round()) *
+        BigInt.from(
+                hasCompleteCosts ? (item.product.cost * 1000000).round() : 1) *
             BigInt.from(item.catalogUnitsPerPurchase),
     ];
     if (weights.every((weight) => weight <= BigInt.zero)) {

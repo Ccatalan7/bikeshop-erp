@@ -176,7 +176,7 @@ parallel visual workspace or its own behavioral test suite.
 | Purchase receipt discrepancy capture | `PurchaseReceivingWorkspace` in either purchase-invoice host | `_ReceiptGridRow` in `purchase_receiving_page.dart` | The single `Motivo / evidencia` cell contains both the categorical difference dropdown (`Faltante`, `Dañado`, `Rechazado`) and an optional free-text detail/evidence field. The category continues to drive the exact quantity bucket; the composed category plus operator detail persists atomically as the receipt line's `discrepancy_reason` and reappears in the formal `REC-*` and its resolution case. Simplifying the table must never remove the operator's ability to record this evidence. |
 | Purchase document list read model | Every purchase-document row/card and the selected workflow in `/purchases` | `purchase_invoice_list_read_model_v2` + `PurchaseService.getPurchaseInvoicesForList` + `_buildStatusChip` | One versioned snapshot combines the V1 financial/physical fulfillment state with the server-owned source-document code, display label and workflow kind. The service caches that combined row as one unit and preserves the three document fields across realtime/full-row updates; the page never publishes a financial-only row or loses `Boleta`/`Ticket` while hydrating receipt state. Legacy `received_date/status` evidence remains compatible, while professional `none`, `open`, `complete` and `closed_with_difference` states are derived without rewriting the document or re-running legacy stock triggers. Receipt, void and resolution evidence invalidates the same read-model cache. Application roles have SELECT only on V2. |
 | Purchase receipt formal detail | `/purchases/receipts/:receiptId` from the invoice evidence register and any linked resolution | `purchase_receipt_detail_page.dart` + shared `PurchaseReceiptDetailView` | The persisted `REC-*` opens inside the existing `MainLayout` with a task-appropriate detail composition, not a replacement application shell. Its compact header identifies receipt, invoice, supplier, registration state and unresolved-case state. The primary table uses product thumbnails and the operational projection `Producto`, `Pedido`, `Recibido`, `Diferencia`, `Motivo / evidencia`; prior quantity, cost, stock movement identifiers, operation IDs and actors remain available as secondary or collapsed technical trace rather than parallel decision columns. All open and completed resolution evidence remains linked to the exact case. Choosing a resolution uses the host-appropriate blocking or contextual surface selected under the GUI guides; it remains keyboard/touch accessible, scroll-safe, and preserves the receipt context, and the selection itself never rewrites the physical receipt. |
-| AliExpress daily purchase intake | Contextual `Compras del día` action in the embedded ERP browser while visiting `*.aliexpress.com`; Chrome companion side panel when the legacy add-on is used | `webview_module_page.dart` + `AliExpressDailyInvoiceService` + packaged `content.js` extractor + shared packaged `invoice.js` / `invoice.css` document renderer + `OcrFileHandoffService` + canonical `OCRUploadWidget` in `purchase_invoice_form_page.dart` | Reuse the signed-in browser session and the same packaged extractor only on trusted HTTPS AliExpress hosts; select a day, automatically traverse/load the order history, collect and enrich every matching order, preserve product images/source links, and consolidate all landed costs into one draft. The embedded browser offers two explicit continuations: `Generar preview` converts the same packaged HTML renderer used by the Chrome companion into the PDF shown to the user, including compact names, images and every landed-cost column, then waits for `Enviar al OCR`; `Preparar factura` skips that visual stop and continues directly with bytes from that same renderer. Preview and OCR handoff must reuse one identical byte payload; an independent simplified ERP invoice template is not a valid preview. Either continuation opens `/purchases/new` in a fresh workspace tab, preserving the signed-in AliExpress tab and its current page. The Chrome side panel mirrors the underlying workflow as `Factura: fecha → buscar → revisar → crear`; manual export/settings live under `Más` and AI Vision remains a separate explicit fallback. Repeated DOM observations are deduplicated per order and identical products are aggregated across the day before cost allocation. Explicit pack labels are converted into shop inventory units (for example, `2 × 4 pares` becomes `8 pares`) while retaining purchased quantity and pack factor for audit. Subtotal, shipping, tax, discount and final total remain separate source facts; an unexplained difference adjusts landed cost but is never relabeled as a fabricated tax or discount. The bridge never reads or transports stored credentials. Collection itself performs no database writes. Product resolution waits for title/model cleanup, resolves tenant-and-supplier-scoped listing aliases first, gives exact image identity priority, normalizes model forms such as `RT56` / `RT-56`, and uses fuzzy/vision analysis only for a bounded ambiguous shortlist. Every unresolved row is explicitly `Revisar` or `Nuevo`; creation stays blocked during analysis and until the worker links a candidate or confirms the new product. A confirmed existing-product choice persists the AliExpress listing as an alias so later purchases auto-link. A new AliExpress product receives an atomically reserved, idempotently replayable internal `AE0001…` SKU while the full listing identifier remains its supplier code; partial failures retain only the failed rows for retry. Applying the OCR draft requires every source line to resolve and the landed line sum to reconcile with the invoice total within whole-peso rounding tolerance. AliExpress landed unit costs already contain distributed shipping, tax and discounts, so the purchase form must not add another 19% IVA. Invoice save and receiving remain separate explicit actions. **La revisión de productos es full-page** (corrección 2026-08-09): ocupa el área completa de la factura de compra, conserva el batch vertical en orden de factura y no usa una receta de side sheet. El cuerpo de página tiene scroll y un pie propio mantiene alcanzables la política de precios, el bloqueo exacto y la acción final sin introducir otro shell o modal. El estado del día en el selector de fecha usa **E-04 `VbNotice`** en vez de una fila de texto local. **Bajo 900px el WebView se comporta como el navegador de un teléfono** (2026-08-06): `useWideViewPort` queda desactivado —en Android medía la página contra ~980px y los sitios servían su versión de escritorio dentro del teléfono— y la escala efectiva es 1.0, sin el zoom de escritorio. La acción «Compras del día» baja a su propia fila contextual de ancho completo y 48px, visible sólo dentro de AliExpress: dentro de la barra ocupaba ~250px de 420 y volvía a dejar la dirección como un candado ilegible, y esconderla en el menú degradaría la acción por la que el ERP tiene navegador propio. **Bajo 900px la barra del navegador se recompone, no se encoge** (2026-08-06): en compacto sobreviven en la fila sólo «Atrás», la dirección y el menú «⋮»; adelante, recargar, inicio y marcador pasan al menú y «abrir afuera» reutiliza el ítem que ya existía ahí. Con los nueve controles de escritorio metidos en 420px, la dirección quedaba reducida a un candado de ~40px: ilegible, intocable y sin decir en qué sitio estabas. El control que permanece usa objetivo de 48px. **El listado se pide a la API de pedidos, no se raspa del DOM** (2026-08-06): la página construye su listado llamando a `mtop.aliexpress.trade.buyer.order.list` y expone su cliente firmado en `window.lib.mtop`; el puente reutiliza ese cliente y toma la plantilla del cuerpo de una llamada real de la sesión (los ids de módulo cambian por cuenta y versión, reconstruirlos sería adivinar). De ahí salen número, fecha, total, tienda y cada línea con producto, cantidad, precio unitario e imagen, con paginación por número de página. Resultado medido el 2026-04-06: 6 de 6 pedidos en 2 páginas y segundos, contra 4 de 6 tras minutos de scroll. El índice se precarga al abrir el flujo y **D-01 marca dentro de cada celda los días con pedidos antes de cualquier selección**; informa sin bloquear, por lo que un día sin marca significa «no consta», nunca «no hubo compras». Ese índice se contrasta además con las facturas ya emitidas (`AEDDMMYY`, `AliExpressPendingDaysService`) para distinguir **compras sin factura registrada** de días ya cerrados, y avisar de las primeras. Ese contraste —cuenta del proveedor contra facturas del ERP— es lo que cubre la compra hecha fuera del navegador del ERP (teléfono, otro equipo): **no** depende del correo, porque AliExpress sólo envía avisos de entrega y su número es el seguimiento del courier, que no liga con el pedido ni con la factura (verificado en la bandeja real el 2026-08-06). El recorrido del DOM permanece **sólo como respaldo** para cuando la página no exponga su cliente de API. **Ese respaldo lo gobierna Dart, no la página** (2026-08-06): macOS marca como ocluida la ventana tapada y WebKit suspende entonces la página del WebView —sus timers y hasta el JavaScript que se le pide evaluar—, así que un recorrido que esperaba con `setTimeout` dentro del WebView se congelaba indefinidamente en cuanto el usuario ponía otra ventana encima. El puente expone pasos atómicos y síncronos (`ordersListBeginSteppedRun`, `ordersListScrollTo`, `ordersListHarvestStep`, `ordersListClickLoadMore`, `ordersListFinishSteppedRun`) y el ritmo lo pone Dart; además la ventana macOS activa `preventsOcclusion` y toda llamada al puente tiene tope de tiempo. El recorrido nunca baja más allá del final de la lista de pedidos: debajo vive un carrusel de recomendaciones con scroll infinito que, si se toca, crece sin techo, deja el botón «ver más pedidos» fuera de pantalla y vuelve cuadrático cualquier escaneo del documento. Opening `Compras del día` from any AliExpress page first loads the order history itself (the calendar borrows that page's own listing request; no other page makes it) and shows `Abriendo el historial de pedidos…` while it does, then reads the purchase days; the dialog no longer gives up with «sin plantilla de petición capturada» when opened from the home page (2026-09-03). The invoice PDF is produced from the same HTML template on every host, and the template draws its body with JavaScript. **macOS and Android both convert in an app-owned native host** on `com.vinabike.erp/html_pdf_renderer`; only iOS still uses the `printing` plugin. macOS runs the template live in its WKWebView host, while Android pre-renders it in a headless web view (`HtmlPdfRendererService.prepareWithHeadlessWebView`) and hands the finished, script-free DOM to `HtmlPdfRenderer.kt`. Two Android defects made this necessary, both read from the plugin source and both silent: its converter prints with JavaScript disabled, so the raw template filed a blank page as the purchase evidence while the OCR review still looked correct from `structuredInvoiceData` (2026-09-03); and it keeps no reference to the WebView it converts with while its `PdfConvert` helper overrides neither `onLayoutFailed` nor `onWriteFailed`, so a conversion that is collected or that fails never calls back and the progress dialog spins forever (2026-09-04). The app-owned host retains every job, carries its own deadline and answers exactly once; six consecutive conversions of a seven-photo invoice measured 2.9 s then 0.56-0.85 s, against one success followed by an unbounded hang through the plugin. Product photos are shrunk to a 220 px thumbnail off the UI isolate before being embedded, which took the same invoice from 1.34 MB to 476 kB. A template that never signals ready fails loudly instead of printing an empty sheet, and the page is converted edge to edge because the template owns its 14 mm padding. |
+| AliExpress daily purchase intake | Contextual `Compras del día` action in the embedded ERP browser while visiting `*.aliexpress.com`; Chrome companion side panel when the legacy add-on is used | `webview_module_page.dart` + `AliExpressDailyInvoiceService` + packaged `content.js` extractor + shared packaged `invoice.js` / `invoice.css` document renderer + `OcrFileHandoffService` + canonical `OCRUploadWidget` in `purchase_invoice_form_page.dart` | Reuse the signed-in browser session and the same packaged extractor only on trusted HTTPS AliExpress hosts; select a day, automatically traverse/load the order history, collect and enrich every matching order, preserve product images/source links, and consolidate all landed costs into one draft. The embedded browser offers two explicit continuations: `Generar preview` converts the same packaged HTML renderer used by the Chrome companion into the PDF shown to the user, including compact names, images and every landed-cost column, then waits for `Enviar al OCR`; `Preparar factura` skips that visual stop and continues directly with bytes from that same renderer. Preview and OCR handoff must reuse one identical byte payload; an independent simplified ERP invoice template is not a valid preview. Either continuation opens `/purchases/new` in a fresh workspace tab, preserving the signed-in AliExpress tab and its current page. The Chrome side panel mirrors the underlying workflow as `Factura: fecha → buscar → revisar → crear`; manual export/settings live under `Más` and AI Vision remains a separate explicit fallback. Repeated DOM observations are deduplicated per order and identical products are aggregated across the day before cost allocation. Explicit pack labels are converted into shop inventory units (for example, `2 × 4 pares` becomes `8 pares`) while retaining purchased quantity and pack factor for audit. Subtotal, shipping, tax, discount and final total remain separate source facts; an unexplained difference adjusts landed cost but is never relabeled as a fabricated tax or discount. The bridge never reads or transports stored credentials. Collection itself performs no database writes. Product resolution preserves source evidence, checks tenant-and-supplier-scoped versioned authority first, and stages a remembered rule for explicit review; unresolved rows use the canonical eliminate-then-rank identity pipeline and cached AI evidence. Every unresolved row is explicitly `Revisar` or `Nuevo`; creation stays blocked during analysis and until the worker links a candidate or confirms the new product. Confirmed supplier content is saved through the versioned resolution writer; later purchases show that rule for acceptance or correction, as detailed in the OCR product review contract below. A new AliExpress product receives an atomically reserved, idempotently replayable internal `AE0001…` SKU while the full listing identifier remains its supplier code; partial failures retain only the failed rows for retry. Applying the OCR draft requires every source line to resolve and the landed line sum to reconcile with the invoice total within whole-peso rounding tolerance. AliExpress landed unit costs already contain distributed shipping, tax and discounts, so the purchase form must not add another 19% IVA. Invoice save and receiving remain separate explicit actions. **La revisión de productos es full-page** (corrección 2026-08-09): ocupa el área completa de la factura de compra, conserva el batch vertical en orden de factura y no usa una receta de side sheet. El cuerpo de página tiene scroll y un pie propio mantiene alcanzables la política de precios, el bloqueo exacto y la acción final sin introducir otro shell o modal. El estado del día en el selector de fecha usa **E-04 `VbNotice`** en vez de una fila de texto local. **Bajo 900px el WebView se comporta como el navegador de un teléfono** (2026-08-06): `useWideViewPort` queda desactivado —en Android medía la página contra ~980px y los sitios servían su versión de escritorio dentro del teléfono— y la escala efectiva es 1.0, sin el zoom de escritorio. La acción «Compras del día» baja a su propia fila contextual de ancho completo y 48px, visible sólo dentro de AliExpress: dentro de la barra ocupaba ~250px de 420 y volvía a dejar la dirección como un candado ilegible, y esconderla en el menú degradaría la acción por la que el ERP tiene navegador propio. **Bajo 900px la barra del navegador se recompone, no se encoge** (2026-08-06): en compacto sobreviven en la fila sólo «Atrás», la dirección y el menú «⋮»; adelante, recargar, inicio y marcador pasan al menú y «abrir afuera» reutiliza el ítem que ya existía ahí. Con los nueve controles de escritorio metidos en 420px, la dirección quedaba reducida a un candado de ~40px: ilegible, intocable y sin decir en qué sitio estabas. El control que permanece usa objetivo de 48px. **El listado se pide a la API de pedidos, no se raspa del DOM** (2026-08-06): la página construye su listado llamando a `mtop.aliexpress.trade.buyer.order.list` y expone su cliente firmado en `window.lib.mtop`; el puente reutiliza ese cliente y toma la plantilla del cuerpo de una llamada real de la sesión (los ids de módulo cambian por cuenta y versión, reconstruirlos sería adivinar). De ahí salen número, fecha, total, tienda y cada línea con producto, cantidad, precio unitario e imagen, con paginación por número de página. Resultado medido el 2026-04-06: 6 de 6 pedidos en 2 páginas y segundos, contra 4 de 6 tras minutos de scroll. El índice se precarga al abrir el flujo y **D-01 marca dentro de cada celda los días con pedidos antes de cualquier selección**; informa sin bloquear, por lo que un día sin marca significa «no consta», nunca «no hubo compras». Ese índice se contrasta además con las facturas ya emitidas (`AEDDMMYY`, `AliExpressPendingDaysService`) para distinguir **compras sin factura registrada** de días ya cerrados, y avisar de las primeras. Ese contraste —cuenta del proveedor contra facturas del ERP— es lo que cubre la compra hecha fuera del navegador del ERP (teléfono, otro equipo): **no** depende del correo, porque AliExpress sólo envía avisos de entrega y su número es el seguimiento del courier, que no liga con el pedido ni con la factura (verificado en la bandeja real el 2026-08-06). El recorrido del DOM permanece **sólo como respaldo** para cuando la página no exponga su cliente de API. **Ese respaldo lo gobierna Dart, no la página** (2026-08-06): macOS marca como ocluida la ventana tapada y WebKit suspende entonces la página del WebView —sus timers y hasta el JavaScript que se le pide evaluar—, así que un recorrido que esperaba con `setTimeout` dentro del WebView se congelaba indefinidamente en cuanto el usuario ponía otra ventana encima. El puente expone pasos atómicos y síncronos (`ordersListBeginSteppedRun`, `ordersListScrollTo`, `ordersListHarvestStep`, `ordersListClickLoadMore`, `ordersListFinishSteppedRun`) y el ritmo lo pone Dart; además la ventana macOS activa `preventsOcclusion` y toda llamada al puente tiene tope de tiempo. El recorrido nunca baja más allá del final de la lista de pedidos: debajo vive un carrusel de recomendaciones con scroll infinito que, si se toca, crece sin techo, deja el botón «ver más pedidos» fuera de pantalla y vuelve cuadrático cualquier escaneo del documento. Opening `Compras del día` from any AliExpress page first loads the order history itself (the calendar borrows that page's own listing request; no other page makes it) and shows `Abriendo el historial de pedidos…` while it does, then reads the purchase days; the dialog no longer gives up with «sin plantilla de petición capturada» when opened from the home page (2026-09-03). The invoice PDF is produced from the same HTML template on every host, and the template draws its body with JavaScript. **macOS and Android both convert in an app-owned native host** on `com.vinabike.erp/html_pdf_renderer`; only iOS still uses the `printing` plugin. macOS runs the template live in its WKWebView host, while Android pre-renders it in a headless web view (`HtmlPdfRendererService.prepareWithHeadlessWebView`) and hands the finished, script-free DOM to `HtmlPdfRenderer.kt`. Two Android defects made this necessary, both read from the plugin source and both silent: its converter prints with JavaScript disabled, so the raw template filed a blank page as the purchase evidence while the OCR review still looked correct from `structuredInvoiceData` (2026-09-03); and it keeps no reference to the WebView it converts with while its `PdfConvert` helper overrides neither `onLayoutFailed` nor `onWriteFailed`, so a conversion that is collected or that fails never calls back and the progress dialog spins forever (2026-09-04). The app-owned host retains every job, carries its own deadline and answers exactly once; six consecutive conversions of a seven-photo invoice measured 2.9 s then 0.56-0.85 s, against one success followed by an unbounded hang through the plugin. Product photos are shrunk to a 220 px thumbnail off the UI isolate before being embedded, which took the same invoice from 1.34 MB to 476 kB. A template that never signals ready fails loudly instead of printing an empty sheet, and the page is converted edge to edge because the template owns its 14 mm padding. |
 
 #### El bloque de decisión de una línea (corrección 2026-08-24)
 
@@ -247,102 +247,57 @@ Medición real del 2026-08-12:
 ventana `6m`, 8 páginas por recorrido, 67 órdenes únicas, 5 solapamientos
 idénticos, 7 órdenes objetivo y el mismo hash objetivo en ambas pasadas.
 
-### OCR product-review composition (2026-08-10)
+### OCR product review: purchase intake (2026-09-05)
 
-The OCR review is a full-page child of the existing purchase-invoice
-`MainLayout`, not a dialog, inset shell, split pane, accordion or per-product
-wizard. **Preview and reconciliation are operational tables.** The preview
-aligns source product, supplier code, quantity, unit cost, discount, line total
-and state, and closes with the arithmetic that decides whether the invoice adds
-up: sum of lines, invoice total, difference. The reconciliation aligns source
-identity, SKU, name, category, brand, cost, price, catalog decision and sale
-use. One source line is one row and invoice order never changes.
+The goal is to turn supplier orders into an accurate purchase draft with minimal
+manual entry. Every routed purchase-document editor and the AliExpress daily
+purchase browser handoff share `OCRUploadWidget`, `OcrProductReviewWorkspace`,
+`OcrCandidatePicker` and `OcrPurchaseReviewFlow` on desktop, tablet and phone.
+The source draft/controllers belong to the host; recomposition preserves them.
 
-**Both tables are fluid, and their column set comes from the width they are
-actually given** (owner correction 2026-08-10, superseding the 2026-08-09
-entry). A fixed inner canvas inside a horizontal scroller is rejected: the
-reconciliation shipped at 1680 px and the preview claimed to fit at 1060 px
-when its cells need 1286, so on ordinary local window sizes the decision column
-and the line total sat off screen while scrolling was already disabled. The
-reconciliation declares three column tiers and picks the richest that honours
-every minimum; when none fits it renders the compact line editor rather than an
-overflow. The preview scrolls only below the width its cells arithmetically
-require.
+1. **Identificar productos.** Source order remains visible as an OCR article
+   column beside the first viable **actual inventory Product**, including its
+   image, name, SKU and canonical product-editor link by primary key. Cached
+   alternatives and general inventory search return actual Product identities.
+   `Seleccionar producto` or `Marcar como nuevo` records a local decision only.
+   A stored rule may supply candidate products but cannot display an already
+   accepted composition or apply quantities at this step. All selected source
+   rows need a decision before advancing; deselected rows are omitted on finish.
+2. **Cantidades y costos.** Existing identities are reviewed together with source
+   purchase quantity, purchase unit cost, landed line total and catalog units per
+   purchase prefilled. The batch action confirms all valid amounts; optional
+   per-line confirmation is never a prerequisite to pressing the batch action.
+   Only here may the operator apply a remembered rule or configure decomposition.
+   Its graph must contain the explicitly selected Product primary key. Changing
+   a decision restores the source draft and does not revoke a stored rule.
+3. **Productos nuevos.** All newly chosen products form one editable batch,
+   with visible name/SKU, category, brand, catalog-unit factor, cost and sale-price
+   columns. No row expansion is required. Tablet/phone use always-visible field
+   groups with the same controllers. Source/AI assistance preserves user edits;
+   it never creates products or decides identity automatically. The final action
+   confirms the batch, reserves each canonical SKU idempotently, creates products
+   with zero stock and reconciles the source invoice. A partially committed row
+   remains visible for reconciliation retry and cannot be created again.
 
-**Rows share one height, and a row with something to say may exceed it.** A
-mandatory missing category or a brand suggestion without manufacturer evidence
-renders under its control; clipping the exact reason the invoice cannot be
-applied to keep a table even is a defect, not tidiness.
+Catalog creation, applying the OCR result to a purchase draft, saving the invoice
+and receiving stock remain separate operations. `OcrPurchaseAmounts` and
+`OcrCatalogUnitConversion` conserve the landed total and supplier provenance;
+reviewed totals already include discounts and must not be discounted twice.
+A verified graph expands downstream exactly once; otherwise the explicit unit
+conversion updates the invoice quantity and unit cost locally.
 
-**Alternatives open in a centred, closeable picker — never inside the row.**
-This supersedes the 2026-08-09 rule that kept alternatives expanding in the
-decision cell: in place they made every row a different height and pushed the
-rest of the invoice out of view. The canonical component is
-`OcrCandidatePicker`. It carries the line being decided (photo, title, supplier
-code, quantity, cost), one row per candidate with image, SKU, brand, category,
-the verbal reason it is offered and the stated objection against it, explicit
-selection, free-text catalog search, `Ninguno · crear nuevo`, and designed
-loading, empty and error states. En escritorio usa el sobre grande de revisión
-disponible —sin convertirse en página ni ocultar la factura bajo una ruta— y
-dimensiona las miniaturas para comparar evidencia visual sin desperdiciar el
-ancho de la ventana; restaurar el antiguo shell angosto de 720 px es una
-regresión. Its manual search owns a generation: a slower
-older response never replaces a newer one or a cleared box, and a failed search
-says so instead of looking like «no existe». The row keeps the two peer
-decisions `Vincular` and `Crear nuevo`; `Ver alternativas` is labelled and one
-click away rather than hidden behind an ellipsis.
+`SupplierResolutionProposalBuilder` owns grounded composition and canonical sets.
+The editor retains real product identities, units per purchase and front/rear/
+left/right roles. Corrections use the observed prior revision and a content-bound
+idempotency key. A remembered rule is past evidence, never a new AI success.
+Opening alternatives uses the cached receipt and performs no model calls.
+Actual asynchronous work disables affected actions; completed supplier lookup
+must clear stale `searching` state instead of showing an endless spinner.
 
-**La abstención bloquea automatización, no al operador — corrección
-2026-08-13.** El fin de la revisión es producir las líneas reales de la
-factura, no exhibir el estado interno del matcher. Por eso cada fila conserva
-una salida completa y contextual: si hay un candidato normal viable se muestra
-el primero como `Más parecido` con `Vincular`, `Ver alternativas` y `Crear
-nuevo`; si el único candidato recuperado está fuera de la categoría autoritativa
-permanece únicamente en la sección separada de conflictos del picker, nunca
-como vínculo rápido; si no sobrevivió ningún candidato normal pero el picker
-conserva un descarte útil, la fila muestra ese mismo primer elemento como
-`Revisión manual` y en el mismo orden —jamás sustituye ese elemento por el
-primer conflicto de categoría—; si existe una composición validada, `Usar
-descomposición` reemplaza a `Vincular` como
-acción principal; y si no existe candidato visible se ofrecen búsqueda,
-creación y reintento. La lista del picker sigue separando viables, descartados
-y conflictos de catálogo, pero una propuesta composite no puede deshabilitar
-por accidente la selección manual ni ocultar `Ninguno · crear nuevo`. Los
-descartes conservan sus objeciones y toda elección es explícita: ninguna se
-aplica o aprende al abrir la superficie. La columna `Decisión` recibe la mayor
-prioridad flexible de la tabla; sus acciones se envuelven y la fila crece antes
-de reducir texto, ocultar una decisión frecuente o volverla un icono críptico.
-
-**Inspección de imágenes — corrección 2026-08-12.** La imagen fuente y las
-imágenes de cada candidato son evidencia para decidir, no decoración. Sus
-miniaturas tienen un objetivo independiente de ampliación: abrir la imagen
-nunca selecciona el producto. El visor es un pop-over grande y centrado sobre
-el picker —no una ruta ni una página full-screen—, conserva visible el contexto
-atenuado, permite zoom y recorre la fuente más las fichas candidatas conservando
-nombre/SKU/categoría. Cerrar vuelve exactamente a la lista y no ejecuta visión,
-matching, búsqueda, vínculo ni escritura adicional.
-
-Category and brand use the canonical searchable selector **S-06
-`VbSearchableSelect`**, not a feature-local dropdown. Its closed field shows the
-short name (`Tee`, `Maza`, `Rotores`); the branch appears where it
-disambiguates — inside every search result, and as helper text plus accessible
-value once a duplicated leaf name (`Adaptadores`, which exists under three
-branches) has been chosen. A slash path inside the closed field is rejected.
-
-Tablet uses the reduced column tier while the useful columns still fit. Below
-900 px the same controllers and commands recompose as divider-separated line
-editors, one per source row: not a shrunken desktop table, not cards, not an
-accordion, not a wizard. A search affects only its row. A confirmed new product
-remains editable until creation; a linked row compacts to a truthful state and
-keeps `Cambiar`. Excluding a row removes it from creation progress and from the
-invoice only when the review is committed, so Back preserves the draft.
-
-Candidate evidence is verbal and never a percentage — the matcher publishes an
-ordering value that no surface may render. The footer is the single owner of
-pricing policy, progress, the exact next step, Back and the final action, and it
-states that next step whether or not anything is blocked. Shared visual grammar
-comes from **I-01/S-06/E-01/F-06**; the module workflow and layout are
-Codex-owned.
+Canonical theme/component owners supply the visual language (I-01/S-06, S-05,
+T-01/T-03, E-01/E-04). Professional action labels, aligned comparisons, visible
+field groups and stage-specific validation guide the workflow. The owner
+prioritized UX and domain verification over repeated aesthetic test matrices.
 
 **Identidad AI-first — corrección 2026-08-12.** Esta corrección reemplaza las
 frases históricas de la fila `AliExpress daily purchase intake` que describen
@@ -434,8 +389,10 @@ pendiente de confirmación. No aparece `Vincular` ni `Es este` para escoger uno
 de sus componentes y convertir por accidente un conjunto en un producto
 simple; abrir el picker tampoco vuelve a ejecutar visión, matching o
 adjudicación. La propuesta de IA no crea un alias, no modifica el grafo y no se
-aplica automáticamente. Sólo una resolución compuesta ya confirmada en el grafo
-inmutable del proveedor puede resolver la fila sin otra decisión humana.
+aplica automáticamente. **Corrección 2026-09-05:** una resolución ya confirmada
+en el grafo inmutable conserva su autoridad de identidad, pero esta revisión de
+compra la presenta pendiente de aceptación y permite corregir su contenido
+antes de aplicarla a la factura.
 
 Duplicate identity fails closed on catalog meaning, and the gates run before any
 ranking. A candidate is eliminated — not merely ranked lower — when the physical
