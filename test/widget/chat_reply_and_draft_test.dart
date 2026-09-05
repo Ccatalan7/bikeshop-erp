@@ -1,5 +1,5 @@
 import 'dart:async';
-import 'dart:typed_data';
+import 'package:intl/date_symbol_data_local.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -13,7 +13,10 @@ import 'package:vinabike_erp/modules/messaging/services/messaging_attachment_ser
 import 'package:vinabike_erp/modules/messaging/models/message_reply.dart';
 import 'package:vinabike_erp/modules/messaging/providers/chat_provider.dart';
 import 'package:vinabike_erp/modules/messaging/widgets/chat_window.dart';
+import 'package:vinabike_erp/modules/messaging/widgets/chat_message_interactions.dart';
 import 'package:vinabike_erp/shared/themes/app_theme.dart';
+import 'package:vinabike_erp/shared/widgets/vb_searchable_select.dart';
+import 'package:vinabike_erp/shared/services/whatsapp_service.dart';
 import 'package:vinabike_erp/shared/themes/appearance_preset.dart';
 
 final _original = Message(
@@ -35,6 +38,9 @@ Conversation _conversation(String id) => Conversation(
 
 class _Chats extends ChatProvider {
   List<Message> history = [_original];
+  @override
+  List<Conversation> get conversations =>
+      [_conversation('chat-a'), _conversation('chat-b')];
   Completer<void>? sending;
   Map<String, dynamic>? sentMetadata;
   String? sentConversation;
@@ -60,6 +66,7 @@ class _Chats extends ChatProvider {
 
 void main() {
   setUpAll(() async {
+    await initializeDateFormatting('es_CL');
     SharedPreferences.setMockInitialValues({});
     await Supabase.initialize(
         url: 'http://127.0.0.1:54321', anonKey: 'test-anon-key');
@@ -88,16 +95,116 @@ void main() {
   }
 
   Future<void> reply(WidgetTester tester) async {
-    await tester.longPress(find.text(_original.content));
-    await tester.pump(const Duration(milliseconds: 250));
-    expect(find.text('Responder'), findsOneWidget);
-    expect(find.text('Copiar mensaje'), findsOneWidget);
-    await tester.tap(find.text('Responder'));
+    await tester.drag(find.text(_original.content), const Offset(110, 0));
     await tester.pump(const Duration(milliseconds: 350));
     expect(find.byKey(const ValueKey('chat-reply-preview')), findsOneWidget);
   }
 
   final composer = find.byKey(const ValueKey('chat-message-composer'));
+
+  testWidgets('row long press selects, bubble tap toggles, copy uses selection',
+      (tester) async {
+    final chats = _Chats();
+    final selected = ValueNotifier('chat-a');
+    String? copied;
+    tester.binding.defaultBinaryMessenger
+        .setMockMethodCallHandler(SystemChannels.platform, (call) async {
+      if (call.method == 'Clipboard.setData') {
+        copied = (call.arguments as Map)['text'] as String?;
+      }
+      return null;
+    });
+    addTearDown(() => tester.binding.defaultBinaryMessenger
+        .setMockMethodCallHandler(SystemChannels.platform, null));
+    await pump(tester, chats, selected);
+    final bubble = tester.getRect(find.text(_original.content));
+    await tester.longPressAt(Offset(400, bubble.center.dy));
+    await tester.pump();
+    expect(find.text('1 seleccionado'), findsOneWidget);
+    expect(find.byTooltip('Reenviar mensajes'), findsOneWidget);
+    await tester.tap(find.byTooltip('Copiar mensajes'));
+    await tester.pump();
+    expect(copied, _original.content);
+    expect(find.text('1 seleccionado'), findsNothing);
+    await tester.longPressAt(Offset(400, bubble.center.dy));
+    await tester.pump();
+    await tester.tapAt(tester.getCenter(find.text(_original.content)));
+    await tester.pump();
+    expect(find.text('1 seleccionado'), findsNothing);
+  });
+
+  testWidgets('selection is cleared on conversation change', (tester) async {
+    final chats = _Chats();
+    final selected = ValueNotifier('chat-a');
+    await pump(tester, chats, selected);
+    await tester.longPressAt(
+        Offset(400, tester.getCenter(find.text(_original.content)).dy));
+    await tester.pump();
+    expect(find.text('1 seleccionado'), findsOneWidget);
+    selected.value = 'chat-b';
+    await tester.pump();
+    expect(find.text('1 seleccionado'), findsNothing);
+    selected.value = 'chat-a';
+    await tester.pump();
+    expect(find.text('1 seleccionado'), findsNothing);
+  });
+
+  testWidgets(
+      'forward chooses recipient separately and sends only after confirmation',
+      (tester) async {
+    final chats = _Chats();
+    final selected = ValueNotifier('chat-a');
+    await pump(tester, chats, selected);
+    await tester.longPressAt(
+        Offset(400, tester.getCenter(find.text(_original.content)).dy));
+    await tester.pump();
+    await tester.tap(find.byTooltip('Reenviar mensajes'));
+    await tester.pumpAndSettle();
+    expect(chats.sentConversation, isNull);
+    final selector = tester.widget<VbSearchableSelect<Conversation>>(
+        find.byType(VbSearchableSelect<Conversation>));
+    selector.onChanged!(
+        selector.options.singleWhere((o) => o.value.id == 'chat-b').value);
+    await tester.pump();
+    expect(chats.sentConversation, isNull);
+    await tester.tap(find.byKey(const ValueKey('chat-forward-confirm')));
+    await tester.pumpAndSettle();
+    expect(chats.sentConversation, 'chat-b');
+    expect(chats.sentMetadata, isNull);
+    expect(find.text('1 seleccionado'), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
+  test('forwarding never substitutes a template outside the WhatsApp window',
+      () async {
+    final receipt = await WhatsAppService().sendMessage(
+        customerPhone: '+56900000000',
+        message: 'Texto elegido',
+        allowTemplateFallback: false);
+    expect(receipt.isSuccess, isFalse);
+    expect(receipt.errorRequiresCustomerReply, isTrue);
+    expect(receipt.usedFirstContactTemplate, isFalse);
+  });
+
+  testWidgets('short outgoing bubbles contain the complete timestamp',
+      (tester) async {
+    final chats = _Chats()
+      ..history = [
+        Message(
+            id: 'short',
+            conversationId: 'chat-a',
+            content: 'OK',
+            type: 'text',
+            metadata: const {},
+            createdAt: DateTime(2026, 9, 4, 12, 34),
+            isMe: true)
+      ];
+    await pump(tester, chats, ValueNotifier('chat-a'), width: 272);
+    final bubble = tester.getRect(find.byType(ChatMessageBubble));
+    final timestamp = tester.getRect(find.text('12:34'));
+    expect(timestamp.left, greaterThanOrEqualTo(bubble.left));
+    expect(timestamp.right, lessThanOrEqualTo(bubble.right));
+  });
 
   testWidgets('file captions remain visible without duplicating bare filenames',
       (tester) async {
@@ -146,7 +253,9 @@ void main() {
               isButton: true,
               hasTapAction: true));
     }
-    await tester.tap(find.text('Copiar mensaje'));
+    expect(find.text('Responder'), findsNothing);
+    expect(find.text('Copiar mensaje'), findsNothing);
+    await tester.tapAt(const Offset(5, 100));
     await tester.pump(const Duration(milliseconds: 350));
     semantics.dispose();
   });

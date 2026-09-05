@@ -342,6 +342,12 @@ scripts/dev/app_control.sh choose-file \
   /Users/Claudio/Dev/bikeshop-erp/tmp/pdfs/cartola_analysis/page-01.png
 ```
 
+**2026-09-04 — Galería y Archivo no exponen el mismo panel nativo.**
+`ImagePicker` puede abrir un `AXSheet` con descripción `open` dentro de la ventana,
+mientras `FilePicker` abre una ventana `Open`. El wrapper reconoce ambas formas
+antes de enviar teclas y al comprobar el cierre. Buscar sólo ventanas por nombre
+rechazaba una Galería correctamente abierta; no era un fallo del adjunto.
+
 `choose-file` exige un archivo real y una ruta absoluta, resuelve el panel
 `Open` del PID debug exacto, lo trae al frente y abre `Go to Folder`. **La ruta
 se pega desde el portapapeles en una sola operación; no se teclea carácter a

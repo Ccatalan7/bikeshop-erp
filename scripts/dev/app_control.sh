@@ -490,6 +490,11 @@ on run argv
       set windowCount to count of windows
       repeat with candidateIndex from 1 to windowCount
         try
+          repeat with candidateSheet in sheets of window candidateIndex
+            if (description of candidateSheet is "open") or (description of candidateSheet is "abrir") or (exists button "Open" of candidateSheet) or (exists button "Abrir" of candidateSheet) then
+              set hasOpenPanel to true
+            end if
+          end repeat
           set candidateText to name of window candidateIndex as text
           if candidateText is "Open" or candidateText is "Abrir" then
             set hasOpenPanel to true
@@ -521,6 +526,11 @@ on run argv
         set windowCount to count of windows
         repeat with candidateIndex from 1 to windowCount
           try
+            repeat with candidateSheet in sheets of window candidateIndex
+              if (description of candidateSheet is "open") or (description of candidateSheet is "abrir") or (exists button "Open" of candidateSheet) or (exists button "Abrir" of candidateSheet) then
+                set panelStillOpen to true
+              end if
+            end repeat
             set candidateText to name of window candidateIndex as text
             if candidateText is "Open" or candidateText is "Abrir" then
               set panelStillOpen to true

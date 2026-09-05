@@ -1081,3 +1081,19 @@ A mobile, tablet, or responsive UI change is complete only when:
 - `canonical-ui-surfaces.md` reflects the affected hosts; and
 - any multi-iteration learning is captured once in the validated record format
   above.
+
+
+### Mensajería: arbitraje de gestos (2026-09-04)
+
+En el historial de chat, la pulsación de la burbuja abre reacciones, la pulsación
+fuera de ella selecciona la fila y un deslizamiento horizontal deliberado cita.
+El scroll vertical, un recorrido corto, el sentido opuesto o una cancelación no
+citan. Durante selección, tocar imagen/enlace cambia la selección sin abrirlos.
+La selección de texto de un `SelectionArea` ancestro no debe disputar esos
+reconocedores; copiar sigue disponible mediante la selección de mensajes.
+Cancelar, Back/Escape y un cambio de chat/sesión liberan la selección. Verificar
+las mismas acciones en el componente compartido y en un dispositivo, además de
+los hosts del registro canónico; una prueba aislada no detecta que las pestañas
+del workspace estén cubriendo los botones en escritorio. Regresión mínima:
+`chat_message_interactions_test.dart`, `chat_reply_and_draft_test.dart` y
+`integration_test/messaging_gestures_device_test.dart`.

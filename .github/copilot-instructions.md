@@ -1508,6 +1508,13 @@ run once, but must not dispatch an unbounded replacement. Standalone macOS or
 Windows workflow dispatches carry no qualification proof and therefore retain
 their own complete integrity fallback.
 
+2026-09-04 clarification: `qualify_erp_update.mjs --dispatch-only` can bind the
+prepared SHA to the one live integrity run and let both platform builds start
+while it runs. This does not qualify a failed or unfinished source for
+publication: each platform waits for that exact run and attempt and refuses
+publication unless it succeeds. Use this supported path to overlap compilation;
+never dispatch a second integrity gate per platform or bypass its final result.
+
 2026-07-31 correction: qualification mode deliberately leaves the workflow's
 internal integrity fallback job skipped. A protected desktop publish job after
 the build must therefore use `always() && !cancelled()`, require

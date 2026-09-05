@@ -1201,6 +1201,7 @@ Viña Bike
     String? clientMessageId,
     String? replyToMessageId,
     Map<String, dynamic>? metadata,
+    bool allowTemplateFallback = true,
   }) async {
     final normalizedTemplateContact = templateContactName?.trim();
     final normalizedBindingContact = contactName?.trim();
@@ -1213,6 +1214,12 @@ Viña Bike
                 : 'cliente';
 
     if (!_isCustomerServiceWindowOpen(lastInboundAt)) {
+      if (!allowTemplateFallback) {
+        return const WhatsAppSendReceipt(
+          deliveryMethod: WhatsAppDeliveryMethod.failed,
+          errorCode: WhatsAppSendReceipt.reengagementErrorCode,
+        );
+      }
       return isSupplierConversation
           ? sendSupplierReengagementTemplate(
               customerPhone: customerPhone,
@@ -1256,7 +1263,7 @@ Viña Bike
     if (cloudReceipt.isSuccess) return cloudReceipt;
     var failureReceipt = cloudReceipt;
 
-    if (cloudReceipt.errorRequiresCustomerReply) {
+    if (allowTemplateFallback && cloudReceipt.errorRequiresCustomerReply) {
       final templateReceipt = isSupplierConversation
           ? await sendSupplierReengagementTemplate(
               customerPhone: customerPhone,
