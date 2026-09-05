@@ -29,6 +29,7 @@ import '../services/messaging_attachment_service.dart';
 import '../services/chat_media_cache.dart';
 import 'chat_media_thumbnail.dart';
 import 'chat_message_interactions.dart';
+import 'chat_message_quote.dart';
 import 'chat_forward_picker.dart';
 import 'chat_audio_message.dart';
 import 'chat_voice_recorder.dart';
@@ -58,7 +59,6 @@ import '../../../shared/utils/purchase_document_pdf_generator.dart';
 import '../models/conversation_context_hint.dart';
 import '../../../shared/utils/supplier_whatsapp_phone.dart';
 import '../../../shared/widgets/vb_status_badge.dart';
-import '../../../shared/widgets/vb_notice.dart';
 import '../../../shared/widgets/vb_overlay_surfaces.dart';
 import '../../../shared/widgets/vb_surface_icon_button.dart';
 import '../../../shared/services/supabase_functions_region.dart';
@@ -164,6 +164,7 @@ class ChatWindow extends StatefulWidget {
   final bool isContextPanelClosed;
   final VoidCallback? onShowContextPanel;
   final List<Widget> headerActions;
+  final Widget? headerLeading;
   final bool compact;
   @visibleForTesting
   final MessagingAttachmentService? attachmentService;
@@ -182,6 +183,7 @@ class ChatWindow extends StatefulWidget {
     this.isContextPanelClosed = false,
     this.onShowContextPanel,
     this.headerActions = const [],
+    this.headerLeading,
     this.compact = false,
     this.attachmentService,
     this.initialThreadRootMessageId,
@@ -1832,22 +1834,15 @@ class _ChatWindowState extends State<ChatWindow> {
             : reply.direction == 'inbound'
                 ? widget.conversation.title ?? 'Contacto'
                 : 'Mensaje';
-    return VbNotice(
+    return ChatMessageQuote(
       key: composing ? const ValueKey('chat-reply-preview') : null,
-      tone: VbNoticeTone.neutral,
-      glyph: '↩',
-      title: composing ? 'Responder a $author' : author,
-      body: reply.preview,
-      bodyMaxLines: 2,
-      action: composing
-          ? IconButton(
-              tooltip: 'Cancelar respuesta',
-              onPressed: () {
-                setState(() => _replyToMessage = null);
-                _saveComposerDraft(widget.conversation.id);
-              },
-              icon: const Icon(Icons.close),
-            )
+      author: composing ? 'Responder a $author' : author,
+      preview: reply.preview,
+      onCancel: composing
+          ? () {
+              setState(() => _replyToMessage = null);
+              _saveComposerDraft(widget.conversation.id);
+            }
           : null,
     );
   }
@@ -3867,7 +3862,8 @@ class _ChatWindowState extends State<ChatWindow> {
       },
       child: Column(
         children: [
-          _buildHeader(context, chatProvider),
+          if (_selectedMessages.isEmpty || !widget.compact)
+            _buildHeader(context, chatProvider),
           if (_selectedMessages.isNotEmpty) _buildMessageSelectionToolbar(),
           if (pendingDraft != null) _buildPreparedHandoffBanner(pendingDraft),
 
@@ -4203,6 +4199,7 @@ class _ChatWindowState extends State<ChatWindow> {
       ),
       child: Row(
         children: [
+          if (widget.headerLeading != null) widget.headerLeading!,
           Expanded(
             child: Material(
               color: Colors.transparent,
@@ -4266,7 +4263,7 @@ class _ChatWindowState extends State<ChatWindow> {
             ),
           ),
           const SizedBox(width: 8),
-          if (_canStartWhatsAppFromConversation)
+          if (!widget.compact && _canStartWhatsAppFromConversation)
             IconButton(
               icon: const Icon(Icons.phone_in_talk_outlined),
               color: colorScheme.primary,
@@ -4275,7 +4272,8 @@ class _ChatWindowState extends State<ChatWindow> {
                   ? null
                   : () => _openWhatsAppConversationForCurrentContext(context),
             ),
-          if (hasSupportedContextPanel &&
+          if (!widget.compact &&
+              hasSupportedContextPanel &&
               widget.isContextPanelClosed &&
               _canOpenCurrentContext)
             IconButton(
@@ -4286,7 +4284,7 @@ class _ChatWindowState extends State<ChatWindow> {
               tooltip: 'Mostrar detalles',
               onPressed: _openCurrentContext,
             ),
-          if (!conversation.isSupplierConversation)
+          if (!widget.compact && !conversation.isSupplierConversation)
             if (!conversation.isTaskThread)
               IconButton(
                 icon: Icon(
@@ -4302,6 +4300,40 @@ class _ChatWindowState extends State<ChatWindow> {
                     : 'Vincular contexto del chat',
                 onPressed: () => _showAssignContextDialog(context),
               ),
+          if (widget.compact)
+            PopupMenuButton<String>(
+              key: const ValueKey('chat-options'),
+              tooltip: 'Opciones del chat',
+              onSelected: (action) {
+                switch (action) {
+                  case 'info':
+                    _toggleChatInfoPanel();
+                  case 'link':
+                    _showAssignContextDialog(context);
+                  case 'context':
+                    _openCurrentContext();
+                  case 'contact':
+                    _openWhatsAppConversationForCurrentContext(context);
+                }
+              },
+              itemBuilder: (_) => [
+                const PopupMenuItem(
+                    value: 'info', child: Text('Información del chat')),
+                if (hasSupportedContextPanel && _canOpenCurrentContext)
+                  const PopupMenuItem(
+                      value: 'context', child: Text('Mostrar detalles')),
+                if (!conversation.isSupplierConversation &&
+                    !conversation.isTaskThread)
+                  PopupMenuItem(
+                      value: 'link',
+                      child: Text(hasContext
+                          ? 'Cambiar contexto vinculado'
+                          : 'Vincular contexto del chat')),
+                if (_canStartWhatsAppFromConversation)
+                  const PopupMenuItem(
+                      value: 'contact', child: Text('Contactar por WhatsApp')),
+              ],
+            ),
           ...widget.headerActions,
         ],
       ),
@@ -4365,6 +4397,19 @@ class _ChatWindowState extends State<ChatWindow> {
         'Trabajo',
       if (hint?.jobStatus?.trim().isNotEmpty == true) hint!.jobStatus!.trim(),
     ].join(' · ');
+
+    if (widget.compact) {
+      // Only the primary operational reference belongs next to the person.
+      // Complete jobs/bikes/documents remain in the shared information panel.
+      final summary = jobLabel.isNotEmpty
+          ? jobLabel
+          : purchaseInvoiceLabel ?? invoiceLabel ?? bikeName ?? fallback;
+      return Text(summary,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: theme.textTheme.bodySmall
+              ?.copyWith(color: colorScheme.onSurfaceVariant));
+    }
 
     return SizedBox(
       height: 22,
@@ -6246,22 +6291,16 @@ class _ChatWindowState extends State<ChatWindow> {
         }
       },
       child: Container(
-        padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          color: isMe
-              ? Colors.white.withValues(alpha: 0.3)
-              : Theme.of(context).colorScheme.surfaceContainerLow,
-          borderRadius: BorderRadius.circular(8),
-        ),
+        // The bubble already owns the surface. A file is a content row, not
+        // a second card; name/type/action retain their own hierarchy.
+        padding: const EdgeInsets.symmetric(vertical: 8),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
             Icon(
               _getFileIcon(extension),
-              color: isMe
-                  ? Theme.of(context).colorScheme.onSurface
-                  : Colors.blue[600],
-              size: 32,
+              color: Theme.of(context).colorScheme.primary,
+              size: 24,
             ),
             const SizedBox(width: 8),
             Flexible(
@@ -8298,7 +8337,8 @@ class _ChatWindowState extends State<ChatWindow> {
             : isOpen
                 ? 'WhatsApp: ${_formatWindowDuration(remaining)} disponibles'
                 : 'WhatsApp: sólo mensajes autorizados';
-        final color = isOpen ? const Color(0xFF16A34A) : Colors.amber[800]!;
+        final roles = VinabikeThemeRoles.of(context);
+        final color = isOpen ? roles.success.accent : roles.warning.accent;
 
         return Tooltip(
           message: lastInboundAt == null
@@ -9315,9 +9355,8 @@ class _ChatWindowState extends State<ChatWindow> {
                   style: IconButton.styleFrom(
                     foregroundColor: colorScheme.onSurfaceVariant,
                     backgroundColor: colorScheme.surfaceContainerHighest,
-                    // 44 = alto natural del campo con una línea, para que la
-                    // fila quede a ras.
-                    minimumSize: const Size.square(44),
+                    // F-06: every composer action retains a 48 px touch target.
+                    minimumSize: const Size.square(kMinInteractiveDimension),
                   ),
                   icon: AnimatedRotation(
                     turns: _activeComposerMenuName == 'composer_actions' ||
@@ -9359,7 +9398,9 @@ class _ChatWindowState extends State<ChatWindow> {
                                     : isCheckingMetaWindow
                                         ? 'Verificando ventana de respuesta...'
                                         : 'Espera un nuevo mensaje del cliente'
-                                : 'Escribe un mensaje... (# para ref)',
+                                : widget.compact
+                                    ? 'Mensaje'
+                                    : 'Escribe un mensaje... (# para ref)',
                         filled: true,
                         fillColor: colorScheme.surfaceContainerLowest,
                         // El texto de ayuda NO envuelve. En un teléfono angosto
@@ -9370,23 +9411,23 @@ class _ChatWindowState extends State<ChatWindow> {
                         hintMaxLines: 1,
                         contentPadding: const EdgeInsets.symmetric(
                           horizontal: 14,
-                          vertical: 11,
+                          vertical: 12,
                         ),
                         border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(11),
+                          borderRadius: BorderRadius.circular(8),
                           borderSide:
                               BorderSide(color: colorScheme.outlineVariant),
                         ),
                         enabledBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(11),
+                          borderRadius: BorderRadius.circular(8),
                           borderSide:
                               BorderSide(color: colorScheme.outlineVariant),
                         ),
                         focusedBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(11),
+                          borderRadius: BorderRadius.circular(8),
                           borderSide: BorderSide(
                             color: colorScheme.primary,
-                            width: 1.4,
+                            width: 1.5,
                           ),
                         ),
                       ),
@@ -9404,11 +9445,13 @@ class _ChatWindowState extends State<ChatWindow> {
                     return FilledButton(
                       key: const ValueKey<String>('chat-voice-record'),
                       style: FilledButton.styleFrom(
-                        minimumSize: const Size.square(44),
-                        maximumSize: const Size.square(44),
+                        minimumSize:
+                            const Size.square(kMinInteractiveDimension),
+                        maximumSize:
+                            const Size.square(kMinInteractiveDimension),
                         padding: EdgeInsets.zero,
                         shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(11),
+                          borderRadius: BorderRadius.circular(8),
                         ),
                       ),
                       onPressed: hasBlockingOutcomeUnknownAttachment ||
@@ -9421,11 +9464,11 @@ class _ChatWindowState extends State<ChatWindow> {
                   return FilledButton(
                     key: const ValueKey<String>('chat-message-send'),
                     style: FilledButton.styleFrom(
-                      minimumSize: const Size.square(44),
-                      maximumSize: const Size.square(44),
+                      minimumSize: const Size.square(kMinInteractiveDimension),
+                      maximumSize: const Size.square(kMinInteractiveDimension),
                       padding: EdgeInsets.zero,
                       shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(11),
+                        borderRadius: BorderRadius.circular(8),
                       ),
                     ),
                     onPressed: _isSendingPendingAttachments ||
@@ -10864,6 +10907,7 @@ class _ChatWindowState extends State<ChatWindow> {
       ChatMessageRow(
         key: ValueKey('chat-message-row-${message.id}'),
         selected: _selectedMessages.containsKey(message.id),
+        selectionOnLeading: message.isMe,
         selecting: _selectedMessages.isNotEmpty,
         onSelect: _canSelectMessage(message)
             ? () => _toggleMessageSelection(message)
@@ -11100,8 +11144,12 @@ class _ChatWindowState extends State<ChatWindow> {
         final contentIsMe = isThreadReply ? false : isMe;
         final senderId = msg.senderId;
         final grouping = _messageGroupingFor(msg, messages);
-        final bubbleMaxWidth =
-            constraints.maxWidth > 0 ? constraints.maxWidth * 0.72 : 280.0;
+        final bubbleMaxWidth = constraints.maxWidth > 0
+            ? widget.compact
+                ? (constraints.maxWidth - kMinInteractiveDimension)
+                    .clamp(0.0, constraints.maxWidth)
+                : constraints.maxWidth * 0.72
+            : 280.0;
 
         return FutureBuilder<Map<String, dynamic>?>(
           future:
@@ -11209,7 +11257,11 @@ class _ChatWindowState extends State<ChatWindow> {
               contentWidget = Column(
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
-                children: [_buildMessageQuote(quote), contentWidget],
+                children: [
+                  _buildMessageQuote(quote),
+                  const SizedBox(height: 6),
+                  contentWidget
+                ],
               );
             }
 
@@ -11291,26 +11343,29 @@ class _ChatWindowState extends State<ChatWindow> {
                   child: Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      // Avatar
-                      if (grouping.withPrevious)
-                        const SizedBox(width: 28)
-                      else
-                        CircleAvatar(
-                          radius: 14,
-                          backgroundColor:
-                              theme.colorScheme.surfaceContainerHighest,
-                          backgroundImage: senderAvatar != null
-                              ? NetworkImage(senderAvatar)
-                              : null,
-                          child: senderAvatar == null
-                              ? Icon(
-                                  Icons.person,
-                                  size: 16,
-                                  color: theme.colorScheme.onSurfaceVariant,
-                                )
-                              : null,
-                        ),
-                      const SizedBox(width: 8),
+                      // Individual conversations already identify the person
+                      // in the header; group messages still need the avatar.
+                      if (widget.conversation.isGroup) ...[
+                        if (grouping.withPrevious)
+                          const SizedBox(width: 28)
+                        else
+                          CircleAvatar(
+                            radius: 14,
+                            backgroundColor:
+                                theme.colorScheme.surfaceContainerHighest,
+                            backgroundImage: senderAvatar != null
+                                ? NetworkImage(senderAvatar)
+                                : null,
+                            child: senderAvatar == null
+                                ? Icon(
+                                    Icons.person,
+                                    size: 16,
+                                    color: theme.colorScheme.onSurfaceVariant,
+                                  )
+                                : null,
+                          ),
+                        const SizedBox(width: 8),
+                      ],
 
                       // Bubble
                       Flexible(

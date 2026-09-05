@@ -12,12 +12,14 @@ class ChatMessageRow extends StatelessWidget {
     required this.selecting,
     required this.onSelect,
     required this.child,
+    this.selectionOnLeading = true,
   });
 
   final bool selected;
   final bool selecting;
   final VoidCallback? onSelect;
   final Widget child;
+  final bool selectionOnLeading;
 
   @override
   Widget build(BuildContext context) => SelectionContainer.disabled(
@@ -39,7 +41,18 @@ class ChatMessageRow extends StatelessWidget {
                   ? Theme.of(context).colorScheme.secondaryContainer
                   : Colors.transparent,
               // Attachment/link taps must select while the toolbar is open.
-              child: IgnorePointer(ignoring: selecting, child: child),
+              child: Stack(children: [
+                IgnorePointer(ignoring: selecting, child: child),
+                if (selected)
+                  Positioned(
+                    left: selectionOnLeading ? 8 : null,
+                    right: selectionOnLeading ? null : 8,
+                    top: 8,
+                    child: IgnorePointer(
+                        child: Icon(Icons.check_circle,
+                            color: Theme.of(context).colorScheme.primary)),
+                  ),
+              ]),
             ),
           ),
         ),

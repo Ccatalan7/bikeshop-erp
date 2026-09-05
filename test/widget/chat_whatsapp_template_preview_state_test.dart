@@ -1,6 +1,8 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:vinabike_erp/shared/themes/app_theme.dart';
+import 'package:vinabike_erp/shared/themes/appearance_preset.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:provider/provider.dart';
@@ -54,6 +56,8 @@ void main() {
           ChangeNotifierProvider(create: (_) => InventoryService()),
         ],
         child: MaterialApp(
+          theme: AppTheme.resolve(
+              preset: AppearancePresets.vinabike, brightness: Brightness.light),
           home: Scaffold(
             body: ChatWindow(
               conversation: Conversation(

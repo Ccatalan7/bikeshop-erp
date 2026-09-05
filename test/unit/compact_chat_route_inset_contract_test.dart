@@ -37,8 +37,8 @@ void main() {
     expect(routeSource, contains('top: true'));
     expect(
       routeSource,
-      contains('bottom: false'),
-      reason: 'consumir el inferior le robaría alto al compositor',
+      contains('bottom: true'),
+      reason: 'ChatWindow is embedded and consumes no system inset; the full-screen host owns the gesture bar once',
     );
     expect(
       routeSource,

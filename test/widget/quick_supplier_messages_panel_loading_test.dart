@@ -110,7 +110,10 @@ void main() {
     await tester.pump();
     await tester.pump();
     expect(find.byType(ConversationTile), findsNWidgets(6));
-    expect(find.text('6 resultados'), findsOneWidget);
+    expect(
+        find.byWidgetPredicate((widget) =>
+            widget is Semantics && widget.properties.label == '6 resultados'),
+        findsOneWidget);
     fixture.purchases.pending.completeError(Exception('refresh failed'));
     await tester.pump();
     await tester.pump();

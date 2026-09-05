@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 
 import '../models/conversation.dart';
 import 'chat_window.dart';
+import '../../../shared/services/return_navigation.dart';
 
 /// Una conversación a pantalla completa en compacto.
 ///
@@ -29,6 +30,33 @@ class CompactChatRoute extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    return CompactMessagingViewport(
+      child: ChatWindow(
+        conversation: conversation,
+        compact: true,
+        initialThreadRootMessageId: initialThreadRootMessageId,
+        headerLeading: IconButton(
+          key: const ValueKey('compact-chat-back'),
+          tooltip: 'Volver a mensajes',
+          icon: const Icon(Icons.arrow_back),
+          onPressed: () =>
+              ReturnNavigation.close(context, fallbackRoute: '/chat'),
+        ),
+      ),
+    );
+  }
+}
+
+/// One surface/IME/system-inset boundary for the routed conversation and the
+/// right-toolbar inbox on phones. Inherited app-bar ink must not cross it.
+class CompactMessagingViewport extends StatelessWidget {
+  const CompactMessagingViewport({super.key, required this.child});
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     final colorScheme = Theme.of(context).colorScheme;
     // La tinta de los iconos del sistema sale del MISMO lienzo semántico que
     // pinta la franja; anotar un estilo que no corresponda al color de abajo es
@@ -42,19 +70,21 @@ class CompactChatRoute extends StatelessWidget {
             canvasIsDark ? Brightness.light : Brightness.dark,
         statusBarBrightness: canvasIsDark ? Brightness.dark : Brightness.light,
       ),
-      child: Scaffold(
-        // El Scaffold pinta la franja del sistema con la misma superficie del
-        // encabezado, así no queda una costura de otro color arriba.
-        backgroundColor: colorScheme.surface,
-        body: SafeArea(
-          // Sólo arriba: el compositor de abajo ya resuelve el teclado y la
-          // barra de gestos, y consumir el inferior le robaría alto.
-          top: true,
-          bottom: false,
-          child: ChatWindow(
-            conversation: conversation,
-            compact: true,
-            initialThreadRootMessageId: initialThreadRootMessageId,
+      child: IconButtonTheme(
+        data: theme.iconButtonTheme,
+        child: IconTheme(
+          data: theme.iconTheme,
+          child: Scaffold(
+            // El Scaffold pinta la franja del sistema con la misma superficie del
+            // encabezado, así no queda una costura de otro color arriba.
+            backgroundColor: colorScheme.surface,
+            body: SafeArea(
+              // The embedded ChatWindow owns no system inset. Scaffold handles
+              // the IME; SafeArea handles the status and gesture bars once.
+              top: true,
+              bottom: true,
+              child: child,
+            ),
           ),
         ),
       ),

@@ -1097,3 +1097,30 @@ los hosts del registro canónico; una prueba aislada no detecta que las pestaña
 del workspace estén cubriendo los botones en escritorio. Regresión mínima:
 `chat_message_interactions_test.dart`, `chat_reply_and_draft_test.dart` y
 `integration_test/messaging_gestures_device_test.dart`.
+
+
+### Mensajería: verificar el host completo (corrección 2026-09-04)
+
+Un gesto probado en una burbuja aislada no verifica la pantalla que lo hospeda.
+La bandeja abierta desde un action del `AppBar` capturaba su `IconButtonTheme`:
+en oscuro los botones de selección heredaban tinta de shell sobre la superficie
+de la conversación (contraste 1,06:1). Cambiar sólo el `ColorScheme` del chat no
+corrige esa herencia. `CompactMessagingViewport` restituye el tema de controles
+de la aplicación y comparte la misma frontera de superficie, Scaffold/teclado
+y SafeArea entre `CompactChatRoute` y la bandeja del right toolbar.
+
+La conversación es un espacio de trabajo sostenido: en teléfono usa el viewport
+completo, con volver/contexto/opciones en una sola cabecera. Seleccionar sustituye
+esa cabecera; no agrega otra fila. Las referencias completas siguen en los
+detalles del contacto y las citas son contenido referenciado, no avisos E-04.
+
+Corrección del contrato anterior de inset: `ChatWindow` no consume el borde del
+sistema; por eso su host completo sí reserva también el inferior. La afirmación
+anterior `bottom: false` sólo se comprobaba buscando texto en el código. La
+regresión exige renderizar ambas entradas con selección y teclado, en claro y
+oscuro, y conservar el borrador al volver. Los hosts embebidos del escritorio
+siguen delegando los insets al shell.
+
+El indicador de la ventana WhatsApp conserva reloj, barra y tiempo restante por
+preferencia explícita del dueño; sus estados consumen los tonos de éxito/atención
+del tema, sin sustituir esa lectura gráfica por una sola etiqueta.

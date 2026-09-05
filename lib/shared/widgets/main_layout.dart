@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import '../../modules/messaging/widgets/compact_chat_route.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import 'package:cached_network_image/cached_network_image.dart';
@@ -2055,15 +2056,15 @@ class _CompactShellActions extends StatelessWidget {
   }
 
   Future<void> _showMessages(BuildContext context) async {
-    await showModalBottomSheet<void>(
+    // Messaging is a sustained workspace: O-05 explicitly reserves sheets
+    // for short choices. A full-screen dialog also gives the IME one Scaffold
+    // inset owner instead of squeezing the timeline below a drag handle.
+    await showDialog<void>(
       context: context,
-      useSafeArea: true,
-      showDragHandle: true,
-      isScrollControlled: true,
-      constraints: BoxConstraints(
-        maxHeight: MediaQuery.sizeOf(context).height * 0.88,
+      useSafeArea: false,
+      builder: (dialogContext) => Dialog.fullscreen(
+        child: const CompactMessagingViewport(child: _CompactMessagesSheet()),
       ),
-      builder: (sheetContext) => const _CompactMessagesSheet(),
     );
   }
 
@@ -2133,10 +2134,12 @@ class _CompactSheetFrame extends StatelessWidget {
     required this.title,
     required this.child,
     this.showHeader = true,
+    this.onClose,
   });
 
   final String title;
   final Widget child;
+  final VoidCallback? onClose;
 
   /// La cabecera se ESCONDE, no se desmonta el marco. Devolver un árbol de
   /// otra forma cuando hay chat abierto hacía que Flutter recreara el panel, y
@@ -2169,6 +2172,12 @@ class _CompactSheetFrame extends StatelessWidget {
                         ?.copyWith(fontWeight: FontWeight.w800),
                   ),
                 ),
+                if (onClose != null)
+                  IconButton(
+                    tooltip: 'Cerrar mensajes',
+                    onPressed: onClose,
+                    icon: const Icon(Icons.close),
+                  ),
               ],
             ),
           ),
@@ -2304,6 +2313,7 @@ class _CompactMessagesSheetState extends State<_CompactMessagesSheet> {
       builder: (context, open, child) => _CompactSheetFrame(
         title: 'Mensajes',
         showHeader: !open,
+        onClose: () => Navigator.of(context).pop(),
         child: child!,
       ),
       child: inbox,

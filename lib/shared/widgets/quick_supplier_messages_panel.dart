@@ -268,58 +268,24 @@ class _QuickSupplierMessagesPanelState extends State<QuickSupplierMessagesPanel>
   }
 
   Widget _buildConversationView(Conversation conversation) {
-    return Column(
-      children: [
-        Container(
-          height: 42,
-          padding: const EdgeInsets.symmetric(horizontal: 6),
-          decoration: BoxDecoration(
-            // Opaco y de un rol. Antes era `surface` al 72%: el contrato de
-            // paletas prohíbe el truco de opacidad, y acá además dejaba
-            // transparentar lo de atrás, que es por qué la flecha de volver no
-            // contrastaba ni en claro ni en oscuro.
-            color: Theme.of(context).colorScheme.surfaceContainerLow,
-            border: Border(
-              bottom: BorderSide(color: Theme.of(context).dividerColor),
-            ),
+    return ChatWindow(
+      conversation: conversation,
+      compact: true,
+      headerLeading: IconButton(
+        key: const ValueKey('quick-suppliers-back-to-inbox'),
+        icon: const Icon(Icons.arrow_back),
+        tooltip: 'Volver a proveedores',
+        onPressed: () => returnToInbox(conversation.id),
+      ),
+      headerActions: [
+        // On a phone this inbox already owns the full viewport.
+        if (MediaQuery.sizeOf(context).width >= 600)
+          IconButton(
+            key: const ValueKey('quick-suppliers-open-full'),
+            icon: const Icon(Icons.open_in_full),
+            tooltip: 'Abrir mensajería completa',
+            onPressed: () => _openFullChat(conversation),
           ),
-          child: Row(
-            children: [
-              IconButton(
-                icon: Icon(
-                  Icons.arrow_back,
-                  size: 20,
-                  color: Theme.of(context).colorScheme.onSurface,
-                ),
-                tooltip: 'Volver a proveedores',
-                onPressed: () => returnToInbox(conversation.id),
-              ),
-              const Expanded(
-                child: Text(
-                  'Chats proveedores',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(fontWeight: FontWeight.w700),
-                ),
-              ),
-              IconButton(
-                icon: Icon(
-                  Icons.open_in_full,
-                  size: 18,
-                  color: Theme.of(context).colorScheme.onSurface,
-                ),
-                tooltip: 'Abrir mensajería completa',
-                onPressed: () => _openFullChat(conversation),
-              ),
-            ],
-          ),
-        ),
-        Expanded(
-          child: ChatWindow(
-            conversation: conversation,
-            compact: true,
-          ),
-        ),
       ],
     );
   }
@@ -483,12 +449,15 @@ class _QuickSupplierMessagesPanelState extends State<QuickSupplierMessagesPanel>
                           historyCount: historyCount,
                         ),
                         const Spacer(),
-                        Text(
-                          '${entries.length} ${entries.length == 1 ? 'resultado' : 'resultados'}',
-                          style: theme.textTheme.labelSmall?.copyWith(
-                            color: colorScheme.onSurfaceVariant,
-                            fontWeight: FontWeight.w500,
-                            letterSpacing: 0,
+                        Semantics(
+                          label: '${entries.length} resultados',
+                          child: Text(
+                            '${entries.length}',
+                            style: theme.textTheme.labelSmall?.copyWith(
+                              color: colorScheme.onSurfaceVariant,
+                              fontWeight: FontWeight.w500,
+                              letterSpacing: 0,
+                            ),
                           ),
                         ),
                       ],

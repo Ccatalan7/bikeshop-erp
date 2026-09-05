@@ -112,3 +112,24 @@ el origen o fallar una entrega. Nunca copia referencias privadas, contexto de
 negocio, hilos ni citas del origen. Reautoriza la descarga y crea una reserva
 propia del destino; no convierte texto reenviado en una plantilla cuando vence
 la ventana de WhatsApp y no repite automáticamente un resultado incierto.
+
+
+## Dark-mode and compact-host correction
+
+The previous isolated gesture smoke did not cover the toolbar launch boundary.
+An AppBar action passed its inherited icon styles into the modal: enabled
+selection icons had only 1.06:1 contrast in dark mode (1:1 in light). The new
+full-host regression fails against the previous implementation and verifies
+both the module route and toolbar entry, selection, menu contrast, 48 px touch
+targets, keyboard bounds and return with a preserved draft. Compact messaging
+now shares its surface/IME/inset owner; the shared chat replaces stacked inbox
+and selection headers with contextual navigation. Desktop retains its wider
+context readers and the selection row below workspace chrome.
+
+Quotes are inline content references rather than status notices; document
+rows use the bubble surface and retain name, type, caption and open action.
+The first full-host empty supplier load also exposed a filter-row overflow:
+the count now shows the number and keeps its complete accessible label.
+The owner's requested 24-hour clock, bar and time remain in both entries;
+only their colours migrate to the semantic theme. No message transport or
+production schema changes are required by this correction.
