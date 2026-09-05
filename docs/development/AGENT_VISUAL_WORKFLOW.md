@@ -437,6 +437,15 @@ cierra por identidad**: se cierra con un `click X Y` sobre el velo, tomado del
 `shot` actual, lejos del popover. Confirma el estado final con el `shot` del
 popover reabierto —el segmento activo se ve resaltado— y ciérralo otra vez.
 
+**Precisión 2026-09-05: `tap --label "Oscuro"` resolvió el `Text` (clave
+`theme-mode-dark`, 39×16) aunque `read` liste el botón de 106×32, y el tema no
+cambió; la ronda perdió tres capturas «oscuras» en claro.** Lo que sí cambia
+el tema es un `click X Y` sobre el segmento, con la coordenada del `shot`
+actual (el popover siempre se abre en la misma esquina), y el popover se
+cierra con un `click` sobre el velo lejos de él. Confirma con un `shot` del
+popover reabierto y luego `find --label "Oscuro"`: si no aparece, el popover
+está cerrado.
+
 **Si el toggle se resiste, no insistas a ciegas.** El pase oscuro también se
 verifica sin la UI: `payroll_redesign_dark_host_test.dart` monta las superficies
 en 6 presets × 2 modos y `payroll_visual_tokens_test.dart` verifica capas,
@@ -1272,6 +1281,22 @@ salieron en claro con el popover encima. Lo que sí cambia el tema es tocar el
 y el popover se cierra volviendo a tocar `Apariencia`. Comprueba con
 `find --label "Oscuro"`: si sigue encontrándolo, el popover sigue abierto y
 todo `tap` sobre el resto de la app se pierde.
+
+### Un `--index` después de un diálogo que no abrió cae en la lista de atrás
+
+**2026-09-05, revisión OCR, y el error fue mío.** `tap --label "Buscar en
+inventario" --index 5` falló con «índice fuera de rango» porque sólo cinco
+filas eran tocables en el viewport; el `enter-text` siguiente falló por no
+haber diálogo; y el `tap --label "Seleccionar producto" --index 0` que iba
+dirigido al picker **tocó la fila 5 de la lista de fondo** y vinculó un
+portabotellas a unas pegatinas. Fue una decisión local y se deshizo con
+«Cambiar selección», pero en otra pantalla habría escrito.
+
+> **La regla:** en una cadena, cada `tap` que depende de un diálogo abierto
+> se condiciona a que el diálogo esté (`find` de un control que sólo exista
+> dentro), y un `--index` se elige leyendo la lista **en ese momento**, no
+> contando filas de una lectura anterior. `find` sólo devuelve lo tocable en
+> el viewport: al desplazar, los índices cambian.
 
 ---
 
