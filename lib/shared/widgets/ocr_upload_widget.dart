@@ -3147,7 +3147,18 @@ class OCRUploadWidgetState extends State<OCRUploadWidget> {
     final rowCandidates = orderOcrCandidateChoices(cachedChoices);
     final viable = rowCandidates.where((candidate) =>
         !candidate.isRuledOut && !candidate.isReviewOnlyFamilyScope);
-    final proposed = viable.isNotEmpty ? viable.first.product : null;
+    // The row proposes only what the matcher recommended. Until 2026-09-05
+    // an abstained result still showed the first viable deterministic
+    // candidate as «Primera coincidencia», so an unrelated leader of the
+    // proposed leaf was one tap away from being linked. Without a matcher
+    // result (a remembered rule, or no search yet) the cached choices are the
+    // recommendation themselves.
+    final result = entry.duplicateResult;
+    final proposed = result == null
+        ? (viable.isNotEmpty ? viable.first.product : null)
+        : result.recommendations.isEmpty
+            ? null
+            : result.recommendations.first.product;
     final identity = entry.identityProduct ?? proposed;
     final sku = entry.displaySku.isNotEmpty
         ? entry.displaySku

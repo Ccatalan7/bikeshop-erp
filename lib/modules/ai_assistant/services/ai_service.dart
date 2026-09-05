@@ -852,7 +852,7 @@ class AIAssistantService extends ChangeNotifier
       ProductIdentityAIContract.schemaVersion;
   static const String productIdentityVisionModel = 'gemini-3.6-flash';
   static const String productMatchPromptKey =
-      'ai-product-grounded-adjudication-v9';
+      'ai-product-grounded-adjudication-v10';
   static const String productCatalogScreenPromptKey =
       'ai-product-catalog-screen-v1';
 
@@ -1617,6 +1617,11 @@ Responde SOLO JSON valido con esta forma exacta:
 Reglas duras:
 - `same`: exactamente un pick con qty=1 y role=primary. Úsalo sólo cuando una
   unidad comprada equivale a una unidad del producto de catálogo ofrecido.
+- SOURCE.quantity es cuántas unidades compró el taller, NO cuántas piezas trae
+  cada unidad. Comprar 2 de un producto que el catálogo controla por unidad es
+  `same` (qty=1, role=primary), nunca `composite` con qty=2. Un `composite`
+  homogéneo exige evidencia de pack dentro de UNA unidad comprada:
+  supplier_package.count, packaging.count o composition estructurada.
 - `different`: hay evidencia suficiente de que ninguno es el mismo;
   picks debe ser [].
 - `insufficient`: la evidencia no alcanza para decidir; picks es []. No uses

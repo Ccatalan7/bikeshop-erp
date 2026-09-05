@@ -493,6 +493,138 @@ void main() {
       service.dispose();
     });
 
+    // Reproduces the 2026-04-06 AliExpress invoice (lines 4, 6 and 9):
+    // quantity 2 of a single-unit product came back `composite ×2` and the
+    // row proposed an unrelated leader instead of the product it had.
+    test('composite of one product repeated as the purchased quantity is same',
+        () async {
+      final proxy = _Proxy(_typedDecision(
+        decision: 'composite',
+        picks: const <Map<String, Object?>>[
+          <String, Object?>{
+            'product_id': 'C001',
+            'qty': 2,
+            'role': 'homogeneous',
+            'basis': <String>['object', 'image'],
+          },
+        ],
+      ));
+      final service = AIAssistantService(geminiProxy: proxy);
+      final matcher = _quantityMatcher(service);
+      final result = await matcher.resolveCandidates(
+        probe: ProductDuplicateProbe(
+          name: 'Luz delantera USB DY-1022',
+          imageBytes: _sourceImageBytes,
+          sourcePurchaseQuantity: 2,
+          investigation: _investigation(
+            leafId: 'novel-leaf',
+            objectLabel: 'luz delantera',
+            modelCode: 'DY-1022',
+          ),
+        ),
+        products: <Product>[
+          _product(
+            id: 'light',
+            sku: 'AE0317',
+            name: 'Luz delantera DY-1022',
+            model: 'DY-1022',
+            categoryId: 'novel-leaf',
+            categoryName: 'Objetos nuevos',
+          ),
+        ],
+      );
+
+      expect(result.kind, ProductDuplicateDecisionKind.recommendation);
+      expect(result.recommendations.single.product.id, 'light');
+      expect(result.adjudication?.decision, AIProductMatchDecisionKind.same);
+      expect(result.adjudication?.productId, 'light');
+      expect(result.compositeComponents, isEmpty);
+      expect(result.aiCompositeProposal, isNull);
+      expect(proxy.calls, 1);
+      service.dispose();
+    });
+
+    test('composite ×2 keeps abstaining when the option itself is a pack',
+        () async {
+      for (final probe in <ProductDuplicateProbe>[
+        ProductDuplicateProbe(
+          name: 'Luz delantera 2PCS',
+          imageBytes: _sourceImageBytes,
+          sourcePurchaseQuantity: 2,
+          supplierPackCount: 2,
+          supplierUnitClass: 'piece',
+          investigation: _investigation(
+            leafId: 'novel-leaf',
+            objectLabel: 'luz delantera',
+          ),
+        ),
+        ProductDuplicateProbe(
+          name: 'Luz delantera par',
+          imageBytes: _sourceImageBytes,
+          sourcePurchaseQuantity: 2,
+          supplierUnitClass: 'pair',
+          requiresExplicitComposition: true,
+          investigation: _investigation(
+            leafId: 'novel-leaf',
+            objectLabel: 'luz delantera',
+          ),
+        ),
+        ProductDuplicateProbe(
+          name: 'Luz delantera',
+          imageBytes: _sourceImageBytes,
+          sourcePurchaseQuantity: 2,
+          investigation: _investigation(
+            leafId: 'novel-leaf',
+            objectLabel: 'luz delantera',
+            packagingCount: 2,
+          ),
+        ),
+        ProductDuplicateProbe(
+          name: 'Luz delantera',
+          imageBytes: _sourceImageBytes,
+          sourcePurchaseQuantity: 3,
+          investigation: _investigation(
+            leafId: 'novel-leaf',
+            objectLabel: 'luz delantera',
+          ),
+        ),
+      ]) {
+        final proxy = _Proxy(_typedDecision(
+          decision: 'composite',
+          picks: const <Map<String, Object?>>[
+            <String, Object?>{
+              'product_id': 'C001',
+              'qty': 2,
+              'role': 'homogeneous',
+              'basis': <String>['object'],
+            },
+          ],
+        ));
+        final service = AIAssistantService(geminiProxy: proxy);
+        final result = await _quantityMatcher(service).resolveCandidates(
+          probe: probe,
+          products: <Product>[
+            _product(
+              id: 'light',
+              sku: 'AE0317',
+              name: 'Luz delantera',
+              categoryId: 'novel-leaf',
+              categoryName: 'Objetos nuevos',
+            ),
+          ],
+        );
+        expect(result.kind, ProductDuplicateDecisionKind.abstained,
+            reason: probe.name);
+        expect(result.recommendations, isEmpty, reason: probe.name);
+        expect(result.adjudication?.decision,
+            AIProductMatchDecisionKind.composite,
+            reason: probe.name);
+        expect(result.compositeComponents.single.quantity, 2,
+            reason: probe.name);
+        service.dispose();
+      }
+    });
+
     test('misfiled gold stays only in category conflicts and is adjudicated',
         () async {
       final proxy = _Proxy.sequence(<String>[
@@ -570,14 +702,21 @@ void main() {
 
       expect(matcher.lastCatalogRowsEvaluated, 3,
           reason: 'every active non-service row reaches evaluation');
-      expect(result.recommendations, isEmpty);
-      expect(result.kind, ProductDuplicateDecisionKind.abstained);
+      // Since 2026-09-05 a proved identity is not erased by its catalog
+      // placement: the misfiled row is the one recommendation and carries
+      // the placement objection next to it.
+      expect(result.kind, ProductDuplicateDecisionKind.recommendation);
+      expect(result.recommendations.single.product.id, 'misfiled-gold');
+      expect(
+        result.recommendations.single.objections,
+        anyElement(contains('Está en otra categoría')),
+      );
       expect(
         result.normalCandidates.map((candidate) => candidate.product.id),
         contains('normal'),
       );
       expect(result.categoryConflicts.first.product.id, 'misfiled-gold');
-      expect(result.reason, contains('fuera de la hoja propuesta'));
+      expect(result.reason, contains('otra categoría'));
       service.dispose();
     });
 
@@ -638,13 +777,13 @@ void main() {
         ],
       );
 
-      expect(result.recommendations, isEmpty);
+      expect(result.recommendations.single.product.id, 'misfiled-novel');
       expect(
         result.categoryConflicts.map((candidate) => candidate.product.id),
         contains('misfiled-novel'),
       );
       expect(result.adjudication?.productId, 'misfiled-novel');
-      expect(result.reason, contains('fuera de la hoja propuesta'));
+      expect(result.reason, contains('otra categoría'));
       service.dispose();
     });
 
@@ -842,10 +981,21 @@ void main() {
   });
 }
 
+ProductDuplicateMatcherService _quantityMatcher(AIAssistantService service) =>
+    ProductDuplicateMatcherService(
+      inventoryService: _SpyInventoryService(),
+      aiAssistantService: service,
+      categories: _categories,
+      enableVisualReading: false,
+      enableDeterministicRanking: false,
+      persistComputedImageFingerprints: false,
+    );
+
 AIProductIdentityInvestigation _investigation({
   required String leafId,
   String objectLabel = 'objeto novedoso',
   String? modelCode,
+  int packagingCount = 1,
 }) {
   return AIProductIdentityInvestigation(
     schemaVersion: AIAssistantService.productIdentitySchemaVersion,
@@ -878,8 +1028,8 @@ AIProductIdentityInvestigation _investigation({
         ),
       ],
     ),
-    packaging: const AIProductPackagingIdentity(
-      count: 1,
+    packaging: AIProductPackagingIdentity(
+      count: packagingCount,
       unitToken: 'pieza',
       source: AIProductSpecSource.name,
     ),

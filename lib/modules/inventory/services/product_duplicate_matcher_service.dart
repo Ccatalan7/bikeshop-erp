@@ -775,12 +775,28 @@ class ProductDuplicateMatcherService {
       );
     }
     if (decision.decision == AIProductMatchDecisionKind.composite) {
-      return _AdjudicationOutcome(
-        candidates: const <ProductDuplicateCandidate>[],
-        state: ProductDuplicateAdjudicationState.abstained,
-        reason: decision.reason ?? 'La IA propuso un conjunto para revisión.',
-        decision: decision,
+      final normalized = _quantityOnlyCompositeAsSame(probe, decision);
+      if (normalized == null) {
+        return _AdjudicationOutcome(
+          candidates: const <ProductDuplicateCandidate>[],
+          state: ProductDuplicateAdjudicationState.abstained,
+          reason:
+              decision.reason ?? 'La IA propuso un conjunto para revisión.',
+          decision: decision,
+        );
+      }
+      ProductIdentityTrace.emit(
+        traceId: traceId,
+        event: 'adjudication.composite_normalized',
+        sink: _traceSink,
+        data: <String, Object?>{
+          'product_id': normalized.productId,
+          'component_qty': decision.components.single.quantity,
+          'purchased_quantity': probe.sourcePurchaseQuantity,
+          'confidence': decision.confidence,
+        },
       );
+      decision = normalized;
     }
     if (decision.decision == AIProductMatchDecisionKind.different ||
         decision.decision == AIProductMatchDecisionKind.insufficient) {
@@ -890,6 +906,78 @@ class ProductDuplicateMatcherService {
       reason: decision.reason,
       decision: decision,
     );
+  }
+
+  /// A purchase of N units is not a pack of N.
+  ///
+  /// Measured on 2026-09-05 against the AliExpress invoice of 2026-04-06:
+  /// three lines bought with quantity 2 came back
+  /// `composite {product ×2, homogeneous}` with confidence 0.9–1.0. The
+  /// product was the right one every time; the model had read the purchased
+  /// quantity as pack content, while its own primary investigation had said
+  /// `composition: single`. Treating that answer as an abstention hid the
+  /// correct product behind an unrelated deterministic leader in the row.
+  ///
+  /// The decision is `same` when the only component is one product repeated
+  /// exactly as many times as the line bought it and nothing structured says
+  /// the purchased option is a pack. Real packs keep their evidence —
+  /// `supplier_package.count`, a `pair`/`set` unit, `packaging.count` or a
+  /// composite primary investigation — and still abstain for the operator.
+  AIProductMatchDecision? _quantityOnlyCompositeAsSame(
+    ProductDuplicateProbe probe,
+    AIProductMatchDecision decision,
+  ) {
+    if (decision.components.length != 1) return null;
+    final component = decision.components.single;
+    if (component.role != AIProductMatchComponentRole.homogeneous &&
+        component.role != AIProductMatchComponentRole.primary) {
+      return null;
+    }
+    final productId = component.productId.trim();
+    if (productId.isEmpty) return null;
+    final purchased = probe.sourcePurchaseQuantity;
+    final repeatsThePurchase = purchased != null &&
+        purchased > 1 &&
+        (purchased - component.quantity).abs() < 0.001;
+    if (component.quantity != 1 && !repeatsThePurchase) return null;
+    if (_hasPackEvidence(probe)) return null;
+    final pick = decision.picks.firstWhere(
+      (pick) => pick.productId.trim() == productId,
+      orElse: () => AIProductMatchPick(
+        productId: productId,
+        quantity: 1,
+        basis: const <AIProductMatchBasis>[AIProductMatchBasis.object],
+      ),
+    );
+    return AIProductMatchDecision(
+      decision: AIProductMatchDecisionKind.same,
+      productId: productId,
+      picks: <AIProductMatchPick>[
+        AIProductMatchPick(
+          productId: productId,
+          quantity: 1,
+          basis: pick.basis,
+          role: AIProductMatchComponentRole.primary,
+        ),
+      ],
+      rejected: decision.rejected,
+      reason: decision.reason,
+      confidence: decision.confidence,
+      promptVersion: decision.promptVersion,
+      modelId: decision.modelId,
+    );
+  }
+
+  bool _hasPackEvidence(ProductDuplicateProbe probe) {
+    if (probe.requiresExplicitComposition ||
+        probe.supplierPackEvidenceConflict) {
+      return true;
+    }
+    if ((probe.supplierPackCount ?? 1) > 1) return true;
+    final investigation = probe.investigation;
+    if (investigation == null) return false;
+    if ((investigation.packaging.count ?? 1) > 1) return true;
+    return investigation.composition.kind == AIProductPackageKind.composite;
   }
 
   double _lineEvidenceScore(ProductDuplicateCandidate candidate) =>
@@ -1571,8 +1659,18 @@ class ProductDuplicateMatcherService {
         builtCategoryConflicts,
       );
     }
+    // A category conflict is catalog-placement evidence, not identity
+    // evidence — so it cannot erase an identity the grounded pass proved.
+    // Until 2026-09-05 a `same` on a misfiled row emptied the recommendation
+    // and the row proposed the deterministic leader of the proposed leaf
+    // instead: on the 2026-04-06 invoice that offered a bottle cage for a
+    // saddle the catalog already had. The adjudicated product stays as the
+    // one recommendation, carrying its «Está en otra categoría» objection so
+    // the operator sees the placement problem next to the identity.
     recommendations = choseCategoryConflict
-        ? const <ProductDuplicateCandidate>[]
+        ? recommendations
+            .where((candidate) => candidate.product.id == selectedId)
+            .toList(growable: false)
         : recommendations
             .where(
               (candidate) =>
@@ -1642,8 +1740,8 @@ class ProductDuplicateMatcherService {
       investigation: investigation,
       adjudication: adjudication.decision,
       reason: choseCategoryConflict
-          ? 'La IA identificó el producto, pero su ficha está fuera de la '
-              'hoja propuesta; revisa y corrige la categoría del catálogo.'
+          ? 'La IA identificó el producto; su ficha está en otra categoría '
+              'del catálogo. Si es el mismo, vincúlalo y corrige la categoría.'
           : adjudication.reason ?? recallReason,
     );
   }

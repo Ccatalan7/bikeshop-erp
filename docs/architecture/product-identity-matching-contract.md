@@ -1051,3 +1051,55 @@ esa necesidad sigue sin alternativas comprobadas — y eso es la respuesta
 correcta, no una falla. Su valor real ahí es convertir silencio en
 contradicción: una pastilla `METALICA CON DISIPADOR` deja de ser «no verificada»
 y pasa a decir por qué no sirve.
+
+## Dos lecturas que descartaban al producto correcto (2026-09-05)
+
+Medido contra la compra AliExpress del 2026-04-06, ya facturada, comparando
+cada primera propuesta con el `product_sku` registrado: la segunda pasada de
+IA acertó las diez líneas y el código que la seguía descartó cuatro. No era
+un problema de modelo ni de prompt; era de qué hacíamos con la respuesta.
+
+### La cantidad comprada no es un pack
+
+Tres líneas compradas con cantidad 2 volvieron `composite {producto ×2,
+homogeneous}` con confianza 0,9–1,0, mientras la investigación primaria de
+esas mismas filas decía `composition: single`. El matcher trataba todo
+`composite` como abstención, y la fila proponía entonces al líder
+determinista de la hoja —una luz genérica, un porta-botella— como «Primera
+coincidencia».
+
+Regla: un `composite` con **un solo componente**, repetido **exactamente la
+cantidad comprada** (o 1), y **sin evidencia estructurada de pack** —ni
+`supplier_package.count > 1`, ni unidad `pair`/`set`
+(`requiresExplicitComposition`), ni `packaging.count > 1`, ni composición
+primaria `composite`— es identidad `same` de ese producto. La traza lo
+registra como `adjudication.composite_normalized`. Un pack real conserva su
+evidencia y sigue abstenido para que el operador defina el contenido. El
+prompt de adjudicación (`v10`) dice lo mismo en su regla de `SOURCE.quantity`,
+pero la garantía es el código, no la instrucción.
+
+### Un conflicto de categoría no borra una identidad probada
+
+Un `same` con 0,95 sobre un asiento archivado en «Accesorios», con la hoja
+propuesta en «Souvenirs», vaciaba las recomendaciones y la fila proponía un
+porta-botella. La ubicación en el catálogo es evidencia de higiene, no de
+identidad: la fila mal archivada queda como **la** recomendación, con su
+objeción «Está en otra categoría: … (seleccionada: …)» al lado, y sigue
+apareciendo en el balde de conflictos para la corrección del catálogo. Esto
+corrige el párrafo «A category is a place for an object» en un punto: la
+ficha en otra hoja no entra a la lista ordinaria **antes** de la adjudicación,
+pero si la adjudicación la elige, sí es la recomendación.
+
+### La fila propone sólo lo recomendado
+
+`_buildProductReviewLine` mostraba como «Primera coincidencia» al primer
+candidato viable aunque el matcher hubiera abstenido. Con resultado del
+matcher, la fila propone sólo `recommendations.first`; sin resultado (regla
+recordada o búsqueda pendiente), los candidatos en caché son la propuesta.
+Un `abstained` con candidatos viables se muestra como «N para comparar», no
+como una coincidencia.
+
+Regresiones: `test/unit/ai_first_product_identity_coordinator_test.dart`
+(«composite of one product repeated as the purchased quantity is same»,
+«composite ×2 keeps abstaining when the option itself is a pack», y los dos
+casos de `misfiled` actualizados a recomendación con objeción).
