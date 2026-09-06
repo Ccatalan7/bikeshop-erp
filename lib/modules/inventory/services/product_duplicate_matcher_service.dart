@@ -1458,10 +1458,17 @@ class ProductDuplicateMatcherService {
         probeIdentity: probeIdentity,
         candidates: exactLeafAdjudicationPool,
       );
+      // A leaf `composite` is a pack of a leaf product, not a proved exact
+      // identity, so it does not close the search. On 2026-09-05 a «50 uds.»
+      // sticker line resolved to a generic «Stickers» ×50 inside the leaf
+      // while «Set de Pegatinas Los Simpson (50 Uds.)», the product the shop
+      // had bought before, sat in another category and was never offered.
+      // The global screen runs; if it adds nothing beyond the leaf pool the
+      // leaf answer stands without a second adjudication.
+      final leafComposite = leafAdjudication.decision?.decision ==
+          AIProductMatchDecisionKind.composite;
       final leafResolved = leafAdjudication.state ==
               ProductDuplicateAdjudicationState.accepted ||
-          leafAdjudication.decision?.decision ==
-              AIProductMatchDecisionKind.composite ||
           (probe.requiresExplicitComposition &&
               leafAdjudication.state ==
                   ProductDuplicateAdjudicationState.abstained &&
@@ -1536,8 +1543,9 @@ class ProductDuplicateMatcherService {
             'candidate_ids': globallyScreenedIds,
           },
         );
+        _AdjudicationOutcome globalOutcome;
         if (catalogScreening == null) {
-          adjudication = _AdjudicationOutcome(
+          globalOutcome = _AdjudicationOutcome(
             candidates: const <ProductDuplicateCandidate>[],
             state: ProductDuplicateAdjudicationState.failed,
             reason: 'La hoja propuesta no resolvió el producto y la búsqueda '
@@ -1557,6 +1565,13 @@ class ProductDuplicateMatcherService {
             }
           }
           categoryConflicts.sort(_compareEvaluated);
+          final exactLeafIds = exactLeafDetailed
+              .map((candidate) => candidate.product.id)
+              .whereType<String>()
+              .toSet();
+          final screenAddsBeyondLeaf = selected.any(
+            (candidate) => !exactLeafIds.contains(candidate.product.id),
+          );
           final detailedEvaluated = <_EvaluatedCandidate>[
             ...selected,
             for (final candidate in exactLeafDetailed)
@@ -1586,11 +1601,33 @@ class ProductDuplicateMatcherService {
                   .toList(growable: false),
             },
           );
-          adjudication = await _adjudicate(
-            probe: probe,
-            probeIdentity: probeIdentity,
-            candidates: fullAdjudicationPool,
+          globalOutcome = leafComposite && !screenAddsBeyondLeaf
+              ? leafAdjudication
+              : await _adjudicate(
+                  probe: probe,
+                  probeIdentity: probeIdentity,
+                  candidates: fullAdjudicationPool,
+                );
+        }
+        final globalDecided = globalOutcome.state ==
+                ProductDuplicateAdjudicationState.accepted ||
+            globalOutcome.decision?.decision ==
+                AIProductMatchDecisionKind.composite;
+        if (leafComposite && !globalDecided) {
+          // The wider pool did not find anything better: the leaf's pack
+          // answer is still the most useful thing to show.
+          ProductIdentityTrace.emit(
+            traceId: traceId,
+            event: 'catalog_match.leaf_composite_kept',
+            sink: _traceSink,
+            data: <String, Object?>{
+              'global_state': globalOutcome.state.name,
+              'global_decision': globalOutcome.decision?.decision.name,
+            },
           );
+          adjudication = leafAdjudication;
+        } else {
+          adjudication = globalOutcome;
         }
       }
     }

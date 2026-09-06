@@ -625,6 +625,128 @@ void main() {
       }
     });
 
+    // Reproduces the 2026-04-06 sticker line: a «50 uds.» pack resolved to a
+    // generic product inside the proposed leaf while the exact product the
+    // shop already had sat in another category and was never offered.
+    test('a leaf composite with same-family rows elsewhere still screens',
+        () async {
+      final proxy = _Proxy.sequence(<String>[
+        _typedDecision(
+          decision: 'composite',
+          picks: const <Map<String, Object?>>[
+            <String, Object?>{
+              'product_id': 'C001',
+              'qty': 50,
+              'role': 'homogeneous',
+              'basis': <String>['object'],
+            },
+          ],
+        ),
+        jsonEncode(<String, Object?>{
+          'candidate_refs': <String>['R0002'],
+          'reason': 'Las pegatinas de Los Simpson sobreviven mal archivadas.',
+        }),
+        _typedDecision(
+          decision: 'composite',
+          picks: const <Map<String, Object?>>[
+            <String, Object?>{
+              'product_id': 'C001',
+              'qty': 50,
+              'role': 'homogeneous',
+              'basis': <String>['object', 'name'],
+            },
+          ],
+        ),
+      ]);
+      final service = AIAssistantService(geminiProxy: proxy);
+      final result = await _quantityMatcher(service).resolveCandidates(
+        probe: ProductDuplicateProbe(
+          name: '50 uds. pegatinas Los Simpson',
+          imageBytes: _sourceImageBytes,
+          sourcePurchaseQuantity: 1,
+          investigation: _investigation(
+            leafId: 'novel-leaf',
+            objectLabel: 'pegatinas',
+            modelCode: 'SIMP-50',
+            packagingCount: 50,
+          ),
+        ),
+        products: <Product>[
+          _product(
+            id: 'generic',
+            sku: 'NNV172',
+            name: 'Pegatinas',
+            categoryId: 'novel-leaf',
+            categoryName: 'Objetos nuevos',
+          ),
+          _product(
+            id: 'misfiled',
+            sku: 'AE0318',
+            name: 'Pegatinas Los Simpson SIMP-50',
+            model: 'SIMP-50',
+            categoryId: 'other-leaf',
+            categoryName: 'Otra hoja',
+          ),
+        ],
+      );
+
+      expect(proxy.calls, 3,
+          reason: 'leaf adjudication, global screen, full adjudication');
+      expect(result.kind, ProductDuplicateDecisionKind.abstained);
+      expect(result.adjudication?.decision, AIProductMatchDecisionKind.composite);
+      expect(result.compositeComponents.single.productId, 'misfiled');
+      expect(result.aiCompositeProposal, contains('AE0318'));
+      service.dispose();
+    });
+
+    test('a leaf composite screens once and keeps its answer when nothing new',
+        () async {
+      final proxy = _Proxy.sequence(<String>[
+        _typedDecision(
+          decision: 'composite',
+          picks: const <Map<String, Object?>>[
+            <String, Object?>{
+              'product_id': 'C001',
+              'qty': 50,
+              'role': 'homogeneous',
+              'basis': <String>['object'],
+            },
+          ],
+        ),
+        jsonEncode(<String, Object?>{
+          'candidate_refs': <String>[],
+          'reason': 'Nada fuera de la hoja.',
+        }),
+      ]);
+      final service = AIAssistantService(geminiProxy: proxy);
+      final result = await _quantityMatcher(service).resolveCandidates(
+        probe: ProductDuplicateProbe(
+          name: '50 uds. pegatinas',
+          imageBytes: _sourceImageBytes,
+          sourcePurchaseQuantity: 1,
+          investigation: _investigation(
+            leafId: 'novel-leaf',
+            objectLabel: 'pegatinas',
+            packagingCount: 50,
+          ),
+        ),
+        products: <Product>[
+          _product(
+            id: 'generic',
+            sku: 'NNV172',
+            name: 'Pegatinas',
+            categoryId: 'novel-leaf',
+            categoryName: 'Objetos nuevos',
+          ),
+          _product(id: 'unrelated', sku: 'X', name: 'Cadena 9v'),
+        ],
+      );
+      expect(proxy.calls, 2,
+          reason: 'leaf adjudication and the screen; no second adjudication');
+      expect(result.compositeComponents.single.productId, 'generic');
+      service.dispose();
+    });
+
     test('misfiled gold stays only in category conflicts and is adjudicated',
         () async {
       final proxy = _Proxy.sequence(<String>[
