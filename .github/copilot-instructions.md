@@ -122,6 +122,14 @@ system clipboard read-back. Intercept `SystemChannels.platform` with
 call and assert its payload instead. This verifies the actual app boundary
 without depending on host clipboard state or adding an unbounded pump/wait.
 
+### Business-day tests assert calendar boundaries (2026-09-07)
+
+A live-clock attendance test assumed every business day lasts 24 elapsed hours
+and failed the release gate at a daylight-saving transition. Assert the start
+and end of the selected civil date in the business timezone. Keep fixed-date
+transition cases beside the window model; do not replace calendar boundaries
+with a fixed duration or weaken the production date range to satisfy a test.
+
 ### HTTP mock responses: declare UTF-8 before testing byte limits
 
 **2026-08-11 — one focused AI transport run exposed this trap.**
