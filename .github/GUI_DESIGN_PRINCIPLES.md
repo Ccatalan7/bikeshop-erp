@@ -1305,11 +1305,12 @@ con ancho fijo, y las celdas editables como I-01 de 34 px sin rótulo propio
 sangradas (T-03) bajo su línea, no como un panel. El pie confirma las filas
 «Listo»; no existe un botón por fila que repita al del pie.
 
-Lo que hacía «infantil» a la superficie no estaba en el widget: era la semilla
-`#1976D2` del preset y unos tonos aproximados en el resolver. Se corrigió en
-el dueño de la paleta, no pintando encima (ver
-`docs/architecture/appearance-palette-contract.md`); el fg success se quedó en
-`#18764B` porque el de la guía mide 4,36:1 sobre blanco y el contrato pide 4,5.
+La semilla heredada del preset y los tonos aproximados del resolver
+alteraban la superficie. La corrección pertenece al dueño de la paleta (ver
+`docs/architecture/appearance-palette-contract.md`), y los widgets consumen
+sus roles semánticos. El foreground de éxito conserva el tono del resolver que
+cumple el contraste mínimo de 4,5:1; el candidato de la guía medía 4,36:1.
+Los valores de color se mantienen en ese dueño, sin duplicarlos en esta guía.
 
 Y una regla recordada nunca es «el sistema sabe»: se muestra con quién la
 confirmó y cuándo, se aplica sola sólo cuando nombra el producto que el

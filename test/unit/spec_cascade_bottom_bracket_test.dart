@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:vinabike_erp/modules/inventory/utils/spec_rule_evaluator.dart';
 import 'package:vinabike_erp/modules/inventory/services/spec_engine_service.dart';
 
 /// Camina la cascada completa del pedalier con el evaluador real.
@@ -1194,20 +1195,18 @@ void main() {
     expect(optionsFor('spindle_diameter_mm', hollowtech), {'24'});
   });
 
-  test('un largo ya guardado no se esconde por una interfaz sin contestar', () {
-    // El guardado borra todo campo de la plantilla que no venga en el payload,
-    // asi que un campo escondido con dato adentro esta a un guardado de
-    // perderse. 29 pedaliers del catalogo tienen su largo de eje y ninguno
-    // tiene la interfaz confirmada: el nombre dice `P/CUADRADA`, que no prueba
-    // JIS ni ISO. Se esconde cuando se SABE que el eje es pasante, no mientras
-    // no se sabe.
+  test('una interfaz sin contestar conserva aplicabilidad desconocida', () {
+    // Applicability is distinct from draft retention. The editor preserves
+    // populated observations separately; this legacy graph only determines
+    // whether an unanswered field can be offered as applicable.
     final sinInterfaz = {
       'bb_shell_standard': 'BSA / Caja inglesa 34,8 mm (1.37\") x 24',
       'bb_construction': 'Rodamiento sellado',
       'includes_spindle': true,
     };
-    expect(visible('spindle_length_mm', sinInterfaz), isTrue,
-        reason: 'el largo de 29 productos desaparece y el guardado lo borra');
+    expect(fields['spindle_length_mm']!.applicability(sinInterfaz),
+        SpecTruth.unknown);
+    expect(visible('spindle_length_mm', sinInterfaz), isFalse);
 
     expect(
       visible('spindle_length_mm', {...sinInterfaz, 'spindle_interface': 'Cuadrado JIS'}),

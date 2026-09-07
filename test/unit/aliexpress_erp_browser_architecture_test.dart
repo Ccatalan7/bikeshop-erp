@@ -305,12 +305,13 @@ void main() {
     expect(
       ocr,
       contains(
-          "'Revisar \$unresolved producto\${unresolved == 1 ? '' : 's'} · solo lectura'"),
+          "'Revisar productos · \$unresolved por decidir · solo lectura'"),
     );
     expect(
-      ocr,
+      ocr.replaceAll(RegExp(r'\s+'), ' '),
       contains(
-        'readOnly: _creatingProducts || _readOnlyEvaluationBlocksMutations',
+        'readOnly: _creatingProducts || _finalizingNewProducts || '
+        '_readOnlyEvaluationBlocksMutations',
       ),
     );
   });
