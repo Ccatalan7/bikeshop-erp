@@ -1,0 +1,717 @@
+{
+  "notice": "Synthetic contract fixtures, not OEM compatibility or product data. V2 decimals use strings and every condition declares decimal/token/boolean.",
+  "relations": {
+    "tube": {
+      "schema_version": 2,
+      "interface": "tube_tire",
+      "label": "Synthetic tube declaration",
+      "alternatives": [
+        {
+          "id": "622",
+          "label": "BSD 622, 28–47 mm",
+          "conditions": [
+            {
+              "field": "tire.bsd_mm",
+              "operator": "eq",
+              "value": "622",
+              "value_type": "decimal"
+            },
+            {
+              "field": "tire.width_mm",
+              "operator": "gte",
+              "value": "28",
+              "value_type": "decimal"
+            },
+            {
+              "field": "tire.width_mm",
+              "operator": "lte",
+              "value": "47",
+              "value_type": "decimal"
+            }
+          ],
+          "sources": [
+            "https://example.invalid/synthetic-only"
+          ]
+        },
+        {
+          "id": "635",
+          "label": "BSD 635, 35–47 mm",
+          "conditions": [
+            {
+              "field": "tire.bsd_mm",
+              "operator": "eq",
+              "value": "635",
+              "value_type": "decimal"
+            },
+            {
+              "field": "tire.width_mm",
+              "operator": "gte",
+              "value": "35",
+              "value_type": "decimal"
+            },
+            {
+              "field": "tire.width_mm",
+              "operator": "lte",
+              "value": "47",
+              "value_type": "decimal"
+            }
+          ],
+          "sources": [
+            "https://example.invalid/synthetic-only"
+          ]
+        }
+      ],
+      "exclusions": []
+    },
+    "headset": {
+      "schema_version": 2,
+      "interface": "headset_frame_fork",
+      "label": "Synthetic paired ends",
+      "alternatives": [
+        {
+          "id": "straight",
+          "label": "One documented straight pairing",
+          "conditions": [
+            {
+              "field": "upper.shis",
+              "operator": "eq",
+              "value": "EC34/28.6",
+              "value_type": "token"
+            },
+            {
+              "field": "lower.shis",
+              "operator": "eq",
+              "value": "EC34/30",
+              "value_type": "token"
+            }
+          ],
+          "sources": [
+            "https://example.invalid/synthetic-only"
+          ]
+        },
+        {
+          "id": "tapered",
+          "label": "One documented tapered pairing",
+          "conditions": [
+            {
+              "field": "upper.shis",
+              "operator": "eq",
+              "value": "ZS44/28.6",
+              "value_type": "token"
+            },
+            {
+              "field": "lower.shis",
+              "operator": "eq",
+              "value": "ZS56/40",
+              "value_type": "token"
+            }
+          ],
+          "sources": [
+            "https://example.invalid/synthetic-only"
+          ]
+        }
+      ],
+      "exclusions": []
+    },
+    "electrical": {
+      "schema_version": 2,
+      "interface": "charger_battery",
+      "label": "Synthetic electrical interface",
+      "alternatives": [
+        {
+          "id": "system_a",
+          "label": "Exact protocol and connector",
+          "conditions": [
+            {
+              "field": "input.voltage_v",
+              "operator": "eq",
+              "value": "48",
+              "value_type": "decimal"
+            },
+            {
+              "field": "protocol",
+              "operator": "eq",
+              "value": "synthetic_a",
+              "value_type": "token"
+            },
+            {
+              "field": "connector",
+              "operator": "eq",
+              "value": "synthetic_5_pin",
+              "value_type": "token"
+            }
+          ],
+          "sources": [
+            "https://example.invalid/synthetic-only"
+          ]
+        }
+      ],
+      "exclusions": []
+    },
+    "exception": {
+      "schema_version": 2,
+      "interface": "brake_pad_rotor",
+      "label": "Synthetic explicit exception",
+      "alternatives": [
+        {
+          "id": "positive",
+          "label": "Declared surface range",
+          "conditions": [
+            {
+              "field": "surface",
+              "operator": "in",
+              "value": [
+                "synthetic_a",
+                "synthetic_b"
+              ],
+              "value_type": "token"
+            }
+          ],
+          "sources": [
+            "https://example.invalid/synthetic-only"
+          ]
+        }
+      ],
+      "exclusions": [
+        {
+          "id": "excluded",
+          "label": "Excludes this compound",
+          "conditions": [
+            {
+              "field": "compound",
+              "operator": "eq",
+              "value": "synthetic_excluded",
+              "value_type": "token"
+            }
+          ],
+          "sources": [
+            "https://example.invalid/synthetic-only"
+          ]
+        }
+      ]
+    },
+    "numeric": {
+      "schema_version": 2,
+      "interface": "synthetic_interval",
+      "label": "Open and closed endpoints",
+      "alternatives": [
+        {
+          "id": "range",
+          "label": "Above zero, through one",
+          "conditions": [
+            {
+              "field": "measure",
+              "operator": "gt",
+              "value": "0",
+              "value_type": "decimal"
+            },
+            {
+              "field": "measure",
+              "operator": "lte",
+              "value": "1",
+              "value_type": "decimal"
+            }
+          ],
+          "sources": [
+            "https://example.invalid/synthetic-only"
+          ]
+        }
+      ],
+      "exclusions": []
+    },
+    "precision": {
+      "schema_version": 2,
+      "interface": "synthetic_exact",
+      "label": "Synthetic precision only",
+      "alternatives": [
+        {
+          "id": "exact",
+          "label": "Typed operand",
+          "conditions": [
+            {
+              "field": "x",
+              "operator": "gte",
+              "value_type": "decimal",
+              "value": "1.0000000000000001"
+            }
+          ],
+          "sources": [
+            "https://example.invalid/synthetic-only"
+          ]
+        }
+      ],
+      "exclusions": []
+    },
+    "large": {
+      "schema_version": 2,
+      "interface": "synthetic_exact",
+      "label": "Synthetic precision only",
+      "alternatives": [
+        {
+          "id": "exact",
+          "label": "Typed operand",
+          "conditions": [
+            {
+              "field": "x",
+              "operator": "eq",
+              "value_type": "decimal",
+              "value": "100000000000000000000"
+            }
+          ],
+          "sources": [
+            "https://example.invalid/synthetic-only"
+          ]
+        }
+      ],
+      "exclusions": []
+    },
+    "decimal_equal": {
+      "schema_version": 2,
+      "interface": "synthetic_exact",
+      "label": "Synthetic precision only",
+      "alternatives": [
+        {
+          "id": "exact",
+          "label": "Typed operand",
+          "conditions": [
+            {
+              "field": "x",
+              "operator": "eq",
+              "value_type": "decimal",
+              "value": "28.60"
+            }
+          ],
+          "sources": [
+            "https://example.invalid/synthetic-only"
+          ]
+        }
+      ],
+      "exclusions": []
+    },
+    "token_equal": {
+      "schema_version": 2,
+      "interface": "synthetic_exact",
+      "label": "Synthetic precision only",
+      "alternatives": [
+        {
+          "id": "exact",
+          "label": "Typed operand",
+          "conditions": [
+            {
+              "field": "x",
+              "operator": "eq",
+              "value_type": "token",
+              "value": "01"
+            }
+          ],
+          "sources": [
+            "https://example.invalid/synthetic-only"
+          ]
+        }
+      ],
+      "exclusions": []
+    },
+    "typed_bool": {
+      "schema_version": 2,
+      "interface": "synthetic_exact",
+      "label": "Synthetic precision only",
+      "alternatives": [
+        {
+          "id": "exact",
+          "label": "Typed operand",
+          "conditions": [
+            {
+              "field": "x",
+              "operator": "eq",
+              "value_type": "boolean",
+              "value": false
+            }
+          ],
+          "sources": [
+            "https://example.invalid/synthetic-only"
+          ]
+        }
+      ],
+      "exclusions": []
+    },
+    "negative": {
+      "schema_version": 2,
+      "interface": "synthetic_exact",
+      "label": "Synthetic precision only",
+      "alternatives": [
+        {
+          "id": "exact",
+          "label": "Typed operand",
+          "conditions": [
+            {
+              "field": "x",
+              "operator": "lt",
+              "value_type": "decimal",
+              "value": "-1.0000000000000001"
+            }
+          ],
+          "sources": [
+            "https://example.invalid/synthetic-only"
+          ]
+        }
+      ],
+      "exclusions": []
+    },
+    "decimal_in": {
+      "schema_version": 2,
+      "interface": "synthetic_exact",
+      "label": "Synthetic precision only",
+      "alternatives": [
+        {
+          "id": "exact",
+          "label": "Typed operand",
+          "conditions": [
+            {
+              "field": "x",
+              "operator": "in",
+              "value_type": "decimal",
+              "value": [
+                "1.0000000000000001",
+                "2"
+              ]
+            }
+          ],
+          "sources": [
+            "https://example.invalid/synthetic-only"
+          ]
+        }
+      ],
+      "exclusions": []
+    }
+  },
+  "cases": [
+    {
+      "name": "range includes the lower boundary",
+      "relation": "tube",
+      "configuration": {
+        "tire.bsd_mm": "622",
+        "tire.width_mm": "28"
+      },
+      "verdict": "supported",
+      "unresolved_fields": []
+    },
+    {
+      "name": "range includes the upper boundary",
+      "relation": "tube",
+      "configuration": {
+        "tire.bsd_mm": "635",
+        "tire.width_mm": "47"
+      },
+      "verdict": "supported",
+      "unresolved_fields": []
+    },
+    {
+      "name": "does not borrow a width from the other BSD row",
+      "relation": "tube",
+      "configuration": {
+        "tire.bsd_mm": "635",
+        "tire.width_mm": "30"
+      },
+      "verdict": "outside_declared_scope",
+      "unresolved_fields": []
+    },
+    {
+      "name": "missing width remains unknown",
+      "relation": "tube",
+      "configuration": {
+        "tire.bsd_mm": "622"
+      },
+      "verdict": "unknown",
+      "unresolved_fields": [
+        "tire.width_mm"
+      ]
+    },
+    {
+      "name": "two possible BSDs are not one configuration",
+      "relation": "tube",
+      "configuration": {
+        "tire.bsd_mm": [
+          "622",
+          "635"
+        ],
+        "tire.width_mm": "40"
+      },
+      "verdict": "unknown",
+      "unresolved_fields": [
+        "tire.bsd_mm"
+      ]
+    },
+    {
+      "name": "cannot borrow the lower headset end from another row",
+      "relation": "headset",
+      "configuration": {
+        "upper.shis": "EC34/28.6",
+        "lower.shis": "ZS56/40"
+      },
+      "verdict": "outside_declared_scope",
+      "unresolved_fields": []
+    },
+    {
+      "name": "known paired ends remain one alternative",
+      "relation": "headset",
+      "configuration": {
+        "upper.shis": "ZS44/28.6",
+        "lower.shis": "ZS56/40"
+      },
+      "verdict": "supported",
+      "unresolved_fields": []
+    },
+    {
+      "name": "a voltage does not certify a charger",
+      "relation": "electrical",
+      "configuration": {
+        "input.voltage_v": "48"
+      },
+      "verdict": "unknown",
+      "unresolved_fields": [
+        "connector",
+        "protocol"
+      ]
+    },
+    {
+      "name": "all electrical interface conditions must hold together",
+      "relation": "electrical",
+      "configuration": {
+        "input.voltage_v": "48",
+        "protocol": "synthetic_a",
+        "connector": "synthetic_5_pin"
+      },
+      "verdict": "supported",
+      "unresolved_fields": []
+    },
+    {
+      "name": "a documented exclusion narrows an otherwise matching row",
+      "relation": "exception",
+      "configuration": {
+        "surface": "synthetic_a",
+        "compound": "synthetic_excluded"
+      },
+      "verdict": "excluded",
+      "unresolved_fields": []
+    },
+    {
+      "name": "an unknown exception prevents approval",
+      "relation": "exception",
+      "configuration": {
+        "surface": "synthetic_a"
+      },
+      "verdict": "unknown",
+      "unresolved_fields": [
+        "compound"
+      ]
+    },
+    {
+      "name": "outside declared coverage is not an incompatibility claim",
+      "relation": "exception",
+      "configuration": {
+        "surface": "synthetic_c",
+        "compound": "synthetic_regular"
+      },
+      "verdict": "outside_declared_scope",
+      "unresolved_fields": []
+    },
+    {
+      "name": "zero is known and fails an open lower endpoint",
+      "relation": "numeric",
+      "configuration": {
+        "measure": "0"
+      },
+      "verdict": "outside_declared_scope",
+      "unresolved_fields": []
+    },
+    {
+      "name": "comma decimals have the canonical numeric value",
+      "relation": "numeric",
+      "configuration": {
+        "measure": "0,5"
+      },
+      "verdict": "supported",
+      "unresolved_fields": []
+    },
+    {
+      "name": "non-finite values are unknown",
+      "relation": "numeric",
+      "configuration": {
+        "measure": "NaN"
+      },
+      "verdict": "unknown",
+      "unresolved_fields": [
+        "measure"
+      ]
+    },
+    {
+      "name": "boolean false is not the number zero",
+      "relation": "numeric",
+      "configuration": {
+        "measure": false
+      },
+      "verdict": "unknown",
+      "unresolved_fields": [
+        "measure"
+      ]
+    },
+    {
+      "name": "dimension text with units is not guessed as a number",
+      "relation": "numeric",
+      "configuration": {
+        "measure": "0.5 mm"
+      },
+      "verdict": "unknown",
+      "unresolved_fields": [
+        "measure"
+      ]
+    },
+    {
+      "name": "a rounded lower limit cannot approve one",
+      "relation": "precision",
+      "configuration": {
+        "x": "1"
+      },
+      "verdict": "outside_declared_scope",
+      "unresolved_fields": []
+    },
+    {
+      "name": "the precise lower limit remains included",
+      "relation": "precision",
+      "configuration": {
+        "x": "1.0000000000000001"
+      },
+      "verdict": "supported",
+      "unresolved_fields": []
+    },
+    {
+      "name": "large integers cannot saturate to equality",
+      "relation": "large",
+      "configuration": {
+        "x": "9223372036854775807"
+      },
+      "verdict": "outside_declared_scope",
+      "unresolved_fields": []
+    },
+    {
+      "name": "large exact decimal strings remain representable",
+      "relation": "large",
+      "configuration": {
+        "x": "1e20"
+      },
+      "verdict": "supported",
+      "unresolved_fields": []
+    },
+    {
+      "name": "decimal type equates trailing zero notation",
+      "relation": "decimal_equal",
+      "configuration": {
+        "x": "28.6"
+      },
+      "verdict": "supported",
+      "unresolved_fields": []
+    },
+    {
+      "name": "a JSON number is not a lossless v2 observation",
+      "relation": "decimal_equal",
+      "configuration": {
+        "x": 28.6
+      },
+      "verdict": "unknown",
+      "unresolved_fields": [
+        "x"
+      ]
+    },
+    {
+      "name": "model token 01 is distinct from token 1",
+      "relation": "token_equal",
+      "configuration": {
+        "x": "1"
+      },
+      "verdict": "outside_declared_scope",
+      "unresolved_fields": []
+    },
+    {
+      "name": "identical model token preserves its identity",
+      "relation": "token_equal",
+      "configuration": {
+        "x": "01"
+      },
+      "verdict": "supported",
+      "unresolved_fields": []
+    },
+    {
+      "name": "boolean false remains an explicit typed answer",
+      "relation": "typed_bool",
+      "configuration": {
+        "x": false
+      },
+      "verdict": "supported",
+      "unresolved_fields": []
+    },
+    {
+      "name": "string false is not a boolean observation",
+      "relation": "typed_bool",
+      "configuration": {
+        "x": "false"
+      },
+      "verdict": "unknown",
+      "unresolved_fields": [
+        "x"
+      ]
+    },
+    {
+      "name": "negative decimal ordering is exact",
+      "relation": "negative",
+      "configuration": {
+        "x": "-1.0000000000000002"
+      },
+      "verdict": "supported",
+      "unresolved_fields": []
+    },
+    {
+      "name": "negative decimal ordering excludes the larger value",
+      "relation": "negative",
+      "configuration": {
+        "x": "-1"
+      },
+      "verdict": "outside_declared_scope",
+      "unresolved_fields": []
+    },
+    {
+      "name": "decimal alternatives do not round membership",
+      "relation": "decimal_in",
+      "configuration": {
+        "x": "1"
+      },
+      "verdict": "outside_declared_scope",
+      "unresolved_fields": []
+    },
+    {
+      "name": "decimal alternatives compare exact values",
+      "relation": "decimal_in",
+      "configuration": {
+        "x": "2.00"
+      },
+      "verdict": "supported",
+      "unresolved_fields": []
+    }
+  ],
+  "valid_sources": [
+    "https://example.invalid:443/a%20b?x=1&y=z#part",
+    "http://www.sheldonbrown.com/tire-sizing.html",
+    "https://www.parktool.com/en-us/blog/repair-help"
+  ],
+  "invalid_sources": [
+    "https://example.invalid:bad",
+    "https://[bad]",
+    "https://example.invalid:65536",
+    "https://example.invalid:0",
+    "https://user:password@example.invalid/path",
+    "https://example.invalid/a%ZZ",
+    "https://example.invalid/white space",
+    "https://example.invalid/\n",
+    "https:///missing-host",
+    "javascript:alert(1)"
+  ]
+}

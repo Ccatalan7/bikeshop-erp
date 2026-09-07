@@ -9,7 +9,9 @@ import '../../modules/ai_assistant/services/ai_service.dart';
 import '../../modules/inventory/services/product_identity/supplier_resolution_proposal.dart';
 import '../services/image_service.dart';
 import '../themes/vinabike_theme_roles.dart';
+import 'vb_button.dart';
 import 'vb_notice.dart';
+import 'vb_segmented.dart' show VbDensity;
 import 'vb_status_badge.dart';
 import 'vb_money_text.dart';
 import 'ocr_review_evidence.dart';
@@ -504,18 +506,21 @@ class _OcrCandidatePickerState extends State<OcrCandidatePicker> {
               spacing: 8,
               runSpacing: 4,
               children: [
-                TextButton(
-                    onPressed: () => Navigator.of(context).pop(),
-                    child: const Text('Cancelar')),
+                VbButton(
+                    label: 'Cancelar',
+                    variant: VbButtonVariant.text,
+                    onPressed: () => Navigator.of(context).pop()),
                 if (!widget.inspectionOnly && widget.allowCreateNew)
-                  OutlinedButton(
+                  VbButton(
                       key: const Key('ocr-candidate-create-new'),
+                      label: 'Marcar como nuevo',
+                      variant: VbButtonVariant.secondary,
                       onPressed: () => Navigator.of(context)
-                          .pop(const OcrCandidateCreateNew()),
-                      child: const Text('Marcar como nuevo')),
+                          .pop(const OcrCandidateCreateNew())),
                 if (!widget.inspectionOnly && _editingComposition)
-                  FilledButton(
+                  VbButton(
                       key: const Key('ocr-candidate-review-content'),
+                      label: 'Continuar',
                       onPressed: _compositionItems.isNotEmpty &&
                               _compositionItems.every((item) =>
                                   item.catalogUnitsPerPurchase > 0 &&
@@ -523,17 +528,16 @@ class _OcrCandidatePickerState extends State<OcrCandidatePicker> {
                           ? () => Navigator.of(context).pop(
                               OcrCandidateDefineComposition(
                                   List.unmodifiable(_compositionItems)))
-                          : null,
-                      child: const Text('Aplicar y guardar regla')),
+                          : null),
                 if (!widget.inspectionOnly &&
                     !_editingComposition &&
                     widget.canConfirmCompositeProposal &&
                     hasComposition)
-                  FilledButton(
+                  VbButton(
                       key: const Key('ocr-candidate-confirm-composite'),
+                      label: 'Continuar con esta descomposición',
                       onPressed: () => Navigator.of(context)
-                          .pop(const OcrCandidateConfirmComposition()),
-                      child: const Text('Usar descomposición')),
+                          .pop(const OcrCandidateConfirmComposition())),
               ]),
         ));
     return Dialog(
@@ -558,7 +562,7 @@ class _OcrCandidatePickerState extends State<OcrCandidatePicker> {
                       Expanded(
                           child: Text(
                               hasComposition
-                                  ? 'Revisar composición'
+                                  ? 'Definir contenido de la compra'
                                   : 'Comparar productos',
                               style: theme.textTheme.titleMedium)),
                       IconButton(
@@ -917,7 +921,7 @@ class _Header extends StatelessWidget {
               children: [
                 Text(
                   compositeReview
-                      ? 'COMPRADO · presentación del proveedor'
+                      ? 'COMPRADO · contenido por definir'
                       : 'COMPRADO · variante a identificar',
                   style: theme.textTheme.titleSmall
                       ?.copyWith(fontWeight: FontWeight.w700),
@@ -1030,14 +1034,16 @@ class _CandidateRow extends StatelessWidget {
           if (evidence != null)
             VbStatusBadge(label: evidence!.label, tone: evidence!.tone),
           if (onSelected != null)
-            OutlinedButton(
+            VbButton(
                 key: ValueKey('ocr-candidate-select-${product.id}'),
-                onPressed: onSelected,
-                child: Text(addsComponent
+                label: addsComponent
                     ? 'Añadir al contenido'
                     : manual
                         ? 'Seleccionar con diferencias'
-                        : 'Seleccionar producto')),
+                        : 'Seleccionar producto',
+                variant: VbButtonVariant.secondary,
+                density: compact ? VbDensity.touch : VbDensity.compact,
+                onPressed: onSelected),
         ]);
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 12),

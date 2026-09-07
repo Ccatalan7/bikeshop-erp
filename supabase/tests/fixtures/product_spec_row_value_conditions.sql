@@ -1,0 +1,4300 @@
+insert into row_value_condition_document(doc) values ($row_value_fixture${
+  "schema_version": 1,
+  "title": "Synthetic typed same-row implications; no OEM or stock claims",
+  "fields": {
+    "configurations": {
+      "data_type": "json",
+      "unit": null,
+      "schema": {
+        "version": 1,
+        "columns": [
+          {
+            "key": "configuration_state",
+            "label": "Estado",
+            "type": "token",
+            "allowed_values": [
+              "Con kit incluido",
+              "Con kit opcional",
+              "Directo",
+              "Desconocido / sin confirmar",
+              "unknown"
+            ]
+          },
+          {
+            "key": "clamp_included",
+            "label": "Incluye abrazadera",
+            "type": "boolean"
+          },
+          {
+            "key": "adapter_required",
+            "label": "Requiere adaptador",
+            "type": "boolean"
+          },
+          {
+            "key": "adapter_present",
+            "label": "Adaptador presente",
+            "type": "boolean"
+          },
+          {
+            "key": "code",
+            "label": "Código literal",
+            "type": "token",
+            "allowed_values": [
+              "01",
+              "1",
+              "unknown"
+            ]
+          },
+          {
+            "key": "quantity",
+            "label": "Magnitud exacta",
+            "type": "decimal",
+            "unit": "mm"
+          },
+          {
+            "key": "count",
+            "label": "Cantidad entera",
+            "type": "integer"
+          },
+          {
+            "key": "limited",
+            "label": "Dominio acotado",
+            "type": "decimal",
+            "validation": {
+              "min": "1.25",
+              "max": "2.75",
+              "positive": true
+            }
+          },
+          {
+            "key": "positive",
+            "label": "Magnitud positiva",
+            "type": "decimal",
+            "validation": {
+              "positive": true
+            }
+          },
+          {
+            "key": "note",
+            "label": "Nota",
+            "type": "text"
+          },
+          {
+            "key": "open_token",
+            "label": "Código abierto",
+            "type": "token"
+          },
+          {
+            "key": "other_flag",
+            "label": "Otro requisito",
+            "type": "boolean"
+          }
+        ]
+      }
+    }
+  },
+  "contract": {
+    "rules_version": 2,
+    "row_conditions": {
+      "version": 1,
+      "fields": {
+        "configurations": {
+          "value_when": {
+            "clamp_included": [
+              {
+                "when": {
+                  "kind": "when",
+                  "rows": [
+                    [
+                      {
+                        "field": "configuration_state",
+                        "operator": "eq",
+                        "value_type": "token",
+                        "value": "Con kit incluido"
+                      }
+                    ]
+                  ]
+                },
+                "expected": {
+                  "value_type": "boolean",
+                  "value": true
+                }
+              }
+            ]
+          }
+        }
+      }
+    }
+  },
+  "cases": [
+    {
+      "id": "included_true",
+      "contract": {
+        "rules_version": 2,
+        "row_conditions": {
+          "version": 1,
+          "fields": {
+            "configurations": {
+              "value_when": {
+                "clamp_included": [
+                  {
+                    "when": {
+                      "kind": "when",
+                      "rows": [
+                        [
+                          {
+                            "field": "configuration_state",
+                            "operator": "eq",
+                            "value_type": "token",
+                            "value": "Con kit incluido"
+                          }
+                        ]
+                      ]
+                    },
+                    "expected": {
+                      "value_type": "boolean",
+                      "value": true
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        }
+      },
+      "values": {
+        "configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "a",
+              "values": {
+                "configuration_state": "Con kit incluido",
+                "clamp_included": true
+              },
+              "sources": [
+                "https://example.test/row-a"
+              ]
+            }
+          ]
+        }
+      },
+      "expected": []
+    },
+    {
+      "id": "included_false",
+      "contract": {
+        "rules_version": 2,
+        "row_conditions": {
+          "version": 1,
+          "fields": {
+            "configurations": {
+              "value_when": {
+                "clamp_included": [
+                  {
+                    "when": {
+                      "kind": "when",
+                      "rows": [
+                        [
+                          {
+                            "field": "configuration_state",
+                            "operator": "eq",
+                            "value_type": "token",
+                            "value": "Con kit incluido"
+                          }
+                        ]
+                      ]
+                    },
+                    "expected": {
+                      "value_type": "boolean",
+                      "value": true
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        }
+      },
+      "values": {
+        "configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "a",
+              "values": {
+                "configuration_state": "Con kit incluido",
+                "clamp_included": false
+              },
+              "sources": [
+                "https://example.test/row-a"
+              ]
+            }
+          ]
+        }
+      },
+      "expected": [
+        {
+          "code": "row_value_conflict",
+          "field": "configurations",
+          "row_id": "a",
+          "column": "clamp_included",
+          "blocking": true
+        }
+      ]
+    },
+    {
+      "id": "included_missing",
+      "contract": {
+        "rules_version": 2,
+        "row_conditions": {
+          "version": 1,
+          "fields": {
+            "configurations": {
+              "value_when": {
+                "clamp_included": [
+                  {
+                    "when": {
+                      "kind": "when",
+                      "rows": [
+                        [
+                          {
+                            "field": "configuration_state",
+                            "operator": "eq",
+                            "value_type": "token",
+                            "value": "Con kit incluido"
+                          }
+                        ]
+                      ]
+                    },
+                    "expected": {
+                      "value_type": "boolean",
+                      "value": true
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        }
+      },
+      "values": {
+        "configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "a",
+              "values": {
+                "configuration_state": "Con kit incluido"
+              },
+              "sources": [
+                "https://example.test/row-a"
+              ]
+            }
+          ]
+        }
+      },
+      "expected": [
+        {
+          "code": "row_value_pending",
+          "field": "configurations",
+          "row_id": "a",
+          "column": "clamp_included",
+          "blocking": false
+        }
+      ]
+    },
+    {
+      "id": "optional_true",
+      "contract": {
+        "rules_version": 2,
+        "row_conditions": {
+          "version": 1,
+          "fields": {
+            "configurations": {
+              "value_when": {
+                "clamp_included": [
+                  {
+                    "when": {
+                      "kind": "when",
+                      "rows": [
+                        [
+                          {
+                            "field": "configuration_state",
+                            "operator": "eq",
+                            "value_type": "token",
+                            "value": "Con kit incluido"
+                          }
+                        ]
+                      ]
+                    },
+                    "expected": {
+                      "value_type": "boolean",
+                      "value": true
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        }
+      },
+      "values": {
+        "configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "a",
+              "values": {
+                "configuration_state": "Con kit opcional",
+                "clamp_included": true
+              },
+              "sources": [
+                "https://example.test/row-a"
+              ]
+            }
+          ]
+        }
+      },
+      "expected": []
+    },
+    {
+      "id": "optional_false",
+      "contract": {
+        "rules_version": 2,
+        "row_conditions": {
+          "version": 1,
+          "fields": {
+            "configurations": {
+              "value_when": {
+                "clamp_included": [
+                  {
+                    "when": {
+                      "kind": "when",
+                      "rows": [
+                        [
+                          {
+                            "field": "configuration_state",
+                            "operator": "eq",
+                            "value_type": "token",
+                            "value": "Con kit incluido"
+                          }
+                        ]
+                      ]
+                    },
+                    "expected": {
+                      "value_type": "boolean",
+                      "value": true
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        }
+      },
+      "values": {
+        "configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "a",
+              "values": {
+                "configuration_state": "Con kit opcional",
+                "clamp_included": false
+              },
+              "sources": [
+                "https://example.test/row-a"
+              ]
+            }
+          ]
+        }
+      },
+      "expected": []
+    },
+    {
+      "id": "optional_missing",
+      "contract": {
+        "rules_version": 2,
+        "row_conditions": {
+          "version": 1,
+          "fields": {
+            "configurations": {
+              "value_when": {
+                "clamp_included": [
+                  {
+                    "when": {
+                      "kind": "when",
+                      "rows": [
+                        [
+                          {
+                            "field": "configuration_state",
+                            "operator": "eq",
+                            "value_type": "token",
+                            "value": "Con kit incluido"
+                          }
+                        ]
+                      ]
+                    },
+                    "expected": {
+                      "value_type": "boolean",
+                      "value": true
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        }
+      },
+      "values": {
+        "configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "a",
+              "values": {
+                "configuration_state": "Con kit opcional"
+              },
+              "sources": [
+                "https://example.test/row-a"
+              ]
+            }
+          ]
+        }
+      },
+      "expected": []
+    },
+    {
+      "id": "direct_false",
+      "contract": {
+        "rules_version": 2,
+        "row_conditions": {
+          "version": 1,
+          "fields": {
+            "configurations": {
+              "value_when": {
+                "clamp_included": [
+                  {
+                    "when": {
+                      "kind": "when",
+                      "rows": [
+                        [
+                          {
+                            "field": "configuration_state",
+                            "operator": "eq",
+                            "value_type": "token",
+                            "value": "Con kit incluido"
+                          }
+                        ]
+                      ]
+                    },
+                    "expected": {
+                      "value_type": "boolean",
+                      "value": true
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        }
+      },
+      "values": {
+        "configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "a",
+              "values": {
+                "configuration_state": "Directo",
+                "clamp_included": false
+              },
+              "sources": [
+                "https://example.test/row-a"
+              ]
+            }
+          ]
+        }
+      },
+      "expected": []
+    },
+    {
+      "id": "unknown_antecedent",
+      "contract": {
+        "rules_version": 2,
+        "row_conditions": {
+          "version": 1,
+          "fields": {
+            "configurations": {
+              "value_when": {
+                "clamp_included": [
+                  {
+                    "when": {
+                      "kind": "when",
+                      "rows": [
+                        [
+                          {
+                            "field": "configuration_state",
+                            "operator": "eq",
+                            "value_type": "token",
+                            "value": "Con kit incluido"
+                          }
+                        ]
+                      ]
+                    },
+                    "expected": {
+                      "value_type": "boolean",
+                      "value": true
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        }
+      },
+      "values": {
+        "configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "a",
+              "values": {
+                "configuration_state": "unknown",
+                "clamp_included": false
+              },
+              "sources": [
+                "https://example.test/row-a"
+              ]
+            }
+          ]
+        }
+      },
+      "expected": [
+        {
+          "code": "row_value_pending",
+          "field": "configurations",
+          "row_id": "a",
+          "column": "clamp_included",
+          "blocking": false
+        }
+      ]
+    },
+    {
+      "id": "unknown_label_antecedent",
+      "contract": {
+        "rules_version": 2,
+        "row_conditions": {
+          "version": 1,
+          "fields": {
+            "configurations": {
+              "value_when": {
+                "clamp_included": [
+                  {
+                    "when": {
+                      "kind": "when",
+                      "rows": [
+                        [
+                          {
+                            "field": "configuration_state",
+                            "operator": "eq",
+                            "value_type": "token",
+                            "value": "Con kit incluido"
+                          }
+                        ]
+                      ]
+                    },
+                    "expected": {
+                      "value_type": "boolean",
+                      "value": true
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        }
+      },
+      "values": {
+        "configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "a",
+              "values": {
+                "configuration_state": "Desconocido / sin confirmar",
+                "clamp_included": true
+              },
+              "sources": [
+                "https://example.test/row-a"
+              ]
+            }
+          ]
+        }
+      },
+      "expected": [
+        {
+          "code": "row_value_pending",
+          "field": "configurations",
+          "row_id": "a",
+          "column": "clamp_included",
+          "blocking": false
+        }
+      ]
+    },
+    {
+      "id": "absent_antecedent",
+      "contract": {
+        "rules_version": 2,
+        "row_conditions": {
+          "version": 1,
+          "fields": {
+            "configurations": {
+              "value_when": {
+                "clamp_included": [
+                  {
+                    "when": {
+                      "kind": "when",
+                      "rows": [
+                        [
+                          {
+                            "field": "configuration_state",
+                            "operator": "eq",
+                            "value_type": "token",
+                            "value": "Con kit incluido"
+                          }
+                        ]
+                      ]
+                    },
+                    "expected": {
+                      "value_type": "boolean",
+                      "value": true
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        }
+      },
+      "values": {
+        "configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "a",
+              "values": {
+                "clamp_included": false
+              },
+              "sources": [
+                "https://example.test/row-a"
+              ]
+            }
+          ]
+        }
+      },
+      "expected": [
+        {
+          "code": "row_value_pending",
+          "field": "configurations",
+          "row_id": "a",
+          "column": "clamp_included",
+          "blocking": false
+        }
+      ]
+    },
+    {
+      "id": "row_does_not_supply_another",
+      "contract": {
+        "rules_version": 2,
+        "row_conditions": {
+          "version": 1,
+          "fields": {
+            "configurations": {
+              "value_when": {
+                "clamp_included": [
+                  {
+                    "when": {
+                      "kind": "when",
+                      "rows": [
+                        [
+                          {
+                            "field": "configuration_state",
+                            "operator": "eq",
+                            "value_type": "token",
+                            "value": "Con kit incluido"
+                          }
+                        ]
+                      ]
+                    },
+                    "expected": {
+                      "value_type": "boolean",
+                      "value": true
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        }
+      },
+      "values": {
+        "configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "a",
+              "values": {
+                "configuration_state": "Con kit incluido"
+              },
+              "sources": [
+                "https://example.test/row-a"
+              ]
+            },
+            {
+              "id": "b",
+              "values": {
+                "configuration_state": "Con kit opcional",
+                "clamp_included": true
+              },
+              "sources": [
+                "https://example.test/row-b"
+              ]
+            }
+          ]
+        }
+      },
+      "expected": [
+        {
+          "code": "row_value_pending",
+          "field": "configurations",
+          "row_id": "a",
+          "column": "clamp_included",
+          "blocking": false
+        }
+      ]
+    },
+    {
+      "id": "row_does_not_trigger_another",
+      "contract": {
+        "rules_version": 2,
+        "row_conditions": {
+          "version": 1,
+          "fields": {
+            "configurations": {
+              "value_when": {
+                "clamp_included": [
+                  {
+                    "when": {
+                      "kind": "when",
+                      "rows": [
+                        [
+                          {
+                            "field": "configuration_state",
+                            "operator": "eq",
+                            "value_type": "token",
+                            "value": "Con kit incluido"
+                          }
+                        ]
+                      ]
+                    },
+                    "expected": {
+                      "value_type": "boolean",
+                      "value": true
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        }
+      },
+      "values": {
+        "configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "a",
+              "values": {
+                "configuration_state": "Con kit incluido",
+                "clamp_included": true
+              },
+              "sources": [
+                "https://example.test/row-a"
+              ]
+            },
+            {
+              "id": "b",
+              "values": {
+                "configuration_state": "Con kit opcional",
+                "clamp_included": false
+              },
+              "sources": [
+                "https://example.test/row-b"
+              ]
+            }
+          ]
+        }
+      },
+      "expected": []
+    },
+    {
+      "id": "adapter_required_present",
+      "contract": {
+        "rules_version": 2,
+        "row_conditions": {
+          "version": 1,
+          "fields": {
+            "configurations": {
+              "value_when": {
+                "adapter_present": [
+                  {
+                    "when": {
+                      "kind": "when",
+                      "rows": [
+                        [
+                          {
+                            "field": "adapter_required",
+                            "operator": "eq",
+                            "value_type": "boolean",
+                            "value": true
+                          }
+                        ]
+                      ]
+                    },
+                    "expected": {
+                      "value_type": "boolean",
+                      "value": true
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        }
+      },
+      "values": {
+        "configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "a",
+              "values": {
+                "adapter_required": true,
+                "adapter_present": true
+              },
+              "sources": [
+                "https://example.test/row-a"
+              ]
+            }
+          ]
+        }
+      },
+      "expected": []
+    },
+    {
+      "id": "adapter_required_explicit_absence",
+      "contract": {
+        "rules_version": 2,
+        "row_conditions": {
+          "version": 1,
+          "fields": {
+            "configurations": {
+              "value_when": {
+                "adapter_present": [
+                  {
+                    "when": {
+                      "kind": "when",
+                      "rows": [
+                        [
+                          {
+                            "field": "adapter_required",
+                            "operator": "eq",
+                            "value_type": "boolean",
+                            "value": true
+                          }
+                        ]
+                      ]
+                    },
+                    "expected": {
+                      "value_type": "boolean",
+                      "value": true
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        }
+      },
+      "values": {
+        "configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "a",
+              "values": {
+                "adapter_required": true,
+                "adapter_present": false
+              },
+              "sources": [
+                "https://example.test/row-a"
+              ]
+            }
+          ]
+        }
+      },
+      "expected": [
+        {
+          "code": "row_value_conflict",
+          "field": "configurations",
+          "row_id": "a",
+          "column": "adapter_present",
+          "blocking": true
+        }
+      ]
+    },
+    {
+      "id": "adapter_optional_present",
+      "contract": {
+        "rules_version": 2,
+        "row_conditions": {
+          "version": 1,
+          "fields": {
+            "configurations": {
+              "value_when": {
+                "adapter_present": [
+                  {
+                    "when": {
+                      "kind": "when",
+                      "rows": [
+                        [
+                          {
+                            "field": "adapter_required",
+                            "operator": "eq",
+                            "value_type": "boolean",
+                            "value": true
+                          }
+                        ]
+                      ]
+                    },
+                    "expected": {
+                      "value_type": "boolean",
+                      "value": true
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        }
+      },
+      "values": {
+        "configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "a",
+              "values": {
+                "adapter_required": false,
+                "adapter_present": true
+              },
+              "sources": [
+                "https://example.test/row-a"
+              ]
+            }
+          ]
+        }
+      },
+      "expected": []
+    },
+    {
+      "id": "adapter_optional_absent",
+      "contract": {
+        "rules_version": 2,
+        "row_conditions": {
+          "version": 1,
+          "fields": {
+            "configurations": {
+              "value_when": {
+                "adapter_present": [
+                  {
+                    "when": {
+                      "kind": "when",
+                      "rows": [
+                        [
+                          {
+                            "field": "adapter_required",
+                            "operator": "eq",
+                            "value_type": "boolean",
+                            "value": true
+                          }
+                        ]
+                      ]
+                    },
+                    "expected": {
+                      "value_type": "boolean",
+                      "value": true
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        }
+      },
+      "values": {
+        "configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "a",
+              "values": {
+                "adapter_required": false,
+                "adapter_present": false
+              },
+              "sources": [
+                "https://example.test/row-a"
+              ]
+            }
+          ]
+        }
+      },
+      "expected": []
+    },
+    {
+      "id": "adapter_missing_observation",
+      "contract": {
+        "rules_version": 2,
+        "row_conditions": {
+          "version": 1,
+          "fields": {
+            "configurations": {
+              "value_when": {
+                "adapter_present": [
+                  {
+                    "when": {
+                      "kind": "when",
+                      "rows": [
+                        [
+                          {
+                            "field": "adapter_required",
+                            "operator": "eq",
+                            "value_type": "boolean",
+                            "value": true
+                          }
+                        ]
+                      ]
+                    },
+                    "expected": {
+                      "value_type": "boolean",
+                      "value": true
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        }
+      },
+      "values": {
+        "configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "a",
+              "values": {
+                "adapter_required": true
+              },
+              "sources": [
+                "https://example.test/row-a"
+              ]
+            }
+          ]
+        }
+      },
+      "expected": [
+        {
+          "code": "row_value_pending",
+          "field": "configurations",
+          "row_id": "a",
+          "column": "adapter_present",
+          "blocking": false
+        }
+      ]
+    },
+    {
+      "id": "adapter_missing_requirement",
+      "contract": {
+        "rules_version": 2,
+        "row_conditions": {
+          "version": 1,
+          "fields": {
+            "configurations": {
+              "value_when": {
+                "adapter_present": [
+                  {
+                    "when": {
+                      "kind": "when",
+                      "rows": [
+                        [
+                          {
+                            "field": "adapter_required",
+                            "operator": "eq",
+                            "value_type": "boolean",
+                            "value": true
+                          }
+                        ]
+                      ]
+                    },
+                    "expected": {
+                      "value_type": "boolean",
+                      "value": true
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        }
+      },
+      "values": {
+        "configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "a",
+              "values": {
+                "adapter_present": false
+              },
+              "sources": [
+                "https://example.test/row-a"
+              ]
+            }
+          ]
+        }
+      },
+      "expected": [
+        {
+          "code": "row_value_pending",
+          "field": "configurations",
+          "row_id": "a",
+          "column": "adapter_present",
+          "blocking": false
+        }
+      ]
+    },
+    {
+      "id": "literal_code_equal",
+      "contract": {
+        "rules_version": 2,
+        "row_conditions": {
+          "version": 1,
+          "fields": {
+            "configurations": {
+              "value_when": {
+                "code": [
+                  {
+                    "when": {
+                      "kind": "always"
+                    },
+                    "expected": {
+                      "value_type": "token",
+                      "value": "01"
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        }
+      },
+      "values": {
+        "configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "a",
+              "values": {
+                "code": "01"
+              },
+              "sources": [
+                "https://example.test/row-a"
+              ]
+            }
+          ]
+        }
+      },
+      "expected": []
+    },
+    {
+      "id": "literal_code_not_numeric",
+      "contract": {
+        "rules_version": 2,
+        "row_conditions": {
+          "version": 1,
+          "fields": {
+            "configurations": {
+              "value_when": {
+                "code": [
+                  {
+                    "when": {
+                      "kind": "always"
+                    },
+                    "expected": {
+                      "value_type": "token",
+                      "value": "01"
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        }
+      },
+      "values": {
+        "configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "a",
+              "values": {
+                "code": "1"
+              },
+              "sources": [
+                "https://example.test/row-a"
+              ]
+            }
+          ]
+        }
+      },
+      "expected": [
+        {
+          "code": "row_value_conflict",
+          "field": "configurations",
+          "row_id": "a",
+          "column": "code",
+          "blocking": true
+        }
+      ]
+    },
+    {
+      "id": "unknown_token_not_false",
+      "contract": {
+        "rules_version": 2,
+        "row_conditions": {
+          "version": 1,
+          "fields": {
+            "configurations": {
+              "value_when": {
+                "code": [
+                  {
+                    "when": {
+                      "kind": "always"
+                    },
+                    "expected": {
+                      "value_type": "token",
+                      "value": "01"
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        }
+      },
+      "values": {
+        "configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "a",
+              "values": {
+                "code": "unknown"
+              },
+              "sources": [
+                "https://example.test/row-a"
+              ]
+            }
+          ]
+        }
+      },
+      "expected": [
+        {
+          "code": "row_value_pending",
+          "field": "configurations",
+          "row_id": "a",
+          "column": "code",
+          "blocking": false
+        }
+      ]
+    },
+    {
+      "id": "decimal_exact_beyond_2_53",
+      "contract": {
+        "rules_version": 2,
+        "row_conditions": {
+          "version": 1,
+          "fields": {
+            "configurations": {
+              "value_when": {
+                "quantity": [
+                  {
+                    "when": {
+                      "kind": "always"
+                    },
+                    "expected": {
+                      "value_type": "decimal",
+                      "value": "9007199254740993.125"
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        }
+      },
+      "values": {
+        "configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "a",
+              "values": {
+                "quantity": "9007199254740993.1250"
+              },
+              "sources": [
+                "https://example.test/row-a"
+              ]
+            }
+          ]
+        }
+      },
+      "expected": []
+    },
+    {
+      "id": "decimal_conflict_beyond_2_53",
+      "contract": {
+        "rules_version": 2,
+        "row_conditions": {
+          "version": 1,
+          "fields": {
+            "configurations": {
+              "value_when": {
+                "quantity": [
+                  {
+                    "when": {
+                      "kind": "always"
+                    },
+                    "expected": {
+                      "value_type": "decimal",
+                      "value": "9007199254740993.125"
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        }
+      },
+      "values": {
+        "configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "a",
+              "values": {
+                "quantity": "9007199254740993.1249999999999999"
+              },
+              "sources": [
+                "https://example.test/row-a"
+              ]
+            }
+          ]
+        }
+      },
+      "expected": [
+        {
+          "code": "row_value_conflict",
+          "field": "configurations",
+          "row_id": "a",
+          "column": "quantity",
+          "blocking": true
+        }
+      ]
+    },
+    {
+      "id": "decimal_exponent_equal",
+      "contract": {
+        "rules_version": 2,
+        "row_conditions": {
+          "version": 1,
+          "fields": {
+            "configurations": {
+              "value_when": {
+                "quantity": [
+                  {
+                    "when": {
+                      "kind": "always"
+                    },
+                    "expected": {
+                      "value_type": "decimal",
+                      "value": "2.50"
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        }
+      },
+      "values": {
+        "configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "a",
+              "values": {
+                "quantity": "25e-1"
+              },
+              "sources": [
+                "https://example.test/row-a"
+              ]
+            }
+          ]
+        }
+      },
+      "expected": []
+    },
+    {
+      "id": "decimal_negative_zero",
+      "contract": {
+        "rules_version": 2,
+        "row_conditions": {
+          "version": 1,
+          "fields": {
+            "configurations": {
+              "value_when": {
+                "quantity": [
+                  {
+                    "when": {
+                      "kind": "always"
+                    },
+                    "expected": {
+                      "value_type": "decimal",
+                      "value": "0"
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        }
+      },
+      "values": {
+        "configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "a",
+              "values": {
+                "quantity": "-0.000"
+              },
+              "sources": [
+                "https://example.test/row-a"
+              ]
+            }
+          ]
+        }
+      },
+      "expected": []
+    },
+    {
+      "id": "integer_trailing_zero",
+      "contract": {
+        "rules_version": 2,
+        "row_conditions": {
+          "version": 1,
+          "fields": {
+            "configurations": {
+              "value_when": {
+                "quantity": [
+                  {
+                    "when": {
+                      "kind": "always"
+                    },
+                    "expected": {
+                      "value_type": "decimal",
+                      "value": "10"
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        }
+      },
+      "values": {
+        "configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "a",
+              "values": {
+                "quantity": "10"
+              },
+              "sources": [
+                "https://example.test/row-a"
+              ]
+            }
+          ]
+        }
+      },
+      "expected": []
+    },
+    {
+      "id": "tiny_pg_decimal",
+      "contract": {
+        "rules_version": 2,
+        "row_conditions": {
+          "version": 1,
+          "fields": {
+            "configurations": {
+              "value_when": {
+                "quantity": [
+                  {
+                    "when": {
+                      "kind": "always"
+                    },
+                    "expected": {
+                      "value_type": "decimal",
+                      "value": "1e-16383"
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        }
+      },
+      "values": {
+        "configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "a",
+              "values": {
+                "quantity": "1e-16383"
+              },
+              "sources": [
+                "https://example.test/row-a"
+              ]
+            }
+          ]
+        }
+      },
+      "expected": []
+    },
+    {
+      "id": "zero_not_ten",
+      "contract": {
+        "rules_version": 2,
+        "row_conditions": {
+          "version": 1,
+          "fields": {
+            "configurations": {
+              "value_when": {
+                "quantity": [
+                  {
+                    "when": {
+                      "kind": "always"
+                    },
+                    "expected": {
+                      "value_type": "decimal",
+                      "value": "0"
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        }
+      },
+      "values": {
+        "configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "a",
+              "values": {
+                "quantity": "10"
+              },
+              "sources": [
+                "https://example.test/row-a"
+              ]
+            }
+          ]
+        }
+      },
+      "expected": [
+        {
+          "code": "row_value_conflict",
+          "field": "configurations",
+          "row_id": "a",
+          "column": "quantity",
+          "blocking": true
+        }
+      ]
+    },
+    {
+      "id": "integer_equivalent_expected",
+      "contract": {
+        "rules_version": 2,
+        "row_conditions": {
+          "version": 1,
+          "fields": {
+            "configurations": {
+              "value_when": {
+                "count": [
+                  {
+                    "when": {
+                      "kind": "always"
+                    },
+                    "expected": {
+                      "value_type": "decimal",
+                      "value": "2.000"
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        }
+      },
+      "values": {
+        "configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "a",
+              "values": {
+                "count": "2"
+              },
+              "sources": [
+                "https://example.test/row-a"
+              ]
+            }
+          ]
+        }
+      },
+      "expected": []
+    },
+    {
+      "id": "expected_at_domain_boundary",
+      "contract": {
+        "rules_version": 2,
+        "row_conditions": {
+          "version": 1,
+          "fields": {
+            "configurations": {
+              "value_when": {
+                "limited": [
+                  {
+                    "when": {
+                      "kind": "always"
+                    },
+                    "expected": {
+                      "value_type": "decimal",
+                      "value": "1.25"
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        }
+      },
+      "values": {
+        "configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "a",
+              "values": {
+                "limited": "1.250"
+              },
+              "sources": [
+                "https://example.test/row-a"
+              ]
+            }
+          ]
+        }
+      },
+      "expected": []
+    },
+    {
+      "id": "simultaneous_conflict_missing",
+      "contract": {
+        "rules_version": 2,
+        "row_conditions": {
+          "version": 1,
+          "fields": {
+            "configurations": {
+              "value_when": {
+                "clamp_included": [
+                  {
+                    "when": {
+                      "kind": "always"
+                    },
+                    "expected": {
+                      "value_type": "boolean",
+                      "value": true
+                    }
+                  },
+                  {
+                    "when": {
+                      "kind": "always"
+                    },
+                    "expected": {
+                      "value_type": "boolean",
+                      "value": false
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        }
+      },
+      "values": {
+        "configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "a",
+              "values": {
+                "note": "No measurement"
+              },
+              "sources": [
+                "https://example.test/row-a"
+              ]
+            }
+          ]
+        }
+      },
+      "expected": [
+        {
+          "code": "row_value_conflict",
+          "field": "configurations",
+          "row_id": "a",
+          "column": "clamp_included",
+          "blocking": true
+        }
+      ]
+    },
+    {
+      "id": "simultaneous_conflict_observed",
+      "contract": {
+        "rules_version": 2,
+        "row_conditions": {
+          "version": 1,
+          "fields": {
+            "configurations": {
+              "value_when": {
+                "clamp_included": [
+                  {
+                    "when": {
+                      "kind": "always"
+                    },
+                    "expected": {
+                      "value_type": "boolean",
+                      "value": true
+                    }
+                  },
+                  {
+                    "when": {
+                      "kind": "always"
+                    },
+                    "expected": {
+                      "value_type": "boolean",
+                      "value": false
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        }
+      },
+      "values": {
+        "configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "a",
+              "values": {
+                "clamp_included": true
+              },
+              "sources": [
+                "https://example.test/row-a"
+              ]
+            }
+          ]
+        }
+      },
+      "expected": [
+        {
+          "code": "row_value_conflict",
+          "field": "configurations",
+          "row_id": "a",
+          "column": "clamp_included",
+          "blocking": true
+        }
+      ]
+    },
+    {
+      "id": "simultaneous_conflict_order_independent",
+      "contract": {
+        "rules_version": 2,
+        "row_conditions": {
+          "version": 1,
+          "fields": {
+            "configurations": {
+              "value_when": {
+                "clamp_included": [
+                  {
+                    "when": {
+                      "kind": "always"
+                    },
+                    "expected": {
+                      "value_type": "boolean",
+                      "value": false
+                    }
+                  },
+                  {
+                    "when": {
+                      "kind": "always"
+                    },
+                    "expected": {
+                      "value_type": "boolean",
+                      "value": true
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        }
+      },
+      "values": {
+        "configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "a",
+              "values": {
+                "clamp_included": false
+              },
+              "sources": [
+                "https://example.test/row-a"
+              ]
+            }
+          ]
+        }
+      },
+      "expected": [
+        {
+          "code": "row_value_conflict",
+          "field": "configurations",
+          "row_id": "a",
+          "column": "clamp_included",
+          "blocking": true
+        }
+      ]
+    },
+    {
+      "id": "simultaneous_same_missing_pending",
+      "contract": {
+        "rules_version": 2,
+        "row_conditions": {
+          "version": 1,
+          "fields": {
+            "configurations": {
+              "value_when": {
+                "clamp_included": [
+                  {
+                    "when": {
+                      "kind": "always"
+                    },
+                    "expected": {
+                      "value_type": "boolean",
+                      "value": true
+                    }
+                  },
+                  {
+                    "when": {
+                      "kind": "always"
+                    },
+                    "expected": {
+                      "value_type": "boolean",
+                      "value": true
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        }
+      },
+      "values": {
+        "configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "a",
+              "values": {
+                "note": "No measurement"
+              },
+              "sources": [
+                "https://example.test/row-a"
+              ]
+            }
+          ]
+        }
+      },
+      "expected": [
+        {
+          "code": "row_value_pending",
+          "field": "configurations",
+          "row_id": "a",
+          "column": "clamp_included",
+          "blocking": false
+        }
+      ]
+    },
+    {
+      "id": "simultaneous_same_known",
+      "contract": {
+        "rules_version": 2,
+        "row_conditions": {
+          "version": 1,
+          "fields": {
+            "configurations": {
+              "value_when": {
+                "clamp_included": [
+                  {
+                    "when": {
+                      "kind": "always"
+                    },
+                    "expected": {
+                      "value_type": "boolean",
+                      "value": true
+                    }
+                  },
+                  {
+                    "when": {
+                      "kind": "always"
+                    },
+                    "expected": {
+                      "value_type": "boolean",
+                      "value": true
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        }
+      },
+      "values": {
+        "configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "a",
+              "values": {
+                "clamp_included": true
+              },
+              "sources": [
+                "https://example.test/row-a"
+              ]
+            }
+          ]
+        }
+      },
+      "expected": []
+    },
+    {
+      "id": "unknown_rule_not_active_conflict",
+      "contract": {
+        "rules_version": 2,
+        "row_conditions": {
+          "version": 1,
+          "fields": {
+            "configurations": {
+              "value_when": {
+                "clamp_included": [
+                  {
+                    "when": {
+                      "kind": "always"
+                    },
+                    "expected": {
+                      "value_type": "boolean",
+                      "value": true
+                    }
+                  },
+                  {
+                    "when": {
+                      "kind": "when",
+                      "rows": [
+                        [
+                          {
+                            "field": "other_flag",
+                            "operator": "eq",
+                            "value_type": "boolean",
+                            "value": true
+                          }
+                        ]
+                      ]
+                    },
+                    "expected": {
+                      "value_type": "boolean",
+                      "value": false
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        }
+      },
+      "values": {
+        "configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "a",
+              "values": {
+                "clamp_included": true
+              },
+              "sources": [
+                "https://example.test/row-a"
+              ]
+            }
+          ]
+        }
+      },
+      "expected": [
+        {
+          "code": "row_value_pending",
+          "field": "configurations",
+          "row_id": "a",
+          "column": "clamp_included",
+          "blocking": false
+        }
+      ]
+    },
+    {
+      "id": "false_rule_not_active_conflict",
+      "contract": {
+        "rules_version": 2,
+        "row_conditions": {
+          "version": 1,
+          "fields": {
+            "configurations": {
+              "value_when": {
+                "clamp_included": [
+                  {
+                    "when": {
+                      "kind": "always"
+                    },
+                    "expected": {
+                      "value_type": "boolean",
+                      "value": true
+                    }
+                  },
+                  {
+                    "when": {
+                      "kind": "when",
+                      "rows": [
+                        [
+                          {
+                            "field": "other_flag",
+                            "operator": "eq",
+                            "value_type": "boolean",
+                            "value": true
+                          }
+                        ]
+                      ]
+                    },
+                    "expected": {
+                      "value_type": "boolean",
+                      "value": false
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        }
+      },
+      "values": {
+        "configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "a",
+              "values": {
+                "clamp_included": true,
+                "other_flag": false
+              },
+              "sources": [
+                "https://example.test/row-a"
+              ]
+            }
+          ]
+        }
+      },
+      "expected": []
+    },
+    {
+      "id": "known_conflict_wins_over_pending",
+      "contract": {
+        "rules_version": 2,
+        "row_conditions": {
+          "version": 1,
+          "fields": {
+            "configurations": {
+              "value_when": {
+                "clamp_included": [
+                  {
+                    "when": {
+                      "kind": "always"
+                    },
+                    "expected": {
+                      "value_type": "boolean",
+                      "value": true
+                    }
+                  },
+                  {
+                    "when": {
+                      "kind": "when",
+                      "rows": [
+                        [
+                          {
+                            "field": "other_flag",
+                            "operator": "eq",
+                            "value_type": "boolean",
+                            "value": true
+                          }
+                        ]
+                      ]
+                    },
+                    "expected": {
+                      "value_type": "boolean",
+                      "value": false
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        }
+      },
+      "values": {
+        "configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "a",
+              "values": {
+                "clamp_included": false
+              },
+              "sources": [
+                "https://example.test/row-a"
+              ]
+            }
+          ]
+        }
+      },
+      "expected": [
+        {
+          "code": "row_value_conflict",
+          "field": "configurations",
+          "row_id": "a",
+          "column": "clamp_included",
+          "blocking": true
+        }
+      ]
+    },
+    {
+      "id": "simultaneous_decimal_equivalent",
+      "contract": {
+        "rules_version": 2,
+        "row_conditions": {
+          "version": 1,
+          "fields": {
+            "configurations": {
+              "value_when": {
+                "quantity": [
+                  {
+                    "when": {
+                      "kind": "always"
+                    },
+                    "expected": {
+                      "value_type": "decimal",
+                      "value": "2.50"
+                    }
+                  },
+                  {
+                    "when": {
+                      "kind": "always"
+                    },
+                    "expected": {
+                      "value_type": "decimal",
+                      "value": "25e-1"
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        }
+      },
+      "values": {
+        "configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "a",
+              "values": {
+                "quantity": "2.5"
+              },
+              "sources": [
+                "https://example.test/row-a"
+              ]
+            }
+          ]
+        }
+      },
+      "expected": []
+    },
+    {
+      "id": "simultaneous_decimal_conflict_missing",
+      "contract": {
+        "rules_version": 2,
+        "row_conditions": {
+          "version": 1,
+          "fields": {
+            "configurations": {
+              "value_when": {
+                "quantity": [
+                  {
+                    "when": {
+                      "kind": "always"
+                    },
+                    "expected": {
+                      "value_type": "decimal",
+                      "value": "2.5"
+                    }
+                  },
+                  {
+                    "when": {
+                      "kind": "always"
+                    },
+                    "expected": {
+                      "value_type": "decimal",
+                      "value": "2.50000000000001"
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        }
+      },
+      "values": {
+        "configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "a",
+              "values": {
+                "note": "No measurement"
+              },
+              "sources": [
+                "https://example.test/row-a"
+              ]
+            }
+          ]
+        }
+      },
+      "expected": [
+        {
+          "code": "row_value_conflict",
+          "field": "configurations",
+          "row_id": "a",
+          "column": "quantity",
+          "blocking": true
+        }
+      ]
+    },
+    {
+      "id": "simultaneous_literal_token_conflict_missing",
+      "contract": {
+        "rules_version": 2,
+        "row_conditions": {
+          "version": 1,
+          "fields": {
+            "configurations": {
+              "value_when": {
+                "code": [
+                  {
+                    "when": {
+                      "kind": "always"
+                    },
+                    "expected": {
+                      "value_type": "token",
+                      "value": "01"
+                    }
+                  },
+                  {
+                    "when": {
+                      "kind": "always"
+                    },
+                    "expected": {
+                      "value_type": "token",
+                      "value": "1"
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        }
+      },
+      "values": {
+        "configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "a",
+              "values": {
+                "note": "No observation"
+              },
+              "sources": [
+                "https://example.test/row-a"
+              ]
+            }
+          ]
+        }
+      },
+      "expected": [
+        {
+          "code": "row_value_conflict",
+          "field": "configurations",
+          "row_id": "a",
+          "column": "code",
+          "blocking": true
+        }
+      ]
+    },
+    {
+      "id": "inapplicable_explicit_value_owned_by_applicability",
+      "contract": {
+        "rules_version": 2,
+        "row_conditions": {
+          "version": 1,
+          "fields": {
+            "configurations": {
+              "value_when": {
+                "clamp_included": [
+                  {
+                    "when": {
+                      "kind": "when",
+                      "rows": [
+                        [
+                          {
+                            "field": "configuration_state",
+                            "operator": "eq",
+                            "value_type": "token",
+                            "value": "Con kit incluido"
+                          }
+                        ]
+                      ]
+                    },
+                    "expected": {
+                      "value_type": "boolean",
+                      "value": true
+                    }
+                  }
+                ]
+              },
+              "allowed_when": {
+                "clamp_included": {
+                  "kind": "when",
+                  "rows": [
+                    [
+                      {
+                        "field": "other_flag",
+                        "operator": "eq",
+                        "value_type": "boolean",
+                        "value": true
+                      }
+                    ]
+                  ]
+                }
+              }
+            }
+          }
+        }
+      },
+      "values": {
+        "configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "a",
+              "values": {
+                "configuration_state": "Con kit incluido",
+                "other_flag": false,
+                "clamp_included": false
+              },
+              "sources": [
+                "https://example.test/row-a"
+              ]
+            }
+          ]
+        }
+      },
+      "expected": [
+        {
+          "code": "row_field_applicability",
+          "field": "configurations",
+          "row_id": "a",
+          "column": "clamp_included",
+          "blocking": true
+        }
+      ]
+    },
+    {
+      "id": "inapplicable_missing_no_value_requirement",
+      "contract": {
+        "rules_version": 2,
+        "row_conditions": {
+          "version": 1,
+          "fields": {
+            "configurations": {
+              "value_when": {
+                "clamp_included": [
+                  {
+                    "when": {
+                      "kind": "when",
+                      "rows": [
+                        [
+                          {
+                            "field": "configuration_state",
+                            "operator": "eq",
+                            "value_type": "token",
+                            "value": "Con kit incluido"
+                          }
+                        ]
+                      ]
+                    },
+                    "expected": {
+                      "value_type": "boolean",
+                      "value": true
+                    }
+                  }
+                ]
+              },
+              "allowed_when": {
+                "clamp_included": {
+                  "kind": "when",
+                  "rows": [
+                    [
+                      {
+                        "field": "other_flag",
+                        "operator": "eq",
+                        "value_type": "boolean",
+                        "value": true
+                      }
+                    ]
+                  ]
+                }
+              }
+            }
+          }
+        }
+      },
+      "values": {
+        "configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "a",
+              "values": {
+                "configuration_state": "Con kit incluido",
+                "other_flag": false
+              },
+              "sources": [
+                "https://example.test/row-a"
+              ]
+            }
+          ]
+        }
+      },
+      "expected": []
+    },
+    {
+      "id": "unknown_applicability_not_value_conflict",
+      "contract": {
+        "rules_version": 2,
+        "row_conditions": {
+          "version": 1,
+          "fields": {
+            "configurations": {
+              "value_when": {
+                "clamp_included": [
+                  {
+                    "when": {
+                      "kind": "when",
+                      "rows": [
+                        [
+                          {
+                            "field": "configuration_state",
+                            "operator": "eq",
+                            "value_type": "token",
+                            "value": "Con kit incluido"
+                          }
+                        ]
+                      ]
+                    },
+                    "expected": {
+                      "value_type": "boolean",
+                      "value": true
+                    }
+                  }
+                ]
+              },
+              "allowed_when": {
+                "clamp_included": {
+                  "kind": "when",
+                  "rows": [
+                    [
+                      {
+                        "field": "other_flag",
+                        "operator": "eq",
+                        "value_type": "boolean",
+                        "value": true
+                      }
+                    ]
+                  ]
+                }
+              }
+            }
+          }
+        }
+      },
+      "values": {
+        "configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "a",
+              "values": {
+                "configuration_state": "Con kit incluido",
+                "clamp_included": false
+              },
+              "sources": [
+                "https://example.test/row-a"
+              ]
+            }
+          ]
+        }
+      },
+      "expected": [
+        {
+          "code": "row_prerequisite",
+          "field": "configurations",
+          "row_id": "a",
+          "column": "clamp_included",
+          "blocking": false
+        }
+      ]
+    },
+    {
+      "id": "required_and_value_pending_are_explicit",
+      "contract": {
+        "rules_version": 2,
+        "row_conditions": {
+          "version": 1,
+          "fields": {
+            "configurations": {
+              "value_when": {
+                "clamp_included": [
+                  {
+                    "when": {
+                      "kind": "when",
+                      "rows": [
+                        [
+                          {
+                            "field": "configuration_state",
+                            "operator": "eq",
+                            "value_type": "token",
+                            "value": "Con kit incluido"
+                          }
+                        ]
+                      ]
+                    },
+                    "expected": {
+                      "value_type": "boolean",
+                      "value": true
+                    }
+                  }
+                ]
+              },
+              "required_when": {
+                "clamp_included": {
+                  "kind": "when",
+                  "rows": [
+                    [
+                      {
+                        "field": "configuration_state",
+                        "operator": "eq",
+                        "value_type": "token",
+                        "value": "Con kit incluido"
+                      }
+                    ]
+                  ]
+                }
+              }
+            }
+          }
+        }
+      },
+      "values": {
+        "configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "a",
+              "values": {
+                "configuration_state": "Con kit incluido"
+              },
+              "sources": [
+                "https://example.test/row-a"
+              ]
+            }
+          ]
+        }
+      },
+      "expected": [
+        {
+          "code": "row_required_missing",
+          "field": "configurations",
+          "row_id": "a",
+          "column": "clamp_included",
+          "blocking": false
+        },
+        {
+          "code": "row_value_pending",
+          "field": "configurations",
+          "row_id": "a",
+          "column": "clamp_included",
+          "blocking": false
+        }
+      ]
+    },
+    {
+      "id": "never_rule_imposes_no_value",
+      "contract": {
+        "rules_version": 2,
+        "row_conditions": {
+          "version": 1,
+          "fields": {
+            "configurations": {
+              "value_when": {
+                "clamp_included": [
+                  {
+                    "when": {
+                      "kind": "never"
+                    },
+                    "expected": {
+                      "value_type": "boolean",
+                      "value": true
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        }
+      },
+      "values": {
+        "configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "a",
+              "values": {
+                "clamp_included": false
+              },
+              "sources": [
+                "https://example.test/row-a"
+              ]
+            }
+          ]
+        }
+      },
+      "expected": []
+    }
+  ],
+  "valid_metadata": [
+    {
+      "id": "pg_zero_exponent",
+      "contract": {
+        "rules_version": 2,
+        "row_conditions": {
+          "version": 1,
+          "fields": {
+            "configurations": {
+              "value_when": {
+                "quantity": [
+                  {
+                    "when": {
+                      "kind": "always"
+                    },
+                    "expected": {
+                      "value_type": "decimal",
+                      "value": "0e1073741823"
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "negative_decimal",
+      "contract": {
+        "rules_version": 2,
+        "row_conditions": {
+          "version": 1,
+          "fields": {
+            "configurations": {
+              "value_when": {
+                "quantity": [
+                  {
+                    "when": {
+                      "kind": "always"
+                    },
+                    "expected": {
+                      "value_type": "decimal",
+                      "value": "-2.5"
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "open_literal_token",
+      "contract": {
+        "rules_version": 2,
+        "row_conditions": {
+          "version": 1,
+          "fields": {
+            "configurations": {
+              "value_when": {
+                "open_token": [
+                  {
+                    "when": {
+                      "kind": "always"
+                    },
+                    "expected": {
+                      "value_type": "token",
+                      "value": "Some exact code"
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "boolean_false",
+      "contract": {
+        "rules_version": 2,
+        "row_conditions": {
+          "version": 1,
+          "fields": {
+            "configurations": {
+              "value_when": {
+                "clamp_included": [
+                  {
+                    "when": {
+                      "kind": "always"
+                    },
+                    "expected": {
+                      "value_type": "boolean",
+                      "value": false
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    }
+  ],
+  "invalid_metadata": [
+    {
+      "id": "boolean_string",
+      "contract": {
+        "rules_version": 2,
+        "row_conditions": {
+          "version": 1,
+          "fields": {
+            "configurations": {
+              "value_when": {
+                "clamp_included": [
+                  {
+                    "when": {
+                      "kind": "always"
+                    },
+                    "expected": {
+                      "value_type": "boolean",
+                      "value": "true"
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "boolean_number",
+      "contract": {
+        "rules_version": 2,
+        "row_conditions": {
+          "version": 1,
+          "fields": {
+            "configurations": {
+              "value_when": {
+                "clamp_included": [
+                  {
+                    "when": {
+                      "kind": "always"
+                    },
+                    "expected": {
+                      "value_type": "boolean",
+                      "value": 1
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "boolean_null",
+      "contract": {
+        "rules_version": 2,
+        "row_conditions": {
+          "version": 1,
+          "fields": {
+            "configurations": {
+              "value_when": {
+                "clamp_included": [
+                  {
+                    "when": {
+                      "kind": "always"
+                    },
+                    "expected": {
+                      "value_type": "boolean",
+                      "value": null
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "boolean_array",
+      "contract": {
+        "rules_version": 2,
+        "row_conditions": {
+          "version": 1,
+          "fields": {
+            "configurations": {
+              "value_when": {
+                "clamp_included": [
+                  {
+                    "when": {
+                      "kind": "always"
+                    },
+                    "expected": {
+                      "value_type": "boolean",
+                      "value": [
+                        true
+                      ]
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "decimal_number",
+      "contract": {
+        "rules_version": 2,
+        "row_conditions": {
+          "version": 1,
+          "fields": {
+            "configurations": {
+              "value_when": {
+                "quantity": [
+                  {
+                    "when": {
+                      "kind": "always"
+                    },
+                    "expected": {
+                      "value_type": "decimal",
+                      "value": 1.5
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "decimal_comma",
+      "contract": {
+        "rules_version": 2,
+        "row_conditions": {
+          "version": 1,
+          "fields": {
+            "configurations": {
+              "value_when": {
+                "quantity": [
+                  {
+                    "when": {
+                      "kind": "always"
+                    },
+                    "expected": {
+                      "value_type": "decimal",
+                      "value": "1,5"
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "decimal_spaces",
+      "contract": {
+        "rules_version": 2,
+        "row_conditions": {
+          "version": 1,
+          "fields": {
+            "configurations": {
+              "value_when": {
+                "quantity": [
+                  {
+                    "when": {
+                      "kind": "always"
+                    },
+                    "expected": {
+                      "value_type": "decimal",
+                      "value": " 1.5 "
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "decimal_incomplete",
+      "contract": {
+        "rules_version": 2,
+        "row_conditions": {
+          "version": 1,
+          "fields": {
+            "configurations": {
+              "value_when": {
+                "quantity": [
+                  {
+                    "when": {
+                      "kind": "always"
+                    },
+                    "expected": {
+                      "value_type": "decimal",
+                      "value": "1e"
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "decimal_nan",
+      "contract": {
+        "rules_version": 2,
+        "row_conditions": {
+          "version": 1,
+          "fields": {
+            "configurations": {
+              "value_when": {
+                "quantity": [
+                  {
+                    "when": {
+                      "kind": "always"
+                    },
+                    "expected": {
+                      "value_type": "decimal",
+                      "value": "NaN"
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "decimal_scale_overflow",
+      "contract": {
+        "rules_version": 2,
+        "row_conditions": {
+          "version": 1,
+          "fields": {
+            "configurations": {
+              "value_when": {
+                "quantity": [
+                  {
+                    "when": {
+                      "kind": "always"
+                    },
+                    "expected": {
+                      "value_type": "decimal",
+                      "value": "1e-16384"
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "decimal_integer_overflow",
+      "contract": {
+        "rules_version": 2,
+        "row_conditions": {
+          "version": 1,
+          "fields": {
+            "configurations": {
+              "value_when": {
+                "quantity": [
+                  {
+                    "when": {
+                      "kind": "always"
+                    },
+                    "expected": {
+                      "value_type": "decimal",
+                      "value": "1e131072"
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "decimal_zero_exponent_overflow",
+      "contract": {
+        "rules_version": 2,
+        "row_conditions": {
+          "version": 1,
+          "fields": {
+            "configurations": {
+              "value_when": {
+                "quantity": [
+                  {
+                    "when": {
+                      "kind": "always"
+                    },
+                    "expected": {
+                      "value_type": "decimal",
+                      "value": "0e1073741824"
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "decimal_int64_exponent_overflow",
+      "contract": {
+        "rules_version": 2,
+        "row_conditions": {
+          "version": 1,
+          "fields": {
+            "configurations": {
+              "value_when": {
+                "quantity": [
+                  {
+                    "when": {
+                      "kind": "always"
+                    },
+                    "expected": {
+                      "value_type": "decimal",
+                      "value": "0e9223372036854775808"
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "integer_fraction",
+      "contract": {
+        "rules_version": 2,
+        "row_conditions": {
+          "version": 1,
+          "fields": {
+            "configurations": {
+              "value_when": {
+                "count": [
+                  {
+                    "when": {
+                      "kind": "always"
+                    },
+                    "expected": {
+                      "value_type": "decimal",
+                      "value": "2.5"
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "below_min",
+      "contract": {
+        "rules_version": 2,
+        "row_conditions": {
+          "version": 1,
+          "fields": {
+            "configurations": {
+              "value_when": {
+                "limited": [
+                  {
+                    "when": {
+                      "kind": "always"
+                    },
+                    "expected": {
+                      "value_type": "decimal",
+                      "value": "1.2499999999999999"
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "above_max",
+      "contract": {
+        "rules_version": 2,
+        "row_conditions": {
+          "version": 1,
+          "fields": {
+            "configurations": {
+              "value_when": {
+                "limited": [
+                  {
+                    "when": {
+                      "kind": "always"
+                    },
+                    "expected": {
+                      "value_type": "decimal",
+                      "value": "2.7500000000000001"
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "positive_zero",
+      "contract": {
+        "rules_version": 2,
+        "row_conditions": {
+          "version": 1,
+          "fields": {
+            "configurations": {
+              "value_when": {
+                "positive": [
+                  {
+                    "when": {
+                      "kind": "always"
+                    },
+                    "expected": {
+                      "value_type": "decimal",
+                      "value": "0"
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "positive_negative",
+      "contract": {
+        "rules_version": 2,
+        "row_conditions": {
+          "version": 1,
+          "fields": {
+            "configurations": {
+              "value_when": {
+                "positive": [
+                  {
+                    "when": {
+                      "kind": "always"
+                    },
+                    "expected": {
+                      "value_type": "decimal",
+                      "value": "-1"
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "token_number",
+      "contract": {
+        "rules_version": 2,
+        "row_conditions": {
+          "version": 1,
+          "fields": {
+            "configurations": {
+              "value_when": {
+                "code": [
+                  {
+                    "when": {
+                      "kind": "always"
+                    },
+                    "expected": {
+                      "value_type": "token",
+                      "value": 1
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "token_unknown",
+      "contract": {
+        "rules_version": 2,
+        "row_conditions": {
+          "version": 1,
+          "fields": {
+            "configurations": {
+              "value_when": {
+                "code": [
+                  {
+                    "when": {
+                      "kind": "always"
+                    },
+                    "expected": {
+                      "value_type": "token",
+                      "value": "unknown"
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "token_foreign",
+      "contract": {
+        "rules_version": 2,
+        "row_conditions": {
+          "version": 1,
+          "fields": {
+            "configurations": {
+              "value_when": {
+                "code": [
+                  {
+                    "when": {
+                      "kind": "always"
+                    },
+                    "expected": {
+                      "value_type": "token",
+                      "value": "other"
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "token_empty",
+      "contract": {
+        "rules_version": 2,
+        "row_conditions": {
+          "version": 1,
+          "fields": {
+            "configurations": {
+              "value_when": {
+                "code": [
+                  {
+                    "when": {
+                      "kind": "always"
+                    },
+                    "expected": {
+                      "value_type": "token",
+                      "value": ""
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "token_whitespace",
+      "contract": {
+        "rules_version": 2,
+        "row_conditions": {
+          "version": 1,
+          "fields": {
+            "configurations": {
+              "value_when": {
+                "code": [
+                  {
+                    "when": {
+                      "kind": "always"
+                    },
+                    "expected": {
+                      "value_type": "token",
+                      "value": " "
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "open_token_unknown",
+      "contract": {
+        "rules_version": 2,
+        "row_conditions": {
+          "version": 1,
+          "fields": {
+            "configurations": {
+              "value_when": {
+                "open_token": [
+                  {
+                    "when": {
+                      "kind": "always"
+                    },
+                    "expected": {
+                      "value_type": "token",
+                      "value": "unknown"
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "open_token_unknown_label",
+      "contract": {
+        "rules_version": 2,
+        "row_conditions": {
+          "version": 1,
+          "fields": {
+            "configurations": {
+              "value_when": {
+                "open_token": [
+                  {
+                    "when": {
+                      "kind": "always"
+                    },
+                    "expected": {
+                      "value_type": "token",
+                      "value": "Desconocido / sin confirmar"
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "text_is_not_a_token_target",
+      "contract": {
+        "rules_version": 2,
+        "row_conditions": {
+          "version": 1,
+          "fields": {
+            "configurations": {
+              "value_when": {
+                "note": [
+                  {
+                    "when": {
+                      "kind": "always"
+                    },
+                    "expected": {
+                      "value_type": "token",
+                      "value": "literal"
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "boolean_target_as_token",
+      "contract": {
+        "rules_version": 2,
+        "row_conditions": {
+          "version": 1,
+          "fields": {
+            "configurations": {
+              "value_when": {
+                "clamp_included": [
+                  {
+                    "when": {
+                      "kind": "always"
+                    },
+                    "expected": {
+                      "value_type": "token",
+                      "value": "true"
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "token_target_as_boolean",
+      "contract": {
+        "rules_version": 2,
+        "row_conditions": {
+          "version": 1,
+          "fields": {
+            "configurations": {
+              "value_when": {
+                "code": [
+                  {
+                    "when": {
+                      "kind": "always"
+                    },
+                    "expected": {
+                      "value_type": "boolean",
+                      "value": true
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "missing_target",
+      "contract": {
+        "rules_version": 2,
+        "row_conditions": {
+          "version": 1,
+          "fields": {
+            "configurations": {
+              "value_when": {
+                "foreign": [
+                  {
+                    "when": {
+                      "kind": "always"
+                    },
+                    "expected": {
+                      "value_type": "boolean",
+                      "value": true
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "expected_missing_type",
+      "contract": {
+        "rules_version": 2,
+        "row_conditions": {
+          "version": 1,
+          "fields": {
+            "configurations": {
+              "value_when": {
+                "clamp_included": [
+                  {
+                    "when": {
+                      "kind": "when",
+                      "rows": [
+                        [
+                          {
+                            "field": "configuration_state",
+                            "operator": "eq",
+                            "value_type": "token",
+                            "value": "Con kit incluido"
+                          }
+                        ]
+                      ]
+                    },
+                    "expected": {
+                      "value": true
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "expected_missing_value",
+      "contract": {
+        "rules_version": 2,
+        "row_conditions": {
+          "version": 1,
+          "fields": {
+            "configurations": {
+              "value_when": {
+                "clamp_included": [
+                  {
+                    "when": {
+                      "kind": "when",
+                      "rows": [
+                        [
+                          {
+                            "field": "configuration_state",
+                            "operator": "eq",
+                            "value_type": "token",
+                            "value": "Con kit incluido"
+                          }
+                        ]
+                      ]
+                    },
+                    "expected": {
+                      "value_type": "boolean"
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "expected_extra",
+      "contract": {
+        "rules_version": 2,
+        "row_conditions": {
+          "version": 1,
+          "fields": {
+            "configurations": {
+              "value_when": {
+                "clamp_included": [
+                  {
+                    "when": {
+                      "kind": "when",
+                      "rows": [
+                        [
+                          {
+                            "field": "configuration_state",
+                            "operator": "eq",
+                            "value_type": "token",
+                            "value": "Con kit incluido"
+                          }
+                        ]
+                      ]
+                    },
+                    "expected": {
+                      "value_type": "boolean",
+                      "value": true,
+                      "note": "extra"
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "expected_wrong_type",
+      "contract": {
+        "rules_version": 2,
+        "row_conditions": {
+          "version": 1,
+          "fields": {
+            "configurations": {
+              "value_when": {
+                "clamp_included": [
+                  {
+                    "when": {
+                      "kind": "when",
+                      "rows": [
+                        [
+                          {
+                            "field": "configuration_state",
+                            "operator": "eq",
+                            "value_type": "token",
+                            "value": "Con kit incluido"
+                          }
+                        ]
+                      ]
+                    },
+                    "expected": {
+                      "value_type": "text",
+                      "value": "true"
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "expected_type_null",
+      "contract": {
+        "rules_version": 2,
+        "row_conditions": {
+          "version": 1,
+          "fields": {
+            "configurations": {
+              "value_when": {
+                "clamp_included": [
+                  {
+                    "when": {
+                      "kind": "when",
+                      "rows": [
+                        [
+                          {
+                            "field": "configuration_state",
+                            "operator": "eq",
+                            "value_type": "token",
+                            "value": "Con kit incluido"
+                          }
+                        ]
+                      ]
+                    },
+                    "expected": {
+                      "value_type": null,
+                      "value": true
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "rules_empty",
+      "contract": {
+        "rules_version": 2,
+        "row_conditions": {
+          "version": 1,
+          "fields": {
+            "configurations": {
+              "value_when": {
+                "clamp_included": []
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "rules_null",
+      "contract": {
+        "rules_version": 2,
+        "row_conditions": {
+          "version": 1,
+          "fields": {
+            "configurations": {
+              "value_when": {
+                "clamp_included": null
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "rules_map",
+      "contract": {
+        "rules_version": 2,
+        "row_conditions": {
+          "version": 1,
+          "fields": {
+            "configurations": {
+              "value_when": {
+                "clamp_included": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "rule_null",
+      "contract": {
+        "rules_version": 2,
+        "row_conditions": {
+          "version": 1,
+          "fields": {
+            "configurations": {
+              "value_when": {
+                "clamp_included": [
+                  null
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "rule_extra",
+      "contract": {
+        "rules_version": 2,
+        "row_conditions": {
+          "version": 1,
+          "fields": {
+            "configurations": {
+              "value_when": {
+                "clamp_included": [
+                  {
+                    "when": {
+                      "kind": "always"
+                    },
+                    "expected": {
+                      "value_type": "boolean",
+                      "value": true
+                    },
+                    "priority": 1
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "rule_without_when",
+      "contract": {
+        "rules_version": 2,
+        "row_conditions": {
+          "version": 1,
+          "fields": {
+            "configurations": {
+              "value_when": {
+                "clamp_included": [
+                  {
+                    "expected": {
+                      "value_type": "boolean",
+                      "value": true
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "when_null",
+      "contract": {
+        "rules_version": 2,
+        "row_conditions": {
+          "version": 1,
+          "fields": {
+            "configurations": {
+              "value_when": {
+                "clamp_included": [
+                  {
+                    "when": null,
+                    "expected": {
+                      "value_type": "boolean",
+                      "value": true
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "direct_cycle",
+      "contract": {
+        "rules_version": 2,
+        "row_conditions": {
+          "version": 1,
+          "fields": {
+            "configurations": {
+              "value_when": {
+                "clamp_included": [
+                  {
+                    "when": {
+                      "kind": "when",
+                      "rows": [
+                        [
+                          {
+                            "field": "clamp_included",
+                            "operator": "eq",
+                            "value_type": "boolean",
+                            "value": false
+                          }
+                        ]
+                      ]
+                    },
+                    "expected": {
+                      "value_type": "boolean",
+                      "value": true
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "foreign_prerequisite",
+      "contract": {
+        "rules_version": 2,
+        "row_conditions": {
+          "version": 1,
+          "fields": {
+            "configurations": {
+              "value_when": {
+                "clamp_included": [
+                  {
+                    "when": {
+                      "kind": "when",
+                      "rows": [
+                        [
+                          {
+                            "field": "another_row.flag",
+                            "operator": "eq",
+                            "value_type": "boolean",
+                            "value": true
+                          }
+                        ]
+                      ]
+                    },
+                    "expected": {
+                      "value_type": "boolean",
+                      "value": true
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "mistyped_prerequisite",
+      "contract": {
+        "rules_version": 2,
+        "row_conditions": {
+          "version": 1,
+          "fields": {
+            "configurations": {
+              "value_when": {
+                "clamp_included": [
+                  {
+                    "when": {
+                      "kind": "when",
+                      "rows": [
+                        [
+                          {
+                            "field": "configuration_state",
+                            "operator": "eq",
+                            "value_type": "boolean",
+                            "value": true
+                          }
+                        ]
+                      ]
+                    },
+                    "expected": {
+                      "value_type": "boolean",
+                      "value": true
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "unknown_prerequisite_option",
+      "contract": {
+        "rules_version": 2,
+        "row_conditions": {
+          "version": 1,
+          "fields": {
+            "configurations": {
+              "value_when": {
+                "clamp_included": [
+                  {
+                    "when": {
+                      "kind": "when",
+                      "rows": [
+                        [
+                          {
+                            "field": "configuration_state",
+                            "operator": "eq",
+                            "value_type": "token",
+                            "value": "not allowed"
+                          }
+                        ]
+                      ]
+                    },
+                    "expected": {
+                      "value_type": "boolean",
+                      "value": true
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "mixed_bucket_cycle",
+      "contract": {
+        "rules_version": 2,
+        "row_conditions": {
+          "version": 1,
+          "fields": {
+            "configurations": {
+              "value_when": {
+                "clamp_included": [
+                  {
+                    "when": {
+                      "kind": "when",
+                      "rows": [
+                        [
+                          {
+                            "field": "other_flag",
+                            "operator": "eq",
+                            "value_type": "boolean",
+                            "value": true
+                          }
+                        ]
+                      ]
+                    },
+                    "expected": {
+                      "value_type": "boolean",
+                      "value": true
+                    }
+                  }
+                ]
+              },
+              "required_when": {
+                "other_flag": {
+                  "kind": "when",
+                  "rows": [
+                    [
+                      {
+                        "field": "clamp_included",
+                        "operator": "eq",
+                        "value_type": "boolean",
+                        "value": true
+                      }
+                    ]
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "two_value_rule_cycle",
+      "contract": {
+        "rules_version": 2,
+        "row_conditions": {
+          "version": 1,
+          "fields": {
+            "configurations": {
+              "value_when": {
+                "clamp_included": [
+                  {
+                    "when": {
+                      "kind": "when",
+                      "rows": [
+                        [
+                          {
+                            "field": "configuration_state",
+                            "operator": "eq",
+                            "value_type": "token",
+                            "value": "Con kit incluido"
+                          }
+                        ]
+                      ]
+                    },
+                    "expected": {
+                      "value_type": "boolean",
+                      "value": true
+                    }
+                  }
+                ],
+                "configuration_state": [
+                  {
+                    "when": {
+                      "kind": "when",
+                      "rows": [
+                        [
+                          {
+                            "field": "clamp_included",
+                            "operator": "eq",
+                            "value_type": "boolean",
+                            "value": true
+                          }
+                        ]
+                      ]
+                    },
+                    "expected": {
+                      "value_type": "token",
+                      "value": "Con kit incluido"
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "expected_outside_template_options",
+      "contract": {
+        "rules_version": 2,
+        "row_conditions": {
+          "version": 1,
+          "fields": {
+            "configurations": {
+              "value_when": {
+                "code": [
+                  {
+                    "when": {
+                      "kind": "always"
+                    },
+                    "expected": {
+                      "value_type": "token",
+                      "value": "01"
+                    }
+                  }
+                ]
+              },
+              "allowed_options": {
+                "code": [
+                  "1"
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "expected_with_malformed_scope",
+      "contract": {
+        "rules_version": 2,
+        "row_conditions": {
+          "version": 1,
+          "fields": {
+            "configurations": {
+              "value_when": {
+                "code": [
+                  {
+                    "when": {
+                      "kind": "always"
+                    },
+                    "expected": {
+                      "value_type": "token",
+                      "value": "01"
+                    }
+                  }
+                ]
+              },
+              "allowed_options": {
+                "code": false
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "bucket_null",
+      "contract": {
+        "rules_version": 2,
+        "row_conditions": {
+          "version": 1,
+          "fields": {
+            "configurations": {
+              "value_when": null
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "foreign_field",
+      "contract": {
+        "rules_version": 2,
+        "row_conditions": {
+          "version": 1,
+          "fields": {
+            "foreign": {
+              "value_when": {
+                "clamp_included": [
+                  {
+                    "when": {
+                      "kind": "when",
+                      "rows": [
+                        [
+                          {
+                            "field": "configuration_state",
+                            "operator": "eq",
+                            "value_type": "token",
+                            "value": "Con kit incluido"
+                          }
+                        ]
+                      ]
+                    },
+                    "expected": {
+                      "value_type": "boolean",
+                      "value": true
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    }
+  ]
+}
+$row_value_fixture$::jsonb);

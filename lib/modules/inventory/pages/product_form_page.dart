@@ -14,6 +14,7 @@ import '../../../shared/models/stock_adjustment_origin.dart';
 import '../../../shared/services/image_service.dart';
 import '../../../shared/services/inventory_service.dart' as shared_inventory;
 import '../../../shared/services/tenant_service.dart';
+import '../../../shared/services/authority_scoped_cache.dart';
 import '../../../shared/services/error_reporting_service.dart';
 import '../../../shared/utils/chilean_utils.dart';
 import '../../../shared/utils/gtin_utils.dart';
@@ -40,6 +41,16 @@ import '../widgets/product_sku_field_row.dart';
 import '../utils/product_spec_inference_utils.dart';
 import '../../../shared/services/barcode_scanner_service.dart';
 import '../services/spec_engine_service.dart';
+import '../models/product_spec_contract.dart';
+import '../models/product_spec_rows.dart';
+import '../models/product_spec_number.dart';
+import '../widgets/product_spec_rows_field.dart';
+import '../utils/spec_rule_evaluator.dart';
+import '../../../shared/widgets/vb_notice.dart';
+import '../../../shared/widgets/vb_form_section.dart';
+import '../../../shared/widgets/vb_searchable_select.dart';
+import '../../../shared/widgets/vb_short_select.dart';
+import '../widgets/product_spec_boolean_field.dart';
 import '../services/whatsapp_catalog_sync_service.dart';
 import '../../ai_assistant/services/ai_service.dart';
 import '../../bikeshop/config/brake_canonical_data.dart';
@@ -294,6 +305,7 @@ class _ProductFormPageState extends State<ProductFormPage>
   final _whatsappCatalogPriceController = TextEditingController();
   final _brandController = TextEditingController();
   final _modelController = TextEditingController();
+  final _specManufacturerSkuController = TextEditingController();
   final _priceController = TextEditingController();
   final _costController = TextEditingController();
   final _inventoryQtyController = TextEditingController();
@@ -377,6 +389,25 @@ class _ProductFormPageState extends State<ProductFormPage>
   SpecTemplate? _specTemplate;
   Map<String, dynamic> _specValues = {};
   bool _isLoadingSpecs = false;
+  String? _specLoadError;
+  int _specLoadEpoch = 0;
+  int _specDisplayGeneration = 0;
+  String? _specAuthorityUser;
+  int _specRevision = 0;
+  String? _loadedSpecDraftKey;
+  // Older open editors survive hot reload without running field initializers.
+  List<Map<String, dynamic>>? _unassignedSpecFactsState;
+  List<Map<String, dynamic>> get _unassignedSpecFacts =>
+      _unassignedSpecFactsState ?? const [];
+  set _unassignedSpecFacts(List<Map<String, dynamic>> value) =>
+      _unassignedSpecFactsState = value;
+  String? _specBindingSource;
+  ProductSpecReference? _specReference;
+  List<ProductSpecReference> _specReferences = [];
+  final Map<String, _SpecInferenceResolution> _specDrafts = {};
+  final Map<String, ProductSpecReference?> _specDraftReferences = {};
+  String _productSpecOperationKey =
+      'product-spec-${DateTime.now().microsecondsSinceEpoch}';
   final Set<String> _manualSpecOverrideKeys = <String>{};
   final Map<String, dynamic> _autoDerivedSpecValues = <String, dynamic>{};
   Map<String, String> _specFieldGuidance = const <String, String>{};
@@ -426,6 +457,7 @@ class _ProductFormPageState extends State<ProductFormPage>
     _inventoryQtyController.text = '0';
     _minStockController.text = '1';
 
+    _bindSpecIdentityListeners();
     _priceController.addListener(_onPricingChanged);
     _costController.addListener(_onPricingChanged);
     if (widget.productId == null) _applySeed();
@@ -454,8 +486,28 @@ class _ProductFormPageState extends State<ProductFormPage>
     HardwareKeyboard.instance.addHandler(_hardwareKeyHandler);
   }
 
+  void _bindSpecIdentityListeners() {
+    for (final controller in [
+      _brandController,
+      _modelController,
+      _specManufacturerSkuController
+    ]) {
+      controller.removeListener(_onSpecIdentityChanged);
+      controller.addListener(_onSpecIdentityChanged);
+    }
+  }
+
+  @override
+  void reassemble() {
+    super.reassemble();
+    // A preserved editor predating this contract did not register these
+    // listeners in initState. Rebind without restarting or discarding its draft.
+    _bindSpecIdentityListeners();
+  }
+
   @override
   void dispose() {
+    _specLoadEpoch++;
     _tabController.removeListener(_handleTabControllerChanged);
     _tabController.dispose();
     for (final controller in _retiredTabControllers.toList()) {
@@ -488,6 +540,7 @@ class _ProductFormPageState extends State<ProductFormPage>
     _whatsappCatalogPriceController.dispose();
     _brandController.dispose();
     _modelController.dispose();
+    _specManufacturerSkuController.dispose();
     _priceController
       ..removeListener(_onPricingChanged)
       ..dispose();
@@ -1138,6 +1191,7 @@ class _ProductFormPageState extends State<ProductFormPage>
         _brandController.text = product.brand ?? '';
         _selectedBrandId = product.brandId;
         _modelController.text = product.model ?? '';
+        _specManufacturerSkuController.text = product.manufacturerSku ?? '';
         _priceController.text = product.price.toStringAsFixed(0);
         _costController.text = product.cost.toStringAsFixed(0);
         _inventoryQtyController.text = product.inventoryQty.toString();
@@ -1174,9 +1228,8 @@ class _ProductFormPageState extends State<ProductFormPage>
         }
 
         // Load Ficha Técnica spec template and saved values
-        if (product.productType != ProductType.service &&
-            product.categoryId != null) {
-          _loadSpecTemplate(product.categoryId!, productId: product.id);
+        if (product.productType != ProductType.service) {
+          _loadSpecTemplate(product.categoryId, productId: product.id);
         } else {
           _specTemplate = null;
           _specValues = {};
@@ -1208,41 +1261,134 @@ class _ProductFormPageState extends State<ProductFormPage>
     }
   }
 
-  Future<void> _loadSpecTemplate(String categoryId, {String? productId}) async {
-    if (mounted) setState(() => _isLoadingSpecs = true);
+  void _onSpecIdentityChanged() {
+    if (mounted && _specTemplate != null) setState(() {});
+  }
+
+  Future<void> _loadSpecTemplate(String? categoryId,
+      {String? productId}) async {
+    final epoch = ++_specLoadEpoch;
+    final user = Supabase.instance.client.auth.currentUser?.id;
+    final previousDraftKey = _loadedSpecDraftKey ??
+        (_specTemplate == null
+            ? null
+            : '${_existingProduct?.id ?? 'new'}:${_specTemplate!.id}');
+    if (previousDraftKey != null && _specLoadError == null) {
+      _specDrafts[previousDraftKey] = _SpecInferenceResolution(
+          values: Map.of(_specValues),
+          manualKeys: Set.of(_manualSpecOverrideKeys),
+          autoDerivedValues: Map.of(_autoDerivedSpecValues),
+          guidanceByField: Map.of(_specFieldGuidance));
+      _specDraftReferences[previousDraftKey] = _specReference;
+    }
+    if (mounted)
+      setState(() {
+        _isLoadingSpecs = true;
+        _specLoadError = null;
+      });
     try {
-      final template =
-          await SpecEngineService.instance.getTemplateForCategory(categoryId);
-      if (!mounted) return;
-      final values = (template != null && productId != null)
-          ? await SpecEngineService.instance.getProductSpecValues(productId)
-          : <String, dynamic>{};
+      final tenant = await TenantService().getTenantId();
+      if (user == null || tenant == null)
+        throw const AuthorityScopeChangedException();
+      final context = await SpecEngineService.instance.getProductEditorContext(
+          productId: productId, categoryId: categoryId);
+      final template = context.template;
+      final snapshot = context.snapshot;
+      final draftKey =
+          '${productId ?? 'new'}:${template?.id ?? 'unmapped:$categoryId'}';
+      final references = template == null
+          ? <ProductSpecReference>[]
+          : (await SpecEngineService.instance
+                  .getReferences(template.technicalFamily))
+              .map(ProductSpecReference.fromJson)
+              .toList(growable: false);
+      if (user != Supabase.instance.client.auth.currentUser?.id ||
+          tenant != await TenantService().getTenantId()) {
+        throw const AuthorityScopeChangedException();
+      }
+      if (!mounted ||
+          epoch != _specLoadEpoch ||
+          _selectedCategoryId != categoryId) return;
+      final draft = _specDrafts[draftKey];
+      final referenceId = snapshot['reference_id'] as String?;
+      final reference = _specDraftReferences.containsKey(draftKey)
+          ? _specDraftReferences[draftKey]
+          : references.where((r) => r.id == referenceId).firstOrNull;
+      if (referenceId != null &&
+          draft == null &&
+          reference == null &&
+          snapshot['template_id'] == template?.id) {
+        throw StateError('No se pudo cargar la referencia guardada.');
+      }
+      _specReference = reference;
+      final storedValues =
+          Map<String, dynamic>.from(snapshot['values'] as Map? ?? {});
+      final activeKeys =
+          template?.fields.map((field) => field.definition?.key).toSet() ??
+              <String?>{};
+      final values = draft?.values ??
+          <String, dynamic>{
+            for (final entry in storedValues.entries)
+              if (activeKeys.contains(entry.key)) entry.key: entry.value,
+          };
+      final storedAuto = <String, dynamic>{
+        for (final key in (snapshot['catalog_keys'] as List? ?? []))
+          if (reference?.facts.containsKey(key) == true)
+            key as String: values[key],
+      };
       final resolution = _resolveSpecInference(
-        template: template,
-        baseValues: values,
-        manualKeys: const <String>{},
-        previousAutoValues: const <String, dynamic>{},
-      );
+          template: template,
+          baseValues: values,
+          manualKeys: draft?.manualKeys ?? const {},
+          previousAutoValues: draft?.autoDerivedValues ?? storedAuto);
       setState(() {
         _specTemplate = template;
+        _specAuthorityUser = user;
+        _specDisplayGeneration++;
+        _loadedSpecDraftKey = draftKey;
+        _specBindingSource = snapshot['binding_source'] as String? ?? 'none';
+        _unassignedSpecFacts = (snapshot['unassigned_facts'] as List? ?? [])
+            .map((row) => Map<String, dynamic>.from(row as Map))
+            .toList(growable: false);
+        _specReferences = references;
+        // A reload of an existing draft must not bless a stale revision.
+        if (draft == null)
+          _specRevision = (snapshot['revision'] as num?)?.toInt() ?? 0;
         _specValues = resolution.values;
-        _manualSpecOverrideKeys.clear();
+        _manualSpecOverrideKeys
+          ..clear()
+          ..addAll(resolution.manualKeys);
         _autoDerivedSpecValues
           ..clear()
           ..addAll(resolution.autoDerivedValues);
         _specFieldGuidance = resolution.guidanceByField;
       });
+    } on AuthorityScopeChangedException {
+      if (mounted && epoch == _specLoadEpoch) {
+        setState(() {
+          _specTemplate = null;
+          _specValues = {};
+          _specDrafts.clear();
+          _loadedSpecDraftKey = null;
+          _unassignedSpecFacts = [];
+          _specReference = null;
+          _specDraftReferences.clear();
+        });
+      }
+    } catch (error) {
+      if (mounted && epoch == _specLoadEpoch) {
+        setState(() => _specLoadError =
+            'No se pudo cargar la ficha. Tus respuestas se conservan.');
+        debugPrint('[ProductForm] Specification load failed: $error');
+      }
     } finally {
-      if (mounted) setState(() => _isLoadingSpecs = false);
+      if (mounted && epoch == _specLoadEpoch)
+        setState(() => _isLoadingSpecs = false);
     }
   }
 
   bool _isMeaningfulSpecValue(dynamic value) {
     return isMeaningfulProductSpecValue(value);
-  }
-
-  bool _specValuesEquivalent(dynamic left, dynamic right) {
-    return areProductSpecValuesEquivalent(left, right);
   }
 
   _SpecInferenceResolution _resolveSpecInference({
@@ -1266,91 +1412,22 @@ class _ProductFormPageState extends State<ProductFormPage>
       previousAutoValues: previousAutoValues,
     );
 
-    final inference = inferDrivetrainProductSpecValues(
-      technicalFamily: template.technicalFamily,
-      currentValues: resolvedValues,
-    );
-
     final nextAutoDerivedValues = <String, dynamic>{};
-
-    for (final entry in inference.derivedValues.entries) {
-      final currentValue = resolvedValues[entry.key];
-      final previousAutoValue = previousAutoValues[entry.key];
-      final hasExplicitCurrentValue =
-          _isMeaningfulSpecValue(currentValue) && previousAutoValue == null;
-      final hasManualOverride = manualKeys.contains(entry.key) &&
-          !_specValuesEquivalent(currentValue, previousAutoValue);
-
-      if (hasExplicitCurrentValue || hasManualOverride) {
-        continue;
-      }
-
-      if (_isMeaningfulSpecValue(entry.value)) {
-        resolvedValues[entry.key] = entry.value;
-        nextAutoDerivedValues[entry.key] = entry.value;
-      } else {
-        resolvedValues.remove(entry.key);
-      }
-    }
-
-    final resolvedManualKeys = Set<String>.from(manualKeys);
-
-    for (final field in template.fields) {
-      final def = field.definition;
-      if (def == null) {
-        continue;
-      }
-
-      final behavior = _specFieldBehaviorForValues(
-        template: template,
-        field: field,
-        values: resolvedValues,
-      );
-      final currentValue = resolvedValues[def.key];
-      if (!_isMeaningfulSpecValue(currentValue)) {
-        continue;
-      }
-
-      if (behavior.hidden) {
-        resolvedValues.remove(def.key);
-        resolvedManualKeys.remove(def.key);
-        continue;
-      }
-
-      final allowedOptions = behavior.allowedOptions ??
-          _numberOptionValuesForField(
-            field: field,
-            values: resolvedValues,
-          );
-      if (allowedOptions == null || allowedOptions.isEmpty) {
-        continue;
-      }
-
-      if (currentValue is List) {
-        final filtered = currentValue
-            .map(_normalizedSpecOptionValue)
-            .where(allowedOptions.contains)
-            .toList(growable: false);
-        if (filtered.isEmpty) {
-          resolvedValues.remove(def.key);
-          resolvedManualKeys.remove(def.key);
-        } else {
-          resolvedValues[def.key] = filtered;
+    // Only an explicitly selected, versioned reference derives product facts.
+    // No speed/width/profile loop and no deletion of contradictory manual facts.
+    if (_specReference?.family == template.technicalFamily) {
+      for (final entry in _specReference!.facts.entries) {
+        if (!hasKnownSpecValue(resolvedValues[entry.key])) {
+          resolvedValues[entry.key] = entry.value;
+          nextAutoDerivedValues[entry.key] = entry.value;
         }
-        continue;
-      }
-
-      if (!allowedOptions.contains(_normalizedSpecOptionValue(currentValue))) {
-        resolvedValues.remove(def.key);
-        resolvedManualKeys.remove(def.key);
       }
     }
-
     return _SpecInferenceResolution(
       values: resolvedValues,
-      manualKeys: resolvedManualKeys,
+      manualKeys: Set.of(manualKeys),
       autoDerivedValues: nextAutoDerivedValues,
-      guidanceByField: inference.guidanceByField,
+      guidanceByField: const {},
     );
   }
 
@@ -1383,6 +1460,7 @@ class _ProductFormPageState extends State<ProductFormPage>
   }
 
   void _refreshSpecInference() {
+    _specDisplayGeneration++;
     final resolution = _resolveSpecInference(
       template: _specTemplate,
       baseValues: _specValues,
@@ -1421,30 +1499,6 @@ class _ProductFormPageState extends State<ProductFormPage>
     );
     persistedValues.remove('drivetrain_compatibility_family');
 
-    for (final field in template.fields) {
-      final def = field.definition;
-      if (def == null || def.key != 'drivetrain_mode') {
-        continue;
-      }
-
-      final behavior = _specFieldBehaviorForValues(
-        template: template,
-        field: field,
-        values: _specValues,
-      );
-      final allowedOptions = behavior.allowedOptions;
-      if (!behavior.enabled &&
-          allowedOptions != null &&
-          allowedOptions.length == 1 &&
-          _specValuesEquivalent(
-            persistedValues[def.key],
-            allowedOptions.first,
-          )) {
-        persistedValues.remove(def.key);
-      }
-      break;
-    }
-
     return persistedValues;
   }
 
@@ -1453,19 +1507,15 @@ class _ProductFormPageState extends State<ProductFormPage>
     DrivetrainProductSpecFieldBehavior? behavior,
     bool isAutoLocked = false,
   }) {
-    final def = field.definition;
-    final guidance = def == null ? null : _specFieldGuidance[def.key];
-    final helperText = field.helperText ?? def?.helpText;
-    final parts = <String>[
-      if (guidance != null && guidance.trim().isNotEmpty) guidance.trim(),
-      if (behavior?.helperText != null &&
-          behavior!.helperText!.trim().isNotEmpty)
-        behavior.helperText!.trim(),
-      if (isAutoLocked)
-        'Se bloquea mientras siga autoderivado desde familia, plataforma, perfil, indexado u otras senales upstream. Ajusta esos campos si la caja declara otra compatibilidad.',
-      if (helperText != null && helperText.trim().isNotEmpty) helperText.trim(),
-    ];
-    return parts.isEmpty ? null : parts.join('\n');
+    final key = field.definition?.key ?? '';
+    if (key == 'spec_evidence_source' && _specReference != null) {
+      return 'Puedes registrar aquí el envase o manual que revisaste. Las fuentes del fabricante se conservan en Datos de la referencia.';
+    }
+    if (isAutoLocked) return 'Dato de la referencia seleccionada.';
+    return behavior?.helperText ??
+        _specTemplate?.helperFor(key) ??
+        field.helperText ??
+        field.definition?.helpText;
   }
 
   DrivetrainProductSpecFieldBehavior _specFieldBehavior(
@@ -1494,47 +1544,28 @@ class _ProductFormPageState extends State<ProductFormPage>
       return const DrivetrainProductSpecFieldBehavior();
     }
 
-    final behavior = resolveDrivetrainProductSpecFieldBehavior(
-      technicalFamily: template.technicalFamily,
-      fieldKey: def.key,
-      currentValues: values,
-    );
-
-    // Narrowing declared on the template field (`option_rules`) intersects
-    // with whatever the code-side family rules already decided, so a fact
-    // moved into the database keeps every downstream behavior it had here:
-    // pruning of values that stopped being offerable, the single-option
-    // auto-lock, and dropdown rendering for numeric fields.
-    final narrowed = field.allowedOptionsFor(values);
-    if (narrowed == null) {
-      return behavior;
-    }
-
-    final existing = behavior.allowedOptions;
-    final merged = existing == null
-        ? narrowed.toList(growable: false)
-        : existing.where(narrowed.contains).toList(growable: false);
-
-    // An empty intersection means two rules on one field contradict each
-    // other, which is a defect in the rules and not a statement about this
-    // product. Narrowing to nothing would drop a numeric field back to free
-    // text, so leave the field as the code-side rules left it;
-    // `spec_option_rules_test.dart` is what fails on the contradiction.
-    if (merged.isEmpty) {
-      return behavior;
-    }
-
+    final ready = template.applicabilityFor(field, values) == SpecTruth.yes &&
+        template
+            .prerequisitesFor(def.key)
+            .every((key) => hasKnownSpecValue(values[key]));
+    final allowed = template.constrainedOptionsFor(field, values);
     return DrivetrainProductSpecFieldBehavior(
-      hidden: behavior.hidden,
-      enabled: behavior.enabled,
-      allowedOptions: merged,
-      helperText: behavior.helperText,
+      hidden: template.roleFor(def.key) == 'legacy' &&
+          !hasKnownSpecValue(values[def.key]),
+      enabled: ready && (allowed == null || allowed.isNotEmpty),
+      allowedOptions: allowed?.toList(growable: false),
+      helperText: ready
+          ? null
+          : 'Completa primero ${{
+              ...template.prerequisitesFor(def.key),
+              ...template.applicabilityDependencies(field)
+            }.map(template.labelFor).join(', ')}.',
     );
   }
 
   bool _isSpecFieldAutoLocked(SpecTemplateField field) {
     final def = field.definition;
-    if (def == null) {
+    if (def == null || def.key == 'spec_evidence_source') {
       return false;
     }
 
@@ -1552,35 +1583,18 @@ class _ProductFormPageState extends State<ProductFormPage>
     return value.toString().trim();
   }
 
-  num? _specNumericValue(dynamic value) {
-    if (value == null) {
-      return null;
-    }
-    if (value is num) {
-      return value;
-    }
-    return num.tryParse(value.toString().trim().replaceAll(',', '.'));
-  }
+  String _specOptionLabel(SpecDefinition definition, Object? value) =>
+      definition.dataType == 'number'
+          ? _normalizedSpecOptionValue(value)
+          : value?.toString().trim() ?? '';
 
-  dynamic _parsedSpecNumberValue(String value) {
-    final parsed = _specNumericValue(value);
-    if (parsed == null) {
-      return value;
-    }
-    final integerValue = parsed.toInt();
-    if (parsed == integerValue) {
-      return integerValue;
-    }
-    return parsed.toDouble();
-  }
+  SpecRuleDecimal? _specNumericValue(Object? value) => productSpecNumber(value);
 
-  String _formattedSpecNumericValue(num value) {
-    final integerValue = value.toInt();
-    if (value == integerValue) {
-      return integerValue.toString();
-    }
-    return value.toString();
-  }
+  // Keep intermediate text (including a sign or exponent) in the draft.
+  // Validation rejects incomplete text; only the writer canonicalizes it.
+  String _parsedSpecNumberValue(String value) => value;
+
+  String _formattedSpecNumericValue(SpecRuleDecimal value) => value.canonical;
 
   int _compareSpecOptionValues(String left, String right) {
     final leftNumber = _specNumericValue(left);
@@ -1605,14 +1619,19 @@ class _ProductFormPageState extends State<ProductFormPage>
       final largestCog = _specNumericValue(values['largest_cog_teeth']);
       if (largestCog != null) {
         options.removeWhere(
-          (value) => (_specNumericValue(value) ?? largestCog) >= largestCog,
+          (value) =>
+              (_specNumericValue(value) ?? largestCog).compareTo(largestCog) >=
+              0,
         );
       }
     } else if (def.key == 'largest_cog_teeth') {
       final smallestCog = _specNumericValue(values['smallest_cog_teeth']);
       if (smallestCog != null) {
         options.removeWhere(
-          (value) => (_specNumericValue(value) ?? smallestCog) <= smallestCog,
+          (value) =>
+              (_specNumericValue(value) ?? smallestCog)
+                  .compareTo(smallestCog) <=
+              0,
         );
       }
     }
@@ -1630,6 +1649,8 @@ class _ProductFormPageState extends State<ProductFormPage>
       return const <String>[];
     }
 
+    if (def.dataType == 'number' && behavior.allowedOptions == null)
+      return const [];
     final constrainedOptions = behavior.allowedOptions;
     final options = <String>{
       ...?(constrainedOptions ??
@@ -1640,9 +1661,9 @@ class _ProductFormPageState extends State<ProductFormPage>
 
     final currentValue = _specValues[def.key];
     if (currentValue is List) {
-      options.addAll(currentValue.map(_normalizedSpecOptionValue));
+      options.addAll(currentValue.map((value) => _specOptionLabel(def, value)));
     } else if (_isMeaningfulSpecValue(currentValue)) {
-      options.add(_normalizedSpecOptionValue(currentValue));
+      options.add(_specOptionLabel(def, currentValue));
     }
 
     final sorted = options.where((value) => value.trim().isNotEmpty).toList();
@@ -1653,9 +1674,6 @@ class _ProductFormPageState extends State<ProductFormPage>
   String? _validateSpecField(SpecTemplateField field, String? rawValue) {
     final def = field.definition;
     final trimmed = rawValue?.trim() ?? '';
-    if (field.isRequired && trimmed.isEmpty) {
-      return 'Requerido';
-    }
     if (def == null || trimmed.isEmpty) {
       return null;
     }
@@ -1664,33 +1682,29 @@ class _ProductFormPageState extends State<ProductFormPage>
       return null;
     }
 
-    final parsed = _specNumericValue(trimmed);
-    if (parsed == null) {
-      return 'Numero invalido';
-    }
-
-    final minValue = _specNumericValue(def.validationRules['min']);
-    if (minValue != null && parsed < minValue) {
+    final error = productSpecNumberErrorCode(trimmed, def.validationRules);
+    if (error == 'type') return 'Ingresa un número válido.';
+    if (error == 'invalid_rules')
+      return 'No se pudieron validar los límites de este campo.';
+    if (error == 'positive') return 'Ingresa un valor mayor que cero.';
+    if (error == 'integer') return 'Ingresa una cantidad entera.';
+    if (error == 'min' || error == 'max') {
+      final boundary = _specNumericValue(def.validationRules[error]);
       final suffix = def.unit == null ? '' : ' ${def.unit}';
-      return 'Minimo ${_formattedSpecNumericValue(minValue)}$suffix';
+      return '${error == 'min' ? 'Mínimo' : 'Máximo'} ${boundary!.canonical}$suffix';
     }
-
-    final maxValue = _specNumericValue(def.validationRules['max']);
-    if (maxValue != null && parsed > maxValue) {
-      final suffix = def.unit == null ? '' : ' ${def.unit}';
-      return 'Maximo ${_formattedSpecNumericValue(maxValue)}$suffix';
-    }
+    final parsed = _specNumericValue(trimmed)!;
 
     if (def.key == 'smallest_cog_teeth') {
       final largestCog = _specNumericValue(_specValues['largest_cog_teeth']);
-      if (largestCog != null && parsed >= largestCog) {
+      if (largestCog != null && parsed.compareTo(largestCog) >= 0) {
         return 'Debe ser menor que el pinon mayor';
       }
     }
 
     if (def.key == 'largest_cog_teeth') {
       final smallestCog = _specNumericValue(_specValues['smallest_cog_teeth']);
-      if (smallestCog != null && parsed <= smallestCog) {
+      if (smallestCog != null && parsed.compareTo(smallestCog) <= 0) {
         return 'Debe ser mayor que el pinon menor';
       }
     }
@@ -3196,13 +3210,24 @@ class _ProductFormPageState extends State<ProductFormPage>
         adjustmentOrigin: StockAdjustmentOrigin.productForm.value,
       );
 
+      Product? refreshed;
+      try {
+        refreshed = await _inventoryService.getProductById(product.id!);
+      } catch (error) {
+        debugPrint(
+            '[ProductForm] Stock committed; product refresh failed: $error');
+      }
       if (!mounted) return;
-
+      final safeRefresh = refreshed != null &&
+          canRefreshProductEditAfterStockAdjustment(product, refreshed);
       setState(() {
-        _existingProduct = product.copyWith(
-          inventoryQty: detail.stockAfter,
-          updatedAt: DateTime.now(),
-        );
+        _existingProduct = safeRefresh
+            ? refreshed
+            : product.copyWith(inventoryQty: detail.stockAfter);
+        if (!safeRefresh) {
+          _specLoadError =
+              'El ajuste quedó registrado. Reabre el producto para recuperar su versión actual antes de guardar la ficha.';
+        }
         _inventoryQtyController.text = detail.stockAfter.toString();
       });
 
@@ -4735,7 +4760,46 @@ class _ProductFormPageState extends State<ProductFormPage>
 
   bool get _isChildProduct => _existingProduct?.parentSetId != null;
 
+  List<ProductSpecIssue> get _specIssues => _specTemplate == null
+      ? const []
+      : validateProductSpecDraft(
+          template: _specTemplate!,
+          values: _specValues,
+          reference: _specReference,
+          brand: _brandController.text,
+          model: _modelController.text,
+          manufacturerSku: _specManufacturerSkuController.text);
+
+  Map<String, dynamic> _specSaveCommand() => {
+        'p_is_new': _existingProduct == null,
+        'p_template_id': _specTemplate?.id,
+        'p_contract_version': _specTemplate?.contractVersion,
+        'p_values': _specTemplate == null
+            ? <String, dynamic>{}
+            : SpecEngineService.buildFactPayload(
+                _specTemplate!, _specValuesForPersistence()),
+        'p_expected_revision': _specRevision,
+        'p_expected_updated_at':
+            _existingProduct?.updatedAt.toUtc().toIso8601String(),
+        'p_reference_id': _specReference?.id,
+      };
+
   Future<void> _saveProduct() async {
+    if (!_isServiceForm &&
+        _specAuthorityUser != null &&
+        _specAuthorityUser != Supabase.instance.client.auth.currentUser?.id)
+      return;
+    if (!_isServiceForm &&
+        (_isLoadingSpecs ||
+            _specLoadError != null ||
+            _specIssues.any((issue) => issue.blocking))) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(_isLoadingSpecs
+              ? 'Espera a que termine de cargar la ficha.'
+              : _specLoadError ??
+                  _specIssues.firstWhere((issue) => issue.blocking).message)));
+      return;
+    }
     if (!_hasTaxClassification && (_isPublished || _isGoogleMerchant)) {
       _showTaxClassificationRequired(
         message:
@@ -4988,6 +5052,9 @@ class _ProductFormPageState extends State<ProductFormPage>
             brandId: normalizedBrandId,
             brand: normalizedBrandName,
             model: normalizedModel,
+            manufacturerSku: _specManufacturerSkuController.text.trim().isEmpty
+                ? null
+                : _specManufacturerSkuController.text.trim(),
             barcode: _barcodeController.text.trim().isEmpty
                 ? null
                 : _barcodeController.text.trim(),
@@ -5061,6 +5128,10 @@ class _ProductFormPageState extends State<ProductFormPage>
         brand: normalizedBrandName,
         brandHasValue: true,
         model: normalizedModel,
+        manufacturerSku: _specManufacturerSkuController.text.trim().isEmpty
+            ? null
+            : _specManufacturerSkuController.text.trim(),
+        manufacturerSkuHasValue: true,
         barcode: _barcodeController.text.trim().isEmpty
             ? null
             : _barcodeController.text.trim(),
@@ -5140,6 +5211,7 @@ class _ProductFormPageState extends State<ProductFormPage>
           parent: parentPayload,
           components: componentPayloads,
           operationKey: _productSetSaveOperationKey,
+          specCommand: _specSaveCommand(),
         );
         savedProduct = aggregate.parent;
         _existingProduct = savedProduct;
@@ -5166,31 +5238,26 @@ class _ProductFormPageState extends State<ProductFormPage>
             price: component.price,
           );
         }).toList(growable: false);
+      } else if (!_isServiceForm) {
+        savedProduct = await _inventoryService.saveProductWithSpecs(
+            product: product,
+            specCommand: _specSaveCommand(),
+            operationKey: _productSpecOperationKey);
+        _productSpecOperationKey =
+            'product-spec-${DateTime.now().microsecondsSinceEpoch}';
       } else if (_existingProduct != null) {
         savedProduct = await _inventoryService.updateProduct(product);
       } else {
         savedProduct = await _inventoryService.createProduct(product);
       }
 
+      _specRevision = savedProduct.specRevision;
+      _existingProduct = savedProduct;
       if (savedProduct.id != null) {
         await _syncServiceProfileMapping(
           tenantId: tenantId,
           productId: savedProduct.id!,
         );
-      }
-
-      // Save Ficha Técnica spec values
-      if (!_isServiceForm && _specTemplate != null && savedProduct.id != null) {
-        final tenantId = await TenantService().getTenantId();
-        if (tenantId != null) {
-          final persistedSpecValues = _specValuesForPersistence();
-          await SpecEngineService.instance.saveProductSpecValues(
-            productId: savedProduct.id!,
-            tenantId: tenantId,
-            template: _specTemplate!,
-            values: persistedSpecValues,
-          );
-        }
       }
 
       WhatsAppCatalogSyncResult? whatsappSyncResult;
@@ -5276,7 +5343,14 @@ class _ProductFormPageState extends State<ProductFormPage>
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Error guardando producto: $e'),
+          content: Text(e is PostgrestException
+              ? (productSpecServerIssues(e.details).isEmpty
+                  ? e.message
+                  : productSpecServerIssues(e.details)
+                      .map((issue) => productSpecIssueMessage(
+                          issue, _specTemplate, _specValues))
+                      .join('\n'))
+              : 'No se pudo guardar el producto. Tus respuestas se conservan.'),
           backgroundColor: Colors.red,
         ),
       );
@@ -7341,7 +7415,222 @@ class _ProductFormPageState extends State<ProductFormPage>
 
   // ── Ficha Técnica tab ──────────────────────────────────────────────────
 
+  String _specValueText(dynamic value) => value is List
+      ? value.join(', ')
+      : value == true
+          ? 'Sí'
+          : value == false
+              ? 'No'
+              : value?.toString() ?? 'Sin confirmar';
+
+  Widget _buildSpecIdentitySection(ThemeData theme) {
+    final modelSuggestions = _modelController.text.trim().isEmpty
+        ? suggestProductSpecModels(
+            name: _nameController.text,
+            brand: _brandController.text,
+            family: _specTemplate!.technicalFamily,
+            references: _specReferences)
+        : const <String>[];
+    final choices = _specReferences
+        .where((reference) =>
+            (reference.brand.toLowerCase() ==
+                    _brandController.text.trim().toLowerCase() &&
+                reference.model.toLowerCase() ==
+                    _modelController.text.trim().toLowerCase()) ||
+            reference.id == _specReference?.id)
+        .toList(growable: false);
+    return VbFormSection(title: _specTemplate!.name, children: [
+      LayoutBuilder(builder: (context, constraints) {
+        final title =
+            Text(_nameController.text, style: theme.textTheme.titleMedium);
+        final refresh = TextButton.icon(
+            key: const ValueKey('product-spec-refresh'),
+            onPressed: () => _loadSpecTemplate(_selectedCategoryId,
+                productId: _existingProduct?.id),
+            icon: const Icon(Icons.refresh),
+            label: const Text('Actualizar ficha'));
+        return constraints.maxWidth < 600
+            ? Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [title, refresh])
+            : Row(children: [Expanded(child: title), refresh]);
+      }),
+      Text([_brandController.text, _modelController.text]
+          .where((value) => value.trim().isNotEmpty)
+          .join(' · ')),
+      const SizedBox(height: 16),
+      VbShortSelect.labelled(
+          context,
+          'Modelo del fabricante',
+          TextFormField(
+              key: const ValueKey('product-spec-model'),
+              controller: _modelController,
+              decoration: const InputDecoration(
+                  helperMaxLines: 5,
+                  helperText:
+                      'Confirma el modelo antes de elegir su variante. La marca por sí sola no determina compatibilidad.'))),
+      if (modelSuggestions.isNotEmpty)
+        Wrap(children: [
+          for (final model in modelSuggestions)
+            TextButton(
+                key: ValueKey('product-spec-confirm-model-$model'),
+                onPressed: () => _modelController.text = model,
+                child: Text('Confirmar modelo $model del nombre')),
+        ]),
+      const SizedBox(height: 16),
+      VbShortSelect.labelled(
+          context,
+          'Código del fabricante (MPN)',
+          TextFormField(
+              key: const ValueKey('product-spec-mpn'),
+              controller: _specManufacturerSkuController,
+              decoration: const InputDecoration(
+                  helperMaxLines: 5,
+                  helperText:
+                      'Identifica la variante exacta. Es distinto del SKU de la tienda.'))),
+      const SizedBox(height: 16),
+      VbSearchableSelect<String>(
+        key: const ValueKey('product-spec-reference'),
+        value: _specReference?.id,
+        label: 'Referencia del fabricante',
+        sheetTitle: 'Elegir referencia del fabricante',
+        placeholder: 'Completar manualmente',
+        allowClear: true,
+        clearLabel: 'Sin referencia · completar manualmente',
+        helperText:
+            'Las referencias corresponden a la marca y modelo confirmados. Revisa si documentan una presentación o sólo el modelo. Se completa el MPN únicamente cuando está documentado. Al retirar la referencia se quitan sus datos automáticos; tus respuestas manuales se conservan.',
+        options: [
+          for (final reference in choices)
+            VbSearchableSelectOption(
+                value: reference.id,
+                label: '${reference.brand} ${reference.model}',
+                context: reference.label,
+                searchText: reference.manufacturerSku)
+        ],
+        onChanged: (id) {
+          final reference =
+              choices.where((choice) => choice.id == id).firstOrNull;
+          setState(() {
+            _specReference = reference;
+            if (reference?.manufacturerSku != null) {
+              _specManufacturerSkuController.text = reference!.manufacturerSku!;
+            }
+          });
+          _refreshSpecInference();
+        },
+      ),
+      if (_specReference == null) ...[
+        const SizedBox(height: 16),
+        Text(
+            choices.isEmpty
+                ? 'Ficha manual: todavía no hay una referencia documentada cargada para esta marca y modelo. Completa los datos que conoces.'
+                : 'Ficha manual: elige una variante documentada o completa los datos que conoces.',
+            style: theme.textTheme.bodySmall),
+      ],
+    ]);
+  }
+
+  Widget _buildSpecReadOnlyValue(String id, String label, Object? value,
+      {ProductSpecRowSchema? schema, String? unit}) {
+    if (schema != null) {
+      return ProductSpecRowsField(
+          key: ValueKey('spec-readonly-$id-$_specDisplayGeneration'),
+          fieldKey: id,
+          label: label,
+          schema: schema,
+          value: value,
+          onChanged: null);
+    }
+    if (value is Map) {
+      return VbNotice(
+          title: label,
+          tone: VbNoticeTone.warning,
+          body: 'Estos datos se conservan. Falta su esquema para mostrarlos.');
+    }
+    return Text(
+        '$label: ${_specValueText(value)}${unit == null ? '' : ' $unit'}');
+  }
+
+  Widget _buildUnassignedSpecFacts() => VbFormSection(
+        title: 'Datos conservados por revisar',
+        children: [
+          const Text(
+              'Estos datos pertenecían a otra ficha. Se conservan con sus fuentes y no se usan para afirmar compatibilidad.'),
+          for (final fact in _unassignedSpecFacts)
+            _buildSpecReadOnlyValue(fact['definition_id'] as String,
+                fact['label'] as String, fact['value'],
+                schema: fact['rows_schema'] is Map
+                    ? ProductSpecRowSchema.fromJson(
+                        Map<String, dynamic>.from(fact['rows_schema'] as Map))
+                    : null),
+        ],
+      );
+
+  Widget _buildSpecReferenceDetails(ThemeData theme) {
+    final reference = _specReference!;
+    return VbFormSection(title: 'Datos de la referencia', children: [
+      Text(reference.label, style: theme.textTheme.titleSmall),
+      for (final entry in reference.facts.entries
+          .where((entry) => entry.key != 'spec_evidence_source'))
+        _buildSpecReadOnlyValue('reference-${reference.id}-${entry.key}',
+            _specTemplate!.labelFor(entry.key), entry.value,
+            schema: _specTemplate!.fields
+                .where((field) => field.definition?.key == entry.key)
+                .firstOrNull
+                ?.definition
+                ?.rowSchema,
+            unit: _specTemplate!.fields
+                .where((field) => field.definition?.key == entry.key)
+                .firstOrNull
+                ?.definition
+                ?.unit),
+      const SizedBox(height: 16),
+      if (reference.claims.isNotEmpty) ...[
+        Text('Declaraciones documentadas', style: theme.textTheme.titleSmall),
+        for (final claim in reference.claims) ...[
+          Text(productSpecClaimSummary(claim)),
+          if (claim['note'] is String) Text(claim['note'] as String),
+        ],
+      ],
+      for (final source in reference.sources)
+        TextButton(
+            onPressed: () => launchUrl(Uri.parse(source),
+                mode: LaunchMode.externalApplication),
+            child: Text('Fuente: ${Uri.parse(source).host}')),
+      if (_specIssues.any((issue) => (issue.code == 'reference_conflict' ||
+          issue.code == 'unsupported_declaration')))
+        TextButton(
+            onPressed: () {
+              for (final issue in _specIssues.where((issue) =>
+                  (issue.code == 'reference_conflict' ||
+                      issue.code == 'unsupported_declaration'))) {
+                _specValues.remove(issue.fieldKey);
+                _manualSpecOverrideKeys.remove(issue.fieldKey);
+              }
+              _refreshSpecInference();
+            },
+            child: const Text('Usar los datos de esta referencia')),
+    ]);
+  }
+
   Widget _buildSpecTab(ThemeData theme, {Key? key}) {
+    if (_specLoadError != null) {
+      return Column(
+          key: key,
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            VbNotice(
+                title: 'Ficha pendiente de cargar',
+                body: _specLoadError,
+                tone: VbNoticeTone.warning),
+            TextButton(
+                onPressed: () {
+                  _loadSpecTemplate(_selectedCategoryId,
+                      productId: _existingProduct?.id);
+                },
+                child: const Text('Reintentar carga')),
+          ]);
+    }
     if (_isLoadingSpecs) {
       return Center(key: key, child: const CircularProgressIndicator());
     }
@@ -7365,14 +7654,15 @@ class _ProductFormPageState extends State<ProductFormPage>
               ),
               const SizedBox(height: 8),
               Text(
-                _selectedCategoryId == null
-                    ? 'Asigna una categoría al producto para ver su ficha técnica.'
-                    : 'Esta categoría no tiene ficha técnica configurada.',
+                _specBindingSource == 'explicit_unavailable'
+                    ? 'La ficha asignada no está disponible. Sus datos se conservan; revisa la asignación antes de guardar.'
+                    : 'Este producto todavía no tiene una ficha técnica asignada.',
                 textAlign: TextAlign.center,
                 style: theme.textTheme.bodySmall?.copyWith(
                   color: theme.colorScheme.onSurfaceVariant,
                 ),
               ),
+              if (_unassignedSpecFacts.isNotEmpty) _buildUnassignedSpecFacts(),
             ],
           ),
         ),
@@ -7382,6 +7672,10 @@ class _ProductFormPageState extends State<ProductFormPage>
     final template = _specTemplate!;
     final sections = template.sections;
     final sectionLabels = <String, String>{
+      'primary': 'Datos básicos del producto',
+      'measurement': 'Medidas y características',
+      'declaration': 'Declaraciones del fabricante',
+      'legacy': 'Datos anteriores por revisar',
       'identification': 'Identificación',
       'compatibility': 'Compatibilidad',
       'specs': 'Especificaciones',
@@ -7401,23 +7695,24 @@ class _ProductFormPageState extends State<ProductFormPage>
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Template name chip
-          Padding(
-            padding: const EdgeInsets.only(bottom: 16),
-            child: Row(
-              children: [
-                Icon(Icons.tune, size: 16, color: theme.colorScheme.primary),
-                const SizedBox(width: 6),
-                Text(
-                  template.name,
-                  style: theme.textTheme.labelMedium?.copyWith(
-                    color: theme.colorScheme.primary,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ],
-            ),
-          ),
+          _buildSpecIdentitySection(theme),
+          if (_unassignedSpecFacts.isNotEmpty) _buildUnassignedSpecFacts(),
+          const SizedBox(height: 16),
+          if (_specIssues.isNotEmpty) ...[
+            VbNotice(
+                title: _specIssues.any((i) => i.blocking)
+                    ? 'Revisa la ficha antes de guardar'
+                    : 'Datos por confirmar',
+                tone: _specIssues.any((i) => i.blocking)
+                    ? VbNoticeTone.danger
+                    : VbNoticeTone.warning,
+                body: _specIssues.map((issue) => issue.message).join('\n')),
+            const SizedBox(height: 16),
+          ],
+          if (_specReference != null) ...[
+            _buildSpecReferenceDetails(theme),
+            const SizedBox(height: 16),
+          ],
           for (final section in sections)
             ..._buildSpecSection(
               theme: theme,
@@ -7436,33 +7731,47 @@ class _ProductFormPageState extends State<ProductFormPage>
     required String label,
     required SpecTemplate template,
   }) {
-    final fields = template
-        .fieldsForSection(section)
-        .where((f) => f.isVisible(_specValues) && !_specFieldBehavior(f).hidden)
-        .toList();
+    final fields = template.fieldsForSection(section).where((f) {
+      final specKey = f.definition?.key;
+      final hasValue = hasKnownSpecValue(_specValues[specKey]);
+      final supplied = specKey != 'spec_evidence_source' &&
+          _specReference != null &&
+          (_specReference!.facts.containsKey(specKey) ||
+              template.roleFor(specKey ?? '') == 'declaration');
+      final conflict = _specIssues.any((i) => i.fieldKey == specKey);
+      return (!supplied || conflict) &&
+          (hasValue ||
+              (template.applicabilityFor(f, _specValues) == SpecTruth.yes &&
+                  !_specFieldBehavior(f).hidden));
+    }).toList();
     if (fields.isEmpty) return [];
 
-    if (section == 'compatibility') {
-      fields.sort((left, right) => _compareSpecFieldDisplayOrder(
-            template: template,
-            left: left,
-            right: right,
-          ));
+    final ordered = <SpecTemplateField>[];
+    final visiting = <String>{};
+    void visit(SpecTemplateField field) {
+      final fieldKey = field.definition?.key ?? field.specDefinitionId;
+      if (!visiting.add(fieldKey)) return;
+      for (final dependency in {
+        ...template.prerequisitesFor(fieldKey),
+        ...template.applicabilityDependencies(field),
+        ...template.coherence.links
+            .where((link) => link.field == fieldKey)
+            .map((link) => link.targetField),
+      }) {
+        final parent = fields
+            .where((candidate) => candidate.definition?.key == dependency)
+            .firstOrNull;
+        if (parent != null) visit(parent);
+      }
+      ordered.add(field);
     }
 
-    const sectionIcons = <String, IconData>{
-      'hydraulic': Icons.water_drop_outlined,
-      'identification': Icons.label_outline,
-      'compatibility': Icons.link_outlined,
-      'range': Icons.stacked_line_chart_outlined,
-      'dimensions': Icons.straighten_outlined,
-      'contents': Icons.inventory_2_outlined,
-      'specs': Icons.tune,
-      'mounting': Icons.build_outlined,
-      'features': Icons.star_outline,
-      'installation': Icons.handyman_outlined,
-      'general': Icons.list_alt_outlined,
-    };
+    for (final field in fields) {
+      visit(field);
+    }
+    fields
+      ..clear()
+      ..addAll(ordered);
 
     final fieldWidgets = <Widget>[];
     for (int i = 0; i < fields.length; i++) {
@@ -7471,48 +7780,9 @@ class _ProductFormPageState extends State<ProductFormPage>
     }
 
     return [
-      _buildSectionCard(
-        theme,
-        icon: sectionIcons[section] ?? Icons.tune,
-        title: label,
-        children: fieldWidgets,
-      ),
+      VbFormSection(title: label, children: fieldWidgets),
       const SizedBox(height: 16),
     ];
-  }
-
-  int _compareSpecFieldDisplayOrder({
-    required SpecTemplate template,
-    required SpecTemplateField left,
-    required SpecTemplateField right,
-  }) {
-    final normalizedFamily =
-        template.technicalFamily.trim().toLowerCase().replaceAll(' ', '_');
-
-    if (normalizedFamily == 'chain' ||
-        normalizedFamily == 'chain_link' ||
-        normalizedFamily == 'missing_link') {
-      const order = <String, int>{
-        'drivetrain_mode': 10,
-        'chain_speeds': 20,
-        'chain_speed': 20,
-        'drivetrain_primary_ecosystem': 30,
-        'drivetrain_declared_compatible_ecosystems': 40,
-        'drivetrain_platform': 50,
-        'chain_profile_family': 60,
-        'chain_width_family': 70,
-        'chain_outer_width_mm': 75,
-      };
-      final leftKey = left.definition?.key;
-      final rightKey = right.definition?.key;
-      final leftOrder = order[leftKey] ?? (1000 + left.sortOrder);
-      final rightOrder = order[rightKey] ?? (1000 + right.sortOrder);
-      if (leftOrder != rightOrder) {
-        return leftOrder.compareTo(rightOrder);
-      }
-    }
-
-    return left.sortOrder.compareTo(right.sortOrder);
   }
 
   Widget _buildSpecField({
@@ -7524,66 +7794,104 @@ class _ProductFormPageState extends State<ProductFormPage>
 
     final behavior = _specFieldBehavior(field);
     final currentValue = _specValues[def.key];
-    final currentValueText = _normalizedSpecOptionValue(currentValue);
+    final currentValueText =
+        def.dataType == 'json' ? '' : _specOptionLabel(def, currentValue);
     final label = _specDisplayLabel(def, field);
     final isAutoLocked = _isSpecFieldAutoLocked(field);
     final isEnabled = behavior.enabled && !isAutoLocked;
-    final helperText = _specHelperTextForField(
-      field,
-      behavior: behavior,
-      isAutoLocked: isAutoLocked,
-    );
+    final issue = _specIssues.where((i) => i.fieldKey == def.key).firstOrNull;
+    if (_specTemplate?.roleFor(def.key) == 'legacy') {
+      return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        _buildSpecReadOnlyValue('legacy-${def.id}', label, currentValue,
+            schema: def.rowSchema, unit: def.unit),
+        Text(
+            'Se conserva para revisión y no se usa para afirmar compatibilidad.',
+            style: theme.textTheme.bodySmall),
+      ]);
+    }
+    if (!behavior.enabled &&
+        hasKnownSpecValue(currentValue) &&
+        def.rowSchema == null) {
+      return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Text('$label: ${_specValueText(currentValue)}'),
+        Text(issue?.message ?? behavior.helperText ?? 'Revisa los requisitos.',
+            style: theme.textTheme.bodySmall?.copyWith(
+                color: issue?.blocking == true
+                    ? theme.colorScheme.error
+                    : theme.colorScheme.onSurfaceVariant)),
+        TextButton(
+            onPressed: () => _updateSpecValue(def.key, null),
+            child: const Text('Retirar este valor')),
+      ]);
+    }
+    final helperText = issue != null && !issue.blocking
+        ? issue.message
+        : _specHelperTextForField(
+            field,
+            behavior: behavior,
+            isAutoLocked: isAutoLocked,
+          );
     final options = _specFieldOptions(field, behavior);
 
     switch (def.dataType) {
       case 'boolean':
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Expanded(
-                  child: Text(label, style: theme.textTheme.bodyMedium),
-                ),
-                Switch(
-                  value: currentValue == true ||
-                      currentValue?.toString().toLowerCase() == 'true',
-                  onChanged:
-                      isEnabled ? (v) => _updateSpecValue(def.key, v) : null,
-                ),
-              ],
-            ),
-            if (helperText != null) ...[
-              const SizedBox(height: 4),
-              Text(
-                helperText,
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: theme.colorScheme.onSurfaceVariant,
-                ),
-              ),
-            ],
-          ],
-        );
+        return ProductSpecBooleanField(
+            key: ValueKey('spec-${def.key}'),
+            label: label,
+            value: currentValue is bool ? currentValue : null,
+            helperText: helperText,
+            errorText: issue?.blocking == true ? issue?.message : null,
+            allowedValues: behavior.allowedOptions == null
+                ? null
+                : {
+                    if (behavior.allowedOptions!.contains('true')) true,
+                    if (behavior.allowedOptions!.contains('false')) false,
+                  },
+            onChanged:
+                isEnabled ? (value) => _updateSpecValue(def.key, value) : null);
+
+      case 'json':
+        final schema = def.rowSchema;
+        if (schema == null) {
+          return VbNotice(
+              title: label,
+              tone: VbNoticeTone.warning,
+              body:
+                  'Falta el esquema de estas configuraciones. Sus datos se conservan.');
+        }
+        return ProductSpecRowsField(
+            key: ValueKey(
+                'spec-${def.key}-${_loadedSpecDraftKey}-$_specDisplayGeneration'),
+            fieldKey: def.key,
+            label: label,
+            schema: schema,
+            value: currentValue,
+            itemLabel:
+                def.validationRules['row_label'] as String? ?? 'Configuración',
+            helperText: helperText,
+            conditions: _specTemplate!.rowConditions.fields[def.key],
+            referenceOptions: _specTemplate!.coherence
+                .optionsFor(def.key, _specValues, _specTemplate!.labelFor),
+            onChanged:
+                isEnabled ? (value) => _updateSpecValue(def.key, value) : null);
 
       case 'single_select':
-        return DropdownButtonFormField<String>(
-          initialValue: currentValueText.isEmpty ? null : currentValueText,
-          decoration: InputDecoration(
-            labelText: label,
-            suffixText: def.unit,
-            helperText: helperText,
-          ),
-          items: options
-              .map((o) => DropdownMenuItem(value: o, child: Text(o)))
-              .toList(),
-          onChanged: isEnabled ? (v) => _updateSpecValue(def.key, v) : null,
-        );
+        return _buildSpecScalarSelect(
+            field: field,
+            value: currentValueText,
+            options: options,
+            label: label,
+            helper: helperText,
+            error: issue?.blocking == true ? issue?.message : null,
+            onChanged:
+                isEnabled ? (value) => _updateSpecValue(def.key, value) : null);
 
       case 'multi_select':
         final selected = (currentValue is List)
-            ? Set<String>.from(currentValue.map(_normalizedSpecOptionValue))
+            ? Set<String>.from(
+                currentValue.map((value) => _specOptionLabel(def, value)))
             : (currentValue != null
-                ? {_normalizedSpecOptionValue(currentValue)}
+                ? {_specOptionLabel(def, currentValue)}
                 : <String>{});
         if (def.key == 'drivetrain_declared_compatible_ecosystems') {
           return _buildDropdownMultiSelectSpecField(
@@ -7595,7 +7903,7 @@ class _ProductFormPageState extends State<ProductFormPage>
             selected: selected,
             helperText: helperText,
             isEnabled: isEnabled,
-            placeholderText: 'Seleccionar claims explícitos...',
+            placeholderText: 'Seleccionar declaraciones...',
           );
         }
         return Column(
@@ -7614,9 +7922,10 @@ class _ProductFormPageState extends State<ProductFormPage>
               children: options.map((o) {
                 final isSelected = selected.contains(o);
                 return FilterChip(
+                  key: ValueKey('product-spec-${def.key}-option-$o'),
                   label: Text(o),
                   selected: isSelected,
-                  onSelected: isEnabled
+                  onSelected: (isEnabled || isSelected)
                       ? (v) {
                           final next = Set<String>.from(selected);
                           if (v) {
@@ -7644,75 +7953,142 @@ class _ProductFormPageState extends State<ProductFormPage>
 
       case 'number':
         if (options.isNotEmpty) {
-          return DropdownButtonFormField<String>(
-            initialValue: currentValueText.isEmpty ? null : currentValueText,
-            decoration: InputDecoration(
-              labelText: label,
-              suffixText: def.unit,
-              helperText: helperText,
-            ),
-            items: options
-                .map((option) => DropdownMenuItem<String>(
-                      value: option,
-                      child: Text(option),
-                    ))
-                .toList(growable: false),
-            validator: (value) => _validateSpecField(field, value),
-            onChanged: isEnabled
-                ? (value) => _updateSpecValue(
-                      def.key,
-                      value == null ? null : _parsedSpecNumberValue(value),
-                    )
-                : null,
-          );
+          return _buildSpecScalarSelect(
+              field: field,
+              value: currentValueText,
+              options: options,
+              label: label,
+              helper: helperText,
+              error: issue?.blocking == true ? issue?.message : null,
+              onChanged: isEnabled
+                  ? (value) => _updateSpecValue(def.key,
+                      value == null ? null : _parsedSpecNumberValue(value))
+                  : null);
         }
 
-        return TextFormField(
-          initialValue: currentValue?.toString() ?? '',
-          keyboardType: const TextInputType.numberWithOptions(decimal: true),
-          inputFormatters: [
-            FilteringTextInputFormatter.allow(RegExp(r'[0-9.,]')),
-          ],
-          autovalidateMode: AutovalidateMode.onUserInteraction,
-          decoration: InputDecoration(
-            labelText: label,
-            suffixText: def.unit,
-            helperText: helperText,
-          ),
-          validator: (value) => _validateSpecField(field, value),
-          onChanged: (v) {
-            _updateSpecValue(
-              def.key,
-              v.trim().isEmpty ? null : _parsedSpecNumberValue(v),
-            );
-          },
-        );
+        return VbShortSelect.labelled(
+            context,
+            label,
+            Semantics(
+                key: ValueKey('product-spec-field-${def.key}'),
+                label: label,
+                child: TextFormField(
+                  key: ValueKey(
+                      'spec-${def.key}-${_loadedSpecDraftKey}-$_specDisplayGeneration'),
+                  enabled: isEnabled,
+                  initialValue: currentValue?.toString() ?? '',
+                  keyboardType: const TextInputType.numberWithOptions(
+                      decimal: true, signed: true),
+                  autovalidateMode: AutovalidateMode.onUserInteraction,
+                  decoration: InputDecoration(
+                    suffixText: def.unit,
+                    helperText: helperText,
+                    helperMaxLines: 5,
+                    errorMaxLines: 5,
+                    errorText: issue?.blocking == true ? issue?.message : null,
+                  ),
+                  validator: (value) => _validateSpecField(field, value),
+                  onChanged: isEnabled
+                      ? (v) {
+                          _updateSpecValue(
+                            def.key,
+                            v.trim().isEmpty ? null : _parsedSpecNumberValue(v),
+                          );
+                        }
+                      : null,
+                )));
 
       default: // text
-        return TextFormField(
-          initialValue: currentValue?.toString() ?? '',
-          decoration: InputDecoration(
-            labelText: label,
-            suffixText: def.unit,
-            helperText: helperText,
-          ),
-          validator: (value) => _validateSpecField(field, value),
-          onChanged:
-              isEnabled ? (v) => _updateSpecValue(def.key, v.trim()) : null,
-        );
+        return VbShortSelect.labelled(
+            context,
+            label,
+            Semantics(
+                key: ValueKey('product-spec-field-${def.key}'),
+                label: label,
+                child: TextFormField(
+                  key: ValueKey(
+                      'spec-${def.key}-${_loadedSpecDraftKey}-$_specDisplayGeneration'),
+                  enabled: isEnabled,
+                  initialValue: currentValue?.toString() ?? '',
+                  decoration: InputDecoration(
+                    suffixText: def.unit,
+                    helperText: helperText,
+                    helperMaxLines: 5,
+                    errorMaxLines: 5,
+                    errorText: issue?.blocking == true ? issue?.message : null,
+                  ),
+                  validator: (value) => _validateSpecField(field, value),
+                  onChanged: isEnabled
+                      ? (v) => _updateSpecValue(def.key, v.trim())
+                      : null,
+                )));
     }
   }
 
+  Widget _buildSpecScalarSelect(
+      {required SpecTemplateField field,
+      required String value,
+      required List<String> options,
+      required String label,
+      required String? helper,
+      required String? error,
+      required ValueChanged<String?>? onChanged}) {
+    if (options.length > VbShortSelect.maxOptions ||
+        options.any((option) => option.length > 30)) {
+      return VbSearchableSelect<String>(
+          key: ValueKey('product-spec-${field.definition?.key}'),
+          value: value.isEmpty ? null : value,
+          label: label,
+          sheetTitle: label,
+          helperText: helper,
+          errorText: error,
+          allowClear: true,
+          clearLabel: 'Sin confirmar',
+          options: [
+            for (final option in options)
+              VbSearchableSelectOption(value: option, label: option)
+          ],
+          onChanged: onChanged);
+    }
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      VbShortSelect<String?>(
+          key: ValueKey('product-spec-${field.definition?.key}'),
+          semanticLabel: label,
+          value: value.isEmpty ? null : value,
+          label: label,
+          sheetTitle: label,
+          placeholder: 'Sin confirmar',
+          options: [
+            for (final option in options)
+              VbShortSelectOption(value: option, label: option)
+          ],
+          onChanged: onChanged),
+      if (error != null || helper != null) ...[
+        const SizedBox(height: 5),
+        Text(error ?? helper!,
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: error != null
+                    ? Theme.of(context).colorScheme.error
+                    : Theme.of(context).colorScheme.onSurfaceVariant)),
+      ],
+      if (value.isNotEmpty && onChanged != null)
+        TextButton(
+            onPressed: () => onChanged(null),
+            child: const Text('Dejar sin confirmar')),
+    ]);
+  }
+
   String _specDisplayLabel(SpecDefinition def, SpecTemplateField field) {
-    final baseLabel = switch (def.key) {
-      'drivetrain_mode' => 'Modo transmisión',
-      'drivetrain_primary_ecosystem' =>
-        'Familia tecnica / ecosistema principal',
-      'drivetrain_declared_compatible_ecosystems' =>
-        'Ecosistemas compatibles declarados',
-      _ => def.label,
-    };
-    return baseLabel + (field.isRequired ? ' *' : '');
+    final baseLabel = _specTemplate?.displayLabelFor(def.key) ??
+        switch (def.key) {
+          'drivetrain_mode' => 'Modo transmisión',
+          'drivetrain_primary_ecosystem' =>
+            'Familia tecnica / ecosistema principal',
+          'drivetrain_declared_compatible_ecosystems' =>
+            'Ecosistemas compatibles declarados',
+          _ => def.label,
+        };
+    return baseLabel;
   }
 
   Widget _buildDropdownMultiSelectSpecField({

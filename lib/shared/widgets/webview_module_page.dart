@@ -1042,6 +1042,14 @@ class _WebViewModulePageState extends State<WebViewModulePage>
 
   /// Días de compra que ya tienen factura emitida en el ERP.
   final Set<String> _aliExpressInvoicedDates = <String>{};
+
+  /// The registered invoice behind each invoiced day, so «Día ya facturado»
+  /// can open it instead of only stating it.
+  final Map<String, String> _aliExpressInvoiceIdsByDate = <String, String>{};
+
+  /// Set by «Cancelar» on the progress dialog; honoured between orders, so
+  /// the browser is never left mid-navigation.
+  bool _aliExpressImportCancelRequested = false;
   int _aliExpressInvoiceDateRefreshGeneration = 0;
 
   void _rememberAliExpressOrderDates(Iterable<String> dates) {
@@ -1062,12 +1070,16 @@ class _WebViewModulePageState extends State<WebViewModulePage>
     try {
       final purchaseService = context.read<PurchaseService>();
       final invoiced = <String>{};
+      final invoiceIds = <String, String>{};
       for (final day in orderDates) {
         final date = DateTime.tryParse(day);
         if (date == null) continue;
         final number = AliExpressPendingDaysService.invoiceNumberForDate(date);
-        if (await purchaseService.checkInvoiceNumberExists(number) != null) {
+        final existing = await purchaseService.checkInvoiceNumberExists(number);
+        if (existing != null) {
           invoiced.add(day);
+          final id = existing.id?.trim();
+          if (id != null && id.isNotEmpty) invoiceIds[day] = id;
         }
       }
       if (!mounted || generation != _aliExpressInvoiceDateRefreshGeneration) {
@@ -1077,6 +1089,9 @@ class _WebViewModulePageState extends State<WebViewModulePage>
         _aliExpressInvoicedDates
           ..clear()
           ..addAll(invoiced);
+        _aliExpressInvoiceIdsByDate
+          ..clear()
+          ..addAll(invoiceIds);
       });
       _announceAliExpressPendingDays();
     } catch (error) {
@@ -1292,6 +1307,9 @@ class _WebViewModulePageState extends State<WebViewModulePage>
     final selectedKey = _dateKey(selectedDate);
     final hasOrders = _aliExpressOrderDates.contains(selectedKey);
     final alreadyInvoiced = _aliExpressInvoicedDates.contains(selectedKey);
+    final invoiceId = _aliExpressInvoiceIdsByDate[selectedKey];
+    final invoiceNumber =
+        AliExpressPendingDaysService.invoiceNumberForDate(selectedDate);
 
     return Padding(
       padding: const EdgeInsets.only(top: 10),
@@ -1314,6 +1332,30 @@ class _WebViewModulePageState extends State<WebViewModulePage>
             : hasOrders
                 ? 'Las compras de este día aún no se registran en el ERP.'
                 : 'No consta una compra para esta fecha en el índice disponible.',
+        action: alreadyInvoiced && invoiceId != null
+            ? TextButton(
+                key: const ValueKey('aliexpress-open-existing-invoice'),
+                onPressed: () {
+                  // Same pattern as the import itself: the registered invoice
+                  // opens in its own workspace tab, and the signed-in
+                  // AliExpress tab keeps its page and its name.
+                  final workspaces = context.read<WorkspaceManager>();
+                  if (workspaces.workspaces.length >=
+                      WorkspaceManager.maxWorkspaces) {
+                    _showBrowserSnack(
+                      'No hay espacio para abrir la factura. Cierra una pestaña del ERP e inténtalo nuevamente.',
+                    );
+                    return;
+                  }
+                  Navigator.of(context).pop();
+                  workspaces.addWorkspace(
+                    title: 'Factura $invoiceNumber',
+                    initialRoute: '/purchases/$invoiceId',
+                  );
+                },
+                child: Text('Abrir factura $invoiceNumber'),
+              )
+            : null,
       ),
     );
   }
@@ -1510,7 +1552,10 @@ class _WebViewModulePageState extends State<WebViewModulePage>
     final progressTitle = request.mode == _AliExpressImportMode.preview
         ? 'Generando preview AliExpress'
         : 'Preparando factura AliExpress';
-    setState(() => _isAliExpressImportRunning = true);
+    setState(() {
+      _isAliExpressImportRunning = true;
+      _aliExpressImportCancelRequested = false;
+    });
     unawaited(
       showDialog<void>(
         context: context,
@@ -1519,6 +1564,16 @@ class _WebViewModulePageState extends State<WebViewModulePage>
         builder: (dialogContext) {
           progressNavigator = Navigator.of(dialogContext);
           return AlertDialog(
+            actions: [
+              TextButton(
+                key: const ValueKey('aliexpress-import-cancel'),
+                onPressed: () {
+                  _aliExpressImportCancelRequested = true;
+                  progress.value = 'Cancelando al terminar el pedido actual…';
+                },
+                child: const Text('Cancelar'),
+              ),
+            ],
             content: SizedBox(
               width: 390,
               child: Row(
@@ -1611,6 +1666,9 @@ class _WebViewModulePageState extends State<WebViewModulePage>
             sourceSupplierWebsite: 'https://www.aliexpress.com',
             structuredInvoiceData: invoice,
           );
+    } on _AliExpressImportCancelled {
+      closeProgressDialog();
+      _showBrowserSnack('Importación cancelada. No se guardó nada.');
     } catch (error) {
       closeProgressDialog();
       _showBrowserSnack(_friendlyAliExpressImportError(error));
@@ -1864,6 +1922,9 @@ class _WebViewModulePageState extends State<WebViewModulePage>
         throw StateError(
           'El pedido ${listOrder['orderNumber'] ?? index + 1} no tiene un enlace válido.',
         );
+      }
+      if (_aliExpressImportCancelRequested) {
+        throw const _AliExpressImportCancelled();
       }
       onProgress(
         'Leyendo pedido ${index + 1} de ${orders.length} '
@@ -6668,6 +6729,12 @@ class _WebViewModulePageState extends State<WebViewModulePage>
 }
 
 enum _AliExpressImportMode { preview, directToOcr }
+
+/// The operator pressed «Cancelar» on the progress dialog. Raised between
+/// orders only, so the browser never stops mid-navigation.
+class _AliExpressImportCancelled implements Exception {
+  const _AliExpressImportCancelled();
+}
 
 class _AliExpressDateIndexRefresh {
   const _AliExpressDateIndexRefresh.ready({

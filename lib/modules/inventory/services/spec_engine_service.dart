@@ -1,7 +1,11 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:flutter/foundation.dart';
 
-import '../utils/product_spec_persistence_utils.dart';
+import '../utils/spec_rule_evaluator.dart';
+import '../models/product_spec_number.dart';
+import '../models/product_spec_rows.dart';
+import '../models/product_spec_template_rules.dart';
+import '../models/product_spec_coherence.dart';
+import '../models/product_spec_row_conditions.dart';
 
 // ---------------------------------------------------------------------------
 // Models
@@ -11,12 +15,19 @@ class SpecDefinition {
   final String id;
   final String key;
   final String label;
-  final String dataType; // text | number | boolean | select | multiselect
+  final String dataType; // text | number | boolean | single/multi_select | json
   final List<String> options;
   final String? unit;
   final String? helpText;
   final Map<String, dynamic> validationRules;
   final int sortOrder;
+  final Map<String, String>? _optionIds;
+  Map<String, String> get optionIds => _optionIds ?? const {};
+
+  ProductSpecRowSchema? get rowSchema => validationRules['rows_schema'] is Map
+      ? ProductSpecRowSchema.fromJson(
+          Map<String, dynamic>.from(validationRules['rows_schema'] as Map))
+      : null;
 
   const SpecDefinition({
     required this.id,
@@ -24,11 +35,12 @@ class SpecDefinition {
     required this.label,
     required this.dataType,
     required this.options,
+    Map<String, String> optionIds = const {},
     this.unit,
     this.helpText,
     this.validationRules = const <String, dynamic>{},
     required this.sortOrder,
-  });
+  }) : _optionIds = optionIds;
 
   factory SpecDefinition.fromJson(Map<String, dynamic> j) {
     final raw = j['allowed_values'];
@@ -46,6 +58,11 @@ class SpecDefinition {
       label: j['label'] as String,
       dataType: j['data_type'] as String? ?? 'text',
       options: opts,
+      optionIds: {
+        for (final value
+            in (j['spec_definition_values'] as List? ?? []).whereType<Map>())
+          value['label'] as String: value['id'] as String
+      },
       unit: j['unit'] as String?,
       helpText: j['description'] as String?,
       validationRules: validationRules,
@@ -68,6 +85,12 @@ class SpecTemplateField {
   /// whether the field exists at all.
   final List<Map<String, dynamic>> optionRules;
 
+  /// Enforced rules have a reviewed scope and source. Legacy option_rules are
+  /// suggestions, and must not become mechanical prohibitions by accident.
+  final List<Map<String, dynamic>>? _constraintRules;
+  List<Map<String, dynamic>> get constraintRules =>
+      _constraintRules ?? const [];
+
   // Resolved after join
   SpecDefinition? definition;
 
@@ -80,8 +103,9 @@ class SpecTemplateField {
     this.helperText,
     required this.visibilityRules,
     this.optionRules = const <Map<String, dynamic>>[],
+    List<Map<String, dynamic>> constraintRules = const [],
     this.definition,
-  });
+  }) : _constraintRules = constraintRules;
 
   factory SpecTemplateField.fromJson(Map<String, dynamic> j) {
     return SpecTemplateField(
@@ -93,6 +117,7 @@ class SpecTemplateField {
       helperText: j['helper_text'] as String?,
       visibilityRules: _ruleList(j['visibility_rules']),
       optionRules: _ruleList(j['option_rules']),
+      constraintRules: _ruleList(j['constraint_rules']),
     );
   }
 
@@ -107,13 +132,11 @@ class SpecTemplateField {
   /// Evaluate visibility rules against current spec values.
   /// Empty rules → always visible.
   bool isVisible(Map<String, dynamic> currentValues) {
-    if (visibilityRules.isEmpty) return true;
-    // All rules must pass (AND semantics)
-    for (final rule in visibilityRules) {
-      if (!_conditionMatches(rule, currentValues)) return false;
-    }
-    return true;
+    return applicability(currentValues) == SpecTruth.yes;
   }
+
+  SpecTruth applicability(Map<String, dynamic> currentValues) =>
+      evaluateSpecConditions(visibilityRules, currentValues);
 
   /// Which of the definition's `allowed_values` stay offerable given the
   /// sibling answers, as normalized strings.
@@ -127,75 +150,14 @@ class SpecTemplateField {
   /// authoritative for what the value may be, and this only decides what may
   /// be picked here.
   Set<String>? allowedOptionsFor(Map<String, dynamic> currentValues) {
-    if (optionRules.isEmpty) return null;
-    Set<String>? narrowed;
-    for (final rule in optionRules) {
-      if (!_conditionMatches(rule, currentValues)) continue;
-      final allow = rule['allow'];
-      if (allow is! List) continue;
-      final offered = allow
-          .map(normalizeRuleValue)
-          .where((value) => value.isNotEmpty)
-          .toSet();
-      narrowed = narrowed == null ? offered : narrowed.intersection(offered);
-    }
-    return narrowed;
+    return intersectSpecOptionRules(optionRules, currentValues);
   }
 
-  bool _conditionMatches(
-    Map<String, dynamic> rule,
-    Map<String, dynamic> currentValues,
-  ) {
-    final field = rule['field'] as String?;
-    if (field == null) return true;
-    final op = rule['operator'] as String? ?? 'eq';
-    final expected = rule['value'];
-    final actual = normalizeRuleValue(currentValues[field]);
+  Set<String>? constrainedOptionsFor(Map<String, dynamic> values) =>
+      intersectSpecOptionRules(constraintRules, values);
 
-    switch (op) {
-      case 'eq':
-        return actual == normalizeRuleValue(expected);
-      case 'neq':
-        return actual != normalizeRuleValue(expected);
-      case 'in':
-        return _expectedSet(expected).contains(actual);
-      case 'not_in':
-        return !_expectedSet(expected).contains(actual);
-      // "this question has been answered", whatever the answer was. A guided
-      // cascade needs it for every step after the first: asking for the
-      // construction before the shell is known offers combinations that cannot
-      // exist, and a value picked there outlives the correction.
-      case 'is_set':
-        return actual.isNotEmpty;
-      case 'not_set':
-        return actual.isEmpty;
-      default:
-        return true;
-    }
-  }
-
-  Set<String> _expectedSet(dynamic expected) {
-    final list = expected is List ? expected : [expected];
-    return list.map(normalizeRuleValue).toSet();
-  }
-
-  /// Rule values arrive from JSON, so `73` and `"73.0"` must compare equal to
-  /// the `73` a numeric field stores. Mirrors the product form's option
-  /// normalization so a rule written against a number keeps matching.
-  static String normalizeRuleValue(dynamic value) {
-    if (value == null) return '';
-    final numeric = value is num
-        ? value
-        : num.tryParse(value.toString().trim().replaceAll(',', '.'));
-    if (numeric != null) {
-      final asDouble = numeric.toDouble();
-      if (asDouble == asDouble.roundToDouble()) {
-        return asDouble.toInt().toString();
-      }
-      return asDouble.toString();
-    }
-    return value.toString().trim();
-  }
+  static String normalizeRuleValue(dynamic value) =>
+      normalizeSpecRuleValue(value);
 }
 
 class SpecTemplate {
@@ -205,6 +167,12 @@ class SpecTemplate {
   final String name;
   final String technicalFamily;
   final List<SpecTemplateField> fields;
+  // A live debug editor can retain an older model across hot reload. Until
+  // refreshed it remains version 1, which the server cannot accept as v2.
+  final Map<String, dynamic>? _formContract;
+  final int? _contractVersion;
+  Map<String, dynamic> get formContract => _formContract ?? const {};
+  int get contractVersion => _contractVersion ?? 1;
 
   const SpecTemplate({
     required this.id,
@@ -213,10 +181,134 @@ class SpecTemplate {
     required this.name,
     required this.technicalFamily,
     required this.fields,
-  });
+    Map<String, dynamic> formContract = const {},
+    int contractVersion = 1,
+  })  : _formContract = formContract,
+        _contractVersion = contractVersion;
+
+  List<String> prerequisitesFor(String key) => List<String>.from(
+      (formContract['prerequisites'] as Map?)?[key] as List? ?? []);
+
+  ProductSpecRowConditions get rowConditions =>
+      ProductSpecRowConditions.fromContract(formContract, {
+        for (final field in fields)
+          if (field.definition != null &&
+              roleFor(field.definition!.key) != 'legacy' &&
+              field.definition!.rowSchema != null)
+            field.definition!.key: field.definition!.rowSchema!
+      });
+
+  ProductSpecCoherence get coherence {
+    final active = fields.where(
+        (f) => f.definition != null && roleFor(f.definition!.key) != 'legacy');
+    return ProductSpecCoherence.fromContract(formContract, {
+      for (final f in active) f.definition!.key: f.definition!.dataType
+    }, {
+      for (final f in active)
+        if (f.definition!.rowSchema != null)
+          f.definition!.key: f.definition!.rowSchema!
+    }, {
+      for (final f in active)
+        f.definition!.key: {
+          ...prerequisitesFor(f.definition!.key),
+          ...applicabilityDependencies(f)
+        }
+    }, units: {
+      for (final f in active) f.definition!.key: f.definition!.unit
+    }, numberRules: {
+      for (final f in active)
+        if (f.definition!.dataType == 'number')
+          f.definition!.key: f.definition!.validationRules
+    });
+  }
+
+  SpecTruth applicabilityFor(
+      SpecTemplateField field, Map<String, dynamic> values) {
+    final expression =
+        (formContract['allowed_when'] as Map?)?[field.definition?.key];
+    final legacy = field.applicability(values);
+    if (expression == null) return legacy;
+    final declared = evaluateProductSpecTemplateCondition(expression, values);
+    if (legacy == SpecTruth.no || declared == SpecTruth.no) return SpecTruth.no;
+    if (legacy == SpecTruth.unknown || declared == SpecTruth.unknown) {
+      return SpecTruth.unknown;
+    }
+    return SpecTruth.yes;
+  }
+
+  SpecTruth requiredFor(SpecTemplateField field, Map<String, dynamic> values) {
+    final expression =
+        (formContract['required_when'] as Map?)?[field.definition?.key];
+    return expression == null
+        ? SpecTruth.no
+        : evaluateProductSpecTemplateCondition(expression, values);
+  }
+
+  Set<String> applicabilityDependencies(SpecTemplateField field) {
+    final expression =
+        (formContract['allowed_when'] as Map?)?[field.definition?.key];
+    return {
+      ...specConditionDependencies(field.visibilityRules),
+      if (expression != null)
+        ...productSpecTemplateConditionDependencies(expression),
+    };
+  }
+
+  Set<String>? constrainedOptionsFor(
+      SpecTemplateField field, Map<String, dynamic> values) {
+    final local = (formContract['allowed_options']
+        as Map?)?[field.definition?.key] as List?;
+    Set<String>? constrained;
+    if (formContract['rules_version'] == 2) {
+      for (final rule in field.constraintRules) {
+        if (evaluateSpecCondition(rule, values) != SpecTruth.yes) continue;
+        final raw = rule['allow'];
+        if (raw is! List ||
+            raw.any((v) =>
+                v is! String &&
+                !(field.definition?.dataType == 'boolean' && v is bool))) {
+          throw const FormatException('Opciones de requisito inválidas.');
+        }
+        final allowed = raw.map((v) => v.toString()).toSet();
+        constrained = constrained?.intersection(allowed) ?? allowed;
+      }
+    } else {
+      constrained = field.constrainedOptionsFor(values);
+    }
+    if (local == null) return constrained;
+    final subset = Set<String>.from(local);
+    return constrained == null ? subset : subset.intersection(constrained);
+  }
+
+  String roleFor(String key) =>
+      (formContract['roles'] as Map?)?[key] as String? ?? 'primary';
+
+  String labelFor(String key) =>
+      displayLabelFor(key) ??
+      fields
+          .where((field) => field.definition?.key == key)
+          .firstOrNull
+          ?.definition
+          ?.label ??
+      key;
+
+  String sectionFor(SpecTemplateField field) => formContract.isEmpty
+      ? field.sectionKey
+      : roleFor(field.definition?.key ?? '');
+
+  String? helperFor(String key) =>
+      (formContract['helpers'] as Map?)?[key] as String?;
+  String? displayLabelFor(String key) =>
+      (formContract['labels'] as Map?)?[key] as String?;
 
   /// Return unique section keys in display order.
   List<String> get sections {
+    if (formContract.isNotEmpty) {
+      final used = fields.map(sectionFor).toSet();
+      return ['primary', 'measurement', 'contents', 'declaration', 'legacy']
+          .where(used.contains)
+          .toList(growable: false);
+    }
     final seen = <String>{};
     return fields
         .where((f) => seen.add(f.sectionKey))
@@ -226,7 +318,7 @@ class SpecTemplate {
 
   /// Fields for a given section, sorted by sort_order.
   List<SpecTemplateField> fieldsForSection(String section) {
-    final result = fields.where((f) => f.sectionKey == section).toList()
+    final result = fields.where((f) => sectionFor(f) == section).toList()
       ..sort((a, b) => a.sortOrder.compareTo(b.sortOrder));
     return result;
   }
@@ -242,269 +334,192 @@ class SpecEngineService {
 
   final _client = Supabase.instance.client;
 
-  // Cache: template_id → SpecTemplate
-  final _templateCache = <String, SpecTemplate>{};
-  // Cache: category_id → template_id (null means no mapping)
-  final _categoryMappingCache = <String, String?>{};
+  // Always read the active contract when opening/retrying an editor. Server
+  // versions reject stale saves; no process-wide cache may hide that reload.
+  Future<SpecTemplate?> getTemplateForCategory(String categoryId) async =>
+      (await getProductEditorContext(categoryId: categoryId)).template;
 
-  // ---------------------------------------------------------------------------
-  // Template resolution
-  // ---------------------------------------------------------------------------
-
-  /// Return the resolved [SpecTemplate] for [categoryId], or null if no
-  /// mapping exists for that category.
-  Future<SpecTemplate?> getTemplateForCategory(String categoryId) async {
-    // Check category mapping cache
-    if (_categoryMappingCache.containsKey(categoryId)) {
-      final templateId = _categoryMappingCache[categoryId];
-      if (templateId == null) return null;
-      return _loadTemplate(templateId);
+  /// Identity, facts and definitions share one server snapshot and version.
+  Future<({SpecTemplate? template, Map<String, dynamic> snapshot})>
+      getProductEditorContext({String? productId, String? categoryId}) async {
+    final result = await _client.rpc('get_product_spec_editor_context_v2',
+        params: {'p_product_id': productId, 'p_category_id': categoryId});
+    final snapshot = Map<String, dynamic>.from(result as Map);
+    if (snapshot['product_id'] != productId ||
+        snapshot['draft_category_id'] != categoryId) {
+      throw const FormatException('La lectura pertenece a otra ficha.');
     }
-
-    try {
-      final rows = await _client
-          .from('category_tech_mappings')
-          .select('template_id')
-          .eq('category_id', categoryId)
-          .limit(1);
-
-      if (rows.isEmpty) {
-        _categoryMappingCache[categoryId] = null;
-        return null;
-      }
-
-      final templateId = rows.first['template_id'] as String;
-      _categoryMappingCache[categoryId] = templateId;
-      return _loadTemplate(templateId);
-    } catch (e) {
-      debugPrint('⚠️ [SpecEngine] getTemplateForCategory error: $e');
-      return null;
-    }
+    return decodeProductSpecEditorContext(snapshot);
   }
 
-  /// Load a [SpecTemplate] by id, using the in-memory cache.
-  Future<SpecTemplate?> _loadTemplate(String templateId) async {
-    if (_templateCache.containsKey(templateId)) {
-      return _templateCache[templateId];
+  /// The v2 RPC supplies facts, definitions and the version in one PostgreSQL
+  /// snapshot. Numeric observations and bounds must already be decimal text:
+  /// converting a decoded JSON double back to text cannot recover its digits.
+  static ({SpecTemplate? template, Map<String, dynamic> snapshot})
+      decodeProductSpecEditorContext(Map<String, dynamic> snapshot) {
+    final revision = snapshot['revision'];
+    if (snapshot['read_schema_version'] is! int ||
+        snapshot['read_schema_version'] != 2 ||
+        revision is! int ||
+        revision < 0 ||
+        revision > 9007199254740991 ||
+        snapshot['values'] is! Map) {
+      throw const FormatException(
+          'Lectura de ficha inválida. Reintenta la carga.');
     }
-
-    try {
-      // 1. Fetch template header
-      final tRows = await _client
-          .from('spec_templates')
-          .select('id, key, name, technical_family, tenant_id')
-          .eq('id', templateId)
-          .limit(1);
-
-      if (tRows.isEmpty) return null;
-      final t = tRows.first;
-
-      // 2. Fetch template fields with their spec definitions
-      final fRows = await _client.from('spec_template_fields').select('''
-            spec_definition_id,
-            section_key,
-            sort_order,
-            is_required,
-            default_value_json,
-            helper_text,
-            visibility_rules,
-            option_rules,
-            spec_definitions!inner(
-              id, key, label, data_type, allowed_values, validation_rules, unit, description, sort_order
-            )
-          ''').eq('template_id', templateId).order('sort_order');
-
-      final fields = fRows.map((row) {
-        final field = SpecTemplateField.fromJson(row);
-        final defJson = row['spec_definitions'] as Map<String, dynamic>? ?? {};
-        field.definition = SpecDefinition.fromJson(defJson);
-        return field;
-      }).toList()
-        // `sort_order` exists on both this table and the embedded
-        // `spec_definitions`, so the query's `.order('sort_order')` is
-        // ambiguous and does not reliably order the rows. Section order is
-        // taken from the first field seen (see `SpecTemplate.sections`), so an
-        // unordered list silently decides which section renders first: the
-        // pedalier ficha asked for measurements before the standard because
-        // the rows came back in physical order.
-        ..sort((a, b) => a.sortOrder.compareTo(b.sortOrder));
-
-      final template = SpecTemplate(
-        id: t['id'] as String,
-        tenantId: t['tenant_id'] as String?,
-        key: t['key'] as String,
-        name: t['name'] as String,
-        technicalFamily: t['technical_family'] as String,
-        fields: fields,
-      );
-
-      _templateCache[templateId] = template;
-      return template;
-    } catch (e) {
-      debugPrint('⚠️ [SpecEngine] _loadTemplate error: $e');
-      return null;
+    final raw = snapshot['template'];
+    if (snapshot['template_id'] == null) {
+      if (raw != null)
+        throw const FormatException('Identidad de ficha inválida.');
+      return (template: null, snapshot: Map<String, dynamic>.from(snapshot));
     }
+    if (raw is! Map ||
+        snapshot['contract_version'] is! int ||
+        raw['id'] != snapshot['template_id'] ||
+        raw['contract_version'] != snapshot['contract_version'] ||
+        raw['key'] != snapshot['template_key'] ||
+        raw['technical_family'] != snapshot['technical_family'] ||
+        raw['contract_version'] is! int ||
+        (raw['contract_version'] as int) < 1 ||
+        raw['form_contract'] is! Map ||
+        raw['fields'] is! List) {
+      throw const FormatException('Identidad o versión de ficha inválida.');
+    }
+    final ids = <String>{};
+    final keys = <String>{};
+    final fields = <SpecTemplateField>[];
+    for (final item in raw['fields'] as List) {
+      if (item is! Map || item['spec_definitions'] is! Map) {
+        throw const FormatException('Campo de ficha inválido.');
+      }
+      final rawDefinition = item['spec_definitions'] as Map;
+      if (rawDefinition['validation_rules'] is! Map ||
+          !const {
+            'text',
+            'number',
+            'boolean',
+            'single_select',
+            'multi_select',
+            'range',
+            'json'
+          }.contains(rawDefinition['data_type']) ||
+          item['is_required'] is! bool ||
+          ['visibility_rules', 'option_rules', 'constraint_rules'].any((key) =>
+              item[key] is! List ||
+              (item[key] as List).any((rule) => rule is! Map))) {
+        throw const FormatException('Reglas de campo inválidas.');
+      }
+      final field = SpecTemplateField.fromJson(Map<String, dynamic>.from(item));
+      final definition = SpecDefinition.fromJson(
+          Map<String, dynamic>.from(item['spec_definitions'] as Map));
+      if (field.specDefinitionId != definition.id ||
+          !ids.add(definition.id) ||
+          !keys.add(definition.key)) {
+        throw const FormatException('Identidad de campo inválida.');
+      }
+      if (definition.dataType == 'number') {
+        for (final value in [
+          (snapshot['values'] as Map)[definition.key],
+          field.defaultValue,
+          definition.validationRules['min'],
+          definition.validationRules['max']
+        ]) {
+          if (value != null &&
+              (value is! String || SpecRuleDecimal.tryParse(value) == null)) {
+            throw const FormatException(
+                'La medida no tiene un transporte exacto.');
+          }
+        }
+      }
+      field.definition = definition;
+      fields.add(field);
+    }
+    fields.sort((a, b) => a.sortOrder.compareTo(b.sortOrder));
+    final template = SpecTemplate(
+      id: raw['id'] as String,
+      tenantId: raw['tenant_id'] as String?,
+      key: raw['key'] as String,
+      name: raw['name'] as String,
+      technicalFamily: raw['technical_family'] as String,
+      fields: fields,
+      formContract:
+          Map<String, dynamic>.from(raw['form_contract'] as Map? ?? {}),
+      contractVersion: raw['contract_version'] as int,
+    );
+    // Do not mount an editor whose field links are unknown or point outside
+    // its own template, even if the transport itself was well formed.
+    template.coherence.validate(const {});
+    template.rowConditions.validate(const {});
+    return (template: template, snapshot: Map<String, dynamic>.from(snapshot));
   }
 
   // ---------------------------------------------------------------------------
   // Spec values
   // ---------------------------------------------------------------------------
 
-  /// Load saved spec values for a product. Returns map of key → value.
-  ///
-  /// Lee el registro unificado (`spec_facts`), no la tabla vieja: la etiqueta
-  /// de un valor de lista se resuelve desde `spec_definition_values` en la
-  /// consulta, así que renombrar un valor cambia lo que ve el mecánico sin
-  /// reescribir un solo producto. La escritura también va al registro; la
-  /// tabla vieja quedó como copia que un trigger mantiene al día mientras
-  /// exista algo que la lea.
-  Future<Map<String, dynamic>> getProductSpecValues(String productId) async {
-    try {
-      final rows = await _client
-          .from('spec_facts')
-          .select('value_text, value_number, value_boolean, '
-              'spec_definitions!inner(key, data_type), '
-              'spec_fact_values(position, spec_definition_values!inner(label))')
-          .eq('subject_type', 'product')
-          .eq('subject_id', productId)
-          .isFilter('subject_scope', null);
+  Future<Map<String, dynamic>> getProductSpecSnapshot(String productId) async {
+    final result = await _client.rpc('get_product_spec_snapshot_v1',
+        params: {'p_product_id': productId});
+    return Map<String, dynamic>.from(result as Map);
+  }
 
-      final result = <String, dynamic>{};
-      for (final row in rows) {
-        final defJson = row['spec_definitions'] as Map<String, dynamic>?;
-        final key = defJson?['key'] as String?;
-        final dataType = defJson?['data_type'] as String?;
-        if (key == null) continue;
-
-        dynamic value;
-        switch (dataType) {
-          case 'boolean':
-            value = row['value_boolean'];
-          case 'number':
-            value = row['value_number'];
-          case 'single_select':
-            value = _factLabels(row).firstOrNull;
-          case 'multi_select':
-            final labels = _factLabels(row);
-            value = labels.isEmpty ? null : labels;
-          default:
-            value = row['value_text'];
-        }
-
-        if (value != null) result[key] = value;
+  Future<List<Map<String, dynamic>>> getReferences(String family) async {
+    final result = await _client
+        .rpc('get_product_spec_references_v2', params: {'p_family': family});
+    return (result as List).map((row) {
+      final reference = Map<String, dynamic>.from(row as Map);
+      if (reference['read_schema_version'] is! int ||
+          reference['read_schema_version'] != 2 ||
+          reference['facts'] is! Map) {
+        throw const FormatException('Lectura de referencia inválida.');
       }
-      return result;
-    } catch (e) {
-      debugPrint('⚠️ [SpecEngine] getProductSpecValues error: $e');
-      return {};
-    }
+      return reference;
+    }).toList(growable: false);
   }
 
-  /// Las etiquetas de un hecho de lista, en el orden en que se eligieron.
-  List<String> _factLabels(Map<String, dynamic> row) {
-    final raw = row['spec_fact_values'];
-    if (raw is! List) return const <String>[];
-    final entries = raw.whereType<Map>().toList()
-      ..sort((a, b) => ((a['position'] as num?)?.toInt() ?? 0)
-          .compareTo((b['position'] as num?)?.toInt() ?? 0));
-    return entries
-        .map((entry) =>
-            (entry['spec_definition_values'] as Map?)?['label'] as String?)
-        .whereType<String>()
-        .toList(growable: false);
-  }
-
-  /// Save spec values for a product.
-  /// [values] is a map of spec_key → value (only fields belonging to
-  /// [template] are written; others are ignored).
-  Future<void> saveProductSpecValues({
-    required String productId,
-    required String tenantId,
-    required SpecTemplate template,
-    required Map<String, dynamic> values,
-  }) async {
-    try {
-      // La ficha se guarda entera en una sola transacción del servidor. El
-      // conjunto de la plantilla viaja completo: lo que no venga en el payload
-      // se borra allá, así vaciar un campo y llenar otro son el mismo guardado
-      // y no existe el estado intermedio en que la ficha quedó a medias.
-      //
-      // `display_value` ya no se escribe: era una copia congelada de la
-      // etiqueta, y es exactamente lo que hacía que renombrar un valor
-      // obligara a reescribir productos. Ahora se resuelve al leer.
-      final definitionIds = template.fields
-          .map((field) => field.definition?.id)
-          .whereType<String>()
-          .toSet()
-          .toList(growable: false);
-
-      final payload = <String, dynamic>{};
-      for (final field in template.fields) {
-        final def = field.definition;
-        if (def == null) continue;
-        final value = sanitizeProductSpecValueForPersistence(
-          specKey: def.key,
-          value: values[def.key],
-        );
-        final isEmpty = value == null ||
-            (value is String && value.trim().isEmpty) ||
-            (value is List && value.isEmpty);
-        if (isEmpty) continue;
-
-        switch (def.dataType) {
-          case 'boolean':
-            payload[def.id] = {
-              'boolean':
-                  value == true || value.toString().toLowerCase() == 'true',
-            };
-          case 'number':
-            final parsed =
-                value is num ? value : num.tryParse(value.toString());
-            if (parsed == null) continue;
-            payload[def.id] = {'number': parsed};
-          case 'single_select':
-            payload[def.id] = {
-              'labels': [value.toString()],
-            };
-          case 'multi_select':
-            final list = value is List ? value : [value];
-            payload[def.id] = {
-              'labels': list.map((item) => item.toString()).toList(),
-            };
-          default:
-            payload[def.id] = {'text': value.toString()};
-        }
+  /// V2 writes normalized option identities. Unknown/invalid values fail before
+  /// the product command; they can never disappear through a failed label join.
+  static Map<String, dynamic> buildFactPayload(
+      SpecTemplate template, Map<String, dynamic> values) {
+    final payload = <String, dynamic>{};
+    for (final field in template.fields) {
+      final def = field.definition;
+      if (def == null || template.roleFor(def.key) == 'legacy') continue;
+      final value = values[def.key];
+      if (!hasKnownSpecValue(value)) continue;
+      switch (def.dataType) {
+        case 'boolean':
+          if (value is! bool)
+            throw FormatException('${def.label}: booleano inválido');
+          payload[def.id] = {'boolean': value};
+        case 'number':
+          if (productSpecNumberErrorCode(value, def.validationRules) != null) {
+            throw FormatException(
+                '${def.label}: número inválido para este campo');
+          }
+          payload[def.id] = {'number': productSpecNumberWireValue(value)};
+        case 'json':
+          final schema = def.rowSchema;
+          if (schema == null) {
+            throw FormatException(
+                '${def.label}: falta el esquema de configuraciones');
+          }
+          payload[def.id] = {'rows': schema.parse(value).toJson()};
+        case 'single_select':
+        case 'multi_select':
+          final labels = value is List ? value : [value];
+          final ids = labels.map((label) {
+            final id = def.optionIds[label.toString()];
+            if (id == null)
+              throw FormatException('${def.label}: opción desconocida $label');
+            return id;
+          }).toList(growable: false);
+          payload[def.id] = {'value_ids': ids};
+        default:
+          payload[def.id] = {'text': value.toString()};
       }
-
-      final written = await _client.rpc(
-        'save_product_spec_facts_v1',
-        params: {
-          'p_product_id': productId,
-          'p_definition_ids': definitionIds,
-          'p_values': payload,
-        },
-      );
-
-      debugPrint(
-          '✅ [SpecEngine] Saved $written spec facts for product $productId');
-    } catch (e) {
-      debugPrint('🔴 [SpecEngine] saveProductSpecValues error: $e');
-      rethrow;
     }
-  }
-
-  /// Delete all spec values for a product. Useful when changing category.
-  Future<void> clearProductSpecValues(String productId) async {
-    try {
-      // El trigger inverso limpia la copia en `product_spec_values`.
-      await _client
-          .from('spec_facts')
-          .delete()
-          .eq('subject_type', 'product')
-          .eq('subject_id', productId);
-    } catch (e) {
-      debugPrint('⚠️ [SpecEngine] clearProductSpecValues error: $e');
-    }
+    return payload;
   }
 
   // ---------------------------------------------------------------------------
@@ -512,7 +527,6 @@ class SpecEngineService {
   // ---------------------------------------------------------------------------
 
   void clearCache() {
-    _templateCache.clear();
-    _categoryMappingCache.clear();
+    // Compatibility with callers: contracts are now read fresh.
   }
 }

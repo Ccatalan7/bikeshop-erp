@@ -41,6 +41,22 @@ consulta de nuevo al matcher— en vez de rehacer el flujo desde el navegador.
 
 ## The three surfaces, and when to use each
 
+**2026-09-06 — model and draft transitions during hot reload.** The product ficha
+introduced constructor fields and controller listeners while an older editor
+was open. Reload does not rerun constructors or `initState`: old instances
+returned null for new non-null fields, and model edits did not refresh reference
+choices until listeners were rebound. Use a backward-compatible field read and
+fresh metadata hydration; rebind the affected listeners idempotently in
+`reassemble` when preserving that already-open editor. Do not restart merely to
+make the problem disappear. Capture the old draft before refreshing a new
+category/revision key. The first refresh here lost the user's unsaved test
+selections (stored product data was unchanged); the corrected transition was
+verified by refreshing HV408 with 6/7/8, 11/128 and 7.1 still selected, then
+binding/unbinding a reference without discarding those manual values. See the
+[result](product-specs-research-2026-09-05/implementation-result.md). This is a
+specific preserved-session transition, not a reason to add reassembly hooks to
+every widget.
+
 | Surface | Loop | Use it for |
 |---|---|---|
 | **macOS debug session** (`scripts/dev/native_session.sh`) | hot reload 2–5 s | Default for every desktop/tablet UI round. Real data, real services. |
@@ -493,6 +509,18 @@ costs text instead of an image. `--filter` narrows it to one region.
 Use both: **structure from `read`, appearance from `shot`.** When they
 disagree, the semantics tree is what a screen reader will announce — that
 disagreement is itself the bug.
+
+**2026-09-07 — empty OCR tree is not evidence of a blank app.** In the live
+Flutter 3.38.5 session, closing the supplier picker over `DataTable` could
+produce the SDK assertion `owner!._nodes.containsKey(id)` in
+`RenderTable.assembleSemanticsNode`, followed by an empty `read`. Fresh frames
+still showed the completed supplier selection and code edits. Check the
+exception and verify the changed value in a new frame plus identity-based
+input before calling the business operation stuck. Keeping a persistent
+semantics handle passed an isolated test but did not recover this session;
+that exploratory patch was removed. The SDK/reader failure remains open.
+Do not restart the owner's session to investigate it while other workspaces
+contain unsaved edits.
 
 **Precisión 2026-08-19: un `shot` puede estar viejo, y entonces no desmiente
 nada.** Si la ventana de la app está detrás de otra —o su ciclo de vida quedó

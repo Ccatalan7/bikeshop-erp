@@ -392,3 +392,12 @@ Ask for human intervention only for missing provider access, billing/MFA/legal
 UI, ambiguous target or authorization, destructive scope expansion, or a
 failed gate requiring a business decision. Do not hand the user routine SQL,
 tests, or deployment commands to run on the agent's behalf.
+
+
+**2026-09-06 — serializar wrappers que aseguran el stack local.** Dos procesos
+`query.sh local`/`db-test` simultáneos pueden competir por
+`.tmp/db/ensure-local.lock/owner`: se observó `No such file or directory` al
+crear owner tras liberar el lock desde otro proceso. Hasta corregir el owner
+del lock, ejecutar esos wrappers de forma secuencial; las pruebas Flutter y
+lecturas remotas independientes pueden correr a la vez. No confundir ese fallo
+de arranque con un error del SQL. Costó una consulta repetida, sin mutaciones.

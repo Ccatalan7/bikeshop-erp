@@ -162,13 +162,16 @@ select is((select case when is_called then last_value else 0 end
 select is((select case when is_called then last_value else 0 end
   from stock_scope_outside_calls), 0::bigint,
   'unrelated family, disabled products/categories, services and other tenant are not judged');
+-- 20260906: 20260831290000 intentionally aligned complete criterion evidence
+-- (including identity_fallback) with strong. This is criterion completeness,
+-- not mechanical/OEM fitment approval; preserve the current server contract.
 select is((select body -> 'items' from scope_result),
   '[
     {"productId":"99e10000-0000-4000-8000-000000000101","matchState":"strong",
      "matchDetail":[{"field":"scope_probe","source":"product_spec"}]},
     {"productId":"99e10000-0000-4000-8000-000000000103","matchState":"unverified",
      "matchDetail":[{"field":"scope_probe","source":"unresolved"}]},
-    {"productId":"99e10000-0000-4000-8000-000000000104","matchState":"weak",
+    {"productId":"99e10000-0000-4000-8000-000000000104","matchState":"strong",
      "matchDetail":[{"field":"scope_probe","source":"identity_fallback"}]}
   ]'::jsonb,
   'ordered full detail is preserved; only conflict is removed');

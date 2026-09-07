@@ -1,0 +1,284 @@
+[
+  {
+    "id": "kmc-cl573r-global-20260906",
+    "technical_family": "chain_link",
+    "brand": "KMC",
+    "model": "CL573R",
+    "label": "KMC CL573R · datos del modelo; presentación por confirmar",
+    "facts": {
+      "chain_connector_type": "Missing link",
+      "chain_speeds": [
+        "6",
+        "7",
+        "8"
+      ],
+      "chain_link_reusable": true,
+      "chain_connector_directional": false,
+      "chain_connector_target": "KMC X8, KMC Z8.3, KMC Z7, KMC Z6",
+      "spec_evidence_source": "https://www.kmcchain.com/en/product/connector-missing-link-cl573r-8s-7s-6s-speed"
+    },
+    "sources": [
+      "https://www.kmcchain.com/en/product/connector-missing-link-cl573r-8s-7s-6s-speed"
+    ],
+    "claims": [
+      {
+        "interface": "connector_chain",
+        "targets": [
+          "KMC X8",
+          "KMC Z8.3",
+          "KMC Z7",
+          "KMC Z6"
+        ],
+        "chain_speeds": [
+          6,
+          7,
+          8
+        ],
+        "excludes": [],
+        "note": "Alcance declarado para estas cadenas. Confirma el modelo instalado y las instrucciones de montaje. La cantidad del envase se registra por separado."
+      }
+    ]
+  },
+  {
+    "id": "kmc-cl571r-global-20260906",
+    "technical_family": "chain_link",
+    "brand": "KMC",
+    "model": "CL571R",
+    "label": "KMC CL571R · datos del modelo; presentación por confirmar",
+    "facts": {
+      "chain_connector_type": "Missing link",
+      "chain_speeds": [
+        "8"
+      ],
+      "chain_link_reusable": true,
+      "chain_connector_directional": false,
+      "chain_connector_target": "KMC Z8.1",
+      "spec_evidence_source": "https://www.kmcchain.com/en/product/connector-missing-link-cl571r-8s-single-speed"
+    },
+    "sources": [
+      "https://www.kmcchain.com/en/product/connector-missing-link-cl571r-8s-single-speed"
+    ],
+    "claims": [
+      {
+        "interface": "connector_chain",
+        "targets": [
+          "KMC Z8.1"
+        ],
+        "chain_speeds": [
+          8
+        ],
+        "excludes": [],
+        "note": "Alcance declarado para estas cadenas. Confirma el modelo instalado y las instrucciones de montaje. La cantidad del envase se registra por separado."
+      }
+    ]
+  },
+  {
+    "id": "kmc-cl566r-global-20260906",
+    "technical_family": "chain_link",
+    "brand": "KMC",
+    "model": "CL566R",
+    "label": "KMC CL566R · datos del modelo; presentación por confirmar",
+    "facts": {
+      "chain_connector_type": "Missing link",
+      "chain_speeds": [
+        "9"
+      ],
+      "chain_link_reusable": true,
+      "chain_connector_directional": false,
+      "chain_connector_target": "KMC 9 velocidades, Shimano 9 velocidades, SRAM 9 velocidades",
+      "spec_evidence_source": "https://www.kmcchain.com/en/product/connector-missing-link-cl566r-9-speed"
+    },
+    "sources": [
+      "https://www.kmcchain.com/en/product/connector-missing-link-cl566r-9-speed"
+    ],
+    "claims": [
+      {
+        "interface": "connector_chain",
+        "targets": [
+          "KMC 9 velocidades",
+          "Shimano 9 velocidades",
+          "SRAM 9 velocidades"
+        ],
+        "chain_speeds": [
+          9
+        ],
+        "excludes": [],
+        "note": "Alcance declarado para estas cadenas. Confirma el modelo instalado y las instrucciones de montaje. La cantidad del envase se registra por separado."
+      }
+    ]
+  },
+  {
+    "id": "kmc-cl559r-global-20260906",
+    "technical_family": "chain_link",
+    "brand": "KMC",
+    "model": "CL559R",
+    "label": "KMC CL559R · datos del modelo; presentación por confirmar",
+    "facts": {
+      "chain_connector_type": "Missing link",
+      "chain_speeds": [
+        "10"
+      ],
+      "chain_link_reusable": true,
+      "chain_connector_directional": false,
+      "chain_connector_target": "KMC 10 velocidades, Shimano 10 velocidades",
+      "spec_evidence_source": "https://www.kmcchain.com/en/product/connector-missing-link-cl559r-10-speed"
+    },
+    "sources": [
+      "https://www.kmcchain.com/en/product/connector-missing-link-cl559r-10-speed"
+    ],
+    "claims": [
+      {
+        "interface": "connector_chain",
+        "targets": [
+          "KMC 10 velocidades",
+          "Shimano 10 velocidades"
+        ],
+        "chain_speeds": [
+          10
+        ],
+        "excludes": [],
+        "note": "Alcance declarado para estas cadenas. Confirma el modelo instalado y las instrucciones de montaje. La cantidad del envase se registra por separado."
+      }
+    ]
+  },
+  {
+    "id": "kmc-cl555r-global-20260906",
+    "technical_family": "chain_link",
+    "brand": "KMC",
+    "model": "CL555R",
+    "label": "KMC CL555R · datos del modelo; presentación por confirmar",
+    "facts": {
+      "chain_connector_type": "Missing link",
+      "chain_speeds": [
+        "11"
+      ],
+      "chain_link_reusable": true,
+      "chain_connector_directional": false,
+      "chain_connector_target": "KMC 11 velocidades, Shimano 11 velocidades, SRAM 11 velocidades",
+      "spec_evidence_source": "https://www.kmcchain.com/en/product/connector-missing-link-cl555r-11-speed"
+    },
+    "sources": [
+      "https://www.kmcchain.com/en/product/connector-missing-link-cl555r-11-speed"
+    ],
+    "claims": [
+      {
+        "interface": "connector_chain",
+        "targets": [
+          "KMC 11 velocidades",
+          "Shimano 11 velocidades",
+          "SRAM 11 velocidades"
+        ],
+        "chain_speeds": [
+          11
+        ],
+        "excludes": [],
+        "note": "Alcance declarado para estas cadenas. Confirma el modelo instalado y las instrucciones de montaje. La cantidad del envase se registra por separado."
+      }
+    ]
+  },
+  {
+    "id": "kmc-cl552-global-20260906",
+    "technical_family": "chain_link",
+    "brand": "KMC",
+    "model": "CL552",
+    "label": "KMC CL552 · datos del modelo; presentación por confirmar",
+    "facts": {
+      "chain_connector_type": "Missing link",
+      "chain_speeds": [
+        "12"
+      ],
+      "chain_link_reusable": false,
+      "chain_connector_directional": false,
+      "chain_connector_target": "KMC 12 velocidades, Shimano 12 velocidades, SRAM MTB 12 velocidades, Campagnolo 12 velocidades; excluye cualquier Flattop",
+      "spec_evidence_source": "https://www.kmcchain.com/en/product/connector-missing-link-cl552-12-speed"
+    },
+    "sources": [
+      "https://www.kmcchain.com/en/product/connector-missing-link-cl552-12-speed"
+    ],
+    "claims": [
+      {
+        "interface": "connector_chain",
+        "targets": [
+          "KMC 12 velocidades",
+          "Shimano 12 velocidades",
+          "SRAM MTB 12 velocidades",
+          "Campagnolo 12 velocidades"
+        ],
+        "chain_speeds": [
+          12
+        ],
+        "excludes": [
+          "Cualquier cadena Flattop"
+        ],
+        "note": "Alcance declarado para estas cadenas. Confirma el modelo instalado y las instrucciones de montaje. La cantidad del envase se registra por separado."
+      }
+    ]
+  },
+  {
+    "id": "kmc-z83-bz08ng114-eu-20260906",
+    "technical_family": "chain",
+    "brand": "KMC",
+    "model": "Z8.3",
+    "manufacturer_sku": "BZ08NG114",
+    "label": "KMC Z8.3 Silver/Grey · BZ08NG114 · 114 eslabones",
+    "facts": {
+      "chain_speeds": [
+        "6",
+        "7",
+        "8"
+      ],
+      "drivetrain_mode": "Derailleur",
+      "link_count": 114,
+      "quick_link_included": true,
+      "spec_evidence_source": "https://www.datocms-assets.com/104526/1781274377-kmc-2026-dealer-catalogue-en-260612.pdf"
+    },
+    "sources": [
+      "https://www.datocms-assets.com/104526/1781274377-kmc-2026-dealer-catalogue-en-260612.pdf"
+    ],
+    "claims": [
+      {
+        "rear_speeds": [
+          6,
+          7,
+          8
+        ],
+        "note": "Catálogo Europa 2026, revisión junio, página 59. Esta referencia corresponde a la cadena de 114 eslabones; el DISPLAY de 116 tiene otro código.",
+        "coverage": "Todos los sistemas"
+      }
+    ]
+  },
+  {
+    "id": "kmc-z7-bz07gb114-eu-20260906",
+    "technical_family": "chain",
+    "brand": "KMC",
+    "model": "Z7",
+    "manufacturer_sku": "BZ07GB114",
+    "label": "KMC Z7 Grey/Brown · BZ07GB114 · 114 eslabones",
+    "facts": {
+      "chain_speeds": [
+        "6",
+        "7"
+      ],
+      "chain_width_family": "3/32",
+      "chain_outer_width_mm": 7.3,
+      "drivetrain_mode": "Derailleur",
+      "link_count": 114,
+      "quick_link_included": true,
+      "spec_evidence_source": "https://www.kmcchain.eu/products/z7-grey-brown"
+    },
+    "sources": [
+      "https://www.kmcchain.eu/products/z7-grey-brown",
+      "https://www.datocms-assets.com/104526/1781274377-kmc-2026-dealer-catalogue-en-260612.pdf"
+    ],
+    "claims": [
+      {
+        "rear_speeds": [
+          6,
+          7
+        ],
+        "note": "La edición declara 6/7. No se agrega cobertura de 8 velocidades por compartir ancho con otras cadenas.",
+        "coverage": "Todos los sistemas"
+      }
+    ]
+  }
+]

@@ -117,6 +117,8 @@ class Product {
   final bool? isPartial;
   final DateTime createdAt;
   final DateTime updatedAt;
+  final int? _specRevision;
+  int get specRevision => _specRevision ?? 0;
 
   Product({
     this.id,
@@ -204,9 +206,11 @@ class Product {
     this.componentPosition,
     this.fullSetsAvailable,
     this.isPartial,
+    int specRevision = 0,
     DateTime? createdAt,
     DateTime? updatedAt,
-  })  : createdAt = createdAt ?? DateTime.now(),
+  })  : _specRevision = specRevision,
+        createdAt = createdAt ?? DateTime.now(),
         updatedAt = updatedAt ?? DateTime.now();
 
   /// Returns true if this product is a service (doesn't track inventory)
@@ -337,6 +341,7 @@ class Product {
       componentPosition: json['component_position'],
       fullSetsAvailable: (json['full_sets_available'] as num?)?.toInt(),
       isPartial: json['is_partial'],
+      specRevision: (json['spec_revision'] as num?)?.toInt() ?? 0,
       createdAt: json['created_at'] == null
           ? DateTime.now()
           : (json['created_at'] is String
@@ -478,6 +483,7 @@ class Product {
     String? model,
     String? manufacturer,
     String? manufacturerSku,
+    bool manufacturerSkuHasValue = false,
     String? gtin,
     bool gtinHasValue = false,
     String? barcode,
@@ -596,7 +602,9 @@ class Product {
       brand: (brandHasValue || brand != null) ? brand : this.brand,
       model: model ?? this.model,
       manufacturer: manufacturer ?? this.manufacturer,
-      manufacturerSku: manufacturerSku ?? this.manufacturerSku,
+      manufacturerSku: manufacturerSkuHasValue
+          ? manufacturerSku
+          : manufacturerSku ?? this.manufacturerSku,
       gtin: (gtinHasValue || gtin != null) ? gtin : this.gtin,
       barcode: (barcodeHasValue || barcode != null) ? barcode : this.barcode,
       hsCode: hsCode ?? this.hsCode,
@@ -735,6 +743,7 @@ class Product {
       isPartial: isPartial ?? this.isPartial,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
+      specRevision: specRevision,
     );
   }
 

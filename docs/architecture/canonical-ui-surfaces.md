@@ -255,29 +255,190 @@ purchase browser handoff share `OCRUploadWidget`, `OcrProductReviewWorkspace`,
 `OcrCandidatePicker` and `OcrPurchaseReviewFlow` on desktop, tablet and phone.
 The source draft/controllers belong to the host; recomposition preserves them.
 
+**Ordinary supplier intake — correction 2026-09-07.** In `Factura leída` →
+`Productos de la factura`, the code is editable on each source row, including
+when OCR left it empty, in both the desktop table and compact list. This edits
+the OCR draft, not the inventory product SKU. An explicit code edit clears the
+old resolution and checks the internal SKU or the selected supplier's code;
+name fallback cannot disguise an unsuccessful code lookup. Per-row debounce,
+revision and document ownership reject late responses. Source quantities,
+costs, discounts and totals remain intact. AliExpress option codes remain
+read-only and keep their separate identity/composition workflow.
+
+Supplier loading belongs to the invoice, with a timeout and a retry action.
+The supplier picker owns its single modal route and closes through that
+route's context. Never pair a root `showDialog` loading overlay with
+`Navigator.pop` on the nested purchase host: it can pop the invoice and leave
+the loading barrier in place. Replacing or closing the document invalidates
+pending supplier and code results; a late supplier completion must not clear
+another file's processing state.
+
+**Selection acknowledgement, 2026-09-07.** Choosing a supplier returned by the
+picker immediately publishes that supplier and its local OCR template. Previous
+product matches are cleared; catalog verification runs with the selected supplier
+and the new document epoch. The existing `Verificando productos…` state blocks
+continuation until verification finishes. Do not defer the supplier header until
+all catalog lookups return: that made an already-known selection appear ignored.
+The intake regression holds catalog reads pending at desktop/phone widths and
+checks immediate acknowledgement, blocked continuation and disposal of late
+results after replacing the document.
+
+File selection is a distinct state from OCR processing. Show `Leyendo` only
+after the native picker returns a file; disable competing pick/drop actions
+while it is open. Cancellation restores the chooser, and closing the OCR host
+ignores late file/image results and errors before any OCR upload. The native
+log on 2026-09-07 showed no OCR request for the prolonged `Leyendo` screenshot:
+`_pickInvoiceFile` had set processing before awaiting the picker, then its
+cancellation callback called `setState` after disposal. Both cases are covered
+by the same regression host. Automatic supplier identification also has a
+bounded wait so a stalled directory read cannot hold the entire preview.
+
+Regression: `test/widget/ocr_normal_supplier_intake_test.dart` mounts the
+actual PDF intake in a nested purchase navigator with a controlled OCR
+response. It covers missing-code editing, internal and supplier-scoped
+lookups, preserved amounts, stale results, failures/retry, supplier timeout,
+document replacement and AliExpress isolation at desktop and phone widths.
+The intake host also covers explicit net/IVA reconciliation at desktop and
+phone widths, and rejects unexplained header differences. The adapter's
+`veryfi_invoice_amounts_test.dart` covers the live Derman amounts, missing
+unit prices, discounts, contradictory discounts and missing base values.
+Validation: **139 OCR tests passed**, focused analyzer clean. The compact
+layout was exercised at 430 logical pixels; native evidence is macOS only.
+
+**Live Derman check — 2026-09-07.** After explicit owner approval, the native
+ERP processed `/Users/Claudio/Downloads/factura-10959.pdf` through Veryfi twice
+and reached `Factura leída` in both runs. This is invoice 10959, not the
+coworker's unavailable 10228. Veryfi supplied 11 quantities and line totals
+but no unit prices. The adapter now derives only a missing unit price from
+valid quantity/total and explicit discounts, records the adjustment, and
+preserves an explicit price. It also preserves Veryfi's `tax` header field.
+Do not divide tax into these net line costs: the purchase form already adds
+IVA to its net subtotal despite the enum name `taxIncluded`.
+
+The second native run reconciled net **101503**, IVA **19286**, total **120789**,
+with zero difference; quantities 2 at line total 8258 produced unit cost 4129.
+Preview totals count separately stated IVA only when both the complete line
+sum and net/tax/header arithmetic corroborate it. The same totals owner is
+used below the desktop table and compact list.
+
+Derman selection closed normally and retained the preview. Clearing code
+`213111BN` removed its inventory link (3 pending); restoring it recovered the
+same product (2 pending), preserving quantities and amounts. Automatic
+supplier recognition remains incomplete: Veryfi read the logo as
+`CICLISMO TECNOLOGIA`. Nine of eleven products linked; the source has one
+missing code, and `213071BN` did not resolve through either exact SKU or
+the selected supplier's code. No substitute identity was forced. No purchase,
+product, stock, template or rule was saved. Evidence is under
+`.tmp/ocr-normal-regressions/derman-*`; the original coworker PDF remains an
+unverified case.
+
 1. **Identificar productos.** Source order remains visible as an OCR article
-   column beside the first viable **actual inventory Product**, including its
-   image, name, SKU and canonical product-editor link by primary key. Cached
-   alternatives and general inventory search return actual Product identities.
+   column beside the matcher's **one recommendation** — an actual inventory
+   Product with image, name, SKU and canonical product-editor link by primary
+   key — captioned «Mejor coincidencia» with its evidence badge (E-01) next to
+   it. **Corrección 2026-09-05:** a row the matcher has not compared yet says
+   «Pendiente de comparar» and offers no decision; **a row the automatic pass
+   holds** (catalog loading, or the three workers busy) is not pending: it
+   draws the `X-01` silhouette of the product reference in the match cell,
+   its decision reads «En cola», and the step header carries the surface's
+   one live label with the `A-01` spinner — «Cargando el catálogo para
+   comparar…», then «Comparando con el inventario · 2 de 5» — while
+   «Reintentar pendientes» is hidden. Queued from the first frame: before
+   this, the 1.6k-row catalog fetch started only after the panel opened and
+   every row read «aún no corre» for about ten seconds (owner, 2026-09-05:
+   «el usuario podría dejar la página porque "nada" está pasando»); the fetch
+   now warms up when the AliExpress invoice is adopted and again when the
+   review is requested. Guard:
+   `test/widget/ocr_product_review_workspace_test.dart` («a queued row draws
+   its silhouette…», «the header publishes the running pass…»); an abstained result says
+   «Sin coincidencia recomendada · N parecidos para comparar» and never shows
+   the first deterministic candidate as if it were a match; a pack match says
+   «Coincide como pack: 50 × SKU» with «Definir contenido» as its primary
+   action; a «Podría ser» makes «Comparar» primary and «Seleccionar igual»
+   secondary; a product already proposed or chosen by another line of the same
+   purchase is flagged on both rows. One door into the picker per row:
+   «Comparar (N)», or «Buscar en inventario» when nothing is viable. A
+   remembered rule shows as «Coincidencia de compras anteriores» with a
+   «Regla de compras anteriores» badge, never a fabricated tier.
    `Seleccionar producto` or `Marcar como nuevo` records a local decision only.
-   A stored rule may supply candidate products but cannot display an already
-   accepted composition or apply quantities at this step. All selected source
-   rows need a decision before advancing; deselected rows are omitted on finish.
-2. **Cantidades y costos.** Existing identities are reviewed together with source
-   purchase quantity, purchase unit cost, landed line total and catalog units per
-   purchase prefilled. The batch action confirms all valid amounts; optional
-   per-line confirmation is never a prerequisite to pressing the batch action.
-   Only here may the operator apply a remembered rule or configure decomposition.
-   Its graph must contain the explicitly selected Product primary key. Changing
-   a decision restores the source draft and does not revoke a stored rule.
+   All selected source rows need a decision before advancing; deselected rows
+   are omitted on finish.
+2. **Cantidades y costos.** **Es una tabla T-01** (decisión del dueño,
+   2026-09-05: «una tabla ordenada, no fichas apiladas»): one row per confirmed
+   line and eight cells — Producto (image 32, name, SKU, OCR line) · Comprado ·
+   Costo/compra · Total línea · Unid./compra · Ingreso a inventario · Regla ·
+   Estado — three of them editable in place (I-01, 34 px), header 30 on the
+   sunken surface with overline labels, rows 48 with a hairline, money in
+   tabular figures and CLP with at most one decimal on the editable unit cost.
+   An applied rule expands as indented component rows (T-03) with the cost
+   split; below `fullTableBreakpoint` Regla and Estado fold into the product
+   cell, below `touchBreakpoint` each row is a card with the same eight cells.
+   There is no per-line «Confirmar línea»: the footer confirms every row whose
+   Estado is «Listo». **La regla de compras anteriores es una decisión
+   visible, nunca un automatismo mudo:** entering this step applies a rule
+   that names the chosen product (BUCKLOS arrives as 3 × AE0145 + 3 × AE0144);
+   a rule naming another product stays pending, the footer says «N filas con
+   regla de compras anteriores: aplícala o cámbiala» and blocks, and the Regla
+   cell offers «Aplicar» and «Cambiar». Each rule carries its attribution
+   («confirmada por ti el 13/08/2026 · compra del 12/08/2026», «migrada de las
+   compras anteriores»…). Leaving this step writes one rule per confirmed link
+   that had none — listado + variante → SKU, `single` for one unit per
+   purchase, `homogeneous` for more — as `operator_confirmed` on surface
+   `purchase_invoice_ocr_amounts_review`, sequentially, and a changed rule is
+   superseded as a correction; a write failure warns on the row and never
+   blocks the purchase. Verified 2026-09-05 on the re-import of 2026-04-06:
+   nine rules read back from `supplier_variant_resolution_revisions`, and the
+   next import of those listings resolves without a model call.
 3. **Productos nuevos.** All newly chosen products form one editable batch,
-   with visible name/SKU, category, brand, catalog-unit factor, cost and sale-price
-   columns. No row expansion is required. Tablet/phone use always-visible field
-   groups with the same controllers. Source/AI assistance preserves user edits;
+   owned by `ocr_new_products_table.dart`. **Correction 2026-09-07:** one
+   column specification aligns the header and every row: product, SKU,
+   category, brand, unit cost, sale price and `Insumo de taller`.
+   Category/brand have no repeated visual label in the desktop cells; their
+   accessible names still identify the source product. A field owns its error
+   exactly once. `Insumo de taller` is a checkbox: checked means the product
+   is a workshop consumable. It prepares the batch save and does not immediately
+   change inventory. The editable image and sibling
+   category/brand reuse remain reachable. Each image accepts one dropped image
+   as well as the click picker; both stage bytes in the same draft and upload
+   only during confirmed product creation. A local image can be removed before
+   it has a URL. Hovering or focusing an image reveals a direct `×` removal
+   action composing `A-02` inside a 16 px corner footprint. The painted and
+   clickable bounds both fit that corner; the rest of the 34 px thumbnail keeps
+   its image action. The image menu preserves touch/keyboard access.
+   Read-only/busy/covered routes reject drops; obsolete image reads
+   cannot replace another review's state. The drop target belongs to the shared
+   thumbnail, so desktop and compact compositions preserve the same behavior.
+   Quantity conversion is reviewed in
+   step 2; step 3 does not repeat a units-per-purchase field or receipt total.
+   Hiding those controls preserves the reviewed quantities and costs. The frame
+   wraps the rows rather than outlining empty space.
+   The internal table threshold is **1280 px of available batch width**: below
+   that its seven columns cannot preserve a usable product field alongside
+   the code, selectors and monetary amounts. Boundary tests cover 1279/1280
+   after the host gutters; the product's 600/900 width classes are unchanged.
+   Tablet/phone use always-visible field groups, no horizontal table or row
+   expansions, with the same controllers. Source/AI assistance preserves user edits;
    it never creates products or decides identity automatically. The final action
    confirms the batch, reserves each canonical SKU idempotently, creates products
    with zero stock and reconciles the source invoice. A partially committed row
    remains visible for reconciliation retry and cannot be created again.
+
+Step 3 label/quantity follow-up, 2026-09-07: 71 focused workspace/integration
+checks passed, including both directions of the workshop-consumable checkbox,
+retained quantity state and removal of duplicate quantity controls at all six
+widths in light/dark. Analyzer clean; canonical debug hot reload succeeded.
+The live host was on Dashboard, so this follow-up does not claim a new native
+OCR-frame comparison.
+
+Step 3 validation, 2026-09-07: 151 OCR tests passed; focused analyzer clean.
+The new tests cover alignment of painted input borders (not just outer boxes),
+single field validation, edits, six widths in light/dark and table boundaries.
+Native macOS frames show the current two Derman rows at 1821 and 540 physical
+pixels, light/dark, with the desktop category popover and compact category
+sheet open and cancelled. The invoice draft, source amounts and two pending
+products were retained; nothing was created or saved. Evidence:
+`.tmp/ocr-new-products/`. Compact composition was checked in resized macOS;
+native Android/iOS keyboard and safe-area verification are not claimed.
 
 Catalog creation, applying the OCR result to a purchase draft, saving the invoice
 and receiving stock remain separate operations. `OcrPurchaseAmounts` and
@@ -290,12 +451,26 @@ conversion updates the invoice quantity and unit cost locally.
 The editor retains real product identities, units per purchase and front/rear/
 left/right roles. Corrections use the observed prior revision and a content-bound
 idempotency key. A remembered rule is past evidence, never a new AI success.
-Opening alternatives uses the cached receipt and performs no model calls.
+Opening alternatives uses the cached receipt and performs no model calls. The
+picker in content mode is titled «Definir contenido de la compra» over
+«COMPRADO · contenido por definir» and closes with «Continuar»; the host's
+«Confirmar contenido» dialog is the single «Aplicar y guardar regla». The
+matcher's admission note («Sin contradicción probada; disponible para
+comparación AI-first») reaches the operator as «Coincide en tipo y función;
+falta confirmar el modelo». The invoice's review button says «Revisar
+productos · N por decidir» and reopening returns to the step it left. On the
+daily-import dialog, «Día ya facturado» offers «Abrir factura AEDDMMYY» in its
+own workspace tab, and the progress dialog offers «Cancelar», honoured between
+orders so the browser is never left mid-navigation (verified 2026-09-05).
 Actual asynchronous work disables affected actions; completed supplier lookup
 must clear stale `searching` state instead of showing an endless spinner.
 
 Canonical theme/component owners supply the visual language (I-01/S-06, S-05,
-T-01/T-03, E-01/E-04). Professional action labels, aligned comparisons, visible
+T-01/T-03, E-01/E-04, and since 2026-09-05 **A-01 `VbButton`** in
+`vb_button.dart` for every action of the review, the picker and its footer —
+the theme's 48 px Material buttons are the legacy control, never a row
+action). Step 1 is the same T-01 table as step 2 (`ocr_identity_table.dart`):
+top-aligned cells, no card inside a row, one accent button per undecided row. Professional action labels, aligned comparisons, visible
 field groups and stage-specific validation guide the workflow. The owner
 prioritized UX and domain verification over repeated aesthetic test matrices.
 
@@ -413,6 +588,25 @@ brand Shimano; a manufacturer absent from `product_brands` never prevents
 finding its product. When nothing survives the gates the honest answer is «sin
 coincidencia fiable»; a top-k is never padded.
 
+
+## Product Technical Specification Surfaces
+
+Baseline updated 2026-09-06. The same family contract is consumed across these
+surfaces; exact manufacturer coverage is tracked separately in the
+[family matrix](product-spec-family-matrix.md). An active template is not a
+certificate that every mechanical dependency of that family has been reviewed.
+
+| Workflow / host | User entry point | Canonical implementation | Required shared behavior |
+|---|---|---|---|
+| Product technical editor | `/inventory/products/new`, `/inventory/products/:id/edit`, web-catalog edit and the canonical product editor embedded from purchase/sales invoices; desktop, tablet and compact hosts | `ProductFormPage` + `SpecEngineService` + `ProductSpecReference` + `ProductSpecBooleanField`; panels use shared `VbFormSection` | Confirm model before choosing a matching manufacturer variant. Reference facts and scoped claims are read-only with their source; manual conflicts remain visible and editable. Model suggestions reuse the canonical identity extractor and require confirmation. Connector type precedes target-chain class; source precedes target models, reuse and direction. A model-only reference preserves the operator MPN and leaves pack quantity unresolved. Independent evidence remains editable beside the reference; matching manual observations preserve provenance through save/reload/detach. Text and numeric ficha inputs expose stable semantic identities; forbidden boolean answers stay disabled while Sin dato remains distinct. Explicit prerequisites precede dependents and explain what is missing. Boolean null is `Sin dato`, distinct from No. A failed or stale category load cannot replace the current draft with an empty result; `Actualizar ficha` preserves it. One surface notice summarizes pending or blocking issues. Identity/facts and optional set components save through `InventoryService.saveProductWithSpecs` / `save_product_with_specs_v1`, with template revision, product revision, timestamp and replay key; stock adjustments remain separate and refresh the authoritative timestamp.  **Pending binding integration 2026-09-06:** the editor reads product-owned template + facts together, keeps drafts by product/template, loads uncategorized products, and shows preserved former-template observations in the existing `VbFormSection` owner. `explicit_unavailable` is visible and never becomes the category default. No new visual tokens; runtime proof for this pending change is still required. |
+| Workshop and purchasing compatibility suggestions | Product candidates evaluated by the shared bike compatibility service, including embedded selectors | `BikeProductCompatibilityService` + `get_product_spec_contexts_v1` | Consume normalized current facts, reference claims and issues. Unmapped products have no invented warning. Incomplete prerequisites remain pending; explicit conflicts prevent a positive result. Chain widths/speed counts alone cannot produce green approval; exclusive claims retain their named platform even when the bike platform is unknown. |
+| Public technical projection and other writers | Store product details; legacy spec RPC, OCR/import/AI and direct fact writers | `get_public_product_technical_specs`, `save_product_spec_facts_v1`, deferred product/fact invariants | Keep publication policy, omit private evidence text and retired fields, and suppress blocking fields rather than hiding an incomplete entire ficha. The same server invariants cover bypass paths. Row links keep stable IDs and use derived labels in display; typed consumers receive `row_labels` beside the original IDs. Scalar bound conflicts affect both endpoints. Unchanged facts preserve provenance/readings; no catalogue update rewrites installed-bike observations. |
+
+Evidence is in [implementation-result.md](../development/product-specs-research-2026-09-05/implementation-result.md).
+Real visual checks covered the existing edit route at 1821, 834 and 390 logical
+pixels in the preserved macOS session. Widget checks cover light/dark and three
+widths; SQL checks cover atomic product/set commands and legacy writers. This is
+not an iOS Simulator run or a claim that every embedded launcher was clicked.
 
 ## Product Set And Component Surfaces
 
@@ -1699,3 +1893,49 @@ Reglas que la superficie tiene que conservar:
   segundo lugar donde buscar un documento del mismo proveedor.
 - **Bajo 940 px no hay split**: el documento pasa a vivir debajo de la lista con
   el mismo contenido y las mismas órdenes.
+
+
+### 2026-09-06 — configuraciones dentro de la ficha del producto
+
+`ProductSpecRowsField` pertenece a `ProductFormPage` (routed, dialog/embedded y
+split-pane comparten el dueño). Edita una configuración a la vez mediante S-06,
+I-01, S-04 y A-01 dentro del F-02 existente. La referencia y el dato legacy usan
+el mismo lector de filas sin acciones de edición; seleccionar otra fila sólo
+cambia la vista. Sus fuentes pertenecen a esa fila. Se conservan booleanos sin
+responder y datos incompletos; una alerta no equivale a incompatibilidad física.
+Widget checks: 390/768/1280 claro/oscuro, cambiar configuración, editar una celda,
+añadir/retirar y sólo lectura. Prueba en app real pendiente de esquemas publicados;
+no se atribuye cobertura runtime a esos tests.
+
+### 2026-09-07 — captura numérica de la ficha
+
+El mismo `ProductFormPage` conserva el texto de I-01 hasta validarlo y guardar
+su decimal canónico. Coma, signo y exponente dejan de truncarse mediante un
+filtro de caracteres. Los límites y valores iniciales llegan del lector v2
+con la plantilla, y los prerrequisitos comparan medidas exactas. No cambia
+la anatomía ni las constantes visuales del control. El lector por categoría
+compartido con compras recibe esa misma plantilla; esto no reemplaza aún el
+validador propio de criterios de compra. Evidencia runtime y límites en
+`exact-numeric-transport-checkpoint-2026-09-07.md` del directorio de investigación.
+
+### 2026-09-07 — requisitos de cada configuración
+
+El mismo `ProductSpecRowsField` recibe las condiciones de columna de la
+plantilla. Cada fila resuelve sus requisitos; un dato dependiente conservado
+permanece visible para corregirlo o retirarlo. Retirarlo sincroniza también el
+texto visible, sin perder IDs, fuentes u otras filas. Opciones de plantilla
+restringen tokens abiertos y destinos de referencias. El lector legacy conserva
+su vista histórica. Pruebas de widget y regresiones independientes verifican
+el control compartido; los campos ampliados todavía necesitan publicación del
+catálogo para verificar sus recorridos reales en routed/embedded/split-pane.
+El frame `runtime-row-conditions-baseline.png` demuestra sólo que la recarga
+conservó la ficha abierta y su borrador, no esos recorridos nuevos.
+
+Las implicaciones `value_when` (forward 2400 en prueba local) usan los mismos
+owners: S-04 restringe Sí/No mediante `allowedValues` e I-01/S-06 muestran la
+validación junto al valor. Sólo una condición confirmada restringe opciones;
+las reglas simultáneas se intersectan. No se rellena el valor exigido ni se
+elimina una respuesta contradictoria. Sin dato permanece pendiente y sólo
+lectura muestra el mismo conflicto sin poder editar. El comportamiento está
+en el control compartido, cubierto en 390/768/1280 claro/oscuro; no se atribuye
+prueba de los nuevos metadatos a una recarga con catálogo todavía sin publicar.

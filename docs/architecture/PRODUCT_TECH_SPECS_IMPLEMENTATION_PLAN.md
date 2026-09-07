@@ -1,5 +1,14 @@
 # Product Tech Specs Implementation Plan
 
+**2026-09-05 continuity note:** this is the historical implementation plan.
+For the researched next architecture use
+[product-technical-specifications-contract.md](product-technical-specifications-contract.md),
+its [family matrix](product-spec-family-matrix.md) and
+[mechanical sources](bicycle-compatibility-knowledge.md). The new design is not
+yet implemented. Current reads confirm `spec_facts` with normalized value links
+as the fact authority; references below to `product_spec_values` describe a
+legacy projection, not a second writer. Old coverage counts require a fresh audit.
+
 ## Goal
 
 Implement a category-driven technical spec system for products that also powers:

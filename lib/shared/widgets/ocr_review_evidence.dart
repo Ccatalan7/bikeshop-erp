@@ -7,31 +7,43 @@ import 'vb_status_badge.dart';
 /// One presentation for the cached evidence in both the batch and its picker.
 /// The model's ordering score is never a measured probability.
 class OcrCandidateEvidence {
-  const OcrCandidateEvidence(this.label, this.tone);
+  const OcrCandidateEvidence(this.label, this.tone,
+      {this.needsComparison = false});
   factory OcrCandidateEvidence.forCandidate(
       ProductDuplicateCandidate candidate) {
     if (candidate.isReviewOnlyFamilyScope) {
-      return const OcrCandidateEvidence(
-          'Revisión manual', VbStatusTone.warning);
+      return const OcrCandidateEvidence('Revisión manual', VbStatusTone.warning,
+          needsComparison: true);
     }
     return switch (candidate.matchTier) {
       ProductDuplicateMatchTier.exact => const OcrCandidateEvidence(
           'Coincidencia directa', VbStatusTone.success),
       ProductDuplicateMatchTier.strong =>
-        const OcrCandidateEvidence('Muy parecido', VbStatusTone.warning),
-      ProductDuplicateMatchTier.possible =>
-        const OcrCandidateEvidence('Podría ser', VbStatusTone.neutral),
-      ProductDuplicateMatchTier.ruledOut =>
-        const OcrCandidateEvidence('Descartado', VbStatusTone.warning),
+        const OcrCandidateEvidence('Muy parecido', VbStatusTone.info),
+      ProductDuplicateMatchTier.possible => const OcrCandidateEvidence(
+          'Podría ser', VbStatusTone.neutral,
+          needsComparison: true),
+      ProductDuplicateMatchTier.ruledOut => const OcrCandidateEvidence(
+          'Descartado', VbStatusTone.warning,
+          needsComparison: true),
     };
   }
   final String label;
   final VbStatusTone tone;
+
+  /// «Podría ser» is not a recommendation to accept with one tap: the row's
+  /// primary action becomes «Comparar» and selecting is the secondary one.
+  final bool needsComparison;
 }
 
 /// Translate the provider's closed evidence vocabulary, preserving real reasons.
 /// This is display formatting only; it never changes ranking or identity.
 String ocrReadableEvidence(String reason) {
+  // The matcher's admission note is internal vocabulary («AI-first»); the
+  // operator reads what it means for the decision.
+  if (reason.startsWith('Sin contradicción probada')) {
+    return 'Coincide en tipo y función; falta confirmar el modelo.';
+  }
   const prefix = 'Evidencia de IA:';
   if (!reason.startsWith(prefix)) return reason;
   const labels = <String, String>{

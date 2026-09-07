@@ -51,6 +51,15 @@ código o en git, o una conclusión que todavía no se verificó.
 | Cargas asíncronas, caché, realtime y carreras de read models | `docs/architecture/async-data-loading-contract.md` |
 | Colaboración entre agentes | `docs/development/CODEX_CLAUDE_COLLABORATION.md` |
 | Identidad de producto, duplicados, matching de catálogo | `docs/architecture/product-identity-matching-contract.md` |
+| Mecánica de bicicleta, evidencia y límites por modelo | `docs/architecture/bicycle-compatibility-knowledge.md` |
+| Arquitectura de fichas, prerrequisitos y cobertura de familias | `docs/architecture/product-technical-specifications-contract.md` y `docs/architecture/product-spec-family-matrix.md` |
+
+**2026-09-06, alcance de fichas:** una categoría comercial puede mezclar clases
+de objeto. Auditar tanto productos con ficha como productos sin ella; un conteo
+de plantillas, reglas que pasan o coincidencias nominales no demuestra cobertura
+mecánica. La asignación por producto y todos sus consumidores deben resolver la
+misma identidad. La petición vigente exige saneamiento global antes del llenado;
+el checkpoint está en `docs/development/product-specs-research-2026-09-05/global-audit-and-sanitation-2026-09-06.md`.
 
 ### Lenguaje visual no significa layout impuesto (corrección 2026-08-09)
 
@@ -2006,6 +2015,32 @@ Do not leave bike creation as a single static technical block if the selected bi
 
 ## Product Compatibility Must Reuse Bike Keys
 
+**Semantic correction, 2026-09-05:** read
+`docs/architecture/product-technical-specifications-contract.md`, its family
+matrix and its Sheldon Brown/Park Tool knowledge references before changing
+product ficha semantics. The target and delivered coverage are distinguished in
+`docs/development/product-specs-research-2026-09-05/implementation-result.md`.
+The April ecosystem-first model below is not a universal mechanical hierarchy:
+KMC can declare compatibility across brands, and widths/speed counts cannot
+certify a drivetrain by themselves. Scope relationships to model, system,
+generation and mounting conditions; preserve unknowns and manual conflicts.
+Use one versioned evaluator at the server boundary and in all consumers.
+The live audit confirms `spec_facts` and normalized value links as the fact
+backbone; references below to `product_spec_values` describe its legacy mirror,
+not permission to introduce another independent source of technical truth.
+
+**Implemented baseline, 2026-09-06:** `spec_templates.form_contract` and
+`constraint_rules` govern the shared editor and server validator. Historical
+`option_rules` are advisory until independently reviewed. Missing prerequisites
+are incomplete knowledge, not a retroactive contradiction: they gate new input
+and produce nonblocking issues without hiding an existing published ficha.
+Explicit type/vocabulary/reference conflicts block. Product identity and facts
+save atomically through `save_product_with_specs_v1`; unchanged observations
+retain their source/readings. Workshop contexts consume normalized facts and
+scoped reference claims. `unmapped` is not a false incompatibility badge; matching
+chain speed counts alone cannot certify a complete installation. Exact reference
+coverage starts with three KMC editions, not every model in the 36 families.
+
 The product spec engine must reuse the same canonical compatibility vocabulary as the bike profile.
 
 Do **not** create one set of compatibility keys for bikes and a different set for products.
@@ -2036,9 +2071,9 @@ Phase-one behavior should:
 - after that coarse gate, detailed `product_spec_values` should remain the stronger source for within-family refinement such as rotor size, thickness, material, or floating status
 - AI inventory discovery must consume the same structured product backbone. Category, identity text and technical facts are separate planner inputs: PostgreSQL resolves the category through active `product_categories` plus `category_tech_mappings`, and enforces explicit measurements/standards as bounded `spec_definitions.key` filters together with availability. A matching populated `product_spec_values` row is authoritative; a populated conflict rejects the product. Only an unpopulated field may use an explicit value in the product's curated identity fields as a labelled sparse-catalog fallback; it must never be presented as a filled ficha. Barcode/SKU substrings, description text and compatibility prose are never technical proof.
 - ficha controls for finite workshop vocabularies must use standardized selectors or bounded numeric ranges, not arbitrary free text when the bike world already uses known counts, diameters, widths, tooth ranges, and driver families
-- when one product-spec field is downstream of stronger upstream selections such as chain width, drivetrain speeds, declared profile, brand family, or freehub family, the ficha UI must filter, lock, or suppress incompatible options instead of leaving contradictory combinations available to save
+- when a product-spec field depends on confirmed intrinsic facts or a documented interface/model relationship, the ficha UI must constrain it with the rule's reason. Width bands, commercial brand and unscoped ecosystem labels are not sufficient premises. A changed prerequisite preserves manual values as visible draft conflicts instead of silently deleting them.
 - `products.brand` is commercial brand data, not technical compatibility truth by itself; if ecosystem-family matching matters, the ficha must expose a first-class visible compatibility-family field instead of hiding that logic in helper text or generic brand inference
-- for drivetrain products specifically, do not keep treating one overloaded broad field as if it solved the whole hierarchy. The correct target split is: mandatory drivetrain mode branch, mandatory singular primary ecosystem anchor for modern derailleur products, optional explicit compatible-ecosystems claims, then downstream `drivetrain_platform`, `shift_actuation_family`, and `chain_profile_family` refinements
+- for drivetrain products, separate mode, exact platform/profile/control interfaces and scoped compatibility relationships. Do not require a singular primary ecosystem for every derailleur product: third-party products can support several systems. Broad ecosystem fields are legacy summaries to migrate; they must not generate the Cartesian product of speeds, systems and profiles. Follow the 2026-09-05 target contract.
 - commercial metadata is not allowed to drive runtime ficha truth: `products.brand`, `products.category_name`, product name, and description text must not autofill, hint, or silently constrain drivetrain tech-spec answers during normal product editing
 - compatibility scoring is not allowed to auto-expand those broad ecosystem fields into exact HG+/Linkglide/Eagle/T-Type platform truth. Broad ecosystem claims may gate obvious mismatch or keep the result in caution territory, but exact platform matching must still come from `drivetrain_platform`, `chain_profile_family`, or other true downstream structured fields
 - the same guard applies to dirty legacy values stored in the wrong field: if `drivetrain_platform` contains only a broad brand/ecosystem claim such as `Shimano`, `SRAM`, `Ecosistema Shimano`, or `Compatible SRAM`, the app must refuse to reinterpret that as exact HG/SIS, Eagle, or other downstream platform truth at runtime
@@ -2215,7 +2250,7 @@ For a fresh chat, the current code-side state is:
 - chain-related drivetrain ficha in `lib/modules/inventory/pages/product_form_page.dart` is now inference-aware: `lib/modules/inventory/services/spec_engine_service.dart` passes through `spec_template_fields.helper_text`, and shared helpers in `lib/modules/bikeshop/config/drivetrain_canonical_data.dart` can auto-fill missing `chain_speeds`, suggest `chain_profile_family`, and infer `drivetrain_platform` for `chain` / `chain_link` templates only from structured width-family, speed, platform, profile, and indexing signals. Manual edits still win, stale auto-derived values are cleared when the template/category changes, and commercial brand/category/name metadata is no longer allowed into that runtime inference path.
 - the same chain ficha layer now also needs `chain_outer_width_mm` as the precision seam below `chain_width_family`: internal width alone is too coarse for modern derailleur chains, so inference and compatibility must use standardized outer-width values before collapsing a narrow chain into a broad `9-11v` claim.
 - do not add live Dart-side parsing of product name or description to auto-fill drivetrain ficha truth. If packaging text later needs to backfill chain/drivetrain specs, do it as an explicit DB fulfillment or migration workflow, not as runtime UI logic.
-- production drivetrain ficha now uses the explicit ecosystem split through `drivetrain_primary_ecosystem` and `drivetrain_declared_compatible_ecosystems`, and the product form treats commercial brand only as a suggestion source for the explicit split fields. The legacy `drivetrain_compatibility_family` field was removed from the active production schema on 2026-04-27 after a zero-usage audit; runtime code may still tolerate it as historical migration input, but it is no longer an active ficha field.
+- historical 2026-04-27 drivetrain ficha used the explicit ecosystem split through `drivetrain_primary_ecosystem` and `drivetrain_declared_compatible_ecosystems`. Any historical brand-based suggestion is not technical evidence and is not authorized as the target behavior. The 2026-09-05 contract replaces the universal singular-ecosystem hierarchy with scoped relationships. The legacy `drivetrain_compatibility_family` field was removed from the active production schema on 2026-04-27 after a zero-usage audit; runtime code may still tolerate it as historical migration input, but it is no longer an active ficha field.
 - live verification on 2026-04-27 confirmed two things at once: the safe structured-only backfill inserted `0` product rows in production, and the live catalog still declares speed first, width sometimes, and platform/compatibility claims only occasionally in product names. The next schema/UI step is therefore to populate and consume the explicit ecosystem split more reliably from real packaging evidence, instead of reviving or densifying the legacy interim field.
 - that 2026-04-27 verification is **not** a green light for broad compatibility population yet. Population remains intentionally blocked while shifter and bottom-bracket/crankset seams stay incomplete.
 - current shifter compatibility is still intentionally conservative: exact right/rear matches can rank `compatible`, but left/front and pair/universal cases must remain in `caution` until the front pull/indexing seam is modeled and tested better.

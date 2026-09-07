@@ -1,6 +1,6 @@
 # Bike Workshop Master Schema
 
-Last updated: 2026-08-24
+Last updated: 2026-09-06
 Status: Living architecture document
 Scope: Bike encyclopedia, bike profile, diagnosis, workshop items, service wizard, supply needs and commitments, bike memory kernel, sync pipeline, and visible bike history
 
@@ -636,6 +636,62 @@ The existing generic product spec engine should therefore be used progressively,
 
 ### Commercial Brand Is Not Compatibility Family
 
+**2026-09-05 — researched target; baseline implemented 2026-09-06.** The
+[product ficha contract](docs/architecture/product-technical-specifications-contract.md),
+[family matrix](docs/architecture/product-spec-family-matrix.md) and
+[source-backed mechanics](docs/architecture/bicycle-compatibility-knowledge.md)
+supersede the April target's universal singular-ecosystem hierarchy and
+width-to-speed inference. Commercial identity, intrinsic measurements and
+scoped compatibility relationships are separate. Multi-system products need
+conditional relationship rows, not one compulsory ecosystem owner. Manual
+conflicts remain in a draft; only coherent accepted facts feed compatibility.
+Shared vocabulary and `spec_facts` remain the backbone. A catalogue revision
+must not rewrite installed `bike_profiles` facts or historical workshop snapshots.
+The April field layout and observations below are migration context, not proof
+that old rules are mechanically sufficient. See the
+[implementation result](docs/development/product-specs-research-2026-09-05/implementation-result.md)
+for exact coverage and evidence; the broader target remains incremental.
+
+The deployed baseline adds versioned template contracts, immutable manufacturer
+reference editions, `products.spec_revision` and an atomic identity/facts/set
+command (`save_product_with_specs_v1`). `spec_facts` remains authoritative.
+`get_product_spec_contexts_v1` supplies normalized accepted facts, scoped claims
+and issues to the workshop consumer. Incomplete prerequisites are nonblocking;
+explicit contradictions are blocking. Public specs keep known incomplete facts
+and exclude private sources/retired fields and the affected blocking fields.
+Unchanged observations preserve source and readings on commercial edits. Neither
+catalog references nor this migration rewrite installed-bike facts. No existing
+product was backfilled or saved during verification. Chain scoring removes the
+outer-width oracle and retains a named caution for exclusive LINKGLIDE claims
+when the bike platform is unknown. The three seeded editions do not constitute
+a complete mechanical catalogue for the 36 families.
+
+**2026-09-06, chain/connector extension:** `20260906103000` adds target-chain
+declarations and connector direction, type/source prerequisites and reviewed
+reuse rules, with six connector models and two exact chain presentations.
+The connector consumer does not equate chain class with bicycle cog count;
+installed-chain identity is required before fitment can be established. Numeric
+bands from a glossary are not universal physical limits. Explicitly submitted
+facts keep their existing provenance when equal to the selected reference;
+the reference's sources coexist with independent operator evidence. The exact
+[delivery result](docs/development/product-specs-research-2026-09-05/chain-connector-implementation-2026-09-06.md)
+records production read-back and UI proof. The owner also assigned catalogue
+research/filling to Codex and Claude; the [prepared queue and execution plan](docs/development/product-specs-research-2026-09-05/catalog-fill-execution-plan-2026-09-06.md)
+cover all physical product categories, with no bulk product writes yet.
+
+**2026-09-06, global catalogue audit:** the audit includes 1,664 records,
+1,605 physical products, 59 services and all 136 definitions/280 template-field
+uses. Numeric-domain migration `20260906150000` is deployed for 35 definitions
+in 22 templates; this does not establish mechanical fitment. Product-owned
+template binding (`20260906160000`) is under local validation. Workshop family
+and facts now come from the same `get_product_spec_contexts_v1` projection in
+the pending client change; category caches cannot override an explicit binding.
+Retained facts outside that template remain review evidence, never active
+fitment inputs. Search, purchasing and the job recommender must use the same
+resolution. See the [global checkpoint](docs/development/product-specs-research-2026-09-05/global-audit-and-sanitation-2026-09-06.md).
+Fill follows global sanitation; no early chain pilot and no exclusion of real
+non-bicycle merchandise from its own appropriate product attributes.
+
 This must be explicit because the drivetrain slice already drifted here once.
 
 - `products.brand` is commercial catalog brand data, not technical compatibility truth by itself
@@ -645,7 +701,7 @@ This must be explicit because the drivetrain slice already drifted here once.
   - a mandatory singular top anchor for the product's main drivetrain branch or ecosystem truth
   - optional explicit cross-ecosystem compatibility claims printed on packaging
   - narrower downstream platform/profile/actuation refinements
-- the corrected target model is:
+- the 2026-04-27 field model retained here as migration context was:
   - `drivetrain_mode` (or equivalent) as the top branch: at minimum `single_speed_bmx_igh` vs `derailleur`; this is mandatory for chain-family templates and may be implicit for other drivetrain templates when category already proves the branch
   - when stronger chain-side signals such as standardized width family, confirmed chain speeds, declared platform, or anchored profile already prove that branch, the ficha UI should keep `drivetrain_mode` implicit/hidden instead of re-showing it as a second locked pseudo-field; persist it manually only when the branch is still unresolved and really needs explicit upstream confirmation
   - `drivetrain_primary_ecosystem` (user-facing: `Familia tecnica / ecosistema principal`) as a mandatory single-select anchor for modern derailleur-compatible products when the manufacturer declares one; this is the real top hierarchy field for Shimano/SRAM/Campagnolo/Microshift-style truth
@@ -688,7 +744,11 @@ Live verification on 2026-04-27:
 - live Viñabike drivetrain catalog audit shows current ficha coverage is near-empty for these drivetrain compatibility fields, while product names usually declare speed first, width sometimes, and only occasionally platform or cross-brand compatibility claims
 - the first production deployment intentionally backfilled only from existing structured drivetrain signals and inserted `0` live product rows, so current catalog reality still does not justify dense optimistic inference from sparse drivetrain packaging claims
 
-The architectural gap is no longer "missing the ecosystem split". That split now exists in the active ficha layer. The real remaining gap is data density and disciplined use: the catalog still needs better explicit population of primary ecosystem, declared compatible ecosystems, and downstream platform/profile truth without regressing into commercial-text inference.
+The April assessment treated data density as the remaining gap. The read-only
+2026-09-05 audit also demonstrates a structural gap: independent ecosystem,
+profile, speed and width decisions can contradict one another. More population
+alone does not solve it. The new target requires contextual relationships,
+identity binding and joint server validation, without commercial-text inference.
 
 ### Backbone boundary for this concept
 
@@ -4277,3 +4337,97 @@ compuestos como «José Luis» y deja fuera el apellido—, en `renderPreview` y
 «hablas con Claudio», no «hablas con Claudio Catalán». Cubierto por tres
 pruebas: apellido fuera, compuesto entero, y firma neutra cuando no hay nombre
 resuelto en vez de dejar el hueco en blanco.
+
+
+### Precisión de ficha activa y configuración (2026-09-06)
+
+El contexto del producto se resuelve por vínculo explícito o default de categoría; hechos retirados/fuera de la ficha se conservan y quedan fuera del juicio. Las nuevas restricciones de escritura directa de producto no cambian los sujetos `bike` y `job_bike`. El rótulo de rodado, la válvula instalada y el diámetro del rotor actual describen una configuración, no todas las configuraciones permitidas: diferencias aisladas requieren revisar interfaces y límites documentados. Véase K31 en `docs/architecture/bicycle-compatibility-knowledge.md`; no se declara cobertura global del taller con estas correcciones.
+
+
+### 2026-09-06 — configuraciones técnicas indivisibles por fila
+
+El contrato de producto admite observaciones tipadas en `spec_facts.value_json`
+mediante esquema versionado en la definición. BSD/rango, posición/medida y sus
+fuentes permanecen en una fila; no se genera producto cartesiano. Los hechos de
+bike/job_bike retienen sus permisos por tenant y no se reflejan en productos.
+El transporte `get_product_spec_typed_configurations_v1` entrega tipo y revisión
+explícitos para las próximas evaluaciones de interfaces. No reemplaza todavía
+el perfil de bicicleta ni declara compatibles montajes por lectura de una fila.
+Referencia: `docs/architecture/product-technical-specifications-contract.md`.
+
+
+**2026-09-06 — requisitos de ficha, no aprobación mecánica.** Migración
+`20260906200000`: las plantillas pueden declarar condiciones tipadas de
+aplicabilidad/completitud y opciones locales, validadas en SQL y Dart. El motor
+mecánico conserva su contrato de relaciones: que una pregunta aplique no
+aprueba un montaje. El catálogo de 105 plantillas propuesto sigue en revisión y
+no debe usarse como señal de cobertura completa. Ver el contrato de fichas y el
+checkpoint global de saneamiento para estado aplicado y gates de llenado.
+
+**2026-09-07 — lectura exacta de fichas.** La migración `20260907010000`
+publica editor y referencias v2 con decimales escalares y límites como texto,
+junto con la plantilla y revisión en una instantánea SQL. El editor conserva
+las entradas exactas hasta el escritor agregado. Los lectores v1 y sujetos
+`bike`/`job_bike` permanecen intactos; el taller debe adoptar su transporte
+tipado antes de atribuir esta precisión a sus propias comparaciones.
+
+
+**2026-09-07 — coherencia entre filas de ficha (0200 aplicado/verificado en producción).**
+`form_contract.row_coherence` vincula por ID estable dos configuraciones dentro
+la misma ficha. El DTO tipado conserva IDs y añade `row_labels` sólo como
+presentación; el matcher no convierte etiquetas ni enlaces en prueba de ajuste.
+`scalar_ordered_pairs` compara extremos exactos de igual unidad. Guardas
+centrales y diferidas rechazan contradicción conocida, preservan el borrador
+pendiente y la evidencia anterior de una lectura rechazada. El catálogo local
+A/B actualizado y sus 55 casos no autorizan el llenado ni el ajuste mecánico.
+Continuidad: `docs/development/product-specs-research-2026-09-05/row-coherence-integration-2026-09-07.md`.
+
+**2026-09-07 — consumidor de frenos.** `fluid_type` ya no implica superficie
+de disco ni entrada hidráulica: HY/RD y HS33 demuestran ambas separaciones.
+`braking_surface` se compara sólo cuando ambos extremos la establecen; la
+coincidencia deja pendientes montaje, accionamiento y modelo. Las declaraciones
+schema2 aún necesitan proyección por extremo instalada/producto antes de
+evaluarse aquí. Evidencia y límites en
+`docs/development/product-specs-research-2026-09-05/brake-consumer-integration-2026-09-07.md`.
+
+**2026-09-07 — requisitos dentro de cada configuración (2200 aplicado/verificado).**
+`row_conditions` conserva la indivisibilidad de una fila al determinar qué
+columnas aplican, cuáles faltan y qué opciones admite esa plantilla. Campos de
+otra fila o escalares no satisfacen esos requisitos. No certifica montaje por
+superar la captura. La publicación se serializa con hechos/referencias; se
+comprobó la carrera de producto nuevo y referencia, y su rechazo en ambos
+órdenes. La corrección no altera hechos `bike`/`job_bike`. El catálogo ampliado
+sigue local, sin asignaciones ni llenado; su contexto global está en el
+checkpoint de saneamiento y el contrato de fichas técnicas.
+
+**2026-09-07 — rueda frente a receta de armado.** El consumidor de productos
+conserva `bike.spokeCount` como agregado sin lado. No lo copia a
+`frontSpokeHoles`/`rearSpokeHoles`, ni declara incompatible una maza o llanta
+por ese conteo de la bicicleta. La diferencia exige identificar la contraparte
+y el armado; coincidencia de agujeros tampoco aprueba el montaje. La revisión
+del largo del rayo requiere la receta y geometría por lado. La calculadora de
+armado y su búsqueda por tolerancia siguen siendo consumidores separados.
+Evidencia: `docs/development/product-specs-research-2026-09-05/spoke-wheel-consumer-integration-2026-09-07.md`.
+# Corrección del consumidor de compatibilidad — 2026-09-07
+
+`BikeProductCompatibilityService` despacha por identidad antes de interpretar
+campos compartidos. Un atributo de freno en una maza no debe omitir su interfaz
+con el cuadro/horquilla. El único `brakeType` de `BikeProfile.technicalValues`
+es agregado: no prueba el sistema de cada rueda ni el alcance del trabajo, por
+lo que no rechaza una manilla delantera desde un contrapedal trasero. La ficha
+de diagnóstico por rueda conserva desgaste/estado, pero no aporta un modelo o
+tipo de freno que permita suplantar esa carencia. El consumidor mantiene
+precaución hasta contar con las contrapartes y configuraciones necesarias.
+
+Biela, caja del cuadro y pedalier tienen interfaces diferentes. El estándar
+de caja sólo se compara con otro estándar de caja reconocido; etiquetas de eje
+o construcción no lo sustituyen. Una medida escalar de ancho no es una lista
+exhaustiva de configuraciones de un modelo. Las alternativas aceptadas de eje
+siguen necesitando el montaje completo. Un mando sin lado o Universal no se
+expande a ambos extremos; la familia de indexado trasera no rechaza un mando
+izquierdo. Cambiar la cantidad de platos requiere definir y validar una
+conversión, sin presumir posiciones sobrantes ni convertibilidad del cuadro.
+
+Fuentes, adjudicación de Claude y 82 regresiones del consumidor:
+[consumer-scope-integration-2026-09-07.md](docs/development/product-specs-research-2026-09-05/consumer-scope-integration-2026-09-07.md).
+Persisten los gates globales de saneamiento, publicación de metadatos y llenado.

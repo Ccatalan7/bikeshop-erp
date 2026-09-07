@@ -255,7 +255,9 @@ The first stable kit is intentionally bounded. It should finish approximately
     popover and option geometry are S-05's, reused from the values already read
     with `DesignSync` and recorded in `vb_short_select.dart` — not re-estimated,
     and no literal hex enters the file. Below 900 px the list is an `O-05`
-    bottom sheet with its own search;
+    bottom sheet with its own search. Since 2026-09-07, an embedded host can
+    pass `useTouchLayout` from its available width; the target and overlay
+    then use the same host classification instead of the wider app window;
 - adaptive date/date-range picker;
 - adaptive column specification;
 - accessible split-pane resize and collapse behavior;
@@ -444,6 +446,18 @@ variant of any of these is the defect this document exists to prevent.
 | `E-04` Notice | `VbNotice` | `lib/shared/widgets/vb_notice.dart` |
 | `F-03` Dinero | `VbMoneyText` | `lib/shared/widgets/vb_money_text.dart` |
 | `X-01` Estado de superficie | `VbSurfaceState` · esqueletos | `lib/shared/widgets/vb_skeleton.dart` |
+| `F-02` / `F-04` Form section anatomy | `VbFormSection` | `lib/shared/widgets/vb_form_section.dart` |
+
+**Form containment (2026-09-06).** `VbFormSection` composes the guide's section
+title and panel anatomy: radius 10, hairline 1, body padding 16 vertical / 18
+horizontal, IBM Plex Sans title 13.5/600. It binds surface, border and ink to
+theme roles. These values came from the readable DesignSync `get_file` copy
+dated 2026-08-27; live DesignSync authentication was unavailable. The exact file,
+hash, adopted/discarded decisions and visual limits are recorded in the
+[ficha implementation plan](../development/product-specs-research-2026-09-05/implementation-plan.md).
+This is shared form anatomy, not a universal rule to wrap every group in a card.
+Product boolean observations compose existing `S-04` and the `I-01` label stack;
+the compact `Sin dato` wording preserves null without truncating its meaning.
 
 **`D-01` puede marcar el día sin convertir la marca en el control.** El owner
 normaliza cada `DateTime` a fecha civil, mantiene seleccionables los días sin
@@ -465,9 +479,9 @@ año se navegan dentro de la misma instancia, sin perder selección ni marcas.
 guía lo publica así: *«Hasta ~7 opciones, conjunto estable y conocido, etiquetas
 cortas… El menú **no** es scrollable: si necesita scroll, era el otro
 componente.»* Por encima de eso el control correcto es **`S-06`
-(`VbSearchableSelect`), que todavía NO existe en este repositorio**: una lista
-paginada, que crece con el uso o que trae nombres de persona **no se mete en un
-S-05 más alto**, se deja con su control actual y se anota. `VbShortSelect`
+(`VbSearchableSelect`), existente desde 2026-08-10** (corrige la nota anterior
+de ausencia): una lista que crece con el uso o trae nombres de persona
+**no se mete en un S-05 más alto**, usa el selector buscable. `VbShortSelect`
 lleva un `assert` sobre ese techo para que la violación aparezca en desarrollo
 en vez de recortar el menú en silencio.
 

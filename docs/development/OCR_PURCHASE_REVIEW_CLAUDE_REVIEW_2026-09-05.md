@@ -301,7 +301,26 @@ anotado como pendiente; el paso 3 tampoco lo resuelve.
 - La segunda confirmación «Aplicar y guardar regla».
 - La jerga «Sin contradicción probada; disponible para comparación AI-first».
 
-## Lo que no se probó
+## Estado de los hallazgos tras la implementación (misma tarde, 2026-09-05)
+
+Implementado por Claude sobre el checkpoint de Codex, verificado reimportando
+la misma compra del 06/04/2026 en la sesión `payroll`:
+
+| Hallazgo | Estado |
+|---|---|
+| P1 regla recordada no gobierna el paso 2 | **Resuelto.** Se aplica sola al entrar si nombra el producto elegido (BUCKLOS llegó 3 + 3); si nombra otro, bloquea con «N filas con regla de compras anteriores: aplícala o cámbiala». |
+| P1 «Sin coincidencias sugeridas» antes de comparar | **Resuelto.** «Pendiente de comparar» sin decisión posible; capturado en los primeros segundos de la reimportación. |
+| P1 la fila no muestra la calidad | **Resuelto.** Badge E-01 junto a «Mejor coincidencia»; «Podría ser» compara primero. |
+| P1 el ERP olvida el listado | **Resuelto.** Al confirmar el paso 2 se guarda una regla por vínculo: 9 filas nuevas en `supplier_variant_resolution_revisions`, `single ×1`, `operator_confirmed`, superficie `purchase_invoice_ocr_amounts_review`. |
+| Matcher 6/10 | **10/10 en la reimportación** (9 a la primera; la de pegatinas por búsqueda en el picker). Tres fugas de post-proceso y una de recorrido corregidas en `product_duplicate_matcher_service.dart`; la IA acertaba. |
+| P2 paso 2 largo, redundante, decimales | **Resuelto.** Tabla T-01 de ocho columnas, subfilas de composición, sin «Confirmar línea», un decimal como máximo. |
+| P2 dos botones, palabras | **Resuelto.** «Comparar (N)» único; «Definir contenido de la compra»; «Continuar» en el picker y un solo «Aplicar y guardar regla»; «Revisar productos · N por decidir»; la jerga «AI-first» traducida. |
+| P2 paso 3 escritorio | **Resuelto.** «Se vende», imagen y «Reutilizar categoría y marca» también en escritorio. |
+| P2 calendario y progreso | **Parcial.** «Abrir factura AEDDMMYY» desde «Día ya facturado» y «Cancelar» en el progreso, verificados en vivo. El marcador del calendario sigue igual: la guía no publica un valor para él y no se inventa. |
+| Aviso de producto repetido | **Resuelto.** Ambas filas lo dicen. |
+| «Aceptar N coincidencias directas» en lote | **Pendiente.** No se implementó; con «Podría ser» comparando primero y el badge visible, el dueño decide si aún hace falta. |
+| P3 excepciones en el log | **Pendiente.** El `DropdownButton` con valor fuera de la lista y la aserción de semántica existían antes de esta ronda (12 y 3 ocurrencias previas); no se tocaron. |
+
 
 - Crear productos, guardar reglas, guardar y recibir la factura: son
   escrituras en producción y esta ronda era de revisión.

@@ -1,0 +1,105 @@
+[
+  {
+    "id": "kmc-x8-bx08ng114-eu-20260905",
+    "technical_family": "chain",
+    "brand": "KMC",
+    "model": "X8",
+    "manufacturer_sku": "BX08NG114",
+    "label": "KMC X8 Silver/Grey · BX08NG114 · 114 eslabones",
+    "facts": {
+      "chain_speeds": [
+        "6",
+        "7",
+        "8"
+      ],
+      "chain_width_family": "3/32",
+      "chain_outer_width_mm": 7.3,
+      "link_count": 114,
+      "quick_link_included": true,
+      "drivetrain_mode": "Derailleur",
+      "spec_evidence_source": "https://www.kmcchain.eu/products/x8-silver-grey"
+    },
+    "sources": [
+      "https://www.kmcchain.eu/products/x8-silver-grey"
+    ],
+    "claims": [
+      {
+        "rear_speeds": [
+          6,
+          7,
+          8
+        ],
+        "note": "Declaración del fabricante para todos los sistemas de 6, 7 y 8 velocidades. No implica compatibilidad entre mandos y desviadores de distintas marcas.",
+        "platform": "Todos los sistemas de 6/7/8 velocidades"
+      }
+    ]
+  },
+  {
+    "id": "kmc-eglide-us-20260905",
+    "technical_family": "chain",
+    "brand": "KMC",
+    "model": "eGlide",
+    "label": "KMC eGlide Silver · CN11245 · 126 eslabones",
+    "facts": {
+      "chain_speeds": [
+        "9",
+        "10",
+        "11"
+      ],
+      "chain_width_family": "11/128",
+      "chain_outer_width_mm": 5.4,
+      "link_count": 126,
+      "drivetrain_mode": "Derailleur",
+      "spec_evidence_source": "https://kmcchain.us/products/eglide"
+    },
+    "sources": [
+      "https://kmcchain.us/products/eglide"
+    ],
+    "claims": [
+      {
+        "platform": "Shimano LINKGLIDE",
+        "rear_speeds": [
+          9,
+          10,
+          11
+        ],
+        "exclusive": true,
+        "note": "Sólo sistemas LINKGLIDE de 9, 10 u 11 velocidades. La cobertura no se extiende a otras transmisiones de esas velocidades."
+      }
+    ],
+    "manufacturer_sku": "CN11245"
+  },
+  {
+    "id": "kmc-x11-us-118-20260905",
+    "technical_family": "chain",
+    "brand": "KMC",
+    "model": "X11",
+    "label": "KMC X11 Nickel/Black · CN11665 · 118 eslabones",
+    "facts": {
+      "chain_speeds": [
+        "11"
+      ],
+      "chain_width_family": "11/128",
+      "link_count": 118,
+      "drivetrain_mode": "Derailleur",
+      "spec_evidence_source": "https://kmcchain.us/products/x11"
+    },
+    "sources": [
+      "https://kmcchain.us/products/x11"
+    ],
+    "claims": [
+      {
+        "systems": [
+          "Shimano",
+          "SRAM",
+          "Campagnolo"
+        ],
+        "rear_speeds": [
+          11
+        ],
+        "note": "Declaración del fabricante para transmisiones de 11 velocidades; confirmar el resto de componentes del montaje."
+      }
+    ],
+    "manufacturer_sku": "CN11665"
+  }
+]

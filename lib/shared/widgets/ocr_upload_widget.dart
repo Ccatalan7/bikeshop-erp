@@ -1,5 +1,6 @@
 import 'dart:io' show File;
 import 'dart:typed_data';
+import 'dart:ui' as ui;
 import 'dart:math' as math;
 import 'dart:convert';
 
@@ -34,6 +35,8 @@ import '../models/product.dart' show Product, PurchaseTreatment;
 import '../models/supplier_variant_resolution.dart';
 import '../services/supplier_variant_resolution_service.dart';
 import '../services/database_service.dart';
+import 'package:intl/intl.dart';
+import '../services/auth_service.dart';
 import '../services/tenant_service.dart';
 import '../../modules/inventory/services/category_service.dart';
 import '../../modules/inventory/models/category_models.dart' show Category;
@@ -193,6 +196,7 @@ class OCRUploadWidgetState extends State<OCRUploadWidget> {
   final PDFParserService _pdfService = PDFParserService();
 
   bool _isProcessing = false;
+  bool _isPickingSource = false;
   bool _isDraggingInvoiceFile = false;
   String? _errorMessage;
   ParsedInvoice? _parsedData;
@@ -248,7 +252,17 @@ class OCRUploadWidgetState extends State<OCRUploadWidget> {
   bool _creatingProducts = false;
   OcrPurchaseReviewStep _purchaseReviewStep = OcrPurchaseReviewStep.identify;
   bool _finalizingNewProducts = false;
+
+  /// Leaving step 2: each confirmed link is being written as a rule for the
+  /// next purchase of the same listing variant.
+  bool _savingPurchaseRules = false;
   final Map<int, TextEditingController> _skuControllers = {};
+  final Map<int, Timer> _previewCodeTimers = {};
+  final Map<int, int> _previewCodeRevisions = {};
+  final Set<int> _previewCodesVerifying = {};
+  final Map<int, String> _previewCodeErrors = {};
+  bool _isSelectingSupplier = false;
+  bool _isVerifyingSupplierProducts = false;
   String? _supplierIdForNewProducts; // For potential future use
   String? _ocrSupplierName; // Supplier detected by OCR
   shared_supplier.Supplier? _ocrSupplier;
@@ -256,6 +270,11 @@ class OCRUploadWidgetState extends State<OCRUploadWidget> {
   bool _isOpeningBulkCreate = false;
   bool _isApplyingResult = false;
   int _bulkReviewGeneration = 0;
+
+  /// The automatic comparison pass in flight, if any. Owns the header label
+  /// («Cargando el catálogo…» → «Comparando con el inventario · 2 de 5») and
+  /// which rows sit queued behind the three workers.
+  _ComparisonBatch? _comparisonBatch;
   int _parsedInvoiceEpoch = 0;
   int? _productReviewDraftEpoch;
 
@@ -450,7 +469,14 @@ class OCRUploadWidgetState extends State<OCRUploadWidget> {
     _skuReservationAuthority = null;
     _showBulkCreate = false;
     _isOpeningBulkCreate = false;
-    if (advanceDocumentEpoch) _parsedInvoiceEpoch++;
+    if (advanceDocumentEpoch) {
+      _parsedInvoiceEpoch++;
+      _cancelPreviewCodeLookups();
+      for (final controller in _skuControllers.values) {
+        controller.dispose();
+      }
+      _skuControllers.clear();
+    }
   }
 
   void _adoptParsedInvoiceDocument({
@@ -464,6 +490,12 @@ class OCRUploadWidgetState extends State<OCRUploadWidget> {
     _ocrSupplier = supplier;
     _ocrSupplierName = supplier?.name;
     _supplierIdForNewProducts = supplier?.id;
+    // The operator reads the summary before opening the review; that is
+    // where the catalog fetch hides best.
+    if (_looksLikeAliExpressInvoice(display) &&
+        display.lineItems.any((item) => item.existsInDatabase == false)) {
+      _warmCatalogForReview();
+    }
   }
 
   Widget _buildUploadScreen() {
@@ -474,21 +506,23 @@ class OCRUploadWidgetState extends State<OCRUploadWidget> {
         final horizontalPadding = compact ? 16.0 : 24.0;
         final secondaryActions = <Widget>[
           OutlinedButton.icon(
-            onPressed:
-                _isProcessing ? null : () => _pickImage(ImageSource.camera),
+            onPressed: (_isProcessing || _isPickingSource)
+                ? null
+                : () => _pickImage(ImageSource.camera),
             icon: const Icon(Icons.camera_alt_outlined),
             label: const Text('Tomar foto'),
           ),
           OutlinedButton.icon(
-            onPressed:
-                _isProcessing ? null : () => _pickImage(ImageSource.gallery),
+            onPressed: (_isProcessing || _isPickingSource)
+                ? null
+                : () => _pickImage(ImageSource.gallery),
             icon: const Icon(Icons.photo_library_outlined),
             label: const Text('Elegir de galería'),
           ),
         ];
 
         return DropTarget(
-          enable: !_isProcessing,
+          enable: !_isProcessing && !_isPickingSource,
           onDragEntered: (_) => setState(() => _isDraggingInvoiceFile = true),
           onDragExited: (_) => setState(() => _isDraggingInvoiceFile = false),
           onDragDone: (details) => _handleDroppedInvoiceFiles(details.files),
@@ -597,7 +631,9 @@ class OCRUploadWidgetState extends State<OCRUploadWidget> {
                                 const SizedBox(height: 20),
                                 FilledButton.icon(
                                   key: const Key('ocr-upload-select-file'),
-                                  onPressed: _pickInvoiceFile,
+                                  onPressed: _isPickingSource
+                                      ? null
+                                      : _pickInvoiceFile,
                                   icon: const Icon(Icons.folder_open_outlined),
                                   label: const Text('Seleccionar factura'),
                                 ),
@@ -924,12 +960,18 @@ class OCRUploadWidgetState extends State<OCRUploadWidget> {
                         ),
                       ),
                       const SizedBox(height: 6),
+                      if (!_looksLikeAliExpressInvoice(data)) ...[
+                        _previewCodeField(item, index),
+                        const SizedBox(height: 6),
+                      ],
                       Wrap(
                         spacing: 12,
                         runSpacing: 4,
                         crossAxisAlignment: WrapCrossAlignment.center,
                         children: [
-                          if (code != null && code.isNotEmpty)
+                          if (_looksLikeAliExpressInvoice(data) &&
+                              code != null &&
+                              code.isNotEmpty)
                             Text(
                               'Código proveedor  $code',
                               style: theme.textTheme.labelSmall?.copyWith(
@@ -995,6 +1037,51 @@ class OCRUploadWidgetState extends State<OCRUploadWidget> {
         ),
       );
     }
+
+    Widget invoiceTotals() => Padding(
+          padding: const EdgeInsets.symmetric(
+            horizontal: 12,
+            vertical: 10,
+          ),
+          child: Wrap(
+            alignment: WrapAlignment.end,
+            spacing: 24,
+            runSpacing: 6,
+            children: [
+              Text(
+                'Suma líneas  ${_formatAmount(diagnostics.rowTotal)}',
+                style: theme.textTheme.labelMedium?.copyWith(
+                  fontFeatures: const [FontFeature.tabularFigures()],
+                ),
+              ),
+              if (diagnostics.separateTax > 0)
+                Text(
+                  'IVA  ${_formatAmount(diagnostics.separateTax)}',
+                  style: theme.textTheme.labelMedium?.copyWith(
+                    fontFeatures: const [FontFeature.tabularFigures()],
+                  ),
+                ),
+              Text(
+                'Total factura  ${_formatAmount(diagnostics.headerTotal)}',
+                style: theme.textTheme.labelMedium?.copyWith(
+                  fontFeatures: const [FontFeature.tabularFigures()],
+                ),
+              ),
+              Text(
+                'Diferencia  ${_formatAmount(diagnostics.delta.abs())}',
+                style: theme.textTheme.labelMedium?.copyWith(
+                  color: diagnostics.hasTotalMismatch
+                      ? roles.warning.accent
+                      : theme.colorScheme.onSurfaceVariant,
+                  fontWeight: diagnostics.hasTotalMismatch
+                      ? FontWeight.w700
+                      : FontWeight.w500,
+                  fontFeatures: const [FontFeature.tabularFigures()],
+                ),
+              ),
+            ],
+          ),
+        );
 
     Widget desktopProductTable(List<DataRow> rows) {
       return Semantics(
@@ -1079,43 +1166,7 @@ class OCRUploadWidgetState extends State<OCRUploadWidget> {
                   thickness: 1,
                   color: theme.colorScheme.outlineVariant,
                 ),
-                Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 10,
-                  ),
-                  child: Wrap(
-                    alignment: WrapAlignment.end,
-                    spacing: 24,
-                    runSpacing: 6,
-                    children: [
-                      Text(
-                        'Suma líneas  ${_formatAmount(diagnostics.rowTotal)}',
-                        style: theme.textTheme.labelMedium?.copyWith(
-                          fontFeatures: const [FontFeature.tabularFigures()],
-                        ),
-                      ),
-                      Text(
-                        'Total factura  ${_formatAmount(diagnostics.headerTotal)}',
-                        style: theme.textTheme.labelMedium?.copyWith(
-                          fontFeatures: const [FontFeature.tabularFigures()],
-                        ),
-                      ),
-                      Text(
-                        'Diferencia  ${_formatAmount(diagnostics.delta.abs())}',
-                        style: theme.textTheme.labelMedium?.copyWith(
-                          color: diagnostics.hasTotalMismatch
-                              ? roles.warning.accent
-                              : theme.colorScheme.onSurfaceVariant,
-                          fontWeight: diagnostics.hasTotalMismatch
-                              ? FontWeight.w700
-                              : FontWeight.w500,
-                          fontFeatures: const [FontFeature.tabularFigures()],
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
+                invoiceTotals(),
               ],
             ),
           ),
@@ -1204,14 +1255,16 @@ class OCRUploadWidgetState extends State<OCRUploadWidget> {
             SizedBox(
               key: Key('ocr-preview-cell-code-$index'),
               width: 142,
-              child: Text(
-                code?.isNotEmpty == true ? code! : '—',
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                  fontFeatures: [FontFeature.tabularFigures()],
-                ),
-              ),
+              child: !_looksLikeAliExpressInvoice(data)
+                  ? _previewCodeField(item, index)
+                  : Text(
+                      code?.isNotEmpty == true ? code! : '—',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontFeatures: [FontFeature.tabularFigures()],
+                      ),
+                    ),
             ),
           ),
           DataCell(
@@ -1288,32 +1341,42 @@ class OCRUploadWidgetState extends State<OCRUploadWidget> {
       );
     }
 
-    final primaryLabel = _readOnlyEvaluationBlocksMutations
-        ? widget.showLineItemReview && unresolved > 0
-            ? 'Revisar $unresolved producto${unresolved == 1 ? '' : 's'} · solo lectura'
-            : 'Evaluación completada'
-        : _isApplyingResult
-            ? 'Aplicando factura…'
-            : !hasResolvedSupplier
-                ? 'Seleccionar proveedor'
-                : widget.showLineItemReview && unresolved > 0
-                    ? 'Revisar $unresolved producto${unresolved == 1 ? '' : 's'}'
-                    : 'Usar esta factura';
-    final primaryAction = _readOnlyEvaluationBlocksMutations
-        ? widget.showLineItemReview && unresolved > 0
-            ? _isOpeningBulkCreate
+    final previewBusy =
+        _isSelectingSupplier || _previewCodesVerifying.isNotEmpty;
+    final primaryLabel = _isSelectingSupplier
+        ? (_isVerifyingSupplierProducts
+            ? 'Verificando productos…'
+            : 'Cargando proveedores…')
+        : _previewCodesVerifying.isNotEmpty
+            ? 'Verificando códigos…'
+            : _readOnlyEvaluationBlocksMutations
+                ? widget.showLineItemReview && unresolved > 0
+                    ? 'Revisar productos · $unresolved por decidir · solo lectura'
+                    : 'Evaluación completada'
+                : _isApplyingResult
+                    ? 'Aplicando factura…'
+                    : !hasResolvedSupplier
+                        ? 'Seleccionar proveedor'
+                        : widget.showLineItemReview && unresolved > 0
+                            ? 'Revisar productos · $unresolved por decidir'
+                            : 'Usar esta factura';
+    final primaryAction = previewBusy
+        ? null
+        : _readOnlyEvaluationBlocksMutations
+            ? widget.showLineItemReview && unresolved > 0
+                ? _isOpeningBulkCreate
+                    ? null
+                    : _openBulkCreateScreen
+                : null
+            : _isApplyingResult
                 ? null
-                : _openBulkCreateScreen
-            : null
-        : _isApplyingResult
-            ? null
-            : !hasResolvedSupplier
-                ? _showSupplierSelectionDialog
-                : widget.showLineItemReview && unresolved > 0
-                    ? _isOpeningBulkCreate
-                        ? null
-                        : _openBulkCreateScreen
-                    : () => _handleUseParsedData(data);
+                : !hasResolvedSupplier
+                    ? _showSupplierSelectionDialog
+                    : widget.showLineItemReview && unresolved > 0
+                        ? _isOpeningBulkCreate
+                            ? null
+                            : _openBulkCreateScreen
+                        : () => _handleUseParsedData(data);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -1519,7 +1582,7 @@ class OCRUploadWidgetState extends State<OCRUploadWidget> {
                           index++)
                         previewDataRow(data.lineItems[index], index),
                     ])
-                  else
+                  else ...[
                     for (var index = 0;
                         index < data.lineItems.length;
                         index++) ...[
@@ -1527,6 +1590,8 @@ class OCRUploadWidgetState extends State<OCRUploadWidget> {
                       if (index != data.lineItems.length - 1)
                         const SizedBox(height: 10),
                     ],
+                    invoiceTotals(),
+                  ],
                 ],
               ],
             ),
@@ -1624,16 +1689,18 @@ class OCRUploadWidgetState extends State<OCRUploadWidget> {
     if (diagnostics.hasTotalMismatch) {
       parts.add('dif. ${_formatAmount(diagnostics.delta.abs())}');
     } else if (diagnostics.adjustedRowCount > 0) {
-      parts.add('${diagnostics.adjustedRowCount} con plantilla');
+      parts.add('${diagnostics.adjustedRowCount} con ajustes');
     }
 
     final summary =
-        hasWarning ? 'Revisar antes de importar' : 'OCR con plantilla aplicada';
+        hasWarning ? 'Revisar antes de importar' : 'Lectura ajustada';
 
     final tooltipLines = <String>[
       summary,
       'Total OCR: ${_formatAmount(diagnostics.headerTotal)}',
       'Suma líneas: ${_formatAmount(diagnostics.rowTotal)}',
+      if (diagnostics.separateTax > 0)
+        'IVA: ${_formatAmount(diagnostics.separateTax)}',
       'Diferencia: ${_formatAmount(diagnostics.delta.abs())}',
     ];
 
@@ -1666,6 +1733,7 @@ class OCRUploadWidgetState extends State<OCRUploadWidget> {
     String? supplierId,
     bool allowNameFallback = true,
     bool allowCatalogCodeLookup = true,
+    bool propagateLookupErrors = false,
   }) async {
     final inventoryService =
         Provider.of<InventoryService>(context, listen: false);
@@ -1680,6 +1748,7 @@ class OCRUploadWidgetState extends State<OCRUploadWidget> {
         matchedProduct =
             await inventoryService.getProductBySku(item.sku!.trim());
       } catch (e) {
+        if (propagateLookupErrors) rethrow;
         debugPrint('   ❌ Error looking up SKU ${item.sku}: $e');
       }
     }
@@ -1700,6 +1769,7 @@ class OCRUploadWidgetState extends State<OCRUploadWidget> {
           );
         }
       } catch (e) {
+        if (propagateLookupErrors) rethrow;
         debugPrint('   ❌ Error looking up Supplier Code $cleanSku: $e');
       }
     }
@@ -1725,6 +1795,7 @@ class OCRUploadWidgetState extends State<OCRUploadWidget> {
           }
         }
       } catch (e) {
+        if (propagateLookupErrors) rethrow;
         debugPrint('   ❌ Error searching by name: $e');
       }
     }
@@ -1783,6 +1854,7 @@ class OCRUploadWidgetState extends State<OCRUploadWidget> {
     final sourceData = _parsedData!;
     final reviewGeneration = ++_bulkReviewGeneration;
     setState(() => _isOpeningBulkCreate = true);
+    if (_looksLikeAliExpressInvoice(sourceData)) _warmCatalogForReview();
 
     try {
       final canResumeDraft = _productReviewDraftEpoch == _parsedInvoiceEpoch &&
@@ -1925,6 +1997,7 @@ class OCRUploadWidgetState extends State<OCRUploadWidget> {
         entry.hasSupplierResolution ||
         entry.isAICleaningName ||
         entry.isCheckingSimilar ||
+        entry.isQueuedForComparison ||
         entry.isLinkingExisting ||
         entry.isUploadingImage) {
       return false;
@@ -1961,6 +2034,49 @@ class OCRUploadWidgetState extends State<OCRUploadWidget> {
   /// investigation → full-catalog matching. A slow product no longer delays
   /// useful results for unrelated rows, while variants from the same listing
   /// still share one semantic decision boundary.
+  /// What the step-1 header says while the automatic pass runs; null once
+  /// every queued row has been taken and finished.
+  OcrProductReviewActivity? get _comparisonActivity {
+    final batch = _comparisonBatch;
+    if (batch == null || batch.generation != _bulkReviewGeneration) return null;
+    final members = _newProductEntries
+        .where((entry) => batch.reviewIds.contains(entry.reviewId))
+        .toList(growable: false);
+    final inFlight = members
+        .where((entry) =>
+            entry.isQueuedForComparison ||
+            entry.isCheckingSimilar ||
+            entry.isAICleaningName)
+        .length;
+    if (inFlight == 0) return null;
+    if (!batch.catalogReady) {
+      return const OcrProductReviewActivity(
+          label: 'Cargando el catálogo para comparar…');
+    }
+    return OcrProductReviewActivity(
+      label: 'Comparando con el inventario',
+      completed: members.length - inFlight,
+      total: members.length,
+    );
+  }
+
+  /// Starts the 1.6k-row catalog fetch the comparison will need, so it runs
+  /// while the operator reads the summary or while categories and brands
+  /// load, instead of after the panel opens. `InventoryService` joins a fetch
+  /// already in flight and serves the same rows from its cache afterwards;
+  /// a failure here is not an error yet, the pass reports its own.
+  ///
+  /// Measured before this on 2026-09-05: with the fetch started only after
+  /// the panel opened, every row read «aún no corre» for about ten seconds
+  /// and the operator had no sign that anything was happening.
+  void _warmCatalogForReview() {
+    if (!mounted) return;
+    final inventoryService = context.read<inv_service.InventoryService>();
+    unawaited(inventoryService
+        .getProducts()
+        .then<void>((_) {}, onError: (Object _, StackTrace __) {}));
+  }
+
   Future<void> _runAliExpressProductAnalysis(int reviewGeneration) async {
     if (!_ownsBulkReview(reviewGeneration)) return;
     final inventoryService = context.read<inv_service.InventoryService>();
@@ -1982,39 +2098,84 @@ class OCRUploadWidgetState extends State<OCRUploadWidget> {
     final groups = grouped.values.toList(growable: false);
     if (groups.isEmpty) return;
 
-    final iterator = groups.iterator;
-    final workerCount = math.min(3, groups.length);
-    await Future.wait(List.generate(workerCount, (_) async {
-      while (iterator.moveNext()) {
-        if (!_ownsBulkReview(reviewGeneration)) return;
-        final group = iterator.current;
-        try {
-          final products = await productsFuture;
-          if (_ownsBulkReview(reviewGeneration)) {
-            _productReviewCatalogSnapshot = products;
-            _productReviewDuplicateMatcher = matcher;
-            _productReviewCatalogGeneration = reviewGeneration;
-          }
-          await _checkSimilarProductsForNewEntries(
-            targetEntries:
-                group.where(_needsSimilaritySearch).toList(growable: false),
-            autoTriggered: true,
-            reviewGeneration: reviewGeneration,
-            preparedInventoryService: inventoryService,
-            preparedProducts: products,
-            preparedMatcher: matcher,
-          );
-        } catch (error) {
-          for (final entry in group) {
-            if (_newProductEntries.contains(entry) &&
-                _needsSimilaritySearch(entry)) {
-              entry.markResolutionFailed(error);
-            }
-          }
-          if (_ownsBulkReview(reviewGeneration)) setState(() {});
+    // Every row the pass will take is queued from the first frame: the
+    // table draws its silhouette and the header says what is loading. Until
+    // now the rows read «aún no corre» for the whole catalog fetch.
+    final batch = _ComparisonBatch(
+      generation: reviewGeneration,
+      reviewIds: <String>{
+        for (final group in groups)
+          for (final entry in group) entry.reviewId,
+      },
+    );
+    setState(() {
+      _comparisonBatch = batch;
+      for (final group in groups) {
+        for (final entry in group) {
+          entry.isQueuedForComparison = true;
         }
       }
-    }));
+    });
+    unawaited(productsFuture.then<void>((_) {
+      if (!identical(_comparisonBatch, batch) ||
+          !_ownsBulkReview(reviewGeneration)) {
+        return;
+      }
+      setState(() => batch.catalogReady = true);
+    }, onError: (Object _, StackTrace __) {}));
+
+    try {
+      final iterator = groups.iterator;
+      final workerCount = math.min(3, groups.length);
+      await Future.wait(List.generate(workerCount, (_) async {
+        while (iterator.moveNext()) {
+          if (!_ownsBulkReview(reviewGeneration)) return;
+          final group = iterator.current;
+          try {
+            final products = await productsFuture;
+            if (_ownsBulkReview(reviewGeneration)) {
+              _productReviewCatalogSnapshot = products;
+              _productReviewDuplicateMatcher = matcher;
+              _productReviewCatalogGeneration = reviewGeneration;
+            }
+            // Taken: the row leaves the queue and `markSearching` flips it to
+            // the spinner in the same frame. No await sits in between, so it
+            // never shows as «pendiente» on the way.
+            for (final entry in group) {
+              entry.isQueuedForComparison = false;
+            }
+            await _checkSimilarProductsForNewEntries(
+              targetEntries:
+                  group.where(_needsSimilaritySearch).toList(growable: false),
+              autoTriggered: true,
+              reviewGeneration: reviewGeneration,
+              preparedInventoryService: inventoryService,
+              preparedProducts: products,
+              preparedMatcher: matcher,
+            );
+          } catch (error) {
+            for (final entry in group) {
+              entry.isQueuedForComparison = false;
+              if (_newProductEntries.contains(entry) &&
+                  _needsSimilaritySearch(entry)) {
+                entry.markResolutionFailed(error);
+              }
+            }
+            if (_ownsBulkReview(reviewGeneration)) setState(() {});
+          }
+        }
+      }));
+    } finally {
+      if (identical(_comparisonBatch, batch)) {
+        // A worker that lost the review returns with its rows still queued;
+        // whatever is left goes back to «pendiente», where a retry can see it.
+        for (final entry in _newProductEntries) {
+          entry.isQueuedForComparison = false;
+        }
+        _comparisonBatch = null;
+        if (mounted) setState(() {});
+      }
+    }
   }
 
   /// The one authority for this review's SKUs, built lazily from live state.
@@ -2076,159 +2237,254 @@ class OCRUploadWidgetState extends State<OCRUploadWidget> {
       );
 
   Future<void> _showSupplierSelectionDialog() async {
-    // Show loading
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (ctx) => const Center(child: CircularProgressIndicator()),
-    );
-
+    if (_isSelectingSupplier || _isProcessing || blocksOwnerExit) return;
+    var epoch = _parsedInvoiceEpoch;
+    setState(() => _isSelectingSupplier = true);
     try {
-      final dbService = DatabaseService();
-      final suppliers = await dbService.select(
-        'suppliers',
-        selectColumns: shared_supplier.Supplier.secretFreeSelect,
-        orderBy: 'id',
-        fetchAll: true,
-      );
+      final suppliers = await DatabaseService()
+          .select(
+            'suppliers',
+            selectColumns: shared_supplier.Supplier.secretFreeSelect,
+            orderBy: 'id',
+            fetchAll: true,
+          )
+          .timeout(const Duration(seconds: 15));
+      if (!mounted || epoch != _parsedInvoiceEpoch) return;
       final allSuppliers =
-          suppliers.map((s) => shared_supplier.Supplier.fromJson(s)).toList()
+          suppliers.map(shared_supplier.Supplier.fromJson).toList()
             ..sort((a, b) {
               final byName = a.name.compareTo(b.name);
               return byName != 0 ? byName : a.id.compareTo(b.id);
             });
-
-      if (mounted) {
-        Navigator.pop(context); // Close loading start
-
-        await showDialog(
-          context: context,
-          builder: (context) {
-            String searchQuery = '';
-            List<shared_supplier.Supplier> filteredSuppliers = allSuppliers;
-
-            return StatefulBuilder(
-              builder: (context, setState) {
-                return AlertDialog(
-                  title: const Text('Seleccionar Proveedor'),
-                  content: SizedBox(
-                    width: double.maxFinite,
-                    height: 500, // Increased height for search bar
-                    child: Column(
-                      children: [
-                        // Search Bar
-                        TextField(
-                          decoration: const InputDecoration(
-                            labelText: 'Buscar proveedor',
-                            prefixIcon: Icon(Icons.search),
-                            border: OutlineInputBorder(),
-                            contentPadding: EdgeInsets.symmetric(
-                                horizontal: 12, vertical: 12),
-                          ),
-                          onChanged: (value) {
-                            setState(() {
-                              searchQuery = _normalizeSimilarityText(value);
-                              filteredSuppliers = allSuppliers
-                                  .where((s) =>
-                                      _supplierSearchText(s)
-                                          .contains(searchQuery) ||
-                                      (s.rut != null &&
-                                          _normalizeSimilarityText(s.rut!)
-                                              .contains(searchQuery)))
-                                  .toList();
-                            });
-                          },
-                        ),
-                        const SizedBox(height: 12),
-                        // Supplier List
-                        Expanded(
-                          child: filteredSuppliers.isEmpty
-                              ? const Center(
-                                  child: Text('No se encontraron proveedores'),
-                                )
-                              : ListView.builder(
-                                  itemCount: filteredSuppliers.length,
-                                  itemBuilder: (context, index) {
-                                    final supplier = filteredSuppliers[index];
-                                    return ListTile(
-                                      title: Text(supplier.displayName),
-                                      subtitle: Text(
-                                        _supplierSubtitle(supplier),
-                                      ),
-                                      onTap: () async {
-                                        Navigator.pop(context);
-                                        final source = _baseParsedData;
-                                        if (!mounted || source == null) return;
-                                        this.setState(
-                                            () => _isProcessing = true);
-                                        try {
-                                          final supplierBase =
-                                              await _verifyProductsInDatabase(
-                                            source.copyWith(
-                                              supplierName: supplier.name,
-                                            ),
-                                            supplierId: supplier.id,
-                                          );
-                                          if (!mounted) return;
-                                          this.setState(() {
-                                            _discardProductReviewDraft(
-                                              advanceDocumentEpoch: true,
-                                            );
-                                            _ocrSupplier = supplier;
-                                            _ocrSupplierName = supplier.name;
-                                            _supplierIdForNewProducts =
-                                                supplier.id;
-                                            _baseParsedData = supplierBase;
-                                            _parsedData =
-                                                _applySupplierTemplate(
-                                              supplierBase,
-                                              supplier,
-                                            );
-                                            _isProcessing = false;
-                                          });
-                                        } catch (error) {
-                                          if (!mounted) return;
-                                          this.setState(
-                                              () => _isProcessing = false);
-                                          ScaffoldMessenger.of(this.context)
-                                              .showSnackBar(
-                                            SnackBar(
-                                              content: Text(
-                                                'No se pudo verificar el catálogo de ${supplier.name}: $error',
-                                              ),
-                                              backgroundColor:
-                                                  Theme.of(this.context)
-                                                      .colorScheme
-                                                      .error,
-                                            ),
-                                          );
-                                        }
-                                      },
-                                    );
-                                  },
-                                ),
-                        ),
-                      ],
+      // The picker owns its only route. There is no separate loading route
+      // to accidentally pop through the purchase workspace's nested navigator.
+      var filteredSuppliers = allSuppliers;
+      final supplier = await showDialog<shared_supplier.Supplier>(
+        context: context,
+        builder: (dialogContext) => StatefulBuilder(
+          builder: (dialogContext, updateDialog) => AlertDialog(
+            key: const Key('ocr-supplier-picker'),
+            title: const Text('Seleccionar proveedor'),
+            content: SizedBox(
+              width: double.maxFinite,
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxHeight: 500),
+                child: Column(mainAxisSize: MainAxisSize.min, children: [
+                  TextField(
+                    key: const Key('ocr-supplier-search'),
+                    decoration: const InputDecoration(
+                      labelText: 'Buscar proveedor',
+                      prefixIcon: Icon(Icons.search),
                     ),
+                    onChanged: (value) => updateDialog(() {
+                      final query = _normalizeSimilarityText(value);
+                      filteredSuppliers = allSuppliers
+                          .where((supplier) =>
+                              _supplierSearchText(supplier).contains(query) ||
+                              _normalizeSimilarityText(supplier.rut ?? '')
+                                  .contains(query))
+                          .toList();
+                    }),
                   ),
-                  actions: [
-                    TextButton(
-                      onPressed: () => Navigator.pop(context),
-                      child: const Text('Cancelar'),
-                    ),
-                  ],
-                );
-              },
-            );
-          },
+                  const SizedBox(height: 12),
+                  Flexible(
+                      child: filteredSuppliers.isEmpty
+                          ? const Center(
+                              child: Text('No se encontraron proveedores'))
+                          : ListView.builder(
+                              shrinkWrap: true,
+                              itemCount: filteredSuppliers.length,
+                              itemBuilder: (context, index) {
+                                final supplier = filteredSuppliers[index];
+                                return ListTile(
+                                  key: ValueKey('ocr-supplier-${supplier.id}'),
+                                  title: Text(supplier.displayName),
+                                  subtitle: Text(_supplierSubtitle(supplier)),
+                                  onTap: () =>
+                                      Navigator.of(dialogContext).pop(supplier),
+                                );
+                              })),
+                ]),
+              ),
+            ),
+            actions: [
+              TextButton(
+                key: const Key('ocr-supplier-cancel'),
+                onPressed: () => Navigator.of(dialogContext).pop(),
+                child: const Text('Cancelar'),
+              )
+            ],
+          ),
+        ),
+      );
+      if (!mounted || epoch != _parsedInvoiceEpoch || supplier == null) return;
+      final source = _baseParsedData;
+      if (source == null) return;
+      // Choosing a known supplier is local. Catalog verification must not
+      // delay that acknowledgement or retain matches from the previous supplier.
+      final supplierSource = source.copyWith(
+        supplierName: supplier.name,
+        lineItems: source.lineItems.map(_clearProductResolution).toList(),
+      );
+      setState(() {
+        _isVerifyingSupplierProducts = true;
+        _adoptParsedInvoiceDocument(
+          base: supplierSource,
+          display: _applySupplierTemplate(supplierSource, supplier),
+          supplier: supplier,
         );
+        epoch = _parsedInvoiceEpoch;
+      });
+      final supplierBase = await _verifyProductsInDatabase(supplierSource,
+          supplierId: supplier.id);
+      if (!mounted || epoch != _parsedInvoiceEpoch) return;
+      setState(() {
+        _adoptParsedInvoiceDocument(
+          base: supplierBase,
+          display: _applySupplierTemplate(supplierBase, supplier),
+          supplier: supplier,
+        );
+      });
+    } catch (error) {
+      if (mounted && epoch == _parsedInvoiceEpoch) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(error is TimeoutException
+              ? 'La carga de proveedores tardó demasiado. Reintenta.'
+              : 'No se pudo seleccionar el proveedor. Reintenta.'),
+          action: SnackBarAction(
+              label: 'Reintentar',
+              onPressed: () {
+                if (mounted && epoch == _parsedInvoiceEpoch) {
+                  unawaited(_showSupplierSelectionDialog());
+                }
+              }),
+        ));
       }
-    } catch (e) {
-      if (mounted && Navigator.canPop(context)) {
-        Navigator.pop(context); // Close loading on error if still open
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isSelectingSupplier = false;
+          _isVerifyingSupplierProducts = false;
+        });
       }
-      debugPrint('Error loading suppliers: $e');
     }
+  }
+
+  void _cancelPreviewCodeLookups() {
+    for (final timer in _previewCodeTimers.values) {
+      timer.cancel();
+    }
+    _previewCodeTimers.clear();
+    _previewCodeRevisions.clear();
+    _previewCodesVerifying.clear();
+    _previewCodeErrors.clear();
+  }
+
+  bool _ownsPreviewCodeLookup(int index, int epoch, int revision) =>
+      mounted &&
+      _parsedInvoiceEpoch == epoch &&
+      _previewCodeRevisions[index] == revision &&
+      _baseParsedData != null &&
+      index < _baseParsedData!.lineItems.length;
+
+  void _replacePreviewCodeLine(int index, ParsedLineItem item) {
+    final base = _baseParsedData!;
+    final items = List<ParsedLineItem>.from(base.lineItems)..[index] = item;
+    _baseParsedData = base.copyWith(lineItems: items);
+    _parsedData = _ocrSupplier == null
+        ? _baseParsedData
+        : _applySupplierTemplate(_baseParsedData!, _ocrSupplier!);
+  }
+
+  void _updatePreviewCode(int index, String value, {bool immediately = false}) {
+    if (_parsedData == null ||
+        _baseParsedData == null ||
+        index < 0 ||
+        index >= _baseParsedData!.lineItems.length ||
+        _looksLikeAliExpressInvoice(_parsedData!) ||
+        _isSelectingSupplier ||
+        _isProcessing ||
+        blocksOwnerExit) {
+      return;
+    }
+    final epoch = _parsedInvoiceEpoch;
+    final revision = (_previewCodeRevisions[index] ?? 0) + 1;
+    final supplierId = _supplierIdForNewProducts ?? widget.supplierId;
+    final source = _clearProductResolution(
+        _baseParsedData!.lineItems[index].copyWith(sku: value.trim()));
+    _previewCodeTimers.remove(index)?.cancel();
+    setState(() {
+      _discardProductReviewDraft();
+      _previewCodeRevisions[index] = revision;
+      _previewCodeErrors.remove(index);
+      _previewCodesVerifying.add(index);
+      _replacePreviewCodeLine(index, source);
+    });
+    Future<void> verify() async {
+      try {
+        final verified = await _verifySingleProduct(source,
+                supplierId: supplierId,
+                allowNameFallback: false,
+                propagateLookupErrors: true)
+            .timeout(const Duration(seconds: 12));
+        if (!_ownsPreviewCodeLookup(index, epoch, revision)) return;
+        setState(() => _replacePreviewCodeLine(index, verified));
+      } catch (_) {
+        if (!_ownsPreviewCodeLookup(index, epoch, revision)) return;
+        setState(() => _previewCodeErrors[index] = 'No se pudo verificar');
+      } finally {
+        if (_ownsPreviewCodeLookup(index, epoch, revision)) {
+          setState(() => _previewCodesVerifying.remove(index));
+        }
+      }
+    }
+
+    if (immediately) {
+      unawaited(verify());
+    } else {
+      _previewCodeTimers[index] = Timer(const Duration(milliseconds: 500), () {
+        _previewCodeTimers.remove(index);
+        unawaited(verify());
+      });
+    }
+  }
+
+  Widget _previewCodeField(ParsedLineItem item, int index) {
+    final controller = _skuControllers.putIfAbsent(
+        index, () => TextEditingController(text: item.sku ?? ''));
+    final verifying = _previewCodesVerifying.contains(index);
+    return TextField(
+      key: Key('ocr-preview-code-$index'),
+      controller: controller,
+      enabled: !_isSelectingSupplier && !_isProcessing && !blocksOwnerExit,
+      textInputAction: TextInputAction.done,
+      style: Theme.of(context).textTheme.bodySmall,
+      decoration: InputDecoration(
+        isDense: true,
+        labelText: 'Código',
+        hintText: 'Ingresar código',
+        errorText: _previewCodeErrors[index],
+        suffixIcon: verifying
+            ? const Padding(
+                padding: EdgeInsets.all(12),
+                child: SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2)))
+            : IconButton(
+                tooltip: 'Verificar código de la línea ${index + 1}',
+                icon: const Icon(Icons.search),
+                onPressed:
+                    _isSelectingSupplier || _isProcessing || blocksOwnerExit
+                        ? null
+                        : () => _updatePreviewCode(index, controller.text,
+                            immediately: true),
+              ),
+      ),
+      onChanged: (value) => _updatePreviewCode(index, value),
+      onSubmitted: (value) =>
+          _updatePreviewCode(index, value, immediately: true),
+    );
   }
 
   /// Recompute the suggested selling price for every entry whose user has not
@@ -2253,25 +2509,50 @@ class OCRUploadWidgetState extends State<OCRUploadWidget> {
   Future<void> _pickReviewProductImage(
     _NewProductEntry entry, {
     required int reviewGeneration,
+  }) =>
+      _replaceReviewProductImage(entry,
+          reviewGeneration: reviewGeneration, load: ImageService.pickImage);
+
+  Future<void> _replaceReviewProductImage(
+    _NewProductEntry entry, {
+    required int reviewGeneration,
+    required Future<({Uint8List bytes, String name})?> Function() load,
   }) async {
     final revision = entry.resolutionRevision;
-    final picked = await ImageService.pickImage();
-    if (picked == null ||
-        !_ownsNewProductResolution(
-          entry,
-          revision,
-          reviewGeneration: reviewGeneration,
-        )) {
-      return;
+    final imageRequest = ++entry.imageSelectionRevision;
+    setState(() => entry.isUploadingImage = true);
+    var changed = false;
+    try {
+      final picked = await load();
+      if (picked == null ||
+          !_ownsNewProductResolution(entry, revision,
+              reviewGeneration: reviewGeneration)) {
+        return;
+      }
+      setState(() {
+        entry.imageUrl = null;
+        entry.imageUrlOptimized = null;
+        entry.imageBytes = picked.bytes;
+        entry.imageFileName = picked.name;
+        entry.invalidateDuplicateResolution();
+      });
+      changed = true;
+    } catch (error) {
+      if (mounted &&
+          _ownsNewProductResolution(entry, revision,
+              reviewGeneration: reviewGeneration)) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text(error is FormatException
+                ? error.message
+                : 'No se pudo leer la imagen. Reintenta.')));
+      }
+    } finally {
+      if (entry.imageSelectionRevision == imageRequest) {
+        entry.isUploadingImage = false;
+        if (mounted && _newProductEntries.contains(entry)) setState(() {});
+      }
     }
-    setState(() {
-      entry.imageUrl = null;
-      entry.imageUrlOptimized = null;
-      entry.imageBytes = picked.bytes;
-      entry.imageFileName = picked.name;
-      entry.invalidateDuplicateResolution();
-    });
-    _scheduleAIIdentityRecompute(entry);
+    if (changed) _scheduleAIIdentityRecompute(entry);
   }
 
   /// Build the bulk product creation screen
@@ -2279,6 +2560,7 @@ class OCRUploadWidgetState extends State<OCRUploadWidget> {
     final pendingSimilaritySearch = _pendingSimilaritySearchEntries();
     return OcrProductReviewWorkspace(
       step: _purchaseReviewStep,
+      activity: _comparisonActivity,
       backLabel: _purchaseReviewStep == OcrPurchaseReviewStep.identify
           ? 'Volver a la factura'
           : 'Anterior',
@@ -2293,6 +2575,10 @@ class OCRUploadWidgetState extends State<OCRUploadWidget> {
         onConfirmRememberedResolution: (lineId) {
           final entry = _newProductEntryForReviewId(lineId);
           if (entry != null) unawaited(_acceptRememberedResolution(entry));
+        },
+        onRejectRememberedResolution: (lineId) {
+          final entry = _newProductEntryForReviewId(lineId);
+          if (entry != null) _rejectRememberedResolution(entry);
         },
         onNewProductUnitsChanged: (lineId, value) {
           final entry = _newProductEntryForReviewId(lineId);
@@ -2437,6 +2723,13 @@ class OCRUploadWidgetState extends State<OCRUploadWidget> {
             reviewGeneration: _bulkReviewGeneration,
           ));
         },
+        onDropImage: (lineId, files) {
+          final entry = _newProductEntryForReviewId(lineId);
+          if (entry == null || _bulkRowBusy(entry)) return;
+          unawaited(_replaceReviewProductImage(entry,
+              reviewGeneration: _bulkReviewGeneration,
+              load: () => readOcrProductImageDrop(files)));
+        },
         onRemoveImage: (lineId) {
           final entry = _newProductEntryForReviewId(lineId);
           if (entry == null || _bulkRowBusy(entry)) return;
@@ -2513,11 +2806,13 @@ class OCRUploadWidgetState extends State<OCRUploadWidget> {
           identity: entry.identityDecision,
           selected: entry.isSelected,
           productId: entry.identityProduct?.id,
-          amountsConfirmed: entry.purchaseAmountsConfirmed));
+          amountsConfirmed: entry.purchaseAmountsConfirmed,
+          rulePending: entry.supplierRulePending));
 
   bool _canAdvanceProductReview() {
     if (_creatingProducts ||
         _finalizingNewProducts ||
+        _savingPurchaseRules ||
         _anyRowReservingSku ||
         _readOnlyEvaluationBlocksMutations) {
       return false;
@@ -2527,6 +2822,7 @@ class OCRUploadWidgetState extends State<OCRUploadWidget> {
         return OcrPurchaseReviewFlow.identitiesComplete(_reviewDecisions);
       case OcrPurchaseReviewStep.amounts:
         return OcrPurchaseReviewFlow.identitiesComplete(_reviewDecisions) &&
+            OcrPurchaseReviewFlow.rulesSettled(_reviewDecisions) &&
             _selectedReviewEntries
                 .where((entry) =>
                     entry.identityDecision ==
@@ -2553,6 +2849,7 @@ class OCRUploadWidgetState extends State<OCRUploadWidget> {
         _selectedReviewEntries.any((entry) => entry.hasPendingCreatedProduct)) {
       return 'Completar creación y continuar';
     }
+    if (_savingPurchaseRules) return 'Guardando reglas de compra…';
     if (_finalizingNewProducts || _anyRowReservingSku) {
       return 'Preparando creación…';
     }
@@ -2581,6 +2878,12 @@ class OCRUploadWidgetState extends State<OCRUploadWidget> {
       return pending == 0 ? null : '$pending productos por identificar';
     }
     if (_purchaseReviewStep == OcrPurchaseReviewStep.amounts) {
+      final rules = OcrPurchaseReviewFlow.pendingRuleCount(_reviewDecisions);
+      if (rules > 0) {
+        return rules == 1
+            ? '1 fila con regla de compras anteriores: aplícala o cámbiala'
+            : '$rules filas con regla de compras anteriores: aplícala o cámbiala';
+      }
       final pending = _selectedReviewEntries
           .where((entry) =>
               entry.identityDecision == OcrProductIdentityDecision.existing &&
@@ -2620,13 +2923,181 @@ class OCRUploadWidgetState extends State<OCRUploadWidget> {
         _confirmPurchaseAmounts(entry);
       }
       if (!OcrPurchaseReviewFlow.amountsComplete(_reviewDecisions)) return;
+      unawaited(_leaveAmountsStep());
+      return;
     }
     if (_purchaseReviewStep == OcrPurchaseReviewStep.identify &&
         _selectedReviewEntries.any((entry) =>
             entry.identityDecision == OcrProductIdentityDecision.existing)) {
       setState(() => _purchaseReviewStep = OcrPurchaseReviewStep.amounts);
+      unawaited(_applyRememberedRulesOnAmountsEntry());
       return;
     }
+    _continueAfterAmounts();
+  }
+
+  /// Entering step 2, every row whose earlier-purchase rule names the product
+  /// the operator just chose is applied without a click: BUCKLOS arrives as
+  /// 3 front + 3 rear, not as 6 of the first product. A rule that names a
+  /// different product is not applied silently — it stays pending, the batch
+  /// button says so, and the row offers «Aplicar» or «Cambiar».
+  Future<void> _applyRememberedRulesOnAmountsEntry() async {
+    final generation = _bulkReviewGeneration;
+    for (final entry in _selectedReviewEntries) {
+      if (!mounted ||
+          generation != _bulkReviewGeneration ||
+          _purchaseReviewStep != OcrPurchaseReviewStep.amounts) {
+        return;
+      }
+      if (!entry.supplierRulePending) continue;
+      final productId = entry.identityProduct?.id;
+      final rule =
+          entry.suggestedSupplierResolution ?? entry.supplierResolution;
+      if (productId == null ||
+          rule == null ||
+          !rule.edges.any((edge) => edge.productId == productId)) {
+        continue;
+      }
+      await _acceptRememberedResolution(entry);
+    }
+  }
+
+  /// «Cambiar»: the operator keeps their own product and units. The link they
+  /// confirm in this step is then written as a correction of the earlier
+  /// rule, so the next purchase of this variant follows the newer decision.
+  void _rejectRememberedResolution(_NewProductEntry entry) {
+    if (_readOnlyEvaluationBlocksMutations ||
+        _bulkRowBusy(entry) ||
+        _purchaseReviewStep != OcrPurchaseReviewStep.amounts) {
+      return;
+    }
+    setState(() {
+      entry.supplierRuleRejected = true;
+      entry.resolutionError = null;
+    });
+  }
+
+  Future<void> _leaveAmountsStep() async {
+    if (_savingPurchaseRules) return;
+    setState(() => _savingPurchaseRules = true);
+    try {
+      await _rememberLinkedProductRules();
+    } finally {
+      if (mounted) setState(() => _savingPurchaseRules = false);
+    }
+    if (!mounted || _purchaseReviewStep != OcrPurchaseReviewStep.amounts) {
+      return;
+    }
+    _continueAfterAmounts();
+  }
+
+  /// A link the operator confirmed with its units is a decision worth keeping:
+  /// listing + variant → SKU, `single` for one unit per purchase and
+  /// `homogeneous` for more. The next import of the same variant then arrives
+  /// resolved, with attribution, and without a model call. A rule that already
+  /// says exactly this is left alone; a rule the operator changed is
+  /// superseded as a correction. A failure never blocks the purchase — the
+  /// row keeps a warning and the draft continues.
+  Future<void> _rememberLinkedProductRules() async {
+    if (_readOnlyEvaluationBlocksMutations) return;
+    for (final entry in _selectedReviewEntries) {
+      if (!mounted) return;
+      final product = entry.linkedProduct;
+      final productId = product?.id;
+      if (entry.identityDecision != OcrProductIdentityDecision.existing ||
+          !entry.purchaseAmountsConfirmed ||
+          entry.supplierResolutionAccepted ||
+          entry.learnedSupplierResolution != null ||
+          productId == null ||
+          productId.isEmpty) {
+        continue;
+      }
+      final amounts = entry.purchaseAmounts;
+      if (!amounts.isValid) continue;
+      if (!entry.supplierRuleRejected &&
+          _ruleSaysExactly(entry.priorSupplierResolution,
+              productId: productId, units: amounts.unitsPerPurchase)) {
+        continue;
+      }
+      try {
+        final learned = await _rememberAliExpressResolution(
+          entry,
+          productId: productId,
+          purchaseConversion: amounts.conversion,
+          confirmationSurface: 'purchase_invoice_ocr_amounts_review',
+        );
+        if (!mounted) return;
+        if (learned == null) continue;
+        setState(() {
+          entry.learnedSupplierResolution = learned;
+          entry.priorSupplierResolution = learned;
+          entry.suggestedSupplierResolution = null;
+          entry.supplierRuleRejected = false;
+          entry.resolutionError = null;
+        });
+      } on Object catch (error) {
+        if (!mounted) return;
+        setState(() => entry.resolutionError =
+            'La compra sigue; no se guardó la regla para la próxima vez: $error');
+      }
+    }
+  }
+
+  bool _ruleSaysExactly(
+    SupplierVariantResolution? rule, {
+    required String productId,
+    required int units,
+  }) =>
+      rule?.isResolved == true &&
+      rule!.edges.length == 1 &&
+      rule.edges.single.productId == productId &&
+      rule.edges.single.catalogUnitsPerPurchase == units;
+
+  /// The rule this row follows, said the way the shop reads it. The
+  /// attribution is what lets the operator trust or overrule it: a rule is
+  /// never «the system knows»; it is someone's earlier decision, dated.
+  String? _ruleAttributionFor(_NewProductEntry entry) {
+    if (entry.learnedSupplierResolution != null) {
+      return 'guardada ahora para la próxima compra de esta publicación';
+    }
+    final rule = entry.supplierResolutionAccepted
+        ? entry.supplierResolution
+        : entry.suggestedSupplierResolution ??
+            (entry.hasSupplierResolution ? entry.supplierResolution : null);
+    if (rule?.isResolved != true) return null;
+    final createdAt = rule!.createdAt?.toLocal();
+    final when = createdAt == null
+        ? null
+        : 'el ${DateFormat('dd/MM/yyyy').format(createdAt)}';
+    final sourceDate = rule.decisionEvidence['source_document_date'];
+    final purchase = sourceDate is String &&
+            RegExp(r'^\d{4}-\d{2}-\d{2}').hasMatch(sourceDate)
+        ? '· compra del ${sourceDate.substring(8, 10)}/'
+            '${sourceDate.substring(5, 7)}/${sourceDate.substring(0, 4)}'
+        : null;
+    final byYou =
+        rule.createdBy != null && rule.createdBy == _currentOperatorId;
+    final who = switch (rule.decisionSource) {
+      'operator_confirmed' =>
+        byYou ? 'confirmada por ti' : 'confirmada por el equipo',
+      'invoice_confirmed' => 'confirmada al guardar una factura',
+      'migration_confirmed' => 'migrada de las compras anteriores',
+      'administrative_correction' => 'corregida por administración',
+      _ => 'confirmada',
+    };
+    return <String>[who, if (when != null) when, if (purchase != null) purchase]
+        .join(' ');
+  }
+
+  String? get _currentOperatorId {
+    try {
+      return Provider.of<AuthService>(context, listen: false).currentUser?.id;
+    } on ProviderNotFoundException {
+      return null;
+    }
+  }
+
+  void _continueAfterAmounts() {
     if (_purchaseReviewStep != OcrPurchaseReviewStep.newProducts) {
       final newEntries = _selectedReviewEntries
           .where((entry) =>
@@ -3145,21 +3616,40 @@ class OCRUploadWidgetState extends State<OCRUploadWidget> {
     final sibling = _semanticSiblingFor(entry);
     final cachedChoices = _identityCandidatesFor(entry);
     final rowCandidates = orderOcrCandidateChoices(cachedChoices);
-    final viable = rowCandidates.where((candidate) =>
-        !candidate.isRuledOut && !candidate.isReviewOnlyFamilyScope);
-    // The row proposes only what the matcher recommended. Until 2026-09-05
-    // an abstained result still showed the first viable deterministic
-    // candidate as «Primera coincidencia», so an unrelated leader of the
-    // proposed leaf was one tap away from being linked. Without a matcher
-    // result (a remembered rule, or no search yet) the cached choices are the
-    // recommendation themselves.
-    final result = entry.duplicateResult;
-    final proposed = result == null
-        ? (viable.isNotEmpty ? viable.first.product : null)
-        : result.recommendations.isEmpty
-            ? null
-            : result.recommendations.first.product;
+    final recommended = _recommendedCandidateFor(entry, cachedChoices);
+    final proposed = recommended?.product;
+    // A pack of one product keeps that product visible on the row.
+    final compositeComponents = entry.duplicateResult?.compositeComponents ??
+        const <AIProductMatchComponent>[];
+    final compositeProduct = compositeComponents.length == 1
+        ? cachedChoices
+            .where((candidate) =>
+                candidate.product.id == compositeComponents.single.productId)
+            .firstOrNull
+        : null;
+    final compositeUnits =
+        compositeProduct == null ? null : compositeComponents.single.quantity;
     final identity = entry.identityProduct ?? proposed;
+    final identityId = identity?.id;
+    final categoryObjection = recommended?.objections
+        .where((objection) => objection.startsWith('Está en otra categoría'))
+        .firstOrNull;
+    // Two lines of one purchase rarely buy the same product. When the matcher
+    // proposes (or the operator chose) the same catalog row twice, both rows
+    // say so before either is linked.
+    final sharedWith = identityId == null
+        ? null
+        : _newProductEntries
+            .where((other) =>
+                other != entry &&
+                other.isSelected &&
+                (other.identityProduct?.id ??
+                        _recommendedCandidateFor(
+                                other, _identityCandidatesFor(other))
+                            ?.product
+                            .id) ==
+                    identityId)
+            .firstOrNull;
     final sku = entry.displaySku.isNotEmpty
         ? entry.displaySku
         : entry.requiresDuplicateReview
@@ -3182,7 +3672,20 @@ class OCRUploadWidgetState extends State<OCRUploadWidget> {
               : entry.supplierResolutionProducts.isNotEmpty &&
                       entry.duplicateResult == null
                   ? 'Coincidencia de compras anteriores'
-                  : 'Primera coincidencia',
+                  : 'Mejor coincidencia',
+      // A remembered rule is not a matcher tier: the badge names the rule,
+      // not a fabricated «Muy parecido».
+      bestEvidence: recommended == null
+          ? null
+          : entry.duplicateResult == null &&
+                  entry.supplierResolutionProducts.isNotEmpty
+              ? const OcrCandidateEvidence(
+                  'Regla de compras anteriores', VbStatusTone.info)
+              : OcrCandidateEvidence.forCandidate(recommended),
+      categoryObjection: categoryObjection,
+      sharedWithLineTitle: sharedWith?.supplierIdentityTitle,
+      aiCompositeProduct: compositeProduct?.product,
+      aiCompositeUnits: compositeUnits,
       purchaseQuantityController: entry.purchaseQuantityController,
       purchaseUnitCostController: entry.purchaseUnitCostController,
       purchaseTotalController: entry.purchaseTotalController,
@@ -3218,9 +3721,12 @@ class OCRUploadWidgetState extends State<OCRUploadWidget> {
               state: entry.resolutionState),
       hasRememberedSuggestion: entry.suggestedSupplierResolution != null ||
           (entry.hasSupplierResolution && !entry.supplierResolutionAccepted),
+      ruleRejected: entry.supplierRuleRejected,
+      ruleAttribution: _ruleAttributionFor(entry),
       status: _productReviewStatus(entry),
       isUploadingImage: entry.isUploadingImage,
       isReservingSku: entry.isReservingSku,
+      queued: entry.isQueuedForComparison,
       // A code the database owns is not an editable field. Showing it as one
       // invites a worker to "fix" it and send a number nothing reserved.
       skuIsReadOnly: entry.requiresDuplicateReview,
@@ -3265,8 +3771,7 @@ class OCRUploadWidgetState extends State<OCRUploadWidget> {
                   .any((edge) => edge.productId == entry.identityProduct!.id) ==
               true,
       categoryValidationMessage: entry.selectedCategory == null
-          ? entry.categoryReviewReason ??
-              'Falta elegir la familia correcta para este producto.'
+          ? entry.categoryReviewReason ?? 'Selecciona una categoría'
           : null,
       brandWarning: rejectedBrand && entry.selectedBrand == null
           ? 'La marca sugerida no tiene evidencia de fabricante.'
@@ -3293,6 +3798,29 @@ class OCRUploadWidgetState extends State<OCRUploadWidget> {
       isSelected: entry.isSelected,
       inspectionOnly: _readOnlyEvaluationBlocksMutations,
     );
+  }
+
+  /// The one candidate a row may propose. With a matcher result it is the
+  /// recommendation and nothing else — until 2026-09-05 an abstained result
+  /// still showed the first viable deterministic candidate as «Primera
+  /// coincidencia», one tap from being linked. Without a result (a remembered
+  /// rule, or a search that has not run) the cached choices are the proposal.
+  ProductDuplicateCandidate? _recommendedCandidateFor(
+    _NewProductEntry entry,
+    List<ProductDuplicateCandidate> cachedChoices,
+  ) {
+    final result = entry.duplicateResult;
+    if (result != null) {
+      return result.recommendations.isEmpty
+          ? null
+          : result.recommendations.first;
+    }
+    for (final candidate in orderOcrCandidateChoices(cachedChoices)) {
+      if (!candidate.isRuledOut && !candidate.isReviewOnlyFamilyScope) {
+        return candidate;
+      }
+    }
+    return null;
   }
 
   OcrProductResolvedMode _resolvedModeFor(_NewProductEntry entry) {
@@ -3502,6 +4030,7 @@ class OCRUploadWidgetState extends State<OCRUploadWidget> {
           entry.suggestedSupplierResolution?.isResolved == true,
       hasActiveWork: entry.isAICleaningName ||
           entry.isCheckingSimilar ||
+          entry.isQueuedForComparison ||
           entry.isReservingSku ||
           entry.isLinkingExisting,
     )) {
@@ -5743,6 +6272,8 @@ class OCRUploadWidgetState extends State<OCRUploadWidget> {
   Future<SupplierVariantResolution?> _rememberAliExpressResolution(
     _NewProductEntry entry, {
     required String productId,
+    OcrCatalogUnitConversion? purchaseConversion,
+    String confirmationSurface = 'purchase_invoice_ocr_product_review',
   }) async {
     if (_readOnlyEvaluationBlocksMutations) return null;
     final supplierId = (_supplierIdForNewProducts ?? widget.supplierId)?.trim();
@@ -5760,10 +6291,14 @@ class OCRUploadWidgetState extends State<OCRUploadWidget> {
       return null;
     }
 
-    // This writer follows explicit new-product preparation, including the
-    // catalog selling unit. It never derives a multiplier from a supplier token.
-    if (!_newProductUnitIsConfirmed(entry)) return null;
-    final conversion = entry.newProductConversion!;
+    // This writer follows an explicit operator confirmation — the prepared
+    // new product with its selling unit, or the units per purchase confirmed
+    // in step 2 for an existing product. It never derives a multiplier from a
+    // supplier token.
+    if (purchaseConversion == null && !_newProductUnitIsConfirmed(entry)) {
+      return null;
+    }
+    final conversion = purchaseConversion ?? entry.newProductConversion!;
     final invoice = _parsedData;
     final sourceDate = invoice?.date;
     final currencyCode = invoice?.currencyCode?.trim().toUpperCase();
@@ -5832,12 +6367,15 @@ class OCRUploadWidgetState extends State<OCRUploadWidget> {
         'source_purchase_quantity': sourceQuantity,
         'persisted_quantity': conversion.inventoryQuantity,
         'catalog_units_per_purchase': conversion.unitsPerPurchase,
-        'catalog_unit_name': entry.nameController.text.trim(),
-        'catalog_unit_confirmed_by_operator': entry.newProductUnitsEdited,
+        'catalog_unit_name': purchaseConversion == null
+            ? entry.nameController.text.trim()
+            : (entry.linkedProduct?.name ?? entry.nameController.text.trim()),
+        'catalog_unit_confirmed_by_operator':
+            purchaseConversion != null || entry.newProductUnitsEdited,
         'source_total_minor': sourceTotal.round(),
         'persisted_total_minor': sourceTotal.round(),
         'currency_code': currencyCode,
-        'confirmation_surface': 'purchase_invoice_ocr_product_review',
+        'confirmation_surface': confirmationSurface,
         'product_id': productId,
         'listing_id': itemId,
         'variant_key': evidence.variantKey.value,
@@ -6415,7 +6953,9 @@ class OCRUploadWidgetState extends State<OCRUploadWidget> {
 
     try {
       final purchaseService = context.read<PurchaseService>();
-      final suppliers = await purchaseService.getSuppliers();
+      final suppliers = await purchaseService
+          .getSuppliers()
+          .timeout(const Duration(seconds: 15));
       if (suppliers.isEmpty) return null;
 
       final isAliExpressInvoice =
@@ -6842,7 +7382,26 @@ class OCRUploadWidgetState extends State<OCRUploadWidget> {
       (sum, row) => sum + (row.displayedTotal ?? 0.0),
     );
     final headerTotal = invoice.total;
-    final delta = headerTotal != null ? headerTotal - rowTotal : 0.0;
+    final net = invoice.netAmount;
+    final tax = invoice.taxAmount;
+    // Net line prices are normal on supplier invoices. Count separately stated
+    // tax only when both the header and complete line sum corroborate it. An
+    // arbitrary difference (shipping, missing lines, etc.) is never called IVA.
+    final separateTax = headerTotal != null &&
+            headerTotal.isFinite &&
+            net != null &&
+            net.isFinite &&
+            net > 0 &&
+            tax != null &&
+            tax.isFinite &&
+            tax > 0 &&
+            (net + tax - headerTotal).abs() <= 1 &&
+            rowDiagnostics.every((row) => row.displayedTotal != null) &&
+            (rowTotal - net).abs() <= math.max(1, invoice.lineItems.length)
+        ? tax
+        : 0.0;
+    final delta =
+        headerTotal != null ? headerTotal - rowTotal - separateTax : 0.0;
     final tolerance = math
         .max(
           10.0,
@@ -6853,6 +7412,7 @@ class OCRUploadWidgetState extends State<OCRUploadWidget> {
     return _OCRInvoiceDiagnostics(
       lineCount: invoice.lineItems.length,
       rowTotal: rowTotal,
+      separateTax: separateTax,
       headerTotal: headerTotal,
       delta: delta,
       hasTotalMismatch: headerTotal != null && delta.abs() > tolerance,
@@ -6936,7 +7496,7 @@ class OCRUploadWidgetState extends State<OCRUploadWidget> {
             if (diagnostics.incompleteRowCount > 0)
               Text('Filas incompletas: ${diagnostics.incompleteRowCount}'),
             if (diagnostics.adjustedRowCount > 0)
-              Text('Filas con plantilla OCR: ${diagnostics.adjustedRowCount}'),
+              Text('Filas con ajustes OCR: ${diagnostics.adjustedRowCount}'),
             const SizedBox(height: 12),
             const Text('Puedes continuar igual o volver a revisar el preview.'),
           ],
@@ -6978,8 +7538,9 @@ class OCRUploadWidgetState extends State<OCRUploadWidget> {
   }
 
   Future<void> _pickImage(ImageSource source) async {
+    if (!mounted || _isProcessing || _isPickingSource) return;
     setState(() {
-      _isProcessing = true;
+      _isPickingSource = true;
       _errorMessage = null;
     });
 
@@ -6991,10 +7552,11 @@ class OCRUploadWidgetState extends State<OCRUploadWidget> {
         preferredCameraDevice: CameraDevice.rear,
       );
 
-      if (image == null) {
-        setState(() => _isProcessing = false);
-        return;
-      }
+      if (!mounted || image == null) return;
+      setState(() {
+        _isPickingSource = false;
+        _isProcessing = true;
+      });
 
       debugPrint('📷 Image picked: ${image.path}');
 
@@ -7002,10 +7564,9 @@ class OCRUploadWidgetState extends State<OCRUploadWidget> {
 
       if (_useVeryfi) {
         // Use Veryfi cloud OCR
-        parsedData = await _processWithVeryfi(
-          await image.readAsBytes(),
-          image.name,
-        );
+        final bytes = await image.readAsBytes();
+        if (!mounted) return;
+        parsedData = await _processWithVeryfi(bytes, image.name);
       } else {
         // Process with local OCR
         final recognizedText = await _ocrService.processImage(image.path);
@@ -7024,6 +7585,7 @@ class OCRUploadWidgetState extends State<OCRUploadWidget> {
         fileName: image.name,
       );
 
+      if (!mounted) return;
       final prepared = await _prepareInvoiceForReview(
         parsedData,
         fileName: image.name,
@@ -7044,49 +7606,42 @@ class OCRUploadWidgetState extends State<OCRUploadWidget> {
       if (!widget.showPreview) {
         await _handleUseParsedData(parsedData);
       }
-    } catch (e) {
-      debugPrint('❌ OCR error: $e');
-      final errorMsg = _formatError(e);
-
-      setState(() {
-        _errorMessage = errorMsg;
-        _isProcessing = false;
-      });
-
-      if (widget.onError != null) {
-        widget.onError!(errorMsg);
-      }
+    } catch (error) {
+      _handleInvoiceFileProcessingError(error);
+    } finally {
+      if (mounted) setState(() => _isPickingSource = false);
     }
   }
 
   Future<void> _pickInvoiceFile() async {
+    if (!mounted || _isProcessing || _isPickingSource) return;
     setState(() {
-      _isProcessing = true;
+      _isPickingSource = true;
       _errorMessage = null;
       _isDraggingInvoiceFile = false;
     });
-
     try {
-      // Pick invoice file (withData: true for web compatibility)
       final result = await FilePicker.platform.pickFiles(
         type: FileType.custom,
         allowedExtensions: _invoiceFilePickerExtensions,
-        withData: true, // Load bytes for web
+        withData: true,
       );
-
-      if (result == null || result.files.isEmpty) {
-        setState(() => _isProcessing = false);
-        return;
-      }
-
+      if (!mounted) return;
+      if (result == null || result.files.isEmpty) return;
+      setState(() {
+        _isPickingSource = false;
+        _isProcessing = true;
+      });
       await _processInvoicePlatformFile(result.files.first);
-    } catch (e) {
-      _handleInvoiceFileProcessingError(e);
+    } catch (error) {
+      _handleInvoiceFileProcessingError(error);
+    } finally {
+      if (mounted) setState(() => _isPickingSource = false);
     }
   }
 
   Future<void> _handleDroppedInvoiceFiles(List<DropItem> files) async {
-    if (_isProcessing) return;
+    if (!mounted || _isProcessing || _isPickingSource) return;
 
     setState(() {
       _isProcessing = true;
@@ -7141,6 +7696,7 @@ class OCRUploadWidgetState extends State<OCRUploadWidget> {
     String? sourceSupplierWebsite,
     Map<String, dynamic>? structuredInvoiceData,
   }) async {
+    if (!mounted) return;
     _isReadOnlyEvaluation = structuredInvoiceData?['evaluationOnly'] == true;
     ParsedInvoice? parsedData;
     ParsedInvoice? directPdfParsedData;
@@ -7224,6 +7780,7 @@ class OCRUploadWidgetState extends State<OCRUploadWidget> {
       fileName: fileName,
     );
 
+    if (!mounted) return;
     final prepared = await _prepareInvoiceForReview(
       parsedData,
       fileName: fileName,
@@ -7249,6 +7806,7 @@ class OCRUploadWidgetState extends State<OCRUploadWidget> {
   }
 
   void _handleInvoiceFileProcessingError(Object error) {
+    if (!mounted) return;
     debugPrint('❌ Invoice file processing error: $error');
     final errorMsg = _formatError(error);
 
@@ -8051,6 +8609,7 @@ class OCRUploadWidgetState extends State<OCRUploadWidget> {
 
   @override
   void dispose() {
+    _cancelPreviewCodeLookups();
     for (final timer in _identityRecomputeTimers.values) {
       timer.cancel();
     }
@@ -8074,6 +8633,41 @@ class OCRUploadWidgetState extends State<OCRUploadWidget> {
 enum OCRDocumentType {
   invoice, // Factura (extracts full invoice data)
   receipt, // Boleta/Recibo (simpler format)
+}
+
+/// Reads and validates a single local image dropped on an OCR product.
+/// Storage upload remains owned by the confirmed batch-creation operation.
+@visibleForTesting
+Future<({Uint8List bytes, String name})> readOcrProductImageDrop(
+    List<DropItem> files) async {
+  if (files.length != 1 || files.single is DropItemDirectory) {
+    throw const FormatException('Suelta una sola imagen sobre el producto.');
+  }
+  final file = files.single;
+  final bookmark = file.extraAppleBookmark;
+  var scopedAccess = false;
+  try {
+    if (!kIsWeb &&
+        defaultTargetPlatform == TargetPlatform.macOS &&
+        bookmark != null &&
+        bookmark.isNotEmpty) {
+      scopedAccess = await DesktopDrop.instance
+          .startAccessingSecurityScopedResource(bookmark: bookmark);
+    }
+    final bytes = await file.readAsBytes().timeout(const Duration(seconds: 12));
+    try {
+      final codec = await ui.instantiateImageCodec(bytes);
+      codec.dispose();
+    } catch (_) {
+      throw const FormatException('El archivo no es una imagen compatible.');
+    }
+    return (bytes: bytes, name: file.name);
+  } finally {
+    if (scopedAccess) {
+      await DesktopDrop.instance
+          .stopAccessingSecurityScopedResource(bookmark: bookmark!);
+    }
+  }
 }
 
 class _PreparedOcrInvoice {
@@ -8173,6 +8767,16 @@ String _ocrPreviewQuantityLabel(double value) => value == value.roundToDouble()
 /// columns the operator opens this screen to read.
 const double _previewTableFloor = 1286;
 
+/// One automatic comparison pass over a review: which rows it will take and
+/// whether the catalog it needs has arrived.
+class _ComparisonBatch {
+  _ComparisonBatch({required this.generation, required this.reviewIds});
+
+  final int generation;
+  final Set<String> reviewIds;
+  bool catalogReady = false;
+}
+
 class _NewProductEntry {
   static int _nextReviewSequence = 0;
 
@@ -8192,6 +8796,7 @@ class _NewProductEntry {
   bool brandUserEdited = false;
   String? imageUrl;
   String? imageUrlOptimized;
+  int imageSelectionRevision = 0;
   Uint8List? imageBytes;
   String? imageFileName;
   bool isUploadingImage = false;
@@ -8220,9 +8825,14 @@ class _NewProductEntry {
   final TextEditingController purchaseUnitsController =
       TextEditingController(text: '1');
 
-  static String _reviewNumber(double value) => value == value.roundToDouble()
-      ? value.toInt().toString()
-      : value.toStringAsFixed(4);
+  /// CLP has no cents: a unit cost like 40242 / 5 shows as 8048.4, never as
+  /// 8048.4000. Whole numbers show as integers.
+  static String _reviewNumber(double value) {
+    final rounded = (value * 10).round() / 10;
+    return rounded == rounded.roundToDouble()
+        ? rounded.toInt().toString()
+        : rounded.toStringAsFixed(1);
+  }
 
   OcrPurchaseAmounts get purchaseAmounts => OcrPurchaseAmounts(
       purchasedQuantity: double.tryParse(
@@ -8260,6 +8870,13 @@ class _NewProductEntry {
       TextEditingController(text: '1');
   bool ignoreStoredResolution = false;
   bool isCheckingSimilar = false;
+
+  /// Held by the automatic comparison pass: the catalog is loading or every
+  /// worker is busy with another row. The row shows its `X-01` silhouette and
+  /// is not «pendiente» (`_needsSimilaritySearch` is false), so a manual
+  /// «Reintentar pendientes» cannot start it twice. The pass clears it the
+  /// moment it takes the row, or when it gives up on it.
+  bool isQueuedForComparison = false;
   bool isLinkingExisting = false;
   inv_models.Product? linkedProduct;
 
@@ -8301,6 +8918,22 @@ class _NewProductEntry {
   SupplierVariantResolution? suggestedSupplierResolution;
   SupplierVariantResolution? priorSupplierResolution;
   bool supplierResolutionAccepted = false;
+
+  /// «Cambiar» on the remembered rule: the operator keeps their own choice.
+  bool supplierRuleRejected = false;
+
+  /// The rule this session wrote for the link confirmed in step 2. Kept apart
+  /// from [supplierResolution] so a plain link never turns into an applied
+  /// composition in the row.
+  SupplierVariantResolution? learnedSupplierResolution;
+
+  /// A remembered rule exists and the operator has neither applied nor
+  /// changed it. Only rows linked to an existing product can be pending.
+  bool get supplierRulePending =>
+      identityDecision == OcrProductIdentityDecision.existing &&
+      !supplierResolutionAccepted &&
+      !supplierRuleRejected &&
+      (suggestedSupplierResolution != null || hasSupplierResolution);
   List<inv_models.Product> supplierResolutionProducts = const [];
   String? supplierResolutionOperationId;
   String? supplierResolutionOperationFingerprint;
@@ -8447,6 +9080,7 @@ class _NewProductEntry {
     aiVisualAnalysis = null;
     isAICleaningName = false;
     isCheckingSimilar = false;
+    isQueuedForComparison = false;
     isLinkingExisting = false;
     similarCandidates = [];
     independentDuplicateResult = null;
@@ -8481,6 +9115,7 @@ class _NewProductEntry {
     }
     isAICleaningName = false;
     isCheckingSimilar = false;
+    isQueuedForComparison = false;
     isLinkingExisting = false;
     similarCandidates = [];
     independentDuplicateResult = null;
@@ -8492,6 +9127,7 @@ class _NewProductEntry {
 
   void markSearching() {
     isCheckingSimilar = true;
+    isQueuedForComparison = false;
     independentDuplicateResult = null;
     duplicateResult = null;
     supplierResolutionProposal = null;
@@ -8608,6 +9244,7 @@ class _NewProductEntry {
 
   void markResolutionFailed(Object error) {
     isCheckingSimilar = false;
+    isQueuedForComparison = false;
     resolutionError = error.toString();
     resolutionState = OcrProductResolutionState.failed;
   }
@@ -8615,6 +9252,7 @@ class _NewProductEntry {
   void cancelTransientReviewWork() {
     final wasTransient = isAICleaningName ||
         isCheckingSimilar ||
+        isQueuedForComparison ||
         isLinkingExisting ||
         isUploadingImage ||
         resolutionState == OcrProductResolutionState.searching;
@@ -8622,6 +9260,7 @@ class _NewProductEntry {
     resolutionRevision++;
     isAICleaningName = false;
     isCheckingSimilar = false;
+    isQueuedForComparison = false;
     isLinkingExisting = false;
     isUploadingImage = false;
     if (resolutionState == OcrProductResolutionState.searching) {
@@ -8856,6 +9495,7 @@ class _OCRRowDiagnostics {
 class _OCRInvoiceDiagnostics {
   final int lineCount;
   final double rowTotal;
+  final double separateTax;
   final double? headerTotal;
   final double delta;
   final bool hasTotalMismatch;
@@ -8866,6 +9506,7 @@ class _OCRInvoiceDiagnostics {
   const _OCRInvoiceDiagnostics({
     required this.lineCount,
     required this.rowTotal,
+    required this.separateTax,
     required this.headerTotal,
     required this.delta,
     required this.hasTotalMismatch,

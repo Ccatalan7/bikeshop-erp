@@ -449,6 +449,17 @@ Agregar telemetría de desarrollo o métricas de bajo ruido para:
 La optimización se considera efectiva cuando reduce lecturas y latencia sin
 perder frescura, aislamiento, errores reales ni actualizaciones multiusuario.
 
+### Una selección conocida no espera a sus datos derivados (2026-09-07)
+
+En el ingreso OCR, el selector ya devolvía el proveedor completo, pero su nombre
+se publicaba sólo después de verificar todas las líneas contra inventario. La
+latencia de esas consultas parecía una selección ignorada. La selección y su
+plantilla local se publican al cerrar el selector; los vínculos anteriores se
+invalidan y la verificación conserva su estado y su bloqueo de continuación.
+Su resultado sólo puede publicarse si sigue vigente la generación del documento.
+La regresión mantiene las consultas pendientes y comprueba el nombre visible
+antes de resolverlas, además de rechazar resultados tras reemplazar el documento.
+
 ## 9. Regresiones mínimas por consumidor
 
 1. Respuesta A empieza, B empieza, A termina última: sólo B publica.

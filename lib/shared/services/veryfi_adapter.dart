@@ -427,7 +427,8 @@ class VeryfiAdapter {
     final netAmount = (veryfiJson['subtotal'] as num?)?.toDouble() ??
         (veryfiJson['net_amount'] as num?)?.toDouble();
     final taxAmount = (veryfiJson['tax_amount'] as num?)?.toDouble() ??
-        (veryfiJson['total_tax'] as num?)?.toDouble();
+        (veryfiJson['total_tax'] as num?)?.toDouble() ??
+        (veryfiJson['tax'] as num?)?.toDouble();
 
     final rawLines = (veryfiJson['line_items'] ??
             veryfiJson['lines'] ??
@@ -640,7 +641,34 @@ class VeryfiAdapter {
         }
       }
 
-      // Pass exactly what Veryfi gave us. No smart inferences!
+      // Some invoices print only quantity and line total. Recover a missing
+      // unit price algebraically, never by assuming a quantity or catalog cost.
+      // An explicit price (including zero) remains source evidence.
+      if (price == null &&
+          qty != null &&
+          qty.isFinite &&
+          qty > 0 &&
+          lineTotal != null &&
+          lineTotal.isFinite &&
+          lineTotal >= 0 &&
+          (discount == null || (discount.isFinite && discount >= 0)) &&
+          (discountRate == null ||
+              (discountRate.isFinite &&
+                  discountRate >= 0 &&
+                  discountRate < 100))) {
+        final gross = discount != null
+            ? lineTotal + discount
+            : lineTotal / (1 - (discountRate ?? 0) / 100);
+        final calculatedPrice = gross / qty;
+        final discountsAgree = discount == null ||
+            discountRate == null ||
+            (gross * discountRate / 100 - discount).abs() <= 1;
+        if (calculatedPrice.isFinite && discountsAgree) {
+          price = calculatedPrice;
+          adjustments.add('Costo unitario calculado desde total y cantidad');
+        }
+      }
+
       parsedItems.add(ParsedLineItem(
         description: desc,
         sku: sku,

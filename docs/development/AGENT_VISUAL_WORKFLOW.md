@@ -364,6 +364,19 @@ scripts/dev/app_control.sh tap --label "Nóminas" --index 0
 Si `tap` se queja de varios candidatos, `find --label X` los lista y `--index N`
 desempata. Nunca por coordenada.
 
+**La rueda no mueve la lista de la revisión OCR; el drag sí (2026-09-05).**
+`scroll X Y N` con el punto dentro del batch no desplazó nada;
+`drag 1000 800 1000 300` sí. Para tocar una fila fuera de pantalla: `find
+--key` en bucle con un `drag` corto entre intentos, y se declara «no
+alcanzable» si tras cinco no aparece.
+
+**En el picker, `--index` cuenta botones en el orden del árbol, no el visual
+(2026-09-05).** «Seleccionar producto» índice 1 vinculó el candidato que se
+veía primero. Se localiza el botón por la coordenada `y` del nombre del
+candidato (`find --label "<nombre>"`) y se toca el `find --label "Seleccionar
+producto"` de esa misma fila; o se escribe en el buscador del picker hasta que
+quede un solo botón.
+
 ### Llegar a un módulo EN COMPACTO (por el drawer)
 
 Por debajo de 900 no hay barra lateral, y el drawer no se deja tocar por

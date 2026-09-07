@@ -79,6 +79,7 @@ class VbSearchableSelect<T> extends StatefulWidget {
     this.showLabel = true,
     this.allowClear = false,
     this.clearLabel = 'Sin especificar',
+    this.useTouchLayout,
   });
 
   final T? value;
@@ -104,6 +105,10 @@ class VbSearchableSelect<T> extends StatefulWidget {
   /// Visible wording for the empty choice. The default preserves the generic
   /// S-06 vocabulary; domain selectors should name what is being omitted.
   final String clearLabel;
+
+  /// An embedded host may be narrower than the application MediaQuery.
+  /// Null preserves the ordinary full-route responsive behavior.
+  final bool? useTouchLayout;
 
   /// Height of one result row on desktop.
   static const double optionHeight = 34;
@@ -131,7 +136,8 @@ class _VbSearchableSelectState<T> extends State<VbSearchableSelect<T>> {
   }
 
   bool _isTouchHost(BuildContext context) =>
-      MediaQuery.sizeOf(context).width < ResponsiveBreakpoints.desktopMin;
+      widget.useTouchLayout ??
+      (MediaQuery.sizeOf(context).width < ResponsiveBreakpoints.desktopMin);
 
   Future<void> _open_() async {
     if (!_enabled || widget.options.isEmpty) return;

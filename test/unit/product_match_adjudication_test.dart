@@ -315,6 +315,49 @@ void main() {
     );
   });
 
+  test('lo que la IA eligió va primero en la lista del picker', () {
+    // 2026-09-05: un composite «sillín ×2» dejaba al sillín elegido en el
+    // puesto 17 de 17, bajo dieciséis que la IA no había elegido.
+    final original = <ProductDuplicateCandidate>[
+      _manualCandidate(id: 'a', sku: 'A', name: 'Sillín A'),
+      _manualCandidate(id: 'b', sku: 'B', name: 'Sillín B'),
+      _manualCandidate(id: 'c', sku: 'C', name: 'Sillín C'),
+    ];
+    final composite = AIProductMatchDecision(
+      decision: AIProductMatchDecisionKind.composite,
+      productId: null,
+      components: const <AIProductMatchComponent>[
+        AIProductMatchComponent(
+            productId: 'c',
+            quantity: 2,
+            role: AIProductMatchComponentRole.homogeneous),
+      ],
+      reason: 'dos del mismo sillín',
+      confidence: 0.9,
+    );
+    final ordered =
+        applyAIManualReviewOrder(decision: composite, candidates: original);
+    expect(ordered.map((candidate) => candidate.product.id),
+        <String>['c', 'a', 'b']);
+    expect(ordered.first.reasons.first, 'Elegido por la IA');
+
+    final same = AIProductMatchDecision(
+      decision: AIProductMatchDecisionKind.same,
+      productId: 'b',
+      reason: 'es el B',
+      confidence: 0.95,
+    );
+    expect(
+        applyAIManualReviewOrder(decision: same, candidates: original)
+            .map((candidate) => candidate.product.id),
+        <String>['b', 'a', 'c']);
+    expect(
+        applyAIManualReviewOrder(decision: null, candidates: original)
+            .map((candidate) => candidate.product.id),
+        <String>['a', 'b', 'c'],
+        reason: 'sin recibo, el orden del catálogo no se toca');
+  });
+
   test('propone un conjunto sólo con ids ofrecidos y cantidades positivas',
       () async {
     final proxy = _ScriptedProxy(

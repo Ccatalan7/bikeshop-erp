@@ -727,6 +727,18 @@ overflow regression.
 Phone and tablet recomposition is owned by the mobile guide. A desktop table
 must not become a horizontally scrolling miniature table by default.
 
+**OCR image editing, correction 2026-09-07.** Replacing the batch image control
+with a clickable thumbnail dropped its file-drop interaction. For this surface,
+click and drop must reach the same local draft owner; upload still belongs to
+confirmation. Keep removal available for local bytes, not just remote URLs.
+A thumbnail removal overlay must fit the thumbnail's corner in both paint and
+hit testing. The full 28 px surface button obscured most of a 34 px image; this
+surface fits the shared button into a 16 px footprint. The remaining image must
+still open its own action, and its tooltip must not compete with removal.
+The regression delivers a platform drop to a specific row in desktop/compact,
+checks that another row is untouched, preserves click selection and disables
+drops behind overlays or while the row is busy/read-only.
+
 ### Una etapa que pide N decisiones es una tabla (corrección del dueño, 2026-08-10)
 
 Cuando el operador tiene que **contestar muchas filas del mismo tipo**, la
@@ -912,6 +924,22 @@ Forms should reflect the operator's mental model, not the storage schema.
   visible value while the command serializes the new kind. The minimum
   regression changes the kind and verifies that the rendered value, available
   operators, validation, and submitted command remain identical.
+- **2026-09-06, dynamic ficha inputs:** when an inner field needs a changing
+  key to reset its controller, expose a stable semantic identity around that
+  editable field as well. A separately drawn visual label must still name the
+  input when it receives accessibility focus. Preserve the child's editable
+  semantics; do not exclude them just to remove a duplicate visual label.
+- **2026-09-07, explicit clear in dependent ficha cells:** when a prerequisite
+  is unknown and an existing cell remains visible, clearing the observation
+  must clear its rendered text even though row identity and field kind did not
+  change. Synchronize external replacement/clear separately from normalized
+  local keystrokes, so an ordinary rebuild preserves the cursor and unfinished
+  decimal input. The minimum regression checks both the command data and the
+  actual editable controller after clear, and preserves other rows and sources.
+  Minimum regression: change the reference/category, address the live field by
+  its stable identity, enter a value and verify the rendered value, validation
+  and draft. An offscreen target must first be scrolled into view; its presence
+  in the semantics tree does not make it hittable.
 
 Compact forms must also follow the mobile guide's keyboard, focus, SafeArea,
 scroll-to-error, and persistent-action rules.
@@ -1251,3 +1279,63 @@ visibles y columnas alineadas; no se usa expansión por producto. La regresión
 comprueba selección sin escritura, reglas inaccesibles antes de identificar y
 campos visibles sólo en el lote nuevo. Son condiciones de este trabajo masivo,
 no una receta de componentes para otros módulos.
+
+**2026-09-07, edición tabular de productos nuevos.** El encabezado y las filas
+deben compartir la misma definición de columnas. No basta con alinear sus
+cajas externas: `InputDecorator` puede pintar un borde más bajo que su
+`SizedBox` por el padding del texto y la densidad ambiente. La regresión mide
+el contenedor pintado del campo y lo compara con la altura del selector;
+los controles conservan la altura de la guía y centran el texto del tema.
+El encabezado reemplaza la etiqueta visual por celda, pero nunca su nombre
+accesible. La validación aparece sólo bajo el campo responsable, y las opciones
+que se guardan con el lote permanecen dentro de su columna. Estos límites
+se validaron en el paso 3 de OCR con dos productos reales y en claro/oscuro;
+no justifican reducir todos los formularios del ERP a una cuadrícula.
+
+### Cantidades y costos es una tabla, y la regla anterior se ve (corrección del dueño, 2026-09-05)
+
+El paso 2 se había hecho como fichas apiladas: cuatro campos con rótulo, una
+ecuación, tres botones y «Confirmar línea» por fila, una pantalla por línea.
+El dueño: «debería ser una tabla ordenada, no esa mierda… aprovecha muy mal el
+espacio y da más trabajo del que ahorra». Cuando cada fila pide los mismos
+tres números y una decisión, es T-01: header 30 con overline sobre la
+superficie hundida, filas 48 con hairline, la identidad flexible y las cifras
+con ancho fijo, y las celdas editables como I-01 de 34 px sin rótulo propio
+—el encabezado es el rótulo—. La composición aplicada abre como filas
+sangradas (T-03) bajo su línea, no como un panel. El pie confirma las filas
+«Listo»; no existe un botón por fila que repita al del pie.
+
+Lo que hacía «infantil» a la superficie no estaba en el widget: era la semilla
+`#1976D2` del preset y unos tonos aproximados en el resolver. Se corrigió en
+el dueño de la paleta, no pintando encima (ver
+`docs/architecture/appearance-palette-contract.md`); el fg success se quedó en
+`#18764B` porque el de la guía mide 4,36:1 sobre blanco y el contrato pide 4,5.
+
+Y una regla recordada nunca es «el sistema sabe»: se muestra con quién la
+confirmó y cuándo, se aplica sola sólo cuando nombra el producto que el
+operador acaba de elegir, y si nombra otro, bloquea el lote hasta «Aplicar» o
+«Cambiar». Las condiciones se prueban en
+`test/widget/ocr_product_review_workspace_test.dart` (tabla en 1440 y 430,
+claro y oscuro, filas de composición, regla con autor) y en
+`test/unit/ocr_purchase_review_flow_test.dart` (`rulesSettled`).
+
+### El botón del tema no es el botón de la guía (corrección del dueño, 2026-09-05, tarde)
+
+El paso 1 volvió a verse «terrible, desnivelado» con la paleta ya corregida:
+la fila apilaba una tarjeta con borde para la coincidencia, un enlace suelto y
+dos botones Material de 48 px de alturas distintas en una columna de 172, y el
+accent llenaba un bloque por línea. El tema define `FilledButton` y
+`OutlinedButton` con `minimumSize` 48 —eso es el control heredado, no el A-01—.
+**A-01 vive en `lib/shared/widgets/vb_button.dart` (`VbButton`)**: cuatro
+variantes, alto por densidad 32 · 38 · 48, padding 14/16, radio 8, rótulo
+12/600 de una línea, `busy` que conserva el rótulo y `disabledReason` al lado.
+Una fila de tabla usa `VbDensity.compact`; el pie, comfortable; bajo 900 px,
+touch. Un `Container(alignment:)` dentro de un `Wrap` o `Column` se estira al
+ancho de la celda y centra el rótulo: el botón mide su rótulo con
+`Center(widthFactor: 1)`.
+
+El paso 1 pasó a la misma tabla T-01 del paso 2 (`ocr_identity_table.dart`):
+tres celdas alineadas arriba —lo leído, la coincidencia sin tarjeta, la
+decisión—, hairline entre filas, un solo botón accent por fila sin decidir,
+badge neutral «Seleccionado» y «Cambiar» en texto cuando ya se decidió.
+Regresión: `test/widget/vb_button_test.dart` y la batería del workspace.

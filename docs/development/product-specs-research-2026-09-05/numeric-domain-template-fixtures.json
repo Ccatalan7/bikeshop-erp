@@ -1,0 +1,3846 @@
+[
+  {
+    "key": "bottom_bracket_axle",
+    "technical_family": "bottom_bracket_axle",
+    "form_contract": {
+      "coverage": "template",
+      "helpers": {},
+      "labels": {},
+      "prerequisites": {},
+      "roles": {
+        "bb_construction": "primary",
+        "spec_evidence_source": "declaration",
+        "spindle_diameter_mm": "measurement",
+        "spindle_interface": "primary",
+        "spindle_length_mm": "measurement"
+      },
+      "version": 1
+    },
+    "fields": [
+      {
+        "key": "bb_construction",
+        "section": "compatibility",
+        "sort_order": 10,
+        "required": true,
+        "visibility_rules": [],
+        "constraint_rules": [],
+        "label": "Construcción",
+        "data_type": "single_select",
+        "allowed_values": [
+          "Rodamiento sellado",
+          "Integrado",
+          "Cubetas y canastillo",
+          "A presión",
+          "Roscado entre sí"
+        ],
+        "validation_rules": {}
+      },
+      {
+        "key": "spec_evidence_source",
+        "section": "declaration",
+        "sort_order": 5,
+        "required": false,
+        "visibility_rules": [],
+        "constraint_rules": [],
+        "label": "Fuente de la declaración",
+        "data_type": "text",
+        "allowed_values": [],
+        "validation_rules": {}
+      },
+      {
+        "key": "spindle_length_mm",
+        "section": "dimensions",
+        "sort_order": 30,
+        "required": false,
+        "visibility_rules": [
+          {
+            "field": "spindle_interface",
+            "operator": "is_set"
+          }
+        ],
+        "constraint_rules": [],
+        "label": "Largo eje",
+        "data_type": "number",
+        "allowed_values": [
+          "103",
+          "107",
+          "108",
+          "109",
+          "110",
+          "110.5",
+          "113",
+          "113.5",
+          "116",
+          "118",
+          "118.5",
+          "119",
+          "121",
+          "122.5",
+          "124",
+          "124.5",
+          "125",
+          "125.5",
+          "126",
+          "127",
+          "127.5",
+          "128",
+          "131",
+          "135",
+          "140",
+          "145",
+          "147"
+        ],
+        "validation_rules": {
+          "positive": true
+        }
+      },
+      {
+        "key": "spindle_interface",
+        "section": "compatibility",
+        "sort_order": 20,
+        "required": true,
+        "visibility_rules": [
+          {
+            "field": "bb_construction",
+            "operator": "is_set"
+          }
+        ],
+        "constraint_rules": [],
+        "label": "Punta del eje",
+        "data_type": "single_select",
+        "allowed_values": [
+          "Cuadrado JIS",
+          "Cuadrado ISO",
+          "Hollowtech / 24mm",
+          "SRAM GXP 24/22",
+          "SRAM DUB 28.99mm",
+          "BB30 30mm",
+          "ISIS",
+          "Octalink",
+          "Con chaveta",
+          "BMX 19mm",
+          "BMX 22mm",
+          "BMX 24mm",
+          "One-piece / americano",
+          "Powerspline"
+        ],
+        "validation_rules": {}
+      },
+      {
+        "key": "spindle_diameter_mm",
+        "section": "dimensions",
+        "sort_order": 40,
+        "required": false,
+        "visibility_rules": [
+          {
+            "field": "spindle_interface",
+            "operator": "in",
+            "value": [
+              "BMX 19mm",
+              "BMX 22mm",
+              "BMX 24mm"
+            ]
+          }
+        ],
+        "constraint_rules": [],
+        "label": "Diámetro eje",
+        "data_type": "number",
+        "allowed_values": [
+          "17",
+          "19",
+          "20",
+          "22",
+          "24",
+          "25.4",
+          "28.99",
+          "30"
+        ],
+        "validation_rules": {
+          "positive": true
+        }
+      }
+    ]
+  },
+  {
+    "key": "rear_derailleur",
+    "technical_family": "rear_derailleur",
+    "form_contract": {
+      "coverage": "template",
+      "helpers": {},
+      "labels": {},
+      "prerequisites": {},
+      "roles": {
+        "derailleur_cage_length": "primary",
+        "derailleur_clutch": "measurement",
+        "drivetrain_declared_compatible_ecosystems": "declaration",
+        "drivetrain_platform": "primary",
+        "drivetrain_primary_ecosystem": "primary",
+        "drivetrain_speeds": "primary",
+        "rear_derailleur_max_teeth": "measurement",
+        "rear_derailleur_min_teeth": "measurement",
+        "rear_derailleur_mount_type": "primary",
+        "rear_derailleur_total_capacity_teeth": "measurement",
+        "shift_actuation_family": "primary",
+        "spec_evidence_source": "declaration"
+      },
+      "version": 1
+    },
+    "fields": [
+      {
+        "key": "spec_evidence_source",
+        "section": "declaration",
+        "sort_order": 5,
+        "required": false,
+        "visibility_rules": [],
+        "constraint_rules": [],
+        "label": "Fuente de la declaración",
+        "data_type": "text",
+        "allowed_values": [],
+        "validation_rules": {}
+      },
+      {
+        "key": "drivetrain_speeds",
+        "section": "compatibility",
+        "sort_order": 10,
+        "required": true,
+        "visibility_rules": [],
+        "constraint_rules": [],
+        "label": "Velocidades transmisión",
+        "data_type": "multi_select",
+        "allowed_values": [
+          "1",
+          "5",
+          "6",
+          "7",
+          "8",
+          "9",
+          "10",
+          "11",
+          "12",
+          "13"
+        ],
+        "validation_rules": {}
+      },
+      {
+        "key": "drivetrain_declared_compatible_ecosystems",
+        "section": "compatibility",
+        "sort_order": 25,
+        "required": false,
+        "visibility_rules": [],
+        "constraint_rules": [],
+        "label": "Ecosistemas compatibles declarados",
+        "data_type": "multi_select",
+        "allowed_values": [
+          "Ecosistema Shimano",
+          "Ecosistema SRAM",
+          "Ecosistema Campagnolo",
+          "Ecosistema Microshift",
+          "Universal / generico",
+          "Single speed / BMX",
+          "Otro",
+          "Desconocido / sin confirmar"
+        ],
+        "validation_rules": {}
+      },
+      {
+        "key": "drivetrain_platform",
+        "section": "compatibility",
+        "sort_order": 30,
+        "required": false,
+        "visibility_rules": [],
+        "constraint_rules": [],
+        "label": "Plataforma transmision",
+        "data_type": "single_select",
+        "allowed_values": [
+          "Shimano HG / SIS",
+          "Shimano Hyperglide+",
+          "Shimano Linkglide / CUES",
+          "SRAM Eagle",
+          "SRAM FlatTop / AXS road",
+          "SRAM T-Type Transmission",
+          "Campagnolo",
+          "Microshift Advent / Acolyte",
+          "Friccion / universal",
+          "Single speed / BMX",
+          "Generico compatible",
+          "Desconocido / sin confirmar"
+        ],
+        "validation_rules": {}
+      },
+      {
+        "key": "shift_actuation_family",
+        "section": "compatibility",
+        "sort_order": 20,
+        "required": false,
+        "visibility_rules": [],
+        "constraint_rules": [],
+        "label": "Familia indexado / tiro",
+        "data_type": "single_select",
+        "allowed_values": [
+          "Shimano SIS 6-9v",
+          "Shimano Dynasys 10v",
+          "Shimano Dynasys 11/12v",
+          "Shimano CUES / Linkglide",
+          "Shimano ruta",
+          "SRAM Exact Actuation",
+          "SRAM X-Actuation / Eagle",
+          "SRAM AXS road / FlatTop",
+          "SRAM T-Type Transmission",
+          "Campagnolo",
+          "Microshift Advent / Acolyte",
+          "Friccion / universal",
+          "Otro",
+          "Desconocido / sin confirmar"
+        ],
+        "validation_rules": {}
+      },
+      {
+        "key": "rear_derailleur_mount_type",
+        "section": "mounting",
+        "sort_order": 10,
+        "required": false,
+        "visibility_rules": [],
+        "constraint_rules": [],
+        "label": "Montaje cambio trasero",
+        "data_type": "single_select",
+        "allowed_values": [
+          "Pata/postiza estándar",
+          "Direct mount",
+          "Con uña / claw",
+          "Extensor de pata",
+          "Otro",
+          "Desconocido / sin confirmar"
+        ],
+        "validation_rules": {}
+      },
+      {
+        "key": "derailleur_cage_length",
+        "section": "range",
+        "sort_order": 20,
+        "required": false,
+        "visibility_rules": [],
+        "constraint_rules": [],
+        "label": "Largo caja cambio",
+        "data_type": "single_select",
+        "allowed_values": [
+          "SS / corta",
+          "GS / media",
+          "SGS / larga",
+          "Otro",
+          "Desconocido / sin confirmar"
+        ],
+        "validation_rules": {}
+      },
+      {
+        "key": "rear_derailleur_max_teeth",
+        "section": "range",
+        "sort_order": 10,
+        "required": false,
+        "visibility_rules": [],
+        "constraint_rules": [],
+        "label": "Máximo piñón cambio trasero",
+        "data_type": "number",
+        "allowed_values": [],
+        "validation_rules": {
+          "positive": true,
+          "integer": true
+        }
+      },
+      {
+        "key": "rear_derailleur_total_capacity_teeth",
+        "section": "range",
+        "sort_order": 30,
+        "required": false,
+        "visibility_rules": [],
+        "constraint_rules": [],
+        "label": "Capacidad total cambio trasero",
+        "data_type": "number",
+        "allowed_values": [],
+        "validation_rules": {
+          "min": 0,
+          "integer": true
+        }
+      },
+      {
+        "key": "rear_derailleur_min_teeth",
+        "section": "range",
+        "sort_order": 15,
+        "required": false,
+        "visibility_rules": [],
+        "constraint_rules": [],
+        "label": "Minimo pinon cambio trasero",
+        "data_type": "number",
+        "allowed_values": [],
+        "validation_rules": {
+          "positive": true,
+          "integer": true
+        }
+      },
+      {
+        "key": "drivetrain_primary_ecosystem",
+        "section": "compatibility",
+        "sort_order": 20,
+        "required": false,
+        "visibility_rules": [],
+        "constraint_rules": [],
+        "label": "Familia tecnica / ecosistema principal",
+        "data_type": "single_select",
+        "allowed_values": [
+          "Ecosistema Shimano",
+          "Ecosistema SRAM",
+          "Ecosistema Campagnolo",
+          "Ecosistema Microshift",
+          "Universal / generico",
+          "Single speed / BMX",
+          "Otro",
+          "Desconocido / sin confirmar"
+        ],
+        "validation_rules": {}
+      },
+      {
+        "key": "derailleur_clutch",
+        "section": "features",
+        "sort_order": 10,
+        "required": false,
+        "visibility_rules": [],
+        "constraint_rules": [],
+        "label": "Cambio con clutch",
+        "data_type": "boolean",
+        "allowed_values": [],
+        "validation_rules": {}
+      }
+    ]
+  },
+  {
+    "key": "chain_guide",
+    "technical_family": "chain_guide",
+    "form_contract": {
+      "coverage": "template",
+      "helpers": {},
+      "labels": {},
+      "prerequisites": {},
+      "roles": {
+        "chain_guide_mount_type": "primary",
+        "chainline_mm": "measurement",
+        "chainring_teeth": "primary",
+        "spec_evidence_source": "declaration"
+      },
+      "version": 1
+    },
+    "fields": [
+      {
+        "key": "chain_guide_mount_type",
+        "section": "mounting",
+        "sort_order": 10,
+        "required": false,
+        "visibility_rules": [],
+        "constraint_rules": [],
+        "label": "Montaje guía cadena",
+        "data_type": "single_select",
+        "allowed_values": [
+          "ISCG 05",
+          "BB mount",
+          "Seat tube",
+          "Direct mount",
+          "Otro",
+          "Desconocido / sin confirmar"
+        ],
+        "validation_rules": {}
+      },
+      {
+        "key": "chainline_mm",
+        "section": "compatibility",
+        "sort_order": 20,
+        "required": false,
+        "visibility_rules": [],
+        "constraint_rules": [],
+        "label": "Línea de cadena",
+        "data_type": "number",
+        "allowed_values": [],
+        "validation_rules": {
+          "positive": true
+        }
+      },
+      {
+        "key": "chainring_teeth",
+        "section": "compatibility",
+        "sort_order": 10,
+        "required": false,
+        "visibility_rules": [],
+        "constraint_rules": [],
+        "label": "Dientes plato/corona",
+        "data_type": "text",
+        "allowed_values": [],
+        "validation_rules": {}
+      },
+      {
+        "key": "spec_evidence_source",
+        "section": "declaration",
+        "sort_order": 5,
+        "required": false,
+        "visibility_rules": [],
+        "constraint_rules": [],
+        "label": "Fuente de la declaración",
+        "data_type": "text",
+        "allowed_values": [],
+        "validation_rules": {}
+      }
+    ]
+  },
+  {
+    "key": "chainring",
+    "technical_family": "chainring",
+    "form_contract": {
+      "coverage": "template",
+      "helpers": {},
+      "labels": {},
+      "prerequisites": {},
+      "roles": {
+        "chain_profile_family": "primary",
+        "chain_width_family": "measurement",
+        "chainring_bcd_mm": "measurement",
+        "chainring_bolt_count": "primary",
+        "chainring_mount_type": "primary",
+        "chainring_offset_mm": "measurement",
+        "chainring_teeth": "primary",
+        "drivetrain_platform": "primary",
+        "drivetrain_speeds": "primary",
+        "narrow_wide": "measurement",
+        "spec_evidence_source": "declaration"
+      },
+      "version": 1
+    },
+    "fields": [
+      {
+        "key": "chain_profile_family",
+        "section": "compatibility",
+        "sort_order": 40,
+        "required": false,
+        "visibility_rules": [],
+        "constraint_rules": [],
+        "label": "Perfil cadena",
+        "data_type": "multi_select",
+        "allowed_values": [
+          "Universal 5-8v",
+          "Universal 9-11v",
+          "Shimano HG+",
+          "Shimano Linkglide / CUES",
+          "SRAM Eagle",
+          "SRAM FlatTop",
+          "SRAM T-Type",
+          "Campagnolo",
+          "KMC compatible",
+          "Single speed / BMX",
+          "Otro",
+          "Desconocido / sin confirmar"
+        ],
+        "validation_rules": {}
+      },
+      {
+        "key": "chain_width_family",
+        "section": "compatibility",
+        "sort_order": 30,
+        "required": false,
+        "visibility_rules": [],
+        "constraint_rules": [],
+        "label": "Familia ancho cadena",
+        "data_type": "single_select",
+        "allowed_values": [
+          "1/8",
+          "3/32",
+          "11/128",
+          "Otro",
+          "Desconocido / sin confirmar"
+        ],
+        "validation_rules": {}
+      },
+      {
+        "key": "chainring_bcd_mm",
+        "section": "mounting",
+        "sort_order": 10,
+        "required": false,
+        "visibility_rules": [],
+        "constraint_rules": [],
+        "label": "BCD corona",
+        "data_type": "number",
+        "allowed_values": [],
+        "validation_rules": {
+          "positive": true
+        }
+      },
+      {
+        "key": "chainring_teeth",
+        "section": "compatibility",
+        "sort_order": 10,
+        "required": true,
+        "visibility_rules": [],
+        "constraint_rules": [],
+        "label": "Dientes plato/corona",
+        "data_type": "text",
+        "allowed_values": [],
+        "validation_rules": {}
+      },
+      {
+        "key": "chainring_mount_type",
+        "section": "mounting",
+        "sort_order": 30,
+        "required": false,
+        "visibility_rules": [],
+        "constraint_rules": [],
+        "label": "Montaje corona",
+        "data_type": "single_select",
+        "allowed_values": [
+          "BCD 4 pernos",
+          "BCD 5 pernos",
+          "Direct mount Shimano",
+          "Direct mount SRAM",
+          "Direct mount Cinch",
+          "Rosca BMX",
+          "Otro",
+          "Desconocido / sin confirmar"
+        ],
+        "validation_rules": {}
+      },
+      {
+        "key": "drivetrain_speeds",
+        "section": "compatibility",
+        "sort_order": 20,
+        "required": false,
+        "visibility_rules": [],
+        "constraint_rules": [],
+        "label": "Velocidades transmisión",
+        "data_type": "multi_select",
+        "allowed_values": [
+          "1",
+          "5",
+          "6",
+          "7",
+          "8",
+          "9",
+          "10",
+          "11",
+          "12",
+          "13"
+        ],
+        "validation_rules": {}
+      },
+      {
+        "key": "chainring_offset_mm",
+        "section": "mounting",
+        "sort_order": 40,
+        "required": false,
+        "visibility_rules": [],
+        "constraint_rules": [],
+        "label": "Offset corona",
+        "data_type": "number",
+        "allowed_values": [],
+        "validation_rules": {}
+      },
+      {
+        "key": "chainring_bolt_count",
+        "section": "mounting",
+        "sort_order": 20,
+        "required": false,
+        "visibility_rules": [],
+        "constraint_rules": [],
+        "label": "Pernos corona",
+        "data_type": "single_select",
+        "allowed_values": [
+          "3",
+          "4",
+          "5",
+          "Direct mount",
+          "Otro"
+        ],
+        "validation_rules": {}
+      },
+      {
+        "key": "spec_evidence_source",
+        "section": "declaration",
+        "sort_order": 5,
+        "required": false,
+        "visibility_rules": [],
+        "constraint_rules": [],
+        "label": "Fuente de la declaración",
+        "data_type": "text",
+        "allowed_values": [],
+        "validation_rules": {}
+      },
+      {
+        "key": "drivetrain_platform",
+        "section": "compatibility",
+        "sort_order": 50,
+        "required": false,
+        "visibility_rules": [],
+        "constraint_rules": [],
+        "label": "Plataforma transmision",
+        "data_type": "single_select",
+        "allowed_values": [
+          "Shimano HG / SIS",
+          "Shimano Hyperglide+",
+          "Shimano Linkglide / CUES",
+          "SRAM Eagle",
+          "SRAM FlatTop / AXS road",
+          "SRAM T-Type Transmission",
+          "Campagnolo",
+          "Microshift Advent / Acolyte",
+          "Friccion / universal",
+          "Single speed / BMX",
+          "Generico compatible",
+          "Desconocido / sin confirmar"
+        ],
+        "validation_rules": {}
+      },
+      {
+        "key": "narrow_wide",
+        "section": "features",
+        "sort_order": 10,
+        "required": false,
+        "visibility_rules": [],
+        "constraint_rules": [],
+        "label": "Narrow-wide",
+        "data_type": "boolean",
+        "allowed_values": [],
+        "validation_rules": {}
+      }
+    ]
+  },
+  {
+    "key": "crank_arm",
+    "technical_family": "crank_arm",
+    "form_contract": {
+      "coverage": "template",
+      "helpers": {},
+      "labels": {},
+      "prerequisites": {},
+      "roles": {
+        "crank_arm_length_mm": "measurement",
+        "crank_side": "primary",
+        "pedal_thread": "primary",
+        "spec_evidence_source": "declaration",
+        "spindle_interface": "primary"
+      },
+      "version": 1
+    },
+    "fields": [
+      {
+        "key": "crank_side",
+        "section": "identification",
+        "sort_order": 10,
+        "required": true,
+        "visibility_rules": [],
+        "constraint_rules": [],
+        "label": "Lado biela",
+        "data_type": "single_select",
+        "allowed_values": [
+          "Izquierda",
+          "Derecha",
+          "Par"
+        ],
+        "validation_rules": {}
+      },
+      {
+        "key": "spindle_interface",
+        "section": "compatibility",
+        "sort_order": 10,
+        "required": true,
+        "visibility_rules": [],
+        "constraint_rules": [],
+        "label": "Punta del eje",
+        "data_type": "single_select",
+        "allowed_values": [
+          "Cuadrado JIS",
+          "Cuadrado ISO",
+          "Hollowtech / 24mm",
+          "SRAM GXP 24/22",
+          "SRAM DUB 28.99mm",
+          "BB30 30mm",
+          "ISIS",
+          "Octalink",
+          "Con chaveta",
+          "BMX 19mm",
+          "BMX 22mm",
+          "BMX 24mm",
+          "One-piece / americano",
+          "Powerspline"
+        ],
+        "validation_rules": {}
+      },
+      {
+        "key": "pedal_thread",
+        "section": "compatibility",
+        "sort_order": 20,
+        "required": false,
+        "visibility_rules": [],
+        "constraint_rules": [],
+        "label": "Rosca pedal",
+        "data_type": "single_select",
+        "allowed_values": [
+          "9/16",
+          "1/2",
+          "Otro",
+          "Desconocido / sin confirmar"
+        ],
+        "validation_rules": {}
+      },
+      {
+        "key": "spec_evidence_source",
+        "section": "declaration",
+        "sort_order": 5,
+        "required": false,
+        "visibility_rules": [],
+        "constraint_rules": [],
+        "label": "Fuente de la declaración",
+        "data_type": "text",
+        "allowed_values": [],
+        "validation_rules": {}
+      },
+      {
+        "key": "crank_arm_length_mm",
+        "section": "dimensions",
+        "sort_order": 10,
+        "required": true,
+        "visibility_rules": [],
+        "constraint_rules": [],
+        "label": "Largo biela",
+        "data_type": "number",
+        "allowed_values": [],
+        "validation_rules": {
+          "positive": true
+        }
+      }
+    ]
+  },
+  {
+    "key": "hydraulic_disc_brake",
+    "technical_family": "complete_brake",
+    "form_contract": {
+      "coverage": "template",
+      "helpers": {},
+      "labels": {},
+      "prerequisites": {},
+      "roles": {
+        "bleed_port": "primary",
+        "brake_position": "primary",
+        "brake_system": "primary",
+        "fluid_type": "primary",
+        "hose_fitting_type": "primary",
+        "hose_length_mm": "measurement",
+        "mount_standard": "primary",
+        "pad_shape_code": "primary",
+        "piston_count": "primary",
+        "reach_adjust": "measurement",
+        "rotor_diameter_mm": "primary",
+        "spec_evidence_source": "declaration"
+      },
+      "version": 1
+    },
+    "fields": [
+      {
+        "key": "rotor_diameter_mm",
+        "section": "compatibility",
+        "sort_order": 10,
+        "required": false,
+        "visibility_rules": [],
+        "constraint_rules": [],
+        "label": "Diámetro del Rotor (mm)",
+        "data_type": "single_select",
+        "allowed_values": [
+          "140",
+          "160",
+          "180",
+          "203",
+          "220",
+          "160/140",
+          "180/160",
+          "203/180"
+        ],
+        "validation_rules": {}
+      },
+      {
+        "key": "hose_length_mm",
+        "section": "hydraulic",
+        "sort_order": 20,
+        "required": false,
+        "visibility_rules": [],
+        "constraint_rules": [],
+        "label": "Largo de Manguera (mm)",
+        "data_type": "number",
+        "allowed_values": [],
+        "validation_rules": {
+          "positive": true
+        }
+      },
+      {
+        "key": "reach_adjust",
+        "section": "features",
+        "sort_order": 10,
+        "required": false,
+        "visibility_rules": [],
+        "constraint_rules": [],
+        "label": "Regulación de Alcance",
+        "data_type": "boolean",
+        "allowed_values": [],
+        "validation_rules": {}
+      },
+      {
+        "key": "brake_system",
+        "section": "identification",
+        "sort_order": 10,
+        "required": true,
+        "visibility_rules": [],
+        "constraint_rules": [],
+        "label": "Sistema de Freno",
+        "data_type": "single_select",
+        "allowed_values": [
+          "Shimano",
+          "SRAM",
+          "Magura",
+          "Tektro",
+          "Hayes",
+          "Bengal",
+          "TRP",
+          "Hope",
+          "Promax",
+          "Genérico"
+        ],
+        "validation_rules": {}
+      },
+      {
+        "key": "bleed_port",
+        "section": "hydraulic",
+        "sort_order": 40,
+        "required": false,
+        "visibility_rules": [],
+        "constraint_rules": [],
+        "label": "Puerto de Purga",
+        "data_type": "single_select",
+        "allowed_values": [
+          "Tornillo",
+          "Jeringa de Empuje",
+          "Llave 7mm",
+          "Llave T25"
+        ],
+        "validation_rules": {}
+      },
+      {
+        "key": "spec_evidence_source",
+        "section": "declaration",
+        "sort_order": 5,
+        "required": false,
+        "visibility_rules": [],
+        "constraint_rules": [],
+        "label": "Fuente de la declaración",
+        "data_type": "text",
+        "allowed_values": [],
+        "validation_rules": {}
+      },
+      {
+        "key": "fluid_type",
+        "section": "hydraulic",
+        "sort_order": 10,
+        "required": true,
+        "visibility_rules": [],
+        "constraint_rules": [],
+        "label": "Tipo de Fluido",
+        "data_type": "single_select",
+        "allowed_values": [
+          "Aceite Mineral",
+          "DOT 4",
+          "DOT 5.1"
+        ],
+        "validation_rules": {}
+      },
+      {
+        "key": "pad_shape_code",
+        "section": "compatibility",
+        "sort_order": 20,
+        "required": false,
+        "visibility_rules": [],
+        "constraint_rules": [],
+        "label": "Código de Forma (Pastilla)",
+        "data_type": "text",
+        "allowed_values": [],
+        "validation_rules": {}
+      },
+      {
+        "key": "brake_position",
+        "section": "identification",
+        "sort_order": 20,
+        "required": true,
+        "visibility_rules": [],
+        "constraint_rules": [],
+        "label": "Posición",
+        "data_type": "single_select",
+        "allowed_values": [
+          "Delantero",
+          "Trasero",
+          "Universal"
+        ],
+        "validation_rules": {}
+      },
+      {
+        "key": "hose_fitting_type",
+        "section": "hydraulic",
+        "sort_order": 30,
+        "required": false,
+        "visibility_rules": [],
+        "constraint_rules": [],
+        "label": "Tipo de Fitting",
+        "data_type": "single_select",
+        "allowed_values": [
+          "Oliva + Barb",
+          "Compresión",
+          "Push-fit"
+        ],
+        "validation_rules": {}
+      },
+      {
+        "key": "piston_count",
+        "section": "specs",
+        "sort_order": 10,
+        "required": false,
+        "visibility_rules": [],
+        "constraint_rules": [],
+        "label": "Número de Pistones",
+        "data_type": "single_select",
+        "allowed_values": [
+          "2",
+          "4",
+          "6"
+        ],
+        "validation_rules": {}
+      },
+      {
+        "key": "mount_standard",
+        "section": "mounting",
+        "sort_order": 10,
+        "required": true,
+        "visibility_rules": [],
+        "constraint_rules": [],
+        "label": "Estándar de Montaje",
+        "data_type": "single_select",
+        "allowed_values": [
+          "Post Mount",
+          "Flat Mount",
+          "International Standard",
+          "Adaptor Requerido"
+        ],
+        "validation_rules": {}
+      }
+    ]
+  },
+  {
+    "key": "tire",
+    "technical_family": "tire",
+    "form_contract": {
+      "coverage": "template",
+      "helpers": {},
+      "labels": {},
+      "prerequisites": {},
+      "roles": {
+        "spec_evidence_source": "declaration",
+        "tire_bead_type": "primary",
+        "tire_etrto": "primary",
+        "tire_tubeless_ready": "measurement",
+        "tire_width_in": "measurement",
+        "tire_width_mm": "measurement",
+        "wheel_size": "primary"
+      },
+      "version": 1
+    },
+    "fields": [
+      {
+        "key": "wheel_size",
+        "section": "compatibility",
+        "sort_order": 10,
+        "required": true,
+        "visibility_rules": [],
+        "constraint_rules": [],
+        "label": "Tamaño de rueda",
+        "data_type": "single_select",
+        "allowed_values": [
+          "12\"",
+          "16\"",
+          "20\"",
+          "24\"",
+          "26\"",
+          "27.5\"",
+          "29\"",
+          "700c",
+          "650b",
+          "Otra"
+        ],
+        "validation_rules": {}
+      },
+      {
+        "key": "tire_tubeless_ready",
+        "section": "tubeless",
+        "sort_order": 10,
+        "required": false,
+        "visibility_rules": [],
+        "constraint_rules": [],
+        "label": "Tubeless Ready",
+        "data_type": "boolean",
+        "allowed_values": [],
+        "validation_rules": {}
+      },
+      {
+        "key": "spec_evidence_source",
+        "section": "declaration",
+        "sort_order": 5,
+        "required": false,
+        "visibility_rules": [],
+        "constraint_rules": [],
+        "label": "Fuente de la declaración",
+        "data_type": "text",
+        "allowed_values": [],
+        "validation_rules": {}
+      },
+      {
+        "key": "tire_width_in",
+        "section": "dimensions",
+        "sort_order": 10,
+        "required": false,
+        "visibility_rules": [],
+        "constraint_rules": [],
+        "label": "Ancho nominal (pulgadas)",
+        "data_type": "number",
+        "allowed_values": [],
+        "validation_rules": {
+          "positive": true
+        }
+      },
+      {
+        "key": "tire_bead_type",
+        "section": "construction",
+        "sort_order": 10,
+        "required": false,
+        "visibility_rules": [],
+        "constraint_rules": [],
+        "label": "Construcción del talón",
+        "data_type": "single_select",
+        "allowed_values": [
+          "Talón de alambre",
+          "Talón plegable",
+          "Tubular",
+          "Sólido / sin aire",
+          "Desconocido / sin confirmar"
+        ],
+        "validation_rules": {}
+      },
+      {
+        "key": "tire_etrto",
+        "section": "compatibility",
+        "sort_order": 20,
+        "required": false,
+        "visibility_rules": [],
+        "constraint_rules": [],
+        "label": "Medida ETRTO",
+        "data_type": "text",
+        "allowed_values": [],
+        "validation_rules": {}
+      },
+      {
+        "key": "tire_width_mm",
+        "section": "dimensions",
+        "sort_order": 20,
+        "required": false,
+        "visibility_rules": [],
+        "constraint_rules": [],
+        "label": "Ancho nominal (mm)",
+        "data_type": "number",
+        "allowed_values": [],
+        "validation_rules": {
+          "positive": true
+        }
+      }
+    ]
+  },
+  {
+    "key": "bottom_bracket_cup",
+    "technical_family": "bottom_bracket_cup",
+    "form_contract": {
+      "coverage": "template",
+      "helpers": {},
+      "labels": {},
+      "prerequisites": {},
+      "roles": {
+        "bb_construction": "primary",
+        "bb_cup_outer_diameter_mm": "measurement",
+        "bb_cup_thread_pair": "primary",
+        "bb_shell_standard": "primary",
+        "bb_shell_width_mm": "measurement",
+        "spec_evidence_source": "declaration",
+        "spindle_interface_accepted": "primary"
+      },
+      "version": 1
+    },
+    "fields": [
+      {
+        "key": "bb_shell_standard",
+        "section": "compatibility",
+        "sort_order": 10,
+        "required": true,
+        "visibility_rules": [],
+        "constraint_rules": [],
+        "label": "Caja de motor",
+        "data_type": "single_select",
+        "allowed_values": [
+          "BSA / Caja inglesa 34,8 mm (1.37\") x 24",
+          "Italiano 36 mm x 24",
+          "T47 47 mm",
+          "Francés 35 mm x 1",
+          "Suizo 35 mm x 1",
+          "Euro BMX roscado 68 mm",
+          "BB86 / BB92 41 mm",
+          "PF30 46 mm",
+          "BB30 42 mm",
+          "BB386EVO 46 mm",
+          "BB90 / BB95",
+          "BBRight / OSBB",
+          "Mid BMX 41,2 mm",
+          "Spanish BMX 37 mm",
+          "Americano 51,5 mm"
+        ],
+        "validation_rules": {}
+      },
+      {
+        "key": "bb_construction",
+        "section": "compatibility",
+        "sort_order": 20,
+        "required": true,
+        "visibility_rules": [
+          {
+            "field": "bb_shell_standard",
+            "operator": "is_set"
+          }
+        ],
+        "constraint_rules": [],
+        "label": "Construcción",
+        "data_type": "single_select",
+        "allowed_values": [
+          "Rodamiento sellado",
+          "Integrado",
+          "Cubetas y canastillo",
+          "A presión",
+          "Roscado entre sí"
+        ],
+        "validation_rules": {}
+      },
+      {
+        "key": "bb_shell_width_mm",
+        "section": "dimensions",
+        "sort_order": 50,
+        "required": false,
+        "visibility_rules": [
+          {
+            "field": "bb_shell_standard",
+            "operator": "is_set"
+          }
+        ],
+        "constraint_rules": [],
+        "label": "Ancho caja motor",
+        "data_type": "number",
+        "allowed_values": [
+          "68",
+          "70",
+          "73",
+          "83",
+          "86.5",
+          "89.5",
+          "92",
+          "100",
+          "107",
+          "121"
+        ],
+        "validation_rules": {
+          "positive": true
+        }
+      },
+      {
+        "key": "spec_evidence_source",
+        "section": "declaration",
+        "sort_order": 5,
+        "required": false,
+        "visibility_rules": [],
+        "constraint_rules": [],
+        "label": "Fuente de la declaración",
+        "data_type": "text",
+        "allowed_values": [],
+        "validation_rules": {}
+      },
+      {
+        "key": "bb_cup_outer_diameter_mm",
+        "section": "dimensions",
+        "sort_order": 60,
+        "required": false,
+        "visibility_rules": [
+          {
+            "field": "bb_construction",
+            "operator": "eq",
+            "value": "Cubetas y canastillo"
+          }
+        ],
+        "constraint_rules": [],
+        "label": "Diámetro de rosca de cubeta",
+        "data_type": "number",
+        "allowed_values": [
+          "34.8",
+          "35",
+          "36",
+          "37",
+          "41.2",
+          "51.5"
+        ],
+        "validation_rules": {
+          "positive": true
+        }
+      },
+      {
+        "key": "bb_cup_thread_pair",
+        "section": "compatibility",
+        "sort_order": 30,
+        "required": true,
+        "visibility_rules": [
+          {
+            "field": "bb_construction",
+            "operator": "is_set"
+          },
+          {
+            "field": "bb_shell_standard",
+            "operator": "in",
+            "value": [
+              "BSA / Caja inglesa 34,8 mm (1.37\") x 24",
+              "Italiano 36 mm x 24",
+              "T47 47 mm",
+              "Francés 35 mm x 1",
+              "Suizo 35 mm x 1",
+              "Euro BMX roscado 68 mm",
+              "Americano 51,5 mm"
+            ]
+          }
+        ],
+        "constraint_rules": [],
+        "label": "Mano de la rosca",
+        "data_type": "single_select",
+        "allowed_values": [
+          "Derecha / Izquierda (BSA inglés)",
+          "Derecha / Derecha (italiano o genérico)",
+          "Sin rosca (a presión)"
+        ],
+        "validation_rules": {}
+      },
+      {
+        "key": "spindle_interface_accepted",
+        "section": "compatibility",
+        "sort_order": 40,
+        "required": true,
+        "visibility_rules": [
+          {
+            "field": "bb_construction",
+            "operator": "is_set"
+          }
+        ],
+        "constraint_rules": [],
+        "label": "Puntas de eje que acepta",
+        "data_type": "multi_select",
+        "allowed_values": [
+          "Cuadrado JIS",
+          "Cuadrado ISO",
+          "Hollowtech / 24mm",
+          "SRAM GXP 24/22",
+          "SRAM DUB 28.99mm",
+          "BB30 30mm",
+          "ISIS",
+          "Octalink",
+          "Con chaveta",
+          "BMX 19mm",
+          "BMX 22mm",
+          "BMX 24mm",
+          "One-piece / americano",
+          "Powerspline"
+        ],
+        "validation_rules": {}
+      }
+    ]
+  },
+  {
+    "key": "cassette_spacer",
+    "technical_family": "cassette_spacer",
+    "form_contract": {
+      "coverage": "template",
+      "helpers": {},
+      "labels": {},
+      "prerequisites": {},
+      "roles": {
+        "freehub_type": "primary",
+        "spacer_thickness_mm": "measurement",
+        "spec_evidence_source": "declaration"
+      },
+      "version": 1
+    },
+    "fields": [
+      {
+        "key": "spacer_thickness_mm",
+        "section": "dimensions",
+        "sort_order": 10,
+        "required": true,
+        "visibility_rules": [],
+        "constraint_rules": [],
+        "label": "Espesor espaciador",
+        "data_type": "number",
+        "allowed_values": [],
+        "validation_rules": {
+          "positive": true
+        }
+      },
+      {
+        "key": "freehub_type",
+        "section": "compatibility",
+        "sort_order": 10,
+        "required": false,
+        "visibility_rules": [],
+        "constraint_rules": [],
+        "label": "Driver / Freehub",
+        "data_type": "single_select",
+        "allowed_values": [
+          "Shimano HG",
+          "Shimano HG Road 11",
+          "Micro Spline",
+          "SRAM XD",
+          "SRAM XDR",
+          "Campagnolo",
+          "Campagnolo N3W",
+          "Rueda libre roscada",
+          "Driver BMX",
+          "Rosca fija / contratuerca",
+          "Maza contrapedal",
+          "Desconocido / sin confirmar"
+        ],
+        "validation_rules": {}
+      },
+      {
+        "key": "spec_evidence_source",
+        "section": "declaration",
+        "sort_order": 5,
+        "required": false,
+        "visibility_rules": [],
+        "constraint_rules": [],
+        "label": "Fuente de la declaración",
+        "data_type": "text",
+        "allowed_values": [],
+        "validation_rules": {}
+      }
+    ]
+  },
+  {
+    "key": "cassette",
+    "technical_family": "cassette",
+    "form_contract": {
+      "coverage": "template",
+      "helpers": {},
+      "labels": {},
+      "prerequisites": {},
+      "roles": {
+        "cassette_cog_sequence": "primary",
+        "drivetrain_speeds": "primary",
+        "freehub_type": "primary",
+        "largest_cog_teeth": "measurement",
+        "smallest_cog_teeth": "measurement",
+        "spec_evidence_source": "declaration"
+      },
+      "version": 1
+    },
+    "fields": [
+      {
+        "key": "largest_cog_teeth",
+        "section": "range",
+        "sort_order": 20,
+        "required": false,
+        "visibility_rules": [],
+        "constraint_rules": [],
+        "label": "Piñón mayor",
+        "data_type": "number",
+        "allowed_values": [
+          "14",
+          "15",
+          "16",
+          "18",
+          "20",
+          "21",
+          "22",
+          "24",
+          "25",
+          "26",
+          "27",
+          "28",
+          "30",
+          "32",
+          "34",
+          "36",
+          "38",
+          "40",
+          "42",
+          "44",
+          "46",
+          "48",
+          "50",
+          "51",
+          "52",
+          "54",
+          "56",
+          "58",
+          "60"
+        ],
+        "validation_rules": {
+          "positive": true,
+          "integer": true
+        }
+      },
+      {
+        "key": "smallest_cog_teeth",
+        "section": "range",
+        "sort_order": 10,
+        "required": false,
+        "visibility_rules": [],
+        "constraint_rules": [],
+        "label": "Piñón menor",
+        "data_type": "number",
+        "allowed_values": [
+          "8",
+          "9",
+          "10",
+          "11",
+          "12",
+          "13",
+          "14",
+          "15",
+          "16"
+        ],
+        "validation_rules": {
+          "positive": true,
+          "integer": true
+        }
+      },
+      {
+        "key": "freehub_type",
+        "section": "compatibility",
+        "sort_order": 20,
+        "required": true,
+        "visibility_rules": [],
+        "constraint_rules": [],
+        "label": "Driver / Freehub",
+        "data_type": "single_select",
+        "allowed_values": [
+          "Shimano HG",
+          "Shimano HG Road 11",
+          "Micro Spline",
+          "SRAM XD",
+          "SRAM XDR",
+          "Campagnolo",
+          "Campagnolo N3W",
+          "Rueda libre roscada",
+          "Driver BMX",
+          "Rosca fija / contratuerca",
+          "Maza contrapedal",
+          "Desconocido / sin confirmar"
+        ],
+        "validation_rules": {}
+      },
+      {
+        "key": "cassette_cog_sequence",
+        "section": "range",
+        "sort_order": 30,
+        "required": false,
+        "visibility_rules": [],
+        "constraint_rules": [],
+        "label": "Secuencia pinones",
+        "data_type": "text",
+        "allowed_values": [],
+        "validation_rules": {}
+      },
+      {
+        "key": "drivetrain_speeds",
+        "section": "compatibility",
+        "sort_order": 10,
+        "required": true,
+        "visibility_rules": [],
+        "constraint_rules": [],
+        "label": "Velocidades transmisión",
+        "data_type": "multi_select",
+        "allowed_values": [
+          "1",
+          "5",
+          "6",
+          "7",
+          "8",
+          "9",
+          "10",
+          "11",
+          "12",
+          "13"
+        ],
+        "validation_rules": {}
+      },
+      {
+        "key": "spec_evidence_source",
+        "section": "declaration",
+        "sort_order": 5,
+        "required": false,
+        "visibility_rules": [],
+        "constraint_rules": [],
+        "label": "Fuente de la declaración",
+        "data_type": "text",
+        "allowed_values": [],
+        "validation_rules": {}
+      }
+    ]
+  },
+  {
+    "key": "drivetrain_kit",
+    "technical_family": "drivetrain_kit",
+    "form_contract": {
+      "coverage": "template",
+      "helpers": {},
+      "labels": {},
+      "prerequisites": {},
+      "roles": {
+        "bottom_bracket_family": "primary",
+        "chain_ebike_rated": "measurement",
+        "chain_profile_family": "primary",
+        "chainring_teeth": "primary",
+        "crank_arm_length_mm": "measurement",
+        "drivetrain_declared_compatible_ecosystems": "declaration",
+        "drivetrain_platform": "primary",
+        "drivetrain_primary_ecosystem": "primary",
+        "front_chainring_count": "primary",
+        "kit_contents": "contents",
+        "spec_evidence_source": "declaration",
+        "spindle_interface": "primary"
+      },
+      "version": 1
+    },
+    "fields": [
+      {
+        "key": "chain_profile_family",
+        "section": "compatibility",
+        "sort_order": 60,
+        "required": false,
+        "visibility_rules": [],
+        "constraint_rules": [],
+        "label": "Perfil cadena",
+        "data_type": "multi_select",
+        "allowed_values": [
+          "Universal 5-8v",
+          "Universal 9-11v",
+          "Shimano HG+",
+          "Shimano Linkglide / CUES",
+          "SRAM Eagle",
+          "SRAM FlatTop",
+          "SRAM T-Type",
+          "Campagnolo",
+          "KMC compatible",
+          "Single speed / BMX",
+          "Otro",
+          "Desconocido / sin confirmar"
+        ],
+        "validation_rules": {}
+      },
+      {
+        "key": "spec_evidence_source",
+        "section": "declaration",
+        "sort_order": 5,
+        "required": false,
+        "visibility_rules": [],
+        "constraint_rules": [],
+        "label": "Fuente de la declaración",
+        "data_type": "text",
+        "allowed_values": [],
+        "validation_rules": {}
+      },
+      {
+        "key": "drivetrain_declared_compatible_ecosystems",
+        "section": "compatibility",
+        "sort_order": 45,
+        "required": false,
+        "visibility_rules": [],
+        "constraint_rules": [],
+        "label": "Ecosistemas compatibles declarados",
+        "data_type": "multi_select",
+        "allowed_values": [
+          "Ecosistema Shimano",
+          "Ecosistema SRAM",
+          "Ecosistema Campagnolo",
+          "Ecosistema Microshift",
+          "Universal / generico",
+          "Single speed / BMX",
+          "Otro",
+          "Desconocido / sin confirmar"
+        ],
+        "validation_rules": {}
+      },
+      {
+        "key": "crank_arm_length_mm",
+        "section": "dimensions",
+        "sort_order": 10,
+        "required": false,
+        "visibility_rules": [],
+        "constraint_rules": [],
+        "label": "Largo biela",
+        "data_type": "number",
+        "allowed_values": [],
+        "validation_rules": {
+          "positive": true
+        }
+      },
+      {
+        "key": "bottom_bracket_family",
+        "section": "compatibility",
+        "sort_order": 30,
+        "required": false,
+        "visibility_rules": [],
+        "constraint_rules": [],
+        "label": "Familia pedalier / motor",
+        "data_type": "single_select",
+        "allowed_values": [
+          "BSA roscado",
+          "Pressfit",
+          "BB30 / PF30",
+          "Mid / BMX",
+          "Americano / one-piece",
+          "Cuadrado cartucho",
+          "Hollowtech / 24mm externo",
+          "Otro",
+          "Desconocido / sin confirmar"
+        ],
+        "validation_rules": {}
+      },
+      {
+        "key": "kit_contents",
+        "section": "contents",
+        "sort_order": 10,
+        "required": false,
+        "visibility_rules": [],
+        "constraint_rules": [],
+        "label": "Contenido kit",
+        "data_type": "text",
+        "allowed_values": [],
+        "validation_rules": {}
+      },
+      {
+        "key": "chain_ebike_rated",
+        "section": "features",
+        "sort_order": 10,
+        "required": false,
+        "visibility_rules": [],
+        "constraint_rules": [],
+        "label": "Apta e-bike",
+        "data_type": "boolean",
+        "allowed_values": [],
+        "validation_rules": {}
+      },
+      {
+        "key": "chainring_teeth",
+        "section": "compatibility",
+        "sort_order": 20,
+        "required": false,
+        "visibility_rules": [],
+        "constraint_rules": [],
+        "label": "Dientes plato/corona",
+        "data_type": "text",
+        "allowed_values": [],
+        "validation_rules": {}
+      },
+      {
+        "key": "front_chainring_count",
+        "section": "compatibility",
+        "sort_order": 10,
+        "required": false,
+        "visibility_rules": [],
+        "constraint_rules": [],
+        "label": "Cantidad de platos",
+        "data_type": "multi_select",
+        "allowed_values": [
+          "1",
+          "2",
+          "3"
+        ],
+        "validation_rules": {}
+      },
+      {
+        "key": "spindle_interface",
+        "section": "compatibility",
+        "sort_order": 40,
+        "required": false,
+        "visibility_rules": [],
+        "constraint_rules": [],
+        "label": "Punta del eje",
+        "data_type": "single_select",
+        "allowed_values": [
+          "Cuadrado JIS",
+          "Cuadrado ISO",
+          "Hollowtech / 24mm",
+          "SRAM GXP 24/22",
+          "SRAM DUB 28.99mm",
+          "BB30 30mm",
+          "ISIS",
+          "Octalink",
+          "Con chaveta",
+          "BMX 19mm",
+          "BMX 22mm",
+          "BMX 24mm",
+          "One-piece / americano",
+          "Powerspline"
+        ],
+        "validation_rules": {}
+      },
+      {
+        "key": "drivetrain_primary_ecosystem",
+        "section": "compatibility",
+        "sort_order": 40,
+        "required": false,
+        "visibility_rules": [],
+        "constraint_rules": [],
+        "label": "Familia tecnica / ecosistema principal",
+        "data_type": "single_select",
+        "allowed_values": [
+          "Ecosistema Shimano",
+          "Ecosistema SRAM",
+          "Ecosistema Campagnolo",
+          "Ecosistema Microshift",
+          "Universal / generico",
+          "Single speed / BMX",
+          "Otro",
+          "Desconocido / sin confirmar"
+        ],
+        "validation_rules": {}
+      },
+      {
+        "key": "drivetrain_platform",
+        "section": "compatibility",
+        "sort_order": 50,
+        "required": false,
+        "visibility_rules": [],
+        "constraint_rules": [],
+        "label": "Plataforma transmision",
+        "data_type": "single_select",
+        "allowed_values": [
+          "Shimano HG / SIS",
+          "Shimano Hyperglide+",
+          "Shimano Linkglide / CUES",
+          "SRAM Eagle",
+          "SRAM FlatTop / AXS road",
+          "SRAM T-Type Transmission",
+          "Campagnolo",
+          "Microshift Advent / Acolyte",
+          "Friccion / universal",
+          "Single speed / BMX",
+          "Generico compatible",
+          "Desconocido / sin confirmar"
+        ],
+        "validation_rules": {}
+      }
+    ]
+  },
+  {
+    "key": "tubeless_consumable",
+    "technical_family": "tubeless_consumable",
+    "form_contract": {
+      "coverage": "template",
+      "helpers": {},
+      "labels": {},
+      "prerequisites": {},
+      "roles": {
+        "sealant_volume_ml": "measurement",
+        "spec_evidence_source": "declaration"
+      },
+      "version": 1
+    },
+    "fields": [
+      {
+        "key": "spec_evidence_source",
+        "section": "declaration",
+        "sort_order": 5,
+        "required": false,
+        "visibility_rules": [],
+        "constraint_rules": [],
+        "label": "Fuente de la declaración",
+        "data_type": "text",
+        "allowed_values": [],
+        "validation_rules": {}
+      },
+      {
+        "key": "sealant_volume_ml",
+        "section": "specs",
+        "sort_order": 10,
+        "required": false,
+        "visibility_rules": [],
+        "constraint_rules": [],
+        "label": "Volumen de Sellante (ml)",
+        "data_type": "number",
+        "allowed_values": [],
+        "validation_rules": {
+          "positive": true
+        }
+      }
+    ]
+  },
+  {
+    "key": "rim",
+    "technical_family": "rim",
+    "form_contract": {
+      "coverage": "template",
+      "helpers": {},
+      "labels": {},
+      "prerequisites": {},
+      "roles": {
+        "rim_asymmetric_offset_mm": "measurement",
+        "rim_erd_mm": "measurement",
+        "rim_etrto": "primary",
+        "rim_external_width_mm": "measurement",
+        "rim_eyelet_type": "primary",
+        "rim_internal_width_mm": "measurement",
+        "rim_material": "primary",
+        "rim_symmetry": "primary",
+        "rim_tubeless_ready": "measurement",
+        "rim_wall_type": "primary",
+        "spec_evidence_source": "declaration",
+        "spoke_holes": "primary",
+        "valve_type": "primary",
+        "wheel_size": "primary"
+      },
+      "version": 1
+    },
+    "fields": [
+      {
+        "key": "rim_wall_type",
+        "section": "construction",
+        "sort_order": 30,
+        "required": false,
+        "visibility_rules": [],
+        "constraint_rules": [],
+        "label": "Construcción de Pared",
+        "data_type": "single_select",
+        "allowed_values": [
+          "Pared simple",
+          "Doble pared",
+          "Triple pared"
+        ],
+        "validation_rules": {}
+      },
+      {
+        "key": "rim_asymmetric_offset_mm",
+        "section": "construction",
+        "sort_order": 50,
+        "required": false,
+        "visibility_rules": [
+          {
+            "field": "rim_symmetry",
+            "operator": "eq",
+            "value": "Asimétrica"
+          }
+        ],
+        "constraint_rules": [],
+        "label": "Offset Asimétrico",
+        "data_type": "number",
+        "allowed_values": [],
+        "validation_rules": {}
+      },
+      {
+        "key": "wheel_size",
+        "section": "compatibility",
+        "sort_order": 10,
+        "required": true,
+        "visibility_rules": [],
+        "constraint_rules": [],
+        "label": "Tamaño de rueda",
+        "data_type": "single_select",
+        "allowed_values": [
+          "12\"",
+          "16\"",
+          "20\"",
+          "24\"",
+          "26\"",
+          "27.5\"",
+          "29\"",
+          "700c",
+          "650b",
+          "Otra"
+        ],
+        "validation_rules": {}
+      },
+      {
+        "key": "rim_erd_mm",
+        "section": "dimensions",
+        "sort_order": 40,
+        "required": false,
+        "visibility_rules": [],
+        "constraint_rules": [],
+        "label": "ERD",
+        "data_type": "number",
+        "allowed_values": [],
+        "validation_rules": {
+          "positive": true
+        }
+      },
+      {
+        "key": "spec_evidence_source",
+        "section": "declaration",
+        "sort_order": 5,
+        "required": false,
+        "visibility_rules": [],
+        "constraint_rules": [],
+        "label": "Fuente de la declaración",
+        "data_type": "text",
+        "allowed_values": [],
+        "validation_rules": {}
+      },
+      {
+        "key": "rim_internal_width_mm",
+        "section": "dimensions",
+        "sort_order": 10,
+        "required": false,
+        "visibility_rules": [],
+        "constraint_rules": [],
+        "label": "Ancho Interno",
+        "data_type": "number",
+        "allowed_values": [],
+        "validation_rules": {
+          "positive": true
+        }
+      },
+      {
+        "key": "rim_external_width_mm",
+        "section": "dimensions",
+        "sort_order": 20,
+        "required": false,
+        "visibility_rules": [],
+        "constraint_rules": [],
+        "label": "Ancho Externo",
+        "data_type": "number",
+        "allowed_values": [],
+        "validation_rules": {
+          "positive": true
+        }
+      },
+      {
+        "key": "rim_tubeless_ready",
+        "section": "tubeless",
+        "sort_order": 10,
+        "required": false,
+        "visibility_rules": [],
+        "constraint_rules": [],
+        "label": "Tubeless Ready (TR)",
+        "data_type": "boolean",
+        "allowed_values": [],
+        "validation_rules": {}
+      },
+      {
+        "key": "valve_type",
+        "section": "compatibility",
+        "sort_order": 30,
+        "required": false,
+        "visibility_rules": [],
+        "constraint_rules": [],
+        "label": "Tipo de Válvula",
+        "data_type": "single_select",
+        "allowed_values": [
+          "Presta (francesa)",
+          "Schrader (americana / auto)",
+          "Dunlop (inglesa)",
+          "Otra",
+          "Desconocido"
+        ],
+        "validation_rules": {}
+      },
+      {
+        "key": "rim_etrto",
+        "section": "dimensions",
+        "sort_order": 30,
+        "required": false,
+        "visibility_rules": [],
+        "constraint_rules": [],
+        "label": "Medida ETRTO",
+        "data_type": "text",
+        "allowed_values": [],
+        "validation_rules": {}
+      },
+      {
+        "key": "rim_material",
+        "section": "construction",
+        "sort_order": 10,
+        "required": false,
+        "visibility_rules": [],
+        "constraint_rules": [],
+        "label": "Material de la Llanta",
+        "data_type": "single_select",
+        "allowed_values": [
+          "Aluminio",
+          "Carbono",
+          "Acero",
+          "Otro"
+        ],
+        "validation_rules": {}
+      },
+      {
+        "key": "rim_symmetry",
+        "section": "construction",
+        "sort_order": 40,
+        "required": false,
+        "visibility_rules": [],
+        "constraint_rules": [],
+        "label": "Perfil de la Llanta",
+        "data_type": "single_select",
+        "allowed_values": [
+          "Simétrica",
+          "Asimétrica"
+        ],
+        "validation_rules": {}
+      },
+      {
+        "key": "rim_eyelet_type",
+        "section": "construction",
+        "sort_order": 20,
+        "required": false,
+        "visibility_rules": [],
+        "constraint_rules": [],
+        "label": "Ojillos",
+        "data_type": "single_select",
+        "allowed_values": [
+          "Sin ojillos",
+          "Ojillo simple",
+          "Doble ojillo"
+        ],
+        "validation_rules": {}
+      },
+      {
+        "key": "spoke_holes",
+        "section": "compatibility",
+        "sort_order": 20,
+        "required": true,
+        "visibility_rules": [],
+        "constraint_rules": [],
+        "label": "Número de Rayos / Perforaciones",
+        "data_type": "single_select",
+        "allowed_values": [
+          "24",
+          "28",
+          "32",
+          "36",
+          "40"
+        ],
+        "validation_rules": {}
+      }
+    ]
+  },
+  {
+    "key": "crankset",
+    "technical_family": "crankset",
+    "form_contract": {
+      "coverage": "template",
+      "helpers": {},
+      "labels": {},
+      "prerequisites": {},
+      "roles": {
+        "bottom_bracket_family": "primary",
+        "chain_profile_family": "primary",
+        "chainline_mm": "measurement",
+        "chainring_teeth": "primary",
+        "crank_arm_length_mm": "measurement",
+        "drivetrain_platform": "primary",
+        "drivetrain_speeds": "primary",
+        "front_chainring_count": "primary",
+        "spec_evidence_source": "declaration",
+        "spindle_interface": "primary"
+      },
+      "version": 1
+    },
+    "fields": [
+      {
+        "key": "chain_profile_family",
+        "section": "compatibility",
+        "sort_order": 70,
+        "required": false,
+        "visibility_rules": [],
+        "constraint_rules": [],
+        "label": "Perfil cadena",
+        "data_type": "multi_select",
+        "allowed_values": [
+          "Universal 5-8v",
+          "Universal 9-11v",
+          "Shimano HG+",
+          "Shimano Linkglide / CUES",
+          "SRAM Eagle",
+          "SRAM FlatTop",
+          "SRAM T-Type",
+          "Campagnolo",
+          "KMC compatible",
+          "Single speed / BMX",
+          "Otro",
+          "Desconocido / sin confirmar"
+        ],
+        "validation_rules": {}
+      },
+      {
+        "key": "bottom_bracket_family",
+        "section": "compatibility",
+        "sort_order": 40,
+        "required": false,
+        "visibility_rules": [],
+        "constraint_rules": [],
+        "label": "Familia pedalier / motor",
+        "data_type": "single_select",
+        "allowed_values": [
+          "BSA roscado",
+          "Pressfit",
+          "BB30 / PF30",
+          "Mid / BMX",
+          "Americano / one-piece",
+          "Cuadrado cartucho",
+          "Hollowtech / 24mm externo",
+          "Otro",
+          "Desconocido / sin confirmar"
+        ],
+        "validation_rules": {}
+      },
+      {
+        "key": "crank_arm_length_mm",
+        "section": "dimensions",
+        "sort_order": 10,
+        "required": false,
+        "visibility_rules": [],
+        "constraint_rules": [],
+        "label": "Largo biela",
+        "data_type": "number",
+        "allowed_values": [],
+        "validation_rules": {
+          "positive": true
+        }
+      },
+      {
+        "key": "drivetrain_platform",
+        "section": "compatibility",
+        "sort_order": 60,
+        "required": false,
+        "visibility_rules": [],
+        "constraint_rules": [],
+        "label": "Plataforma transmision",
+        "data_type": "single_select",
+        "allowed_values": [
+          "Shimano HG / SIS",
+          "Shimano Hyperglide+",
+          "Shimano Linkglide / CUES",
+          "SRAM Eagle",
+          "SRAM FlatTop / AXS road",
+          "SRAM T-Type Transmission",
+          "Campagnolo",
+          "Microshift Advent / Acolyte",
+          "Friccion / universal",
+          "Single speed / BMX",
+          "Generico compatible",
+          "Desconocido / sin confirmar"
+        ],
+        "validation_rules": {}
+      },
+      {
+        "key": "chainring_teeth",
+        "section": "compatibility",
+        "sort_order": 20,
+        "required": false,
+        "visibility_rules": [],
+        "constraint_rules": [],
+        "label": "Dientes plato/corona",
+        "data_type": "text",
+        "allowed_values": [],
+        "validation_rules": {}
+      },
+      {
+        "key": "spindle_interface",
+        "section": "compatibility",
+        "sort_order": 50,
+        "required": false,
+        "visibility_rules": [],
+        "constraint_rules": [],
+        "label": "Punta del eje",
+        "data_type": "single_select",
+        "allowed_values": [
+          "Cuadrado JIS",
+          "Cuadrado ISO",
+          "Hollowtech / 24mm",
+          "SRAM GXP 24/22",
+          "SRAM DUB 28.99mm",
+          "BB30 30mm",
+          "ISIS",
+          "Octalink",
+          "Con chaveta",
+          "BMX 19mm",
+          "BMX 22mm",
+          "BMX 24mm",
+          "One-piece / americano",
+          "Powerspline"
+        ],
+        "validation_rules": {}
+      },
+      {
+        "key": "spec_evidence_source",
+        "section": "declaration",
+        "sort_order": 5,
+        "required": false,
+        "visibility_rules": [],
+        "constraint_rules": [],
+        "label": "Fuente de la declaración",
+        "data_type": "text",
+        "allowed_values": [],
+        "validation_rules": {}
+      },
+      {
+        "key": "drivetrain_speeds",
+        "section": "compatibility",
+        "sort_order": 30,
+        "required": false,
+        "visibility_rules": [],
+        "constraint_rules": [],
+        "label": "Velocidades transmisión",
+        "data_type": "multi_select",
+        "allowed_values": [
+          "1",
+          "5",
+          "6",
+          "7",
+          "8",
+          "9",
+          "10",
+          "11",
+          "12",
+          "13"
+        ],
+        "validation_rules": {}
+      },
+      {
+        "key": "front_chainring_count",
+        "section": "compatibility",
+        "sort_order": 10,
+        "required": false,
+        "visibility_rules": [],
+        "constraint_rules": [],
+        "label": "Cantidad de platos",
+        "data_type": "multi_select",
+        "allowed_values": [
+          "1",
+          "2",
+          "3"
+        ],
+        "validation_rules": {}
+      },
+      {
+        "key": "chainline_mm",
+        "section": "dimensions",
+        "sort_order": 20,
+        "required": false,
+        "visibility_rules": [],
+        "constraint_rules": [],
+        "label": "Línea de cadena",
+        "data_type": "number",
+        "allowed_values": [],
+        "validation_rules": {
+          "positive": true
+        }
+      }
+    ]
+  },
+  {
+    "key": "bottom_bracket_bearing",
+    "technical_family": "bottom_bracket_bearing",
+    "form_contract": {
+      "coverage": "template",
+      "helpers": {},
+      "labels": {},
+      "prerequisites": {},
+      "roles": {
+        "bb_ball_count_per_side": "measurement",
+        "bb_ball_size_in": "primary",
+        "bb_bearing_width_mm": "measurement",
+        "bb_construction": "primary",
+        "bearing_inner_diameter_mm": "measurement",
+        "bearing_outer_diameter_mm": "measurement",
+        "bearing_size_code": "primary",
+        "spec_evidence_source": "declaration",
+        "spindle_diameter_mm": "measurement"
+      },
+      "version": 1
+    },
+    "fields": [
+      {
+        "key": "spec_evidence_source",
+        "section": "declaration",
+        "sort_order": 5,
+        "required": false,
+        "visibility_rules": [],
+        "constraint_rules": [],
+        "label": "Fuente de la declaración",
+        "data_type": "text",
+        "allowed_values": [],
+        "validation_rules": {}
+      },
+      {
+        "key": "bearing_inner_diameter_mm",
+        "section": "dimensions",
+        "sort_order": 50,
+        "required": false,
+        "visibility_rules": [
+          {
+            "field": "bb_construction",
+            "operator": "in",
+            "value": [
+              "Rodamiento sellado",
+              "A presión"
+            ]
+          }
+        ],
+        "constraint_rules": [],
+        "label": "Diámetro interno rodamiento",
+        "data_type": "number",
+        "allowed_values": [],
+        "validation_rules": {
+          "positive": true
+        }
+      },
+      {
+        "key": "bb_ball_count_per_side",
+        "section": "identification",
+        "sort_order": 30,
+        "required": true,
+        "visibility_rules": [
+          {
+            "field": "bb_construction",
+            "operator": "eq",
+            "value": "Cubetas y canastillo"
+          }
+        ],
+        "constraint_rules": [],
+        "label": "Bolitas por lado",
+        "data_type": "number",
+        "allowed_values": [
+          "7",
+          "9",
+          "11",
+          "12",
+          "13"
+        ],
+        "validation_rules": {
+          "positive": true,
+          "integer": true
+        }
+      },
+      {
+        "key": "bb_bearing_width_mm",
+        "section": "dimensions",
+        "sort_order": 70,
+        "required": false,
+        "visibility_rules": [
+          {
+            "field": "bb_construction",
+            "operator": "in",
+            "value": [
+              "Rodamiento sellado",
+              "A presión"
+            ]
+          }
+        ],
+        "constraint_rules": [],
+        "label": "Ancho rodamiento motor",
+        "data_type": "number",
+        "allowed_values": [],
+        "validation_rules": {
+          "positive": true
+        }
+      },
+      {
+        "key": "bearing_outer_diameter_mm",
+        "section": "dimensions",
+        "sort_order": 60,
+        "required": false,
+        "visibility_rules": [
+          {
+            "field": "bb_construction",
+            "operator": "in",
+            "value": [
+              "Rodamiento sellado",
+              "A presión"
+            ]
+          }
+        ],
+        "constraint_rules": [],
+        "label": "Diámetro externo rodamiento",
+        "data_type": "number",
+        "allowed_values": [],
+        "validation_rules": {
+          "positive": true
+        }
+      },
+      {
+        "key": "bearing_size_code",
+        "section": "identification",
+        "sort_order": 40,
+        "required": true,
+        "visibility_rules": [
+          {
+            "field": "bb_construction",
+            "operator": "in",
+            "value": [
+              "Rodamiento sellado",
+              "A presión"
+            ]
+          }
+        ],
+        "constraint_rules": [],
+        "label": "Código rodamiento",
+        "data_type": "text",
+        "allowed_values": [],
+        "validation_rules": {}
+      },
+      {
+        "key": "bb_construction",
+        "section": "compatibility",
+        "sort_order": 10,
+        "required": true,
+        "visibility_rules": [],
+        "constraint_rules": [],
+        "label": "Construcción",
+        "data_type": "single_select",
+        "allowed_values": [
+          "Rodamiento sellado",
+          "Integrado",
+          "Cubetas y canastillo",
+          "A presión",
+          "Roscado entre sí"
+        ],
+        "validation_rules": {}
+      },
+      {
+        "key": "bb_ball_size_in",
+        "section": "identification",
+        "sort_order": 20,
+        "required": true,
+        "visibility_rules": [
+          {
+            "field": "bb_construction",
+            "operator": "eq",
+            "value": "Cubetas y canastillo"
+          }
+        ],
+        "constraint_rules": [],
+        "label": "Tamaño de bolita",
+        "data_type": "single_select",
+        "allowed_values": [
+          "1/8",
+          "5/32",
+          "3/16",
+          "1/4"
+        ],
+        "validation_rules": {}
+      },
+      {
+        "key": "spindle_diameter_mm",
+        "section": "dimensions",
+        "sort_order": 80,
+        "required": false,
+        "visibility_rules": [
+          {
+            "field": "bb_construction",
+            "operator": "is_set"
+          }
+        ],
+        "constraint_rules": [],
+        "label": "Diámetro eje",
+        "data_type": "number",
+        "allowed_values": [
+          "17",
+          "19",
+          "20",
+          "22",
+          "24",
+          "25.4",
+          "28.99",
+          "30"
+        ],
+        "validation_rules": {
+          "positive": true
+        }
+      }
+    ]
+  },
+  {
+    "key": "spoke",
+    "technical_family": "spoke",
+    "form_contract": {
+      "coverage": "template",
+      "helpers": {},
+      "labels": {},
+      "prerequisites": {},
+      "roles": {
+        "spec_evidence_source": "declaration",
+        "spoke_bend_type": "primary",
+        "spoke_gauge": "primary",
+        "spoke_length_mm": "measurement"
+      },
+      "version": 1
+    },
+    "fields": [
+      {
+        "key": "spec_evidence_source",
+        "section": "declaration",
+        "sort_order": 5,
+        "required": false,
+        "visibility_rules": [],
+        "constraint_rules": [],
+        "label": "Fuente de la declaración",
+        "data_type": "text",
+        "allowed_values": [],
+        "validation_rules": {}
+      },
+      {
+        "key": "spoke_bend_type",
+        "section": "specs",
+        "sort_order": 30,
+        "required": false,
+        "visibility_rules": [],
+        "constraint_rules": [],
+        "label": "Tipo de Cabeza del Rayo",
+        "data_type": "single_select",
+        "allowed_values": [
+          "J-Bend",
+          "Straight Pull"
+        ],
+        "validation_rules": {}
+      },
+      {
+        "key": "spoke_gauge",
+        "section": "specs",
+        "sort_order": 20,
+        "required": false,
+        "visibility_rules": [],
+        "constraint_rules": [],
+        "label": "Calibre del Rayo",
+        "data_type": "single_select",
+        "allowed_values": [
+          "14G",
+          "14/15G",
+          "13G",
+          "2.0/1.8",
+          "2.0/1.7/2.0"
+        ],
+        "validation_rules": {}
+      },
+      {
+        "key": "spoke_length_mm",
+        "section": "specs",
+        "sort_order": 10,
+        "required": true,
+        "visibility_rules": [],
+        "constraint_rules": [],
+        "label": "Largo de Rayo (mm)",
+        "data_type": "number",
+        "allowed_values": [],
+        "validation_rules": {
+          "positive": true
+        }
+      }
+    ]
+  },
+  {
+    "key": "rotor",
+    "technical_family": "rotor",
+    "form_contract": {
+      "coverage": "template",
+      "helpers": {},
+      "labels": {},
+      "prerequisites": {},
+      "roles": {
+        "brake_position": "primary",
+        "brake_system": "primary",
+        "rotor_diameter_mm": "primary",
+        "rotor_floating": "measurement",
+        "rotor_material": "primary",
+        "rotor_mount_type": "primary",
+        "rotor_thickness_mm": "measurement",
+        "spec_evidence_source": "declaration",
+        "tool_size_mm": "primary"
+      },
+      "version": 1
+    },
+    "fields": [
+      {
+        "key": "brake_system",
+        "section": "identification",
+        "sort_order": 10,
+        "required": false,
+        "visibility_rules": [],
+        "constraint_rules": [],
+        "label": "Sistema de Freno",
+        "data_type": "single_select",
+        "allowed_values": [
+          "Shimano",
+          "SRAM",
+          "Magura",
+          "Tektro",
+          "Hayes",
+          "Bengal",
+          "TRP",
+          "Hope",
+          "Promax",
+          "Genérico"
+        ],
+        "validation_rules": {}
+      },
+      {
+        "key": "rotor_material",
+        "section": "material",
+        "sort_order": 10,
+        "required": false,
+        "visibility_rules": [],
+        "constraint_rules": [],
+        "label": "Material del Rotor",
+        "data_type": "single_select",
+        "allowed_values": [
+          "Acero Inoxidable",
+          "Acero",
+          "Aluminio (Pista Acerada)"
+        ],
+        "validation_rules": {}
+      },
+      {
+        "key": "rotor_mount_type",
+        "section": "mounting",
+        "sort_order": 10,
+        "required": true,
+        "visibility_rules": [],
+        "constraint_rules": [],
+        "label": "Montaje del Rotor",
+        "data_type": "single_select",
+        "allowed_values": [
+          "6 pernos",
+          "Centerlock"
+        ],
+        "validation_rules": {}
+      },
+      {
+        "key": "spec_evidence_source",
+        "section": "declaration",
+        "sort_order": 5,
+        "required": false,
+        "visibility_rules": [],
+        "constraint_rules": [],
+        "label": "Fuente de la declaración",
+        "data_type": "text",
+        "allowed_values": [],
+        "validation_rules": {}
+      },
+      {
+        "key": "rotor_thickness_mm",
+        "section": "dimensions",
+        "sort_order": 20,
+        "required": false,
+        "visibility_rules": [],
+        "constraint_rules": [],
+        "label": "Espesor del Rotor (mm)",
+        "data_type": "number",
+        "allowed_values": [],
+        "validation_rules": {
+          "positive": true
+        }
+      },
+      {
+        "key": "tool_size_mm",
+        "section": "installation",
+        "sort_order": 10,
+        "required": false,
+        "visibility_rules": [],
+        "constraint_rules": [],
+        "label": "Tamaño de Herramienta (mm)",
+        "data_type": "text",
+        "allowed_values": [],
+        "validation_rules": {}
+      },
+      {
+        "key": "rotor_diameter_mm",
+        "section": "dimensions",
+        "sort_order": 10,
+        "required": true,
+        "visibility_rules": [],
+        "constraint_rules": [],
+        "label": "Diámetro del Rotor (mm)",
+        "data_type": "single_select",
+        "allowed_values": [
+          "140",
+          "160",
+          "180",
+          "203",
+          "220",
+          "160/140",
+          "180/160",
+          "203/180"
+        ],
+        "validation_rules": {}
+      },
+      {
+        "key": "brake_position",
+        "section": "identification",
+        "sort_order": 20,
+        "required": false,
+        "visibility_rules": [],
+        "constraint_rules": [],
+        "label": "Posición",
+        "data_type": "single_select",
+        "allowed_values": [
+          "Delantero",
+          "Trasero",
+          "Universal"
+        ],
+        "validation_rules": {}
+      },
+      {
+        "key": "rotor_floating",
+        "section": "features",
+        "sort_order": 10,
+        "required": false,
+        "visibility_rules": [],
+        "constraint_rules": [],
+        "label": "Rotor Flotante",
+        "data_type": "boolean",
+        "allowed_values": [],
+        "validation_rules": {}
+      }
+    ]
+  },
+  {
+    "key": "bottom_bracket",
+    "technical_family": "bottom_bracket",
+    "form_contract": {
+      "coverage": "template",
+      "helpers": {},
+      "labels": {},
+      "prerequisites": {},
+      "roles": {
+        "bb_ball_count_per_side": "measurement",
+        "bb_ball_size_in": "primary",
+        "bb_construction": "primary",
+        "bb_cup_outer_diameter_mm": "measurement",
+        "bb_cup_thread_pair": "primary",
+        "bb_shell_diameter_mm": "measurement",
+        "bb_shell_standard": "primary",
+        "bb_shell_width_mm": "measurement",
+        "bb_spacer_stack_mm": "measurement",
+        "bearing_size_code": "primary",
+        "includes_spindle": "measurement",
+        "spec_evidence_source": "declaration",
+        "spindle_diameter_mm": "measurement",
+        "spindle_interface": "primary",
+        "spindle_interface_accepted": "primary",
+        "spindle_length_mm": "measurement"
+      },
+      "version": 1
+    },
+    "fields": [
+      {
+        "key": "bb_ball_size_in",
+        "section": "identification",
+        "sort_order": 130,
+        "required": false,
+        "visibility_rules": [
+          {
+            "field": "bb_construction",
+            "operator": "eq",
+            "value": "Cubetas y canastillo"
+          }
+        ],
+        "constraint_rules": [],
+        "label": "Tamaño de bolita",
+        "data_type": "single_select",
+        "allowed_values": [
+          "1/8",
+          "5/32",
+          "3/16",
+          "1/4"
+        ],
+        "validation_rules": {}
+      },
+      {
+        "key": "bb_ball_count_per_side",
+        "section": "identification",
+        "sort_order": 140,
+        "required": false,
+        "visibility_rules": [
+          {
+            "field": "bb_construction",
+            "operator": "eq",
+            "value": "Cubetas y canastillo"
+          }
+        ],
+        "constraint_rules": [],
+        "label": "Bolitas por lado",
+        "data_type": "number",
+        "allowed_values": [
+          "7",
+          "9",
+          "11",
+          "12",
+          "13"
+        ],
+        "validation_rules": {
+          "positive": true,
+          "integer": true
+        }
+      },
+      {
+        "key": "spindle_diameter_mm",
+        "section": "dimensions",
+        "sort_order": 110,
+        "required": false,
+        "visibility_rules": [
+          {
+            "field": "includes_spindle",
+            "operator": "eq",
+            "value": true
+          },
+          {
+            "field": "spindle_interface",
+            "operator": "in",
+            "value": [
+              "BMX 19mm",
+              "BMX 22mm",
+              "BMX 24mm",
+              "Hollowtech / 24mm",
+              "SRAM DUB 28.99mm",
+              "BB30 30mm",
+              "SRAM GXP 24/22"
+            ]
+          }
+        ],
+        "constraint_rules": [],
+        "label": "Diámetro eje",
+        "data_type": "number",
+        "allowed_values": [
+          "17",
+          "19",
+          "20",
+          "22",
+          "24",
+          "25.4",
+          "28.99",
+          "30"
+        ],
+        "validation_rules": {
+          "positive": true
+        }
+      },
+      {
+        "key": "spindle_interface",
+        "section": "compatibility",
+        "sort_order": 40,
+        "required": false,
+        "visibility_rules": [
+          {
+            "field": "includes_spindle",
+            "operator": "eq",
+            "value": true
+          }
+        ],
+        "constraint_rules": [],
+        "label": "Punta del eje",
+        "data_type": "single_select",
+        "allowed_values": [
+          "Cuadrado JIS",
+          "Cuadrado ISO",
+          "Hollowtech / 24mm",
+          "SRAM GXP 24/22",
+          "SRAM DUB 28.99mm",
+          "BB30 30mm",
+          "ISIS",
+          "Octalink",
+          "Con chaveta",
+          "BMX 19mm",
+          "BMX 22mm",
+          "BMX 24mm",
+          "One-piece / americano",
+          "Powerspline"
+        ],
+        "validation_rules": {}
+      },
+      {
+        "key": "spec_evidence_source",
+        "section": "declaration",
+        "sort_order": 5,
+        "required": false,
+        "visibility_rules": [],
+        "constraint_rules": [],
+        "label": "Fuente de la declaración",
+        "data_type": "text",
+        "allowed_values": [],
+        "validation_rules": {}
+      },
+      {
+        "key": "includes_spindle",
+        "section": "compatibility",
+        "sort_order": 30,
+        "required": true,
+        "visibility_rules": [
+          {
+            "field": "bb_construction",
+            "operator": "is_set"
+          }
+        ],
+        "constraint_rules": [],
+        "label": "Incluye eje",
+        "data_type": "boolean",
+        "allowed_values": [],
+        "validation_rules": {}
+      },
+      {
+        "key": "bb_spacer_stack_mm",
+        "section": "dimensions",
+        "sort_order": 120,
+        "required": false,
+        "visibility_rules": [
+          {
+            "field": "bb_construction",
+            "operator": "eq",
+            "value": "Integrado"
+          }
+        ],
+        "constraint_rules": [],
+        "label": "Espaciadores incluidos",
+        "data_type": "number",
+        "allowed_values": [
+          "0",
+          "2.5",
+          "5"
+        ],
+        "validation_rules": {
+          "min": 0
+        }
+      },
+      {
+        "key": "bb_cup_thread_pair",
+        "section": "compatibility",
+        "sort_order": 60,
+        "required": false,
+        "visibility_rules": [
+          {
+            "field": "bb_construction",
+            "operator": "in",
+            "value": [
+              "Cubetas y canastillo",
+              "Integrado"
+            ]
+          },
+          {
+            "field": "bb_shell_standard",
+            "operator": "in",
+            "value": [
+              "BSA / Caja inglesa 34,8 mm (1.37\") x 24",
+              "Italiano 36 mm x 24",
+              "T47 47 mm",
+              "Francés 35 mm x 1",
+              "Suizo 35 mm x 1",
+              "Euro BMX roscado 68 mm"
+            ]
+          }
+        ],
+        "constraint_rules": [],
+        "label": "Mano de la rosca",
+        "data_type": "single_select",
+        "allowed_values": [
+          "Derecha / Izquierda (BSA inglés)",
+          "Derecha / Derecha (italiano o genérico)",
+          "Sin rosca (a presión)"
+        ],
+        "validation_rules": {}
+      },
+      {
+        "key": "bb_shell_standard",
+        "section": "compatibility",
+        "sort_order": 10,
+        "required": true,
+        "visibility_rules": [],
+        "constraint_rules": [],
+        "label": "Caja de motor",
+        "data_type": "single_select",
+        "allowed_values": [
+          "BSA / Caja inglesa 34,8 mm (1.37\") x 24",
+          "Italiano 36 mm x 24",
+          "T47 47 mm",
+          "Francés 35 mm x 1",
+          "Suizo 35 mm x 1",
+          "Euro BMX roscado 68 mm",
+          "BB86 / BB92 41 mm",
+          "PF30 46 mm",
+          "BB30 42 mm",
+          "BB386EVO 46 mm",
+          "BB90 / BB95",
+          "BBRight / OSBB",
+          "Mid BMX 41,2 mm",
+          "Spanish BMX 37 mm",
+          "Americano 51,5 mm"
+        ],
+        "validation_rules": {}
+      },
+      {
+        "key": "bearing_size_code",
+        "section": "identification",
+        "sort_order": 150,
+        "required": false,
+        "visibility_rules": [
+          {
+            "field": "bb_construction",
+            "operator": "in",
+            "value": [
+              "Integrado",
+              "A presión",
+              "Thread-together",
+              "Rodamiento sellado"
+            ]
+          }
+        ],
+        "constraint_rules": [],
+        "label": "Código rodamiento",
+        "data_type": "text",
+        "allowed_values": [],
+        "validation_rules": {}
+      },
+      {
+        "key": "bb_shell_width_mm",
+        "section": "dimensions",
+        "sort_order": 70,
+        "required": false,
+        "visibility_rules": [
+          {
+            "field": "bb_shell_standard",
+            "operator": "is_set"
+          }
+        ],
+        "constraint_rules": [],
+        "label": "Ancho caja motor",
+        "data_type": "number",
+        "allowed_values": [
+          "68",
+          "70",
+          "73",
+          "83",
+          "86.5",
+          "89.5",
+          "92",
+          "100",
+          "107",
+          "121"
+        ],
+        "validation_rules": {
+          "positive": true
+        }
+      },
+      {
+        "key": "spindle_length_mm",
+        "section": "dimensions",
+        "sort_order": 100,
+        "required": false,
+        "visibility_rules": [
+          {
+            "field": "includes_spindle",
+            "operator": "eq",
+            "value": true
+          },
+          {
+            "field": "spindle_interface",
+            "operator": "not_in",
+            "value": [
+              "Hollowtech / 24mm",
+              "SRAM GXP 24/22",
+              "SRAM DUB 28.99mm",
+              "BB30 30mm",
+              "One-piece / americano"
+            ]
+          }
+        ],
+        "constraint_rules": [],
+        "label": "Largo eje",
+        "data_type": "number",
+        "allowed_values": [
+          "103",
+          "107",
+          "108",
+          "109",
+          "110",
+          "110.5",
+          "113",
+          "113.5",
+          "116",
+          "118",
+          "118.5",
+          "119",
+          "121",
+          "122.5",
+          "124",
+          "124.5",
+          "125",
+          "125.5",
+          "126",
+          "127",
+          "127.5",
+          "128",
+          "131",
+          "135",
+          "140",
+          "145",
+          "147"
+        ],
+        "validation_rules": {
+          "positive": true
+        }
+      },
+      {
+        "key": "bb_cup_outer_diameter_mm",
+        "section": "dimensions",
+        "sort_order": 90,
+        "required": false,
+        "visibility_rules": [
+          {
+            "field": "bb_construction",
+            "operator": "eq",
+            "value": "Cubetas y canastillo"
+          }
+        ],
+        "constraint_rules": [],
+        "label": "Diámetro de rosca de cubeta",
+        "data_type": "number",
+        "allowed_values": [
+          "34.8",
+          "35",
+          "36",
+          "37",
+          "41.2",
+          "51.5"
+        ],
+        "validation_rules": {
+          "positive": true
+        }
+      },
+      {
+        "key": "bb_shell_diameter_mm",
+        "section": "dimensions",
+        "sort_order": 80,
+        "required": false,
+        "visibility_rules": [
+          {
+            "field": "bb_shell_standard",
+            "operator": "in",
+            "value": [
+              "BB86 / BB92 41 mm",
+              "PF30 46 mm",
+              "BB30 42 mm",
+              "BB386EVO 46 mm",
+              "BB90 / BB95",
+              "BBRight / OSBB",
+              "Mid BMX 41,2 mm",
+              "Spanish BMX 37 mm",
+              "Americano 51,5 mm"
+            ]
+          }
+        ],
+        "constraint_rules": [],
+        "label": "Diametro caja motor",
+        "data_type": "number",
+        "allowed_values": [
+          "37",
+          "41",
+          "41.2",
+          "42",
+          "46",
+          "51.5"
+        ],
+        "validation_rules": {
+          "positive": true
+        }
+      },
+      {
+        "key": "spindle_interface_accepted",
+        "section": "compatibility",
+        "sort_order": 50,
+        "required": false,
+        "visibility_rules": [
+          {
+            "field": "includes_spindle",
+            "operator": "eq",
+            "value": false
+          }
+        ],
+        "constraint_rules": [],
+        "label": "Puntas de eje que acepta",
+        "data_type": "multi_select",
+        "allowed_values": [
+          "Cuadrado JIS",
+          "Cuadrado ISO",
+          "Hollowtech / 24mm",
+          "SRAM GXP 24/22",
+          "SRAM DUB 28.99mm",
+          "BB30 30mm",
+          "ISIS",
+          "Octalink",
+          "Con chaveta",
+          "BMX 19mm",
+          "BMX 22mm",
+          "BMX 24mm",
+          "One-piece / americano",
+          "Powerspline"
+        ],
+        "validation_rules": {}
+      },
+      {
+        "key": "bb_construction",
+        "section": "compatibility",
+        "sort_order": 20,
+        "required": true,
+        "visibility_rules": [
+          {
+            "field": "bb_shell_standard",
+            "operator": "is_set"
+          }
+        ],
+        "constraint_rules": [],
+        "label": "Construcción",
+        "data_type": "single_select",
+        "allowed_values": [
+          "Rodamiento sellado",
+          "Integrado",
+          "Cubetas y canastillo",
+          "A presión",
+          "Roscado entre sí"
+        ],
+        "validation_rules": {}
+      }
+    ]
+  },
+  {
+    "key": "fixed_cog",
+    "technical_family": "fixed_cog",
+    "form_contract": {
+      "coverage": "template",
+      "helpers": {},
+      "labels": {},
+      "prerequisites": {},
+      "roles": {
+        "chain_width_family": "measurement",
+        "drivetrain_speeds": "primary",
+        "freehub_type": "primary",
+        "single_cog_teeth": "measurement",
+        "spec_evidence_source": "declaration"
+      },
+      "version": 1
+    },
+    "fields": [
+      {
+        "key": "single_cog_teeth",
+        "section": "range",
+        "sort_order": 10,
+        "required": true,
+        "visibility_rules": [],
+        "constraint_rules": [],
+        "label": "Dientes piñón simple",
+        "data_type": "number",
+        "allowed_values": [],
+        "validation_rules": {
+          "positive": true,
+          "integer": true
+        }
+      },
+      {
+        "key": "chain_width_family",
+        "section": "compatibility",
+        "sort_order": 30,
+        "required": false,
+        "visibility_rules": [],
+        "constraint_rules": [],
+        "label": "Familia ancho cadena",
+        "data_type": "single_select",
+        "allowed_values": [
+          "1/8",
+          "3/32",
+          "11/128",
+          "Otro",
+          "Desconocido / sin confirmar"
+        ],
+        "validation_rules": {}
+      },
+      {
+        "key": "spec_evidence_source",
+        "section": "declaration",
+        "sort_order": 5,
+        "required": false,
+        "visibility_rules": [],
+        "constraint_rules": [],
+        "label": "Fuente de la declaración",
+        "data_type": "text",
+        "allowed_values": [],
+        "validation_rules": {}
+      },
+      {
+        "key": "freehub_type",
+        "section": "compatibility",
+        "sort_order": 20,
+        "required": true,
+        "visibility_rules": [],
+        "constraint_rules": [],
+        "label": "Driver / Freehub",
+        "data_type": "single_select",
+        "allowed_values": [
+          "Shimano HG",
+          "Shimano HG Road 11",
+          "Micro Spline",
+          "SRAM XD",
+          "SRAM XDR",
+          "Campagnolo",
+          "Campagnolo N3W",
+          "Rueda libre roscada",
+          "Driver BMX",
+          "Rosca fija / contratuerca",
+          "Maza contrapedal",
+          "Desconocido / sin confirmar"
+        ],
+        "validation_rules": {}
+      },
+      {
+        "key": "drivetrain_speeds",
+        "section": "compatibility",
+        "sort_order": 10,
+        "required": false,
+        "visibility_rules": [],
+        "constraint_rules": [],
+        "label": "Velocidades transmisión",
+        "data_type": "multi_select",
+        "allowed_values": [
+          "1",
+          "5",
+          "6",
+          "7",
+          "8",
+          "9",
+          "10",
+          "11",
+          "12",
+          "13"
+        ],
+        "validation_rules": {}
+      }
+    ]
+  },
+  {
+    "key": "freewheel",
+    "technical_family": "freewheel",
+    "form_contract": {
+      "coverage": "template",
+      "helpers": {},
+      "labels": {},
+      "prerequisites": {},
+      "roles": {
+        "cassette_cog_sequence": "primary",
+        "drivetrain_speeds": "primary",
+        "freehub_type": "primary",
+        "largest_cog_teeth": "measurement",
+        "smallest_cog_teeth": "measurement",
+        "spec_evidence_source": "declaration"
+      },
+      "version": 1
+    },
+    "fields": [
+      {
+        "key": "drivetrain_speeds",
+        "section": "compatibility",
+        "sort_order": 10,
+        "required": true,
+        "visibility_rules": [],
+        "constraint_rules": [],
+        "label": "Velocidades transmisión",
+        "data_type": "multi_select",
+        "allowed_values": [
+          "1",
+          "5",
+          "6",
+          "7",
+          "8",
+          "9",
+          "10",
+          "11",
+          "12",
+          "13"
+        ],
+        "validation_rules": {}
+      },
+      {
+        "key": "cassette_cog_sequence",
+        "section": "range",
+        "sort_order": 30,
+        "required": false,
+        "visibility_rules": [],
+        "constraint_rules": [],
+        "label": "Secuencia pinones",
+        "data_type": "text",
+        "allowed_values": [],
+        "validation_rules": {}
+      },
+      {
+        "key": "smallest_cog_teeth",
+        "section": "range",
+        "sort_order": 10,
+        "required": false,
+        "visibility_rules": [],
+        "constraint_rules": [],
+        "label": "Piñón menor",
+        "data_type": "number",
+        "allowed_values": [
+          "8",
+          "9",
+          "10",
+          "11",
+          "12",
+          "13",
+          "14",
+          "15",
+          "16"
+        ],
+        "validation_rules": {
+          "positive": true,
+          "integer": true
+        }
+      },
+      {
+        "key": "freehub_type",
+        "section": "compatibility",
+        "sort_order": 20,
+        "required": true,
+        "visibility_rules": [],
+        "constraint_rules": [],
+        "label": "Driver / Freehub",
+        "data_type": "single_select",
+        "allowed_values": [
+          "Shimano HG",
+          "Shimano HG Road 11",
+          "Micro Spline",
+          "SRAM XD",
+          "SRAM XDR",
+          "Campagnolo",
+          "Campagnolo N3W",
+          "Rueda libre roscada",
+          "Driver BMX",
+          "Rosca fija / contratuerca",
+          "Maza contrapedal",
+          "Desconocido / sin confirmar"
+        ],
+        "validation_rules": {}
+      },
+      {
+        "key": "largest_cog_teeth",
+        "section": "range",
+        "sort_order": 20,
+        "required": false,
+        "visibility_rules": [],
+        "constraint_rules": [],
+        "label": "Piñón mayor",
+        "data_type": "number",
+        "allowed_values": [
+          "14",
+          "15",
+          "16",
+          "18",
+          "20",
+          "21",
+          "22",
+          "24",
+          "25",
+          "26",
+          "27",
+          "28",
+          "30",
+          "32",
+          "34",
+          "36",
+          "38",
+          "40",
+          "42",
+          "44",
+          "46",
+          "48",
+          "50",
+          "51",
+          "52",
+          "54",
+          "56",
+          "58",
+          "60"
+        ],
+        "validation_rules": {
+          "positive": true,
+          "integer": true
+        }
+      },
+      {
+        "key": "spec_evidence_source",
+        "section": "declaration",
+        "sort_order": 5,
+        "required": false,
+        "visibility_rules": [],
+        "constraint_rules": [],
+        "label": "Fuente de la declaración",
+        "data_type": "text",
+        "allowed_values": [],
+        "validation_rules": {}
+      }
+    ]
+  },
+  {
+    "key": "derailleur_pulley",
+    "technical_family": "derailleur_pulley",
+    "form_contract": {
+      "coverage": "template",
+      "helpers": {},
+      "labels": {},
+      "prerequisites": {},
+      "roles": {
+        "derailleur_cage_length": "primary",
+        "pulley_teeth": "measurement",
+        "spec_evidence_source": "declaration"
+      },
+      "version": 1
+    },
+    "fields": [
+      {
+        "key": "derailleur_cage_length",
+        "section": "compatibility",
+        "sort_order": 20,
+        "required": false,
+        "visibility_rules": [],
+        "constraint_rules": [],
+        "label": "Largo caja cambio",
+        "data_type": "single_select",
+        "allowed_values": [
+          "SS / corta",
+          "GS / media",
+          "SGS / larga",
+          "Otro",
+          "Desconocido / sin confirmar"
+        ],
+        "validation_rules": {}
+      },
+      {
+        "key": "pulley_teeth",
+        "section": "compatibility",
+        "sort_order": 10,
+        "required": true,
+        "visibility_rules": [],
+        "constraint_rules": [],
+        "label": "Dientes roldana",
+        "data_type": "number",
+        "allowed_values": [],
+        "validation_rules": {
+          "positive": true,
+          "integer": true
+        }
+      },
+      {
+        "key": "spec_evidence_source",
+        "section": "declaration",
+        "sort_order": 5,
+        "required": false,
+        "visibility_rules": [],
+        "constraint_rules": [],
+        "label": "Fuente de la declaración",
+        "data_type": "text",
+        "allowed_values": [],
+        "validation_rules": {}
+      }
+    ]
+  },
+  {
+    "key": "tube",
+    "technical_family": "tube",
+    "form_contract": {
+      "coverage": "template",
+      "helpers": {},
+      "labels": {},
+      "prerequisites": {},
+      "roles": {
+        "spec_evidence_source": "declaration",
+        "tube_has_sealant": "measurement",
+        "tube_material": "primary",
+        "tube_width_max_in": "measurement",
+        "tube_width_max_mm": "measurement",
+        "tube_width_min_in": "measurement",
+        "tube_width_min_mm": "measurement",
+        "valve_length_mm": "primary",
+        "valve_type": "primary",
+        "wheel_size": "primary"
+      },
+      "version": 1
+    },
+    "fields": [
+      {
+        "key": "tube_width_max_in",
+        "section": "compatibility",
+        "sort_order": 31,
+        "required": false,
+        "visibility_rules": [],
+        "constraint_rules": [],
+        "label": "Ancho máximo (pulgadas)",
+        "data_type": "number",
+        "allowed_values": [],
+        "validation_rules": {
+          "positive": true
+        }
+      },
+      {
+        "key": "tube_width_max_mm",
+        "section": "compatibility",
+        "sort_order": 33,
+        "required": false,
+        "visibility_rules": [],
+        "constraint_rules": [],
+        "label": "Ancho máximo (mm)",
+        "data_type": "number",
+        "allowed_values": [],
+        "validation_rules": {
+          "positive": true
+        }
+      },
+      {
+        "key": "tube_width_min_in",
+        "section": "compatibility",
+        "sort_order": 30,
+        "required": false,
+        "visibility_rules": [],
+        "constraint_rules": [],
+        "label": "Ancho mínimo (pulgadas)",
+        "data_type": "number",
+        "allowed_values": [],
+        "validation_rules": {
+          "positive": true
+        }
+      },
+      {
+        "key": "wheel_size",
+        "section": "compatibility",
+        "sort_order": 10,
+        "required": true,
+        "visibility_rules": [],
+        "constraint_rules": [],
+        "label": "Tamaño de rueda",
+        "data_type": "single_select",
+        "allowed_values": [
+          "12\"",
+          "16\"",
+          "20\"",
+          "24\"",
+          "26\"",
+          "27.5\"",
+          "29\"",
+          "700c",
+          "650b",
+          "Otra"
+        ],
+        "validation_rules": {}
+      },
+      {
+        "key": "valve_length_mm",
+        "section": "specs",
+        "sort_order": 10,
+        "required": false,
+        "visibility_rules": [],
+        "constraint_rules": [],
+        "label": "Largo de Válvula (mm)",
+        "data_type": "single_select",
+        "allowed_values": [
+          "33",
+          "35",
+          "40",
+          "44",
+          "48",
+          "52",
+          "60",
+          "80"
+        ],
+        "validation_rules": {}
+      },
+      {
+        "key": "tube_has_sealant",
+        "section": "specs",
+        "sort_order": 40,
+        "required": false,
+        "visibility_rules": [],
+        "constraint_rules": [],
+        "label": "Trae líquido sellante",
+        "data_type": "boolean",
+        "allowed_values": [],
+        "validation_rules": {}
+      },
+      {
+        "key": "valve_type",
+        "section": "compatibility",
+        "sort_order": 20,
+        "required": true,
+        "visibility_rules": [],
+        "constraint_rules": [],
+        "label": "Tipo de Válvula",
+        "data_type": "single_select",
+        "allowed_values": [
+          "Presta (francesa)",
+          "Schrader (americana / auto)",
+          "Dunlop (inglesa)",
+          "Otra",
+          "Desconocido"
+        ],
+        "validation_rules": {}
+      },
+      {
+        "key": "tube_width_min_mm",
+        "section": "compatibility",
+        "sort_order": 32,
+        "required": false,
+        "visibility_rules": [],
+        "constraint_rules": [],
+        "label": "Ancho mínimo (mm)",
+        "data_type": "number",
+        "allowed_values": [],
+        "validation_rules": {
+          "positive": true
+        }
+      },
+      {
+        "key": "tube_material",
+        "section": "specs",
+        "sort_order": 41,
+        "required": false,
+        "visibility_rules": [],
+        "constraint_rules": [],
+        "label": "Material de la cámara",
+        "data_type": "single_select",
+        "allowed_values": [
+          "Butilo",
+          "TPU",
+          "Látex",
+          "Otro"
+        ],
+        "validation_rules": {}
+      },
+      {
+        "key": "spec_evidence_source",
+        "section": "declaration",
+        "sort_order": 5,
+        "required": false,
+        "visibility_rules": [],
+        "constraint_rules": [],
+        "label": "Fuente de la declaración",
+        "data_type": "text",
+        "allowed_values": [],
+        "validation_rules": {}
+      }
+    ]
+  }
+]

@@ -1,0 +1,4955 @@
+{
+  "schema_version": 1,
+  "title": "Propuesta independiente de row_conditions v1 para las 48 definiciones de filas",
+  "created_on": "2026-09-07",
+  "status": "proposal_not_applied",
+  "base_artifact": "docs/development/product-specs-research-2026-09-05/all-family-reviewed-fields-integrated-2026-09-07.json",
+  "base_sha256": "f3178bd3c860c421d2365961fe3ff057581d2d038bb999bc59f5f0f959937072",
+  "approval_scope": "field_representation",
+  "new_definitions": {},
+  "patches": [
+    {
+      "id": "RCF-brake_caliper",
+      "op": "replace_template_coherence",
+      "template": "brake_caliper",
+      "key": "row_conditions",
+      "path": "/templates/5/form_contract/row_conditions",
+      "before": {
+        "present": false,
+        "value": null
+      },
+      "after": {
+        "version": 1,
+        "fields": {
+          "rotor_size_recipe": {
+            "required_when": {
+              "adapter_model": {
+                "kind": "when",
+                "rows": [
+                  [
+                    {
+                      "field": "adapter_required",
+                      "operator": "eq",
+                      "value_type": "boolean",
+                      "value": true
+                    }
+                  ]
+                ]
+              }
+            }
+          },
+          "brake_fluid_approvals": {
+            "required_when": {
+              "fluid_product": {
+                "kind": "always"
+              }
+            }
+          }
+        }
+      },
+      "source_ids": [
+        "CATALOG",
+        "PARK_ROTOR",
+        "SRAM_MAVEN"
+      ],
+      "reason": "Añade requisitos de completitud de columnas de esta misma fila; light además conserva una sola tabla propietaria de luces físicas.",
+      "mechanical_verdict": false,
+      "automatic_fill_authorized": false
+    },
+    {
+      "id": "RCF-brake_lever",
+      "op": "replace_template_coherence",
+      "template": "brake_lever",
+      "key": "row_conditions",
+      "path": "/templates/6/form_contract/row_conditions",
+      "before": {
+        "present": false,
+        "value": null
+      },
+      "after": {
+        "version": 1,
+        "fields": {
+          "brake_fluid_approvals": {
+            "required_when": {
+              "fluid_product": {
+                "kind": "always"
+              }
+            }
+          }
+        }
+      },
+      "source_ids": [
+        "CATALOG",
+        "SRAM_MAVEN"
+      ],
+      "reason": "Añade requisitos de completitud de columnas de esta misma fila; light además conserva una sola tabla propietaria de luces físicas.",
+      "mechanical_verdict": false,
+      "automatic_fill_authorized": false
+    },
+    {
+      "id": "RCF-hydraulic_disc_brake",
+      "op": "replace_template_coherence",
+      "template": "hydraulic_disc_brake",
+      "key": "row_conditions",
+      "path": "/templates/14/form_contract/row_conditions",
+      "before": {
+        "present": false,
+        "value": null
+      },
+      "after": {
+        "version": 1,
+        "fields": {
+          "rotor_size_recipe": {
+            "required_when": {
+              "adapter_model": {
+                "kind": "when",
+                "rows": [
+                  [
+                    {
+                      "field": "adapter_required",
+                      "operator": "eq",
+                      "value_type": "boolean",
+                      "value": true
+                    }
+                  ]
+                ]
+              }
+            }
+          },
+          "brake_fluid_approvals": {
+            "required_when": {
+              "fluid_product": {
+                "kind": "always"
+              }
+            }
+          }
+        }
+      },
+      "source_ids": [
+        "CATALOG",
+        "PARK_ROTOR",
+        "SRAM_MAVEN"
+      ],
+      "reason": "Añade requisitos de completitud de columnas de esta misma fila; light además conserva una sola tabla propietaria de luces físicas.",
+      "mechanical_verdict": false,
+      "automatic_fill_authorized": false
+    },
+    {
+      "id": "RCF-mechanical_disc_brake",
+      "op": "replace_template_coherence",
+      "template": "mechanical_disc_brake",
+      "key": "row_conditions",
+      "path": "/templates/15/form_contract/row_conditions",
+      "before": {
+        "present": false,
+        "value": null
+      },
+      "after": {
+        "version": 1,
+        "fields": {
+          "rotor_size_recipe": {
+            "required_when": {
+              "adapter_model": {
+                "kind": "when",
+                "rows": [
+                  [
+                    {
+                      "field": "adapter_required",
+                      "operator": "eq",
+                      "value_type": "boolean",
+                      "value": true
+                    }
+                  ]
+                ]
+              }
+            }
+          }
+        }
+      },
+      "source_ids": [
+        "CATALOG",
+        "PARK_ROTOR"
+      ],
+      "reason": "Añade requisitos de completitud de columnas de esta misma fila; light además conserva una sola tabla propietaria de luces físicas.",
+      "mechanical_verdict": false,
+      "automatic_fill_authorized": false
+    },
+    {
+      "id": "RCF-rim_brake",
+      "op": "replace_template_coherence",
+      "template": "rim_brake",
+      "key": "row_conditions",
+      "path": "/templates/28/form_contract/row_conditions",
+      "before": {
+        "present": false,
+        "value": null
+      },
+      "after": {
+        "version": 1,
+        "fields": {
+          "brake_fluid_approvals": {
+            "required_when": {
+              "fluid_product": {
+                "kind": "always"
+              }
+            }
+          }
+        }
+      },
+      "source_ids": [
+        "CATALOG",
+        "SRAM_MAVEN"
+      ],
+      "reason": "Añade requisitos de completitud de columnas de esta misma fila; light además conserva una sola tabla propietaria de luces físicas.",
+      "mechanical_verdict": false,
+      "automatic_fill_authorized": false
+    },
+    {
+      "id": "RCF-seatpost",
+      "op": "replace_template_coherence",
+      "template": "seatpost",
+      "key": "row_conditions",
+      "path": "/templates/43/form_contract/row_conditions",
+      "before": {
+        "present": false,
+        "value": null
+      },
+      "after": {
+        "version": 1,
+        "fields": {
+          "seatpost_saddle_configurations": {
+            "required_when": {
+              "clamp_part": {
+                "kind": "when",
+                "rows": [
+                  [
+                    {
+                      "field": "configuration_state",
+                      "operator": "in",
+                      "value_type": "token",
+                      "value": [
+                        "Con kit incluido",
+                        "Con kit opcional"
+                      ]
+                    }
+                  ]
+                ]
+              }
+            }
+          }
+        }
+      },
+      "source_ids": [
+        "CATALOG",
+        "RITCHEY_1BOLT"
+      ],
+      "reason": "Añade requisitos de completitud de columnas de esta misma fila; light además conserva una sola tabla propietaria de luces físicas.",
+      "mechanical_verdict": false,
+      "automatic_fill_authorized": false
+    },
+    {
+      "id": "RCF-rotor_mount_adapter",
+      "op": "replace_template_coherence",
+      "template": "rotor_mount_adapter",
+      "key": "row_conditions",
+      "path": "/templates/67/form_contract/row_conditions",
+      "before": {
+        "present": false,
+        "value": null
+      },
+      "after": {
+        "version": 1,
+        "fields": {
+          "rotor_adapter_fitments": {
+            "required_when": {
+              "hub_thread_spec": {
+                "kind": "when",
+                "rows": [
+                  [
+                    {
+                      "field": "hub_mount",
+                      "operator": "eq",
+                      "value_type": "token",
+                      "value": "Rosca especificada"
+                    }
+                  ]
+                ]
+              }
+            }
+          }
+        }
+      },
+      "source_ids": [
+        "CATALOG",
+        "PARK_THREADS"
+      ],
+      "reason": "Añade requisitos de completitud de columnas de esta misma fila; light además conserva una sola tabla propietaria de luces físicas.",
+      "mechanical_verdict": false,
+      "automatic_fill_authorized": false
+    },
+    {
+      "id": "RCF-workshop_tool",
+      "op": "replace_template_coherence",
+      "template": "workshop_tool",
+      "key": "row_conditions",
+      "path": "/templates/75/form_contract/row_conditions",
+      "before": {
+        "present": false,
+        "value": null
+      },
+      "after": {
+        "version": 1,
+        "fields": {
+          "tool_capabilities": {
+            "required_when": {
+              "adapter_model": {
+                "kind": "when",
+                "rows": [
+                  [
+                    {
+                      "field": "adapter_required",
+                      "operator": "eq",
+                      "value_type": "boolean",
+                      "value": true
+                    }
+                  ]
+                ]
+              }
+            }
+          },
+          "tool_bits_included": {
+            "required_when": {
+              "size": {
+                "kind": "when",
+                "rows": [
+                  [
+                    {
+                      "field": "bit_kind",
+                      "operator": "in",
+                      "value_type": "token",
+                      "value": [
+                        "Hexagonal (Allen)",
+                        "Torx",
+                        "Llave fija",
+                        "Llave de rayos",
+                        "Llave de tubo",
+                        "Llave estrella / cerrada"
+                      ]
+                    }
+                  ]
+                ]
+              }
+            }
+          }
+        }
+      },
+      "source_ids": [
+        "CATALOG",
+        "ENGINE2200",
+        "PARK_IB3"
+      ],
+      "reason": "Añade requisitos de completitud de columnas de esta misma fila; light además conserva una sola tabla propietaria de luces físicas.",
+      "mechanical_verdict": false,
+      "automatic_fill_authorized": false
+    },
+    {
+      "id": "RCF-light",
+      "op": "replace_template_coherence",
+      "template": "light",
+      "key": "row_conditions",
+      "path": "/templates/78/form_contract/row_conditions",
+      "before": {
+        "present": false,
+        "value": null
+      },
+      "after": {
+        "version": 1,
+        "fields": {
+          "light_member_configurations": {
+            "required_when": {
+              "power_input_connector": {
+                "kind": "when",
+                "rows": [
+                  [
+                    {
+                      "field": "battery_kind",
+                      "operator": "in",
+                      "value_type": "token",
+                      "value": [
+                        "Alimentación externa (USB)",
+                        "Alimentación externa (no USB)"
+                      ]
+                    }
+                  ]
+                ]
+              },
+              "power_source_note": {
+                "kind": "when",
+                "rows": [
+                  [
+                    {
+                      "field": "battery_kind",
+                      "operator": "eq",
+                      "value_type": "token",
+                      "value": "Otra batería / alimentación"
+                    }
+                  ]
+                ]
+              }
+            }
+          },
+          "kit_members": {
+            "allowed_options": {
+              "family": [
+                "accessory_mount",
+                "audible_signal",
+                "bearing",
+                "bicycle",
+                "bike_bag",
+                "bike_protection",
+                "bmx_cable_detangler",
+                "bottle",
+                "bottle_cage",
+                "bottom_bracket",
+                "bottom_bracket_axle",
+                "bottom_bracket_bearing",
+                "bottom_bracket_cup",
+                "brake_caliper",
+                "brake_fluid",
+                "brake_lever",
+                "brake_mount_adapter",
+                "brake_pad",
+                "brake_shift_combined_control",
+                "brake_small_part",
+                "cassette",
+                "cassette_lockring",
+                "cassette_spacer",
+                "chain",
+                "chain_guide",
+                "chain_link",
+                "chainring",
+                "chainring_guard",
+                "consumer_electronics",
+                "control_cable",
+                "control_housing",
+                "control_small_part",
+                "crank_arm",
+                "crankset",
+                "cycle_computer",
+                "derailleur_hanger",
+                "derailleur_hanger_extender",
+                "derailleur_pulley",
+                "drivetrain_kit",
+                "eyewear",
+                "fastener",
+                "fender",
+                "fixed_cog",
+                "food_beverage",
+                "fork",
+                "frame",
+                "freewheel",
+                "front_derailleur",
+                "grip",
+                "handlebar",
+                "handlebar_covering",
+                "headset",
+                "headset_small_part",
+                "helmet",
+                "hub",
+                "hub_axle",
+                "hub_brake",
+                "hub_small_part",
+                "hydraulic_disc_brake",
+                "hydraulic_fitting",
+                "hydraulic_hose",
+                "kickstand",
+                "lock",
+                "mechanical_disc_brake",
+                "pedal",
+                "pedal_peg",
+                "pump",
+                "rack_basket",
+                "rear_derailleur",
+                "rear_shock",
+                "reflector",
+                "rider_apparel",
+                "rider_bag",
+                "rider_glove",
+                "rider_protection",
+                "rim",
+                "rim_brake",
+                "rim_strip",
+                "rotor",
+                "rotor_mount_adapter",
+                "saddle",
+                "saddle_cover",
+                "seat_clamp",
+                "seatpost",
+                "shifter",
+                "souvenir",
+                "spacer",
+                "spoke",
+                "spoke_nipple",
+                "stem",
+                "tire",
+                "tire_liner",
+                "training_wheel",
+                "tube",
+                "tube_repair",
+                "tubeless_consumable",
+                "tubeless_repair",
+                "tubeless_tape",
+                "tubeless_valve",
+                "valve_small_part",
+                "wheel",
+                "wheel_retention",
+                "workshop_chemical",
+                "workshop_tool"
+              ]
+            }
+          }
+        }
+      },
+      "source_ids": [
+        "CATALOG",
+        "ENGINE2200",
+        "LEZYNE_HV_MANUAL"
+      ],
+      "reason": "Añade requisitos de completitud de columnas de esta misma fila; light además conserva una sola tabla propietaria de luces físicas.",
+      "mechanical_verdict": false,
+      "automatic_fill_authorized": false
+    },
+    {
+      "id": "RCF-consumer_electronics",
+      "op": "replace_template_coherence",
+      "template": "consumer_electronics",
+      "key": "row_conditions",
+      "path": "/templates/81/form_contract/row_conditions",
+      "before": {
+        "present": false,
+        "value": null
+      },
+      "after": {
+        "version": 1,
+        "fields": {
+          "power_port_profile_configurations": {
+            "required_when": {
+              "voltage_v": {
+                "kind": "when",
+                "rows": [
+                  [
+                    {
+                      "field": "profile_kind",
+                      "operator": "in",
+                      "value_type": "token",
+                      "value": [
+                        "Tensión fija",
+                        "Rango de tensión"
+                      ]
+                    }
+                  ]
+                ]
+              },
+              "voltage_max_v": {
+                "kind": "when",
+                "rows": [
+                  [
+                    {
+                      "field": "profile_kind",
+                      "operator": "eq",
+                      "value_type": "token",
+                      "value": "Rango de tensión"
+                    }
+                  ]
+                ]
+              },
+              "oem_profile_label": {
+                "kind": "when",
+                "rows": [
+                  [
+                    {
+                      "field": "profile_kind",
+                      "operator": "eq",
+                      "value_type": "token",
+                      "value": "Otro perfil declarado"
+                    }
+                  ]
+                ]
+              }
+            }
+          }
+        }
+      },
+      "source_ids": [
+        "ANKER_A2663",
+        "CATALOG"
+      ],
+      "reason": "Añade requisitos de completitud de columnas de esta misma fila; light además conserva una sola tabla propietaria de luces físicas.",
+      "mechanical_verdict": false,
+      "automatic_fill_authorized": false
+    },
+    {
+      "id": "RCF-accessory_mount",
+      "op": "replace_template_coherence",
+      "template": "accessory_mount",
+      "key": "row_conditions",
+      "path": "/templates/82/form_contract/row_conditions",
+      "before": {
+        "present": false,
+        "value": null
+      },
+      "after": {
+        "version": 1,
+        "fields": {
+          "bar_clamp_configurations": {
+            "required_when": {
+              "spacer_or_variant": {
+                "kind": "when",
+                "rows": [
+                  [
+                    {
+                      "field": "fit_method",
+                      "operator": "in",
+                      "value_type": "token",
+                      "value": [
+                        "Con espaciador incluido",
+                        "Con espaciador opcional",
+                        "Variante / versión distinta"
+                      ]
+                    }
+                  ]
+                ]
+              }
+            }
+          }
+        }
+      },
+      "source_ids": [
+        "CATALOG",
+        "ENGINE2200"
+      ],
+      "reason": "Añade requisitos de completitud de columnas de esta misma fila; light además conserva una sola tabla propietaria de luces físicas.",
+      "mechanical_verdict": false,
+      "automatic_fill_authorized": false
+    },
+    {
+      "id": "RCF-food_beverage",
+      "op": "replace_template_coherence",
+      "template": "food_beverage",
+      "key": "row_conditions",
+      "path": "/templates/99/form_contract/row_conditions",
+      "before": {
+        "present": false,
+        "value": null
+      },
+      "after": {
+        "version": 1,
+        "fields": {
+          "nutrition_facts": {
+            "required_when": {
+              "nutrient_name": {
+                "kind": "when",
+                "rows": [
+                  [
+                    {
+                      "field": "nutrient",
+                      "operator": "eq",
+                      "value_type": "token",
+                      "value": "Otro"
+                    }
+                  ]
+                ]
+              },
+              "amount_unit": {
+                "kind": "when",
+                "rows": [
+                  [
+                    {
+                      "field": "nutrient",
+                      "operator": "eq",
+                      "value_type": "token",
+                      "value": "Otro"
+                    }
+                  ]
+                ]
+              },
+              "basis_amount": {
+                "kind": "when",
+                "rows": [
+                  [
+                    {
+                      "field": "basis",
+                      "operator": "in",
+                      "value_type": "token",
+                      "value": [
+                        "Por porción declarada",
+                        "Por porción servida"
+                      ]
+                    }
+                  ]
+                ]
+              },
+              "basis_unit": {
+                "kind": "when",
+                "rows": [
+                  [
+                    {
+                      "field": "basis",
+                      "operator": "in",
+                      "value_type": "token",
+                      "value": [
+                        "Por porción declarada",
+                        "Por porción servida"
+                      ]
+                    }
+                  ]
+                ]
+              },
+              "serving_reference": {
+                "kind": "when",
+                "rows": [
+                  [
+                    {
+                      "field": "basis",
+                      "operator": "eq",
+                      "value_type": "token",
+                      "value": "Por porción servida"
+                    }
+                  ]
+                ]
+              }
+            }
+          }
+        }
+      },
+      "source_ids": [
+        "CATALOG",
+        "SIS_GO"
+      ],
+      "reason": "Añade requisitos de completitud de columnas de esta misma fila; light además conserva una sola tabla propietaria de luces físicas.",
+      "mechanical_verdict": false,
+      "automatic_fill_authorized": false
+    },
+    {
+      "id": "RCF-pump",
+      "op": "replace_template_coherence",
+      "template": "pump",
+      "key": "row_conditions",
+      "path": "/templates/100/form_contract/row_conditions",
+      "before": {
+        "present": false,
+        "value": null
+      },
+      "after": {
+        "version": 1,
+        "fields": {
+          "co2_cartridge_configurations": {
+            "required_when": {
+              "thread_designation": {
+                "kind": "when",
+                "rows": [
+                  [
+                    {
+                      "field": "threaded",
+                      "operator": "eq",
+                      "value_type": "boolean",
+                      "value": true
+                    }
+                  ]
+                ]
+              },
+              "counterpart_model": {
+                "kind": "when",
+                "rows": [
+                  [
+                    {
+                      "field": "configuration_kind",
+                      "operator": "eq",
+                      "value_type": "token",
+                      "value": "Cartucho compatible declarado"
+                    }
+                  ]
+                ]
+              },
+              "included_quantity": {
+                "kind": "when",
+                "rows": [
+                  [
+                    {
+                      "field": "configuration_kind",
+                      "operator": "eq",
+                      "value_type": "token",
+                      "value": "Cartucho de esta presentación"
+                    }
+                  ]
+                ]
+              }
+            }
+          }
+        }
+      },
+      "source_ids": [
+        "CATALOG",
+        "LEZYNE_CO2",
+        "PARK_THREADS"
+      ],
+      "reason": "Añade requisitos de completitud de columnas de esta misma fila; light además conserva una sola tabla propietaria de luces físicas.",
+      "mechanical_verdict": false,
+      "automatic_fill_authorized": false
+    },
+    {
+      "id": "RCF-brake_shift_combined_control",
+      "op": "replace_template_coherence",
+      "template": "brake_shift_combined_control",
+      "key": "row_conditions",
+      "path": "/templates/104/form_contract/row_conditions",
+      "before": {
+        "present": false,
+        "value": null
+      },
+      "after": {
+        "version": 1,
+        "fields": {
+          "brake_fluid_approvals": {
+            "required_when": {
+              "fluid_product": {
+                "kind": "always"
+              }
+            }
+          }
+        }
+      },
+      "source_ids": [
+        "CATALOG",
+        "SRAM_MAVEN"
+      ],
+      "reason": "Añade requisitos de completitud de columnas de esta misma fila; light además conserva una sola tabla propietaria de luces físicas.",
+      "mechanical_verdict": false,
+      "automatic_fill_authorized": false
+    }
+  ],
+  "row_field_audits": [
+    {
+      "key": "kit_members",
+      "definition_path": "/definitions/kit_members",
+      "definition_id": "d0cfc800-78a6-5bba-945b-ccbff6fa88e1",
+      "rows_schema_sha256": "93b8a5dc67ae16fb553c9195709e02695f759be8ec387aa72d67dbfb89d8cc41",
+      "reviewed_columns": [
+        "member_role",
+        "family",
+        "quantity",
+        "position",
+        "identity_brand",
+        "identity_model"
+      ],
+      "template_uses": [
+        "bottom_bracket_cup",
+        "brake_lever",
+        "hydraulic_disc_brake",
+        "mechanical_disc_brake",
+        "crankset",
+        "drivetrain_kit",
+        "rim_brake",
+        "shifter",
+        "tubeless_consumable",
+        "handlebar_covering",
+        "headset_small_part",
+        "tubeless_repair",
+        "tube_repair",
+        "hydraulic_fitting",
+        "hydraulic_hose",
+        "bmx_cable_detangler",
+        "lock",
+        "light",
+        "fender",
+        "training_wheel",
+        "rider_protection",
+        "bicycle",
+        "wheel"
+      ],
+      "condition_applies_to": [
+        "light"
+      ],
+      "disposition": "condition",
+      "reason": "En light, family excluye únicamente light para que las luces físicas se describan en light_member_configurations. Los demás usos conservan toda la lista.",
+      "gap_ids": [
+        "G05",
+        "G09"
+      ],
+      "source_ids": [
+        "CATALOG",
+        "ENGINE2200"
+      ],
+      "reviewed_row_schema": true,
+      "mechanical_family_complete": false,
+      "fill_allowed": false
+    },
+    {
+      "key": "rotor_size_recipe",
+      "definition_path": "/definitions/rotor_size_recipe",
+      "definition_id": "ce285e7e-d2e9-5b60-bb5c-bc36f8c24e72",
+      "rows_schema_sha256": "8579e6a6c91291cc68f43d02d706f9b8be4f888963c564b59ae5c0f85b9bb862",
+      "reviewed_columns": [
+        "position",
+        "rotor_diameter_mm",
+        "frame_mount",
+        "adapter_required",
+        "adapter_model",
+        "source_url",
+        "caliper_mount",
+        "frame_base_rotor_mm",
+        "caliper_model",
+        "conditions"
+      ],
+      "template_uses": [
+        "brake_caliper",
+        "hydraulic_disc_brake",
+        "mechanical_disc_brake"
+      ],
+      "condition_applies_to": [
+        "brake_caliper",
+        "hydraulic_disc_brake",
+        "mechanical_disc_brake"
+      ],
+      "disposition": "condition",
+      "reason": "adapter_required=true exige adapter_model para completar. false permite conservar un adaptador opcional; no resuelve diámetros ni estándares por sí solo.",
+      "gap_ids": [
+        "G03"
+      ],
+      "source_ids": [
+        "CATALOG",
+        "PARK_ROTOR"
+      ],
+      "reviewed_row_schema": true,
+      "mechanical_family_complete": false,
+      "fill_allowed": false
+    },
+    {
+      "key": "compatible_caliper_models",
+      "definition_path": "/definitions/compatible_caliper_models",
+      "definition_id": "e029e8ae-53d0-5b8d-9a93-6b7d40d74953",
+      "rows_schema_sha256": "352b44d9b0b4b80f2c18fee24eb0f017908e3e71d6df6d6670659122be20c6ce",
+      "reviewed_columns": [
+        "brand",
+        "model",
+        "source_url",
+        "generation",
+        "conditions",
+        "position",
+        "variant"
+      ],
+      "template_uses": [
+        "brake_pad"
+      ],
+      "condition_applies_to": [],
+      "disposition": "no_condition_needed",
+      "reason": "Marca, modelo y fuente ya son obligatorios. Generación/posición/variante y condiciones sólo se agregan cuando el alcance OEM lo necesita; ningún valor genérico habilita todos los modelos.",
+      "gap_ids": [
+        "G03",
+        "G07"
+      ],
+      "source_ids": [
+        "CATALOG",
+        "ENGINE2200"
+      ],
+      "reviewed_row_schema": true,
+      "mechanical_family_complete": false,
+      "fill_allowed": false
+    },
+    {
+      "key": "cog_sequence",
+      "definition_path": "/definitions/cog_sequence",
+      "definition_id": "5ee6715c-096b-5118-940c-ceb47ed66234",
+      "rows_schema_sha256": "e1d417caa2ebb3723c45d042c1c9e27bf283a04a13243e48e05f6db6e2fab6c1",
+      "reviewed_columns": [
+        "position",
+        "teeth"
+      ],
+      "template_uses": [
+        "cassette",
+        "freewheel"
+      ],
+      "condition_applies_to": [],
+      "disposition": "no_condition_needed",
+      "reason": "Posición y dientes ya son requeridos, positivos y únicos por posición. Secuencia parcial no permite derivar velocidades o una receta universal.",
+      "gap_ids": [
+        "G09"
+      ],
+      "source_ids": [
+        "CATALOG",
+        "ENGINE2200"
+      ],
+      "reviewed_row_schema": true,
+      "mechanical_family_complete": false,
+      "fill_allowed": false
+    },
+    {
+      "key": "freehub_bodies_accepted",
+      "definition_path": "/definitions/freehub_bodies_accepted",
+      "definition_id": "812c6ff5-1e94-5b06-954f-2cb8947e7d6b",
+      "rows_schema_sha256": "9dcd5b21c234ccacc183f0c1d1395d2a7d83b7cd7d39df3ed98cd271de02912b",
+      "reviewed_columns": [
+        "rear_drive_interface",
+        "spacer_mm",
+        "source_url"
+      ],
+      "template_uses": [
+        "cassette"
+      ],
+      "condition_applies_to": [],
+      "disposition": "no_condition_needed",
+      "reason": "Interfaz, separador y fuente ya se conservan en una misma fila; cero es medida válida del separador. No se infiere separador por marca o número de velocidades.",
+      "gap_ids": [
+        "G03"
+      ],
+      "source_ids": [
+        "CATALOG",
+        "ENGINE2200"
+      ],
+      "reviewed_row_schema": true,
+      "mechanical_family_complete": false,
+      "fill_allowed": false
+    },
+    {
+      "key": "chainring_teeth_rows",
+      "definition_path": "/definitions/chainring_teeth_rows",
+      "definition_id": "39e5dab9-b2b8-5a28-97d2-b595908e71f2",
+      "rows_schema_sha256": "e1d417caa2ebb3723c45d042c1c9e27bf283a04a13243e48e05f6db6e2fab6c1",
+      "reviewed_columns": [
+        "position",
+        "teeth"
+      ],
+      "template_uses": [
+        "crankset"
+      ],
+      "condition_applies_to": [],
+      "disposition": "no_condition_needed",
+      "reason": "Posición y dientes ya son requeridos y únicos. Esta tabla describe contenido; no autoriza cruces de platos, desviadores o líneas de cadena.",
+      "gap_ids": [
+        "G03",
+        "G09"
+      ],
+      "source_ids": [
+        "CATALOG",
+        "ENGINE2200"
+      ],
+      "reviewed_row_schema": true,
+      "mechanical_family_complete": false,
+      "fill_allowed": false
+    },
+    {
+      "key": "bottom_bracket_required",
+      "definition_path": "/definitions/bottom_bracket_required",
+      "definition_id": "17316f7f-c02c-5eed-b443-72491fdb2877",
+      "rows_schema_sha256": "cfdebb994662c1bc479f58b3846c88b63e4b17b12d01fa55eb7cdde3c8efd9e0",
+      "reviewed_columns": [
+        "bb_shell_interface",
+        "bb_shell_width_mm",
+        "model_or_family",
+        "source_url"
+      ],
+      "template_uses": [
+        "crankset"
+      ],
+      "condition_applies_to": [],
+      "disposition": "gap",
+      "reason": "Interfaz de caja y ancho no identifican eje/biela ni montaje. No se fuerza model_or_family mediante una heurística de la caja.",
+      "gap_ids": [
+        "G03",
+        "G06"
+      ],
+      "source_ids": [
+        "CATALOG",
+        "ENGINE2200"
+      ],
+      "reviewed_row_schema": true,
+      "mechanical_family_complete": false,
+      "fill_allowed": false
+    },
+    {
+      "key": "compatible_frames",
+      "definition_path": "/definitions/compatible_frames",
+      "definition_id": "a34e0baf-2cc8-592a-84cf-6f7482cf2f0b",
+      "rows_schema_sha256": "bd9f7580e7f0e1b16d2c3a827aa9f1a78ab2e594ddbb917561e9664eddd62aaa",
+      "reviewed_columns": [
+        "frame_brand",
+        "frame_model",
+        "years",
+        "source_url",
+        "generation",
+        "conditions"
+      ],
+      "template_uses": [
+        "derailleur_hanger"
+      ],
+      "condition_applies_to": [],
+      "disposition": "no_condition_needed",
+      "reason": "Marca, modelo y fuente ya son requeridos. Años y generación necesitan alcance del fabricante; no se deducen de la categoría de bicicleta.",
+      "gap_ids": [
+        "G03"
+      ],
+      "source_ids": [
+        "CATALOG",
+        "ENGINE2200"
+      ],
+      "reviewed_row_schema": true,
+      "mechanical_family_complete": false,
+      "fill_allowed": false
+    },
+    {
+      "key": "compatible_derailleur_models",
+      "definition_path": "/definitions/compatible_derailleur_models",
+      "definition_id": "a27bda44-6b0c-531a-8a4a-f4bf409f19a9",
+      "rows_schema_sha256": "01971c07162e2bbdcc01891eca9f8eaaf78b273b86e255ff913e0ed92ec4c228",
+      "reviewed_columns": [
+        "brand",
+        "model",
+        "source_url",
+        "generation",
+        "conditions"
+      ],
+      "template_uses": [
+        "derailleur_pulley"
+      ],
+      "condition_applies_to": [],
+      "disposition": "no_condition_needed",
+      "reason": "Marca, modelo y fuente ya son requeridos. Sin una matriz OEM no procede otro requisito local universal.",
+      "gap_ids": [
+        "G03"
+      ],
+      "source_ids": [
+        "CATALOG",
+        "ENGINE2200"
+      ],
+      "reviewed_row_schema": true,
+      "mechanical_family_complete": false,
+      "fill_allowed": false
+    },
+    {
+      "key": "shifter_models_compatible",
+      "definition_path": "/definitions/shifter_models_compatible",
+      "definition_id": "7ad9175e-bec0-5b63-9b42-986886bbe929",
+      "rows_schema_sha256": "01971c07162e2bbdcc01891eca9f8eaaf78b273b86e255ff913e0ed92ec4c228",
+      "reviewed_columns": [
+        "brand",
+        "model",
+        "source_url",
+        "generation",
+        "conditions"
+      ],
+      "template_uses": [
+        "rear_derailleur"
+      ],
+      "condition_applies_to": [],
+      "disposition": "no_condition_needed",
+      "reason": "Marca, modelo y fuente ya son requeridos; transmisión completa y generaciones siguen siendo relaciones por modelo.",
+      "gap_ids": [
+        "G03"
+      ],
+      "source_ids": [
+        "CATALOG",
+        "ENGINE2200"
+      ],
+      "reviewed_row_schema": true,
+      "mechanical_family_complete": false,
+      "fill_allowed": false
+    },
+    {
+      "key": "tire_width_range_mm",
+      "definition_path": "/definitions/tire_width_range_mm",
+      "definition_id": "8ae22532-5e4f-532b-a35b-979d3873d740",
+      "rows_schema_sha256": "cb4e85f833ded4ddbc8b5fc2e78b99ea3f4be4bc1c647d9419552f6b0ece3613",
+      "reviewed_columns": [
+        "width_min_mm",
+        "width_max_mm",
+        "source_url"
+      ],
+      "template_uses": [
+        "rim"
+      ],
+      "condition_applies_to": [],
+      "disposition": "no_condition_needed",
+      "reason": "Los dos extremos y fuente ya son requeridos, positivos y ordenados. W01–W11 y tablas OEM siguen pendientes; no añade reglas de aro/neumático.",
+      "gap_ids": [
+        "G03"
+      ],
+      "source_ids": [
+        "CATALOG",
+        "ENGINE2200"
+      ],
+      "reviewed_row_schema": true,
+      "mechanical_family_complete": false,
+      "fill_allowed": false
+    },
+    {
+      "key": "derailleur_models_compatible",
+      "definition_path": "/definitions/derailleur_models_compatible",
+      "definition_id": "76b98de8-f49a-558f-9c08-d6760f5fc13e",
+      "rows_schema_sha256": "01971c07162e2bbdcc01891eca9f8eaaf78b273b86e255ff913e0ed92ec4c228",
+      "reviewed_columns": [
+        "brand",
+        "model",
+        "source_url",
+        "generation",
+        "conditions"
+      ],
+      "template_uses": [
+        "shifter",
+        "brake_shift_combined_control"
+      ],
+      "condition_applies_to": [],
+      "disposition": "no_condition_needed",
+      "reason": "La fila ya obliga marca, modelo y fuente. No se usa cantidad de velocidades para completar un modelo.",
+      "gap_ids": [
+        "G03"
+      ],
+      "source_ids": [
+        "CATALOG",
+        "ENGINE2200"
+      ],
+      "reviewed_row_schema": true,
+      "mechanical_family_complete": false,
+      "fill_allowed": false
+    },
+    {
+      "key": "tube_fit_rows",
+      "definition_path": "/definitions/tube_fit_rows",
+      "definition_id": "890bca3e-7cf9-521e-8e14-bfcc1530e653",
+      "rows_schema_sha256": "6380c0e713808de08c5261251db2792bd0a4b6d735a94d315bb4cd4a3c26c7f4",
+      "reviewed_columns": [
+        "bead_seat_diameter_mm",
+        "width_min_mm",
+        "width_max_mm"
+      ],
+      "template_uses": [
+        "tube"
+      ],
+      "condition_applies_to": [],
+      "disposition": "no_condition_needed",
+      "reason": "BSD y ambos anchos ya son requeridos y el rango está ordenado. No se inventa equivalencia por medida comercial.",
+      "gap_ids": [
+        "G03"
+      ],
+      "source_ids": [
+        "CATALOG",
+        "ENGINE2200"
+      ],
+      "reviewed_row_schema": true,
+      "mechanical_family_complete": false,
+      "fill_allowed": false
+    },
+    {
+      "key": "bead_seat_diameters_supported",
+      "definition_path": "/definitions/bead_seat_diameters_supported",
+      "definition_id": "f3e80815-be5e-59b8-9352-7d494ab0aca5",
+      "rows_schema_sha256": "d7f68f2b215ab1481aadbc7a7602adf87b9f9dc70fc1bf8c0f744f206b868e6a",
+      "reviewed_columns": [
+        "bead_seat_diameter_mm"
+      ],
+      "template_uses": [
+        "tire_liner"
+      ],
+      "condition_applies_to": [],
+      "disposition": "no_condition_needed",
+      "reason": "La única columna BSD es requerida; no hay dependencia local adicional que expresar.",
+      "gap_ids": [
+        "G03"
+      ],
+      "source_ids": [
+        "CATALOG",
+        "ENGINE2200"
+      ],
+      "reviewed_row_schema": true,
+      "mechanical_family_complete": false,
+      "fill_allowed": false
+    },
+    {
+      "key": "compatible_brake_models",
+      "definition_path": "/definitions/compatible_brake_models",
+      "definition_id": "369c2b61-dd89-5153-8fdb-7ecf123529fd",
+      "rows_schema_sha256": "352b44d9b0b4b80f2c18fee24eb0f017908e3e71d6df6d6670659122be20c6ce",
+      "reviewed_columns": [
+        "brand",
+        "model",
+        "source_url",
+        "generation",
+        "conditions",
+        "position",
+        "variant"
+      ],
+      "template_uses": [
+        "control_small_part",
+        "hydraulic_fitting",
+        "brake_fluid",
+        "brake_small_part",
+        "bmx_cable_detangler"
+      ],
+      "condition_applies_to": [],
+      "disposition": "no_condition_needed",
+      "reason": "Marca, modelo y fuente ya son requeridos en todos sus usos. Fuente y condiciones por modelo siguen necesarias para el dictamen, sin atajos por fluido o marca.",
+      "gap_ids": [
+        "G03"
+      ],
+      "source_ids": [
+        "CATALOG",
+        "ENGINE2200"
+      ],
+      "reviewed_row_schema": true,
+      "mechanical_family_complete": false,
+      "fill_allowed": false
+    },
+    {
+      "key": "wheel_configurations",
+      "definition_path": "/definitions/wheel_configurations",
+      "definition_id": "af201908-b60f-5e02-a0c2-7f37fa6d4c1f",
+      "rows_schema_sha256": "1d7c46301b05207fe7809cf7c0b345247972daf486bcacdba9227fa201838908",
+      "reviewed_columns": [
+        "position",
+        "bead_seat_diameter_mm",
+        "hub_old_mm",
+        "axle_type",
+        "rim_internal_width_mm",
+        "rear_drive_interface",
+        "rotor_mount_type",
+        "brake_track",
+        "rim_tubeless_ready",
+        "spoke_count"
+      ],
+      "template_uses": [
+        "wheel"
+      ],
+      "condition_applies_to": [],
+      "disposition": "gap",
+      "reason": "Posición no permite una prohibición universal de interfaz de tracción en una rueda delantera. Modelos de montaje y alcance de medidas pertenecen a W01–W11/revisión OEM.",
+      "gap_ids": [
+        "G03",
+        "G06"
+      ],
+      "source_ids": [
+        "CATALOG",
+        "ENGINE2200"
+      ],
+      "reviewed_row_schema": true,
+      "mechanical_family_complete": false,
+      "fill_allowed": false
+    },
+    {
+      "key": "pedal_bearing_configurations",
+      "definition_path": "/definitions/pedal_bearing_configurations",
+      "definition_id": "588a7a4d-bd99-5b6b-948b-f423cf53043d",
+      "rows_schema_sha256": "01df6a0a9b3151cb47ee145850c98e1fb6a5b153e1f37bf7de91e39f06f94872",
+      "reviewed_columns": [
+        "position",
+        "construction",
+        "model",
+        "conditions"
+      ],
+      "template_uses": [
+        "pedal"
+      ],
+      "condition_applies_to": [],
+      "disposition": "gap",
+      "reason": "Cartucho no exige necesariamente código grabado; puede describirse por medidas o repuesto OEM. El esquema actual no tiene ese conjunto de interfaces/medidas alternativo.",
+      "gap_ids": [
+        "G01",
+        "G06"
+      ],
+      "source_ids": [
+        "CATALOG",
+        "ENGINE2200"
+      ],
+      "reviewed_row_schema": true,
+      "mechanical_family_complete": false,
+      "fill_allowed": false
+    },
+    {
+      "key": "seatpost_saddle_configurations",
+      "definition_path": "/definitions/seatpost_saddle_configurations",
+      "definition_id": "cef7dd5c-611e-529f-9830-21de5ef3133d",
+      "rows_schema_sha256": "63697bd561d94f3023d01ff360fc2aaa4b70efb4bf9b9ed6b7f3bae226dcd9f7",
+      "reviewed_columns": [
+        "rail_geometry",
+        "configuration_state",
+        "model",
+        "generation",
+        "conditions",
+        "clamp_part",
+        "clamp_included",
+        "source_url"
+      ],
+      "template_uses": [
+        "seatpost"
+      ],
+      "condition_applies_to": [
+        "seatpost"
+      ],
+      "disposition": "condition",
+      "reason": "Los dos estados con kit requieren clamp_part. De fábrica permite conservar una pieza documentada. No prohíbe rieles por geometría sin modelo/kit.",
+      "gap_ids": [
+        "G02",
+        "G03"
+      ],
+      "source_ids": [
+        "CATALOG",
+        "RITCHEY_1BOLT"
+      ],
+      "reviewed_row_schema": true,
+      "mechanical_family_complete": false,
+      "fill_allowed": false
+    },
+    {
+      "key": "eyewear_lens_configurations",
+      "definition_path": "/definitions/eyewear_lens_configurations",
+      "definition_id": "5adb00e1-e791-5bde-b953-750f9b7674ea",
+      "rows_schema_sha256": "4320648e9c70fd64cb334da8b695ef691d485f115dcb3d2fb48654b03c73c289",
+      "reviewed_columns": [
+        "model",
+        "included",
+        "photochromic",
+        "polarized",
+        "mirrored",
+        "tint",
+        "conditions",
+        "category_min",
+        "category_max",
+        "vlt_min_pct",
+        "vlt_max_pct",
+        "uv_claim",
+        "source_url"
+      ],
+      "template_uses": [
+        "eyewear"
+      ],
+      "condition_applies_to": [],
+      "disposition": "gap",
+      "reason": "Ser fotocromática no obliga a publicar simultáneamente VLT y categoría ni permite convertirlas. Los pares opcionales ya ordenan extremos conocidos; completar un extremo desde presencia del otro necesita otro contrato.",
+      "gap_ids": [
+        "G01",
+        "G03"
+      ],
+      "source_ids": [
+        "CATALOG",
+        "ENGINE2200"
+      ],
+      "reviewed_row_schema": true,
+      "mechanical_family_complete": false,
+      "fill_allowed": false
+    },
+    {
+      "key": "fastener_kit_members",
+      "definition_path": "/definitions/fastener_kit_members",
+      "definition_id": "26435d8f-5009-5600-8699-2f5cdf751b55",
+      "rows_schema_sha256": "f51e9c6d6685dc90fa11e4efcec8db255092eaf2a59ae0bd6c6f7659e2ba24cc",
+      "reviewed_columns": [
+        "member_role",
+        "thread_nominal",
+        "thread_pitch_mm",
+        "thread_tpi",
+        "thread_hand",
+        "length_mm",
+        "length_datum",
+        "head_drive",
+        "quantity",
+        "source_url",
+        "member_kind",
+        "inner_diameter_mm",
+        "outer_diameter_mm",
+        "thickness_mm"
+      ],
+      "template_uses": [
+        "fastener"
+      ],
+      "condition_applies_to": [],
+      "disposition": "gap",
+      "reason": "No se condiciona TPI al dialecto fraccional ni pitch_mm a M. No adivina pieza roscada por member_role. Paso alternativo, referencia de largo y límites opcionales requieren presencia/discriminador.",
+      "gap_ids": [
+        "G01",
+        "G06"
+      ],
+      "source_ids": [
+        "CATALOG",
+        "ENGINE2200",
+        "PARK_THREADS"
+      ],
+      "reviewed_row_schema": true,
+      "mechanical_family_complete": false,
+      "fill_allowed": false
+    },
+    {
+      "key": "tool_capabilities",
+      "definition_path": "/definitions/tool_capabilities",
+      "definition_id": "4306f0d5-d420-57e7-8421-b682452cb845",
+      "rows_schema_sha256": "14c8d3b2ea834d89600206c5dfb20046a366e08b2c60e08eff4aac347f64e930",
+      "reviewed_columns": [
+        "member",
+        "operation",
+        "target_standard",
+        "supported",
+        "interface_measure_mm",
+        "drive_size",
+        "speeds_min",
+        "speeds_max",
+        "brand_scope",
+        "adapter_required",
+        "adapter_model",
+        "source_url",
+        "interface_measure_kind",
+        "interface_diameter_min_mm",
+        "interface_diameter_max_mm",
+        "interface_minor_diameter_mm",
+        "interface_feature_count"
+      ],
+      "template_uses": [
+        "workshop_tool"
+      ],
+      "condition_applies_to": [
+        "workshop_tool"
+      ],
+      "disposition": "condition",
+      "reason": "adapter_required=true exige adapter_model para completar; false no excluye información opcional ni supported=false se interpreta como ausencia de herramienta.",
+      "gap_ids": [
+        "G01",
+        "G03"
+      ],
+      "source_ids": [
+        "CATALOG",
+        "ENGINE2200"
+      ],
+      "reviewed_row_schema": true,
+      "mechanical_family_complete": false,
+      "fill_allowed": false
+    },
+    {
+      "key": "tool_bits_included",
+      "definition_path": "/definitions/tool_bits_included",
+      "definition_id": "e34a1404-abdd-5fab-b906-bdfddda9d00f",
+      "rows_schema_sha256": "e584c3e132ae89855815cdb1312b71f9a843862026c2a41d556bdeaed8f7311e",
+      "reviewed_columns": [
+        "bit_kind",
+        "size",
+        "quantity",
+        "source_url"
+      ],
+      "template_uses": [
+        "workshop_tool"
+      ],
+      "condition_applies_to": [
+        "workshop_tool"
+      ],
+      "disposition": "condition",
+      "reason": "Pide size en seis interfaces dimensionadas. Conserva Desmontador, Corta cadena, destornilladores y Otro sin imponer medida inexistente en la fuente.",
+      "gap_ids": [
+        "G03",
+        "G07"
+      ],
+      "source_ids": [
+        "CATALOG",
+        "PARK_IB3"
+      ],
+      "reviewed_row_schema": true,
+      "mechanical_family_complete": false,
+      "fill_allowed": false
+    },
+    {
+      "key": "light_member_configurations",
+      "definition_path": "/definitions/light_member_configurations",
+      "definition_id": "43ccc42c-4b97-5a9c-9a42-3e6eed12b208",
+      "rows_schema_sha256": "e89c79e7bc0ad4a3da178589b81ae9d3dba190fb1f9ee0bd67e9763c23c5ae7d",
+      "reviewed_columns": [
+        "member_id",
+        "position",
+        "battery_kind",
+        "battery_capacity_mah",
+        "battery_voltage_v",
+        "charge_connector",
+        "mount_kind",
+        "mount_diameter_min_mm",
+        "mount_diameter_max_mm",
+        "mount_circumference_max_mm",
+        "ip_rating",
+        "source_url",
+        "member_revision",
+        "mount_zone",
+        "power_input_connector",
+        "ip_standard",
+        "power_source_note"
+      ],
+      "template_uses": [
+        "light"
+      ],
+      "condition_applies_to": [
+        "light"
+      ],
+      "disposition": "condition",
+      "reason": "Alimentación externa exige su entrada declarada (admite cable directo); Otro exige detalles. No clasifica carga ni batería interna desde el tipo de alimentación.",
+      "gap_ids": [
+        "G01",
+        "G05",
+        "G07"
+      ],
+      "source_ids": [
+        "CATALOG",
+        "LEZYNE_HV_MANUAL"
+      ],
+      "reviewed_row_schema": true,
+      "mechanical_family_complete": false,
+      "fill_allowed": false
+    },
+    {
+      "key": "light_mode_configurations",
+      "definition_path": "/definitions/light_mode_configurations",
+      "definition_id": "4dbc2261-fbda-5a2e-8400-3611d3d7a78a",
+      "rows_schema_sha256": "c2266d71c57bfd394f3aac560ba54e3120fdc1a8ea8d4c8738171aa1995da752",
+      "reviewed_columns": [
+        "member_id",
+        "mode",
+        "pattern",
+        "lumens",
+        "lumens_secondary",
+        "runtime_h",
+        "runtime_max_h",
+        "source_url",
+        "member_revision",
+        "operating_conditions",
+        "measurement_method"
+      ],
+      "template_uses": [
+        "light"
+      ],
+      "condition_applies_to": [],
+      "disposition": "gap",
+      "reason": "Los modos enlazan una luz por ID, pero no pueden exigir autonomía en función de la alimentación de otra fila. No exige lumens_secondary por patrón ni crea identidad por nombre de modo.",
+      "gap_ids": [
+        "G01",
+        "G04",
+        "G05",
+        "G09"
+      ],
+      "source_ids": [
+        "CATALOG",
+        "ENGINE2200"
+      ],
+      "reviewed_row_schema": true,
+      "mechanical_family_complete": false,
+      "fill_allowed": false
+    },
+    {
+      "key": "bar_clamp_configurations",
+      "definition_path": "/definitions/bar_clamp_configurations",
+      "definition_id": "a8bfa085-b16e-56ec-8fb8-ae6fed007079",
+      "rows_schema_sha256": "cc4068c572906ff4366aa056991e7491aef719909fd7b14213d20b09418a29dc",
+      "reviewed_columns": [
+        "nominal_diameter_mm",
+        "fit_method",
+        "spacer_or_variant",
+        "included",
+        "source_url",
+        "mount_revision"
+      ],
+      "template_uses": [
+        "accessory_mount"
+      ],
+      "condition_applies_to": [
+        "accessory_mount"
+      ],
+      "disposition": "condition",
+      "reason": "Los dos estados con espaciador y variante distinta requieren spacer_or_variant; Directo permite conservarlo. No infiere incluido=true ni compatibilidad por diámetro.",
+      "gap_ids": [
+        "G02",
+        "G03",
+        "G08"
+      ],
+      "source_ids": [
+        "CATALOG",
+        "ENGINE2200"
+      ],
+      "reviewed_row_schema": true,
+      "mechanical_family_complete": false,
+      "fill_allowed": false
+    },
+    {
+      "key": "sensor_support_configurations",
+      "definition_path": "/definitions/sensor_support_configurations",
+      "definition_id": "c846a079-4d18-5b67-87f4-a076d7b8a2b7",
+      "rows_schema_sha256": "f4a27383ec7aaf0581ec2d3f8e9951ea5c13023df389514cdcd4170a0cb406fa",
+      "reviewed_columns": [
+        "sensor_type",
+        "transport",
+        "models_note",
+        "source_url",
+        "profile",
+        "supported",
+        "scope",
+        "sensor_model",
+        "sensor_generation",
+        "conditions",
+        "mount_interface"
+      ],
+      "template_uses": [
+        "cycle_computer"
+      ],
+      "condition_applies_to": [],
+      "disposition": "gap",
+      "reason": "supported y scope ya son requeridos; una declaración válida puede cubrir perfil o familia sin modelo individual. Tipo/transporte no bastan para identidad ni aprobación de todos los sensores.",
+      "gap_ids": [
+        "G03",
+        "G04",
+        "G05",
+        "G06"
+      ],
+      "source_ids": [
+        "CATALOG",
+        "ENGINE2200"
+      ],
+      "reviewed_row_schema": true,
+      "mechanical_family_complete": false,
+      "fill_allowed": false
+    },
+    {
+      "key": "computer_contents",
+      "definition_path": "/definitions/computer_contents",
+      "definition_id": "63af9c63-a13b-5e6a-8867-e470f23b2b3e",
+      "rows_schema_sha256": "dcffc1bab94740c8866320c275dc0245c321362186f15b0f8c44e2edde547ad8",
+      "reviewed_columns": [
+        "item",
+        "quantity",
+        "mount_interface",
+        "source_url"
+      ],
+      "template_uses": [
+        "cycle_computer"
+      ],
+      "condition_applies_to": [],
+      "disposition": "no_condition_needed",
+      "reason": "Artículo y cantidad requerida describen contenido, no compatibilidad ni número completo de piezas. Interfaz de montaje se conserva si está declarada.",
+      "gap_ids": [
+        "G09"
+      ],
+      "source_ids": [
+        "CATALOG",
+        "ENGINE2200"
+      ],
+      "reviewed_row_schema": true,
+      "mechanical_family_complete": false,
+      "fill_allowed": false
+    },
+    {
+      "key": "power_port_configurations",
+      "definition_path": "/definitions/power_port_configurations",
+      "definition_id": "b24cc664-f14c-53d1-a214-cd7f87a4c9bc",
+      "rows_schema_sha256": "5adeee186a497621890f124dace86ec9c2700ef5643c4c0d8f9e3a56fb491afd",
+      "reviewed_columns": [
+        "port_id",
+        "connector",
+        "direction",
+        "max_power_w",
+        "protocols",
+        "source_url",
+        "connector_gender"
+      ],
+      "template_uses": [
+        "consumer_electronics"
+      ],
+      "condition_applies_to": [],
+      "disposition": "gap",
+      "reason": "ID, conector y dirección ya son requeridos; bidireccional necesita alcance del perfil para no confundir entrada/salida. No deduce protocolo ni V/A/W desde USB-C.",
+      "gap_ids": [
+        "G04",
+        "G06",
+        "G09"
+      ],
+      "source_ids": [
+        "CATALOG",
+        "ENGINE2200"
+      ],
+      "reviewed_row_schema": true,
+      "mechanical_family_complete": false,
+      "fill_allowed": false
+    },
+    {
+      "key": "power_budget_configurations",
+      "definition_path": "/definitions/power_budget_configurations",
+      "definition_id": "ad5f6076-4af4-5d90-8521-c172a5716947",
+      "rows_schema_sha256": "0f385b44fc68f43c2af2b225377a33b1bab844a636f73676dc583aacf5231add",
+      "reviewed_columns": [
+        "configuration",
+        "port_id",
+        "power_w",
+        "source_url"
+      ],
+      "template_uses": [
+        "consumer_electronics"
+      ],
+      "condition_applies_to": [],
+      "disposition": "no_condition_needed",
+      "reason": "Configuración, puerto enlazado y potencia son requeridos. No suma filas parciales ni mezcla configuraciones para obtener capacidad agregada.",
+      "gap_ids": [
+        "G04",
+        "G09"
+      ],
+      "source_ids": [
+        "CATALOG",
+        "ENGINE2200"
+      ],
+      "reviewed_row_schema": true,
+      "mechanical_family_complete": false,
+      "fill_allowed": false
+    },
+    {
+      "key": "nutrition_facts",
+      "definition_path": "/definitions/nutrition_facts",
+      "definition_id": "eb2f8631-cf6b-5ac0-9582-86aac11ecb47",
+      "rows_schema_sha256": "d7321b7d02161607628ce9712fcbb022ebf1f534096934369fe2ac61ed111148",
+      "reviewed_columns": [
+        "nutrient",
+        "amount",
+        "basis",
+        "source_url",
+        "nutrient_name",
+        "amount_unit",
+        "basis_amount",
+        "basis_unit",
+        "serving_reference",
+        "qualifier"
+      ],
+      "template_uses": [
+        "food_beverage"
+      ],
+      "condition_applies_to": [
+        "food_beverage"
+      ],
+      "disposition": "condition",
+      "reason": "Otro exige nombre/unidad; porciones declarada/servida exigen cantidad/unidad de base; servida además referencia de porción o receta. No convierte sal a sodio ni bases entre sí.",
+      "gap_ids": [
+        "G01",
+        "G07",
+        "G08"
+      ],
+      "source_ids": [
+        "CATALOG",
+        "SIS_GO"
+      ],
+      "reviewed_row_schema": true,
+      "mechanical_family_complete": false,
+      "fill_allowed": false
+    },
+    {
+      "key": "conflicting_claims",
+      "definition_path": "/definitions/conflicting_claims",
+      "definition_id": "b5ca0938-8e08-579d-bd79-ac7eaededf33",
+      "rows_schema_sha256": "cde2d67c37119cebe611543f07d28eb0498d88302eb5cdf59704bda4fb98cbdb",
+      "reviewed_columns": [
+        "field_key",
+        "value",
+        "unit",
+        "source_kind",
+        "source_date",
+        "locator",
+        "measurement_context",
+        "source_url"
+      ],
+      "template_uses": [
+        "handlebar",
+        "bike_bag"
+      ],
+      "condition_applies_to": [],
+      "disposition": "no_condition_needed",
+      "reason": "Campo, valor y tipo de fuente ya se conservan como afirmaciones. Fecha más reciente no elige ganador ni versión OEM; se mantiene el conflicto.",
+      "gap_ids": [
+        "G05",
+        "G07"
+      ],
+      "source_ids": [
+        "CATALOG",
+        "ENGINE2200"
+      ],
+      "reviewed_row_schema": true,
+      "mechanical_family_complete": false,
+      "fill_allowed": false
+    },
+    {
+      "key": "security_rating_configurations",
+      "definition_path": "/definitions/security_rating_configurations",
+      "definition_id": "bbbde95f-7e1c-5489-a5e7-2e8fbf75970b",
+      "rows_schema_sha256": "9456d697df294df5e4bee5fe5c5595faf893fc0b3a2ac1b7d5f88189955797c6",
+      "reviewed_columns": [
+        "component",
+        "issuer",
+        "level",
+        "scope_note",
+        "source_url",
+        "component_model",
+        "edition",
+        "certificate_id"
+      ],
+      "template_uses": [
+        "lock"
+      ],
+      "condition_applies_to": [],
+      "disposition": "gap",
+      "reason": "Emisor y nivel ya son requeridos. Un score de fabricante no se convierte en certificación ni existe traducción universal entre escalas. Falta alcance estructurado de certificación para reglas más fuertes.",
+      "gap_ids": [
+        "G03",
+        "G06",
+        "G07"
+      ],
+      "source_ids": [
+        "CATALOG",
+        "ENGINE2200"
+      ],
+      "reviewed_row_schema": true,
+      "mechanical_family_complete": false,
+      "fill_allowed": false
+    },
+    {
+      "key": "rack_top_interface",
+      "definition_path": "/definitions/rack_top_interface",
+      "definition_id": "e07ea256-12be-5927-8efb-5e56bcfa8bf3",
+      "rows_schema_sha256": "f300d10a7a81018bf78b09626207b0e87b022b78b160d61ea52750585a568d28",
+      "reviewed_columns": [
+        "interface",
+        "generation",
+        "counterpart_model",
+        "configuration",
+        "required_part",
+        "conditions",
+        "source_url"
+      ],
+      "template_uses": [
+        "rack_basket"
+      ],
+      "condition_applies_to": [],
+      "disposition": "gap",
+      "reason": "Interfaz libre y condiciones no son discriminadores de required_part. No se identifica plataforma o generación por coincidencia de texto.",
+      "gap_ids": [
+        "G01",
+        "G03",
+        "G06"
+      ],
+      "source_ids": [
+        "CATALOG",
+        "ENGINE2200"
+      ],
+      "reviewed_row_schema": true,
+      "mechanical_family_complete": false,
+      "fill_allowed": false
+    },
+    {
+      "key": "rack_mount_configurations",
+      "definition_path": "/definitions/rack_mount_configurations",
+      "definition_id": "29b3b9e5-5263-592c-9cbd-3e90a9bc9942",
+      "rows_schema_sha256": "954d78d236511622a42878e6b0381bfc0046e01394e22ac477f99982115008f9",
+      "reviewed_columns": [
+        "mount_point",
+        "requirement",
+        "tube_diameter_min_mm",
+        "tube_diameter_max_mm",
+        "span_min_mm",
+        "span_max_mm",
+        "exclusions",
+        "source_url",
+        "configuration",
+        "tube_diameter_min_inclusive",
+        "tube_diameter_max_inclusive",
+        "mount_length_mm",
+        "advisories"
+      ],
+      "template_uses": [
+        "rack_basket"
+      ],
+      "condition_applies_to": [],
+      "disposition": "gap",
+      "reason": "El punto de montaje no determina rangos universales. No reutiliza requirement como descripción obligatoria de Otro; extremos y método dependen del sistema.",
+      "gap_ids": [
+        "G01",
+        "G03",
+        "G06"
+      ],
+      "source_ids": [
+        "CATALOG",
+        "ENGINE2200"
+      ],
+      "reviewed_row_schema": true,
+      "mechanical_family_complete": false,
+      "fill_allowed": false
+    },
+    {
+      "key": "bag_rack_interface",
+      "definition_path": "/definitions/bag_rack_interface",
+      "definition_id": "e1a71a9a-30a6-5f53-93c6-a005d80a4f88",
+      "rows_schema_sha256": "f300d10a7a81018bf78b09626207b0e87b022b78b160d61ea52750585a568d28",
+      "reviewed_columns": [
+        "interface",
+        "generation",
+        "counterpart_model",
+        "configuration",
+        "required_part",
+        "conditions",
+        "source_url"
+      ],
+      "template_uses": [
+        "bike_bag"
+      ],
+      "condition_applies_to": [],
+      "disposition": "gap",
+      "reason": "Interfaz libre, generación y parte requerida necesitan alcance estructurado; no se activa un requisito por nombre de plataforma.",
+      "gap_ids": [
+        "G01",
+        "G03",
+        "G06"
+      ],
+      "source_ids": [
+        "CATALOG",
+        "ENGINE2200"
+      ],
+      "reviewed_row_schema": true,
+      "mechanical_family_complete": false,
+      "fill_allowed": false
+    },
+    {
+      "key": "auxiliary_part_requirements",
+      "definition_path": "/definitions/auxiliary_part_requirements",
+      "definition_id": "66807dc0-18e4-5b25-96ed-f07d8be90a7e",
+      "rows_schema_sha256": "7330ecf8819a1a7962530db58cfb5a28d5aa738693f15411087c9a2d34611e3f",
+      "reviewed_columns": [
+        "configuration",
+        "part",
+        "included",
+        "applies_to",
+        "source_url"
+      ],
+      "template_uses": [
+        "bike_bag"
+      ],
+      "condition_applies_to": [],
+      "disposition": "no_condition_needed",
+      "reason": "Configuración y pieza ya son requeridas; incluida y requerida son conceptos distintos. No fuerza included ni elimina accesorios opcionales.",
+      "gap_ids": [
+        "G03"
+      ],
+      "source_ids": [
+        "CATALOG",
+        "ENGINE2200"
+      ],
+      "reviewed_row_schema": true,
+      "mechanical_family_complete": false,
+      "fill_allowed": false
+    },
+    {
+      "key": "bag_member_configurations",
+      "definition_path": "/definitions/bag_member_configurations",
+      "definition_id": "104a6948-a864-5c61-a291-740088376e7f",
+      "rows_schema_sha256": "1a8088d3cc60a9723fbf3a87ea6edadb32cf7ada4770f2a6db91cd5ff254beb0",
+      "reviewed_columns": [
+        "member",
+        "position",
+        "volume_l",
+        "width_mm",
+        "height_mm",
+        "depth_mm",
+        "source_url",
+        "configuration",
+        "measurement_reference"
+      ],
+      "template_uses": [
+        "bike_bag"
+      ],
+      "condition_applies_to": [],
+      "disposition": "gap",
+      "reason": "Dimensiones, volumen y referencia de medición son observaciones independientes. Sin presence no se exige measurement_reference sólo cuando corresponde; no calcula volumen ni total de un kit.",
+      "gap_ids": [
+        "G01",
+        "G05",
+        "G09"
+      ],
+      "source_ids": [
+        "CATALOG",
+        "ENGINE2200"
+      ],
+      "reviewed_row_schema": true,
+      "mechanical_family_complete": false,
+      "fill_allowed": false
+    },
+    {
+      "key": "co2_cartridge_configurations",
+      "definition_path": "/definitions/co2_cartridge_configurations",
+      "definition_id": "d572d95d-c94f-5b42-84d9-05f4040e9353",
+      "rows_schema_sha256": "477d8d95163af104ec49242a82ebc14528a7a41eb3d0819a6947de288bc79334",
+      "reviewed_columns": [
+        "configuration_kind",
+        "gas_mass_g",
+        "threaded",
+        "included_quantity",
+        "gross_weight_g",
+        "source_url",
+        "thread_designation",
+        "counterpart_model",
+        "conditions",
+        "cartridge_length_mm",
+        "cartridge_diameter_mm"
+      ],
+      "template_uses": [
+        "pump"
+      ],
+      "condition_applies_to": [
+        "pump"
+      ],
+      "disposition": "condition",
+      "reason": "Roscado exige designación para completar; presentación exige cantidad incluida; compatible declarado exige contraparte literal (modelo o alcance OEM expreso). No inventa rosca ni hereda identidad del nombre.",
+      "gap_ids": [
+        "G03",
+        "G07",
+        "G09"
+      ],
+      "source_ids": [
+        "CATALOG",
+        "LEZYNE_CO2",
+        "PARK_THREADS"
+      ],
+      "reviewed_row_schema": true,
+      "mechanical_family_complete": false,
+      "fill_allowed": false
+    },
+    {
+      "key": "certification_configurations",
+      "definition_path": "/definitions/certification_configurations",
+      "definition_id": "2a0f4fbd-c6b0-5f91-b3de-fde54a842634",
+      "rows_schema_sha256": "9ce2e9a5e43135158842a6e2181d5eee59d508a8b5dc986dd3fac4354d258be0",
+      "reviewed_columns": [
+        "standard",
+        "standard_text",
+        "edition",
+        "market",
+        "scope_model",
+        "evidence_kind",
+        "evidence_date",
+        "source_url",
+        "level",
+        "body_region",
+        "configuration"
+      ],
+      "template_uses": [
+        "helmet",
+        "rider_protection"
+      ],
+      "condition_applies_to": [],
+      "disposition": "gap",
+      "reason": "Norma literal y tipo de evidencia ya son requeridos. No añade reglas de nivel/región por una shortlist de normas sin edición/modelo/certificado exactos; nunca transforma un claim en certificación válida.",
+      "gap_ids": [
+        "G03",
+        "G06",
+        "G07"
+      ],
+      "source_ids": [
+        "CATALOG",
+        "ENGINE2200"
+      ],
+      "reviewed_row_schema": true,
+      "mechanical_family_complete": false,
+      "fill_allowed": false
+    },
+    {
+      "key": "brake_fluid_approvals",
+      "definition_path": "/definitions/brake_fluid_approvals",
+      "definition_id": "39f6432d-5f19-5f14-ad46-90946c4f5fa4",
+      "rows_schema_sha256": "8693ab7b2ec919604149fba0ea821cff45dae6d127861f9e980f0478c444cc26",
+      "reviewed_columns": [
+        "system_brand",
+        "system_model",
+        "generation",
+        "fluid_class",
+        "fluid_product",
+        "conditions",
+        "source_url"
+      ],
+      "template_uses": [
+        "brake_caliper",
+        "brake_lever",
+        "hydraulic_disc_brake",
+        "rim_brake",
+        "brake_shift_combined_control"
+      ],
+      "condition_applies_to": [
+        "brake_caliper",
+        "brake_lever",
+        "hydraulic_disc_brake",
+        "rim_brake",
+        "brake_shift_combined_control"
+      ],
+      "disposition": "condition",
+      "reason": "Cada aprobación pide producto/formulación o especificación OEM literal además de la clase y sistema. No exige una marca comercial cuando el OEM sólo prescribe una especificación.",
+      "gap_ids": [
+        "G03",
+        "G07"
+      ],
+      "source_ids": [
+        "CATALOG",
+        "SRAM_MAVEN"
+      ],
+      "reviewed_row_schema": true,
+      "mechanical_family_complete": false,
+      "fill_allowed": false
+    },
+    {
+      "key": "brake_hydraulic_connections",
+      "definition_path": "/definitions/brake_hydraulic_connections",
+      "definition_id": "3d0e43ef-5414-5814-9267-c6b20b77e41b",
+      "rows_schema_sha256": "664ab340662c44fe890f2195fe0299144419276a5710d4b38ddc61f4402fb03c",
+      "reviewed_columns": [
+        "circuit_id",
+        "component_role",
+        "end_role",
+        "component_brand",
+        "component_model",
+        "generation",
+        "hose_brand",
+        "hose_model",
+        "fitting_model",
+        "connection_spec",
+        "source_url"
+      ],
+      "template_uses": [
+        "brake_caliper",
+        "brake_lever",
+        "hydraulic_disc_brake",
+        "rim_brake",
+        "hydraulic_fitting",
+        "hydraulic_hose",
+        "brake_shift_combined_control"
+      ],
+      "condition_applies_to": [],
+      "disposition": "gap",
+      "reason": "Un extremo podría documentarse por fitting_model o connection_spec; exigir ambos sería excesivo. El enlace circuit_id puede usar row_coherence pero no está configurado aquí.",
+      "gap_ids": [
+        "G01",
+        "G03",
+        "G04"
+      ],
+      "source_ids": [
+        "CATALOG",
+        "ENGINE2200"
+      ],
+      "reviewed_row_schema": true,
+      "mechanical_family_complete": false,
+      "fill_allowed": false
+    },
+    {
+      "key": "brake_bleed_ports",
+      "definition_path": "/definitions/brake_bleed_ports",
+      "definition_id": "2132bfb4-5e72-5826-9f5b-5b73039de39b",
+      "rows_schema_sha256": "8e8fe3ac3d31fac7aa2b48a86c4bd3b665e366b0f608abff3a04e3ddcae0fcc5",
+      "reviewed_columns": [
+        "component_role",
+        "port_id",
+        "connection_spec",
+        "tool_interface",
+        "procedure_reference",
+        "source_url"
+      ],
+      "template_uses": [
+        "brake_caliper",
+        "hydraulic_disc_brake"
+      ],
+      "condition_applies_to": [],
+      "disposition": "gap",
+      "reason": "Necesita conservar las alternativas de interfaz de conexión, herramienta o procedimiento OEM. No inventa rosca de purga, adaptador ni fluido por marca.",
+      "gap_ids": [
+        "G01",
+        "G03"
+      ],
+      "source_ids": [
+        "CATALOG",
+        "ENGINE2200"
+      ],
+      "reviewed_row_schema": true,
+      "mechanical_family_complete": false,
+      "fill_allowed": false
+    },
+    {
+      "key": "rim_brake_mount_fitments",
+      "definition_path": "/definitions/rim_brake_mount_fitments",
+      "definition_id": "8b59fe62-3508-59c0-a707-69ffeb3094ea",
+      "rows_schema_sha256": "a09669ff3a6001e322daa3440c69d0ca75e3b4ace6f3ee03981287fe72cf749e",
+      "reviewed_columns": [
+        "position",
+        "mount_spec",
+        "adapter_model",
+        "brake_model",
+        "generation",
+        "boss_spacing_min_mm",
+        "boss_spacing_max_mm",
+        "track_offset_min_mm",
+        "track_offset_max_mm",
+        "rim_width_min_mm",
+        "rim_width_max_mm",
+        "source_url"
+      ],
+      "template_uses": [
+        "brake_caliper",
+        "rim_brake"
+      ],
+      "condition_applies_to": [],
+      "disposition": "gap",
+      "reason": "Montaje, modelo, posición y fuente son requeridos. Rangos opcionales ya ordenados; un extremo faltante y adaptación exacta siguen pendientes.",
+      "gap_ids": [
+        "G01",
+        "G03"
+      ],
+      "source_ids": [
+        "CATALOG",
+        "ENGINE2200"
+      ],
+      "reviewed_row_schema": true,
+      "mechanical_family_complete": false,
+      "fill_allowed": false
+    },
+    {
+      "key": "brake_assembly_configurations",
+      "definition_path": "/definitions/brake_assembly_configurations",
+      "definition_id": "a5753255-ac9d-5c52-a14a-3b9f57fe85a0",
+      "rows_schema_sha256": "bd820f0b83719afaff5ddf3e3e3a5016404bbaac93d24a508433c9603cd4da65",
+      "reviewed_columns": [
+        "circuit_id",
+        "position",
+        "lever_brand",
+        "lever_model",
+        "lever_generation",
+        "caliper_brand",
+        "caliper_model",
+        "caliper_generation",
+        "caliper_rotor_nominal_thickness_mm",
+        "hose_model",
+        "hose_length_mm",
+        "rotor_model",
+        "rotor_diameter_mm",
+        "adapter_model",
+        "source_url"
+      ],
+      "template_uses": [
+        "hydraulic_disc_brake",
+        "mechanical_disc_brake",
+        "rim_brake"
+      ],
+      "condition_applies_to": [],
+      "disposition": "gap",
+      "reason": "No obliga todas las piezas: hay presentaciones parciales y sistemas híbridos. Faltan discriminadores de contenido y presencia para requerir sólo identidades realmente incluidas.",
+      "gap_ids": [
+        "G01",
+        "G03",
+        "G06",
+        "G09"
+      ],
+      "source_ids": [
+        "CATALOG",
+        "ENGINE2200"
+      ],
+      "reviewed_row_schema": true,
+      "mechanical_family_complete": false,
+      "fill_allowed": false
+    },
+    {
+      "key": "brake_adapter_fitments",
+      "definition_path": "/definitions/brake_adapter_fitments",
+      "definition_id": "f1c31f79-2ade-5d6f-86e3-bc56fb61d9f7",
+      "rows_schema_sha256": "bc5045d1dea1062619004af77b16209f899b25c10d09d9881f69ed5f88a7c836",
+      "reviewed_columns": [
+        "position",
+        "frame_mount",
+        "frame_base_rotor_mm",
+        "caliper_mount",
+        "caliper_brand",
+        "caliper_model",
+        "generation",
+        "rotor_diameter_mm",
+        "adapter_model",
+        "conditions",
+        "source_url"
+      ],
+      "template_uses": [
+        "brake_mount_adapter"
+      ],
+      "condition_applies_to": [],
+      "disposition": "no_condition_needed",
+      "reason": "Montajes, posición, rotor, adaptador y fuente ya son requeridos. Máximo de diámetro y compatibilidad son declaraciones del conjunto OEM, no ecuaciones generales del adaptador.",
+      "gap_ids": [
+        "G03"
+      ],
+      "source_ids": [
+        "CATALOG",
+        "ENGINE2200"
+      ],
+      "reviewed_row_schema": true,
+      "mechanical_family_complete": false,
+      "fill_allowed": false
+    },
+    {
+      "key": "rotor_adapter_fitments",
+      "definition_path": "/definitions/rotor_adapter_fitments",
+      "definition_id": "5583e7d8-ac8e-57d9-8c79-304f134f12b0",
+      "rows_schema_sha256": "79e400d14e2b21c7e5bb307c80a75b2b9ccf9e59e6d85bf3c0513dd8b36c8e05",
+      "reviewed_columns": [
+        "hub_mount",
+        "hub_thread_spec",
+        "hub_model",
+        "rotor_mount",
+        "rotor_model",
+        "rotor_max_mm",
+        "conditions",
+        "source_url"
+      ],
+      "template_uses": [
+        "rotor_mount_adapter"
+      ],
+      "condition_applies_to": [
+        "rotor_mount_adapter"
+      ],
+      "disposition": "condition",
+      "reason": "Rosca especificada exige hub_thread_spec para completar. No prohíbe información de rosca de anillo en Centerlock; máximo ausente nunca significa ilimitado.",
+      "gap_ids": [
+        "G01",
+        "G03"
+      ],
+      "source_ids": [
+        "CATALOG",
+        "PARK_THREADS"
+      ],
+      "reviewed_row_schema": true,
+      "mechanical_family_complete": false,
+      "fill_allowed": false
+    },
+    {
+      "key": "control_cable_end_options",
+      "definition_path": "/definitions/control_cable_end_options",
+      "definition_id": "a9f16931-055e-5332-ab07-7e1830c8c0dd",
+      "rows_schema_sha256": "3025e164d90b1f7c3a0aab9e77d444f1c329b264938e9375eb7c33da1665b54f",
+      "reviewed_columns": [
+        "end_id",
+        "purpose",
+        "head_profile",
+        "head_diameter_mm",
+        "head_length_mm",
+        "lever_model",
+        "generation",
+        "source_url"
+      ],
+      "template_uses": [
+        "control_cable"
+      ],
+      "condition_applies_to": [],
+      "disposition": "no_condition_needed",
+      "reason": "Extremo, propósito, perfil y fuente son requeridos. No deduce tiraje o modelo de maneta desde la cabeza, diámetro o longitud.",
+      "gap_ids": [
+        "G03"
+      ],
+      "source_ids": [
+        "CATALOG",
+        "ENGINE2200"
+      ],
+      "reviewed_row_schema": true,
+      "mechanical_family_complete": false,
+      "fill_allowed": false
+    },
+    {
+      "key": "power_port_profile_configurations",
+      "definition_path": "/definitions/power_port_profile_configurations",
+      "definition_id": "51ab62d2-7d06-5a91-950e-9c7900aa17d0",
+      "rows_schema_sha256": "c3234f21a9ee32318e5399794f7154e41f3668b63df41875c9ac46a05be15bbd",
+      "reviewed_columns": [
+        "port_id",
+        "protocol",
+        "voltage_v",
+        "voltage_max_v",
+        "current_a",
+        "power_w",
+        "source_url",
+        "oem_profile_label",
+        "profile_kind",
+        "current_role",
+        "conditions"
+      ],
+      "template_uses": [
+        "consumer_electronics"
+      ],
+      "condition_applies_to": [
+        "consumer_electronics"
+      ],
+      "disposition": "condition",
+      "reason": "Tensión fija exige tensión; rango exige ambos extremos; Otro exige nombre de perfil. No pide ni calcula A/W y no deriva profile_kind desde el número.",
+      "gap_ids": [
+        "G01",
+        "G04",
+        "G07",
+        "G09"
+      ],
+      "source_ids": [
+        "CATALOG",
+        "ANKER_A2663"
+      ],
+      "reviewed_row_schema": true,
+      "mechanical_family_complete": false,
+      "fill_allowed": false
+    }
+  ],
+  "sources": [
+    {
+      "id": "CATALOG",
+      "title": "Catálogo congelado: definición y semántica declarada de cada columna",
+      "path": "docs/development/product-specs-research-2026-09-05/all-family-reviewed-fields-integrated-2026-09-07.json",
+      "sha256": "f3178bd3c860c421d2365961fe3ff057581d2d038bb999bc59f5f0f959937072",
+      "kind": "local_contract",
+      "scope": "Representación de datos; no evidencia física OEM de un producto."
+    },
+    {
+      "id": "ENGINE2200",
+      "title": "Motor row_conditions v1 y consumidores",
+      "kind": "local_contract",
+      "paths": [
+        "lib/modules/inventory/models/product_spec_row_conditions.dart",
+        "lib/modules/inventory/models/product_spec_contract.dart",
+        "lib/modules/inventory/services/spec_engine_service.dart",
+        "supabase/migrations/20260907022000_product_spec_row_conditions.sql"
+      ],
+      "scope": "Gramática ejecutable, trivalencia, aislamiento por fila y preservación; no evidencia mecánica."
+    },
+    {
+      "id": "PARK_ROTOR",
+      "title": "Park Tool: Disc Brake Rotor Removal & Installation",
+      "url": "https://www.parktool.com/en-us/blog/repair-help/disc-brake-rotor-removal-installation",
+      "kind": "foundation",
+      "accessed_on": "2026-09-07",
+      "scope": "Fundamento: diámetro y adaptador deben revisarse en el sistema concreto.",
+      "evidence_read": "La sección de cambio de diámetro remite al fabricante para el cáliper/adaptador. No se importan espesores ni límites universales.",
+      "establishes_inventory_identity": false
+    },
+    {
+      "id": "SHELDON_BRAKES",
+      "title": "Sheldon Brown: Adjusting Direct-pull Cantilever Bicycle Brakes",
+      "url": "https://www.sheldonbrown.com/cantilever-adjustment.html",
+      "kind": "foundation",
+      "accessed_on": "2026-09-07",
+      "scope": "Fundamento de interfaces y tiraje de frenos sobre pivotes; no matriz actual por modelo.",
+      "evidence_read": "Las familias de freno y sus interfaces necesitan distinguirse. No convierte un nombre de familia en un dictamen de montaje.",
+      "establishes_inventory_identity": false
+    },
+    {
+      "id": "PARK_THREADS",
+      "title": "Park Tool: Basic Thread Concepts",
+      "url": "https://www.parktool.com/en-us/blog/repair-help/basic-thread-concepts",
+      "kind": "foundation",
+      "accessed_on": "2026-09-07",
+      "scope": "Designación nominal, paso y tolerancias; ejemplos históricos, lista no exhaustiva.",
+      "evidence_read": "Diámetro nominal y paso son distintos. Hay diámetros métricos con TPI (9 mm × 26, 10 mm × 26 y 36 mm × 24); no se impone dialecto por diámetro.",
+      "establishes_inventory_identity": false
+    },
+    {
+      "id": "PARK_IB3",
+      "title": "Park Tool IB-3: Features",
+      "url": "https://www.parktool.com/en-us/product/i-beam-mini-fold-up-with-chain-tool-ib-3",
+      "kind": "manufacturer",
+      "accessed_on": "2026-09-07",
+      "scope": "Contenido publicado del IB-3; no todos los multiherramientas.",
+      "evidence_read": "Publica medidas de Allen, T25, llave cerrada y llaves de rayos; el destornillador plano se declara sin medida. Eso justifica conservar piezas descriptivas y pedir medida sólo como completitud de interfaces dimensionadas.",
+      "establishes_inventory_identity": false
+    },
+    {
+      "id": "SRAM_MAVEN",
+      "title": "SRAM: Which is the right brake fluid for my SRAM Maven mineral oil brake?",
+      "url": "https://support.sram.com/hc/en-us/articles/23147687539099-Which-is-the-right-brake-fluid-for-my-SRAM-Maven-mineral-oil-brake",
+      "kind": "manufacturer",
+      "accessed_on": "2026-09-07",
+      "scope": "Maven identificado por el artículo. No se propaga a todos los SRAM ni a todo aceite mineral.",
+      "evidence_read": "Maven requiere Maxima Mineral Brake Oil. La clase genérica no sustituye la formulación/producto o especificación OEM del sistema.",
+      "establishes_inventory_identity": false
+    },
+    {
+      "id": "RITCHEY_1BOLT",
+      "title": "Ritchey WCS Carbon 1-Bolt Seatpost Complete Clampset",
+      "url": "https://ritcheylogic.com/bike/seatposts/wcs-carbon-1-bolt-seatpost-complete-clampset",
+      "kind": "manufacturer",
+      "accessed_on": "2026-09-07",
+      "scope": "Clampset específico de tijas Superlogic y WCS Carbon 1-Bolt indicadas por la página.",
+      "evidence_read": "Las variantes del kit tienen alcances de geometría de riel distintos. Una configuración que necesita kit debe identificarlo; no se importa una regla dimensional para otras tijas.",
+      "establishes_inventory_identity": false
+    },
+    {
+      "id": "LEZYNE_CO2",
+      "title": "Lezyne 16G CO2 - 5 Pack, 1-C2-CRTDG-V116P5",
+      "url": "https://ride.lezyne.com/products/16g-co2-cartridge",
+      "kind": "manufacturer",
+      "accessed_on": "2026-09-07",
+      "scope": "Presentación concreta del cartucho y alcance de contraparte que la página declara.",
+      "evidence_read": "Declara 16 g de gas, cartuchos roscados y presentación de cinco; no publica diámetro/paso/sentido de rosca. La ausencia queda pendiente, nunca se deduce del peso ni de la marca.",
+      "establishes_inventory_identity": false
+    },
+    {
+      "id": "LEZYNE_HV_MANUAL",
+      "title": "Lezyne MICRO DRIVE 500 HV / LITE PRO DRIVE 800 SWITCH HV, manual 73725-B1",
+      "url": "https://cdn.shopify.com/s/files/1/0043/1246/5494/files/73725-MANUAL-Y14-MICRO_LITE_PRO-EBIKE-R0B1.pdf?v=1633510382",
+      "kind": "manufacturer",
+      "accessed_on": "2026-09-07",
+      "scope": "Página 1 del manual enlazado por el registro OEM para 1-LED-EMICHV-V104SA; alimentación externa del modelo.",
+      "evidence_read": "Describe alimentación del sistema de la e-bike y cableado amarillo positivo/negro negativo. La tabla dice AC/DC y la operación restringe a DC: no se usa para aprobar AC, inferir batería interna, carga USB ni compatibilidad de motor.",
+      "establishes_inventory_identity": false
+    },
+    {
+      "id": "ANKER_A2663",
+      "title": "Anker 715 Charger (Nano II 65W), A2663: Output",
+      "url": "https://service.anker.com/product-description/a085g000004x2BTAAY/anker-715-charger-nano-ii-65w%3Fref=Home_Page",
+      "kind": "manufacturer",
+      "accessed_on": "2026-09-07",
+      "scope": "Perfiles que la página A2663 declara; no otros cargadores ni todos los USB-C.",
+      "evidence_read": "Distingue tensiones fijas de un rango PPS 5.0–21.0 V. La corriente PPS tiene un error literal (3..25): se deja sin normalizar en fixtures. No se calcula corriente/potencia ni se asigna el protocolo desde el conector.",
+      "establishes_inventory_identity": false
+    },
+    {
+      "id": "SIS_GO",
+      "title": "Science in Sport GO Isotonic Energy Gels Mixed: información nutricional por sabor",
+      "url": "https://www.scienceinsport.com/shop-sis/team-sis/go-isotonic-energy-gels-mixed",
+      "kind": "manufacturer",
+      "accessed_on": "2026-09-07",
+      "scope": "Tabla OEM indexada para sabor Cherry, base declarada de 60 ml y por 100 ml; no cantidades del stock.",
+      "evidence_read": "La tabla distingue bases y expresa sal, que no se debe renombrar sodio. La regla pide base explícita y nombre/unidad de Otro; no hace conversiones ni recomendaciones nutricionales.",
+      "establishes_inventory_identity": false
+    }
+  ],
+  "gaps": [
+    {
+      "id": "G01",
+      "kind": "engine_gap",
+      "title": "Presencia y alternativas de columnas",
+      "detail": "No existe exists/is_known ni al-menos-uno de columnas. No simular presencia con >0 o texto inferido. Las exigencias mutuas entre extremos también forman ciclos prohibidos.",
+      "next_step": "Diseñar contrato de completitud por presencia y grupos alternativos antes de añadir estas reglas; no es parte de este addendum."
+    },
+    {
+      "id": "G02",
+      "kind": "engine_gap",
+      "title": "Igualdad booleana condicional sin ocultar datos",
+      "detail": "allowed_options sólo estrecha tokens; allowed_when sobre un booleano prohíbe cualquier valor conocido, incluido el que se quería exigir. Con kit incluido y included=false requiere aserción condicional, no borrado.",
+      "next_step": "Añadir aserciones tipadas o retirar duplicación semántica con una migración separada y preservación de historia."
+    },
+    {
+      "id": "G03",
+      "kind": "coverage_gap",
+      "title": "Compatibilidad por modelo, generación, instalación y fuente",
+      "detail": "Un documento de filas bien formado no prueba compatibilidad. Las relaciones schema2 todavía requieren integración y matrices OEM con alcance, exclusiones y condiciones; nunca deducir modelo desde marca, velocidades o nombre libre.",
+      "next_step": "Adjudicar modelos y fuentes e integrar el consumidor de relaciones antes de emitir dictámenes mecánicos o llenar automáticamente."
+    },
+    {
+      "id": "G04",
+      "kind": "engine_gap",
+      "title": "Predicados sobre un miembro enlazado",
+      "detail": "row_conditions sólo lee columnas de la fila actual. row_coherence puede verificar IDs de enlace, pero no proyecta battery_kind, direction o generación del miembro para predicados locales.",
+      "next_step": "Diseñar evaluación de predicados con alcance de miembro; no copiar hechos a filas hermanas ni usar nombres como join."
+    },
+    {
+      "id": "G05",
+      "kind": "identity_gap",
+      "title": "Un ID de fila no demuestra una identidad física o revisión OEM",
+      "detail": "Excluir family=light en kit_members cierra el segundo dueño explícito. Una luz mal rotulada como accesorio, dos filas con igual nombre o dos revisiones contradictorias aún necesitan resolución de identidad/evidencia; fecha de consulta no es revisión.",
+      "next_step": "Mantener IDs estables y revisión de evidencia por producto; no deduplicar por nombres, modo o perfil incompleto."
+    },
+    {
+      "id": "G06",
+      "kind": "metadata_gap",
+      "title": "Faltan discriminadores estructurados para exigir campos con seguridad",
+      "detail": "Texto libre como configuration, member_kind, interface o conditions no se puede interpretar como hechos estructurados. Faltan algunos alcances de medición/parte incluida/certificación que distingan cuándo un dato es necesario.",
+      "next_step": "Separar esquema descriptivo de decisiones de compatibilidad; proponer columnas y semántica en otra revisión, sin adivinar valores."
+    },
+    {
+      "id": "G07",
+      "kind": "evidence_gap",
+      "title": "Fuentes y datos desconocidos no equivalen a aprobación",
+      "detail": "No exigir source_url duplicado donde row.sources ya documenta la evidencia; el motor local no pregunta por fuentes del sobre. Un valor desconocido o faltante debe seguir pendiente, nunca rellenarse desde el ejemplo OEM.",
+      "next_step": "La futura adopción necesita fuente por afirmación, identidad/variante, cobertura y recibo de reversión."
+    },
+    {
+      "id": "G08",
+      "kind": "parent_contract_gap",
+      "title": "Alcance de la tabla puede ser más estrecho que el dominio de sus filas",
+      "detail": "nutrition_facts sólo aplica a preparation_kind=Envasado; Por porción servida representa una porción declarada del envasado, no habilita productos preparados en barra. bar_clamp_configurations está limitado a Soporte de teléfono + medidas discretas. Este addendum no amplía esas guardas.",
+      "next_step": "Revisar los alcances del campo padre separadamente antes de extender su uso a recetas del negocio u otros soportes."
+    },
+    {
+      "id": "G09",
+      "kind": "consumer_gap",
+      "title": "Completo para la fila no equivale a catálogo investigado",
+      "detail": "No se derivan modes_count, ports_count, lúmenes, potencia agregada, cantidad comercial o contenido completo de filas parciales. Los requisitos nuevos producen avisos de completitud, no bloqueo de observaciones válidas incompletas.",
+      "next_step": "Integrador, simulador y aplicador deben conservar los avisos pendientes y exigir evidencia por producto antes de fill."
+    }
+  ],
+  "fixtures": [
+    {
+      "id": "RCF01",
+      "template": "hydraulic_disc_brake",
+      "field": "rotor_size_recipe",
+      "kind": "synthetic_regression",
+      "values": {
+        "rotor_size_recipe": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "position": "Delantero",
+                "rotor_diameter_mm": "180",
+                "frame_mount": "Post Mount",
+                "adapter_required": true,
+                "source_url": "https://example.com/synthetic-rotor"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_row_condition_issues": [
+        {
+          "code": "row_required_missing",
+          "field": "rotor_size_recipe",
+          "row_id": "r1",
+          "column": "adapter_model",
+          "blocking": false
+        }
+      ],
+      "expected_blocking": [],
+      "source_ids": [
+        "CATALOG",
+        "ENGINE2200"
+      ],
+      "purpose": "Adaptador requerido, modelo ausente: pendiente sin bloquear la observación.",
+      "gap_ids": [],
+      "not_a_mechanical_verdict": true,
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false
+    },
+    {
+      "id": "RCF02",
+      "template": "hydraulic_disc_brake",
+      "field": "rotor_size_recipe",
+      "kind": "synthetic_regression",
+      "values": {
+        "rotor_size_recipe": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "position": "Delantero",
+                "rotor_diameter_mm": "180",
+                "frame_mount": "Post Mount",
+                "adapter_required": true,
+                "source_url": "https://example.com/synthetic-rotor",
+                "adapter_model": "Adaptador documentado de prueba"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_row_condition_issues": [],
+      "expected_blocking": [],
+      "source_ids": [
+        "CATALOG",
+        "ENGINE2200"
+      ],
+      "purpose": "Identificación presente resuelve sólo completitud.",
+      "gap_ids": [],
+      "not_a_mechanical_verdict": true,
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false
+    },
+    {
+      "id": "RCF03",
+      "template": "hydraulic_disc_brake",
+      "field": "rotor_size_recipe",
+      "kind": "synthetic_regression",
+      "values": {
+        "rotor_size_recipe": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "position": "Delantero",
+                "rotor_diameter_mm": "180",
+                "frame_mount": "Post Mount",
+                "adapter_required": false,
+                "source_url": "https://example.com/synthetic-rotor",
+                "adapter_model": "Accesorio opcional documentado"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_row_condition_issues": [],
+      "expected_blocking": [],
+      "source_ids": [
+        "CATALOG",
+        "ENGINE2200"
+      ],
+      "purpose": "false no prohíbe modelo opcional.",
+      "gap_ids": [],
+      "not_a_mechanical_verdict": true,
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false
+    },
+    {
+      "id": "RCF04",
+      "template": "hydraulic_disc_brake",
+      "field": "rotor_size_recipe",
+      "kind": "synthetic_regression",
+      "values": {
+        "rotor_size_recipe": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "position": "Delantero",
+                "rotor_diameter_mm": "180",
+                "frame_mount": "Post Mount",
+                "source_url": "https://example.com/synthetic-rotor"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_row_condition_issues": [
+        {
+          "code": "row_prerequisite",
+          "field": "rotor_size_recipe",
+          "row_id": "r1",
+          "column": "adapter_model",
+          "blocking": false
+        }
+      ],
+      "expected_blocking": [],
+      "source_ids": [
+        "CATALOG",
+        "ENGINE2200"
+      ],
+      "purpose": "No asumir false a partir de desconocido.",
+      "gap_ids": [],
+      "not_a_mechanical_verdict": true,
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false
+    },
+    {
+      "id": "RCF05",
+      "template": "hydraulic_disc_brake",
+      "field": "rotor_size_recipe",
+      "kind": "synthetic_regression",
+      "values": {
+        "rotor_size_recipe": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "position": "Delantero",
+                "rotor_diameter_mm": "180",
+                "frame_mount": "Post Mount",
+                "adapter_required": true,
+                "source_url": "https://example.com/synthetic-rotor"
+              },
+              "sources": []
+            },
+            {
+              "id": "r2",
+              "values": {
+                "position": "Trasero",
+                "rotor_diameter_mm": "180",
+                "frame_mount": "Post Mount",
+                "adapter_required": true,
+                "source_url": "https://example.com/synthetic-rotor",
+                "adapter_model": "Sólo fila dos"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_row_condition_issues": [
+        {
+          "code": "row_required_missing",
+          "field": "rotor_size_recipe",
+          "row_id": "r1",
+          "column": "adapter_model",
+          "blocking": false
+        }
+      ],
+      "expected_blocking": [],
+      "source_ids": [
+        "CATALOG",
+        "ENGINE2200"
+      ],
+      "purpose": "Modelo en otra fila no satisface la primera.",
+      "gap_ids": [],
+      "not_a_mechanical_verdict": true,
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false
+    },
+    {
+      "id": "RCF06",
+      "template": "seatpost",
+      "field": "seatpost_saddle_configurations",
+      "kind": "synthetic_regression",
+      "values": {
+        "seatpost_kind": "Rígida",
+        "seatpost_saddle_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "rail_geometry": "Oval 7x9 mm",
+                "configuration_state": "Con kit opcional"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_row_condition_issues": [
+        {
+          "code": "row_required_missing",
+          "field": "seatpost_saddle_configurations",
+          "row_id": "r1",
+          "column": "clamp_part",
+          "blocking": false
+        }
+      ],
+      "expected_blocking": [],
+      "source_ids": [
+        "RITCHEY_1BOLT",
+        "CATALOG"
+      ],
+      "purpose": "Kit declarado sin pieza: incompleto.",
+      "gap_ids": [],
+      "not_a_mechanical_verdict": true,
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false
+    },
+    {
+      "id": "RCF07",
+      "template": "seatpost",
+      "field": "seatpost_saddle_configurations",
+      "kind": "oem_representation_example",
+      "values": {
+        "seatpost_kind": "Rígida",
+        "seatpost_saddle_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "rail_geometry": "Oval 7x9 mm",
+                "configuration_state": "Con kit opcional",
+                "clamp_part": "WCS Carbon 1-Bolt complete clampset 7x10",
+                "model": "WCS Carbon 1-Bolt"
+              },
+              "sources": [
+                "https://ritcheylogic.com/bike/seatposts/wcs-carbon-1-bolt-seatpost-complete-clampset"
+              ]
+            }
+          ]
+        }
+      },
+      "expected_row_condition_issues": [],
+      "expected_blocking": [],
+      "source_ids": [
+        "RITCHEY_1BOLT"
+      ],
+      "purpose": "Kit y riel 7x9 de la página específica; no establece inclusión ni identidad de stock.",
+      "gap_ids": [],
+      "not_a_mechanical_verdict": true,
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false
+    },
+    {
+      "id": "RCF08",
+      "template": "seatpost",
+      "field": "seatpost_saddle_configurations",
+      "kind": "known_gap_regression",
+      "values": {
+        "seatpost_kind": "Rígida",
+        "seatpost_saddle_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "rail_geometry": "Oval 7x9 mm",
+                "configuration_state": "Con kit incluido",
+                "clamp_part": "Pieza de prueba",
+                "clamp_included": false
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_row_condition_issues": [],
+      "expected_blocking": [],
+      "source_ids": [
+        "CATALOG",
+        "ENGINE2200"
+      ],
+      "purpose": "Contradicción de inclusión sigue sin expresarse por este motor; no aprobación.",
+      "gap_ids": [
+        "G02"
+      ],
+      "not_a_mechanical_verdict": true,
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false
+    },
+    {
+      "id": "RCF09",
+      "template": "seatpost",
+      "field": "seatpost_saddle_configurations",
+      "kind": "synthetic_regression",
+      "values": {
+        "seatpost_kind": "Rígida",
+        "seatpost_saddle_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "rail_geometry": "Oval 7x9 mm",
+                "configuration_state": "De fábrica",
+                "clamp_part": "Pieza original de prueba"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_row_condition_issues": [],
+      "expected_blocking": [],
+      "source_ids": [
+        "CATALOG",
+        "ENGINE2200"
+      ],
+      "purpose": "De fábrica conserva detalles de abrazadera.",
+      "gap_ids": [],
+      "not_a_mechanical_verdict": true,
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false
+    },
+    {
+      "id": "RCF10",
+      "template": "workshop_tool",
+      "field": "tool_capabilities",
+      "kind": "synthetic_regression",
+      "values": {
+        "tool_capabilities": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "operation": "Otra",
+                "target_standard": "Interfaz de prueba",
+                "supported": true,
+                "adapter_required": true
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_row_condition_issues": [
+        {
+          "code": "row_required_missing",
+          "field": "tool_capabilities",
+          "row_id": "r1",
+          "column": "adapter_model",
+          "blocking": false
+        }
+      ],
+      "expected_blocking": [],
+      "source_ids": [
+        "CATALOG",
+        "ENGINE2200"
+      ],
+      "purpose": "Adaptador de herramienta requerido necesita identificarse.",
+      "gap_ids": [],
+      "not_a_mechanical_verdict": true,
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false
+    },
+    {
+      "id": "RCF11",
+      "template": "workshop_tool",
+      "field": "tool_capabilities",
+      "kind": "synthetic_regression",
+      "values": {
+        "tool_capabilities": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "operation": "Otra",
+                "target_standard": "Interfaz de prueba",
+                "supported": false,
+                "adapter_required": false,
+                "adapter_model": "Adaptador evaluado en exclusión"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_row_condition_issues": [],
+      "expected_blocking": [],
+      "source_ids": [
+        "CATALOG",
+        "ENGINE2200"
+      ],
+      "purpose": "Exclusión explícita conserva condiciones y pieza evaluada.",
+      "gap_ids": [],
+      "not_a_mechanical_verdict": true,
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false
+    },
+    {
+      "id": "RCF12",
+      "template": "workshop_tool",
+      "field": "tool_bits_included",
+      "kind": "synthetic_regression",
+      "values": {
+        "tool_kind": "Multiherramienta",
+        "tool_bits_included": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "bit_kind": "Torx",
+                "quantity": "1"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_row_condition_issues": [
+        {
+          "code": "row_required_missing",
+          "field": "tool_bits_included",
+          "row_id": "r1",
+          "column": "size",
+          "blocking": false
+        }
+      ],
+      "expected_blocking": [],
+      "source_ids": [
+        "PARK_IB3"
+      ],
+      "purpose": "Interfaz Torx sin tamaño queda pendiente.",
+      "gap_ids": [],
+      "not_a_mechanical_verdict": true,
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false
+    },
+    {
+      "id": "RCF13",
+      "template": "workshop_tool",
+      "field": "tool_bits_included",
+      "kind": "oem_representation_example",
+      "values": {
+        "tool_kind": "Multiherramienta",
+        "tool_bits_included": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "bit_kind": "Torx",
+                "size": "T25",
+                "quantity": "1"
+              },
+              "sources": [
+                "https://www.parktool.com/en-us/product/i-beam-mini-fold-up-with-chain-tool-ib-3"
+              ]
+            },
+            {
+              "id": "r2",
+              "values": {
+                "bit_kind": "Destornillador plano",
+                "quantity": "1"
+              },
+              "sources": [
+                "https://www.parktool.com/en-us/product/i-beam-mini-fold-up-with-chain-tool-ib-3"
+              ]
+            }
+          ]
+        }
+      },
+      "expected_row_condition_issues": [],
+      "expected_blocking": [],
+      "source_ids": [
+        "PARK_IB3"
+      ],
+      "purpose": "IB-3: T25 y destornillador plano sin medida publicados; no forzar tamaño inventado.",
+      "gap_ids": [],
+      "not_a_mechanical_verdict": true,
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false
+    },
+    {
+      "id": "RCF14",
+      "template": "workshop_tool",
+      "field": "tool_bits_included",
+      "kind": "synthetic_regression",
+      "values": {
+        "tool_kind": "Multiherramienta",
+        "tool_bits_included": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "bit_kind": "Corta cadena",
+                "quantity": "1"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_row_condition_issues": [],
+      "expected_blocking": [],
+      "source_ids": [
+        "CATALOG",
+        "ENGINE2200"
+      ],
+      "purpose": "Un corta cadenas no necesita una medida de bit ficticia.",
+      "gap_ids": [],
+      "not_a_mechanical_verdict": true,
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false
+    },
+    {
+      "id": "RCF15",
+      "template": "light",
+      "field": "light_member_configurations",
+      "kind": "synthetic_regression",
+      "values": {
+        "light_member_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "member_id": "Luz de prueba",
+                "position": "Delantera",
+                "battery_kind": "Alimentación externa (no USB)"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_row_condition_issues": [
+        {
+          "code": "row_required_missing",
+          "field": "light_member_configurations",
+          "row_id": "r1",
+          "column": "power_input_connector",
+          "blocking": false
+        }
+      ],
+      "expected_blocking": [],
+      "source_ids": [
+        "LEZYNE_HV_MANUAL",
+        "CATALOG"
+      ],
+      "purpose": "Entrada externa desconocida: pendiente; no deducir conector de marca de motor.",
+      "gap_ids": [],
+      "not_a_mechanical_verdict": true,
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false
+    },
+    {
+      "id": "RCF16",
+      "template": "light",
+      "field": "light_member_configurations",
+      "kind": "oem_representation_example",
+      "values": {
+        "light_member_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "member_id": "MICRO DRIVE 500 HV",
+                "position": "Delantera",
+                "battery_kind": "Alimentación externa (no USB)",
+                "power_input_connector": "Cable directo: amarillo positivo y negro negativo"
+              },
+              "sources": [
+                "https://cdn.shopify.com/s/files/1/0043/1246/5494/files/73725-MANUAL-Y14-MICRO_LITE_PRO-EBIKE-R0B1.pdf?v=1633510382"
+              ]
+            }
+          ]
+        }
+      },
+      "expected_row_condition_issues": [],
+      "expected_blocking": [],
+      "source_ids": [
+        "LEZYNE_HV_MANUAL"
+      ],
+      "purpose": "Entrada admite cable directo; no exige USB, batería interna ni números eléctricos.",
+      "gap_ids": [],
+      "not_a_mechanical_verdict": true,
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false
+    },
+    {
+      "id": "RCF17",
+      "template": "light",
+      "field": "light_member_configurations",
+      "kind": "synthetic_regression",
+      "values": {
+        "light_member_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "member_id": "Luz de prueba",
+                "position": "Delantera",
+                "battery_kind": "Otra batería / alimentación"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_row_condition_issues": [
+        {
+          "code": "row_required_missing",
+          "field": "light_member_configurations",
+          "row_id": "r1",
+          "column": "power_source_note",
+          "blocking": false
+        }
+      ],
+      "expected_blocking": [],
+      "source_ids": [
+        "CATALOG",
+        "ENGINE2200"
+      ],
+      "purpose": "Otro requiere descripción literal.",
+      "gap_ids": [],
+      "not_a_mechanical_verdict": true,
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false
+    },
+    {
+      "id": "RCF18",
+      "template": "light",
+      "field": "light_member_configurations",
+      "kind": "synthetic_regression",
+      "values": {
+        "light_member_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "member_id": "Luz de prueba",
+                "position": "Delantera",
+                "battery_kind": "Desconocido / sin confirmar"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_row_condition_issues": [
+        {
+          "code": "row_prerequisite",
+          "field": "light_member_configurations",
+          "row_id": "r1",
+          "column": "power_input_connector",
+          "blocking": false
+        },
+        {
+          "code": "row_prerequisite",
+          "field": "light_member_configurations",
+          "row_id": "r1",
+          "column": "power_source_note",
+          "blocking": false
+        }
+      ],
+      "expected_blocking": [],
+      "source_ids": [
+        "CATALOG",
+        "ENGINE2200"
+      ],
+      "purpose": "Desconocido no equivale a una alimentación negativa.",
+      "gap_ids": [],
+      "not_a_mechanical_verdict": true,
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false
+    },
+    {
+      "id": "RCF19",
+      "template": "light",
+      "field": "light_member_configurations",
+      "kind": "synthetic_regression",
+      "values": {
+        "light_member_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "member_id": "Luz de prueba",
+                "position": "Delantera",
+                "battery_kind": "Dinamo",
+                "battery_capacity_mah": "100",
+                "power_source_note": "Reserva documentada de prueba"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_row_condition_issues": [],
+      "expected_blocking": [],
+      "source_ids": [
+        "CATALOG",
+        "ENGINE2200"
+      ],
+      "purpose": "No prohíbe un dato de almacenamiento sólo por alimentación principal; no afirma producto real.",
+      "gap_ids": [],
+      "not_a_mechanical_verdict": true,
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false
+    },
+    {
+      "id": "RCF20",
+      "template": "light",
+      "field": "kit_members",
+      "kind": "synthetic_regression",
+      "values": {
+        "kit_members": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "member_role": "soporte",
+                "family": "light",
+                "quantity": "1",
+                "position": "Sin posición"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_row_condition_issues": [
+        {
+          "code": "row_option",
+          "field": "kit_members",
+          "row_id": "r1",
+          "column": "family",
+          "blocking": true
+        }
+      ],
+      "expected_blocking": [
+        {
+          "code": "row_option",
+          "field": "kit_members"
+        }
+      ],
+      "source_ids": [
+        "CATALOG",
+        "ENGINE2200"
+      ],
+      "purpose": "Luz física explícita debe ir a light_member_configurations, no al contenido auxiliar.",
+      "gap_ids": [],
+      "not_a_mechanical_verdict": true,
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false
+    },
+    {
+      "id": "RCF21",
+      "template": "light",
+      "field": "kit_members",
+      "kind": "synthetic_regression",
+      "values": {
+        "kit_members": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "member_role": "soporte",
+                "family": "accessory_mount",
+                "quantity": "1",
+                "position": "Sin posición"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_row_condition_issues": [],
+      "expected_blocking": [],
+      "source_ids": [
+        "CATALOG",
+        "ENGINE2200"
+      ],
+      "purpose": "Soporte permanece en contenido auxiliar.",
+      "gap_ids": [],
+      "not_a_mechanical_verdict": true,
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false
+    },
+    {
+      "id": "RCF22",
+      "template": "light",
+      "field": "kit_members",
+      "kind": "known_gap_regression",
+      "values": {
+        "kit_members": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "member_role": "soporte",
+                "family": "accessory_mount",
+                "quantity": "1",
+                "position": "Sin posición",
+                "identity_model": "Nombre que parece luz"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_row_condition_issues": [],
+      "expected_blocking": [],
+      "source_ids": [
+        "CATALOG",
+        "ENGINE2200"
+      ],
+      "purpose": "La familia declarada incorrectamente no se detecta por el nombre; hace falta identidad/evidencia.",
+      "gap_ids": [
+        "G05"
+      ],
+      "not_a_mechanical_verdict": true,
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false
+    },
+    {
+      "id": "RCF23",
+      "template": "bicycle",
+      "field": "kit_members",
+      "kind": "synthetic_regression",
+      "values": {
+        "kit_members": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "member_role": "soporte",
+                "family": "light",
+                "quantity": "1",
+                "position": "Sin posición"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_row_condition_issues": [],
+      "expected_blocking": [],
+      "source_ids": [
+        "CATALOG",
+        "ENGINE2200"
+      ],
+      "purpose": "La restricción es exclusiva de light; un kit de bicicleta puede contener una luz.",
+      "gap_ids": [],
+      "not_a_mechanical_verdict": true,
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false
+    },
+    {
+      "id": "RCF24",
+      "template": "accessory_mount",
+      "field": "bar_clamp_configurations",
+      "kind": "synthetic_regression",
+      "values": {
+        "accessory_mount_kind": "Soporte de teléfono",
+        "bar_fit_representation": "Medidas discretas (filas)",
+        "bar_clamp_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "nominal_diameter_mm": "31.8",
+                "fit_method": "Con espaciador opcional"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_row_condition_issues": [
+        {
+          "code": "row_required_missing",
+          "field": "bar_clamp_configurations",
+          "row_id": "r1",
+          "column": "spacer_or_variant",
+          "blocking": false
+        }
+      ],
+      "expected_blocking": [],
+      "source_ids": [
+        "CATALOG",
+        "ENGINE2200"
+      ],
+      "purpose": "Espaciador declarado sin identificación queda pendiente.",
+      "gap_ids": [],
+      "not_a_mechanical_verdict": true,
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false
+    },
+    {
+      "id": "RCF25",
+      "template": "accessory_mount",
+      "field": "bar_clamp_configurations",
+      "kind": "synthetic_regression",
+      "values": {
+        "accessory_mount_kind": "Soporte de teléfono",
+        "bar_fit_representation": "Medidas discretas (filas)",
+        "bar_clamp_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "nominal_diameter_mm": "31.8",
+                "fit_method": "Variante / versión distinta",
+                "spacer_or_variant": "Variante publicada de prueba"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_row_condition_issues": [],
+      "expected_blocking": [],
+      "source_ids": [
+        "CATALOG",
+        "ENGINE2200"
+      ],
+      "purpose": "No usa diámetro como identidad de variante.",
+      "gap_ids": [],
+      "not_a_mechanical_verdict": true,
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false
+    },
+    {
+      "id": "RCF26",
+      "template": "accessory_mount",
+      "field": "bar_clamp_configurations",
+      "kind": "synthetic_regression",
+      "values": {
+        "accessory_mount_kind": "Soporte de teléfono",
+        "bar_fit_representation": "Medidas discretas (filas)",
+        "bar_clamp_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "nominal_diameter_mm": "31.8",
+                "fit_method": "Directo",
+                "spacer_or_variant": "Accesorio opcional de prueba",
+                "included": false
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_row_condition_issues": [],
+      "expected_blocking": [],
+      "source_ids": [
+        "CATALOG",
+        "ENGINE2200"
+      ],
+      "purpose": "Directo no borra una pieza opcional.",
+      "gap_ids": [],
+      "not_a_mechanical_verdict": true,
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false
+    },
+    {
+      "id": "RCF27",
+      "template": "food_beverage",
+      "field": "nutrition_facts",
+      "kind": "synthetic_regression",
+      "values": {
+        "preparation_kind": "Envasado",
+        "nutrition_facts": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "nutrient": "Otro",
+                "amount": "0.01",
+                "basis": "Por porción declarada"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_row_condition_issues": [
+        {
+          "code": "row_required_missing",
+          "field": "nutrition_facts",
+          "row_id": "r1",
+          "column": "nutrient_name",
+          "blocking": false
+        },
+        {
+          "code": "row_required_missing",
+          "field": "nutrition_facts",
+          "row_id": "r1",
+          "column": "amount_unit",
+          "blocking": false
+        },
+        {
+          "code": "row_required_missing",
+          "field": "nutrition_facts",
+          "row_id": "r1",
+          "column": "basis_amount",
+          "blocking": false
+        },
+        {
+          "code": "row_required_missing",
+          "field": "nutrition_facts",
+          "row_id": "r1",
+          "column": "basis_unit",
+          "blocking": false
+        }
+      ],
+      "expected_blocking": [],
+      "source_ids": [
+        "CATALOG",
+        "ENGINE2200"
+      ],
+      "purpose": "Valor sin nombre, unidad y tamaño de porción no está completo.",
+      "gap_ids": [],
+      "not_a_mechanical_verdict": true,
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false
+    },
+    {
+      "id": "RCF28",
+      "template": "food_beverage",
+      "field": "nutrition_facts",
+      "kind": "oem_representation_example",
+      "values": {
+        "preparation_kind": "Envasado",
+        "nutrition_facts": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "nutrient": "Otro",
+                "amount": "0.01",
+                "basis": "Por porción declarada",
+                "nutrient_name": "Sal",
+                "amount_unit": "g",
+                "basis_amount": "60",
+                "basis_unit": "ml",
+                "source_url": "https://www.scienceinsport.com/shop-sis/team-sis/go-isotonic-energy-gels-mixed"
+              },
+              "sources": [
+                "https://www.scienceinsport.com/shop-sis/team-sis/go-isotonic-energy-gels-mixed"
+              ]
+            }
+          ]
+        }
+      },
+      "expected_row_condition_issues": [],
+      "expected_blocking": [],
+      "source_ids": [
+        "SIS_GO"
+      ],
+      "purpose": "Tabla Cherry: sal por 60 ml, conservada como Otro en gramos; no convertir a sodio.",
+      "gap_ids": [],
+      "not_a_mechanical_verdict": true,
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false
+    },
+    {
+      "id": "RCF29",
+      "template": "food_beverage",
+      "field": "nutrition_facts",
+      "kind": "oem_representation_example",
+      "values": {
+        "preparation_kind": "Envasado",
+        "nutrition_facts": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "nutrient": "Carbohidratos (g)",
+                "amount": "36",
+                "basis": "Por 100 ml"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_row_condition_issues": [],
+      "expected_blocking": [],
+      "source_ids": [
+        "SIS_GO"
+      ],
+      "purpose": "La base 100 ml ya está explícita: no requiere duplicar columnas de porción.",
+      "gap_ids": [],
+      "not_a_mechanical_verdict": true,
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false
+    },
+    {
+      "id": "RCF30",
+      "template": "food_beverage",
+      "field": "nutrition_facts",
+      "kind": "synthetic_regression",
+      "values": {
+        "preparation_kind": "Envasado",
+        "nutrition_facts": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "nutrient": "Carbohidratos (g)",
+                "amount": "10",
+                "basis": "Por porción servida",
+                "basis_amount": "200",
+                "basis_unit": "ml"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_row_condition_issues": [
+        {
+          "code": "row_required_missing",
+          "field": "nutrition_facts",
+          "row_id": "r1",
+          "column": "serving_reference",
+          "blocking": false
+        }
+      ],
+      "expected_blocking": [],
+      "source_ids": [
+        "CATALOG",
+        "ENGINE2200"
+      ],
+      "purpose": "Porción servida del envasado necesita referencia de preparación; cantidades sintéticas.",
+      "gap_ids": [],
+      "not_a_mechanical_verdict": true,
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false
+    },
+    {
+      "id": "RCF31",
+      "template": "pump",
+      "field": "co2_cartridge_configurations",
+      "kind": "oem_representation_example",
+      "values": {
+        "pump_kind": "Cartucho CO2 (recarga)",
+        "co2_cartridge_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "configuration_kind": "Cartucho de esta presentación",
+                "gas_mass_g": "16",
+                "threaded": true,
+                "included_quantity": "5"
+              },
+              "sources": [
+                "https://ride.lezyne.com/products/16g-co2-cartridge"
+              ]
+            }
+          ]
+        }
+      },
+      "expected_row_condition_issues": [
+        {
+          "code": "row_required_missing",
+          "field": "co2_cartridge_configurations",
+          "row_id": "r1",
+          "column": "thread_designation",
+          "blocking": false
+        }
+      ],
+      "expected_blocking": [],
+      "source_ids": [
+        "LEZYNE_CO2"
+      ],
+      "purpose": "Lezyne publica roscado pero no su designación exacta: queda pendiente, no se inventa.",
+      "gap_ids": [],
+      "not_a_mechanical_verdict": true,
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false
+    },
+    {
+      "id": "RCF32",
+      "template": "pump",
+      "field": "co2_cartridge_configurations",
+      "kind": "synthetic_regression",
+      "values": {
+        "pump_kind": "Inflador CO2",
+        "co2_cartridge_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "configuration_kind": "Cartucho compatible declarado",
+                "gas_mass_g": "16",
+                "threaded": false
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_row_condition_issues": [
+        {
+          "code": "row_required_missing",
+          "field": "co2_cartridge_configurations",
+          "row_id": "r1",
+          "column": "counterpart_model",
+          "blocking": false
+        }
+      ],
+      "expected_blocking": [],
+      "source_ids": [
+        "CATALOG",
+        "ENGINE2200"
+      ],
+      "purpose": "Compatibilidad declarada necesita contraparte literal; no se hereda del nombre de stock.",
+      "gap_ids": [],
+      "not_a_mechanical_verdict": true,
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false
+    },
+    {
+      "id": "RCF33",
+      "template": "pump",
+      "field": "co2_cartridge_configurations",
+      "kind": "synthetic_regression",
+      "values": {
+        "pump_kind": "Inflador CO2",
+        "co2_cartridge_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "configuration_kind": "Cartucho compatible declarado",
+                "gas_mass_g": "16",
+                "threaded": false,
+                "counterpart_model": "Alcance OEM sintético",
+                "included_quantity": "0"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_row_condition_issues": [],
+      "expected_blocking": [],
+      "source_ids": [
+        "CATALOG",
+        "ENGINE2200"
+      ],
+      "purpose": "Compatible declarado puede documentar cero incluido; no se prohíbe contenido conocido.",
+      "gap_ids": [],
+      "not_a_mechanical_verdict": true,
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false
+    },
+    {
+      "id": "RCF34",
+      "template": "pump",
+      "field": "co2_cartridge_configurations",
+      "kind": "synthetic_regression",
+      "values": {
+        "pump_kind": "Cartucho CO2 (recarga)",
+        "co2_cartridge_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "configuration_kind": "Cartucho de esta presentación",
+                "gas_mass_g": "16",
+                "threaded": false
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_row_condition_issues": [
+        {
+          "code": "row_required_missing",
+          "field": "co2_cartridge_configurations",
+          "row_id": "r1",
+          "column": "included_quantity",
+          "blocking": false
+        }
+      ],
+      "expected_blocking": [],
+      "source_ids": [
+        "CATALOG",
+        "ENGINE2200"
+      ],
+      "purpose": "La presentación necesita cantidad, sin derivarla de pack_quantity ni otras filas.",
+      "gap_ids": [],
+      "not_a_mechanical_verdict": true,
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false
+    },
+    {
+      "id": "RCF35",
+      "template": "hydraulic_disc_brake",
+      "field": "brake_fluid_approvals",
+      "kind": "synthetic_regression",
+      "values": {
+        "brake_fluid_approvals": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "system_brand": "SRAM",
+                "system_model": "Maven",
+                "fluid_class": "Aceite Mineral",
+                "source_url": "https://support.sram.com/hc/en-us/articles/23147687539099-Which-is-the-right-brake-fluid-for-my-SRAM-Maven-mineral-oil-brake"
+              },
+              "sources": [
+                "https://support.sram.com/hc/en-us/articles/23147687539099-Which-is-the-right-brake-fluid-for-my-SRAM-Maven-mineral-oil-brake"
+              ]
+            }
+          ]
+        }
+      },
+      "expected_row_condition_issues": [
+        {
+          "code": "row_required_missing",
+          "field": "brake_fluid_approvals",
+          "row_id": "r1",
+          "column": "fluid_product",
+          "blocking": false
+        }
+      ],
+      "expected_blocking": [],
+      "source_ids": [
+        "SRAM_MAVEN"
+      ],
+      "purpose": "Aceite mineral no identifica formulación OEM.",
+      "gap_ids": [],
+      "not_a_mechanical_verdict": true,
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false
+    },
+    {
+      "id": "RCF36",
+      "template": "hydraulic_disc_brake",
+      "field": "brake_fluid_approvals",
+      "kind": "oem_representation_example",
+      "values": {
+        "brake_fluid_approvals": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "system_brand": "SRAM",
+                "system_model": "Maven",
+                "fluid_class": "Aceite Mineral",
+                "source_url": "https://support.sram.com/hc/en-us/articles/23147687539099-Which-is-the-right-brake-fluid-for-my-SRAM-Maven-mineral-oil-brake",
+                "fluid_product": "Maxima Mineral Brake Oil"
+              },
+              "sources": [
+                "https://support.sram.com/hc/en-us/articles/23147687539099-Which-is-the-right-brake-fluid-for-my-SRAM-Maven-mineral-oil-brake"
+              ]
+            }
+          ]
+        }
+      },
+      "expected_row_condition_issues": [],
+      "expected_blocking": [],
+      "source_ids": [
+        "SRAM_MAVEN"
+      ],
+      "purpose": "Producto OEM literal en el modelo indicado; no prueba identidad de stock ni otras marcas.",
+      "gap_ids": [],
+      "not_a_mechanical_verdict": true,
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false
+    },
+    {
+      "id": "RCF37",
+      "template": "hydraulic_disc_brake",
+      "field": "brake_fluid_approvals",
+      "kind": "known_gap_regression",
+      "values": {
+        "brake_fluid_approvals": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "system_brand": "SRAM",
+                "system_model": "Maven",
+                "fluid_class": "DOT 5",
+                "source_url": "https://support.sram.com/hc/en-us/articles/23147687539099-Which-is-the-right-brake-fluid-for-my-SRAM-Maven-mineral-oil-brake",
+                "fluid_product": "DOT 5 de prueba"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_row_condition_issues": [],
+      "expected_blocking": [],
+      "source_ids": [
+        "SRAM_MAVEN"
+      ],
+      "purpose": "Contracaso incompatible con el requerimiento Maven: row_conditions no compara relaciones OEM; ausencia de avisos de completitud no autoriza ese fluido.",
+      "gap_ids": [
+        "G03"
+      ],
+      "not_a_mechanical_verdict": true,
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false
+    },
+    {
+      "id": "RCF38",
+      "template": "rotor_mount_adapter",
+      "field": "rotor_adapter_fitments",
+      "kind": "synthetic_regression",
+      "values": {
+        "rotor_adapter_fitments": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "hub_mount": "Rosca especificada",
+                "rotor_mount": "6 pernos",
+                "source_url": "https://example.com/synthetic-rotor-adapter"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_row_condition_issues": [
+        {
+          "code": "row_required_missing",
+          "field": "rotor_adapter_fitments",
+          "row_id": "r1",
+          "column": "hub_thread_spec",
+          "blocking": false
+        }
+      ],
+      "expected_blocking": [],
+      "source_ids": [
+        "CATALOG",
+        "ENGINE2200"
+      ],
+      "purpose": "Rosca específica sin designación queda pendiente.",
+      "gap_ids": [],
+      "not_a_mechanical_verdict": true,
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false
+    },
+    {
+      "id": "RCF39",
+      "template": "rotor_mount_adapter",
+      "field": "rotor_adapter_fitments",
+      "kind": "synthetic_regression",
+      "values": {
+        "rotor_adapter_fitments": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "hub_mount": "Centerlock",
+                "rotor_mount": "6 pernos",
+                "source_url": "https://example.com/synthetic-rotor-adapter",
+                "hub_thread_spec": "Información del anillo OEM de prueba"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_row_condition_issues": [],
+      "expected_blocking": [],
+      "source_ids": [
+        "CATALOG",
+        "ENGINE2200"
+      ],
+      "purpose": "Centerlock puede conservar detalles de anillo; no aplicar una negación universal de roscas.",
+      "gap_ids": [],
+      "not_a_mechanical_verdict": true,
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false
+    },
+    {
+      "id": "RCF40",
+      "template": "consumer_electronics",
+      "field": "power_port_profile_configurations",
+      "kind": "synthetic_regression",
+      "values": {
+        "device_kind": "Cargador",
+        "power_port_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "p1",
+              "values": {
+                "port_id": "USB-C de prueba",
+                "connector": "USB-C",
+                "direction": "Salida"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "power_port_profile_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "port_id": "p1",
+                "profile_kind": "Rango de tensión",
+                "voltage_v": "5",
+                "source_url": "https://service.anker.com/product-description/a085g000004x2BTAAY/anker-715-charger-nano-ii-65w%3Fref=Home_Page"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_row_condition_issues": [
+        {
+          "code": "row_required_missing",
+          "field": "power_port_profile_configurations",
+          "row_id": "r1",
+          "column": "voltage_max_v",
+          "blocking": false
+        }
+      ],
+      "expected_blocking": [],
+      "source_ids": [
+        "ANKER_A2663"
+      ],
+      "purpose": "Rango con mínimo solamente queda pendiente; nunca rellenar el máximo.",
+      "gap_ids": [],
+      "not_a_mechanical_verdict": true,
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false
+    },
+    {
+      "id": "RCF41",
+      "template": "consumer_electronics",
+      "field": "power_port_profile_configurations",
+      "kind": "oem_representation_example",
+      "values": {
+        "device_kind": "Cargador",
+        "power_port_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "p1",
+              "values": {
+                "port_id": "USB-C de prueba",
+                "connector": "USB-C",
+                "direction": "Salida"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "power_port_profile_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "port_id": "p1",
+                "profile_kind": "Rango de tensión",
+                "voltage_v": "5",
+                "source_url": "https://service.anker.com/product-description/a085g000004x2BTAAY/anker-715-charger-nano-ii-65w%3Fref=Home_Page",
+                "voltage_max_v": "21",
+                "protocol": "PPS"
+              },
+              "sources": [
+                "https://service.anker.com/product-description/a085g000004x2BTAAY/anker-715-charger-nano-ii-65w%3Fref=Home_Page"
+              ]
+            }
+          ]
+        }
+      },
+      "expected_row_condition_issues": [],
+      "expected_blocking": [],
+      "source_ids": [
+        "ANKER_A2663"
+      ],
+      "purpose": "Ambos límites documentados. A/W ausentes se conservan; corriente mal escrita en la página no se corrige por cálculo.",
+      "gap_ids": [],
+      "not_a_mechanical_verdict": true,
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false
+    },
+    {
+      "id": "RCF42",
+      "template": "consumer_electronics",
+      "field": "power_port_profile_configurations",
+      "kind": "synthetic_regression",
+      "values": {
+        "device_kind": "Cargador",
+        "power_port_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "p1",
+              "values": {
+                "port_id": "USB-C de prueba",
+                "connector": "USB-C",
+                "direction": "Salida"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "power_port_profile_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "port_id": "p1",
+                "profile_kind": "Rango de tensión",
+                "source_url": "https://service.anker.com/product-description/a085g000004x2BTAAY/anker-715-charger-nano-ii-65w%3Fref=Home_Page",
+                "voltage_max_v": "21"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_row_condition_issues": [
+        {
+          "code": "row_required_missing",
+          "field": "power_port_profile_configurations",
+          "row_id": "r1",
+          "column": "voltage_v",
+          "blocking": false
+        }
+      ],
+      "expected_blocking": [],
+      "source_ids": [
+        "CATALOG",
+        "ENGINE2200"
+      ],
+      "purpose": "Rango con máximo solamente queda pendiente.",
+      "gap_ids": [],
+      "not_a_mechanical_verdict": true,
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false
+    },
+    {
+      "id": "RCF43",
+      "template": "consumer_electronics",
+      "field": "power_port_profile_configurations",
+      "kind": "synthetic_regression",
+      "values": {
+        "device_kind": "Cargador",
+        "power_port_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "p1",
+              "values": {
+                "port_id": "USB-C de prueba",
+                "connector": "USB-C",
+                "direction": "Salida"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "power_port_profile_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "port_id": "p1",
+                "profile_kind": "Tensión fija",
+                "voltage_v": "5",
+                "source_url": "https://service.anker.com/product-description/a085g000004x2BTAAY/anker-715-charger-nano-ii-65w%3Fref=Home_Page"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_row_condition_issues": [],
+      "expected_blocking": [],
+      "source_ids": [
+        "CATALOG",
+        "ENGINE2200"
+      ],
+      "purpose": "Tensión fija no necesita máximo ni A/W inventados.",
+      "gap_ids": [],
+      "not_a_mechanical_verdict": true,
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false
+    },
+    {
+      "id": "RCF44",
+      "template": "consumer_electronics",
+      "field": "power_port_profile_configurations",
+      "kind": "synthetic_regression",
+      "values": {
+        "device_kind": "Cargador",
+        "power_port_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "p1",
+              "values": {
+                "port_id": "USB-C de prueba",
+                "connector": "USB-C",
+                "direction": "Salida"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "power_port_profile_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "port_id": "p1",
+                "profile_kind": "Otro perfil declarado",
+                "voltage_v": "5",
+                "source_url": "https://service.anker.com/product-description/a085g000004x2BTAAY/anker-715-charger-nano-ii-65w%3Fref=Home_Page"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_row_condition_issues": [
+        {
+          "code": "row_required_missing",
+          "field": "power_port_profile_configurations",
+          "row_id": "r1",
+          "column": "oem_profile_label",
+          "blocking": false
+        }
+      ],
+      "expected_blocking": [],
+      "source_ids": [
+        "CATALOG",
+        "ENGINE2200"
+      ],
+      "purpose": "Otro necesita etiqueta OEM.",
+      "gap_ids": [],
+      "not_a_mechanical_verdict": true,
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false
+    },
+    {
+      "id": "RCF45",
+      "template": "consumer_electronics",
+      "field": "power_port_profile_configurations",
+      "kind": "synthetic_regression",
+      "values": {
+        "device_kind": "Cargador",
+        "power_port_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "p1",
+              "values": {
+                "port_id": "USB-C de prueba",
+                "connector": "USB-C",
+                "direction": "Salida"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "power_port_profile_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "port_id": "p1",
+                "voltage_v": "5",
+                "source_url": "https://service.anker.com/product-description/a085g000004x2BTAAY/anker-715-charger-nano-ii-65w%3Fref=Home_Page"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_row_condition_issues": [
+        {
+          "code": "row_prerequisite",
+          "field": "power_port_profile_configurations",
+          "row_id": "r1",
+          "column": "voltage_max_v",
+          "blocking": false
+        },
+        {
+          "code": "row_prerequisite",
+          "field": "power_port_profile_configurations",
+          "row_id": "r1",
+          "column": "oem_profile_label",
+          "blocking": false
+        }
+      ],
+      "expected_blocking": [],
+      "source_ids": [
+        "CATALOG",
+        "ENGINE2200"
+      ],
+      "purpose": "Tensión conocida no permite inferir tipo de perfil; dependientes ausentes siguen pendientes.",
+      "gap_ids": [],
+      "not_a_mechanical_verdict": true,
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false
+    },
+    {
+      "id": "RCF46",
+      "template": "consumer_electronics",
+      "field": "power_port_profile_configurations",
+      "kind": "synthetic_regression",
+      "values": {
+        "device_kind": "Cargador",
+        "power_port_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "p1",
+              "values": {
+                "port_id": "USB-C de prueba",
+                "connector": "USB-C",
+                "direction": "Salida"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "power_port_profile_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "port_id": "p1",
+                "profile_kind": "Rango de tensión",
+                "voltage_v": "5",
+                "source_url": "https://service.anker.com/product-description/a085g000004x2BTAAY/anker-715-charger-nano-ii-65w%3Fref=Home_Page",
+                "voltage_max_v": "4"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_row_condition_issues": [],
+      "expected_blocking": [
+        {
+          "code": "row_shape",
+          "field": "power_port_profile_configurations"
+        }
+      ],
+      "source_ids": [
+        "CATALOG",
+        "ENGINE2200"
+      ],
+      "purpose": "Rango invertido lo rechaza rows_schema existente, no una regla física nueva.",
+      "gap_ids": [],
+      "not_a_mechanical_verdict": true,
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false
+    },
+    {
+      "id": "RCF47",
+      "template": "fastener",
+      "field": "fastener_kit_members",
+      "kind": "source_grounded_representation_example",
+      "values": {
+        "fastener_kit_members": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "member_role": "Eje de ejemplo",
+                "quantity": "1",
+                "thread_nominal": "9 mm",
+                "thread_tpi": "26"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_row_condition_issues": [],
+      "expected_blocking": [],
+      "source_ids": [
+        "PARK_THREADS"
+      ],
+      "purpose": "Ejemplo Park de diámetro métrico con TPI; no reintroducir gating por dialecto.",
+      "gap_ids": [],
+      "not_a_mechanical_verdict": true,
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false
+    },
+    {
+      "id": "RCF48",
+      "template": "light",
+      "field": "light_member_configurations",
+      "kind": "known_gap_regression",
+      "values": {
+        "light_member_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "a",
+              "values": {
+                "member_id": "Luz de prueba",
+                "position": "Delantera",
+                "battery_kind": "Li-ion integrada"
+              },
+              "sources": []
+            },
+            {
+              "id": "b",
+              "values": {
+                "member_id": "Luz de prueba",
+                "position": "Delantera",
+                "battery_kind": "Li-ion integrada"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_row_condition_issues": [],
+      "expected_blocking": [],
+      "source_ids": [
+        "CATALOG",
+        "ENGINE2200"
+      ],
+      "purpose": "Dos nombres iguales no son identidad única ni prueban duplicación; queda revisión de miembros físicos.",
+      "gap_ids": [
+        "G05"
+      ],
+      "not_a_mechanical_verdict": true,
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false
+    }
+  ],
+  "metadata_negative_cases": [
+    {
+      "id": "RCFM01",
+      "reason": "No inventar exists como operador de presencia.",
+      "template": "light",
+      "field": "light_member_configurations",
+      "replace_rules": {
+        "required_when": {
+          "power_source_note": {
+            "kind": "exists",
+            "field": "battery_capacity_mah"
+          }
+        }
+      },
+      "expected": "FormatException"
+    },
+    {
+      "id": "RCFM02",
+      "reason": "No consultar alimentación de otra fila desde el modo.",
+      "template": "light",
+      "field": "light_mode_configurations",
+      "replace_rules": {
+        "required_when": {
+          "runtime_h": {
+            "kind": "when",
+            "rows": [
+              [
+                {
+                  "field": "battery_kind",
+                  "operator": "eq",
+                  "value_type": "token",
+                  "value": "Li-ion integrada"
+                }
+              ]
+            ]
+          }
+        }
+      },
+      "expected": "FormatException"
+    },
+    {
+      "id": "RCFM03",
+      "reason": "Booleano condicional no es allowed_options de token.",
+      "template": "seatpost",
+      "field": "seatpost_saddle_configurations",
+      "replace_rules": {
+        "allowed_options": {
+          "clamp_included": [
+            true
+          ]
+        }
+      },
+      "expected": "FormatException"
+    },
+    {
+      "id": "RCFM04",
+      "reason": "Exigir recíprocamente extremos mediante comparaciones genera ciclo y no es presencia.",
+      "template": "consumer_electronics",
+      "field": "power_port_profile_configurations",
+      "replace_rules": {
+        "required_when": {
+          "voltage_v": {
+            "kind": "when",
+            "rows": [
+              [
+                {
+                  "field": "voltage_max_v",
+                  "operator": "gt",
+                  "value_type": "decimal",
+                  "value": "0"
+                }
+              ]
+            ]
+          },
+          "voltage_max_v": {
+            "kind": "when",
+            "rows": [
+              [
+                {
+                  "field": "voltage_v",
+                  "operator": "gt",
+                  "value_type": "decimal",
+                  "value": "0"
+                }
+              ]
+            ]
+          }
+        }
+      },
+      "expected": "FormatException"
+    }
+  ],
+  "prior_cases_artifact": "docs/development/product-specs-research-2026-09-05/all-family-representation-cases-integrated-2026-09-07.json",
+  "prior_cases_sha256": "3aea8e7a6a7c3d7d91bd24a8135ce91c36674699acfa5c9f283d408dd980cf42",
+  "case_overrides": {
+    "light_kit_member_inside_kit_members_undetectable": {
+      "kind": "classified_light_member_in_wrong_table",
+      "expected_blocking": [
+        {
+          "code": "row_option",
+          "field": "kit_members"
+        }
+      ],
+      "expected_issues": [
+        {
+          "code": "required_missing",
+          "field": "light_mode_configurations",
+          "blocking": false
+        },
+        {
+          "code": "row_option",
+          "field": "kit_members",
+          "row_id": "k",
+          "column": "family",
+          "blocking": true
+        },
+        {
+          "code": "row_prerequisite",
+          "field": "light_member_configurations",
+          "row_id": "m",
+          "column": "power_input_connector",
+          "blocking": false
+        },
+        {
+          "code": "row_prerequisite",
+          "field": "light_member_configurations",
+          "row_id": "m",
+          "column": "power_source_note",
+          "blocking": false
+        }
+      ],
+      "note": "family=light en kit_members es una clasificación en el propietario incorrecto y queda bloqueada. Esto no determina si las filas describen una o dos unidades físicas; esa identidad sigue pendiente. El ID histórico del caso se conserva para trazabilidad."
+    }
+  },
+  "case_override_preimages": {
+    "light_kit_member_inside_kit_members_undetectable": {
+      "path": "/cases/76",
+      "before": {
+        "id": "light_kit_member_inside_kit_members_undetectable",
+        "template": "light",
+        "kind": "membership_identity_pending",
+        "source_ids": [
+          "S-ENGINE"
+        ],
+        "values": {
+          "light_position": "Juego delantera + trasera",
+          "kit_members": {
+            "schema_version": 1,
+            "rows": [
+              {
+                "id": "k",
+                "values": {
+                  "member_role": "otro",
+                  "family": "light",
+                  "quantity": "1",
+                  "position": "Delantero"
+                },
+                "sources": []
+              }
+            ]
+          },
+          "light_member_configurations": {
+            "schema_version": 1,
+            "rows": [
+              {
+                "id": "m",
+                "values": {
+                  "member_id": "Delantera X",
+                  "position": "Delantera"
+                },
+                "sources": []
+              }
+            ]
+          }
+        },
+        "expected_issues": [
+          {
+            "code": "required_missing",
+            "field": "light_mode_configurations",
+            "blocking": false
+          }
+        ],
+        "note": "Coincidir familia/posición no demuestra que sea la misma unidad física. Puede haber doble registro o dos unidades diferentes; resolver referencias de miembro, sin deducir identidad del nombre.",
+        "inventory_write": false,
+        "evidence_scope": "Reference/representation example only, never an inventory attribution",
+        "automatic_fill_authorized": false,
+        "facts_verified_for_product": false,
+        "expected_blocking": []
+      }
+    }
+  },
+  "semantics": {
+    "required_when": "Completitud no bloqueante: row_required_missing o row_prerequisite. No prueba imposibilidad ni rellena datos.",
+    "allowed_options": "Sólo light.kit_members.family: bloqueo de clasificación en el propietario incorrecto; no dictamen físico.",
+    "absent_fields": "No crea filas ni hechos para un campo ausente.",
+    "source_scope": "Las fuentes sustentan diseño/ejemplos; fixtures sintéticas no son declaraciones OEM, y ningún caso identifica stock.",
+    "literal_preservation": "El addendum no añade normalización de nombres/modelos/revisiones, IP, protocolo, unidades o magnitudes; se conserva el parser numérico exacto vigente y no se derivan valores desde filas parciales."
+  },
+  "integration_requirements": [
+    "Adjudicación explícita de cada parche con las preimágenes exactas.",
+    "Ejecutar compilador y paridad SQL/Dart contra la carga integrada, preservando avisos de completitud.",
+    "Verificar publicación de metadatos frente a hechos/referencias existentes con locks de 2200; este agente no ejecutó DB.",
+    "Mantener todas las puertas globales y fill en false; esta propuesta no constituye saneamiento mecánico completo."
+  ],
+  "publication_gates": {
+    "all_family_domain_review_complete": false,
+    "all_product_assignment_review_complete": false,
+    "compatibility_rules_integrated": false,
+    "fill_allowed": false
+  },
+  "verification": {
+    "base_sha256_verified": true,
+    "dart_probe": "PASS",
+    "sql_executed_by_reviewer": false,
+    "runtime_executed_by_reviewer": false,
+    "production_writes": false,
+    "dart_test_count": 242,
+    "dart_command": "fvm flutter test --no-pub .tmp/product-spec-catalog/row-condition-family-review-probe.dart --reporter expanded",
+    "dart_probe_path": ".tmp/product-spec-catalog/row-condition-family-review-probe.dart",
+    "dart_probe_sha256": "e1312559cfa2695097c28a300a3551dd800e2bca856046864bb0b7252925ecbe",
+    "dart_log_path": ".tmp/product-spec-catalog/row-condition-family-review-probe.log",
+    "dart_log_sha256": "24a4db39fc9c0523572b3d2aac7163d506f67c59c4a43dbf7118a21f33531bc9",
+    "python_metadata_validation": "PASS: 14 exact preimages, 105 contracts, 4 negative metadata cases",
+    "python_log_path": ".tmp/product-spec-catalog/row-condition-family-review-python.log",
+    "python_log_sha256": "c05bc03b58a713419b9aee05ce904cb923c90d08665d3d36d5b4aaa05d051bf3",
+    "checked_implementation_sha256": {
+      "lib/modules/inventory/models/product_spec_row_conditions.dart": "d2f28a35ded7fcd97aab0f3f93238f1eec456a1fc8f9cebf74eaee1a7209ee67",
+      "lib/modules/inventory/models/product_spec_contract.dart": "a73eb6008e48563d2fd22726cf7a7da4f2893928415a5d11bfe7df34061c594b",
+      "lib/modules/inventory/services/spec_engine_service.dart": "af39a6b55f36ac016bee16ead8c3f1d2c3a3aa7a36818ce55f10f01d0cc82a00",
+      "supabase/migrations/20260907022000_product_spec_row_conditions.sql": "6d18c2e1e985d73ca935987a5615bf6365e8a32e26720a5068e78bbb878f16a7",
+      "scripts/inventory/product_spec_row_condition_metadata.py": "d847279c90bda86907dfa48ec7215276ea0c4e34c04f35dbcf9f859eb89b843e",
+      "scripts/inventory/product_spec_field_patches.py": "67c2f36159bb4e05b4219cd6b0a4822f788102c0b44ca7da02e96e7eb3d5468e"
+    },
+    "tested_payload_sha256": "b1d2f3d72ea90561b6d49413761d5fc7ac9b7e17d0ea43485bd10e9d4c628a6a",
+    "test_scope": "Pruebas de representación y preservación de observaciones en Dart y metadatos Python. No confieren aprobación OEM, identidad de stock, paridad SQL del catálogo ni adopción productiva."
+  },
+  "stats": {
+    "audited_row_fields": 48,
+    "audited_template_field_uses": 94,
+    "row_field_dispositions": {
+      "condition": 12,
+      "no_condition_needed": 18,
+      "gap": 18
+    },
+    "template_patches": 14,
+    "affected_template_row_fields": 18,
+    "condition_cells_by_template": 27,
+    "new_fixtures": 48,
+    "prior_fixtures": 84,
+    "intentional_prior_case_changes": 1,
+    "metadata_negative_cases": 4,
+    "new_definitions": 0
+  }
+}
