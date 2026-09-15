@@ -31,6 +31,9 @@ class ConversationHistoryStore {
   final Map<String, Timer> _pendingWrites = <String, Timer>{};
   final Map<String, List<Message>> _pendingSnapshots =
       <String, List<Message>>{};
+  // One chain per conversation: a later snapshot never races an earlier
+  // write for the same `.tmp` file, and `flush` knows what is still in flight.
+  final Map<String, Future<void>> _inFlightWrites = <String, Future<void>>{};
 
   Future<Directory?> _root() {
     if (kIsWeb) return Future.value(null);
@@ -107,8 +110,34 @@ class ConversationHistoryStore {
     _pendingWrites[conversationId] = Timer(_writeDebounce, () {
       _pendingWrites.remove(conversationId);
       final snapshot = _pendingSnapshots.remove(conversationId);
-      if (snapshot != null) unawaited(_write(conversationId, snapshot));
+      if (snapshot != null) _startWrite(conversationId, snapshot);
     });
+  }
+
+  void _startWrite(String conversationId, List<Message> snapshot) {
+    final previous = _inFlightWrites[conversationId] ?? Future<void>.value();
+    late final Future<void> write;
+    write = previous
+        .then((_) => _write(conversationId, snapshot))
+        .whenComplete(() {
+      if (identical(_inFlightWrites[conversationId], write)) {
+        _inFlightWrites.remove(conversationId);
+      }
+    });
+    _inFlightWrites[conversationId] = write;
+  }
+
+  /// Writes every scheduled snapshot now and returns once the files are on
+  /// disk. The debounce coalesces bursts; it is not a promise about when a
+  /// row becomes readable, so anything that needs the rows (tests included)
+  /// waits on this instead of guessing a wall-clock delay.
+  Future<void> flush() async {
+    for (final conversationId in _pendingWrites.keys.toList(growable: false)) {
+      _pendingWrites.remove(conversationId)?.cancel();
+      final snapshot = _pendingSnapshots.remove(conversationId);
+      if (snapshot != null) _startWrite(conversationId, snapshot);
+    }
+    await Future.wait(_inFlightWrites.values.toList(growable: false));
   }
 
   Future<void> _write(String conversationId, List<Message> messages) async {
