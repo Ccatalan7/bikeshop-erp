@@ -103,8 +103,8 @@ secret_workflow_bindings="$(
     'SUPABASE_SECRET_KEY: ${{ secrets.SUPABASE_SECRET_KEY }}' \
     "$ROOT_DIR/.github/workflows/firebase-hosting-store.yml"
 )"
-[[ "$secret_workflow_bindings" == 2 ]] ||
-  fail "Expected exactly two explicit workflow bindings for SUPABASE_SECRET_KEY."
+[[ "$secret_workflow_bindings" == 7 ]] ||
+  fail "Expected exactly seven reviewed workflow bindings for SUPABASE_SECRET_KEY."
 
 grep -F -- "projects api-keys" "$ROOT_DIR/scripts/db/status.sh" >/dev/null ||
   fail "Status lost its metadata-only API-key type check."
@@ -250,6 +250,20 @@ assert_staging_guard_rejected 1 \
     FAKE_EXTERNAL_ACCESS_LOG="$FAKE_EXTERNAL_ACCESS_LOG" \
     VINABIKE_STAGING_SCHEMA_CONFIRM=staging \
     bash "$ROOT_DIR/scripts/db/staging_schema_gate.sh"
+
+rm -f "$FAKE_EXTERNAL_ACCESS_LOG"
+if retired_staging_schema_output="$(
+  VINABIKE_STAGING_REACTIVATION_CONFIRM=bczzjhjrpmtpgwdvlbut \
+    PATH="$FAKE_BIN_DIR:$PATH" \
+    FAKE_EXTERNAL_ACCESS_LOG="$FAKE_EXTERNAL_ACCESS_LOG" \
+    bash "$ROOT_DIR/scripts/db/staging_schema_gate.sh" 2>&1
+)"; then
+  fail "Retired hosted core-schema gate unexpectedly succeeded."
+fi
+assert_contains "$retired_staging_schema_output" "core_schema.sql"
+assert_contains "$retired_staging_schema_output" "never applied to a hosted database"
+[[ ! -e "$FAKE_EXTERNAL_ACCESS_LOG" ]] ||
+  fail "Retired hosted core-schema gate reached credential/network tooling."
 assert_staging_guard_rejected 64 \
   env -u VINABIKE_STAGING_REACTIVATION_CONFIRM \
     PATH="$FAKE_BIN_DIR:$PATH" \
@@ -260,8 +274,10 @@ assert_staging_guard_rejected 64 \
     bash "$ROOT_DIR/scripts/e2e/run_staging.sh"
 
 FAKE_REPO="$TEST_TMP/repo"
-mkdir -p "$FAKE_REPO/scripts/db" "$FAKE_REPO/supabase/.temp"
+mkdir -p "$FAKE_REPO/scripts/db" "$FAKE_REPO/supabase/.temp" \
+  "$FAKE_REPO/supabase/sql" "$FAKE_REPO/supabase/migrations"
 cp "$ROOT_DIR/scripts/db/query.sh" "$ROOT_DIR/scripts/db/lib.sh" \
+  "$ROOT_DIR/scripts/db/sensitive_tables.txt" \
   "$FAKE_REPO/scripts/db/"
 # Keep the hermetic fake psql ahead of any host libpq installation.
 sed -i.bak 's#export PATH="/opt/homebrew/opt/libpq/bin:$PATH"#export PATH="$PATH"#' \
@@ -288,6 +304,22 @@ tail -1 "$FAKE_REPO/.tmp/db/journal.jsonl" |
 
 printf '%s\n' "xzdvtzdqjeyqxnkqprtf" \
   >"$FAKE_REPO/supabase/.temp/project-ref"
+printf '%s\n' "select 1;" >"$FAKE_REPO/supabase/sql/core_schema.sql"
+rm -f "$FAKE_EXTERNAL_ACCESS_LOG"
+if hosted_core_schema_output="$(
+  VINABIKE_DB_WRITE_CONFIRM=production \
+    PATH="$FAKE_BIN_DIR:$PATH" \
+    FAKE_EXTERNAL_ACCESS_LOG="$FAKE_EXTERNAL_ACCESS_LOG" \
+    bash "$FAKE_REPO/scripts/db/query.sh" production --write \
+      --file "$FAKE_REPO/supabase/sql/core_schema.sql" 2>&1
+)"; then
+  fail "Hosted query path accepted core_schema.sql."
+fi
+assert_contains "$hosted_core_schema_output" \
+  "core_schema.sql is a historical local reference"
+[[ ! -e "$FAKE_EXTERNAL_ACCESS_LOG" ]] ||
+  fail "Hosted core_schema.sql rejection reached psql."
+
 printf '%s\n' "select 1;" >"$TEST_TMP/hosted-read.sql"
 rm -f "$FAKE_EXTERNAL_ACCESS_LOG"
 if SUPABASE_DB_PASSWORD=fake-password \
@@ -304,6 +336,47 @@ fi
 tail -1 "$FAKE_REPO/.tmp/db/journal.jsonl" |
   grep -F '"exit_status":99' >/dev/null ||
   fail "Hosted file read did not journal the psql exit status."
+
+rm -f "$FAKE_EXTERNAL_ACCESS_LOG"
+if sensitive_read_output="$(
+  SUPABASE_DB_PASSWORD=fake-password \
+    PATH="$FAKE_BIN_DIR:$PATH" \
+    FAKE_EXTERNAL_ACCESS_LOG="$FAKE_EXTERNAL_ACCESS_LOG" \
+    bash "$FAKE_REPO/scripts/db/query.sh" production \
+      --sql "select supplier.* from public.suppliers supplier" 2>&1
+)"; then
+  fail "Hosted sensitive star read unexpectedly passed the disclosure guard."
+fi
+assert_contains "$sensitive_read_output" \
+  "Star projection over sensitive table(s): suppliers"
+[[ ! -e "$FAKE_EXTERNAL_ACCESS_LOG" ]] ||
+  fail "Hosted sensitive star read reached psql before rejection."
+
+printf '%s\n' \
+  "begin;" \
+  "create or replace view public.guard_write_probe as" \
+  "select supplier.* from public.suppliers supplier;" \
+  "commit;" \
+  >"$TEST_TMP/hosted-write-with-internal-star.sql"
+rm -f "$FAKE_EXTERNAL_ACCESS_LOG"
+if VINABIKE_DB_WRITE_CONFIRM=production \
+  SUPABASE_DB_PASSWORD=fake-password \
+  PATH="$FAKE_BIN_DIR:$PATH" \
+  FAKE_EXTERNAL_ACCESS_LOG="$FAKE_EXTERNAL_ACCESS_LOG" \
+  bash "$FAKE_REPO/scripts/db/query.sh" production --write \
+    --file "$TEST_TMP/hosted-write-with-internal-star.sql" \
+    >/dev/null 2>&1; then
+  fail "Hosted write unexpectedly ignored the fake psql failure."
+else
+  hosted_write_status=$?
+fi
+[[ "$hosted_write_status" -eq 99 ]] ||
+  fail "Hosted write returned $hosted_write_status instead of psql status 99."
+[[ -e "$FAKE_EXTERNAL_ACCESS_LOG" ]] ||
+  fail "Hosted write was blocked by the read-only disclosure guard."
+tail -1 "$FAKE_REPO/.tmp/db/journal.jsonl" |
+  grep -F '"exit_status":99' >/dev/null ||
+  fail "Hosted write did not journal the psql exit status."
 
 rm -f "$FAKE_EXTERNAL_ACCESS_LOG"
 if staging_identity_output="$(

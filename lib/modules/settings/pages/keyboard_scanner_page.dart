@@ -18,12 +18,12 @@ class _KeyboardScannerPageState extends State<KeyboardScannerPage> {
   late BarcodeScannerService _scannerService;
   final List<String> _recentScans = [];
   final FocusNode _focusNode = FocusNode();
-  
+
   @override
   void initState() {
     super.initState();
     _scannerService = BarcodeScannerService();
-    
+
     // Listen to barcode scans
     _scannerService.barcodeStream.listen((barcode) {
       setState(() {
@@ -32,7 +32,7 @@ class _KeyboardScannerPageState extends State<KeyboardScannerPage> {
           _recentScans.removeLast();
         }
       });
-      
+
       // Show snackbar
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -44,23 +44,23 @@ class _KeyboardScannerPageState extends State<KeyboardScannerPage> {
         );
       }
     });
-    
+
     // Auto-start listening
     _scannerService.startListening();
-    
+
     // Request focus after build
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _focusNode.requestFocus();
     });
   }
-  
+
   @override
   void dispose() {
     _scannerService.dispose();
     _focusNode.dispose();
     super.dispose();
   }
-  
+
   @override
   Widget build(BuildContext context) {
     return ChangeNotifierProvider.value(
@@ -79,8 +79,8 @@ class _KeyboardScannerPageState extends State<KeyboardScannerPage> {
                     // Status card
                     Card(
                       margin: const EdgeInsets.all(16),
-                      color: service.isListening 
-                          ? Colors.green.shade50 
+                      color: service.isListening
+                          ? Colors.green.shade50
                           : Colors.grey.shade50,
                       child: Padding(
                         padding: const EdgeInsets.all(16),
@@ -90,11 +90,11 @@ class _KeyboardScannerPageState extends State<KeyboardScannerPage> {
                             Row(
                               children: [
                                 Icon(
-                                  service.isListening 
-                                      ? Icons.qr_code_scanner 
+                                  service.isListening
+                                      ? Icons.qr_code_scanner
                                       : Icons.qr_code_scanner_outlined,
-                                  color: service.isListening 
-                                      ? Colors.green 
+                                  color: service.isListening
+                                      ? Colors.green
                                       : Colors.grey,
                                   size: 32,
                                 ),
@@ -105,8 +105,8 @@ class _KeyboardScannerPageState extends State<KeyboardScannerPage> {
                                         CrossAxisAlignment.start,
                                     children: [
                                       Text(
-                                        service.isListening 
-                                            ? '✅ Escuchando' 
+                                        service.isListening
+                                            ? '✅ Escuchando'
                                             : '❌ Detenido',
                                         style: const TextStyle(
                                           fontSize: 18,
@@ -136,16 +136,16 @@ class _KeyboardScannerPageState extends State<KeyboardScannerPage> {
                                     }
                                   },
                                   icon: Icon(
-                                    service.isListening 
-                                        ? Icons.stop 
+                                    service.isListening
+                                        ? Icons.stop
                                         : Icons.play_arrow,
                                   ),
                                   label: Text(
                                     service.isListening ? 'Detener' : 'Iniciar',
                                   ),
                                   style: ElevatedButton.styleFrom(
-                                    backgroundColor: service.isListening 
-                                        ? Colors.red 
+                                    backgroundColor: service.isListening
+                                        ? Colors.red
                                         : Colors.green,
                                     foregroundColor: Colors.white,
                                   ),
@@ -211,7 +211,7 @@ class _KeyboardScannerPageState extends State<KeyboardScannerPage> {
                         ),
                       ),
                     ),
-                    
+
                     // Recent scans
                     Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -236,9 +236,9 @@ class _KeyboardScannerPageState extends State<KeyboardScannerPage> {
                         ],
                       ),
                     ),
-                    
+
                     const SizedBox(height: 8),
-                    
+
                     // Scans list
                     Expanded(
                       child: _recentScans.isEmpty
@@ -348,7 +348,7 @@ class _KeyboardScannerPageState extends State<KeyboardScannerPage> {
       ),
     );
   }
-  
+
   Widget _buildInstructionRow(String number, String text) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 4),

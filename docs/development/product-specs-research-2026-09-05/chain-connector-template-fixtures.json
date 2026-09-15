@@ -1,0 +1,780 @@
+[
+    {
+        "key": "chain",
+        "fields": [
+            {
+                "key": "spec_evidence_source",
+                "unit": null,
+                "label": "Fuente de la declaración",
+                "section": "declaration",
+                "required": false,
+                "data_type": "text",
+                "sort_order": 5,
+                "allowed_values": [
+                ],
+                "constraint_rules": [
+                ],
+                "validation_rules": {
+                },
+                "visibility_rules": [
+                ]
+            },
+            {
+                "key": "chain_directional",
+                "unit": null,
+                "label": "Cadena direccional",
+                "section": "features",
+                "required": false,
+                "data_type": "boolean",
+                "sort_order": 10,
+                "allowed_values": [
+                ],
+                "constraint_rules": [
+                ],
+                "validation_rules": {
+                },
+                "visibility_rules": [
+                ]
+            },
+            {
+                "key": "chain_speeds",
+                "unit": null,
+                "label": "Velocidades cadena",
+                "section": "compatibility",
+                "required": true,
+                "data_type": "multi_select",
+                "sort_order": 10,
+                "allowed_values": [
+                    "1",
+                    "5",
+                    "6",
+                    "7",
+                    "8",
+                    "9",
+                    "10",
+                    "11",
+                    "12",
+                    "13"
+                ],
+                "constraint_rules": [
+                ],
+                "validation_rules": {
+                },
+                "visibility_rules": [
+                ]
+            },
+            {
+                "key": "link_count",
+                "unit": "eslabones",
+                "label": "Cantidad de eslabones",
+                "section": "contents",
+                "required": false,
+                "data_type": "number",
+                "sort_order": 10,
+                "allowed_values": [
+                    "72",
+                    "76",
+                    "80",
+                    "82",
+                    "84",
+                    "86",
+                    "88",
+                    "90",
+                    "92",
+                    "94",
+                    "96",
+                    "98",
+                    "100",
+                    "102",
+                    "104",
+                    "106",
+                    "108",
+                    "110",
+                    "112",
+                    "114",
+                    "116",
+                    "118",
+                    "120",
+                    "122",
+                    "124",
+                    "126",
+                    "128",
+                    "130",
+                    "132",
+                    "134",
+                    "136"
+                ],
+                "constraint_rules": [
+                ],
+                "validation_rules": {
+                    "integer": true,
+                    "positive": true
+                },
+                "visibility_rules": [
+                ]
+            },
+            {
+                "key": "drivetrain_mode",
+                "unit": null,
+                "label": "Modo transmision",
+                "section": "compatibility",
+                "required": false,
+                "data_type": "single_select",
+                "sort_order": 15,
+                "allowed_values": [
+                    "Derailleur",
+                    "Single speed / BMX / IGH",
+                    "Desconocido / sin confirmar"
+                ],
+                "constraint_rules": [
+                ],
+                "validation_rules": {
+                },
+                "visibility_rules": [
+                ]
+            },
+            {
+                "key": "chain_ebike_rated",
+                "unit": null,
+                "label": "Apta e-bike",
+                "section": "features",
+                "required": false,
+                "data_type": "boolean",
+                "sort_order": 20,
+                "allowed_values": [
+                ],
+                "constraint_rules": [
+                ],
+                "validation_rules": {
+                },
+                "visibility_rules": [
+                ]
+            },
+            {
+                "key": "chain_width_family",
+                "unit": null,
+                "label": "Familia ancho cadena",
+                "section": "compatibility",
+                "required": false,
+                "data_type": "single_select",
+                "sort_order": 20,
+                "allowed_values": [
+                    "1/8",
+                    "3/32",
+                    "11/128",
+                    "Otro",
+                    "Desconocido / sin confirmar"
+                ],
+                "constraint_rules": [
+                    {
+                        "all": [
+                            {
+                                "field": "drivetrain_mode",
+                                "value": "Derailleur"
+                            },
+                            {
+                                "field": "chain_speeds",
+                                "value": [
+                                    "5",
+                                    "6",
+                                    "7",
+                                    "8",
+                                    "9",
+                                    "10",
+                                    "11",
+                                    "12",
+                                    "13"
+                                ],
+                                "operator": "contains_any"
+                            }
+                        ],
+                        "allow": [
+                            "3/32",
+                            "11/128",
+                            "Otro",
+                            "Desconocido / sin confirmar"
+                        ],
+                        "scope": "1/8 wide chains excluded for declared modern derailleur use, not historical 2-3 cogs",
+                        "sources": [
+                            "https://www.kmcchain.eu/service/glossary",
+                            "https://www.sheldonbrown.com/gloss_ch.html"
+                        ]
+                    }
+                ],
+                "validation_rules": {
+                },
+                "visibility_rules": [
+                ]
+            },
+            {
+                "key": "quick_link_included",
+                "unit": null,
+                "label": "Incluye missing link",
+                "section": "contents",
+                "required": false,
+                "data_type": "boolean",
+                "sort_order": 20,
+                "allowed_values": [
+                ],
+                "constraint_rules": [
+                ],
+                "validation_rules": {
+                },
+                "visibility_rules": [
+                ]
+            },
+            {
+                "key": "chain_outer_width_mm",
+                "unit": "mm",
+                "label": "Ancho externo cadena",
+                "section": "compatibility",
+                "required": false,
+                "data_type": "number",
+                "sort_order": 25,
+                "allowed_values": [
+                    "5.25",
+                    "5.3",
+                    "5.62",
+                    "5.88",
+                    "5.95",
+                    "6.6",
+                    "6.7",
+                    "7.1",
+                    "7.3",
+                    "7.8"
+                ],
+                "constraint_rules": [
+                ],
+                "validation_rules": {
+                    "positive": true
+                },
+                "visibility_rules": [
+                ]
+            },
+            {
+                "key": "drivetrain_primary_ecosystem",
+                "unit": null,
+                "label": "Familia tecnica / ecosistema principal",
+                "section": "compatibility",
+                "required": false,
+                "data_type": "single_select",
+                "sort_order": 30,
+                "allowed_values": [
+                    "Ecosistema Shimano",
+                    "Ecosistema SRAM",
+                    "Ecosistema Campagnolo",
+                    "Ecosistema Microshift",
+                    "Universal / generico",
+                    "Single speed / BMX",
+                    "Otro",
+                    "Desconocido / sin confirmar"
+                ],
+                "constraint_rules": [
+                ],
+                "validation_rules": {
+                },
+                "visibility_rules": [
+                ]
+            },
+            {
+                "key": "drivetrain_declared_compatible_ecosystems",
+                "unit": null,
+                "label": "Ecosistemas compatibles declarados",
+                "section": "compatibility",
+                "required": false,
+                "data_type": "multi_select",
+                "sort_order": 40,
+                "allowed_values": [
+                    "Ecosistema Shimano",
+                    "Ecosistema SRAM",
+                    "Ecosistema Campagnolo",
+                    "Ecosistema Microshift",
+                    "Universal / generico",
+                    "Single speed / BMX",
+                    "Otro",
+                    "Desconocido / sin confirmar"
+                ],
+                "constraint_rules": [
+                ],
+                "validation_rules": {
+                },
+                "visibility_rules": [
+                ]
+            },
+            {
+                "key": "drivetrain_platform",
+                "unit": null,
+                "label": "Plataforma transmision",
+                "section": "compatibility",
+                "required": false,
+                "data_type": "single_select",
+                "sort_order": 50,
+                "allowed_values": [
+                    "Shimano HG / SIS",
+                    "Shimano Hyperglide+",
+                    "Shimano Linkglide / CUES",
+                    "SRAM Eagle",
+                    "SRAM FlatTop / AXS road",
+                    "SRAM T-Type Transmission",
+                    "Campagnolo",
+                    "Microshift Advent / Acolyte",
+                    "Friccion / universal",
+                    "Single speed / BMX",
+                    "Generico compatible",
+                    "Desconocido / sin confirmar"
+                ],
+                "constraint_rules": [
+                ],
+                "validation_rules": {
+                },
+                "visibility_rules": [
+                ]
+            },
+            {
+                "key": "chain_profile_family",
+                "unit": null,
+                "label": "Perfil cadena",
+                "section": "compatibility",
+                "required": false,
+                "data_type": "multi_select",
+                "sort_order": 60,
+                "allowed_values": [
+                    "Universal 5-8v",
+                    "Universal 9-11v",
+                    "Shimano HG+",
+                    "Shimano Linkglide / CUES",
+                    "SRAM Eagle",
+                    "SRAM FlatTop",
+                    "SRAM T-Type",
+                    "Campagnolo",
+                    "KMC compatible",
+                    "Single speed / BMX",
+                    "Otro",
+                    "Desconocido / sin confirmar"
+                ],
+                "constraint_rules": [
+                ],
+                "validation_rules": {
+                },
+                "visibility_rules": [
+                ]
+            }
+        ],
+        "form_contract": {
+            "roles": {
+                "link_count": "contents",
+                "chain_speeds": "primary",
+                "drivetrain_mode": "primary",
+                "chain_directional": "measurement",
+                "chain_ebike_rated": "measurement",
+                "chain_width_family": "measurement",
+                "drivetrain_platform": "declaration",
+                "quick_link_included": "contents",
+                "chain_outer_width_mm": "measurement",
+                "chain_profile_family": "legacy",
+                "spec_evidence_source": "declaration",
+                "drivetrain_primary_ecosystem": "legacy",
+                "drivetrain_declared_compatible_ecosystems": "declaration"
+            },
+            "labels": {
+                "chain_speeds": "Velocidades declaradas del modelo",
+                "chain_width_family": "Denominación de ancho",
+                "drivetrain_platform": "Sistema declarado",
+                "chain_outer_width_mm": "Ancho sobre el pasador"
+            },
+            "helpers": {
+                "chain_speeds": "Velocidades declaradas para este modelo. No se deducen del ancho ni confirman por sí solas un montaje.",
+                "drivetrain_mode": "Tipo de transmisión para el que se declara esta cadena o conector.",
+                "chain_width_family": "Denominación nominal del fabricante. Una cadena 1/8 no corresponde a la cobertura declarada para desviador de 5 o más piñones. Las otras denominaciones no fijan por sí solas las velocidades.",
+                "drivetrain_platform": "Sistema indicado por el fabricante para este modelo. Conserva su fuente y alcance.",
+                "chain_outer_width_mm": "Ancho sobre el pasador. Conserva la medida real; no determina por sí sola las velocidades compatibles.",
+                "drivetrain_declared_compatible_ecosystems": "Declaraciones del fabricante; no crean combinaciones entre componentes."
+            },
+            "version": 1,
+            "coverage": "template",
+            "prerequisites": {
+                "chain_speeds": [
+                    "drivetrain_mode"
+                ],
+                "drivetrain_platform": [
+                    "chain_speeds",
+                    "spec_evidence_source"
+                ],
+                "drivetrain_declared_compatible_ecosystems": [
+                    "chain_speeds",
+                    "spec_evidence_source"
+                ]
+            }
+        },
+        "contract_version": 6,
+        "technical_family": "chain"
+    },
+    {
+        "key": "chain_link",
+        "fields": [
+            {
+                "key": "chain_connector_type",
+                "unit": null,
+                "label": "Tipo conector cadena",
+                "section": "identification",
+                "required": false,
+                "data_type": "single_select",
+                "sort_order": 0,
+                "allowed_values": [
+                    "Missing link",
+                    "Pin",
+                    "Half link",
+                    "Otro",
+                    "Eslabón con clip"
+                ],
+                "constraint_rules": [
+                ],
+                "validation_rules": {
+                },
+                "visibility_rules": [
+                ]
+            },
+            {
+                "key": "chain_link_reusable",
+                "unit": null,
+                "label": "Missing link reutilizable",
+                "section": "features",
+                "required": false,
+                "data_type": "boolean",
+                "sort_order": 10,
+                "allowed_values": [
+                ],
+                "constraint_rules": [
+                    {
+                        "allow": [
+                            false
+                        ],
+                        "field": "chain_connector_type",
+                        "scope": "replacement connecting rivet, not a reusable master link",
+                        "value": "Pin",
+                        "sources": [
+                            "https://www.parktool.com/en-us/blog/repair-help/chain-replacement-derailleur-bikes",
+                            "https://www.sheldonbrown.com/chains.html"
+                        ]
+                    }
+                ],
+                "validation_rules": {
+                },
+                "visibility_rules": [
+                ]
+            },
+            {
+                "key": "chain_speeds",
+                "unit": null,
+                "label": "Velocidades cadena",
+                "section": "compatibility",
+                "required": true,
+                "data_type": "multi_select",
+                "sort_order": 10,
+                "allowed_values": [
+                    "1",
+                    "5",
+                    "6",
+                    "7",
+                    "8",
+                    "9",
+                    "10",
+                    "11",
+                    "12",
+                    "13"
+                ],
+                "constraint_rules": [
+                ],
+                "validation_rules": {
+                },
+                "visibility_rules": [
+                ]
+            },
+            {
+                "key": "drivetrain_mode",
+                "unit": null,
+                "label": "Modo transmision",
+                "section": "compatibility",
+                "required": false,
+                "data_type": "single_select",
+                "sort_order": 15,
+                "allowed_values": [
+                    "Derailleur",
+                    "Single speed / BMX / IGH",
+                    "Desconocido / sin confirmar"
+                ],
+                "constraint_rules": [
+                ],
+                "validation_rules": {
+                },
+                "visibility_rules": [
+                ]
+            },
+            {
+                "key": "chain_link_pack_qty",
+                "unit": "unidades",
+                "label": "Cantidad conectores",
+                "section": "contents",
+                "required": false,
+                "data_type": "number",
+                "sort_order": 20,
+                "allowed_values": [
+                ],
+                "constraint_rules": [
+                ],
+                "validation_rules": {
+                    "integer": true,
+                    "positive": true
+                },
+                "visibility_rules": [
+                ]
+            },
+            {
+                "key": "chain_width_family",
+                "unit": null,
+                "label": "Familia ancho cadena",
+                "section": "compatibility",
+                "required": false,
+                "data_type": "single_select",
+                "sort_order": 20,
+                "allowed_values": [
+                    "1/8",
+                    "3/32",
+                    "11/128",
+                    "Otro",
+                    "Desconocido / sin confirmar"
+                ],
+                "constraint_rules": [
+                ],
+                "validation_rules": {
+                },
+                "visibility_rules": [
+                ]
+            },
+            {
+                "key": "spec_evidence_source",
+                "unit": null,
+                "label": "Fuente de la declaración",
+                "section": "declaration",
+                "required": false,
+                "data_type": "text",
+                "sort_order": 20,
+                "allowed_values": [
+                ],
+                "constraint_rules": [
+                ],
+                "validation_rules": {
+                },
+                "visibility_rules": [
+                ]
+            },
+            {
+                "key": "chain_outer_width_mm",
+                "unit": "mm",
+                "label": "Ancho externo cadena",
+                "section": "compatibility",
+                "required": false,
+                "data_type": "number",
+                "sort_order": 25,
+                "allowed_values": [
+                    "5.25",
+                    "5.3",
+                    "5.62",
+                    "5.88",
+                    "5.95",
+                    "6.6",
+                    "6.7",
+                    "7.1",
+                    "7.3",
+                    "7.8"
+                ],
+                "constraint_rules": [
+                ],
+                "validation_rules": {
+                    "positive": true
+                },
+                "visibility_rules": [
+                    {
+                        "field": "chain_connector_type",
+                        "value": "Pin",
+                        "operator": "neq"
+                    }
+                ]
+            },
+            {
+                "key": "drivetrain_primary_ecosystem",
+                "unit": null,
+                "label": "Familia tecnica / ecosistema principal",
+                "section": "compatibility",
+                "required": false,
+                "data_type": "single_select",
+                "sort_order": 30,
+                "allowed_values": [
+                    "Ecosistema Shimano",
+                    "Ecosistema SRAM",
+                    "Ecosistema Campagnolo",
+                    "Ecosistema Microshift",
+                    "Universal / generico",
+                    "Single speed / BMX",
+                    "Otro",
+                    "Desconocido / sin confirmar"
+                ],
+                "constraint_rules": [
+                ],
+                "validation_rules": {
+                },
+                "visibility_rules": [
+                ]
+            },
+            {
+                "key": "drivetrain_declared_compatible_ecosystems",
+                "unit": null,
+                "label": "Ecosistemas compatibles declarados",
+                "section": "compatibility",
+                "required": false,
+                "data_type": "multi_select",
+                "sort_order": 40,
+                "allowed_values": [
+                    "Ecosistema Shimano",
+                    "Ecosistema SRAM",
+                    "Ecosistema Campagnolo",
+                    "Ecosistema Microshift",
+                    "Universal / generico",
+                    "Single speed / BMX",
+                    "Otro",
+                    "Desconocido / sin confirmar"
+                ],
+                "constraint_rules": [
+                ],
+                "validation_rules": {
+                },
+                "visibility_rules": [
+                ]
+            },
+            {
+                "key": "chain_profile_family",
+                "unit": null,
+                "label": "Perfil cadena",
+                "section": "compatibility",
+                "required": false,
+                "data_type": "multi_select",
+                "sort_order": 50,
+                "allowed_values": [
+                    "Universal 5-8v",
+                    "Universal 9-11v",
+                    "Shimano HG+",
+                    "Shimano Linkglide / CUES",
+                    "SRAM Eagle",
+                    "SRAM FlatTop",
+                    "SRAM T-Type",
+                    "Campagnolo",
+                    "KMC compatible",
+                    "Single speed / BMX",
+                    "Otro",
+                    "Desconocido / sin confirmar"
+                ],
+                "constraint_rules": [
+                ],
+                "validation_rules": {
+                },
+                "visibility_rules": [
+                ]
+            },
+            {
+                "key": "chain_connector_target",
+                "unit": null,
+                "label": "Cadenas admitidas por el fabricante",
+                "section": "declaration",
+                "required": false,
+                "data_type": "text",
+                "sort_order": 90,
+                "allowed_values": [
+                ],
+                "constraint_rules": [
+                ],
+                "validation_rules": {
+                },
+                "visibility_rules": [
+                ]
+            },
+            {
+                "key": "chain_connector_directional",
+                "unit": null,
+                "label": "Conector con sentido de montaje",
+                "section": "declaration",
+                "required": false,
+                "data_type": "boolean",
+                "sort_order": 100,
+                "allowed_values": [
+                ],
+                "constraint_rules": [
+                ],
+                "validation_rules": {
+                },
+                "visibility_rules": [
+                ]
+            }
+        ],
+        "form_contract": {
+            "roles": {
+                "chain_speeds": "primary",
+                "drivetrain_mode": "legacy",
+                "chain_width_family": "measurement",
+                "chain_link_pack_qty": "contents",
+                "chain_link_reusable": "declaration",
+                "chain_connector_type": "primary",
+                "chain_outer_width_mm": "measurement",
+                "chain_profile_family": "legacy",
+                "spec_evidence_source": "primary",
+                "chain_connector_target": "declaration",
+                "chain_connector_directional": "declaration",
+                "drivetrain_primary_ecosystem": "legacy",
+                "drivetrain_declared_compatible_ecosystems": "legacy"
+            },
+            "labels": {
+                "chain_speeds": "Clase de cadena declarada",
+                "chain_width_family": "Denominación de ancho",
+                "chain_link_pack_qty": "Conectores completos por envase",
+                "chain_link_reusable": "Reutilizable según el fabricante",
+                "drivetrain_platform": "Sistema declarado",
+                "chain_connector_type": "Tipo de conector",
+                "chain_outer_width_mm": "Ancho del conector montado sobre el pasador"
+            },
+            "helpers": {
+                "chain_speeds": "Clase indicada para las cadenas que admite este conector. No es el número de piñones de la bicicleta y no confirma por sí sola compatibilidad.",
+                "drivetrain_mode": "Tipo de transmisión para el que se declara esta cadena o conector.",
+                "chain_width_family": "Denominación nominal del fabricante. No es una medición del ancho exterior.",
+                "chain_link_pack_qty": "Cuenta cierres completos: dos mitades de un eslabón rápido forman un conector, no dos.",
+                "chain_link_reusable": "Registra lo indicado para este modelo. Sin dato no autoriza reutilizarlo; un pasador de unión nuevo se utiliza una sola vez.",
+                "drivetrain_platform": "Sistema indicado por el fabricante para este modelo. Conserva su fuente y alcance.",
+                "chain_connector_type": "Missing link: cierre rápido de dos placas. Pin: pasador de unión. Half link: medio eslabón. El clip es otro tipo de cierre.",
+                "chain_outer_width_mm": "Medida exterior del cierre ya montado. No es la longitud de la punta guía de un pasador de unión.",
+                "spec_evidence_source": "URL o identificación del envase/manual de este modelo. Se necesita antes de declarar sus cadenas admitidas, reutilización o sentido.",
+                "chain_connector_target": "Copia los modelos o series admitidos y sus excepciones. Dos cadenas de la misma marca o velocidad pueden necesitar conectores distintos.",
+                "chain_connector_directional": "Confirma las flechas o instrucciones del conector, independientemente del sentido de la cadena.",
+                "drivetrain_declared_compatible_ecosystems": "Declaraciones del fabricante; no crean combinaciones entre componentes."
+            },
+            "version": 1,
+            "coverage": "template",
+            "prerequisites": {
+                "chain_speeds": [
+                    "chain_connector_type"
+                ],
+                "chain_link_reusable": [
+                    "chain_connector_type",
+                    "spec_evidence_source"
+                ],
+                "chain_connector_target": [
+                    "chain_connector_type",
+                    "spec_evidence_source"
+                ],
+                "chain_connector_directional": [
+                    "chain_connector_type",
+                    "spec_evidence_source"
+                ]
+            }
+        },
+        "contract_version": 20,
+        "technical_family": "chain_link"
+    }
+]

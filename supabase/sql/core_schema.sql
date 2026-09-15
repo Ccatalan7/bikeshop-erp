@@ -1,20 +1,24 @@
--- Vinabike ERP version-controlled bootstrap/reference schema.
+-- VINABIKE ERP HISTORICAL REFERENCE ONLY — NEVER DEPLOY THIS FILE.
 --
 -- TRUST BOUNDARY:
--- This file is NOT proof of the live production schema and MUST NOT be treated
--- as a guaranteed 100% representation of the deployed backend. Historical
--- standalone production changes were not always mirrored here, so this file
--- may still contain omissions or stale definitions until an explicit
--- production-to-bootstrap reconciliation proves parity.
+-- This is an incomplete, non-reproducible guide to a large part of the
+-- backend's history. It is NOT the schema source of truth, NOT a production
+-- baseline, NOT a replayable migration chain, and NOT proof that an object is
+-- present or absent in any hosted environment. Historical standalone changes
+-- were not consistently mirrored here, so omissions and stale definitions are
+-- expected.
 --
--- Production catalogs are authoritative for what is currently deployed. This
--- file remains the repository target for deterministic clean/local bootstrap:
--- every new schema change must have a reviewed idempotent forward migration and
--- the same final objects/logic must be added or updated here.
+-- Production catalogs plus supabase_migrations.schema_migrations are
+-- authoritative for what is deployed. Every new backend change is authored and
+-- deployed as one uniquely versioned, reviewed standalone forward migration in
+-- supabase/migrations/. After exact live read-back succeeds, that version is
+-- registered in migration history; the history row is the deployment stamp.
 --
--- Never run this complete file, or copied fragments from it, against production
--- or in the Supabase SQL Editor. Deploy only the smallest reviewed standalone
--- migration through the guarded workflow in docs/development/SUPABASE_WORKFLOW.md.
+-- Never run this complete file, or copied fragments from it, against production,
+-- staging, or the Supabase SQL Editor. It may be used only as a best-effort
+-- disposable local fixture and as search context. A migration may be mirrored
+-- here when that improves the historical guide, but deployment and verification
+-- never depend on that mirror. See docs/development/SUPABASE_WORKFLOW.md.
 --
 -- UUID columns default to gen_random_uuid(); ensure the extension is enabled first.
 -- Match Supabase's hosted public-schema defaults before provisioning objects.
@@ -5634,6 +5638,17 @@ create table if not exists job_statuses (
   unique(tenant_id, code), -- Each tenant has unique codes
   unique(tenant_id, id) -- Enable composite FK references (multi-tenant isolation)
 );
+
+-- Las tres banderas de transición existen en producción desde su migración
+-- propia, pero nunca se espejaron acá: `mechanic_job_resolves_delivery` (más
+-- abajo en este mismo archivo) lee `status.triggers_delivery`, así que un
+-- bootstrap limpio moría con `column status.triggers_delivery does not exist` y
+-- dejaba **inservible todo el stack local** — sin gate de pruebas para nadie.
+-- Detectado el 2026-08-10 al intentar verificar una migración de contabilidad.
+alter table job_statuses
+  add column if not exists triggers_start boolean default false,
+  add column if not exists triggers_completion boolean default false,
+  add column if not exists triggers_delivery boolean default false;
 
 do $$ begin
   create index if not exists idx_job_statuses_tenant on job_statuses(tenant_id);
@@ -22002,15 +22017,58 @@ create table if not exists erp_notifications (
   data jsonb not null default '{}'::jsonb,
   read_at timestamp with time zone,
   created_at timestamp with time zone not null default now(),
+  occurred_at timestamp with time zone not null default now(),
   updated_at timestamp with time zone not null default now(),
   unique(tenant_id, type, entity_type, entity_id)
 );
+
+alter table public.erp_notifications
+  add column if not exists occurred_at timestamp with time zone;
+
+with resolved as (
+  select
+    notification.id,
+    case
+      when notification.type = 'expense_recorded'
+       and notification.entity_type = 'expense'
+        then coalesce(expense.issue_date, notification.created_at)
+      when notification.type = 'sales_payment_received'
+       and notification.entity_type = 'sales_payment'
+        then coalesce(payment.date, notification.created_at)
+      else notification.created_at
+    end as occurred_at
+  from public.erp_notifications notification
+  left join public.expenses expense
+    on notification.type = 'expense_recorded'
+   and notification.entity_type = 'expense'
+   and expense.tenant_id = notification.tenant_id
+   and expense.id = notification.entity_id
+  left join public.sales_payments payment
+    on notification.type = 'sales_payment_received'
+   and notification.entity_type = 'sales_payment'
+   and payment.tenant_id = notification.tenant_id
+   and payment.id = notification.entity_id
+)
+update public.erp_notifications notification
+   set occurred_at = resolved.occurred_at
+  from resolved
+ where notification.id = resolved.id
+   and notification.occurred_at is distinct from resolved.occurred_at;
+
+alter table public.erp_notifications
+  alter column occurred_at set default now(),
+  alter column occurred_at set not null;
+
+comment on column public.erp_notifications.occurred_at is
+  'Economic event time for period summaries; created_at remains the notification recording time.';
 
 create index if not exists idx_erp_notifications_tenant_unread
   on erp_notifications(tenant_id, type, created_at desc)
   where read_at is null;
 create index if not exists idx_erp_notifications_entity
   on erp_notifications(tenant_id, entity_type, entity_id);
+create index if not exists idx_erp_notifications_tenant_occurred_at
+  on erp_notifications(tenant_id, occurred_at desc);
 
 alter table erp_notifications enable row level security;
 
@@ -22047,9 +22105,73 @@ begin
   end if;
 end $$;
 
+-- Smart tasks are an existing production surface consumed by the toolbar and
+-- the assistant read/action RPCs included below. Historical migrations created
+-- the table, but the canonical snapshot must also build it from an empty DB.
+create table if not exists public.smart_tasks (
+  id uuid primary key default gen_random_uuid(),
+  tenant_id uuid not null references public.tenants(id) on delete cascade,
+  title text not null,
+  description text,
+  status text not null default 'pending',
+  priority text not null default 'normal',
+  due_date timestamptz,
+  assigned_to uuid references auth.users(id) on delete set null,
+  created_by uuid references auth.users(id) on delete set null,
+  linked_job_id uuid references public.mechanic_jobs(id) on delete set null,
+  linked_purchase_invoice_id uuid
+    references public.purchase_invoices(id) on delete set null,
+  linked_sales_invoice_id uuid
+    references public.sales_invoices(id) on delete set null,
+  linked_customer_id uuid references public.customers(id) on delete set null,
+  linked_supplier_id uuid references public.suppliers(id) on delete set null,
+  created_at timestamptz default now(),
+  updated_at timestamptz default now(),
+  attachments jsonb default '[]'::jsonb
+);
+
+create index if not exists idx_smart_tasks_tenant_id
+  on public.smart_tasks(tenant_id);
+create index if not exists idx_smart_tasks_status
+  on public.smart_tasks(status);
+create index if not exists idx_smart_tasks_assigned_to
+  on public.smart_tasks(assigned_to);
+create index if not exists idx_smart_tasks_linked_job_id
+  on public.smart_tasks(linked_job_id);
+
+alter table public.smart_tasks enable row level security;
+
+drop policy if exists "Users can view tasks in their tenant"
+  on public.smart_tasks;
+create policy "Users can view tasks in their tenant"
+  on public.smart_tasks for select
+  using (tenant_id = public.user_tenant_id());
+
+drop policy if exists "Users can insert tasks in their tenant"
+  on public.smart_tasks;
+create policy "Users can insert tasks in their tenant"
+  on public.smart_tasks for insert
+  with check (tenant_id = public.user_tenant_id());
+
+drop policy if exists "Users can update tasks in their tenant"
+  on public.smart_tasks;
+create policy "Users can update tasks in their tenant"
+  on public.smart_tasks for update
+  using (tenant_id = public.user_tenant_id())
+  with check (tenant_id = public.user_tenant_id());
+
+drop policy if exists "Users can delete tasks in their tenant"
+  on public.smart_tasks;
+create policy "Users can delete tasks in their tenant"
+  on public.smart_tasks for delete
+  using (tenant_id = public.user_tenant_id());
+
+drop trigger if exists handle_updated_at_smart_tasks on public.smart_tasks;
+create trigger handle_updated_at_smart_tasks
+  before update on public.smart_tasks
+  for each row execute procedure public.set_updated_at();
+
 -- Global smart tasks realtime sync for the right-toolbar tasks panel.
--- Guarded because older local schema snapshots may create smart_tasks from
--- its historical migrations before or after this canonical schema block.
 do $$
 begin
   if to_regclass('public.smart_tasks') is not null then
@@ -22288,6 +22410,10 @@ begin
     return NEW;
   end if;
 
+  if TG_OP = 'UPDATE' and NEW.date is not distinct from OLD.date then
+    return NEW;
+  end if;
+
   select name into v_payment_method
   from public.payment_methods
   where tenant_id = NEW.tenant_id
@@ -22305,7 +22431,7 @@ begin
     v_body := v_body || ' · $' || trim(to_char(NEW.amount, 'FM999G999G999G990'));
   end if;
 
-  insert into public.erp_notifications (
+  insert into public.erp_notifications as existing (
     tenant_id,
     type,
     title,
@@ -22314,7 +22440,8 @@ begin
     entity_type,
     entity_id,
     severity,
-    data
+    data,
+    occurred_at
   ) values (
     NEW.tenant_id,
     'sales_payment_received',
@@ -22335,16 +22462,23 @@ begin
       'recorded_at', NEW.created_at,
       'payment_date', NEW.date,
       'reference', NEW.reference
-    )
-  ) on conflict (tenant_id, type, entity_type, entity_id) do nothing;
+    ),
+    NEW.date
+  ) on conflict (tenant_id, type, entity_type, entity_id) do update
+    set occurred_at = excluded.occurred_at,
+        data = existing.data
+          || jsonb_build_object('payment_date', NEW.date);
 
   return NEW;
 end;
 $$;
 
+revoke all on function public.create_sales_payment_erp_notification()
+  from public, anon, authenticated, service_role;
+
 drop trigger if exists trg_sales_payment_erp_notification on sales_payments;
 create trigger trg_sales_payment_erp_notification
-  after insert on sales_payments
+  after insert or update of date on sales_payments
   for each row execute function public.create_sales_payment_erp_notification();
 
 -- ============================================================
@@ -22366,6 +22500,11 @@ begin
   -- Legacy imports may still contain rows without a tenant. Notification
   -- persistence must never make those compatibility writes fail.
   if NEW.tenant_id is null then
+    return NEW;
+  end if;
+
+  if TG_OP = 'UPDATE'
+     and NEW.issue_date is not distinct from OLD.issue_date then
     return NEW;
   end if;
 
@@ -22399,7 +22538,7 @@ begin
       || trim(to_char(NEW.total_amount, 'FM999G999G999G990'));
   end if;
 
-  insert into public.erp_notifications (
+  insert into public.erp_notifications as existing (
     tenant_id,
     type,
     title,
@@ -22408,7 +22547,8 @@ begin
     entity_type,
     entity_id,
     severity,
-    data
+    data,
+    occurred_at
   ) values (
     NEW.tenant_id,
     'expense_recorded',
@@ -22437,8 +22577,12 @@ begin
       'category_name', v_category_name,
       'recorded_by_name', v_recorded_by,
       'recorded_at', NEW.created_at
-    )
-  ) on conflict (tenant_id, type, entity_type, entity_id) do nothing;
+    ),
+    NEW.issue_date
+  ) on conflict (tenant_id, type, entity_type, entity_id) do update
+    set occurred_at = excluded.occurred_at,
+        data = existing.data
+          || jsonb_build_object('issue_date', NEW.issue_date);
 
   return NEW;
 end;
@@ -22449,7 +22593,7 @@ revoke all on function public.create_expense_erp_notification()
 
 drop trigger if exists trg_expense_erp_notification on public.expenses;
 create trigger trg_expense_erp_notification
-  after insert on public.expenses
+  after insert or update of issue_date on public.expenses
   for each row execute function public.create_expense_erp_notification();
 
 -- ============================================================
@@ -56141,9 +56285,15 @@ alter table public.payroll_money_command_contexts
     command in (
       'manual_payment',
       'advance_registration',
-      'legacy_reversal'
+      'advance_audit_attach',
+      'legacy_reversal',
+      'audited_reversal'
     )
   );
+
+comment on constraint payroll_money_command_contexts_command_check
+  on public.payroll_money_command_contexts is
+  'Complete command domain shared by payroll payments, advances, audit attachment, and reversals.';
 
 alter table public.payroll_statement_command_contexts
   drop constraint if exists payroll_statement_command_contexts_command_check;
@@ -66923,6 +67073,131 @@ create trigger trg_prepare_purchase_journal_provenance
   for each row
   execute function public.prepare_purchase_journal_provenance();
 
+-- The expense-payment journal wrapper is an internal/service command. A later
+-- payroll reversal migration recreated it and accidentally restored direct
+-- EXECUTE to authenticated even though the owning trigger is SECURITY DEFINER.
+revoke all on function public.create_expense_payment_journal_entry(uuid)
+  from public, anon, authenticated;
+grant execute on function public.create_expense_payment_journal_entry(uuid)
+  to service_role;
+
+create or replace function public.journal_source_may_be_supplierless(
+  p_source_document_type text
+)
+returns boolean
+language sql
+immutable
+as $$
+  -- Un gasto puede no tener proveedor —un sueldo, un arriendo, un impuesto— y
+  -- su pago hereda esa misma verdad. Una factura de compra, su pago, su nota de
+  -- crédito y su reembolso existen porque hay un proveedor: ahí la ausencia es
+  -- una procedencia rota, no un caso de negocio.
+  select p_source_document_type in ('expense', 'expense_payment');
+$$;
+
+revoke all on function public.journal_source_may_be_supplierless(text)
+  from public, anon, authenticated, service_role;
+
+create or replace function public.journal_supplier_source_state(
+  p_tenant_id uuid,
+  p_source_document_type text,
+  p_source_document_id uuid
+)
+returns text
+language plpgsql
+stable
+security definer
+set search_path = pg_catalog, public, pg_temp
+as $$
+declare
+  v_found boolean := false;
+  v_supplier_id uuid;
+begin
+  if p_tenant_id is null or p_source_document_id is null then
+    return 'missing';
+  end if;
+
+  -- Cada rama devuelve DOS hechos: si la cadena se pudo recorrer entera dentro
+  -- del tenant, y el `supplier_id` que nombra (que puede ser nulo). Para los
+  -- documentos encadenados —un pago cuelga de su factura— una cadena que se
+  -- corta fuera del tenant es `missing`, no «sin proveedor».
+  if p_source_document_type = 'purchase_invoice' then
+    select true, document.supplier_id into v_found, v_supplier_id
+    from public.purchase_invoices document
+    where document.tenant_id = p_tenant_id
+      and document.id = p_source_document_id;
+  elsif p_source_document_type = 'expense' then
+    select true, document.supplier_id into v_found, v_supplier_id
+    from public.expenses document
+    where document.tenant_id = p_tenant_id
+      and document.id = p_source_document_id;
+  elsif p_source_document_type = 'purchase_payment' then
+    select true, invoice.supplier_id into v_found, v_supplier_id
+    from public.purchase_payments document
+    join public.purchase_invoices invoice
+      on invoice.tenant_id = document.tenant_id
+     and invoice.id = document.invoice_id
+    where document.tenant_id = p_tenant_id
+      and document.id = p_source_document_id;
+  elsif p_source_document_type = 'expense_payment' then
+    select true, expense.supplier_id into v_found, v_supplier_id
+    from public.expense_payments document
+    join public.expenses expense
+      on expense.tenant_id = document.tenant_id
+     and expense.id = document.expense_id
+    where document.tenant_id = p_tenant_id
+      and document.id = p_source_document_id;
+  elsif p_source_document_type = 'purchase_credit_note' then
+    select true, invoice.supplier_id into v_found, v_supplier_id
+    from public.purchase_credit_notes document
+    join public.purchase_invoices invoice
+      on invoice.tenant_id = document.tenant_id
+     and invoice.id = document.purchase_invoice_id
+    where document.tenant_id = p_tenant_id
+      and document.id = p_source_document_id;
+  elsif p_source_document_type = 'purchase_supplier_refund' then
+    select true, invoice.supplier_id into v_found, v_supplier_id
+    from public.purchase_supplier_refunds document
+    join public.purchase_invoices invoice
+      on invoice.tenant_id = document.tenant_id
+     and invoice.id = document.purchase_invoice_id
+    where document.tenant_id = p_tenant_id
+      and document.id = p_source_document_id;
+  end if;
+
+  if not coalesce(v_found, false) then
+    return 'missing';
+  end if;
+  if v_supplier_id is not null then
+    return 'supplier_named';
+  end if;
+  return 'supplierless';
+end;
+$$;
+
+revoke all on function public.journal_supplier_source_state(uuid, text, uuid)
+  from public, anon, authenticated, service_role;
+
+create or replace function public.journal_supplier_source_exists_in_tenant(
+  p_tenant_id uuid,
+  p_source_document_type text,
+  p_source_document_id uuid
+)
+returns boolean
+language sql
+stable
+security definer
+set search_path = pg_catalog, public, pg_temp
+as $$
+  select public.journal_supplier_source_state(
+    p_tenant_id, p_source_document_type, p_source_document_id
+  ) <> 'missing';
+$$;
+
+revoke all on function public.journal_supplier_source_exists_in_tenant(
+  uuid, text, uuid
+) from public, anon, authenticated, service_role;
+
 create or replace function public.validate_supplier_journal_provenance()
 returns trigger
 language plpgsql
@@ -66944,7 +67219,20 @@ begin
     new.source_reference
   );
 
-  if v_is_supplier_source and v_party_id is null then
+  -- La contraparte nula sólo se acepta cuando el tipo admite no tener
+  -- proveedor Y el documento existe sin nombrarlo. Cualquier otra combinación
+  -- —documento inexistente, proveedor que no resuelve en el tenant, o un
+  -- documento de compra sin proveedor— es la violación de siempre.
+  if v_is_supplier_source
+     and v_party_id is null
+     and not (
+       public.journal_source_may_be_supplierless(new.source_document_type)
+       and public.journal_supplier_source_state(
+         new.tenant_id,
+         new.source_document_type,
+         new.source_document_id
+       ) = 'supplierless'
+     ) then
     raise exception 'Canonical journal source is missing or outside tenant'
       using errcode = '23514';
   end if;
@@ -67074,7 +67362,15 @@ begin
   if v_entry.source_document_type in (
     'purchase_invoice', 'expense', 'purchase_payment', 'expense_payment',
     'purchase_credit_note', 'purchase_supplier_refund'
-  ) and v_party_id is null then
+  ) and v_party_id is null
+    and not (
+      public.journal_source_may_be_supplierless(v_entry.source_document_type)
+      and public.journal_supplier_source_state(
+        new.tenant_id,
+        v_entry.source_document_type,
+        v_entry.source_document_id
+      ) = 'supplierless'
+    ) then
     raise exception 'Canonical journal source cannot resolve supplier counterparty'
       using errcode = '23514';
   end if;
@@ -67101,7 +67397,7 @@ end;
 $$;
 
 revoke all on function public.derive_journal_line_counterparty()
-  from public, anon, authenticated;
+  from public, anon, authenticated, service_role;
 
 drop trigger if exists trg_derive_journal_line_counterparty
   on public.journal_lines;
@@ -75137,3 +75433,213 @@ comment on column public.suppliers.portal_username is
   'LEGACY COPY ONLY. Hidden from client roles at the 20260808211000 cutover; current clients use Vault-backed credential metadata RPCs.';
 comment on column public.suppliers.portal_password is
   'LEGACY COPY ONLY. Hidden from client roles at the 20260808211000 cutover. A later migration may clear it only after full Vault/client readback.';
+
+
+-- Canonical payroll payment workspace. Queue-driven individual settlement and
+-- OCR-assisted batch settlement share the same idempotent/CAS posting owner.
+-- Additional concepts stay outside salary and may contain multiple funding
+-- legs; statement observations remain optional one-to-many evidence.
+\ir ../migrations/20260811140000_payroll_payment_workspace.sql
+
+-- Defense in depth: non-salary concepts cannot post anywhere in the connected
+-- account-tree branch of an employee/voucher-line salary account.
+\ir ../migrations/20260811150000_guard_payroll_workspace_salary_account_branch.sql
+
+-- Secret-free, idempotent command for changing only a supplier credential's
+-- exact browser origin. This also keeps managed origins independent from the
+-- transitional legacy username/password mirror.
+\ir ../migrations/20260811160000_supplier_credential_origin_metadata_command.sql
+
+-- Provider-neutral assistant runtime ledger. Canonical visible history,
+-- idempotent runs, fenced leases, bounded quotas and hash-only receipts remain
+-- behind caller-bound admission plus four caller-JWT RPCs carrying short-lived,
+-- Vault-backed HMAC attestations bound to the exact run, lease and body.
+\ir ../migrations/20260811170000_ai_assistant_runtime_ledger.sql
+
+-- Caller-JWT, tenant-derived read projections for the eight advertised ERP
+-- assistant tools plus the non-model workshop visible-context reread.
+\ir ../migrations/20260811171000_ai_assistant_read_tools.sql
+
+-- Closed operational scalar context for model-first planning. Every source
+-- carries its own verified-empty/unavailable state and exposes no row data.
+\ir ../migrations/20260811172000_ai_assistant_business_snapshot.sql
+
+-- Optional keyword plus closed horizon/lifecycle/priority/self filters make
+-- operational questions expressible without authored phrase matching.
+\ir ../migrations/20260811173000_ai_assistant_filtered_operational_reads.sql
+
+-- General model-first ERP reads for inventory risks, expense posture,
+-- recomputed cash/receivables and access-checked conversation metadata.
+\ir ../migrations/20260811174000_ai_assistant_general_operational_reads.sql
+
+-- First general approval-gated action. The model may prepare an exact task;
+-- only a separate caller click can consume its durable ten-minute approval.
+\ir ../migrations/20260811175000_ai_assistant_task_actions.sql
+
+-- The final payroll payment desk can approve its explicit remaining drafts in
+-- one idempotent CAS command before posting any money.
+\ir ../migrations/20260811180000_confirm_payroll_vouchers_batch.sql
+
+-- A separately classified reimbursement may consume part of the authoritative
+-- payroll-line obligation without adding a second cash movement.  V2 persists
+-- the link, settles the line and posts the balancing salary reclassification.
+\ir ../migrations/20260811190000_payroll_included_concept_reclassification.sql
+
+-- Public-web Browser Use / Gemini usage is metered on the originating tool
+-- receipt and atomically contributes to run/quota aggregates without a fake
+-- provider-attempt ordinal.
+\ir ../migrations/20260812030000_ai_assistant_public_research_usage_ledger.sql
+
+-- Payroll payment dates are civil dates. UTC-noon transport for the tenant's
+-- current business date must not be rejected as a future instant.
+\ir ../migrations/20260812020000_payroll_payment_uses_civil_business_date.sql
+
+-- The tenant's last open business day in the period is the operational payroll
+-- close; only earlier money must be represented as an employee advance.
+\ir ../migrations/20260812021000_payroll_payment_allows_closing_eve.sql
+
+-- V2 receipts expose payroll/reclassification lineage only for concepts that
+-- were actually included in a payroll obligation. Pure additional expenses
+-- cannot make a committed batch look malformed to the client.
+\ir ../migrations/20260812031000_payroll_workspace_v2_receipt_shape.sql
+
+-- Revisioned supplier variant identity and durable invoice source-line
+-- provenance. Legacy invoice JSON stays operational; authoritative pack and
+-- composite resolution flows only through the new versioned graph.
+\ir ../migrations/20260812040000_supplier_variant_resolution_graph.sql
+
+-- One typed inventory result set feeds assistant synthesis, compact UI and
+-- exact product-list navigation; availability is filtered before first-N.
+\ir ../migrations/20260813174500_ai_assistant_inventory_list_projection.sql
+
+-- Durable run completion accepts only the exact typed list reference emitted
+-- by the inventory projection; arbitrary card JSON remains closed.
+\ir ../migrations/20260813180300_ai_assistant_inventory_list_card_contract.sql
+
+-- Inventory discovery binds AI-planned technical filters to the canonical
+-- Spec Engine; populated specs outrank identity fallback and availability is
+-- applied inside the same server-owned projection.
+\ir ../migrations/20260813190000_ai_assistant_inventory_identity_constraints.sql
+
+-- Resolve the model-planned catalog category through the canonical category
+-- and technical-family graph before applying specifications and stock.
+\ir ../migrations/20260813203000_ai_assistant_inventory_category_spec_projection.sql
+
+-- Let the assistant discover real category/spec capabilities and data coverage
+-- before it emits typed equality, comparison, membership or range predicates.
+\ir ../migrations/20260813213000_ai_assistant_capability_aware_inventory.sql
+\ir ../migrations/20260813214500_ai_assistant_capability_tool_receipts.sql
+\ir ../migrations/20260813215000_ai_assistant_tool_receipt_contract.sql
+
+-- Inventory comparisons such as stock, stock minimum and price use closed
+-- typed predicates instead of degrading numeric thresholds to availability.
+\ir ../migrations/20260813225000_ai_assistant_inventory_operational_predicates.sql
+
+-- Relative business-date analytics, relationship-aware workshop resolution
+-- and canonical diagnosis-field discovery for model-planned operations.
+\ir ../migrations/20260814010000_ai_assistant_temporal_workshop_reads.sql
+
+-- Diagnosis and catalog-backed workshop writes remain frozen previews until
+-- an explicit caller click applies and reads back the exact typed action.
+\ir ../migrations/20260814011000_ai_assistant_workshop_actions.sql
+
+-- Keep push mailbox identity and webhook evidence server-owned while released
+-- clients migrate from direct subscription-row upserts to the provider action.
+\ir ../migrations/20260814024000_harden_email_push_subscription_identity.sql
+
+-- Privacy-bounded bank-statement evidence and explicit many-to-many links to
+-- existing accounting operations. Combined card payments remain instrument-
+-- unknown until a future provider settlement feed separates their rails.
+\ir ../migrations/20260814130000_bank_reconciliation_foundation.sql
+\ir ../migrations/20260814131000_fix_bank_reconciliation_purchase_reference.sql
+\ir ../migrations/20260814132000_bank_reconciliation_action_workspace.sql
+\ir ../migrations/20260814133000_fix_bank_reconciliation_sales_reference.sql
+
+-- Server-owned workshop registration identity and its durable notification
+-- projection. Historical nulls remain unknown rather than inferred.
+\ir ../migrations/20260814210000_mechanic_job_registration_actor.sql
+
+-- Service-budget conversion preserves every received-bike relationship and
+-- every line attribution, including intentional NULL General scope. Only a
+-- standalone quotation may attribute unscoped lines inside the audited RPC.
+\ir ../migrations/20260815190000_preserve_service_budget_line_attribution.sql
+
+-- Separate debit and credit rails at their acquiring terminal. Commercial
+-- terms are versioned per provider/terminal so bank reconciliation does not
+-- encode Transbank policy in the client and future providers can coexist.
+\ir ../migrations/20260815200000_card_terminal_profiles_and_rails.sql
+\ir ../migrations/20260815201000_card_terminal_settlement_accounting.sql
+
+-- Cash-basis expense drill-down follows each real payment or advance date;
+-- expenses.paid_at remains only the explicit fallback for legacy rows.
+\ir ../migrations/20260815212000_expense_cash_detail_uses_transaction_ledger.sql
+
+-- Intelligent abastecimiento starts from one durable, source-neutral need.
+-- Jobs captures, interpretation, stock decisions and later purchasing all
+-- preserve the same origin, identity state and optimistic version.
+\ir ../migrations/20260816150000_supply_need_kernel.sql
+
+-- Workshop commitments join online reservations in one available-to-promise
+-- authority. Reserving for a need never posts physical stock or accounting.
+\ir ../migrations/20260816151000_supply_need_inventory_commitments.sql
+
+-- Normalized purchase evidence, proportional freight allocation and the
+-- explainable supplier-ranking kernel replace the legacy opaque priority.
+\ir ../migrations/20260816152000_purchase_evidence_ranking_kernel.sql
+\ir ../migrations/20260816152100_harden_purchase_evidence_view_acl.sql
+
+-- Governed assistant projections expose supply reads and ranking without
+-- leaking internal IDs or permitting a model-authored purchase.
+\ir ../migrations/20260816153000_intelligent_purchasing_ai_tools.sql
+
+-- Assistant inventory uses the same ATP semantics as the purchase workspace.
+\ir ../migrations/20260816154000_ai_inventory_available_to_promise.sql
+
+-- Review-only purchase plans freeze selection-time economics and remain
+-- separate from orders, invoices, payments, receipts and stock movement.
+\ir ../migrations/20260816155000_purchase_plan_kernel.sql
+\ir ../migrations/20260816156000_purchase_plan_edit_commands.sql
+
+-- A bounded stock-first basket solver preserves partial coverage and never
+-- invents supplier availability or a freight saving from consolidation.
+\ir ../migrations/20260816157000_purchase_basket_scenarios.sql
+
+-- Accepting a basket scenario composes audited line commands atomically into
+-- the same review-only draft, including hash-derived candidate UUIDs.
+\ir ../migrations/20260816158000_prepare_purchase_plan_scenario.sql
+
+-- Draft quantities remain editable through the same optimistic, idempotent
+-- review-only aggregate and never mutate the source need or stock.
+\ir ../migrations/20260816159000_purchase_plan_quantity_command.sql
+
+-- Tire requests use the same schema-driven ficha layer as the rest of the
+-- workshop. The template is additive and never backfills names as facts.
+\ir ../migrations/20260816160000_tire_product_spec_template.sql
+
+-- Model-visible purchasing reads must be present in the durable receipt
+-- contract, and ranking uses an exact canonical catalog entity identity.
+\ir ../migrations/20260816161000_intelligent_purchasing_ai_runtime_contract.sql
+
+-- Purchase evidence keeps its real document kind. Direct local receipts and
+-- tickets use the canonical purchase/receipt/payment owners without becoming
+-- generic expenses, and locality remains an explicitly reviewed supplier tag.
+\ir ../migrations/20260816162000_purchase_source_document_kinds.sql
+\ir ../migrations/20260816162100_harden_purchase_invoice_list_v2_acl.sql
+\ir ../migrations/20260816162200_link_purchase_lines_to_supply_needs.sql
+
+-- The purchasing assistant decomposes one natural-language request into a
+-- server-validated review draft. One explicit confirmation persists every
+-- reviewed demand line atomically and replay-safely, without purchasing.
+\ir ../migrations/20260816162300_ai_supply_request_drafts.sql
+
+-- The durable assistant-message validator accepts the same closed structured
+-- supply draft that the gateway and Flutter client validate, while retaining
+-- every pre-existing card family and excluding all write authority.
+\ir ../migrations/20260816162400_ai_supply_request_card_contract.sql
+
+-- Bootstrap-wide service-role grants above predate the notification ACL
+-- hardening. Preserve the production end state after every included migration.
+revoke all on function public.create_sales_payment_erp_notification()
+  from public, anon, authenticated, service_role;
+revoke all on function public.create_expense_erp_notification()
+  from public, anon, authenticated, service_role;

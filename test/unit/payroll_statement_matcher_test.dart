@@ -39,7 +39,7 @@ void main() {
 
       final proposal = lineResult.proposedMatch!;
       expect(proposal.amountVarianceClp, 250);
-      expect(proposal.allowedToleranceClp, 500);
+      expect(proposal.allowedToleranceClp, 1000);
       expect(proposal.confidence, PayrollMatchConfidence.high);
       expect(proposal.requiresHumanConfirmation, isTrue);
       expect(
@@ -48,7 +48,51 @@ void main() {
       );
     });
 
-    test('never auto-suggests an underpayment, even inside rounding tolerance',
+    test('week 13–19 proposes a 23/07 transfer of 72,000 against 71,750', () {
+      final statementRow = _outgoingRow(
+        rowNumber: 1,
+        date: const PayrollCivilDate(2026, 7, 23),
+        description: 'App-traspaso A: Persona Taller',
+        amountClp: 72000,
+      );
+      final result = matcher.match(
+        statementRows: [statementRow],
+        employees: [
+          _employee(id: 'employee-shop', name: 'Persona Taller'),
+        ],
+        voucherLines: [
+          _line(
+            id: 'line-week-29',
+            employeeId: 'employee-shop',
+            periodEnd: const PayrollCivilDate(2026, 7, 19),
+            pendingAmountClp: 71750,
+          ),
+          _line(
+            id: 'line-week-30',
+            employeeId: 'employee-shop',
+            periodEnd: const PayrollCivilDate(2026, 7, 26),
+            pendingAmountClp: 71750,
+          ),
+        ],
+      );
+
+      final week29 = result.lineResults.singleWhere(
+        (line) => line.voucherLine.lineId == 'line-week-29',
+      );
+      final week30 = result.lineResults.singleWhere(
+        (line) => line.voucherLine.lineId == 'line-week-30',
+      );
+      final proposal = week29.proposedMatch;
+      expect(proposal, isNotNull);
+      expect(proposal!.daysAfterPeriodEnd, 4);
+      expect(proposal.amountVarianceClp, 250);
+      expect(proposal.requiresHumanConfirmation, isTrue);
+      expect(week30.status, PayrollLineMatchStatus.unmatched);
+      expect(week30.evaluatedCandidates.single.daysAfterPeriodEnd, -3);
+      expect(result.proposedMatches, hasLength(1));
+    });
+
+    test('suggests an underpayment within CLP 1,000 for human confirmation',
         () {
       final partialDebit = _outgoingRow(
         rowNumber: 1,
@@ -75,32 +119,38 @@ void main() {
       );
 
       final lineResult = result.lineResults.single;
-      expect(lineResult.status, PayrollLineMatchStatus.unmatched);
-      expect(lineResult.proposedMatch, isNull);
-      expect(result.proposedMatches, isEmpty);
-      expect(result.unmatchedOutgoingRows, [partialDebit]);
+      expect(lineResult.status, PayrollLineMatchStatus.suggested);
+      expect(lineResult.proposedMatch, isNotNull);
+      expect(lineResult.requiresHumanConfirmation, isTrue);
+      expect(result.proposedMatches, hasLength(1));
+      expect(result.unmatchedOutgoingRows, isEmpty);
 
       final evaluated = lineResult.evaluatedCandidates.single;
       expect(evaluated.amountVarianceClp, -250);
-      expect(evaluated.allowedToleranceClp, 500);
+      expect(evaluated.allowedToleranceClp, 1000);
       expect(
         evaluated.isEligible,
-        isFalse,
-        reason: 'A smaller bank debit is a possible partial payment that '
-            'requires an explicit manual link, never a rounding suggestion.',
+        isTrue,
+        reason: 'The CLP 1,000 rule is symmetric; a smaller movement may be '
+            'proposed but still requires explicit human confirmation.',
       );
+      expect(evaluated.requiresHumanConfirmation, isTrue);
       expect(
         evaluated.reasons,
         contains(PayrollCandidateReason.amountBelowPendingBalance),
       );
+      expect(
+        evaluated.reasons,
+        contains(PayrollCandidateReason.nonZeroVariance),
+      );
     });
 
-    test('keeps an overpayment beyond rounding tolerance ineligible', () {
+    test('keeps an overpayment beyond CLP 1,000 ineligible', () {
       final excessiveDebit = _outgoingRow(
         rowNumber: 1,
         date: const PayrollCivilDate(2026, 7, 27),
         description: 'Transferencia a Persona Exceso',
-        amountClp: 128251,
+        amountClp: 128751,
       );
       final result = matcher.match(
         statementRows: [excessiveDebit],
@@ -126,12 +176,53 @@ void main() {
       expect(lineResult.proposedMatch, isNull);
       expect(result.proposedMatches, isEmpty);
       expect(result.unmatchedOutgoingRows, [excessiveDebit]);
-      expect(evaluated.amountVarianceClp, 501);
-      expect(evaluated.allowedToleranceClp, 500);
+      expect(evaluated.amountVarianceClp, 1001);
+      expect(evaluated.allowedToleranceClp, 1000);
       expect(evaluated.isEligible, isFalse);
       expect(
         evaluated.reasons,
         contains(PayrollCandidateReason.amountOutsideTolerance),
+      );
+    });
+
+    test('keeps an underpayment beyond CLP 1,000 ineligible', () {
+      final excessiveDifference = _outgoingRow(
+        rowNumber: 1,
+        date: const PayrollCivilDate(2026, 7, 27),
+        description: 'Transferencia a Persona Bajo Limite',
+        amountClp: 126749,
+      );
+      final result = matcher.match(
+        statementRows: [excessiveDifference],
+        employees: [
+          _employee(
+            id: 'employee-under-limit',
+            name: 'Persona Bajo Limite',
+          ),
+        ],
+        voucherLines: [
+          _line(
+            id: 'line-under-limit',
+            employeeId: 'employee-under-limit',
+            periodEnd: const PayrollCivilDate(2026, 7, 26),
+            pendingAmountClp: 127750,
+          ),
+        ],
+      );
+
+      final lineResult = result.lineResults.single;
+      final evaluated = lineResult.evaluatedCandidates.single;
+      expect(lineResult.status, PayrollLineMatchStatus.unmatched);
+      expect(lineResult.proposedMatch, isNull);
+      expect(evaluated.amountVarianceClp, -1001);
+      expect(evaluated.allowedToleranceClp, 1000);
+      expect(evaluated.isEligible, isFalse);
+      expect(
+        evaluated.reasons,
+        containsAll(<PayrollCandidateReason>[
+          PayrollCandidateReason.amountBelowPendingBalance,
+          PayrollCandidateReason.amountOutsideTolerance,
+        ]),
       );
     });
 
@@ -181,7 +272,7 @@ void main() {
       }
     });
 
-    test('never evaluates a cash worker as a transfer match', () {
+    test('keeps a bank candidate even when the habitual method is cash', () {
       final result = matcher.match(
         statementRows: [
           _outgoingRow(
@@ -210,23 +301,23 @@ void main() {
       );
 
       final lineResult = result.lineResults.single;
-      expect(lineResult.status, PayrollLineMatchStatus.ineligible);
-      expect(lineResult.proposedMatch, isNull);
-      expect(lineResult.evaluatedCandidates, isEmpty);
+      expect(lineResult.status, PayrollLineMatchStatus.suggested);
+      expect(lineResult.proposedMatch, isNotNull);
+      expect(lineResult.evaluatedCandidates, hasLength(1));
       expect(
-        lineResult.reasons,
-        [PayrollLineMatchReason.paymentMethodIsCash],
+        lineResult.proposedMatch!.reasons,
+        contains(PayrollCandidateReason.paymentMethodDiffersFromPreference),
       );
     });
 
-    test('requires both the 500 CLP cap and the one-percent tolerance', () {
+    test('uses a flat inclusive CLP 1,000 tolerance for small payrolls', () {
       final result = matcher.match(
         statementRows: [
           _outgoingRow(
             rowNumber: 1,
             date: const PayrollCivilDate(2026, 7, 21),
             description: 'Transferencia a Persona Cinco',
-            amountClp: 10400,
+            amountClp: 11000,
           ),
         ],
         employees: [
@@ -243,10 +334,11 @@ void main() {
       );
 
       final evaluated = result.lineResults.single.evaluatedCandidates.single;
-      expect(evaluated.allowedToleranceClp, 100);
-      expect(evaluated.amountVarianceClp, 400);
-      expect(evaluated.isEligible, isFalse);
-      expect(result.proposedMatches, isEmpty);
+      expect(evaluated.allowedToleranceClp, 1000);
+      expect(evaluated.amountVarianceClp, 1000);
+      expect(evaluated.isEligible, isTrue);
+      expect(evaluated.requiresHumanConfirmation, isTrue);
+      expect(result.proposedMatches, hasLength(1));
     });
 
     test('requires review when two transactions fit the same line', () {
@@ -335,46 +427,48 @@ void main() {
       for (final lineResult in result.lineResults) {
         expect(lineResult.status, PayrollLineMatchStatus.needsReview);
         expect(lineResult.proposedMatch, isNull);
+        // **De quién es el pago no lo resuelve ninguna regla de orden.** Es la
+        // única ambigüedad que se queda siempre en manos de un humano, y el
+        // motivo lo dice con esas palabras.
         expect(
           lineResult.reasons,
           contains(
-            PayrollLineMatchReason.transactionMatchesMultipleLines,
+            PayrollLineMatchReason.transactionMatchesMultipleEmployees,
           ),
         );
       }
     });
 
-    test('uses an inclusive civil-date window ending five days after close',
-        () {
+    test('uses an inclusive civil-date window from close through day five', () {
       final result = matcher.match(
         statementRows: [
           _outgoingRow(
             rowNumber: 1,
             date: const PayrollCivilDate(2026, 7, 24),
-            description: 'Transferencia a Persona Tres',
+            description: 'Transferencia a Persona Cinco',
             amountClp: 60000,
           ),
           _outgoingRow(
             rowNumber: 2,
             date: const PayrollCivilDate(2026, 7, 25),
-            description: 'Transferencia a Persona Cuatro',
+            description: 'Transferencia a Persona Seis',
             amountClp: 60000,
           ),
         ],
         employees: [
-          _employee(id: 'employee-three', name: 'Persona Tres'),
-          _employee(id: 'employee-four', name: 'Persona Cuatro'),
+          _employee(id: 'employee-five', name: 'Persona Cinco'),
+          _employee(id: 'employee-six', name: 'Persona Seis'),
         ],
         voucherLines: [
           _line(
             id: 'line-day-five',
-            employeeId: 'employee-three',
+            employeeId: 'employee-five',
             periodEnd: const PayrollCivilDate(2026, 7, 19),
             pendingAmountClp: 60000,
           ),
           _line(
             id: 'line-day-six',
-            employeeId: 'employee-four',
+            employeeId: 'employee-six',
             periodEnd: const PayrollCivilDate(2026, 7, 19),
             pendingAmountClp: 60000,
           ),
@@ -395,64 +489,64 @@ void main() {
       );
     });
 
-    test('accepts a salary paid during the work week but not before it', () {
+    test('week 6–12 accepts day 12 but rejects a salary payment on day 8', () {
       final result = matcher.match(
         statementRows: [
           _outgoingRow(
             rowNumber: 1,
-            date: const PayrollCivilDate(2026, 6, 30),
-            description: 'Transferencia a Persona Semana',
+            date: const PayrollCivilDate(2026, 7, 12),
+            description: 'Transferencia a Persona Cierre',
             amountClp: 94500,
           ),
           _outgoingRow(
             rowNumber: 2,
-            date: const PayrollCivilDate(2026, 6, 28),
+            date: const PayrollCivilDate(2026, 7, 8),
             description: 'Transferencia a Persona Temprana',
             amountClp: 38000,
           ),
         ],
         employees: [
-          _employee(id: 'employee-week', name: 'Persona Semana'),
+          _employee(id: 'employee-close', name: 'Persona Cierre'),
           _employee(id: 'employee-early', name: 'Persona Temprana'),
         ],
         voucherLines: [
           _line(
-            id: 'line-week',
-            employeeId: 'employee-week',
-            periodEnd: const PayrollCivilDate(2026, 7, 5),
+            id: 'line-close',
+            employeeId: 'employee-close',
+            periodEnd: const PayrollCivilDate(2026, 7, 12),
             pendingAmountClp: 94500,
           ),
           _line(
-            id: 'line-too-early',
+            id: 'line-before-close',
             employeeId: 'employee-early',
-            periodEnd: const PayrollCivilDate(2026, 7, 5),
+            periodEnd: const PayrollCivilDate(2026, 7, 12),
             pendingAmountClp: 38000,
           ),
         ],
       );
 
-      final duringWeek = result.lineResults.singleWhere(
-        (line) => line.voucherLine.lineId == 'line-week',
+      final onClose = result.lineResults.singleWhere(
+        (line) => line.voucherLine.lineId == 'line-close',
       );
-      final beforeStart = result.lineResults.singleWhere(
-        (line) => line.voucherLine.lineId == 'line-too-early',
+      final beforeClose = result.lineResults.singleWhere(
+        (line) => line.voucherLine.lineId == 'line-before-close',
       );
       expect(
-        duringWeek.status,
+        onClose.status,
         PayrollLineMatchStatus.suggested,
       );
       expect(
-        duringWeek.proposedMatch!.reasons,
+        onClose.proposedMatch!.reasons,
         contains(PayrollCandidateReason.dateWithinWindow),
       );
       expect(
-        beforeStart.status,
+        beforeClose.status,
         PayrollLineMatchStatus.unmatched,
       );
-      expect(beforeStart.evaluatedCandidates, hasLength(1));
-      expect(beforeStart.evaluatedCandidates.single.daysAfterPeriodEnd, -7);
+      expect(beforeClose.evaluatedCandidates, hasLength(1));
+      expect(beforeClose.evaluatedCandidates.single.daysAfterPeriodEnd, -4);
       expect(
-        beforeStart.evaluatedCandidates.single.reasons,
+        beforeClose.evaluatedCandidates.single.reasons,
         contains(PayrollCandidateReason.dateOutsideWindow),
       );
     });
@@ -652,6 +746,7 @@ void main() {
             'line-week-28-lucas': lucasWeek28.sourceRowId,
             'line-week-29-vicente': vicenteWeek29.sourceRowId,
             'line-week-29-lucas': lucasWeek29.sourceRowId,
+            'line-week-29-guillermo': guillermoBankMovement.sourceRowId,
             'line-week-30-vicente': vicenteWeek30Rounded.sourceRowId,
             'line-week-30-lucas': lucasWeek30.sourceRowId,
           },
@@ -660,7 +755,7 @@ void main() {
           result.proposedMatches
               .map((proposal) => proposal.statementRow.sourceRowId)
               .toSet(),
-          hasLength(8),
+          hasLength(9),
           reason: 'a bank row must be allocated to only one week and person',
         );
         expect(
@@ -680,7 +775,7 @@ void main() {
 
         final roundedProposal = proposalsByLineId['line-week-30-vicente']!;
         expect(roundedProposal.amountVarianceClp, 250);
-        expect(roundedProposal.allowedToleranceClp, 500);
+        expect(roundedProposal.allowedToleranceClp, 1000);
         expect(
           roundedProposal.reasons,
           contains(PayrollCandidateReason.amountWithinTolerance),
@@ -688,6 +783,17 @@ void main() {
 
         final week27Vicente = result.lineResults.singleWhere(
           (line) => line.voucherLine.lineId == 'line-week-27-vicente',
+        );
+        expect(week27Vicente.status, PayrollLineMatchStatus.suggested);
+        final boundaryCandidate = week27Vicente.evaluatedCandidates.singleWhere(
+          (candidate) =>
+              candidate.statementRow.sourceRowId == vicenteWeek27.sourceRowId,
+        );
+        expect(boundaryCandidate.daysAfterPeriodEnd, 5);
+        expect(boundaryCandidate.isEligible, isTrue);
+        expect(
+          week27Vicente.proposedMatch!.statementRow.sourceRowId,
+          vicenteWeek27.sourceRowId,
         );
         final lateCandidate = week27Vicente.evaluatedCandidates.singleWhere(
           (candidate) =>
@@ -699,11 +805,6 @@ void main() {
         expect(
           lateCandidate.reasons,
           contains(PayrollCandidateReason.dateOutsideWindow),
-        );
-        expect(
-          proposalsByLineId['line-week-27-vicente']!.daysAfterPeriodEnd,
-          5,
-          reason: 'the configured payment window includes its fifth day',
         );
 
         final managerCandidates = result.lineResults
@@ -731,19 +832,26 @@ void main() {
             .where((line) => line.voucherLine.employeeId == guillermoId)
             .toList(growable: false);
         expect(guillermoLines, hasLength(4));
+        final guillermoByLineId = <String, PayrollReconciliationLineResult>{
+          for (final line in guillermoLines) line.voucherLine.lineId: line,
+        };
         expect(
-          guillermoLines.map((line) => line.status),
-          everyElement(PayrollLineMatchStatus.ineligible),
+          guillermoByLineId['line-week-29-guillermo']!.status,
+          PayrollLineMatchStatus.suggested,
         );
         expect(
-          guillermoLines.map((line) => line.evaluatedCandidates),
-          everyElement(isEmpty),
+          guillermoLines
+              .where(
+                (line) => line.voucherLine.lineId != 'line-week-29-guillermo',
+              )
+              .map((line) => line.status),
+          everyElement(PayrollLineMatchStatus.unmatched),
         );
         expect(
           result.proposedMatches.map(
             (proposal) => proposal.voucherLine.employeeId,
           ),
-          isNot(contains(guillermoId)),
+          contains(guillermoId),
         );
 
         expect(
@@ -751,7 +859,6 @@ void main() {
           <PayrollStatementRow>[
             vicenteWeek27OneDayLate,
             vicenteManagerTransfer,
-            guillermoBankMovement,
           ],
         );
       },
@@ -877,10 +984,421 @@ void main() {
         ],
       );
 
-      // The cash worker's line is ineligible for transfers and the retired
-      // worker has no line at all: neither row may be absorbed as foreign,
-      // because both plausibly pay a real worker outside the expected flow.
+      // The cash worker normally prefers cash and the retired worker has no
+      // line at all: neither row may be absorbed as foreign, because both
+      // still name a real worker and require an explicit payroll decision.
       expect(result.foreignOutgoingSourceRowIds, isEmpty);
+    });
+
+    group('sueldo semanal plano: varias semanas iguales (caso real)', () {
+      // Cartola real del taller, 2026-08-10. Lucas Pacheco tiene TRES semanas
+      // seguidas de exactamente $35.000 y el banco muestra DOS traspasos de
+      // $35.000 (29/07 y 04/08). La ventana estricta cierre..cierre+5 hace que
+      // el primero sólo pueda pagar la semana 30 y el segundo sólo la 31; una
+      // fecha anterior al cierre de la semana siguiente nunca se repite allí.
+      PayrollStatementRow pago(int rowNumber, int month, int day) =>
+          _outgoingRow(
+            rowNumber: rowNumber,
+            date: PayrollCivilDate(2026, month, day),
+            description: 'App-traspaso A: Lucas Pacheco',
+            amountClp: 35000,
+          );
+
+      PayrollReconciliationVoucherLine semana(
+        String id,
+        int startMonth,
+        int startDay,
+        int endMonth,
+        int endDay,
+      ) =>
+          PayrollReconciliationVoucherLine(
+            lineId: id,
+            voucherId: 'v-$id',
+            employeeId: 'employee-lucas',
+            periodStart: PayrollCivilDate(2026, startMonth, startDay),
+            periodEnd: PayrollCivilDate(2026, endMonth, endDay),
+            pendingAmountClp: 35000,
+            paymentMethod: PayrollReconciliationPaymentMethod.transfer,
+          );
+
+      test('cada pago queda sólo en la semana cuyo cierre ya ocurrió', () {
+        final result = matcher.match(
+          statementRows: [pago(1, 7, 29), pago(2, 8, 4)],
+          employees: [_employee(id: 'employee-lucas', name: 'Lucas Pacheco')],
+          voucherLines: [
+            semana('semana-30', 7, 20, 7, 26),
+            semana('semana-31', 7, 27, 8, 2),
+            semana('semana-32', 8, 3, 8, 9),
+          ],
+        );
+
+        final byLine = <String, PayrollReconciliationLineResult>{
+          for (final lineResult in result.lineResults)
+            lineResult.voucherLine.lineId: lineResult,
+        };
+
+        expect(byLine['semana-30']!.status, PayrollLineMatchStatus.suggested);
+        expect(
+          byLine['semana-30']!.proposedMatch!.statementRow.bookingDate,
+          const PayrollCivilDate(2026, 7, 29),
+        );
+
+        expect(byLine['semana-31']!.status, PayrollLineMatchStatus.suggested);
+        expect(
+          byLine['semana-31']!.proposedMatch!.statementRow.bookingDate,
+          const PayrollCivilDate(2026, 8, 4),
+        );
+        expect(
+          byLine['semana-31']!.reasons,
+          contains(PayrollLineMatchReason.uniqueCandidate),
+        );
+
+        // La tercera semana aún no cerraba en ninguna de las dos fechas.
+        expect(byLine['semana-32']!.status, PayrollLineMatchStatus.unmatched);
+        expect(
+          byLine['semana-32']!.reasons,
+          contains(PayrollLineMatchReason.noEligibleTransaction),
+        );
+
+        // Los dos pagos quedan usados: ninguno vuelve a aparecer como cargo
+        // suelto «sin persona asignada».
+        expect(result.unmatchedOutgoingRows, isEmpty);
+      });
+
+      test('las ventanas semanales no reutilizan un movimiento', () {
+        final result = matcher.match(
+          statementRows: [pago(1, 7, 29), pago(2, 8, 4)],
+          employees: [_employee(id: 'employee-lucas', name: 'Lucas Pacheco')],
+          voucherLines: [
+            semana('semana-30', 7, 20, 7, 26),
+            semana('semana-31', 7, 27, 8, 2),
+          ],
+        );
+        expect(
+          result.proposedMatches
+              .map((proposal) => proposal.statementRow.sourceRowId)
+              .toSet(),
+          hasLength(2),
+        );
+        for (final line in result.lineResults) {
+          expect(line.reasons, [PayrollLineMatchReason.uniqueCandidate]);
+          expect(line.proposedMatch!.confidence, PayrollMatchConfidence.high);
+        }
+      });
+
+      test('dos pagos iguales para UNA sola semana siguen siendo pregunta', () {
+        // Acá no hay orden que resuelva nada: pueden ser un pago partido, un
+        // duplicado o un pago que no era de nómina. Se queda con el humano.
+        final result = matcher.match(
+          statementRows: [pago(1, 7, 28), pago(2, 7, 29)],
+          employees: [_employee(id: 'employee-lucas', name: 'Lucas Pacheco')],
+          voucherLines: [semana('semana-30', 7, 20, 7, 26)],
+        );
+        final lineResult = result.lineResults.single;
+        expect(lineResult.status, PayrollLineMatchStatus.needsReview);
+        expect(lineResult.proposedMatch, isNull);
+        expect(
+          lineResult.reasons,
+          contains(PayrollLineMatchReason.multipleTransactionsForLine),
+        );
+      });
+
+      test('la asignación es estable: el orden de entrada no la cambia', () {
+        List<String?> assign(List<PayrollStatementRow> rows) {
+          final result = matcher.match(
+            statementRows: rows,
+            employees: [_employee(id: 'employee-lucas', name: 'Lucas Pacheco')],
+            voucherLines: [
+              semana('semana-30', 7, 20, 7, 26),
+              semana('semana-31', 7, 27, 8, 2),
+            ],
+          );
+          return [
+            for (final line in result.lineResults)
+              line.proposedMatch?.statementRow.sourceRowId,
+          ];
+        }
+
+        expect(
+          assign([pago(1, 7, 29), pago(2, 8, 4)]),
+          assign([pago(2, 8, 4), pago(1, 7, 29)]),
+        );
+      });
+    });
+
+    group('el banco imprime el nombre corto (caso real, 2026-08-10)', () {
+      // Cartola real del taller, verificada contra producción el 2026-08-10:
+      // el banco imprime `App-traspaso A: Fernando Tapia` —el rótulo de la
+      // libreta de transferencias— mientras la ficha del ERP dice
+      // `Fernando José Tapia Carrillo`. Sin esto, su sueldo aparecía como un
+      // cargo suelto «sin persona asignada» y su semana como una obligación
+      // «que nadie nombra»: las dos mitades del mismo pago, sin juntarse.
+      const week28End = PayrollCivilDate(2026, 7, 12);
+
+      PayrollStatementRow fernandoTransfer({int amountClp = 52000}) =>
+          _outgoingRow(
+            rowNumber: 1,
+            date: const PayrollCivilDate(2026, 7, 14),
+            description: 'App-traspaso A: Fernando Tapia',
+            beneficiaryObserved: 'Fernando Tapia',
+            amountClp: amountClp,
+          );
+
+      test('propone el pago, y lo dice con la razón correcta', () {
+        final result = matcher.match(
+          statementRows: [fernandoTransfer()],
+          employees: [
+            _employee(
+              id: 'employee-fernando',
+              name: 'Fernando José Tapia Carrillo',
+            ),
+          ],
+          voucherLines: [
+            _line(
+              id: 'line-week-28',
+              employeeId: 'employee-fernando',
+              periodEnd: week28End,
+              pendingAmountClp: 52000,
+            ),
+          ],
+        );
+
+        final lineResult = result.lineResults.single;
+        expect(lineResult.status, PayrollLineMatchStatus.suggested);
+        final proposal = lineResult.proposedMatch!;
+        expect(
+          proposal.beneficiaryMatchKind,
+          PayrollBeneficiaryMatchKind.shortName,
+        );
+        expect(proposal.normalizedMatchedBeneficiary, 'fernando tapia');
+        expect(
+          proposal.reasons,
+          contains(PayrollCandidateReason.shortNameMatched),
+        );
+        expect(
+          proposal.reasons,
+          isNot(contains(PayrollCandidateReason.primaryNameMatched)),
+        );
+      });
+
+      test('una forma corta NUNCA llega a confianza alta', () {
+        // Monto exacto y fecha dentro de la ventana: con el nombre registrado
+        // esto sería `high`. Con una deducción del propio ERP no puede serlo —
+        // la identidad es justo lo que queda por mirar.
+        final derived = matcher.match(
+          statementRows: [fernandoTransfer()],
+          employees: [
+            _employee(
+              id: 'employee-fernando',
+              name: 'Fernando José Tapia Carrillo',
+            ),
+          ],
+          voucherLines: [
+            _line(
+              id: 'line-week-28',
+              employeeId: 'employee-fernando',
+              periodEnd: week28End,
+              pendingAmountClp: 52000,
+            ),
+          ],
+        );
+        expect(
+          derived.lineResults.single.proposedMatch!.confidence,
+          PayrollMatchConfidence.medium,
+        );
+
+        final registered = matcher.match(
+          statementRows: [
+            _outgoingRow(
+              rowNumber: 1,
+              date: const PayrollCivilDate(2026, 7, 14),
+              description: 'App-traspaso A: Fernando José Tapia Carrillo',
+              amountClp: 52000,
+            ),
+          ],
+          employees: [
+            _employee(
+              id: 'employee-fernando',
+              name: 'Fernando José Tapia Carrillo',
+            ),
+          ],
+          voucherLines: [
+            _line(
+              id: 'line-week-28',
+              employeeId: 'employee-fernando',
+              periodEnd: week28End,
+              pendingAmountClp: 52000,
+            ),
+          ],
+        );
+        expect(
+          registered.lineResults.single.proposedMatch!.confidence,
+          PayrollMatchConfidence.high,
+          reason: 'el nombre completo sí puede ser alta; la deducción no',
+        );
+      });
+
+      test('dos nombres de pila sin apellido no identifican a nadie', () {
+        // `Fernando José` es la forma que chocaría con cualquier otro Fernando
+        // del taller, así que no se genera.
+        expect(
+          payrollShortNameForms('Fernando José Tapia Carrillo'),
+          isNot(contains('fernando jose')),
+        );
+        expect(
+          payrollShortNameForms('Fernando José Tapia Carrillo'),
+          containsAll(<String>[
+            'fernando tapia',
+            'fernando carrillo',
+            'fernando jose tapia',
+            'fernando tapia carrillo',
+          ]),
+        );
+        // Un nombre de dos palabras ya se compara completo: no deriva nada.
+        expect(payrollShortNameForms('Lucas Pacheco'), isEmpty);
+
+        // Con tres tokens no se puede asumir que los dos últimos sean
+        // apellidos. `Pablo` puede ser un segundo nombre; sólo el token final
+        // es apellido en ambas formas chilenas posibles.
+        expect(
+          payrollShortNameForms('Juan Pablo Soto'),
+          <String>{'juan soto'},
+        );
+      });
+
+      test('otro apellido con el mismo nombre de pila no calza', () {
+        final result = matcher.match(
+          statementRows: [
+            _outgoingRow(
+              rowNumber: 1,
+              date: const PayrollCivilDate(2026, 7, 14),
+              description: 'App-traspaso A: Fernando Soto',
+              amountClp: 52000,
+            ),
+          ],
+          employees: [
+            _employee(
+              id: 'employee-fernando',
+              name: 'Fernando José Tapia Carrillo',
+            ),
+          ],
+          voucherLines: [
+            _line(
+              id: 'line-week-28',
+              employeeId: 'employee-fernando',
+              periodEnd: week28End,
+              pendingAmountClp: 52000,
+            ),
+          ],
+        );
+        expect(
+          result.lineResults.single.status,
+          PayrollLineMatchStatus.unmatched,
+        );
+        expect(
+          result.lineResults.single.reasons,
+          contains(PayrollLineMatchReason.noBeneficiaryMatch),
+        );
+      });
+
+      test('si la forma corta calza con dos personas, decide un humano', () {
+        final result = matcher.match(
+          statementRows: [fernandoTransfer()],
+          employees: [
+            _employee(
+              id: 'employee-uno',
+              name: 'Fernando José Tapia Carrillo',
+            ),
+            _employee(
+              id: 'employee-dos',
+              name: 'Fernando Andrés Tapia Soto',
+            ),
+          ],
+          voucherLines: [
+            _line(
+              id: 'line-uno',
+              employeeId: 'employee-uno',
+              periodEnd: week28End,
+              pendingAmountClp: 52000,
+            ),
+            _line(
+              id: 'line-dos',
+              employeeId: 'employee-dos',
+              periodEnd: week28End,
+              pendingAmountClp: 52000,
+            ),
+          ],
+        );
+
+        expect(result.proposedMatches, isEmpty);
+        for (final lineResult in result.lineResults) {
+          expect(lineResult.status, PayrollLineMatchStatus.needsReview);
+          expect(
+            lineResult.reasons,
+            contains(
+              PayrollLineMatchReason.transactionMatchesMultipleEmployees,
+            ),
+          );
+        }
+      });
+
+      test('una ficha duplicada sin líneas no le quita el calce al que trabaja',
+          () {
+        // Producción tiene DOS fichas de la misma persona: `Fernando Tapia`
+        // (creada 2025-10-27, sin ninguna línea de nómina) y `Fernando José
+        // Tapia Carrillo`, que es quien tiene las 31 semanas. La ambigüedad se
+        // mide entre OBLIGACIONES, no entre fichas: una ficha sin líneas no
+        // compite por el movimiento.
+        final result = matcher.match(
+          statementRows: [fernandoTransfer()],
+          employees: [
+            _employee(
+              id: 'employee-fernando',
+              name: 'Fernando José Tapia Carrillo',
+            ),
+            _employee(id: 'employee-duplicado', name: 'Fernando Tapia'),
+          ],
+          voucherLines: [
+            _line(
+              id: 'line-week-28',
+              employeeId: 'employee-fernando',
+              periodEnd: week28End,
+              pendingAmountClp: 52000,
+            ),
+          ],
+        );
+
+        expect(
+          result.lineResults.single.status,
+          PayrollLineMatchStatus.suggested,
+        );
+        expect(result.unmatchedOutgoingRows, isEmpty);
+      });
+
+      test('un cargo con el nombre corto no se archiva solo como ajeno', () {
+        // Sin la ficha duplicada que hoy lo salva por accidente, el sueldo se
+        // clasificaba solo como «no es nómina». La prueba de ajenidad también
+        // reconoce la forma corta, y esa dirección sólo puede devolver filas a
+        // una decisión explícita.
+        final result = matcher.match(
+          statementRows: [fernandoTransfer(amountClp: 99000)],
+          employees: [
+            _employee(
+              id: 'employee-fernando',
+              name: 'Fernando José Tapia Carrillo',
+            ),
+          ],
+          voucherLines: [
+            _line(
+              id: 'line-week-28',
+              employeeId: 'employee-fernando',
+              periodEnd: week28End,
+              pendingAmountClp: 52000,
+            ),
+          ],
+        );
+        expect(result.foreignOutgoingSourceRowIds, isEmpty);
+      });
     });
 
     test('a legacy result without the proof classifies nothing as foreign', () {

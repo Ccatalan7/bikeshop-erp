@@ -9,7 +9,7 @@ import {
   type JsonObject,
   type LogicalModelRole,
 } from "../contracts.ts";
-import { type AgentModelProvider, ProviderError } from "./provider.ts";
+import { type AgentModelProvider, ProviderError, requiredToolNameFor } from "./provider.ts";
 import { discardProviderBody, readProviderJson } from "./http.ts";
 
 const DEFAULT_OPENAI_MODEL = "gpt-5.6-sol";
@@ -20,7 +20,10 @@ export interface OpenAIResponsesProviderConfig {
   endpoint?: string;
   modelByRole?: Readonly<Record<LogicalModelRole, string>>;
   allowedModels?: readonly string[];
+  reasoningEffortByRole?: Readonly<Record<LogicalModelRole, OpenAIReasoningEffort>>;
 }
+
+export type OpenAIReasoningEffort = "low" | "medium" | "high" | "xhigh" | "max";
 
 interface OpenAIContinuationGroup {
   readonly callIds: readonly string[];
@@ -45,10 +48,17 @@ export function createOpenAIResponsesProvider(
     deep: DEFAULT_OPENAI_MODEL,
     vision: DEFAULT_OPENAI_MODEL,
   };
+  const reasoningEffortByRole = config.reasoningEffortByRole ?? {
+    fast: "medium",
+    deep: "high",
+    vision: "medium",
+  };
   assertServerModelConfiguration(modelByRole, allowedModels);
+  assertServerReasoningConfiguration(reasoningEffortByRole);
 
   return {
     id: "openai",
+    modelFor: (role) => modelByRole[role],
     async generate(request, signal) {
       const model = modelByRole[request.modelRole];
       const hasToolContinuation = request.messages.some((message) =>
@@ -61,8 +71,10 @@ export function createOpenAIResponsesProvider(
       if (!hasToolContinuation && continuation.groups.length > 0) {
         throw new ProviderError("provider_invalid_response", 502, false);
       }
+      const requiredToolName = requiredToolNameFor(request);
       const payload = {
         model,
+        reasoning: { effort: reasoningEffortByRole[request.modelRole] },
         instructions: request.systemInstruction,
         input: openAIInputWithContinuation(request.messages, continuation.groups),
         tools: request.tools.map((tool) => ({
@@ -73,6 +85,7 @@ export function createOpenAIResponsesProvider(
           strict: true,
         })),
         parallel_tool_calls: false,
+        tool_choice: requiredToolName ? { type: "function", name: requiredToolName } : undefined,
         max_output_tokens: request.maxOutputTokens,
         include: ["reasoning.encrypted_content"],
         store: false,
@@ -90,7 +103,7 @@ export function createOpenAIResponsesProvider(
           signal,
         });
       } catch (_) {
-        throw new ProviderError("provider_unavailable", 503, true);
+        throw new ProviderError("provider_unavailable", 503, !signal.aborted);
       }
 
       if (!response.ok) {
@@ -108,6 +121,15 @@ export function createOpenAIResponsesProvider(
       return normalizeOpenAIResponse(body, continuation);
     },
   };
+}
+
+function assertServerReasoningConfiguration(
+  efforts: Readonly<Record<LogicalModelRole, OpenAIReasoningEffort>>,
+): void {
+  const allowed = new Set<OpenAIReasoningEffort>(["low", "medium", "high", "xhigh", "max"]);
+  for (const effort of Object.values(efforts)) {
+    if (!allowed.has(effort)) throw new Error("OpenAI reasoning effort is not allowed");
+  }
 }
 
 function openAIInputWithContinuation(

@@ -1,0 +1,1856 @@
+{
+  "schema_version": 1,
+  "title": "Root-normalized LPS representation after independent correction",
+  "source_sha256": "0f3685983e76efc3aa605ad63ecba70051e5c3b4ef8ccc0dd03047391b7cae47",
+  "independent_review_sha256": "04883ccc4b57283195beff02393bd072a71e87981009170683d2b0f7fd788a80",
+  "mechanical_coverage_complete": false,
+  "automatic_fill_authorized": false,
+  "new_definitions": {
+    "power_port_profile_configurations": {
+      "key": "power_port_profile_configurations",
+      "origin": "new",
+      "label": "Perfiles eléctricos por puerto",
+      "data_type": "json",
+      "validation_rules": {
+        "row_label": "Perfil",
+        "rows_schema": {
+          "version": 1,
+          "columns": [
+            {
+              "key": "port_id",
+              "label": "Puerto",
+              "type": "text",
+              "required": true
+            },
+            {
+              "key": "protocol",
+              "label": "Protocolo declarado (literal)",
+              "type": "text",
+              "required": false
+            },
+            {
+              "key": "voltage_v",
+              "label": "Tensión fija o mínima declarada",
+              "type": "decimal",
+              "unit": "V",
+              "validation": {
+                "positive": true
+              }
+            },
+            {
+              "key": "voltage_max_v",
+              "label": "Tensión máxima del rango declarado",
+              "type": "decimal",
+              "unit": "V",
+              "validation": {
+                "positive": true
+              }
+            },
+            {
+              "key": "current_a",
+              "label": "Corriente declarada para este perfil",
+              "type": "decimal",
+              "unit": "A",
+              "validation": {
+                "positive": true
+              }
+            },
+            {
+              "key": "power_w",
+              "label": "Potencia declarada para este perfil",
+              "type": "decimal",
+              "unit": "W",
+              "validation": {
+                "positive": true
+              }
+            },
+            {
+              "key": "source_url",
+              "label": "Fuente",
+              "type": "url",
+              "required": true
+            },
+            {
+              "key": "oem_profile_label",
+              "label": "Nombre del perfil declarado",
+              "type": "text"
+            },
+            {
+              "key": "profile_kind",
+              "label": "Tipo de perfil declarado",
+              "type": "token",
+              "allowed_values": [
+                "Tensión fija",
+                "Rango de tensión",
+                "Otro perfil declarado",
+                "Desconocido / sin confirmar"
+              ]
+            },
+            {
+              "key": "current_role",
+              "label": "Significado de la corriente declarada",
+              "type": "text"
+            },
+            {
+              "key": "conditions",
+              "label": "Condiciones de funcionamiento declaradas",
+              "type": "text"
+            }
+          ],
+          "ordered_pairs": [
+            [
+              "voltage_v",
+              "voltage_max_v"
+            ]
+          ],
+          "unique_by": []
+        }
+      },
+      "used_by": [
+        "consumer_electronics"
+      ],
+      "id": null,
+      "unit": null,
+      "allowed_values": []
+    }
+  },
+  "patches": [
+    {
+      "id": "LPS-L-retire-power_source",
+      "op": "replace_field_contract",
+      "template": "light",
+      "key": "power_source",
+      "before": {
+        "roles": "primary",
+        "allowed_when": {
+          "kind": "when",
+          "rows": [
+            [
+              {
+                "field": "light_position",
+                "operator": "in",
+                "value_type": "token",
+                "value": [
+                  "Delantera",
+                  "Trasera",
+                  "Casco / otra"
+                ]
+              }
+            ]
+          ]
+        },
+        "required_when": {
+          "kind": "always"
+        },
+        "prerequisites": null,
+        "semantic_roles": "intrinsic"
+      },
+      "after": {
+        "roles": "legacy",
+        "allowed_when": {
+          "kind": "never"
+        },
+        "required_when": {
+          "kind": "never"
+        },
+        "prerequisites": [],
+        "semantic_roles": "legacy"
+      },
+      "original_patch_id": "LPS-L-retire-power_source"
+    },
+    {
+      "id": "LPS-L-retire-charge_connector",
+      "op": "replace_field_contract",
+      "template": "light",
+      "key": "charge_connector",
+      "before": {
+        "roles": "primary",
+        "allowed_when": {
+          "kind": "when",
+          "rows": [
+            [
+              {
+                "field": "light_position",
+                "operator": "in",
+                "value_type": "token",
+                "value": [
+                  "Delantera",
+                  "Trasera",
+                  "Casco / otra"
+                ]
+              },
+              {
+                "field": "power_source",
+                "operator": "in",
+                "value_type": "token",
+                "value": [
+                  "Recargable USB",
+                  "Recargable USB (batería extraíble)"
+                ]
+              }
+            ]
+          ]
+        },
+        "required_when": {
+          "kind": "never"
+        },
+        "prerequisites": null,
+        "semantic_roles": "intrinsic"
+      },
+      "after": {
+        "roles": "legacy",
+        "allowed_when": {
+          "kind": "never"
+        },
+        "required_when": {
+          "kind": "never"
+        },
+        "prerequisites": [],
+        "semantic_roles": "legacy"
+      },
+      "original_patch_id": "LPS-L-retire-charge_connector"
+    },
+    {
+      "id": "LPS-L-retire-battery_capacity_mah",
+      "op": "replace_field_contract",
+      "template": "light",
+      "key": "battery_capacity_mah",
+      "before": {
+        "roles": "declaration",
+        "allowed_when": {
+          "kind": "when",
+          "rows": [
+            [
+              {
+                "field": "light_position",
+                "operator": "in",
+                "value_type": "token",
+                "value": [
+                  "Delantera",
+                  "Trasera",
+                  "Casco / otra"
+                ]
+              }
+            ]
+          ]
+        },
+        "required_when": {
+          "kind": "never"
+        },
+        "prerequisites": [
+          "spec_evidence_source"
+        ],
+        "semantic_roles": "declaration"
+      },
+      "after": {
+        "roles": "legacy",
+        "allowed_when": {
+          "kind": "never"
+        },
+        "required_when": {
+          "kind": "never"
+        },
+        "prerequisites": [],
+        "semantic_roles": "legacy"
+      },
+      "original_patch_id": "LPS-L-retire-battery_capacity_mah"
+    },
+    {
+      "id": "LPS-L-retire-light_mount_kind",
+      "op": "replace_field_contract",
+      "template": "light",
+      "key": "light_mount_kind",
+      "before": {
+        "roles": "measurement",
+        "allowed_when": {
+          "kind": "when",
+          "rows": [
+            [
+              {
+                "field": "light_position",
+                "operator": "in",
+                "value_type": "token",
+                "value": [
+                  "Delantera",
+                  "Trasera",
+                  "Casco / otra"
+                ]
+              }
+            ]
+          ]
+        },
+        "required_when": {
+          "kind": "never"
+        },
+        "prerequisites": null,
+        "semantic_roles": "compatibility"
+      },
+      "after": {
+        "roles": "legacy",
+        "allowed_when": {
+          "kind": "never"
+        },
+        "required_when": {
+          "kind": "never"
+        },
+        "prerequisites": [],
+        "semantic_roles": "legacy"
+      },
+      "original_patch_id": "LPS-L-retire-light_mount_kind"
+    },
+    {
+      "id": "LPS-L-retire-mount_diameter_min_mm",
+      "op": "replace_field_contract",
+      "template": "light",
+      "key": "mount_diameter_min_mm",
+      "before": {
+        "roles": "measurement",
+        "allowed_when": {
+          "kind": "when",
+          "rows": [
+            [
+              {
+                "field": "light_position",
+                "operator": "in",
+                "value_type": "token",
+                "value": [
+                  "Delantera",
+                  "Trasera",
+                  "Casco / otra"
+                ]
+              }
+            ]
+          ]
+        },
+        "required_when": {
+          "kind": "never"
+        },
+        "prerequisites": null,
+        "semantic_roles": "compatibility"
+      },
+      "after": {
+        "roles": "legacy",
+        "allowed_when": {
+          "kind": "never"
+        },
+        "required_when": {
+          "kind": "never"
+        },
+        "prerequisites": [],
+        "semantic_roles": "legacy"
+      },
+      "original_patch_id": "LPS-L-retire-mount_diameter_min_mm"
+    },
+    {
+      "id": "LPS-L-retire-mount_diameter_max_mm",
+      "op": "replace_field_contract",
+      "template": "light",
+      "key": "mount_diameter_max_mm",
+      "before": {
+        "roles": "measurement",
+        "allowed_when": {
+          "kind": "when",
+          "rows": [
+            [
+              {
+                "field": "light_position",
+                "operator": "in",
+                "value_type": "token",
+                "value": [
+                  "Delantera",
+                  "Trasera",
+                  "Casco / otra"
+                ]
+              }
+            ]
+          ]
+        },
+        "required_when": {
+          "kind": "never"
+        },
+        "prerequisites": null,
+        "semantic_roles": "compatibility"
+      },
+      "after": {
+        "roles": "legacy",
+        "allowed_when": {
+          "kind": "never"
+        },
+        "required_when": {
+          "kind": "never"
+        },
+        "prerequisites": [],
+        "semantic_roles": "legacy"
+      },
+      "original_patch_id": "LPS-L-retire-mount_diameter_max_mm"
+    },
+    {
+      "id": "LPS-L-retire-ip_rating",
+      "op": "replace_field_contract",
+      "template": "light",
+      "key": "ip_rating",
+      "before": {
+        "roles": "declaration",
+        "allowed_when": {
+          "kind": "when",
+          "rows": [
+            [
+              {
+                "field": "light_position",
+                "operator": "in",
+                "value_type": "token",
+                "value": [
+                  "Delantera",
+                  "Trasera",
+                  "Casco / otra"
+                ]
+              }
+            ]
+          ]
+        },
+        "required_when": {
+          "kind": "never"
+        },
+        "prerequisites": [
+          "spec_evidence_source"
+        ],
+        "semantic_roles": "declaration"
+      },
+      "after": {
+        "roles": "legacy",
+        "allowed_when": {
+          "kind": "never"
+        },
+        "required_when": {
+          "kind": "never"
+        },
+        "prerequisites": [],
+        "semantic_roles": "legacy"
+      },
+      "original_patch_id": "LPS-L-retire-ip_rating"
+    },
+    {
+      "id": "LPS-L-declared-total-modes_count",
+      "op": "replace_field_contract",
+      "template": "light",
+      "key": "modes_count",
+      "before": {
+        "roles": "primary",
+        "prerequisites": null,
+        "semantic_roles": "intrinsic",
+        "helpers": null
+      },
+      "after": {
+        "roles": "declaration",
+        "prerequisites": [
+          "spec_evidence_source"
+        ],
+        "semantic_roles": "declaration",
+        "helpers": "Total declarado para la luz individual y su alcance; no se calcula contando filas, nombres o variantes documentales. Detalle parcial no fija un total."
+      },
+      "original_patch_id": "LPS-L-declared-total-modes_count"
+    },
+    {
+      "id": "LPS-L-label-modes_count",
+      "op": "replace_definition_label",
+      "template": null,
+      "key": "modes_count",
+      "before": "Cantidad de modos",
+      "after": "Cantidad de modos declarada por el fabricante",
+      "original_patch_id": "LPS-L-label-modes_count"
+    },
+    {
+      "id": "LPS-C-declared-total-ports_count",
+      "op": "replace_field_contract",
+      "template": "consumer_electronics",
+      "key": "ports_count",
+      "before": {
+        "roles": "primary",
+        "prerequisites": null,
+        "semantic_roles": "intrinsic",
+        "helpers": null
+      },
+      "after": {
+        "roles": "declaration",
+        "prerequisites": [
+          "spec_evidence_source"
+        ],
+        "semantic_roles": "declaration",
+        "helpers": "Total de puertos físicos declarado para este modelo/variante. No contar perfiles, direcciones ni filas de reparto como puertos."
+      },
+      "original_patch_id": "LPS-C-declared-total-ports_count"
+    },
+    {
+      "id": "LPS-C-label-ports_count",
+      "op": "replace_definition_label",
+      "template": null,
+      "key": "ports_count",
+      "before": "Cantidad de puertos",
+      "after": "Cantidad de puertos declarada por el fabricante",
+      "original_patch_id": "LPS-C-label-ports_count"
+    },
+    {
+      "id": "LPS-E-storage-label-owner",
+      "op": "replace_field_contract",
+      "template": "consumer_electronics",
+      "key": "storage_capacity_label",
+      "before": {
+        "roles": "primary",
+        "prerequisites": null,
+        "helpers": null
+      },
+      "after": {
+        "roles": "declaration",
+        "prerequisites": [
+          "spec_evidence_source"
+        ],
+        "helpers": "Conserva el literal y su unidad. Si se normaliza con prefijos SI, 1 TB = 1000 GB; verifica qué magnitud declara la fuente y no confundir capacidad nominal con espacio utilizable. No inferir bytes reales del título."
+      },
+      "original_patch_id": "LPS-E-storage-label-owner"
+    },
+    {
+      "id": "LPS-E-storage-label-text",
+      "op": "replace_definition_label",
+      "template": null,
+      "key": "storage_capacity_label",
+      "before": "Capacidad impresa",
+      "after": "Capacidad impresa (literal con su unidad: GB, TB o GiB)",
+      "original_patch_id": "LPS-E-storage-label-text"
+    },
+    {
+      "id": "LPS-L-drop-mount-pair",
+      "op": "replace_template_coherence",
+      "template": "light",
+      "key": "scalar_ordered_pairs",
+      "before": {
+        "present": true,
+        "value": [
+          [
+            "mount_diameter_min_mm",
+            "mount_diameter_max_mm"
+          ]
+        ]
+      },
+      "after": [],
+      "original_patch_id": "LPS-L-drop-mount-pair"
+    },
+    {
+      "id": "LPS-L-members-required",
+      "op": "replace_field_contract",
+      "template": "light",
+      "key": "light_member_configurations",
+      "before": {
+        "allowed_when": {
+          "kind": "always"
+        },
+        "required_when": {
+          "kind": "when",
+          "rows": [
+            [
+              {
+                "field": "light_position",
+                "operator": "eq",
+                "value_type": "token",
+                "value": "Juego delantera + trasera"
+              }
+            ]
+          ]
+        }
+      },
+      "after": {
+        "allowed_when": {
+          "kind": "always"
+        },
+        "required_when": {
+          "kind": "always"
+        }
+      },
+      "original_patch_id": "LPS-L-members-required"
+    },
+    {
+      "id": "LPS-L-modes-required",
+      "op": "replace_field_contract",
+      "template": "light",
+      "key": "light_mode_configurations",
+      "before": {
+        "required_when": {
+          "kind": "when",
+          "rows": [
+            [
+              {
+                "field": "light_position",
+                "operator": "eq",
+                "value_type": "token",
+                "value": "Juego delantera + trasera"
+              }
+            ]
+          ]
+        },
+        "helpers": null
+      },
+      "after": {
+        "required_when": {
+          "kind": "always"
+        },
+        "helpers": "Detalle de modos declarados, cuando se conoce. Un pendiente no autoriza inventar un modo, autonomía o medición; lumens_claimed y modes_count se conservan como declaraciones independientes. Para luces sin modos discretos, resolver la aplicabilidad antes de cerrar completitud."
+      },
+      "original_patch_id": "LPS-L-modes-required"
+    },
+    {
+      "id": "LPS-L-members-schema",
+      "op": "replace_unpublished_rows_schema",
+      "template": null,
+      "key": "light_member_configurations",
+      "before": {
+        "version": 1,
+        "columns": [
+          {
+            "key": "member_id",
+            "label": "Luz",
+            "type": "text",
+            "required": true
+          },
+          {
+            "key": "position",
+            "label": "Posición",
+            "type": "token",
+            "required": true,
+            "allowed_values": [
+              "Delantera",
+              "Trasera",
+              "Casco / otra"
+            ]
+          },
+          {
+            "key": "battery_kind",
+            "label": "Batería / alimentación",
+            "type": "token",
+            "allowed_values": [
+              "Li-ion integrada",
+              "Li-ion extraíble",
+              "Pilas AA/AAA",
+              "Pila botón",
+              "Dinamo",
+              "Alimentación externa (USB)",
+              "Desconocido / sin confirmar"
+            ]
+          },
+          {
+            "key": "battery_capacity_mah",
+            "label": "Capacidad",
+            "type": "decimal",
+            "unit": "mAh",
+            "validation": {
+              "positive": true
+            }
+          },
+          {
+            "key": "battery_voltage_v",
+            "label": "Tensión",
+            "type": "decimal",
+            "unit": "V",
+            "validation": {
+              "positive": true
+            }
+          },
+          {
+            "key": "charge_connector",
+            "label": "Conector de carga",
+            "type": "token",
+            "allowed_values": [
+              "USB-C",
+              "Micro-USB",
+              "USB-A integrado",
+              "Propietario",
+              "Sin carga",
+              "Desconocido / sin confirmar",
+              "Otro"
+            ]
+          },
+          {
+            "key": "mount_kind",
+            "label": "Fijación",
+            "type": "token",
+            "allowed_values": [
+              "Correa de silicona",
+              "Abrazadera de manubrio",
+              "Abrazadera de tija",
+              "Soporte de casco",
+              "Soporte de horquilla",
+              "Otro"
+            ]
+          },
+          {
+            "key": "mount_diameter_min_mm",
+            "label": "Diámetro mín. de montaje",
+            "type": "decimal",
+            "unit": "mm",
+            "validation": {
+              "positive": true
+            }
+          },
+          {
+            "key": "mount_diameter_max_mm",
+            "label": "Diámetro máx. de montaje",
+            "type": "decimal",
+            "unit": "mm",
+            "validation": {
+              "positive": true
+            }
+          },
+          {
+            "key": "mount_circumference_max_mm",
+            "label": "Perímetro máx. (tija aero)",
+            "type": "decimal",
+            "unit": "mm",
+            "validation": {
+              "positive": true
+            }
+          },
+          {
+            "key": "ip_rating",
+            "label": "Grado IP",
+            "type": "text"
+          },
+          {
+            "key": "source_url",
+            "label": "Fuente",
+            "type": "url"
+          },
+          {
+            "key": "member_revision",
+            "label": "Revisión del miembro / fuente",
+            "type": "text"
+          },
+          {
+            "key": "mount_zone",
+            "label": "Zona y forma de montaje",
+            "type": "text"
+          },
+          {
+            "key": "power_input_connector",
+            "label": "Entrada de alimentación externa declarada",
+            "type": "text"
+          }
+        ],
+        "ordered_pairs": [
+          [
+            "mount_diameter_min_mm",
+            "mount_diameter_max_mm"
+          ]
+        ],
+        "unique_by": [
+          [
+            "member_id"
+          ]
+        ]
+      },
+      "after": {
+        "version": 1,
+        "columns": [
+          {
+            "key": "member_id",
+            "label": "Nombre de la luz",
+            "type": "text",
+            "required": true
+          },
+          {
+            "key": "position",
+            "label": "Posición",
+            "type": "token",
+            "required": true,
+            "allowed_values": [
+              "Delantera",
+              "Trasera",
+              "Casco / otra"
+            ]
+          },
+          {
+            "key": "battery_kind",
+            "label": "Batería / alimentación",
+            "type": "token",
+            "allowed_values": [
+              "Li-ion integrada",
+              "Li-ion extraíble",
+              "Pilas AA/AAA",
+              "Pila botón",
+              "Dinamo",
+              "Alimentación externa (USB)",
+              "Desconocido / sin confirmar",
+              "Alimentación externa (no USB)",
+              "Otra batería / alimentación"
+            ]
+          },
+          {
+            "key": "battery_capacity_mah",
+            "label": "Capacidad",
+            "type": "decimal",
+            "unit": "mAh",
+            "validation": {
+              "positive": true
+            }
+          },
+          {
+            "key": "battery_voltage_v",
+            "label": "Tensión",
+            "type": "decimal",
+            "unit": "V",
+            "validation": {
+              "positive": true
+            }
+          },
+          {
+            "key": "charge_connector",
+            "label": "Conector de carga",
+            "type": "token",
+            "allowed_values": [
+              "USB-C",
+              "Micro-USB",
+              "USB-A integrado",
+              "Propietario",
+              "Sin carga",
+              "Desconocido / sin confirmar",
+              "Otro"
+            ]
+          },
+          {
+            "key": "mount_kind",
+            "label": "Fijación",
+            "type": "token",
+            "allowed_values": [
+              "Correa de silicona",
+              "Abrazadera de manubrio",
+              "Abrazadera de tija",
+              "Soporte de casco",
+              "Soporte de horquilla",
+              "Otro"
+            ]
+          },
+          {
+            "key": "mount_diameter_min_mm",
+            "label": "Diámetro mín. de montaje",
+            "type": "decimal",
+            "unit": "mm",
+            "validation": {
+              "positive": true
+            }
+          },
+          {
+            "key": "mount_diameter_max_mm",
+            "label": "Diámetro máx. de montaje",
+            "type": "decimal",
+            "unit": "mm",
+            "validation": {
+              "positive": true
+            }
+          },
+          {
+            "key": "mount_circumference_max_mm",
+            "label": "Perímetro máx. (tija aero)",
+            "type": "decimal",
+            "unit": "mm",
+            "validation": {
+              "positive": true
+            }
+          },
+          {
+            "key": "ip_rating",
+            "label": "Grado IP declarado (literal)",
+            "type": "text"
+          },
+          {
+            "key": "source_url",
+            "label": "Fuente",
+            "type": "url"
+          },
+          {
+            "key": "member_revision",
+            "label": "Revisión OEM de la luz, si está identificada",
+            "type": "text"
+          },
+          {
+            "key": "mount_zone",
+            "label": "Zona y forma de montaje",
+            "type": "text"
+          },
+          {
+            "key": "power_input_connector",
+            "label": "Entrada de alimentación externa declarada",
+            "type": "text"
+          },
+          {
+            "key": "ip_standard",
+            "label": "Norma y edición declaradas",
+            "type": "text"
+          },
+          {
+            "key": "power_source_note",
+            "label": "Alimentación declarada: detalles",
+            "type": "text"
+          }
+        ],
+        "ordered_pairs": [
+          [
+            "mount_diameter_min_mm",
+            "mount_diameter_max_mm"
+          ]
+        ],
+        "unique_by": []
+      },
+      "original_patch_id": "LPS-L-members-schema"
+    },
+    {
+      "id": "LPS-L-modes-schema",
+      "op": "replace_unpublished_rows_schema",
+      "template": null,
+      "key": "light_mode_configurations",
+      "before": {
+        "version": 1,
+        "columns": [
+          {
+            "key": "member_id",
+            "label": "Luz",
+            "type": "text",
+            "required": true
+          },
+          {
+            "key": "mode",
+            "label": "Modo",
+            "type": "text",
+            "required": true
+          },
+          {
+            "key": "pattern",
+            "label": "Patrón",
+            "type": "token",
+            "allowed_values": [
+              "Constante",
+              "Intermitente",
+              "Constante + intermitente",
+              "Diurno",
+              "Otro"
+            ]
+          },
+          {
+            "key": "lumens",
+            "label": "Lúmenes",
+            "type": "decimal",
+            "unit": "lm",
+            "validation": {
+              "positive": true
+            }
+          },
+          {
+            "key": "lumens_secondary",
+            "label": "Lúmenes secundarios (modo doble)",
+            "type": "decimal",
+            "unit": "lm",
+            "validation": {
+              "positive": true
+            }
+          },
+          {
+            "key": "runtime_h",
+            "label": "Autonomía",
+            "type": "decimal",
+            "unit": "h",
+            "validation": {
+              "positive": true
+            }
+          },
+          {
+            "key": "runtime_max_h",
+            "label": "Autonomía máx. (rango declarado)",
+            "type": "decimal",
+            "unit": "h",
+            "validation": {
+              "positive": true
+            }
+          },
+          {
+            "key": "source_url",
+            "label": "Fuente",
+            "type": "url"
+          },
+          {
+            "key": "member_revision",
+            "label": "Revisión del miembro / fuente",
+            "type": "text"
+          }
+        ],
+        "ordered_pairs": [
+          [
+            "runtime_h",
+            "runtime_max_h"
+          ]
+        ],
+        "unique_by": [
+          [
+            "member_id",
+            "mode"
+          ]
+        ]
+      },
+      "after": {
+        "version": 1,
+        "columns": [
+          {
+            "key": "member_id",
+            "label": "Luz",
+            "type": "text",
+            "required": true
+          },
+          {
+            "key": "mode",
+            "label": "Modo",
+            "type": "text",
+            "required": true
+          },
+          {
+            "key": "pattern",
+            "label": "Patrón",
+            "type": "token",
+            "allowed_values": [
+              "Constante",
+              "Intermitente",
+              "Constante + intermitente",
+              "Diurno",
+              "Otro"
+            ]
+          },
+          {
+            "key": "lumens",
+            "label": "Lúmenes",
+            "type": "decimal",
+            "unit": "lm",
+            "validation": {
+              "positive": true
+            }
+          },
+          {
+            "key": "lumens_secondary",
+            "label": "Lúmenes secundarios (modo doble)",
+            "type": "decimal",
+            "unit": "lm",
+            "validation": {
+              "positive": true
+            }
+          },
+          {
+            "key": "runtime_h",
+            "label": "Autonomía",
+            "type": "decimal",
+            "unit": "h",
+            "validation": {
+              "positive": true
+            }
+          },
+          {
+            "key": "runtime_max_h",
+            "label": "Autonomía máx. (rango declarado)",
+            "type": "decimal",
+            "unit": "h",
+            "validation": {
+              "positive": true
+            }
+          },
+          {
+            "key": "source_url",
+            "label": "Fuente",
+            "type": "url"
+          },
+          {
+            "key": "member_revision",
+            "label": "Revisión OEM de la luz, si está identificada",
+            "type": "text"
+          },
+          {
+            "key": "operating_conditions",
+            "label": "Condiciones de funcionamiento declaradas",
+            "type": "text"
+          },
+          {
+            "key": "measurement_method",
+            "label": "Método de medición declarado",
+            "type": "text"
+          }
+        ],
+        "ordered_pairs": [
+          [
+            "runtime_h",
+            "runtime_max_h"
+          ]
+        ],
+        "unique_by": []
+      },
+      "original_patch_id": "LPS-L-modes-schema"
+    },
+    {
+      "id": "LPS-L-link-labels",
+      "op": "replace_template_coherence",
+      "template": "light",
+      "key": "row_coherence",
+      "before": {
+        "present": true,
+        "value": {
+          "version": 1,
+          "links": [
+            {
+              "id": "light_member_link",
+              "field": "light_mode_configurations",
+              "column": "member_id",
+              "target_field": "light_member_configurations",
+              "label_columns": [
+                "member_id"
+              ]
+            }
+          ]
+        }
+      },
+      "after": {
+        "version": 1,
+        "links": [
+          {
+            "id": "light_member_link",
+            "field": "light_mode_configurations",
+            "column": "member_id",
+            "target_field": "light_member_configurations",
+            "label_columns": [
+              "member_id",
+              "member_revision"
+            ]
+          }
+        ]
+      },
+      "original_patch_id": "LPS-L-link-labels"
+    },
+    {
+      "id": "LPS-L-kit-roles",
+      "op": "replace_unpublished_rows_schema",
+      "template": null,
+      "key": "kit_members",
+      "before": {
+        "version": 1,
+        "columns": [
+          {
+            "key": "member_role",
+            "label": "Componente",
+            "type": "token",
+            "required": true,
+            "allowed_values": [
+              "maneta",
+              "cáliper",
+              "manguera",
+              "rotor",
+              "adaptador",
+              "cassette",
+              "cadena",
+              "biela",
+              "pedalier",
+              "copas",
+              "rodamientos",
+              "eje",
+              "plato",
+              "mando",
+              "cambio trasero",
+              "desviador",
+              "pastilla",
+              "parche",
+              "pegamento",
+              "válvula",
+              "cinta",
+              "sellante",
+              "rueda delantera",
+              "rueda trasera",
+              "llanta",
+              "maza",
+              "rayos",
+              "cubierta",
+              "tapa",
+              "araña",
+              "oliva",
+              "inserto",
+              "otro"
+            ]
+          },
+          {
+            "key": "family",
+            "label": "Familia técnica",
+            "type": "token",
+            "required": true,
+            "allowed_values": [
+              "accessory_mount",
+              "audible_signal",
+              "bearing",
+              "bicycle",
+              "bike_bag",
+              "bike_protection",
+              "bmx_cable_detangler",
+              "bottle",
+              "bottle_cage",
+              "bottom_bracket",
+              "bottom_bracket_axle",
+              "bottom_bracket_bearing",
+              "bottom_bracket_cup",
+              "brake_caliper",
+              "brake_fluid",
+              "brake_lever",
+              "brake_mount_adapter",
+              "brake_pad",
+              "brake_shift_combined_control",
+              "brake_small_part",
+              "cassette",
+              "cassette_lockring",
+              "cassette_spacer",
+              "chain",
+              "chain_guide",
+              "chain_link",
+              "chainring",
+              "chainring_guard",
+              "consumer_electronics",
+              "control_cable",
+              "control_housing",
+              "control_small_part",
+              "crank_arm",
+              "crankset",
+              "cycle_computer",
+              "derailleur_hanger",
+              "derailleur_hanger_extender",
+              "derailleur_pulley",
+              "drivetrain_kit",
+              "eyewear",
+              "fastener",
+              "fender",
+              "fixed_cog",
+              "food_beverage",
+              "fork",
+              "frame",
+              "freewheel",
+              "front_derailleur",
+              "grip",
+              "handlebar",
+              "handlebar_covering",
+              "headset",
+              "headset_small_part",
+              "helmet",
+              "hub",
+              "hub_axle",
+              "hub_brake",
+              "hub_small_part",
+              "hydraulic_disc_brake",
+              "hydraulic_fitting",
+              "hydraulic_hose",
+              "kickstand",
+              "light",
+              "lock",
+              "mechanical_disc_brake",
+              "pedal",
+              "pedal_peg",
+              "pump",
+              "rack_basket",
+              "rear_derailleur",
+              "rear_shock",
+              "reflector",
+              "rider_apparel",
+              "rider_bag",
+              "rider_glove",
+              "rider_protection",
+              "rim",
+              "rim_brake",
+              "rim_strip",
+              "rotor",
+              "rotor_mount_adapter",
+              "saddle",
+              "saddle_cover",
+              "seat_clamp",
+              "seatpost",
+              "shifter",
+              "souvenir",
+              "spacer",
+              "spoke",
+              "spoke_nipple",
+              "stem",
+              "tire",
+              "tire_liner",
+              "training_wheel",
+              "tube",
+              "tube_repair",
+              "tubeless_consumable",
+              "tubeless_repair",
+              "tubeless_tape",
+              "tubeless_valve",
+              "valve_small_part",
+              "wheel",
+              "wheel_retention",
+              "workshop_chemical",
+              "workshop_tool"
+            ]
+          },
+          {
+            "key": "quantity",
+            "label": "Cantidad",
+            "type": "integer",
+            "required": true,
+            "validation": {
+              "positive": true
+            }
+          },
+          {
+            "key": "position",
+            "label": "Posición",
+            "type": "token",
+            "required": true,
+            "allowed_values": [
+              "Delantero",
+              "Trasero",
+              "Izquierdo",
+              "Derecho",
+              "Sin posición"
+            ]
+          },
+          {
+            "key": "identity_brand",
+            "label": "Marca",
+            "type": "text",
+            "required": false
+          },
+          {
+            "key": "identity_model",
+            "label": "Modelo",
+            "type": "text",
+            "required": false
+          }
+        ]
+      },
+      "after": {
+        "version": 1,
+        "columns": [
+          {
+            "key": "member_role",
+            "label": "Componente",
+            "type": "token",
+            "required": true,
+            "allowed_values": [
+              "maneta",
+              "cáliper",
+              "manguera",
+              "rotor",
+              "adaptador",
+              "cassette",
+              "cadena",
+              "biela",
+              "pedalier",
+              "copas",
+              "rodamientos",
+              "eje",
+              "plato",
+              "mando",
+              "cambio trasero",
+              "desviador",
+              "pastilla",
+              "parche",
+              "pegamento",
+              "válvula",
+              "cinta",
+              "sellante",
+              "rueda delantera",
+              "rueda trasera",
+              "llanta",
+              "maza",
+              "rayos",
+              "cubierta",
+              "tapa",
+              "araña",
+              "oliva",
+              "inserto",
+              "otro",
+              "cable",
+              "soporte",
+              "correa",
+              "espaciador"
+            ]
+          },
+          {
+            "key": "family",
+            "label": "Familia técnica",
+            "type": "token",
+            "required": true,
+            "allowed_values": [
+              "accessory_mount",
+              "audible_signal",
+              "bearing",
+              "bicycle",
+              "bike_bag",
+              "bike_protection",
+              "bmx_cable_detangler",
+              "bottle",
+              "bottle_cage",
+              "bottom_bracket",
+              "bottom_bracket_axle",
+              "bottom_bracket_bearing",
+              "bottom_bracket_cup",
+              "brake_caliper",
+              "brake_fluid",
+              "brake_lever",
+              "brake_mount_adapter",
+              "brake_pad",
+              "brake_shift_combined_control",
+              "brake_small_part",
+              "cassette",
+              "cassette_lockring",
+              "cassette_spacer",
+              "chain",
+              "chain_guide",
+              "chain_link",
+              "chainring",
+              "chainring_guard",
+              "consumer_electronics",
+              "control_cable",
+              "control_housing",
+              "control_small_part",
+              "crank_arm",
+              "crankset",
+              "cycle_computer",
+              "derailleur_hanger",
+              "derailleur_hanger_extender",
+              "derailleur_pulley",
+              "drivetrain_kit",
+              "eyewear",
+              "fastener",
+              "fender",
+              "fixed_cog",
+              "food_beverage",
+              "fork",
+              "frame",
+              "freewheel",
+              "front_derailleur",
+              "grip",
+              "handlebar",
+              "handlebar_covering",
+              "headset",
+              "headset_small_part",
+              "helmet",
+              "hub",
+              "hub_axle",
+              "hub_brake",
+              "hub_small_part",
+              "hydraulic_disc_brake",
+              "hydraulic_fitting",
+              "hydraulic_hose",
+              "kickstand",
+              "light",
+              "lock",
+              "mechanical_disc_brake",
+              "pedal",
+              "pedal_peg",
+              "pump",
+              "rack_basket",
+              "rear_derailleur",
+              "rear_shock",
+              "reflector",
+              "rider_apparel",
+              "rider_bag",
+              "rider_glove",
+              "rider_protection",
+              "rim",
+              "rim_brake",
+              "rim_strip",
+              "rotor",
+              "rotor_mount_adapter",
+              "saddle",
+              "saddle_cover",
+              "seat_clamp",
+              "seatpost",
+              "shifter",
+              "souvenir",
+              "spacer",
+              "spoke",
+              "spoke_nipple",
+              "stem",
+              "tire",
+              "tire_liner",
+              "training_wheel",
+              "tube",
+              "tube_repair",
+              "tubeless_consumable",
+              "tubeless_repair",
+              "tubeless_tape",
+              "tubeless_valve",
+              "valve_small_part",
+              "wheel",
+              "wheel_retention",
+              "workshop_chemical",
+              "workshop_tool"
+            ]
+          },
+          {
+            "key": "quantity",
+            "label": "Cantidad",
+            "type": "integer",
+            "required": true,
+            "validation": {
+              "positive": true
+            }
+          },
+          {
+            "key": "position",
+            "label": "Posición",
+            "type": "token",
+            "required": true,
+            "allowed_values": [
+              "Delantero",
+              "Trasero",
+              "Izquierdo",
+              "Derecho",
+              "Sin posición"
+            ]
+          },
+          {
+            "key": "identity_brand",
+            "label": "Marca",
+            "type": "text",
+            "required": false
+          },
+          {
+            "key": "identity_model",
+            "label": "Modelo",
+            "type": "text",
+            "required": false
+          }
+        ]
+      },
+      "original_patch_id": "LPS-L-kit-roles"
+    },
+    {
+      "id": "LPS-C-sensor-schema",
+      "op": "replace_unpublished_rows_schema",
+      "template": null,
+      "key": "sensor_support_configurations",
+      "before": {
+        "version": 1,
+        "columns": [
+          {
+            "key": "sensor_type",
+            "label": "Tipo de sensor",
+            "type": "token",
+            "required": true,
+            "allowed_values": [
+              "Velocidad",
+              "Cadencia",
+              "Velocidad / cadencia",
+              "Frecuencia cardiaca",
+              "Potencia",
+              "Radar",
+              "Luces",
+              "Cambio electrónico",
+              "eBike",
+              "Control remoto",
+              "Rodillo inteligente",
+              "Otro"
+            ]
+          },
+          {
+            "key": "transport",
+            "label": "Transporte",
+            "type": "token",
+            "required": true,
+            "allowed_values": [
+              "ANT+",
+              "Bluetooth",
+              "Cable",
+              "Propietario inalámbrico"
+            ]
+          },
+          {
+            "key": "models_note",
+            "label": "Modelos / perfiles declarados",
+            "type": "text"
+          },
+          {
+            "key": "source_url",
+            "label": "Fuente",
+            "type": "url"
+          },
+          {
+            "key": "profile",
+            "label": "Perfil / versión de comunicación declarado",
+            "type": "text"
+          },
+          {
+            "key": "supported",
+            "label": "Pareja admitida según fuente (No = exclusión explícita)",
+            "type": "boolean",
+            "required": true
+          }
+        ]
+      },
+      "after": {
+        "version": 1,
+        "columns": [
+          {
+            "key": "sensor_type",
+            "label": "Tipo de sensor",
+            "type": "token",
+            "required": true,
+            "allowed_values": [
+              "Velocidad",
+              "Cadencia",
+              "Velocidad / cadencia",
+              "Frecuencia cardiaca",
+              "Potencia",
+              "Radar",
+              "Luces",
+              "Cambio electrónico",
+              "eBike",
+              "Control remoto",
+              "Rodillo inteligente",
+              "Otro"
+            ]
+          },
+          {
+            "key": "transport",
+            "label": "Transporte",
+            "type": "token",
+            "required": true,
+            "allowed_values": [
+              "ANT+",
+              "Bluetooth",
+              "Cable",
+              "Propietario inalámbrico",
+              "Desconocido / sin confirmar"
+            ]
+          },
+          {
+            "key": "models_note",
+            "label": "Modelos / perfiles declarados",
+            "type": "text"
+          },
+          {
+            "key": "source_url",
+            "label": "Fuente",
+            "type": "url"
+          },
+          {
+            "key": "profile",
+            "label": "Perfil / versión de comunicación declarado",
+            "type": "text"
+          },
+          {
+            "key": "supported",
+            "label": "Admitido en el alcance declarado (No = exclusión explícita)",
+            "type": "boolean",
+            "required": true
+          },
+          {
+            "key": "scope",
+            "label": "Alcance de la declaración",
+            "type": "text",
+            "required": true
+          },
+          {
+            "key": "sensor_model",
+            "label": "Modelo de sensor declarado",
+            "type": "text"
+          },
+          {
+            "key": "sensor_generation",
+            "label": "Generación del sensor declarada",
+            "type": "text"
+          },
+          {
+            "key": "conditions",
+            "label": "Condiciones declaradas",
+            "type": "text"
+          },
+          {
+            "key": "mount_interface",
+            "label": "Montaje del sensor declarado",
+            "type": "text"
+          }
+        ],
+        "unique_by": []
+      },
+      "original_patch_id": "LPS-C-sensor-schema"
+    },
+    {
+      "id": "LPS-C-retire-sensor_mount",
+      "op": "replace_field_contract",
+      "template": "cycle_computer",
+      "key": "sensor_mount",
+      "before": {
+        "roles": "measurement",
+        "allowed_when": {
+          "kind": "always"
+        },
+        "required_when": {
+          "kind": "never"
+        },
+        "semantic_roles": "compatibility"
+      },
+      "after": {
+        "roles": "legacy",
+        "allowed_when": {
+          "kind": "never"
+        },
+        "required_when": {
+          "kind": "never"
+        },
+        "semantic_roles": "legacy"
+      },
+      "original_patch_id": "LPS-C-retire-sensor_mount"
+    },
+    {
+      "id": "LPS-E-protocol-scope",
+      "op": "replace_field_contract",
+      "template": "consumer_electronics",
+      "key": "charging_protocol_claim",
+      "before": {
+        "allowed_when": {
+          "kind": "always"
+        },
+        "helpers": null
+      },
+      "after": {
+        "allowed_when": {
+          "kind": "always"
+        },
+        "helpers": "Declaración del fabricante sobre este dispositivo completo. No asignarla a cada puerto ni usarla como compatibilidad. Los perfiles y protocolos por puerto se registran sólo cuando la fuente identifica el puerto y su condición."
+      },
+      "original_patch_id": "LPS-E-protocol-scope"
+    },
+    {
+      "id": "LPS-E-link-labels",
+      "op": "replace_template_coherence",
+      "template": "consumer_electronics",
+      "key": "row_coherence",
+      "before": {
+        "present": true,
+        "value": {
+          "version": 1,
+          "links": [
+            {
+              "id": "consumer_electronics_member_link",
+              "field": "power_budget_configurations",
+              "column": "port_id",
+              "target_field": "power_port_configurations",
+              "label_columns": [
+                "port_id"
+              ]
+            }
+          ]
+        }
+      },
+      "after": {
+        "version": 1,
+        "links": [
+          {
+            "id": "consumer_electronics_member_link",
+            "field": "power_budget_configurations",
+            "column": "port_id",
+            "target_field": "power_port_configurations",
+            "label_columns": [
+              "port_id",
+              "connector",
+              "direction"
+            ]
+          }
+        ]
+      },
+      "original_patch_id": "LPS-E-link-labels"
+    },
+    {
+      "id": "LPS-E-port-profiles",
+      "op": "add_field",
+      "template": "consumer_electronics",
+      "key": "power_port_profile_configurations",
+      "before": null,
+      "after": {
+        "field_entry": {
+          "key": "power_port_profile_configurations",
+          "section_key": "declaration",
+          "sort_order": 125,
+          "is_required": false,
+          "visibility_rules": [],
+          "option_rules": [],
+          "constraint_rules": []
+        },
+        "roles": "declaration",
+        "allowed_when": {
+          "kind": "when",
+          "rows": [
+            [
+              {
+                "field": "device_kind",
+                "operator": "eq",
+                "value_type": "token",
+                "value": "Cargador"
+              }
+            ]
+          ]
+        },
+        "required_when": {
+          "kind": "never"
+        },
+        "prerequisites": [
+          "spec_evidence_source"
+        ],
+        "helpers": "Una fila conserva el perfil y su alcance documentados. Protocolo desconocido no se completa desde el conector. No calcular V, A, W, potencia agregada ni compatibilidad desde esta fila. Usa el ID del puerto vinculado; el nombre del perfil no es identidad.",
+        "semantic_roles": "declaration",
+        "definition_used_by_append": "consumer_electronics"
+      },
+      "original_patch_id": "LPS-E-port-profiles"
+    },
+    {
+      "id": "LPS-E-port-profiles-link",
+      "op": "replace_template_coherence",
+      "template": "consumer_electronics",
+      "key": "row_coherence",
+      "before": {
+        "present": true,
+        "value": {
+          "version": 1,
+          "links": [
+            {
+              "id": "consumer_electronics_member_link",
+              "field": "power_budget_configurations",
+              "column": "port_id",
+              "target_field": "power_port_configurations",
+              "label_columns": [
+                "port_id",
+                "connector",
+                "direction"
+              ]
+            }
+          ]
+        }
+      },
+      "after": {
+        "version": 1,
+        "links": [
+          {
+            "id": "consumer_electronics_member_link",
+            "field": "power_budget_configurations",
+            "column": "port_id",
+            "target_field": "power_port_configurations",
+            "label_columns": [
+              "port_id",
+              "connector",
+              "direction"
+            ]
+          },
+          {
+            "id": "consumer_electronics_profile_port_link",
+            "field": "power_port_profile_configurations",
+            "column": "port_id",
+            "target_field": "power_port_configurations",
+            "label_columns": [
+              "port_id",
+              "connector"
+            ]
+          }
+        ]
+      },
+      "original_patch_id": "LPS-E-port-profiles"
+    }
+  ]
+}

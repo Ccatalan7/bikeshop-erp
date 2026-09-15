@@ -1,0 +1,118 @@
+{
+  "schema_version": 1,
+  "approval_scope": "field_representation",
+  "base_sha256": "381847b47595d841288224021ae38a8d5dc399e53555a60ae1d65dd1889ddff3",
+  "proposal_sha256": "c49d9b24a75536896aaffbf53e7e7ebfe12e3656be426950f3afd72499d528a5",
+  "patch_adjudications": [
+    {
+      "patch_id": "ROOT-grip-sold_as",
+      "decision": "aceptar",
+      "reason": "FB02: habilitar presentaciones existentes en el vocabulario, con medida por lado; no afirma que un SKU se venda separado."
+    },
+    {
+      "patch_id": "ROOT-light-power_source",
+      "decision": "aceptar",
+      "reason": "FA07: el juego no tiene una alimentación ni fijación común; los miembros conservan sus configuraciones. La coherencia entre campos de luz individual y sus filas aún es gate."
+    },
+    {
+      "patch_id": "ROOT-light-light_mount_kind",
+      "decision": "aceptar",
+      "reason": "FA07: el juego no tiene una alimentación ni fijación común; los miembros conservan sus configuraciones. La coherencia entre campos de luz individual y sus filas aún es gate."
+    },
+    {
+      "patch_id": "ROOT-consumer_electronics-rated_power_w",
+      "decision": "aceptar",
+      "reason": "FA16: el cable conserva su capacidad en cable_power_capacity_w; el total es del cargador."
+    },
+    {
+      "patch_id": "ROOT-head-drive-single-owner",
+      "decision": "aceptar",
+      "reason": "FA02 y revisión Claude: familia de accionamiento y código Torx en sus respectivos campos; todos estos tokens son nuevos y aún no publicados."
+    },
+    {
+      "patch_id": "ROOT-light-row_coherence",
+      "decision": "aceptar",
+      "reason": "FA09: el origen conserva row.id del destino; la etiqueta no es identidad. Validación Dart/SQL, borrado sin cascada y rótulos derivados."
+    },
+    {
+      "patch_id": "ROOT-consumer_electronics-row_coherence",
+      "decision": "aceptar",
+      "reason": "FA09: el origen conserva row.id del destino; la etiqueta no es identidad. Validación Dart/SQL, borrado sin cascada y rótulos derivados."
+    },
+    {
+      "patch_id": "ROOT-chain_guide-scalar_ordered_pairs",
+      "decision": "aceptar",
+      "reason": "Orden de extremos de la misma magnitud y unidad. La igualdad es válida; no convierte un rango declarado en prueba de ajuste de otra pieza."
+    },
+    {
+      "patch_id": "ROOT-rear_derailleur-scalar_ordered_pairs",
+      "decision": "aceptar",
+      "reason": "Orden de extremos de la misma magnitud y unidad. La igualdad es válida; no convierte un rango declarado en prueba de ajuste de otra pieza."
+    },
+    {
+      "patch_id": "ROOT-rim_brake-scalar_ordered_pairs",
+      "decision": "aceptar",
+      "reason": "Orden de extremos de la misma magnitud y unidad. La igualdad es válida; no convierte un rango declarado en prueba de ajuste de otra pieza."
+    },
+    {
+      "patch_id": "ROOT-saddle_cover-scalar_ordered_pairs",
+      "decision": "aceptar",
+      "reason": "Orden de extremos de la misma magnitud y unidad. La igualdad es válida; no convierte un rango declarado en prueba de ajuste de otra pieza."
+    },
+    {
+      "patch_id": "ROOT-tire_liner-scalar_ordered_pairs",
+      "decision": "aceptar",
+      "reason": "Orden de extremos de la misma magnitud y unidad. La igualdad es válida; no convierte un rango declarado en prueba de ajuste de otra pieza."
+    },
+    {
+      "patch_id": "ROOT-chainring_guard-scalar_ordered_pairs",
+      "decision": "aceptar",
+      "reason": "Orden de extremos de la misma magnitud y unidad. La igualdad es válida; no convierte un rango declarado en prueba de ajuste de otra pieza."
+    },
+    {
+      "patch_id": "ROOT-light-scalar_ordered_pairs",
+      "decision": "aceptar",
+      "reason": "Orden de extremos de la misma magnitud y unidad. La igualdad es válida; no convierte un rango declarado en prueba de ajuste de otra pieza."
+    },
+    {
+      "patch_id": "ROOT-audible_signal-scalar_ordered_pairs",
+      "decision": "aceptar",
+      "reason": "Orden de extremos de la misma magnitud y unidad. La igualdad es válida; no convierte un rango declarado en prueba de ajuste de otra pieza."
+    },
+    {
+      "patch_id": "ROOT-accessory_mount-scalar_ordered_pairs",
+      "decision": "aceptar",
+      "reason": "Orden de extremos de la misma magnitud y unidad. La igualdad es válida; no convierte un rango declarado en prueba de ajuste de otra pieza."
+    },
+    {
+      "patch_id": "ROOT-bottle_cage-scalar_ordered_pairs",
+      "decision": "aceptar",
+      "reason": "Orden de extremos de la misma magnitud y unidad. La igualdad es válida; no convierte un rango declarado en prueba de ajuste de otra pieza."
+    },
+    {
+      "patch_id": "ROOT-kickstand-scalar_ordered_pairs",
+      "decision": "aceptar",
+      "reason": "Orden de extremos de la misma magnitud y unidad. La igualdad es válida; no convierte un rango declarado en prueba de ajuste de otra pieza."
+    },
+    {
+      "patch_id": "ROOT-rider_bag-scalar_ordered_pairs",
+      "decision": "aceptar",
+      "reason": "Orden de extremos de la misma magnitud y unidad. La igualdad es válida; no convierte un rango declarado en prueba de ajuste de otra pieza."
+    },
+    {
+      "patch_id": "ROOT-helmet-scalar_ordered_pairs",
+      "decision": "aceptar",
+      "reason": "Orden de extremos de la misma magnitud y unidad. La igualdad es válida; no convierte un rango declarado en prueba de ajuste de otra pieza."
+    },
+    {
+      "patch_id": "ROOT-bicycle-scalar_ordered_pairs",
+      "decision": "aceptar",
+      "reason": "Orden de extremos de la misma magnitud y unidad. La igualdad es válida; no convierte un rango declarado en prueba de ajuste de otra pieza."
+    }
+  ],
+  "remaining_gates": [
+    "Ver AG01-AG08 y GB01-GB08 de los dictámenes independientes.",
+    "Luz individual: escalares y filas aún pueden duplicar datos; elegir un dueño y validar posición/miembros antes de publicar.",
+    "Los perfiles eléctricos/semántica de reparto requieren modelo y alcance, nunca sumar máximos por defecto."
+  ]
+}

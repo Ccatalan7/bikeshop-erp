@@ -1,0 +1,304 @@
+{
+  "fields": [
+    {
+      "id": "234ce9e7-26b0-4c38-af03-bb2022373b9a",
+      "tenant_id": null,
+      "created_at": "2026-09-06T06:58:57.745728+00:00",
+      "sort_order": 5,
+      "updated_at": "2026-09-06T06:58:57.745728+00:00",
+      "helper_text": null,
+      "is_required": false,
+      "section_key": "declaration",
+      "template_id": "a0cb2acf-1e70-4319-abbd-a4f9cae82f8e",
+      "option_rules": [],
+      "constraint_rules": [],
+      "visibility_rules": [],
+      "default_value_json": null,
+      "spec_definition_id": "4f055961-6c16-430b-a4e2-e6b09dc1cccc"
+    },
+    {
+      "id": "7ee85f00-5161-4793-a064-7936d1c8a4ac",
+      "tenant_id": null,
+      "created_at": "2026-04-20T20:47:55.39882+00:00",
+      "sort_order": 30,
+      "updated_at": "2026-04-20T20:47:55.39882+00:00",
+      "helper_text": null,
+      "is_required": false,
+      "section_key": "specs",
+      "template_id": "a0cb2acf-1e70-4319-abbd-a4f9cae82f8e",
+      "option_rules": [],
+      "constraint_rules": [],
+      "visibility_rules": [],
+      "default_value_json": null,
+      "spec_definition_id": "761cda99-daaa-4405-907e-463e0b965ec4"
+    },
+    {
+      "id": "86cf7f13-0a5e-424a-82d7-424b091a570b",
+      "tenant_id": null,
+      "created_at": "2026-04-20T20:47:55.39882+00:00",
+      "sort_order": 20,
+      "updated_at": "2026-04-20T20:47:55.39882+00:00",
+      "helper_text": null,
+      "is_required": false,
+      "section_key": "specs",
+      "template_id": "a0cb2acf-1e70-4319-abbd-a4f9cae82f8e",
+      "option_rules": [],
+      "constraint_rules": [],
+      "visibility_rules": [],
+      "default_value_json": null,
+      "spec_definition_id": "a34c6a16-d587-44d6-bf88-9f3dc10ec903"
+    },
+    {
+      "id": "a9c329fe-6858-4215-ae57-fc9c1ea9f0e7",
+      "tenant_id": null,
+      "created_at": "2026-04-20T20:47:55.39882+00:00",
+      "sort_order": 10,
+      "updated_at": "2026-04-20T20:47:55.39882+00:00",
+      "helper_text": null,
+      "is_required": true,
+      "section_key": "specs",
+      "template_id": "a0cb2acf-1e70-4319-abbd-a4f9cae82f8e",
+      "option_rules": [],
+      "constraint_rules": [],
+      "visibility_rules": [],
+      "default_value_json": null,
+      "spec_definition_id": "df018659-db16-4ecf-ada9-1bba788ecd8f"
+    }
+  ],
+  "templates": [
+    {
+      "id": "a0cb2acf-1e70-4319-abbd-a4f9cae82f8e",
+      "key": "spoke",
+      "name": "Rayo / Spoke",
+      "is_active": true,
+      "tenant_id": null,
+      "created_at": "2026-04-20T20:47:55.193543+00:00",
+      "updated_at": "2026-04-20T20:47:55.193543+00:00",
+      "description": "Rayos con largo, calibre y tipo de cabeza",
+      "default_tags": [],
+      "form_contract": {
+        "roles": {
+          "spoke_gauge": "primary",
+          "spoke_bend_type": "primary",
+          "spoke_length_mm": "measurement",
+          "spec_evidence_source": "declaration"
+        },
+        "labels": {},
+        "helpers": {},
+        "version": 1,
+        "coverage": "template",
+        "prerequisites": {}
+      },
+      "contract_version": 3,
+      "technical_family": "spoke"
+    }
+  ],
+  "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+  "captured_at": "2026-09-08T09:29:47.187224+00:00",
+  "explicit_bindings": {
+    "spoke": 0
+  },
+  "effective_bindings": {
+    "spoke": 48
+  },
+  "existing_definitions": [
+    {
+      "id": "c8398080-0892-5433-951f-15eaac0feef9",
+      "key": "pack_quantity",
+      "unit": "unidades",
+      "label": "Unidades por envase",
+      "options": [],
+      "data_type": "number",
+      "tenant_id": null,
+      "created_at": "2026-09-07T23:23:18.284731+00:00",
+      "group_name": null,
+      "sort_order": 0,
+      "updated_at": "2026-09-07T23:23:18.284731+00:00",
+      "description": null,
+      "is_filterable": false,
+      "allowed_values": [],
+      "validation_rules": {
+        "integer": true,
+        "positive": true
+      },
+      "is_customer_visible": false,
+      "is_mechanic_visible": true,
+      "is_required_by_default": false,
+      "is_compatibility_relevant": false
+    },
+    {
+      "id": "4f055961-6c16-430b-a4e2-e6b09dc1cccc",
+      "key": "spec_evidence_source",
+      "unit": null,
+      "label": "Fuente de la declaración",
+      "options": [],
+      "data_type": "text",
+      "tenant_id": null,
+      "created_at": "2026-09-06T06:58:57.745728+00:00",
+      "group_name": null,
+      "sort_order": 900,
+      "updated_at": "2026-09-06T06:58:57.745728+00:00",
+      "description": "URL del fabricante, manual o identificación del envase que respalda la declaración.",
+      "is_filterable": false,
+      "allowed_values": [],
+      "validation_rules": {},
+      "is_customer_visible": false,
+      "is_mechanic_visible": true,
+      "is_required_by_default": false,
+      "is_compatibility_relevant": false
+    },
+    {
+      "id": "761cda99-daaa-4405-907e-463e0b965ec4",
+      "key": "spoke_bend_type",
+      "unit": null,
+      "label": "Tipo de Cabeza del Rayo",
+      "options": [
+        {
+          "id": "656e97e3-5689-471c-81bd-6c57559174dd",
+          "code": "j_bend",
+          "label": "J-Bend",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-08-21T17:58:02.773721+00:00",
+          "sort_order": 1,
+          "updated_at": "2026-08-21T17:58:02.773721+00:00",
+          "spec_definition_id": "761cda99-daaa-4405-907e-463e0b965ec4"
+        },
+        {
+          "id": "8d04c105-7579-4422-830a-0a80c07ec457",
+          "code": "straight_pull",
+          "label": "Straight Pull",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-08-21T17:58:02.773721+00:00",
+          "sort_order": 2,
+          "updated_at": "2026-08-21T17:58:02.773721+00:00",
+          "spec_definition_id": "761cda99-daaa-4405-907e-463e0b965ec4"
+        }
+      ],
+      "data_type": "single_select",
+      "tenant_id": null,
+      "created_at": "2026-04-20T20:47:54.99401+00:00",
+      "group_name": "Especificaciones",
+      "sort_order": 100,
+      "updated_at": "2026-04-20T20:47:54.99401+00:00",
+      "description": null,
+      "is_filterable": true,
+      "allowed_values": [
+        "J-Bend",
+        "Straight Pull"
+      ],
+      "validation_rules": {},
+      "is_customer_visible": true,
+      "is_mechanic_visible": true,
+      "is_required_by_default": false,
+      "is_compatibility_relevant": false
+    },
+    {
+      "id": "a34c6a16-d587-44d6-bf88-9f3dc10ec903",
+      "key": "spoke_gauge",
+      "unit": null,
+      "label": "Calibre del Rayo",
+      "options": [
+        {
+          "id": "1bd93b68-3c65-4456-b764-a93aef789d78",
+          "code": "v_14g",
+          "label": "14G",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-08-21T17:58:02.773721+00:00",
+          "sort_order": 1,
+          "updated_at": "2026-08-21T17:58:02.773721+00:00",
+          "spec_definition_id": "a34c6a16-d587-44d6-bf88-9f3dc10ec903"
+        },
+        {
+          "id": "2ba9fc95-6ba6-4ad0-b4a4-85023183bc52",
+          "code": "v_13g",
+          "label": "13G",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-08-21T17:58:02.773721+00:00",
+          "sort_order": 3,
+          "updated_at": "2026-08-21T17:58:02.773721+00:00",
+          "spec_definition_id": "a34c6a16-d587-44d6-bf88-9f3dc10ec903"
+        },
+        {
+          "id": "42b44d35-6c23-4dec-84da-27e33bd94831",
+          "code": "v_2_0_1_8",
+          "label": "2.0/1.8",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-08-21T17:58:02.773721+00:00",
+          "sort_order": 4,
+          "updated_at": "2026-08-21T17:58:02.773721+00:00",
+          "spec_definition_id": "a34c6a16-d587-44d6-bf88-9f3dc10ec903"
+        },
+        {
+          "id": "887a45dd-8810-4ea1-bcf1-97c7848f90c3",
+          "code": "v_14_15g",
+          "label": "14/15G",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-08-21T17:58:02.773721+00:00",
+          "sort_order": 2,
+          "updated_at": "2026-08-21T17:58:02.773721+00:00",
+          "spec_definition_id": "a34c6a16-d587-44d6-bf88-9f3dc10ec903"
+        },
+        {
+          "id": "c68b53e3-7b1c-4a2a-9e86-66275b77985d",
+          "code": "v_2_0_1_7_2_0",
+          "label": "2.0/1.7/2.0",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-08-21T17:58:02.773721+00:00",
+          "sort_order": 5,
+          "updated_at": "2026-08-21T17:58:02.773721+00:00",
+          "spec_definition_id": "a34c6a16-d587-44d6-bf88-9f3dc10ec903"
+        }
+      ],
+      "data_type": "single_select",
+      "tenant_id": null,
+      "created_at": "2026-04-20T20:47:54.99401+00:00",
+      "group_name": "Especificaciones",
+      "sort_order": 90,
+      "updated_at": "2026-04-20T20:47:54.99401+00:00",
+      "description": null,
+      "is_filterable": true,
+      "allowed_values": [
+        "14G",
+        "14/15G",
+        "13G",
+        "2.0/1.8",
+        "2.0/1.7/2.0"
+      ],
+      "validation_rules": {},
+      "is_customer_visible": true,
+      "is_mechanic_visible": true,
+      "is_required_by_default": false,
+      "is_compatibility_relevant": false
+    },
+    {
+      "id": "df018659-db16-4ecf-ada9-1bba788ecd8f",
+      "key": "spoke_length_mm",
+      "unit": "mm",
+      "label": "Largo de Rayo (mm)",
+      "options": [],
+      "data_type": "number",
+      "tenant_id": null,
+      "created_at": "2026-04-20T20:47:54.99401+00:00",
+      "group_name": "Especificaciones",
+      "sort_order": 80,
+      "updated_at": "2026-08-24T07:22:40.799958+00:00",
+      "description": null,
+      "is_filterable": true,
+      "allowed_values": [],
+      "validation_rules": {
+        "positive": true
+      },
+      "is_customer_visible": true,
+      "is_mechanic_visible": true,
+      "is_required_by_default": false,
+      "is_compatibility_relevant": false
+    }
+  ]
+}

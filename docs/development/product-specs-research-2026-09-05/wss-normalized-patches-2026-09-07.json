@@ -1,0 +1,2258 @@
+{
+  "schema_version": 1,
+  "new_definitions": {
+    "rim_bead_profile": {
+      "key": "rim_bead_profile",
+      "origin": "new",
+      "id": null,
+      "label": "Perfil del talón de la llanta",
+      "data_type": "single_select",
+      "unit": null,
+      "allowed_values": [
+        "Con gancho (hooked)",
+        "Sin gancho (hookless)",
+        "Tubular / de pegar",
+        "Otro",
+        "Desconocido / sin confirmar"
+      ],
+      "validation_rules": {},
+      "used_by": []
+    },
+    "tire_rim_configurations": {
+      "key": "tire_rim_configurations",
+      "origin": "new",
+      "id": null,
+      "label": "Límites generales de montaje de esta variante de neumático",
+      "data_type": "json",
+      "unit": null,
+      "allowed_values": [],
+      "validation_rules": {
+        "row_label": "Configuración de llanta",
+        "rows_schema": {
+          "version": 1,
+          "columns": [
+            {
+              "key": "rim_bead_profile",
+              "label": "Perfil de la llanta",
+              "type": "token",
+              "required": true,
+              "allowed_values": [
+                "Con gancho (hooked)",
+                "Sin gancho (hookless)",
+                "Tubular / de pegar",
+                "Otro",
+                "Desconocido / sin confirmar"
+              ]
+            },
+            {
+              "key": "mounting_method",
+              "label": "Método de montaje",
+              "type": "token",
+              "required": true,
+              "allowed_values": [
+                "Con cámara",
+                "Tubeless",
+                "Tubular",
+                "Desconocido / sin confirmar"
+              ]
+            },
+            {
+              "key": "rim_internal_width_min_mm",
+              "label": "Ancho interior mínimo",
+              "type": "decimal",
+              "unit": "mm",
+              "validation": {
+                "positive": true
+              }
+            },
+            {
+              "key": "rim_internal_width_max_mm",
+              "label": "Ancho interior máximo",
+              "type": "decimal",
+              "unit": "mm",
+              "validation": {
+                "positive": true
+              }
+            },
+            {
+              "key": "max_pressure",
+              "label": "Presión máxima declarada",
+              "type": "decimal",
+              "validation": {
+                "positive": true
+              }
+            },
+            {
+              "key": "pressure_unit",
+              "label": "Unidad declarada",
+              "type": "token",
+              "allowed_values": [
+                "bar",
+                "psi"
+              ]
+            },
+            {
+              "key": "source_url",
+              "label": "Fuente",
+              "type": "url"
+            }
+          ],
+          "ordered_pairs": [
+            [
+              "rim_internal_width_min_mm",
+              "rim_internal_width_max_mm"
+            ]
+          ],
+          "unique_by": [
+            [
+              "rim_bead_profile",
+              "mounting_method"
+            ]
+          ]
+        }
+      },
+      "used_by": []
+    },
+    "shock_end_configurations": {
+      "key": "shock_end_configurations",
+      "origin": "new",
+      "id": null,
+      "label": "Fijación por extremo del amortiguador",
+      "data_type": "json",
+      "unit": null,
+      "allowed_values": [],
+      "validation_rules": {
+        "row_label": "Configuración",
+        "rows_schema": {
+          "version": 1,
+          "columns": [
+            {
+              "key": "end_position",
+              "label": "Extremo físico del amortiguador",
+              "type": "token",
+              "required": true,
+              "allowed_values": [
+                "Cuerpo",
+                "Vástago"
+              ]
+            },
+            {
+              "key": "mount_kind",
+              "label": "Tipo de fijación",
+              "type": "token",
+              "required": true,
+              "allowed_values": [
+                "Ojal estándar",
+                "Ojal con rodamiento",
+                "Trunnion",
+                "Yoke",
+                "Otro",
+                "Desconocido / sin confirmar"
+              ]
+            },
+            {
+              "key": "hardware_width_mm",
+              "label": "Ancho del hardware",
+              "type": "decimal",
+              "unit": "mm",
+              "validation": {
+                "positive": true
+              }
+            },
+            {
+              "key": "bolt_diameter_mm",
+              "label": "Diámetro del perno",
+              "type": "decimal",
+              "unit": "mm",
+              "validation": {
+                "positive": true
+              }
+            },
+            {
+              "key": "hardware_reference",
+              "label": "Referencia del hardware / adaptador",
+              "type": "text"
+            },
+            {
+              "key": "source_url",
+              "label": "Fuente",
+              "type": "url"
+            }
+          ],
+          "unique_by": [
+            [
+              "end_position"
+            ]
+          ]
+        }
+      },
+      "used_by": []
+    },
+    "bearing_dimensional_code": {
+      "key": "bearing_dimensional_code",
+      "origin": "new",
+      "id": null,
+      "label": "Código dimensional normalizado (sin sufijos)",
+      "data_type": "text",
+      "unit": null,
+      "allowed_values": [],
+      "validation_rules": {},
+      "used_by": []
+    },
+    "bearing_internal_construction": {
+      "key": "bearing_internal_construction",
+      "origin": "new",
+      "id": null,
+      "label": "Diseño interno declarado por el fabricante (literal)",
+      "data_type": "text",
+      "unit": null,
+      "allowed_values": [],
+      "validation_rules": {},
+      "used_by": []
+    },
+    "bearing_seal_kind": {
+      "key": "bearing_seal_kind",
+      "origin": "new",
+      "id": null,
+      "label": "Designación de sellado o blindaje del fabricante (literal)",
+      "data_type": "text",
+      "unit": null,
+      "allowed_values": [],
+      "validation_rules": {},
+      "used_by": []
+    },
+    "headset_bearing_configurations": {
+      "key": "headset_bearing_configurations",
+      "origin": "new",
+      "id": null,
+      "label": "Rodamientos de la dirección por extremo",
+      "data_type": "json",
+      "unit": null,
+      "allowed_values": [],
+      "validation_rules": {
+        "row_label": "Configuración",
+        "rows_schema": {
+          "version": 1,
+          "columns": [
+            {
+              "key": "position",
+              "label": "Extremo",
+              "type": "token",
+              "required": true,
+              "allowed_values": [
+                "Superior",
+                "Inferior"
+              ]
+            },
+            {
+              "key": "construction",
+              "label": "Construcción",
+              "type": "token",
+              "required": true,
+              "allowed_values": [
+                "Cartucho",
+                "Bolas sueltas",
+                "Canastillo con bolas",
+                "Otro",
+                "Desconocido / sin confirmar"
+              ]
+            },
+            {
+              "key": "seat_geometry",
+              "label": "Geometría de apoyo del cartucho",
+              "type": "token",
+              "allowed_values": [
+                "Biseles interior y exterior",
+                "Sólo bisel interior",
+                "Sólo bisel exterior",
+                "Sin biseles de apoyo",
+                "Otro",
+                "Desconocido / sin confirmar"
+              ]
+            },
+            {
+              "key": "inner_contact_angle_deg",
+              "label": "Ángulo del bisel interior",
+              "type": "decimal",
+              "unit": "°",
+              "validation": {
+                "positive": true,
+                "max": "90"
+              }
+            },
+            {
+              "key": "outer_contact_angle_deg",
+              "label": "Ángulo del bisel exterior",
+              "type": "decimal",
+              "unit": "°",
+              "validation": {
+                "positive": true,
+                "max": "90"
+              }
+            },
+            {
+              "key": "bearing_outer_diameter_mm",
+              "label": "Diámetro exterior",
+              "type": "decimal",
+              "unit": "mm",
+              "validation": {
+                "positive": true
+              }
+            },
+            {
+              "key": "bearing_inner_diameter_mm",
+              "label": "Diámetro interior",
+              "type": "decimal",
+              "unit": "mm",
+              "validation": {
+                "positive": true
+              }
+            },
+            {
+              "key": "bearing_height_mm",
+              "label": "Altura",
+              "type": "decimal",
+              "unit": "mm",
+              "validation": {
+                "positive": true
+              }
+            },
+            {
+              "key": "seat_type",
+              "label": "Asiento",
+              "type": "token",
+              "allowed_values": [
+                "IS (integrado)",
+                "ZS (semi-integrado)",
+                "EC (externo)",
+                "Otro",
+                "Desconocido / sin confirmar"
+              ]
+            },
+            {
+              "key": "bearing_reference",
+              "label": "Referencia del rodamiento",
+              "type": "text"
+            },
+            {
+              "key": "source_url",
+              "label": "Fuente",
+              "type": "url"
+            }
+          ],
+          "unique_by": [
+            [
+              "position"
+            ]
+          ]
+        }
+      },
+      "used_by": []
+    },
+    "headset_port_configurations": {
+      "key": "headset_port_configurations",
+      "origin": "new",
+      "id": null,
+      "label": "Alojamientos de dirección del cuadro por extremo",
+      "data_type": "json",
+      "unit": null,
+      "allowed_values": [],
+      "validation_rules": {
+        "row_label": "Configuración",
+        "rows_schema": {
+          "version": 1,
+          "columns": [
+            {
+              "key": "position",
+              "label": "Extremo",
+              "type": "token",
+              "required": true,
+              "allowed_values": [
+                "Superior",
+                "Inferior"
+              ]
+            },
+            {
+              "key": "seat_type",
+              "label": "Tipo de asiento",
+              "type": "token",
+              "required": true,
+              "allowed_values": [
+                "Alojamiento para cazoleta prensada",
+                "Asiento mecanizado para cartucho",
+                "Otro",
+                "Desconocido / sin confirmar"
+              ]
+            },
+            {
+              "key": "housing_diameter_mm",
+              "label": "Diámetro nominal del alojamiento",
+              "type": "decimal",
+              "unit": "mm",
+              "validation": {
+                "positive": true
+              }
+            },
+            {
+              "key": "housing_depth_mm",
+              "label": "Profundidad admisible",
+              "type": "decimal",
+              "unit": "mm",
+              "validation": {
+                "positive": true
+              }
+            },
+            {
+              "key": "measured_diameter_mm",
+              "label": "Diámetro medido (si se midió)",
+              "type": "decimal",
+              "unit": "mm",
+              "validation": {
+                "positive": true
+              }
+            },
+            {
+              "key": "source_url",
+              "label": "Fuente",
+              "type": "url"
+            }
+          ],
+          "unique_by": [
+            [
+              "position"
+            ]
+          ]
+        }
+      },
+      "used_by": []
+    },
+    "fork_tire_clearance_configurations": {
+      "key": "fork_tire_clearance_configurations",
+      "origin": "new",
+      "id": null,
+      "label": "Envolvente de neumático admitida por la horquilla",
+      "data_type": "json",
+      "unit": null,
+      "allowed_values": [],
+      "validation_rules": {
+        "row_label": "Configuración",
+        "rows_schema": {
+          "version": 1,
+          "columns": [
+            {
+              "key": "bead_seat_diameter_mm",
+              "label": "BSD de la rueda",
+              "type": "integer",
+              "unit": "mm",
+              "required": true,
+              "validation": {
+                "positive": true
+              }
+            },
+            {
+              "key": "max_tire_width_mm",
+              "label": "Ancho máximo",
+              "type": "decimal",
+              "unit": "mm",
+              "required": true,
+              "validation": {
+                "positive": true
+              }
+            },
+            {
+              "key": "max_inflated_diameter_mm",
+              "label": "Diámetro exterior inflado máximo",
+              "type": "decimal",
+              "unit": "mm",
+              "validation": {
+                "positive": true
+              }
+            },
+            {
+              "key": "max_inflated_shoulder_diameter_mm",
+              "label": "Diámetro de borde inflado máximo",
+              "type": "decimal",
+              "unit": "mm",
+              "validation": {
+                "positive": true
+              }
+            },
+            {
+              "key": "measurement_method",
+              "label": "Método de medición declarado",
+              "type": "text"
+            },
+            {
+              "key": "source_url",
+              "label": "Fuente",
+              "type": "url"
+            }
+          ],
+          "unique_by": [
+            [
+              "bead_seat_diameter_mm"
+            ]
+          ]
+        }
+      },
+      "used_by": []
+    },
+    "axle_to_crown_mm": {
+      "key": "axle_to_crown_mm",
+      "origin": "new",
+      "id": null,
+      "label": "Longitud eje-corona",
+      "data_type": "number",
+      "unit": "mm",
+      "allowed_values": [],
+      "validation_rules": {
+        "positive": true
+      },
+      "used_by": []
+    },
+    "crown_stack_min_mm": {
+      "key": "crown_stack_min_mm",
+      "origin": "new",
+      "id": null,
+      "label": "Altura total mínima de montaje entre coronas",
+      "data_type": "number",
+      "unit": "mm",
+      "allowed_values": [],
+      "validation_rules": {
+        "positive": true
+      },
+      "used_by": []
+    },
+    "crown_stack_max_mm": {
+      "key": "crown_stack_max_mm",
+      "origin": "new",
+      "id": null,
+      "label": "Altura total máxima de montaje entre coronas",
+      "data_type": "number",
+      "unit": "mm",
+      "allowed_values": [],
+      "validation_rules": {
+        "positive": true
+      },
+      "used_by": []
+    },
+    "dropout_hub_acceptance_configurations": {
+      "key": "dropout_hub_acceptance_configurations",
+      "origin": "new",
+      "id": null,
+      "label": "Mazas admitidas por las punteras según el fabricante",
+      "data_type": "json",
+      "unit": null,
+      "allowed_values": [],
+      "validation_rules": {
+        "row_label": "Configuración",
+        "rows_schema": {
+          "version": 1,
+          "columns": [
+            {
+              "key": "position",
+              "label": "Extremo",
+              "type": "token",
+              "required": true,
+              "allowed_values": [
+                "Delantera",
+                "Trasera"
+              ]
+            },
+            {
+              "key": "accepted_hub_old_mm",
+              "label": "OLD de maza admitido",
+              "type": "decimal",
+              "unit": "mm",
+              "required": true,
+              "validation": {
+                "positive": true
+              }
+            },
+            {
+              "key": "retention_kind",
+              "label": "Retención",
+              "type": "token",
+              "required": true,
+              "allowed_values": [
+                "Cierre rápido",
+                "Eje pasante",
+                "Tuerca de eje",
+                "Otro",
+                "Desconocido / sin confirmar"
+              ]
+            },
+            {
+              "key": "scope_note",
+              "label": "Alcance declarado por el fabricante",
+              "type": "text"
+            },
+            {
+              "key": "source_url",
+              "label": "Fuente",
+              "type": "url"
+            }
+          ],
+          "unique_by": [
+            [
+              "position",
+              "accepted_hub_old_mm",
+              "retention_kind"
+            ]
+          ]
+        }
+      },
+      "used_by": []
+    },
+    "spoke_thread_standard": {
+      "key": "spoke_thread_standard",
+      "origin": "new",
+      "id": null,
+      "label": "Designación de la rosca declarada por el fabricante (por ejemplo FG 2.3)",
+      "data_type": "text",
+      "unit": null,
+      "allowed_values": [],
+      "validation_rules": {},
+      "used_by": []
+    },
+    "nipple_thread_standard": {
+      "key": "nipple_thread_standard",
+      "origin": "new",
+      "id": null,
+      "label": "Designación de la rosca del niple declarada por el fabricante",
+      "data_type": "text",
+      "unit": null,
+      "allowed_values": [],
+      "validation_rules": {},
+      "used_by": []
+    },
+    "bearing_seat_geometry": {
+      "key": "bearing_seat_geometry",
+      "origin": "new",
+      "id": null,
+      "label": "Geometría de apoyo del cartucho",
+      "data_type": "single_select",
+      "unit": null,
+      "allowed_values": [
+        "Biseles interior y exterior",
+        "Sólo bisel interior",
+        "Sólo bisel exterior",
+        "Sin biseles de apoyo",
+        "Otro",
+        "Desconocido / sin confirmar"
+      ],
+      "validation_rules": {},
+      "used_by": []
+    },
+    "bearing_element_retention": {
+      "key": "bearing_element_retention",
+      "origin": "new",
+      "id": null,
+      "label": "Retención de elementos rodantes",
+      "data_type": "single_select",
+      "unit": null,
+      "allowed_values": [
+        "Con jaula",
+        "Complemento completo / sin jaula",
+        "Otro",
+        "Desconocido / sin confirmar"
+      ],
+      "validation_rules": {},
+      "used_by": []
+    },
+    "fork_crown_layout": {
+      "key": "fork_crown_layout",
+      "origin": "new",
+      "id": null,
+      "label": "Construcción de coronas de la horquilla",
+      "data_type": "single_select",
+      "unit": null,
+      "allowed_values": [
+        "Una corona",
+        "Doble corona",
+        "Otra",
+        "Desconocido / sin confirmar"
+      ],
+      "validation_rules": {},
+      "used_by": []
+    }
+  },
+  "patches": [
+    {
+      "id": "WSS-W01-rim-rim_bead_profile",
+      "op": "add_field",
+      "template": "rim",
+      "key": "rim_bead_profile",
+      "before": null,
+      "after": {
+        "field_entry": {
+          "key": "rim_bead_profile",
+          "section_key": "measurement",
+          "sort_order": 200,
+          "is_required": false,
+          "visibility_rules": [],
+          "option_rules": [],
+          "constraint_rules": []
+        },
+        "definition_used_by_append": "rim",
+        "roles": "measurement",
+        "semantic_roles": "compatibility",
+        "allowed_when": {
+          "kind": "always"
+        },
+        "required_when": {
+          "kind": "never"
+        },
+        "evidence_requirements": "oem_spec"
+      }
+    },
+    {
+      "id": "WSS-W01-wheel-rim_bead_profile",
+      "op": "add_field",
+      "template": "wheel",
+      "key": "rim_bead_profile",
+      "before": null,
+      "after": {
+        "field_entry": {
+          "key": "rim_bead_profile",
+          "section_key": "measurement",
+          "sort_order": 200,
+          "is_required": false,
+          "visibility_rules": [],
+          "option_rules": [],
+          "constraint_rules": []
+        },
+        "definition_used_by_append": "wheel",
+        "roles": "measurement",
+        "semantic_roles": "compatibility",
+        "allowed_when": {
+          "kind": "always"
+        },
+        "required_when": {
+          "kind": "never"
+        },
+        "evidence_requirements": "oem_spec"
+      }
+    },
+    {
+      "id": "WSS-W01-tire-configurations",
+      "op": "add_field",
+      "template": "tire",
+      "key": "tire_rim_configurations",
+      "before": null,
+      "after": {
+        "field_entry": {
+          "key": "tire_rim_configurations",
+          "section_key": "measurement",
+          "sort_order": 210,
+          "is_required": false,
+          "visibility_rules": [],
+          "option_rules": [],
+          "constraint_rules": []
+        },
+        "definition_used_by_append": "tire",
+        "roles": "measurement",
+        "semantic_roles": "compatibility",
+        "allowed_when": {
+          "kind": "always"
+        },
+        "required_when": {
+          "kind": "never"
+        },
+        "evidence_requirements": "oem_spec",
+        "prerequisites": [
+          "spec_evidence_source"
+        ]
+      }
+    },
+    {
+      "id": "WSS-W01-tire-max_pressure-label",
+      "op": "replace_definition_label",
+      "template": null,
+      "key": "tire_max_pressure_psi",
+      "before": "Presión máxima del neumático declarada",
+      "after": "Presión máxima de portada declarada por el fabricante (no es el mínimo de las configuraciones)"
+    },
+    {
+      "id": "WSS-W02-shock-ends",
+      "op": "add_field",
+      "template": "rear_shock",
+      "key": "shock_end_configurations",
+      "before": null,
+      "after": {
+        "field_entry": {
+          "key": "shock_end_configurations",
+          "section_key": "measurement",
+          "sort_order": 210,
+          "is_required": false,
+          "visibility_rules": [],
+          "option_rules": [],
+          "constraint_rules": []
+        },
+        "definition_used_by_append": "rear_shock",
+        "roles": "measurement",
+        "semantic_roles": "compatibility",
+        "allowed_when": {
+          "kind": "always"
+        },
+        "required_when": {
+          "kind": "never"
+        },
+        "evidence_requirements": "oem_spec",
+        "prerequisites": [
+          "spec_evidence_source"
+        ]
+      }
+    },
+    {
+      "id": "WSS-W02-hardware-label",
+      "op": "replace_definition_label",
+      "template": null,
+      "key": "mounting_hardware_included",
+      "before": "Incluye herrajes de montaje",
+      "after": "Incluye hardware de montaje (contenido del envase; no afirma que sirva para un cuadro concreto)"
+    },
+    {
+      "id": "WSS-W03-size_code-label",
+      "op": "replace_definition_label",
+      "template": null,
+      "key": "bearing_size_code",
+      "before": "Código rodamiento",
+      "after": "Designación del fabricante, literal y con sufijos (por ejemplo 6902 2RS MAX)"
+    },
+    {
+      "id": "WSS-W03-dimensional_code",
+      "op": "add_field",
+      "template": "bearing",
+      "key": "bearing_dimensional_code",
+      "before": null,
+      "after": {
+        "field_entry": {
+          "key": "bearing_dimensional_code",
+          "section_key": "measurement",
+          "sort_order": 210,
+          "is_required": false,
+          "visibility_rules": [],
+          "option_rules": [],
+          "constraint_rules": []
+        },
+        "definition_used_by_append": "bearing",
+        "roles": "measurement",
+        "semantic_roles": "compatibility",
+        "allowed_when": {
+          "kind": "when",
+          "rows": [
+            [
+              {
+                "field": "bearing_construction",
+                "operator": "in",
+                "value_type": "token",
+                "value": [
+                  "Cartucho sellado",
+                  "Cartucho abierto",
+                  "Cartucho blindado",
+                  "Cartucho (sellado sin confirmar)"
+                ]
+              }
+            ]
+          ]
+        },
+        "required_when": {
+          "kind": "never"
+        },
+        "evidence_requirements": "oem_spec"
+      }
+    },
+    {
+      "id": "WSS-W03-internal_construction",
+      "op": "add_field",
+      "template": "bearing",
+      "key": "bearing_internal_construction",
+      "before": null,
+      "after": {
+        "field_entry": {
+          "key": "bearing_internal_construction",
+          "section_key": "measurement",
+          "sort_order": 220,
+          "is_required": false,
+          "visibility_rules": [],
+          "option_rules": [],
+          "constraint_rules": []
+        },
+        "definition_used_by_append": "bearing",
+        "roles": "measurement",
+        "semantic_roles": "compatibility",
+        "allowed_when": {
+          "kind": "when",
+          "rows": [
+            [
+              {
+                "field": "bearing_construction",
+                "operator": "in",
+                "value_type": "token",
+                "value": [
+                  "Cartucho sellado",
+                  "Cartucho abierto",
+                  "Cartucho blindado",
+                  "Cartucho (sellado sin confirmar)"
+                ]
+              }
+            ]
+          ]
+        },
+        "required_when": {
+          "kind": "never"
+        },
+        "evidence_requirements": "oem_spec"
+      }
+    },
+    {
+      "id": "WSS-W03-seal_kind",
+      "op": "add_field",
+      "template": "bearing",
+      "key": "bearing_seal_kind",
+      "before": null,
+      "after": {
+        "field_entry": {
+          "key": "bearing_seal_kind",
+          "section_key": "measurement",
+          "sort_order": 230,
+          "is_required": false,
+          "visibility_rules": [],
+          "option_rules": [],
+          "constraint_rules": []
+        },
+        "definition_used_by_append": "bearing",
+        "roles": "measurement",
+        "semantic_roles": "compatibility",
+        "allowed_when": {
+          "kind": "when",
+          "rows": [
+            [
+              {
+                "field": "bearing_construction",
+                "operator": "in",
+                "value_type": "token",
+                "value": [
+                  "Cartucho sellado",
+                  "Cartucho abierto",
+                  "Cartucho blindado",
+                  "Cartucho (sellado sin confirmar)"
+                ]
+              }
+            ]
+          ]
+        },
+        "required_when": {
+          "kind": "never"
+        },
+        "evidence_requirements": "oem_spec"
+      }
+    },
+    {
+      "id": "WSS-W03-application-label",
+      "op": "replace_definition_label",
+      "template": null,
+      "key": "bearing_application",
+      "before": "Aplicación del Rodamiento",
+      "after": "Destino funcional declarado por el fabricante (orientación; no aprueba el montaje)"
+    },
+    {
+      "id": "WSS-W04-headset-bearings",
+      "op": "add_field",
+      "template": "headset",
+      "key": "headset_bearing_configurations",
+      "before": null,
+      "after": {
+        "field_entry": {
+          "key": "headset_bearing_configurations",
+          "section_key": "measurement",
+          "sort_order": 210,
+          "is_required": false,
+          "visibility_rules": [],
+          "option_rules": [],
+          "constraint_rules": []
+        },
+        "definition_used_by_append": "headset",
+        "roles": "measurement",
+        "semantic_roles": "compatibility",
+        "allowed_when": {
+          "kind": "always"
+        },
+        "required_when": {
+          "kind": "never"
+        },
+        "evidence_requirements": "oem_spec",
+        "prerequisites": [
+          "spec_evidence_source"
+        ]
+      }
+    },
+    {
+      "id": "WSS-W04-bearing-require-bearing_inner_contact_angle_deg",
+      "op": "replace_field_contract",
+      "template": "bearing",
+      "key": "bearing_inner_contact_angle_deg",
+      "before": {
+        "allowed_when": {
+          "kind": "when",
+          "rows": [
+            [
+              {
+                "field": "bearing_application",
+                "operator": "eq",
+                "value_type": "token",
+                "value": "Dirección"
+              }
+            ]
+          ]
+        },
+        "required_when": {
+          "kind": "never"
+        }
+      },
+      "after": {
+        "allowed_when": {
+          "kind": "when",
+          "rows": [
+            [
+              {
+                "field": "bearing_construction",
+                "operator": "in",
+                "value_type": "token",
+                "value": [
+                  "Cartucho sellado",
+                  "Cartucho abierto",
+                  "Cartucho blindado",
+                  "Cartucho (sellado sin confirmar)"
+                ]
+              },
+              {
+                "field": "bearing_seat_geometry",
+                "operator": "in",
+                "value_type": "token",
+                "value": [
+                  "Biseles interior y exterior",
+                  "Sólo bisel interior"
+                ]
+              }
+            ]
+          ]
+        },
+        "required_when": {
+          "kind": "when",
+          "rows": [
+            [
+              {
+                "field": "bearing_construction",
+                "operator": "in",
+                "value_type": "token",
+                "value": [
+                  "Cartucho sellado",
+                  "Cartucho abierto",
+                  "Cartucho blindado",
+                  "Cartucho (sellado sin confirmar)"
+                ]
+              },
+              {
+                "field": "bearing_seat_geometry",
+                "operator": "in",
+                "value_type": "token",
+                "value": [
+                  "Biseles interior y exterior",
+                  "Sólo bisel interior"
+                ]
+              }
+            ]
+          ]
+        }
+      }
+    },
+    {
+      "id": "WSS-W04-bearing-require-bearing_outer_contact_angle_deg",
+      "op": "replace_field_contract",
+      "template": "bearing",
+      "key": "bearing_outer_contact_angle_deg",
+      "before": {
+        "allowed_when": {
+          "kind": "when",
+          "rows": [
+            [
+              {
+                "field": "bearing_application",
+                "operator": "eq",
+                "value_type": "token",
+                "value": "Dirección"
+              }
+            ]
+          ]
+        },
+        "required_when": {
+          "kind": "never"
+        }
+      },
+      "after": {
+        "allowed_when": {
+          "kind": "when",
+          "rows": [
+            [
+              {
+                "field": "bearing_construction",
+                "operator": "in",
+                "value_type": "token",
+                "value": [
+                  "Cartucho sellado",
+                  "Cartucho abierto",
+                  "Cartucho blindado",
+                  "Cartucho (sellado sin confirmar)"
+                ]
+              },
+              {
+                "field": "bearing_seat_geometry",
+                "operator": "in",
+                "value_type": "token",
+                "value": [
+                  "Biseles interior y exterior",
+                  "Sólo bisel exterior"
+                ]
+              }
+            ]
+          ]
+        },
+        "required_when": {
+          "kind": "when",
+          "rows": [
+            [
+              {
+                "field": "bearing_construction",
+                "operator": "in",
+                "value_type": "token",
+                "value": [
+                  "Cartucho sellado",
+                  "Cartucho abierto",
+                  "Cartucho blindado",
+                  "Cartucho (sellado sin confirmar)"
+                ]
+              },
+              {
+                "field": "bearing_seat_geometry",
+                "operator": "in",
+                "value_type": "token",
+                "value": [
+                  "Biseles interior y exterior",
+                  "Sólo bisel exterior"
+                ]
+              }
+            ]
+          ]
+        }
+      }
+    },
+    {
+      "id": "WSS-W05-frame-ports",
+      "op": "add_field",
+      "template": "frame",
+      "key": "headset_port_configurations",
+      "before": null,
+      "after": {
+        "field_entry": {
+          "key": "headset_port_configurations",
+          "section_key": "measurement",
+          "sort_order": 210,
+          "is_required": false,
+          "visibility_rules": [],
+          "option_rules": [],
+          "constraint_rules": []
+        },
+        "definition_used_by_append": "frame",
+        "roles": "measurement",
+        "semantic_roles": "compatibility",
+        "allowed_when": {
+          "kind": "always"
+        },
+        "required_when": {
+          "kind": "never"
+        },
+        "evidence_requirements": "oem_spec"
+      }
+    },
+    {
+      "id": "WSS-W05-frame-upper_shis-optional",
+      "op": "replace_field_contract",
+      "template": "frame",
+      "key": "headset_upper_shis",
+      "before": {
+        "required_when": {
+          "kind": "always"
+        }
+      },
+      "after": {
+        "required_when": {
+          "kind": "never"
+        }
+      }
+    },
+    {
+      "id": "WSS-W05-frame-lower_shis-optional",
+      "op": "replace_field_contract",
+      "template": "frame",
+      "key": "headset_lower_shis",
+      "before": {
+        "required_when": {
+          "kind": "always"
+        }
+      },
+      "after": {
+        "required_when": {
+          "kind": "never"
+        }
+      }
+    },
+    {
+      "id": "WSS-W05-label-headset_upper_shis",
+      "op": "replace_field_contract",
+      "template": "frame",
+      "key": "headset_upper_shis",
+      "before": {},
+      "after": {
+        "labels": "SHIS superior de la dirección original (evidencia de configuración, no lista exhaustiva)"
+      }
+    },
+    {
+      "id": "WSS-W05-label-headset_lower_shis",
+      "op": "replace_field_contract",
+      "template": "frame",
+      "key": "headset_lower_shis",
+      "before": {},
+      "after": {
+        "labels": "SHIS inferior de la dirección original (evidencia de configuración, no lista exhaustiva)"
+      }
+    },
+    {
+      "id": "WSS-W07-fork-clearance",
+      "op": "add_field",
+      "template": "fork",
+      "key": "fork_tire_clearance_configurations",
+      "before": null,
+      "after": {
+        "field_entry": {
+          "key": "fork_tire_clearance_configurations",
+          "section_key": "measurement",
+          "sort_order": 210,
+          "is_required": false,
+          "visibility_rules": [],
+          "option_rules": [],
+          "constraint_rules": []
+        },
+        "definition_used_by_append": "fork",
+        "roles": "measurement",
+        "semantic_roles": "compatibility",
+        "allowed_when": {
+          "kind": "always"
+        },
+        "required_when": {
+          "kind": "never"
+        },
+        "evidence_requirements": "oem_spec",
+        "prerequisites": [
+          "spec_evidence_source"
+        ]
+      }
+    },
+    {
+      "id": "WSS-W07-fork-axle_to_crown",
+      "op": "add_field",
+      "template": "fork",
+      "key": "axle_to_crown_mm",
+      "before": null,
+      "after": {
+        "field_entry": {
+          "key": "axle_to_crown_mm",
+          "section_key": "measurement",
+          "sort_order": 220,
+          "is_required": false,
+          "visibility_rules": [],
+          "option_rules": [],
+          "constraint_rules": []
+        },
+        "definition_used_by_append": "fork",
+        "roles": "measurement",
+        "semantic_roles": "compatibility",
+        "allowed_when": {
+          "kind": "always"
+        },
+        "required_when": {
+          "kind": "never"
+        },
+        "evidence_requirements": "oem_spec"
+      }
+    },
+    {
+      "id": "WSS-W07-fork-crown_stack_min_mm",
+      "op": "add_field",
+      "template": "fork",
+      "key": "crown_stack_min_mm",
+      "before": null,
+      "after": {
+        "field_entry": {
+          "key": "crown_stack_min_mm",
+          "section_key": "measurement",
+          "sort_order": 230,
+          "is_required": false,
+          "visibility_rules": [],
+          "option_rules": [],
+          "constraint_rules": []
+        },
+        "definition_used_by_append": "fork",
+        "roles": "measurement",
+        "semantic_roles": "compatibility",
+        "allowed_when": {
+          "kind": "when",
+          "rows": [
+            [
+              {
+                "field": "fork_crown_layout",
+                "operator": "eq",
+                "value_type": "token",
+                "value": "Doble corona"
+              }
+            ]
+          ]
+        },
+        "required_when": {
+          "kind": "never"
+        },
+        "evidence_requirements": "oem_spec"
+      }
+    },
+    {
+      "id": "WSS-W07-fork-crown_stack_max_mm",
+      "op": "add_field",
+      "template": "fork",
+      "key": "crown_stack_max_mm",
+      "before": null,
+      "after": {
+        "field_entry": {
+          "key": "crown_stack_max_mm",
+          "section_key": "measurement",
+          "sort_order": 240,
+          "is_required": false,
+          "visibility_rules": [],
+          "option_rules": [],
+          "constraint_rules": []
+        },
+        "definition_used_by_append": "fork",
+        "roles": "measurement",
+        "semantic_roles": "compatibility",
+        "allowed_when": {
+          "kind": "when",
+          "rows": [
+            [
+              {
+                "field": "fork_crown_layout",
+                "operator": "eq",
+                "value_type": "token",
+                "value": "Doble corona"
+              }
+            ]
+          ]
+        },
+        "required_when": {
+          "kind": "never"
+        },
+        "evidence_requirements": "oem_spec"
+      }
+    },
+    {
+      "id": "WSS-W07-fork-stack-pair",
+      "op": "replace_template_coherence",
+      "template": "fork",
+      "key": "scalar_ordered_pairs",
+      "before": {
+        "present": false,
+        "value": null
+      },
+      "after": [
+        [
+          "crown_stack_min_mm",
+          "crown_stack_max_mm"
+        ]
+      ]
+    },
+    {
+      "id": "WSS-W07-fork-max_tire_width-label",
+      "op": "replace_field_contract",
+      "template": "fork",
+      "key": "max_tire_width_mm",
+      "before": {},
+      "after": {
+        "labels": "Ancho máximo de neumático declarado por el fabricante (titular; el detalle por rueda vive en las configuraciones)"
+      }
+    },
+    {
+      "id": "WSS-W08-frame-dropout",
+      "op": "add_field",
+      "template": "frame",
+      "key": "dropout_hub_acceptance_configurations",
+      "before": null,
+      "after": {
+        "field_entry": {
+          "key": "dropout_hub_acceptance_configurations",
+          "section_key": "measurement",
+          "sort_order": 220,
+          "is_required": false,
+          "visibility_rules": [],
+          "option_rules": [],
+          "constraint_rules": []
+        },
+        "definition_used_by_append": "frame",
+        "roles": "measurement",
+        "semantic_roles": "compatibility",
+        "allowed_when": {
+          "kind": "always"
+        },
+        "required_when": {
+          "kind": "never"
+        },
+        "evidence_requirements": "oem_spec",
+        "prerequisites": [
+          "spec_evidence_source"
+        ]
+      }
+    },
+    {
+      "id": "WSS-W10-spoke-thread-label",
+      "op": "replace_definition_label",
+      "template": null,
+      "key": "spoke_thread_diameter_mm",
+      "before": "Diámetro nominal de rosca del rayo",
+      "after": "Diámetro del alambre en la zona roscada, medido (mm)"
+    },
+    {
+      "id": "WSS-W10-spoke-thread_standard",
+      "op": "add_field",
+      "template": "spoke",
+      "key": "spoke_thread_standard",
+      "before": null,
+      "after": {
+        "field_entry": {
+          "key": "spoke_thread_standard",
+          "section_key": "measurement",
+          "sort_order": 210,
+          "is_required": false,
+          "visibility_rules": [],
+          "option_rules": [],
+          "constraint_rules": []
+        },
+        "definition_used_by_append": "spoke",
+        "roles": "measurement",
+        "semantic_roles": "compatibility",
+        "allowed_when": {
+          "kind": "always"
+        },
+        "required_when": {
+          "kind": "never"
+        },
+        "evidence_requirements": "oem_spec"
+      }
+    },
+    {
+      "id": "WSS-W10-nipple-thread_standard",
+      "op": "add_field",
+      "template": "spoke_nipple",
+      "key": "nipple_thread_standard",
+      "before": null,
+      "after": {
+        "field_entry": {
+          "key": "nipple_thread_standard",
+          "section_key": "measurement",
+          "sort_order": 210,
+          "is_required": false,
+          "visibility_rules": [],
+          "option_rules": [],
+          "constraint_rules": []
+        },
+        "definition_used_by_append": "spoke_nipple",
+        "roles": "measurement",
+        "semantic_roles": "compatibility",
+        "allowed_when": {
+          "kind": "always"
+        },
+        "required_when": {
+          "kind": "never"
+        },
+        "evidence_requirements": "oem_spec"
+      }
+    },
+    {
+      "id": "WSS-W10-nipple-thread-label",
+      "op": "replace_definition_label",
+      "template": null,
+      "key": "nipple_thread",
+      "before": "Rosca del niple",
+      "after": "Calibre de radio declarado por el fabricante del niple (designación comercial)"
+    },
+    {
+      "id": "ROOT-WSS-cartridge-constructions",
+      "op": "append_allowed_values",
+      "template": null,
+      "key": "bearing_construction",
+      "before": [
+        "Cartucho sellado",
+        "Bolas sueltas (bolsa)",
+        "Canastillo con bolas",
+        "Desconocido / sin confirmar"
+      ],
+      "after": [
+        "Cartucho sellado",
+        "Bolas sueltas (bolsa)",
+        "Canastillo con bolas",
+        "Desconocido / sin confirmar",
+        "Cartucho abierto",
+        "Cartucho blindado",
+        "Cartucho (sellado sin confirmar)"
+      ]
+    },
+    {
+      "id": "ROOT-WSS-cartridge-domain-bearing-bearing_size_code",
+      "op": "replace_field_contract",
+      "template": "bearing",
+      "key": "bearing_size_code",
+      "before": {
+        "allowed_when": {
+          "kind": "when",
+          "rows": [
+            [
+              {
+                "field": "bearing_construction",
+                "operator": "eq",
+                "value_type": "token",
+                "value": "Cartucho sellado"
+              }
+            ]
+          ]
+        },
+        "required_when": {
+          "kind": "when",
+          "rows": [
+            [
+              {
+                "field": "bearing_construction",
+                "operator": "eq",
+                "value_type": "token",
+                "value": "Cartucho sellado"
+              }
+            ]
+          ]
+        }
+      },
+      "after": {
+        "allowed_when": {
+          "kind": "when",
+          "rows": [
+            [
+              {
+                "field": "bearing_construction",
+                "operator": "in",
+                "value_type": "token",
+                "value": [
+                  "Cartucho sellado",
+                  "Cartucho abierto",
+                  "Cartucho blindado",
+                  "Cartucho (sellado sin confirmar)"
+                ]
+              }
+            ]
+          ]
+        },
+        "required_when": {
+          "kind": "when",
+          "rows": [
+            [
+              {
+                "field": "bearing_construction",
+                "operator": "in",
+                "value_type": "token",
+                "value": [
+                  "Cartucho sellado",
+                  "Cartucho abierto",
+                  "Cartucho blindado",
+                  "Cartucho (sellado sin confirmar)"
+                ]
+              }
+            ]
+          ]
+        }
+      }
+    },
+    {
+      "id": "ROOT-WSS-cartridge-domain-bearing-bearing_inner_diameter_mm",
+      "op": "replace_field_contract",
+      "template": "bearing",
+      "key": "bearing_inner_diameter_mm",
+      "before": {
+        "allowed_when": {
+          "kind": "when",
+          "rows": [
+            [
+              {
+                "field": "bearing_construction",
+                "operator": "eq",
+                "value_type": "token",
+                "value": "Cartucho sellado"
+              }
+            ]
+          ]
+        }
+      },
+      "after": {
+        "allowed_when": {
+          "kind": "when",
+          "rows": [
+            [
+              {
+                "field": "bearing_construction",
+                "operator": "in",
+                "value_type": "token",
+                "value": [
+                  "Cartucho sellado",
+                  "Cartucho abierto",
+                  "Cartucho blindado",
+                  "Cartucho (sellado sin confirmar)"
+                ]
+              }
+            ]
+          ]
+        }
+      }
+    },
+    {
+      "id": "ROOT-WSS-cartridge-domain-bearing-bearing_outer_diameter_mm",
+      "op": "replace_field_contract",
+      "template": "bearing",
+      "key": "bearing_outer_diameter_mm",
+      "before": {
+        "allowed_when": {
+          "kind": "when",
+          "rows": [
+            [
+              {
+                "field": "bearing_construction",
+                "operator": "eq",
+                "value_type": "token",
+                "value": "Cartucho sellado"
+              }
+            ]
+          ]
+        }
+      },
+      "after": {
+        "allowed_when": {
+          "kind": "when",
+          "rows": [
+            [
+              {
+                "field": "bearing_construction",
+                "operator": "in",
+                "value_type": "token",
+                "value": [
+                  "Cartucho sellado",
+                  "Cartucho abierto",
+                  "Cartucho blindado",
+                  "Cartucho (sellado sin confirmar)"
+                ]
+              }
+            ]
+          ]
+        }
+      }
+    },
+    {
+      "id": "ROOT-WSS-cartridge-domain-bearing-bearing_width_mm",
+      "op": "replace_field_contract",
+      "template": "bearing",
+      "key": "bearing_width_mm",
+      "before": {
+        "allowed_when": {
+          "kind": "when",
+          "rows": [
+            [
+              {
+                "field": "bearing_construction",
+                "operator": "eq",
+                "value_type": "token",
+                "value": "Cartucho sellado"
+              }
+            ]
+          ]
+        }
+      },
+      "after": {
+        "allowed_when": {
+          "kind": "when",
+          "rows": [
+            [
+              {
+                "field": "bearing_construction",
+                "operator": "in",
+                "value_type": "token",
+                "value": [
+                  "Cartucho sellado",
+                  "Cartucho abierto",
+                  "Cartucho blindado",
+                  "Cartucho (sellado sin confirmar)"
+                ]
+              }
+            ]
+          ]
+        }
+      }
+    },
+    {
+      "id": "ROOT-WSS-cartridge-domain-bottom_bracket_bearing-bearing_inner_diameter_mm",
+      "op": "replace_field_contract",
+      "template": "bottom_bracket_bearing",
+      "key": "bearing_inner_diameter_mm",
+      "before": {
+        "allowed_when": {
+          "kind": "when",
+          "rows": [
+            [
+              {
+                "field": "bearing_construction",
+                "operator": "eq",
+                "value_type": "token",
+                "value": "Cartucho sellado"
+              }
+            ]
+          ]
+        }
+      },
+      "after": {
+        "allowed_when": {
+          "kind": "when",
+          "rows": [
+            [
+              {
+                "field": "bearing_construction",
+                "operator": "in",
+                "value_type": "token",
+                "value": [
+                  "Cartucho sellado",
+                  "Cartucho abierto",
+                  "Cartucho blindado",
+                  "Cartucho (sellado sin confirmar)"
+                ]
+              }
+            ]
+          ]
+        }
+      }
+    },
+    {
+      "id": "ROOT-WSS-cartridge-domain-bottom_bracket_bearing-bearing_outer_diameter_mm",
+      "op": "replace_field_contract",
+      "template": "bottom_bracket_bearing",
+      "key": "bearing_outer_diameter_mm",
+      "before": {
+        "allowed_when": {
+          "kind": "when",
+          "rows": [
+            [
+              {
+                "field": "bearing_construction",
+                "operator": "eq",
+                "value_type": "token",
+                "value": "Cartucho sellado"
+              }
+            ]
+          ]
+        }
+      },
+      "after": {
+        "allowed_when": {
+          "kind": "when",
+          "rows": [
+            [
+              {
+                "field": "bearing_construction",
+                "operator": "in",
+                "value_type": "token",
+                "value": [
+                  "Cartucho sellado",
+                  "Cartucho abierto",
+                  "Cartucho blindado",
+                  "Cartucho (sellado sin confirmar)"
+                ]
+              }
+            ]
+          ]
+        }
+      }
+    },
+    {
+      "id": "ROOT-WSS-cartridge-domain-bottom_bracket_bearing-bb_bearing_width_mm",
+      "op": "replace_field_contract",
+      "template": "bottom_bracket_bearing",
+      "key": "bb_bearing_width_mm",
+      "before": {
+        "allowed_when": {
+          "kind": "when",
+          "rows": [
+            [
+              {
+                "field": "bearing_construction",
+                "operator": "eq",
+                "value_type": "token",
+                "value": "Cartucho sellado"
+              }
+            ]
+          ]
+        }
+      },
+      "after": {
+        "allowed_when": {
+          "kind": "when",
+          "rows": [
+            [
+              {
+                "field": "bearing_construction",
+                "operator": "in",
+                "value_type": "token",
+                "value": [
+                  "Cartucho sellado",
+                  "Cartucho abierto",
+                  "Cartucho blindado",
+                  "Cartucho (sellado sin confirmar)"
+                ]
+              }
+            ]
+          ]
+        }
+      }
+    },
+    {
+      "id": "ROOT-WSS-cartridge-domain-bottom_bracket_bearing-bearing_size_code",
+      "op": "replace_field_contract",
+      "template": "bottom_bracket_bearing",
+      "key": "bearing_size_code",
+      "before": {
+        "allowed_when": {
+          "kind": "when",
+          "rows": [
+            [
+              {
+                "field": "bearing_construction",
+                "operator": "eq",
+                "value_type": "token",
+                "value": "Cartucho sellado"
+              }
+            ]
+          ]
+        },
+        "required_when": {
+          "kind": "when",
+          "rows": [
+            [
+              {
+                "field": "bearing_construction",
+                "operator": "eq",
+                "value_type": "token",
+                "value": "Cartucho sellado"
+              }
+            ]
+          ]
+        }
+      },
+      "after": {
+        "allowed_when": {
+          "kind": "when",
+          "rows": [
+            [
+              {
+                "field": "bearing_construction",
+                "operator": "in",
+                "value_type": "token",
+                "value": [
+                  "Cartucho sellado",
+                  "Cartucho abierto",
+                  "Cartucho blindado",
+                  "Cartucho (sellado sin confirmar)"
+                ]
+              }
+            ]
+          ]
+        },
+        "required_when": {
+          "kind": "when",
+          "rows": [
+            [
+              {
+                "field": "bearing_construction",
+                "operator": "in",
+                "value_type": "token",
+                "value": [
+                  "Cartucho sellado",
+                  "Cartucho abierto",
+                  "Cartucho blindado",
+                  "Cartucho (sellado sin confirmar)"
+                ]
+              }
+            ]
+          ]
+        }
+      }
+    },
+    {
+      "id": "ROOT-WSS-bearing-bearing_seat_geometry",
+      "op": "add_field",
+      "template": "bearing",
+      "key": "bearing_seat_geometry",
+      "before": null,
+      "after": {
+        "field_entry": {
+          "key": "bearing_seat_geometry",
+          "section_key": "measurement",
+          "sort_order": 240,
+          "is_required": false,
+          "visibility_rules": [],
+          "option_rules": [],
+          "constraint_rules": []
+        },
+        "definition_used_by_append": "bearing",
+        "roles": "measurement",
+        "semantic_roles": "compatibility",
+        "allowed_when": {
+          "kind": "when",
+          "rows": [
+            [
+              {
+                "field": "bearing_construction",
+                "operator": "in",
+                "value_type": "token",
+                "value": [
+                  "Cartucho sellado",
+                  "Cartucho abierto",
+                  "Cartucho blindado",
+                  "Cartucho (sellado sin confirmar)"
+                ]
+              }
+            ]
+          ]
+        },
+        "required_when": {
+          "kind": "never"
+        },
+        "evidence_requirements": "oem_spec"
+      }
+    },
+    {
+      "id": "ROOT-WSS-bearing-bearing_element_retention",
+      "op": "add_field",
+      "template": "bearing",
+      "key": "bearing_element_retention",
+      "before": null,
+      "after": {
+        "field_entry": {
+          "key": "bearing_element_retention",
+          "section_key": "measurement",
+          "sort_order": 250,
+          "is_required": false,
+          "visibility_rules": [],
+          "option_rules": [],
+          "constraint_rules": []
+        },
+        "definition_used_by_append": "bearing",
+        "roles": "measurement",
+        "semantic_roles": "compatibility",
+        "allowed_when": {
+          "kind": "when",
+          "rows": [
+            [
+              {
+                "field": "bearing_construction",
+                "operator": "in",
+                "value_type": "token",
+                "value": [
+                  "Cartucho sellado",
+                  "Cartucho abierto",
+                  "Cartucho blindado",
+                  "Cartucho (sellado sin confirmar)"
+                ]
+              }
+            ]
+          ]
+        },
+        "required_when": {
+          "kind": "never"
+        },
+        "evidence_requirements": "oem_spec"
+      }
+    },
+    {
+      "id": "ROOT-WSS-bevel-label-inner",
+      "op": "replace_definition_label",
+      "template": null,
+      "key": "bearing_inner_contact_angle_deg",
+      "before": "Ángulo de contacto interior del rodamiento",
+      "after": "Ángulo del bisel de apoyo interior"
+    },
+    {
+      "id": "ROOT-WSS-bevel-domain-inner",
+      "op": "replace_unpublished_numeric_rules",
+      "template": null,
+      "key": "bearing_inner_contact_angle_deg",
+      "before": {
+        "positive": true
+      },
+      "after": {
+        "positive": true,
+        "max": "90"
+      }
+    },
+    {
+      "id": "ROOT-WSS-bevel-label-outer",
+      "op": "replace_definition_label",
+      "template": null,
+      "key": "bearing_outer_contact_angle_deg",
+      "before": "Ángulo de contacto exterior del rodamiento",
+      "after": "Ángulo del bisel de apoyo exterior"
+    },
+    {
+      "id": "ROOT-WSS-bevel-domain-outer",
+      "op": "replace_unpublished_numeric_rules",
+      "template": null,
+      "key": "bearing_outer_contact_angle_deg",
+      "before": {
+        "positive": true
+      },
+      "after": {
+        "positive": true,
+        "max": "90"
+      }
+    },
+    {
+      "id": "ROOT-WSS-retire-shock-mount-scalar",
+      "op": "replace_field_contract",
+      "template": "rear_shock",
+      "key": "shock_mount_kind",
+      "before": {
+        "roles": "measurement"
+      },
+      "after": {
+        "roles": "legacy"
+      }
+    },
+    {
+      "id": "ROOT-WSS-fork-fork_crown_layout",
+      "op": "add_field",
+      "template": "fork",
+      "key": "fork_crown_layout",
+      "before": null,
+      "after": {
+        "field_entry": {
+          "key": "fork_crown_layout",
+          "section_key": "measurement",
+          "sort_order": 200,
+          "is_required": false,
+          "visibility_rules": [],
+          "option_rules": [],
+          "constraint_rules": []
+        },
+        "definition_used_by_append": "fork",
+        "roles": "measurement",
+        "semantic_roles": "compatibility",
+        "allowed_when": {
+          "kind": "always"
+        },
+        "required_when": {
+          "kind": "never"
+        },
+        "evidence_requirements": "oem_spec"
+      }
+    },
+    {
+      "id": "ROOT-WSS-conditions-tire",
+      "op": "replace_template_coherence",
+      "template": "tire",
+      "key": "row_conditions",
+      "before": {
+        "present": false,
+        "value": null
+      },
+      "after": {
+        "version": 1,
+        "fields": {
+          "tire_rim_configurations": {
+            "allowed_when": {
+              "max_pressure": {
+                "kind": "when",
+                "rows": [
+                  [
+                    {
+                      "field": "pressure_unit",
+                      "operator": "in",
+                      "value_type": "token",
+                      "value": [
+                        "bar",
+                        "psi"
+                      ]
+                    }
+                  ]
+                ]
+              }
+            },
+            "required_when": {
+              "max_pressure": {
+                "kind": "when",
+                "rows": [
+                  [
+                    {
+                      "field": "pressure_unit",
+                      "operator": "in",
+                      "value_type": "token",
+                      "value": [
+                        "bar",
+                        "psi"
+                      ]
+                    }
+                  ]
+                ]
+              }
+            },
+            "allowed_options": {}
+          }
+        }
+      }
+    },
+    {
+      "id": "ROOT-WSS-conditions-headset",
+      "op": "replace_template_coherence",
+      "template": "headset",
+      "key": "row_conditions",
+      "before": {
+        "present": false,
+        "value": null
+      },
+      "after": {
+        "version": 1,
+        "fields": {
+          "headset_bearing_configurations": {
+            "allowed_when": {
+              "seat_geometry": {
+                "kind": "when",
+                "rows": [
+                  [
+                    {
+                      "field": "construction",
+                      "operator": "eq",
+                      "value_type": "token",
+                      "value": "Cartucho"
+                    }
+                  ]
+                ]
+              },
+              "inner_contact_angle_deg": {
+                "kind": "when",
+                "rows": [
+                  [
+                    {
+                      "field": "construction",
+                      "operator": "eq",
+                      "value_type": "token",
+                      "value": "Cartucho"
+                    },
+                    {
+                      "field": "seat_geometry",
+                      "operator": "in",
+                      "value_type": "token",
+                      "value": [
+                        "Biseles interior y exterior",
+                        "Sólo bisel interior"
+                      ]
+                    }
+                  ]
+                ]
+              },
+              "outer_contact_angle_deg": {
+                "kind": "when",
+                "rows": [
+                  [
+                    {
+                      "field": "construction",
+                      "operator": "eq",
+                      "value_type": "token",
+                      "value": "Cartucho"
+                    },
+                    {
+                      "field": "seat_geometry",
+                      "operator": "in",
+                      "value_type": "token",
+                      "value": [
+                        "Biseles interior y exterior",
+                        "Sólo bisel exterior"
+                      ]
+                    }
+                  ]
+                ]
+              }
+            },
+            "required_when": {
+              "inner_contact_angle_deg": {
+                "kind": "when",
+                "rows": [
+                  [
+                    {
+                      "field": "construction",
+                      "operator": "eq",
+                      "value_type": "token",
+                      "value": "Cartucho"
+                    },
+                    {
+                      "field": "seat_geometry",
+                      "operator": "in",
+                      "value_type": "token",
+                      "value": [
+                        "Biseles interior y exterior",
+                        "Sólo bisel interior"
+                      ]
+                    }
+                  ]
+                ]
+              },
+              "outer_contact_angle_deg": {
+                "kind": "when",
+                "rows": [
+                  [
+                    {
+                      "field": "construction",
+                      "operator": "eq",
+                      "value_type": "token",
+                      "value": "Cartucho"
+                    },
+                    {
+                      "field": "seat_geometry",
+                      "operator": "in",
+                      "value_type": "token",
+                      "value": [
+                        "Biseles interior y exterior",
+                        "Sólo bisel exterior"
+                      ]
+                    }
+                  ]
+                ]
+              }
+            },
+            "allowed_options": {}
+          }
+        }
+      }
+    }
+  ],
+  "source_hashes": {
+    "wheels-steering-suspension-implementation-packet-2026-09-07.json": "c03ebe91fa7e56d32ffb44a0a6ba3b00a4ff917b296068773e2a95027444b3bd",
+    "wheels-steering-suspension-packet-semantic-review-2026-09-07.json": "d45728eefb34ce50598e1d89d272bcf9bd92ff3c0283e91573404cf290e14171",
+    "all-family-row-conditions-integrated-2026-09-07.json": "c12204e42f86423fc3bf3eba345a9f07568b4849d9c8d9b8ace4d44430ddcf9a"
+  },
+  "approval_scope": "field_representation"
+}

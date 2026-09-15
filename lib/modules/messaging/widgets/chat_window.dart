@@ -2,8 +2,11 @@ import 'dart:async';
 import 'dart:convert';
 import 'package:desktop_drop/desktop_drop.dart';
 import 'package:file_picker/file_picker.dart';
-import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/foundation.dart' show kIsWeb, visibleForTesting;
 import 'package:flutter/material.dart';
+
+import '../../../shared/themes/vinabike_theme_roles.dart';
+import '../../../shared/widgets/whatsapp_outgoing_preview.dart';
 import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
@@ -12,17 +15,32 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../bikeshop/models/bikeshop_models.dart';
 import '../../bikeshop/services/bikeshop_service.dart';
+import '../../purchases/models/purchase_invoice.dart';
+import '../../purchases/services/purchase_service.dart';
 import '../../sales/services/sales_service.dart';
+import '../../settings/services/appearance_service.dart';
+import '../../tasks/services/task_service.dart';
+import '../../tasks/widgets/task_thread_root_card.dart';
 import '../../website/services/website_service.dart';
 import '../models/conversation.dart';
 import '../models/conversation_smart_action_capabilities.dart';
 import '../services/messaging_service.dart';
 import '../services/messaging_attachment_service.dart';
+import '../services/chat_media_cache.dart';
+import 'chat_media_thumbnail.dart';
+import 'chat_message_interactions.dart';
+import 'chat_message_quote.dart';
+import 'chat_forward_picker.dart';
+import 'chat_audio_message.dart';
+import 'chat_voice_recorder.dart';
 import '../services/meta_messaging_service.dart';
 import '../models/message.dart';
+import '../models/message_reply.dart';
+import '../models/chat_attachment_draft.dart';
 import '../models/message_delivery_state.dart';
 import '../models/autocomplete_suggestion.dart';
 import 'parsed_message_text.dart';
+import 'purchase_document_preview_dialog.dart';
 import '../providers/chat_provider.dart';
 import '../utils/message_parser.dart';
 import '../utils/conversation_channel_presentation.dart';
@@ -32,9 +50,18 @@ import 'message_delivery_indicator.dart';
 import '../../storage/models/app_stored_file.dart';
 import '../../../shared/services/whatsapp_service.dart';
 import '../../../shared/services/route_share_service.dart';
+import '../../../shared/services/right_toolbar_service.dart';
 import '../../../shared/services/workspace_manager.dart';
+import '../../../shared/services/inventory_service.dart';
+import '../../../shared/utils/chilean_utils.dart';
 import '../../../shared/utils/file_download.dart';
+import '../../../shared/utils/purchase_document_pdf_generator.dart';
 import '../models/conversation_context_hint.dart';
+import '../../../shared/utils/supplier_whatsapp_phone.dart';
+import '../../../shared/widgets/vb_status_badge.dart';
+import '../../../shared/widgets/vb_overlay_surfaces.dart';
+import '../../../shared/widgets/vb_surface_icon_button.dart';
+import '../../../shared/services/supabase_functions_region.dart';
 
 class _EmojiGroup {
   final String label;
@@ -79,6 +106,12 @@ class _MessageGrouping {
   });
 }
 
+class _WhatsAppTemplatePreviewFailure implements Exception {
+  const _WhatsAppTemplatePreviewFailure(this.message);
+
+  final String message;
+}
+
 enum _ChatInfoSection { info, media, workflow, backup }
 
 class _ChatAttachment {
@@ -99,91 +132,16 @@ class _ChatAttachment {
   });
 }
 
-class _PendingChatAttachment {
-  final String id;
-  final String fileName;
-  final Uint8List bytes;
-  final String extension;
-  final bool isImage;
-  final bool outcomeUnknown;
-  final ReservedMessagingAttachment? reservation;
-  final bool retryUpload;
-  final bool canRetrySafely;
-  final String? replayCaption;
-
-  const _PendingChatAttachment({
-    required this.id,
-    required this.fileName,
-    required this.bytes,
-    required this.extension,
-    required this.isImage,
-    this.outcomeUnknown = false,
-    this.reservation,
-    this.retryUpload = false,
-    this.canRetrySafely = false,
-    this.replayCaption,
+/// Un hilo de proveedor que corre por otro número que el registrado en su
+/// ficha (el vendedor, o el Teléfono si no hay vendedor con número).
+class _SupplierPhoneMismatch {
+  const _SupplierPhoneMismatch({
+    required this.threadPhone,
+    required this.registeredPhone,
   });
 
-  _PendingChatAttachment markOutcomeUnknown(
-    _AttachmentDispatchResult result,
-  ) =>
-      _PendingChatAttachment(
-        id: id,
-        fileName: fileName,
-        bytes: bytes,
-        extension: extension,
-        isImage: isImage,
-        outcomeUnknown: true,
-        reservation: result.reservation,
-        retryUpload: result.retryUpload,
-        canRetrySafely: result.canRetrySafely,
-        replayCaption: result.replayCaption,
-      );
-
-  _PendingChatAttachment resetForNewAttempt() => _PendingChatAttachment(
-        id: id,
-        fileName: fileName,
-        bytes: bytes,
-        extension: extension,
-        isImage: isImage,
-      );
-}
-
-enum _AttachmentDispatchOutcome { confirmed, rejected, outcomeUnknown }
-
-class _AttachmentDispatchResult {
-  const _AttachmentDispatchResult._({
-    required this.outcome,
-    this.reservation,
-    this.retryUpload = false,
-    this.canRetrySafely = false,
-    this.replayCaption,
-  });
-
-  const _AttachmentDispatchResult.confirmed()
-      : this._(outcome: _AttachmentDispatchOutcome.confirmed);
-
-  const _AttachmentDispatchResult.rejected()
-      : this._(outcome: _AttachmentDispatchOutcome.rejected);
-
-  const _AttachmentDispatchResult.outcomeUnknown({
-    required ReservedMessagingAttachment reservation,
-    required bool retryUpload,
-    required bool canRetrySafely,
-    String? replayCaption,
-  }) : this._(
-          outcome: _AttachmentDispatchOutcome.outcomeUnknown,
-          reservation: reservation,
-          retryUpload: retryUpload,
-          canRetrySafely: canRetrySafely,
-          replayCaption: replayCaption,
-        );
-
-  final _AttachmentDispatchOutcome outcome;
-  final ReservedMessagingAttachment? reservation;
-  final bool retryUpload;
-  final bool canRetrySafely;
-  final String? replayCaption;
+  final String threadPhone;
+  final String registeredPhone;
 }
 
 class _RouteSharePreview {
@@ -206,7 +164,17 @@ class ChatWindow extends StatefulWidget {
   final bool isContextPanelClosed;
   final VoidCallback? onShowContextPanel;
   final List<Widget> headerActions;
+  final Widget? headerLeading;
   final bool compact;
+  @visibleForTesting
+  final MessagingAttachmentService? attachmentService;
+  final String? initialThreadRootMessageId;
+
+  /// Test seam for the local preview read. Production always resolves the
+  /// exact contact/business values through the canonical services below.
+  @visibleForTesting
+  final Future<String?> Function(WhatsAppTemplateOption option)?
+      whatsAppTemplatePreviewLoader;
 
   const ChatWindow({
     super.key,
@@ -215,7 +183,11 @@ class ChatWindow extends StatefulWidget {
     this.isContextPanelClosed = false,
     this.onShowContextPanel,
     this.headerActions = const [],
+    this.headerLeading,
     this.compact = false,
+    this.attachmentService,
+    this.initialThreadRootMessageId,
+    this.whatsAppTemplatePreviewLoader,
   });
 
   @override
@@ -224,6 +196,11 @@ class ChatWindow extends StatefulWidget {
 
 class _ChatWindowState extends State<ChatWindow> {
   static const Color _accentBlue = Color(0xFF093357);
+  static const Duration _whatsAppTemplatePreviewTimeout = Duration(seconds: 8);
+
+  /// Same sky the purchase list paints on «Enviada», so the composer entry
+  /// reads as the step that produces that state.
+  static const Color _purchaseDocumentAccent = Color(0xFF0EA5E9);
   static const String _pendingAttachmentMutationBlockedMessage =
       'WhatsApp aún no confirma este adjunto. Conservamos la misma reserva '
       'para evitar un envío duplicado; los controles se habilitarán cuando '
@@ -362,7 +339,9 @@ class _ChatWindowState extends State<ChatWindow> {
   ];
 
   final TextEditingController _messageController = TextEditingController();
+  MessageReply? _replyToMessage;
   final ScrollController _scrollController = ScrollController();
+  final ScrollController _threadScrollController = ScrollController();
   final ScrollController _emojiScrollController = ScrollController();
   final FocusNode _focusNode = FocusNode();
   final FocusNode _emojiSearchFocusNode = FocusNode();
@@ -371,11 +350,20 @@ class _ChatWindowState extends State<ChatWindow> {
   final MetaMessagingService _metaMessagingService = MetaMessagingService();
   final Object _conversationViewOwner = Object();
   ChatProvider? _chatProvider;
+  int? _composerSession;
+  final Map<String, Message> _selectedMessages = {};
+  Timer? _composerFocusTimer;
   String? _reportedConversationId;
+  String? _taskContextConversationIdLoaded;
   bool? _reportedConversationVisibility;
   bool _isSendingMessage = false;
   bool _isEmojiPickerOpen = false;
   OverlayEntry? _emojiOverlayEntry;
+
+  /// Cuando el panel de emojis se abre desde el «+» de una reacción, este es el
+  /// mensaje al que va dirigido. Nulo = el panel escribe en el compositor, que
+  /// es su uso original.
+  Message? _emojiPickerReactionTarget;
   int _selectedEmojiCategoryIndex = 0;
   int _openingUnreadCount = 0;
   String? _openingUnreadConversationId;
@@ -390,19 +378,81 @@ class _ChatWindowState extends State<ChatWindow> {
   OverlayEntry? _overlayEntry;
   final LayerLink _layerLink = LayerLink();
   OverlayEntry? _composerMenuOverlayEntry;
+
+  /// Plantilla que el operador está revisando en el panel, con el texto exacto
+  /// que recibirá el contacto. Tocar una plantilla ya no envía: abre esto.
+  WhatsAppTemplateOption? _reviewingTemplate;
+  String? _reviewingTemplateText;
+  String? _reviewingTemplateError;
+  bool _isReviewingTemplateLoading = false;
+  bool _reviewingTemplateNeedsSupplierContact = false;
+  int _reviewingTemplateGeneration = 0;
   String? _activeComposerMenuName;
   bool _showAutomaticMessagesPanel = false;
   bool _showChatInfoPanel = false;
+  String? _activeThreadRootMessageId;
+  bool _alsoSendThreadReplyToChannel = false;
   bool _isExportingChatArchive = false;
   bool _isDraggingAttachment = false;
   bool _isSendingPendingAttachments = false;
+  bool _isPreparingPurchaseDocument = false;
   bool _pendingAttachmentReconciliationScheduled = false;
   bool _showJumpToLatest = false;
   bool _historyAutoLoadScheduled = false;
-  final List<_PendingChatAttachment> _pendingAttachments = [];
-  final Map<String, List<_PendingChatAttachment>>
-      _pendingAttachmentDraftsByConversation = {};
+  final List<PendingChatAttachment> _pendingAttachments = [];
   int _pendingAttachmentSerial = 0;
+
+  /// Voice notes. The bar replaces the text field while recording; the
+  /// finished note goes through the same pipeline as any attachment.
+  late final ChatVoiceRecorderController _voiceRecorder =
+      ChatVoiceRecorderController()..addListener(_onVoiceRecorderChanged);
+
+  void _onVoiceRecorderChanged() {
+    if (mounted) setState(() {});
+  }
+
+  bool get _showsVoiceButton =>
+      _supportsOutgoingAttachments &&
+      !_voiceRecorder.isRecording &&
+      _messageController.text.trim().isEmpty &&
+      _pendingAttachments.isEmpty &&
+      !_isSendingPendingAttachments;
+
+  Future<void> _startVoiceNote() async {
+    _removeComposerMenuOverlay(notify: false);
+    final started = await _voiceRecorder.start();
+    if (!started && mounted) {
+      final reason = _voiceRecorder.error ?? 'No se pudo grabar.';
+      _showErrorSnackBar(context, reason);
+      await _voiceRecorder.cancel();
+    }
+  }
+
+  Future<void> _cancelVoiceNote() => _voiceRecorder.cancel();
+
+  Future<void> _finishVoiceNote() async {
+    final note = await _voiceRecorder.stop();
+    if (!mounted) return;
+    if (note == null) {
+      _showErrorSnackBar(context, 'La nota quedó demasiado corta.');
+      return;
+    }
+    _pendingAttachmentSerial += 1;
+    setState(() {
+      _pendingAttachments.add(
+        PendingChatAttachment(
+          id: 'voice-${DateTime.now().microsecondsSinceEpoch}-$_pendingAttachmentSerial',
+          fileName: note.fileName,
+          bytes: note.bytes,
+          extension: 'm4a',
+          isImage: false,
+          durationSeconds: note.duration.inSeconds,
+        ),
+      );
+    });
+    await _sendPendingAttachments();
+  }
+
   _ChatInfoSection _selectedChatInfoSection = _ChatInfoSection.info;
   final GlobalKey _composerActionsButtonKey = GlobalKey();
   Timer? _serviceWindowTicker;
@@ -410,12 +460,16 @@ class _ChatWindowState extends State<ChatWindow> {
   String? _whatsAppContactFutureConversationId;
   Future<Map<String, dynamic>?>? _conversationContactFuture;
   String? _conversationContactFutureConversationId;
+  Future<_SupplierPhoneMismatch?>? _supplierPhoneMismatchFuture;
+  String? _supplierPhoneMismatchConversationId;
 
   // Cache futures so FutureBuilder doesn't re-fire on every rebuild.
   final Map<String, Future<Map<String, dynamic>?>> _senderInfoFutureCache = {};
   final Map<String, Future<String?>> _whatsAppMediaFutureCache = {};
-  final MessagingAttachmentService _messagingAttachmentService =
+  final MessagingAttachmentService _defaultAttachmentService =
       MessagingAttachmentService();
+  MessagingAttachmentService get _messagingAttachmentService =>
+      widget.attachmentService ?? _defaultAttachmentService;
 
   bool get _isWhatsAppConversation => widget.conversation.isWhatsApp;
   bool get _isMetaConversation => widget.conversation.isMetaMessaging;
@@ -543,6 +597,142 @@ class _ChatWindowState extends State<ChatWindow> {
     }
   }
 
+  void _openTaskFromThread(String taskId) {
+    if (taskId.trim().isEmpty) return;
+    context.read<RightToolbarService>().openConversation(
+          tool: ToolbarTool.tasks,
+          conversationId: taskId,
+        );
+  }
+
+  void _openTaskThreadRoute(String route) {
+    unawaited(context.read<WorkspaceManager>().pushActiveWorkspace(route));
+  }
+
+  String? _taskIdForRoot(Message root) {
+    final stored = widget.conversation.taskIdForRoot(root.id);
+    if (stored != null && stored.isNotEmpty) return stored;
+    if (root.metadata['task_thread_root'] != true) return null;
+    final metadataTaskId = root.metadata['task_id']?.toString().trim();
+    return metadataTaskId == null || metadataTaskId.isEmpty
+        ? null
+        : metadataTaskId;
+  }
+
+  void _openThreadReplies(String rootMessageId) {
+    _selectedMessages.clear();
+    _removeOverlay();
+    _removeEmojiOverlay();
+    _removeComposerMenuOverlay(notify: false);
+    setState(() {
+      _activeThreadRootMessageId = rootMessageId;
+      _alsoSendThreadReplyToChannel = false;
+      _showChatInfoPanel = false;
+    });
+    _jumpToLatest();
+  }
+
+  void _returnToTaskConversation() {
+    _removeOverlay();
+    _removeEmojiOverlay();
+    _removeComposerMenuOverlay(notify: false);
+    setState(() {
+      _activeThreadRootMessageId = null;
+      _alsoSendThreadReplyToChannel = false;
+      _showChatInfoPanel = false;
+    });
+  }
+
+  Widget _buildTaskThreadNavigation(BuildContext context, int replyCount) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    return Container(
+      key: const ValueKey<String>('task-thread-replies-header'),
+      height: 42,
+      padding: const EdgeInsets.symmetric(horizontal: 6),
+      decoration: BoxDecoration(
+        color: colorScheme.surfaceContainerLow,
+        border: Border(
+          bottom: BorderSide(color: colorScheme.outlineVariant),
+        ),
+      ),
+      child: Row(
+        children: [
+          IconButton(
+            key: const ValueKey<String>('task-thread-close-replies'),
+            tooltip: 'Volver al canal',
+            onPressed: _returnToTaskConversation,
+            icon: const Icon(Icons.arrow_back, size: 18),
+          ),
+          const SizedBox(width: 2),
+          Expanded(
+            child: Text(
+              replyCount == 1
+                  ? 'Hilo · 1 respuesta'
+                  : 'Hilo · $replyCount respuestas',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: theme.textTheme.labelLarge?.copyWith(
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTaskThreadRoot(
+    BuildContext context,
+    String taskId,
+    int replyCount, {
+    String? fallbackTitle,
+    VoidCallback? onOpenReplies,
+  }) {
+    final taskService = context.watch<TaskService>();
+    final matchingTasks = taskService.tasks.where((task) => task.id == taskId);
+    if (matchingTasks.isEmpty) {
+      return TaskThreadRootLoadingCard(
+        title: fallbackTitle ?? 'Tarea vinculada',
+        replyCount: replyCount,
+        onOpenTask: () => _openTaskFromThread(taskId),
+        onOpenReplies: onOpenReplies,
+      );
+    }
+
+    final task = matchingTasks.first;
+    final links = taskService.jobItemsOf(taskId);
+    final jobHeader = taskService.jobHeaderOf(task);
+    final linkedJobId =
+        task.linkedJobId ?? (links.isNotEmpty ? links.first.jobId : null);
+    final jobNumber = task.linkedJobNumber ??
+        (links.isNotEmpty ? links.first.jobNumber : null) ??
+        jobHeader?.jobNumber;
+    final jobSummary = [
+      jobHeader?.customerName,
+      jobHeader?.clientRequest,
+    ].whereType<String>().where((value) => value.trim().isNotEmpty).join(' · ');
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: TaskThreadRootCard(
+        task: task,
+        links: links,
+        replyCount: replyCount,
+        onOpenReplies: onOpenReplies,
+        jobNumber: jobNumber,
+        jobSummary: jobSummary,
+        onOpenTask: () => _openTaskFromThread(taskId),
+        onOpenJob: linkedJobId == null
+            ? null
+            : () => _openTaskThreadRoute('/taller/pegas/$linkedJobId'),
+        onOpenLinkedContext: task.linkedContextTarget == null
+            ? null
+            : () => _openTaskThreadRoute(task.linkedContextTarget!.route),
+      ),
+    );
+  }
+
   bool get _canStartWhatsAppFromConversation =>
       widget.conversation.isSupport && widget.conversation.isWebsitePortal;
 
@@ -551,6 +741,108 @@ class _ChatWindowState extends State<ChatWindow> {
     _whatsAppContactFutureConversationId = null;
     _conversationContactFuture = null;
     _conversationContactFutureConversationId = null;
+    _supplierPhoneMismatchFuture = null;
+    _supplierPhoneMismatchConversationId = null;
+  }
+
+  Future<_SupplierPhoneMismatch?> _getSupplierPhoneMismatchFuture() {
+    if (_supplierPhoneMismatchConversationId != widget.conversation.id) {
+      _supplierPhoneMismatchConversationId = widget.conversation.id;
+      _supplierPhoneMismatchFuture = _resolveSupplierPhoneMismatch();
+    }
+    return _supplierPhoneMismatchFuture ??= _resolveSupplierPhoneMismatch();
+  }
+
+  /// El número registrado viene en el hint (vendedor, o el Teléfono de la
+  /// ficha); el del hilo lo dice el vínculo WhatsApp. Cuando el vendedor
+  /// cambia, el hilo viejo sigue abierto con sus mensajes y el ERP le escribe
+  /// al nuevo: el panel lo declara en vez de mostrar dos números sin explicar.
+  Future<_SupplierPhoneMismatch?> _resolveSupplierPhoneMismatch() async {
+    if (!widget.conversation.isSupplierConversation ||
+        !_isWhatsAppConversation) {
+      return null;
+    }
+    final registered = widget.conversation.contextHint?.supplierPhone?.trim();
+    if (!supplierPhoneIsUsable(registered)) return null;
+    Map<String, dynamic>? contact;
+    try {
+      contact = await _getConversationContactFuture();
+    } catch (_) {
+      return null;
+    }
+    final threadPhone = contact?['phone']?.toString().trim();
+    if (!supplierThreadPhoneDiffers(
+      threadPhone: threadPhone,
+      registeredPhone: registered,
+    )) {
+      return null;
+    }
+    return _SupplierPhoneMismatch(
+      threadPhone: threadPhone!,
+      registeredPhone: registered!,
+    );
+  }
+
+  /// Abre —o crea— el hilo con el número registrado del proveedor y lo deja
+  /// activo en la bandeja de proveedores. El hilo viejo no se toca: queda en
+  /// el historial con sus mensajes.
+  Future<void> _openRegisteredSupplierChat(
+    _SupplierPhoneMismatch mismatch,
+  ) async {
+    if (_isSendingMessage) return;
+    final provider = context.read<ChatProvider>();
+    final toolbar = context.read<RightToolbarService>();
+    final messenger = ScaffoldMessenger.of(context);
+    final roles = VinabikeThemeRoles.of(context);
+    final hint = widget.conversation.contextHint;
+    final supplierId = hint?.supplierId ??
+        (_effectiveContextType == 'supplier' ? _effectiveContextId : null);
+    final supplierName = hint?.supplierName?.trim();
+    setState(() => _isSendingMessage = true);
+    try {
+      await provider.openWhatsAppCustomerChat(
+        phoneNumber: mismatch.registeredPhone,
+        contactName: supplierName != null && supplierName.isNotEmpty
+            ? supplierName
+            : widget.conversation.title ?? 'Proveedor',
+        contextType: supplierId == null ? null : 'supplier',
+        contextId: supplierId,
+      );
+      if (!mounted) return;
+      final conversationId = provider.activeConversationId;
+      if (conversationId != null && conversationId != widget.conversation.id) {
+        toolbar.openConversation(
+          tool: ToolbarTool.supplierMessages,
+          conversationId: conversationId,
+        );
+      }
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(
+            'Chat abierto con ${_formatContactPhone(mismatch.registeredPhone)}.',
+          ),
+          backgroundColor: roles.success.accent,
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text('No se pudo abrir el chat: $e'),
+          backgroundColor: roles.danger.accent,
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _isSendingMessage = false);
+    }
+  }
+
+  Future<void> _copyPanelValue(String value, {required String label}) async {
+    await Clipboard.setData(ClipboardData(text: value));
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('$label copiado')),
+    );
   }
 
   Future<Map<String, dynamic>?> _getWhatsAppContactFuture() {
@@ -614,28 +906,51 @@ class _ChatWindowState extends State<ChatWindow> {
   void didChangeDependencies() {
     super.didChangeDependencies();
     _chatProvider = context.read<ChatProvider>();
+    final session = _chatProvider!.composerSession;
+    if (_composerSession != null && _composerSession != session) {
+      _selectedMessages.clear();
+      _replyToMessage = null;
+      _messageController.removeListener(_onTextChanged);
+      _messageController.clear();
+      _messageController.addListener(_onTextChanged);
+      _pendingAttachments.clear();
+    }
+    if (_composerSession == null) {
+      _pendingAttachments.addAll(
+          _chatProvider!.getComposerAttachments(widget.conversation.id));
+    }
+    _composerSession = session;
+    _loadTaskChannelContext();
+  }
+
+  void _loadTaskChannelContext() {
+    if (!widget.conversation.isTaskChannel ||
+        _taskContextConversationIdLoaded == widget.conversation.id) {
+      return;
+    }
+    _taskContextConversationIdLoaded = widget.conversation.id;
+    unawaited(context.read<TaskService>().fetchTasks());
   }
 
   @override
   void didUpdateWidget(covariant ChatWindow oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.conversation.id != widget.conversation.id) {
-      // Attachment reservations are conversation-scoped. Never carry a
-      // pending or outcome-unknown reservation into another chat.
-      if (_pendingAttachments.isEmpty) {
-        _pendingAttachmentDraftsByConversation.remove(
-          oldWidget.conversation.id,
-        );
-      } else {
-        _pendingAttachmentDraftsByConversation[oldWidget.conversation.id] =
-            List<_PendingChatAttachment>.from(_pendingAttachments);
-      }
-      final nextAttachmentDraft = _pendingAttachmentDraftsByConversation.remove(
-        widget.conversation.id,
-      );
+      _selectedMessages.clear();
+      _composerFocusTimer?.cancel();
+      _saveComposerDraft(oldWidget.conversation.id);
+      _messageController.removeListener(_onTextChanged);
+      final draft = _chatProvider?.getComposerDraft(widget.conversation.id);
+      _replyToMessage = draft?.reply;
+      _messageController.text = draft?.text ?? '';
+      _messageController.addListener(_onTextChanged);
+      _isSendingMessage = false;
+      _saveAttachmentDraft(oldWidget.conversation.id);
+      final nextAttachmentDraft =
+          _chatProvider?.getComposerAttachments(widget.conversation.id);
       _pendingAttachments
         ..clear()
-        ..addAll(nextAttachmentDraft ?? const <_PendingChatAttachment>[]);
+        ..addAll(nextAttachmentDraft ?? const <PendingChatAttachment>[]);
       _isSendingPendingAttachments = false;
       _senderInfoFutureCache.clear();
       _whatsAppMediaFutureCache.clear();
@@ -644,18 +959,35 @@ class _ChatWindowState extends State<ChatWindow> {
       _removeComposerMenuOverlay(notify: false);
       _showAutomaticMessagesPanel = false;
       _showChatInfoPanel = false;
+      _activeThreadRootMessageId =
+          widget.initialThreadRootMessageId?.trim().isNotEmpty == true
+              ? widget.initialThreadRootMessageId!.trim()
+              : null;
+      _alsoSendThreadReplyToChannel = false;
       _historyAutoLoadScheduled = false;
       _selectedChatInfoSection = _ChatInfoSection.info;
+      _loadTaskChannelContext();
       _syncServiceWindowTicker();
       _captureOpeningUnreadCount();
       _loadMessages();
       _applyPendingDraft();
+    } else if (oldWidget.initialThreadRootMessageId !=
+        widget.initialThreadRootMessageId) {
+      _activeThreadRootMessageId =
+          widget.initialThreadRootMessageId?.trim().isNotEmpty == true
+              ? widget.initialThreadRootMessageId!.trim()
+              : null;
+      _alsoSendThreadReplyToChannel = false;
     }
   }
 
   @override
   void initState() {
     super.initState();
+    _activeThreadRootMessageId =
+        widget.initialThreadRootMessageId?.trim().isNotEmpty == true
+            ? widget.initialThreadRootMessageId!.trim()
+            : null;
     _scrollController.addListener(_handleTimelineScroll);
     _captureOpeningUnreadCount();
     _loadMessages();
@@ -666,6 +998,9 @@ class _ChatWindowState extends State<ChatWindow> {
 
   @override
   void dispose() {
+    _composerFocusTimer?.cancel();
+    _saveComposerDraft(widget.conversation.id);
+    _saveAttachmentDraft(widget.conversation.id);
     _chatProvider?.detachConversationView(_conversationViewOwner);
     _removeEmojiOverlay();
     _removeComposerMenuOverlay(notify: false);
@@ -674,8 +1009,13 @@ class _ChatWindowState extends State<ChatWindow> {
     _debounce?.cancel();
     _messageController.removeListener(_onTextChanged);
     _messageController.dispose();
+    _voiceRecorder
+      ..removeListener(_onVoiceRecorderChanged)
+      ..dispose();
+    _historyRequestDebounce?.cancel();
     _scrollController.removeListener(_handleTimelineScroll);
     _scrollController.dispose();
+    _threadScrollController.dispose();
     _emojiScrollController.dispose();
     _focusNode.dispose();
     _emojiSearchFocusNode.dispose();
@@ -684,6 +1024,7 @@ class _ChatWindowState extends State<ChatWindow> {
   }
 
   void _onTextChanged() {
+    _saveComposerDraft(widget.conversation.id);
     _debounce?.cancel();
 
     final text = _messageController.text;
@@ -784,9 +1125,12 @@ class _ChatWindowState extends State<ChatWindow> {
                   Container(
                     padding: const EdgeInsets.all(8),
                     decoration: BoxDecoration(
-                      border:
-                          Border(bottom: BorderSide(color: Colors.grey[200]!)),
-                      color: Colors.grey[50],
+                      border: Border(
+                          bottom: BorderSide(
+                              color: Theme.of(context)
+                                  .colorScheme
+                                  .outlineVariant)),
+                      color: Theme.of(context).colorScheme.surfaceContainerLow,
                     ),
                     child: const Row(
                       children: [
@@ -868,6 +1212,22 @@ class _ChatWindowState extends State<ChatWindow> {
     setState(() {});
   }
 
+  /// Abre el panel de emojis del chat apuntando a un mensaje, para el «+» de
+  /// la barra de reacciones. Se ancla y se dibuja igual que el del compositor:
+  /// dentro del chat, no como un diálogo flotante al medio de la pantalla.
+  void _openEmojiPickerForReaction(Message msg) {
+    _removeEmojiOverlay();
+    _removeOverlay();
+    _removeComposerMenuOverlay(notify: false);
+    _emojiPickerReactionTarget = msg;
+    _isEmojiPickerOpen = true;
+    _emojiOverlayEntry = OverlayEntry(
+      builder: (context) => _buildEmojiOverlay(context),
+    );
+    Overlay.of(context).insert(_emojiOverlayEntry!);
+    setState(() {});
+  }
+
   void _hideEmojiPicker({bool restoreComposerFocus = false}) {
     _removeEmojiOverlay();
     if (mounted) setState(() {});
@@ -878,6 +1238,7 @@ class _ChatWindowState extends State<ChatWindow> {
     _emojiOverlayEntry?.remove();
     _emojiOverlayEntry = null;
     _isEmojiPickerOpen = false;
+    _emojiPickerReactionTarget = null;
     _emojiSearchController.clear();
   }
 
@@ -928,8 +1289,18 @@ class _ChatWindowState extends State<ChatWindow> {
     _composerMenuOverlayEntry = null;
     _activeComposerMenuName = null;
     _showAutomaticMessagesPanel = false;
+    _resetWhatsAppTemplatePreview();
     if (notify && mounted) setState(() {});
     if (restoreComposerFocus) _restoreComposerFocus();
+  }
+
+  void _resetWhatsAppTemplatePreview() {
+    _reviewingTemplateGeneration += 1;
+    _reviewingTemplate = null;
+    _reviewingTemplateText = null;
+    _reviewingTemplateError = null;
+    _isReviewingTemplateLoading = false;
+    _reviewingTemplateNeedsSupplierContact = false;
   }
 
   Widget _buildAnchoredComposerOverlay({
@@ -957,17 +1328,23 @@ class _ChatWindowState extends State<ChatWindow> {
     final anchorRect = anchorOffset & anchorSize;
     final horizontalLimit =
         (overlaySize.width - effectiveWidth - 12).clamp(12.0, double.infinity);
-    final left = (anchorRect.center.dx - effectiveWidth / 2)
-        .clamp(12.0, horizontalLimit)
-        .toDouble();
-    final preferredTop = anchorRect.top - estimatedHeight - 8;
-    final fallbackTop = anchorRect.bottom + 8;
-    final verticalLimit = (overlaySize.height - estimatedHeight - 12)
-        .clamp(12.0, double.infinity);
-    final top = (preferredTop >= 12 ? preferredTop : fallbackTop)
-        .clamp(12.0, verticalLimit)
-        .toDouble();
-    final maxPanelHeight = (overlaySize.height - top - 12)
+    // Hug the button's own edge instead of centring on it: the panel is wider
+    // than the button, so centring pushes it past the pane and the clamp then
+    // parks it against the window border, far from what was pressed.
+    final left = anchorRect.left > horizontalLimit
+        ? (anchorRect.right - effectiveWidth)
+            .clamp(12.0, horizontalLimit)
+            .toDouble()
+        : anchorRect.left.clamp(12.0, horizontalLimit).toDouble();
+
+    // `estimatedHeight` only chooses the side. The panel is then pinned by the
+    // edge that touches the button, so a panel shorter than the estimate stays
+    // glued to it instead of floating that difference away.
+    final spaceAbove = anchorRect.top - 20;
+    final spaceBelow = overlaySize.height - anchorRect.bottom - 20;
+    final opensUpward = spaceAbove >= 140 &&
+        (spaceAbove >= estimatedHeight || spaceAbove >= spaceBelow);
+    final maxPanelHeight = (opensUpward ? spaceAbove : spaceBelow)
         .clamp(120.0, overlaySize.height - 24)
         .toDouble();
 
@@ -982,7 +1359,8 @@ class _ChatWindowState extends State<ChatWindow> {
         ),
         Positioned(
           left: left,
-          top: top,
+          top: opensUpward ? null : anchorRect.bottom + 8,
+          bottom: opensUpward ? overlaySize.height - anchorRect.top + 8 : null,
           width: effectiveWidth,
           child: GestureDetector(
             behavior: HitTestBehavior.opaque,
@@ -1168,6 +1546,15 @@ class _ChatWindowState extends State<ChatWindow> {
   }
 
   void _insertEmoji(String emoji) {
+    // Mismo panel, distinto destino. Un segundo selector para reaccionar se
+    // desincronizaría del del compositor y, peor, WhatsApp no lo tiene: es el
+    // mismo teclado de emojis abierto desde otro lado.
+    final reactionTarget = _emojiPickerReactionTarget;
+    if (reactionTarget != null) {
+      _hideEmojiPicker();
+      unawaited(_toggleReaction(reactionTarget, emoji));
+      return;
+    }
     final value = _messageController.value;
     final text = value.text;
     final selection = _focusNode.hasFocus
@@ -1289,9 +1676,28 @@ class _ChatWindowState extends State<ChatWindow> {
     return items;
   }
 
+  /// Espera a que el scroll SE DETENGA antes de pedir historial.
+  ///
+  /// Antes se pedía en cada evento de scroll. Cargar mensajes viejos mientras
+  /// el dedo está en movimiento inserta contenido en una lista invertida, la
+  /// extensión cambia y el viewport corrige la posición en medio del gesto: eso
+  /// es el «se queda pegado y vibra» al volver hacia abajo tras haber subido.
+  /// El indicador de «ir al último» sí sigue al dedo, porque no toca la
+  /// geometría.
+  Timer? _historyRequestDebounce;
+
   void _handleTimelineScroll() {
     if (!_scrollController.hasClients) return;
-    _requestOlderMessagesIfAtStart();
+
+    _historyRequestDebounce?.cancel();
+    _historyRequestDebounce = Timer(const Duration(milliseconds: 160), () {
+      if (!mounted || !_scrollController.hasClients) return;
+      // Una inercia larga sigue viva cuando expira el temporizador; pedir ahí
+      // reintroduce exactamente el defecto.
+      if (_scrollController.position.isScrollingNotifier.value) return;
+      _requestOlderMessagesIfAtStart();
+    });
+
     final shouldShow = _scrollController.offset > 180;
     if (shouldShow == _showJumpToLatest || !mounted) return;
     setState(() => _showJumpToLatest = shouldShow);
@@ -1330,8 +1736,12 @@ class _ChatWindowState extends State<ChatWindow> {
   }
 
   Future<void> _jumpToLatest() async {
-    if (!_scrollController.hasClients) return;
-    await _scrollController.animateTo(
+    final controller =
+        _activeThreadRootMessageId != null && _threadScrollController.hasClients
+            ? _threadScrollController
+            : _scrollController;
+    if (!controller.hasClients) return;
+    await controller.animateTo(
       0,
       duration: const Duration(milliseconds: 220),
       curve: Curves.easeOutCubic,
@@ -1364,14 +1774,92 @@ class _ChatWindowState extends State<ChatWindow> {
     return !message.isMe && message.type != 'system';
   }
 
-  void _applyPendingDraft() {
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted || _messageController.text.trim().isNotEmpty) return;
+  bool _isCurrentComposer(String conversationId, int? session) =>
+      mounted &&
+      widget.conversation.id == conversationId &&
+      _chatProvider?.composerSession == session;
 
-      final draft = context
-          .read<ChatProvider>()
-          .getConversationDraft(widget.conversation.id)
-          ?.body;
+  void _saveAttachmentDraft(String conversationId) {
+    if (_composerSession == null) return;
+    _chatProvider?.saveComposerAttachments(conversationId, _pendingAttachments,
+        session: _composerSession!);
+  }
+
+  void _saveComposerDraft(String conversationId) {
+    if (_composerSession == null) return;
+    _chatProvider?.saveComposerDraft(
+        conversationId,
+        ChatComposerDraft(
+            text: _messageController.text, reply: _replyToMessage),
+        session: _composerSession!);
+  }
+
+  void _restoreFailedDraft(ChatProvider provider, String conversationId,
+      String text, MessageReply? reply, int session) {
+    if (provider.composerSession != session) return;
+    final existing = provider.getComposerDraft(conversationId);
+    if (existing?.text.isNotEmpty == true || existing?.reply != null) return;
+    provider.saveComposerDraft(
+        conversationId, ChatComposerDraft(text: text, reply: reply),
+        session: session);
+    if (!mounted || widget.conversation.id != conversationId) return;
+    setState(() => _replyToMessage = reply);
+    _messageController.value = TextEditingValue(
+        text: text, selection: TextSelection.collapsed(offset: text.length));
+  }
+
+  bool _canQuoteMessage(Message message) =>
+      message.conversationId == widget.conversation.id &&
+      message.type != 'system' &&
+      !message.id.startsWith('temp-') &&
+      message.metadata['pending'] != true &&
+      (widget.conversation.isInternal ||
+          (_isWhatsAppConversation &&
+              message.metadata['external_message_id']?.toString().isNotEmpty ==
+                  true));
+
+  void _selectReply(Message message) {
+    if (!_canQuoteMessage(message)) return;
+    setState(() => _replyToMessage = MessageReply.fromMessage(message));
+    _saveComposerDraft(widget.conversation.id);
+    _restoreComposerFocus();
+  }
+
+  Widget _buildMessageQuote(MessageReply reply, {bool composing = false}) {
+    final author = reply.senderId != null &&
+            reply.senderId == _messagingService.currentUserId
+        ? 'Tú'
+        : reply.senderName?.trim().isNotEmpty == true
+            ? reply.senderName!
+            : reply.direction == 'inbound'
+                ? widget.conversation.title ?? 'Contacto'
+                : 'Mensaje';
+    return ChatMessageQuote(
+      key: composing ? const ValueKey('chat-reply-preview') : null,
+      author: composing ? 'Responder a $author' : author,
+      preview: reply.preview,
+      onCancel: composing
+          ? () {
+              setState(() => _replyToMessage = null);
+              _saveComposerDraft(widget.conversation.id);
+            }
+          : null,
+    );
+  }
+
+  void _applyPendingDraft() {
+    final conversationId = widget.conversation.id;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted ||
+          widget.conversation.id != conversationId ||
+          _messageController.text.isNotEmpty) return;
+
+      final provider = context.read<ChatProvider>();
+      final composer = provider.getComposerDraft(conversationId);
+      final draft =
+          composer?.text ?? provider.getConversationDraft(conversationId)?.body;
+      if (composer?.reply != null)
+        setState(() => _replyToMessage = composer!.reply);
       if (draft == null || draft.trim().isEmpty) return;
 
       _messageController.value = TextEditingValue(
@@ -1388,8 +1876,19 @@ class _ChatWindowState extends State<ChatWindow> {
       return;
     }
     final chatProvider = context.read<ChatProvider>();
+    final composerSession = chatProvider.composerSession;
+    final conversationId = widget.conversation.id;
+    final reply = _replyToMessage;
     final pendingText = text;
-    final messageMetadata = <String, dynamic>{...?metadata};
+    final threadRootMessageId = _activeThreadRootMessageId;
+    final messageMetadata = <String, dynamic>{
+      ...?metadata,
+      if (reply != null) 'reply_to': reply.toJson(),
+      if (threadRootMessageId != null)
+        'thread_root_message_id': threadRootMessageId,
+      if (threadRootMessageId != null && _alsoSendThreadReplyToChannel)
+        'also_send_to_channel': true,
+    };
 
     if (_isWhatsAppConversation) {
       // Snappy precheck: derive the 24h window state from messages we already
@@ -1430,6 +1929,7 @@ class _ChatWindowState extends State<ChatWindow> {
       }
     }
 
+    _replyToMessage = null;
     _messageController.clear();
     _restoreComposerFocus();
     setState(() {
@@ -1441,10 +1941,15 @@ class _ChatWindowState extends State<ChatWindow> {
       if (!_isWhatsAppConversation && !_isMetaConversation) {
         await chatProvider.sendMessage(
           pendingText,
+          conversationId: conversationId,
           metadata: messageMetadata.isEmpty ? null : messageMetadata,
+          threadRootMessageId: threadRootMessageId,
         );
-        if (!mounted) {
+        if (!mounted || widget.conversation.id != conversationId) {
           return;
+        }
+        if (threadRootMessageId != null && _alsoSendThreadReplyToChannel) {
+          setState(() => _alsoSendThreadReplyToChannel = false);
         }
         return;
       }
@@ -1477,6 +1982,7 @@ class _ChatWindowState extends State<ChatWindow> {
         unawaited(
           _dispatchMetaSend(
             chatProvider: chatProvider,
+            composerSession: composerSession,
             optimisticMessageId: optimisticMessageId,
             pendingText: pendingText,
             messageMetadata: messageMetadata,
@@ -1488,7 +1994,7 @@ class _ChatWindowState extends State<ChatWindow> {
 
       final sendStartedAt = DateTime.now();
       final optimisticMessageId =
-          'temp-wa-${sendStartedAt.millisecondsSinceEpoch}';
+          'temp-wa-${sendStartedAt.microsecondsSinceEpoch}';
       chatProvider.addOptimisticMessage(
         Message(
           id: optimisticMessageId,
@@ -1532,12 +2038,15 @@ class _ChatWindowState extends State<ChatWindow> {
       );
       unawaited(_dispatchWhatsAppSend(
         chatProvider: chatProvider,
+        composerSession: composerSession,
         optimisticMessageId: optimisticMessageId,
         pendingText: pendingText,
         messageMetadata: messageMetadata,
+        reply: reply,
         sendStartedAt: sendStartedAt,
         fallbackContext: dispatchContext,
         conversationId: dispatchConversationId,
+        isSupplierConversation: widget.conversation.isSupplierConversation,
         contextType: dispatchContextType,
         contextId: dispatchContextId,
         contactFuture: contactFuture,
@@ -1545,19 +2054,15 @@ class _ChatWindowState extends State<ChatWindow> {
       ));
       return;
     } catch (e) {
-      if (!mounted) {
-        return;
-      }
-      if (_messageController.text.trim().isEmpty) {
-        _messageController.text = pendingText;
-        _messageController.selection = TextSelection.collapsed(
-          offset: _messageController.text.length,
-        );
-      }
+      _restoreFailedDraft(
+          chatProvider, conversationId, pendingText, reply, composerSession);
+      if (!mounted || widget.conversation.id != conversationId) return;
       _restoreComposerFocus();
       _showErrorSnackBar(context, 'No se pudo enviar el mensaje: $e');
     } finally {
-      if (mounted && _isSendingMessage) {
+      if (mounted &&
+          widget.conversation.id == conversationId &&
+          _isSendingMessage) {
         setState(() => _isSendingMessage = false);
       }
     }
@@ -1573,6 +2078,7 @@ class _ChatWindowState extends State<ChatWindow> {
 
   Future<void> _dispatchMetaSend({
     required ChatProvider chatProvider,
+    required int composerSession,
     required String optimisticMessageId,
     required String pendingText,
     required Map<String, dynamic> messageMetadata,
@@ -1644,13 +2150,9 @@ class _ChatWindowState extends State<ChatWindow> {
             'external_error_message': errorMessage,
           },
         );
+        _restoreFailedDraft(
+            chatProvider, conversationId, pendingText, null, composerSession);
         if (mounted && widget.conversation.id == conversationId) {
-          if (_messageController.text.trim().isEmpty) {
-            _messageController.text = pendingText;
-            _messageController.selection = TextSelection.collapsed(
-              offset: _messageController.text.length,
-            );
-          }
           _restoreComposerFocus();
           _showErrorSnackBar(context, errorMessage);
         }
@@ -1660,12 +2162,15 @@ class _ChatWindowState extends State<ChatWindow> {
 
   Future<void> _dispatchWhatsAppSend({
     required ChatProvider chatProvider,
+    required int composerSession,
     required String optimisticMessageId,
     required String pendingText,
     required Map<String, dynamic> messageMetadata,
+    required MessageReply? reply,
     required DateTime sendStartedAt,
     required BuildContext fallbackContext,
     required String conversationId,
+    required bool isSupplierConversation,
     required String? contextType,
     required String? contextId,
     required Future<Map<String, dynamic>?> contactFuture,
@@ -1698,7 +2203,9 @@ class _ChatWindowState extends State<ChatWindow> {
           sendStartedAt,
         );
         chatProvider.removeMessageById(optimisticMessageId);
-        if (mounted) {
+        _restoreFailedDraft(
+            chatProvider, conversationId, pendingText, reply, composerSession);
+        if (mounted && widget.conversation.id == conversationId) {
           _showErrorSnackBar(
             context,
             'La conversación de WhatsApp no tiene un teléfono asociado.',
@@ -1721,12 +2228,15 @@ class _ChatWindowState extends State<ChatWindow> {
         customerPhone: phone,
         message: pendingText,
         contactName: contact?['name']?.toString(),
+        templateContactName: contact?['template_contact_name']?.toString(),
+        isSupplierConversation: isSupplierConversation,
         conversationId: conversationId,
         contextType: contextType,
         contextId: contextId,
         lastInboundAt: lastInboundAt,
         clientMessageId: optimisticMessageId,
         metadata: messageMetadata,
+        replyToMessageId: reply?.externalMessageId,
       );
       _debugLogWhatsAppSend(
         optimisticMessageId,
@@ -1759,7 +2269,7 @@ class _ChatWindowState extends State<ChatWindow> {
           );
           // Keep the optimistic row: the active realtime subscription can
           // still reconcile a late durable/provider receipt.
-          if (mounted) {
+          if (mounted && widget.conversation.id == conversationId) {
             _showErrorSnackBar(
               context,
               'Resultado incierto: verifica la conversación antes de reenviar.',
@@ -1797,13 +2307,9 @@ class _ChatWindowState extends State<ChatWindow> {
             },
           },
         );
-        if (mounted) {
-          if (_messageController.text.trim().isEmpty) {
-            _messageController.text = pendingText;
-            _messageController.selection = TextSelection.collapsed(
-              offset: _messageController.text.length,
-            );
-          }
+        _restoreFailedDraft(
+            chatProvider, conversationId, pendingText, reply, composerSession);
+        if (mounted && widget.conversation.id == conversationId) {
           final errorMessage = receipt.errorRequiresServerFix
               ? 'Meta rechazó el envío porque el token de WhatsApp Cloud API expiró. Hay que actualizar WHATSAPP_ACCESS_TOKEN en Supabase.'
               : 'No se pudo enviar el mensaje por WhatsApp';
@@ -1814,12 +2320,14 @@ class _ChatWindowState extends State<ChatWindow> {
 
       if (receipt.deliveryMethod == WhatsAppDeliveryMethod.cloudApi) {
         if (receipt.usedFirstContactTemplate) {
+          _restoreFailedDraft(chatProvider, conversationId, pendingText, reply,
+              composerSession);
           chatProvider.setConversationDraft(
             conversationId,
             pendingText,
             title: 'Mensaje pendiente de ventana WhatsApp',
             subtitle:
-                'Se envió la plantilla aprobada. Cuando el cliente responda, puedes enviar este texto.',
+                'El mensaje autorizado quedó registrado. Cuando el ${isSupplierConversation ? 'proveedor' : 'cliente'} responda, puedes enviar este texto libre.',
           );
         } else {
           chatProvider.clearConversationDraft(conversationId);
@@ -1828,13 +2336,14 @@ class _ChatWindowState extends State<ChatWindow> {
           optimisticMessageId,
           content: receipt.resolvedMessageText ?? pendingText,
           metadataUpdates: {
-            // A 2xx is returned only after Meta supplied an external id and
-            // the ERP message was durably persisted.
+            // Database acceptance and provider acceptance are distinct receipts.
             'pending': false,
             'server_ack_durable': true,
             'server_message_id': receipt.messageId,
-            'external_status': 'accepted',
+            'external_status': receipt.externalStatus,
             'external_message_id': receipt.externalMessageId,
+            if (receipt.deliveryStrategy != null)
+              'delivery_strategy': receipt.deliveryStrategy,
             if (receipt.usedFirstContactTemplate) 'template_used': true,
           },
         );
@@ -1848,22 +2357,23 @@ class _ChatWindowState extends State<ChatWindow> {
           },
         );
 
-        if (receipt.usedFirstContactTemplate && mounted) {
+        if (receipt.usedFirstContactTemplate &&
+            mounted &&
+            widget.conversation.id == conversationId) {
           _showWhatsAppResultSnackbar(
             context: context,
             deliveryMethod: receipt.deliveryMethod,
             successMessage:
-                'Meta pidió plantilla para abrir o reabrir la ventana de WhatsApp. Se envió la plantilla aprobada.',
+                'Mensaje autorizado registrado para abrir o reabrir WhatsApp.',
             fallbackMessage: 'WhatsApp abierto con el mensaje prellenado',
           );
         }
       } else if (receipt.deliveryMethod ==
           WhatsAppDeliveryMethod.manualFallback) {
         chatProvider.removeMessageById(optimisticMessageId);
-        if (mounted) {
-          if (_messageController.text.isEmpty) {
-            _messageController.text = pendingText;
-          }
+        _restoreFailedDraft(
+            chatProvider, conversationId, pendingText, reply, composerSession);
+        if (mounted && widget.conversation.id == conversationId) {
           _showWhatsAppResultSnackbar(
             context: context,
             deliveryMethod: receipt.deliveryMethod,
@@ -1874,13 +2384,9 @@ class _ChatWindowState extends State<ChatWindow> {
       }
     } catch (e) {
       chatProvider.removeMessageById(optimisticMessageId);
-      if (mounted) {
-        if (_messageController.text.trim().isEmpty) {
-          _messageController.text = pendingText;
-          _messageController.selection = TextSelection.collapsed(
-            offset: _messageController.text.length,
-          );
-        }
+      _restoreFailedDraft(
+          chatProvider, conversationId, pendingText, reply, composerSession);
+      if (mounted && widget.conversation.id == conversationId) {
         _showErrorSnackBar(context, 'No se pudo enviar el mensaje: $e');
       }
     }
@@ -1889,8 +2395,10 @@ class _ChatWindowState extends State<ChatWindow> {
   void _restoreComposerFocus({TextSelection? selection}) {
     // On Web, post-frame callback isn't always enough due to engine/DOM sync.
     // A small delay ensures the focus request happens after the UI settles.
-    Future.delayed(const Duration(milliseconds: 50), () {
-      if (mounted) {
+    final conversationId = widget.conversation.id;
+    _composerFocusTimer?.cancel();
+    _composerFocusTimer = Timer(const Duration(milliseconds: 50), () {
+      if (mounted && widget.conversation.id == conversationId) {
         FocusScope.of(context).requestFocus(_focusNode);
         if (selection != null) {
           final textLength = _messageController.text.length;
@@ -1910,16 +2418,18 @@ class _ChatWindowState extends State<ChatWindow> {
       await provider.acceptChatRequest(widget.conversation.id);
       if (ctx.mounted) {
         ScaffoldMessenger.of(ctx).showSnackBar(
-          const SnackBar(
+          SnackBar(
             content: Text('Chat aceptado. Ahora puedes responder.'),
-            backgroundColor: Colors.green,
+            backgroundColor: VinabikeThemeRoles.of(context).success.accent,
           ),
         );
       }
     } catch (e) {
       if (ctx.mounted) {
         ScaffoldMessenger.of(ctx).showSnackBar(
-          SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
+          SnackBar(
+              content: Text('Error: $e'),
+              backgroundColor: VinabikeThemeRoles.of(context).danger.accent),
         );
       }
     }
@@ -1963,9 +2473,10 @@ class _ChatWindowState extends State<ChatWindow> {
                 );
                 if (ctx.mounted) {
                   ScaffoldMessenger.of(ctx).showSnackBar(
-                    const SnackBar(
+                    SnackBar(
                       content: Text('Solicitud rechazada'),
-                      backgroundColor: Colors.orange,
+                      backgroundColor:
+                          VinabikeThemeRoles.of(context).warning.accent,
                     ),
                   );
                 }
@@ -1974,12 +2485,14 @@ class _ChatWindowState extends State<ChatWindow> {
                   ScaffoldMessenger.of(ctx).showSnackBar(
                     SnackBar(
                         content: Text('Error: $e'),
-                        backgroundColor: Colors.red),
+                        backgroundColor:
+                            VinabikeThemeRoles.of(context).danger.accent),
                   );
                 }
               }
             },
-            style: FilledButton.styleFrom(backgroundColor: Colors.red),
+            style: FilledButton.styleFrom(
+                backgroundColor: VinabikeThemeRoles.of(context).danger.accent),
             child: const Text('Rechazar'),
           ),
         ],
@@ -2039,6 +2552,8 @@ class _ChatWindowState extends State<ChatWindow> {
   Future<void> _pickAndSendFile(String choice) async {
     if (!mounted) return;
     if (_guardPendingAttachmentMutation()) return;
+    final conversationId = widget.conversation.id;
+    final session = _composerSession;
 
     try {
       if (choice == 'camera') {
@@ -2046,12 +2561,18 @@ class _ChatWindowState extends State<ChatWindow> {
         final XFile? pickedFile = await picker.pickImage(
           source: ImageSource.camera,
         );
-        if (pickedFile == null) return;
+        if (pickedFile == null ||
+            !_isCurrentComposer(conversationId, session)) {
+          return;
+        }
         await _queueXFiles([pickedFile]);
       } else if (choice == 'gallery') {
         final picker = ImagePicker();
         final pickedFiles = await picker.pickMultiImage();
-        if (pickedFiles.isEmpty) return;
+        if (pickedFiles.isEmpty ||
+            !_isCurrentComposer(conversationId, session)) {
+          return;
+        }
         await _queueXFiles(pickedFiles);
       } else {
         final result = await FilePicker.platform.pickFiles(
@@ -2078,8 +2599,10 @@ class _ChatWindowState extends State<ChatWindow> {
           ],
           withData: true,
         );
-        if (result == null || result.files.isEmpty) return;
-        final attachments = <_PendingChatAttachment>[];
+        if (result == null ||
+            result.files.isEmpty ||
+            !_isCurrentComposer(conversationId, session)) return;
+        final attachments = <PendingChatAttachment>[];
         for (final file in result.files.take(
           MessagingAttachmentService.maxAttachmentsPerBatch,
         )) {
@@ -2099,12 +2622,12 @@ class _ChatWindowState extends State<ChatWindow> {
         _addPendingAttachments(attachments);
       }
     } catch (e) {
-      if (!mounted) return;
+      if (!_isCurrentComposer(conversationId, session)) return;
       ScaffoldMessenger.of(context).hideCurrentSnackBar();
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
             content: Text('Error al preparar archivo: $e'),
-            backgroundColor: Colors.red),
+            backgroundColor: VinabikeThemeRoles.of(context).danger.accent),
       );
     }
   }
@@ -2122,7 +2645,9 @@ class _ChatWindowState extends State<ChatWindow> {
 
   Future<void> _queueXFiles(List<XFile> files) async {
     if (_guardPendingAttachmentMutation()) return;
-    final attachments = <_PendingChatAttachment>[];
+    final conversationId = widget.conversation.id;
+    final session = _composerSession;
+    final attachments = <PendingChatAttachment>[];
     for (final file in files.take(
       MessagingAttachmentService.maxAttachmentsPerBatch,
     )) {
@@ -2134,7 +2659,7 @@ class _ChatWindowState extends State<ChatWindow> {
           sizeBytes: sizeBytes,
         );
         final bytes = await file.readAsBytes();
-        if (!mounted) return;
+        if (!_isCurrentComposer(conversationId, session)) return;
         if (bytes.isEmpty) continue;
         attachments.add(
           _buildPendingAttachment(
@@ -2143,11 +2668,11 @@ class _ChatWindowState extends State<ChatWindow> {
           ),
         );
       } catch (e) {
-        if (!mounted) return;
+        if (!_isCurrentComposer(conversationId, session)) return;
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('No se pudo preparar ${_droppedFileName(file)}: $e'),
-            backgroundColor: Colors.red,
+            backgroundColor: VinabikeThemeRoles.of(context).danger.accent,
           ),
         );
       }
@@ -2156,7 +2681,7 @@ class _ChatWindowState extends State<ChatWindow> {
     _addPendingAttachments(attachments);
   }
 
-  void _addPendingAttachments(List<_PendingChatAttachment> attachments) {
+  void _addPendingAttachments(List<PendingChatAttachment> attachments) {
     if (attachments.isEmpty || !mounted) return;
     if (_guardPendingAttachmentMutation()) return;
     final available = MessagingAttachmentService.maxAttachmentsPerBatch -
@@ -2175,9 +2700,11 @@ class _ChatWindowState extends State<ChatWindow> {
     _restoreComposerFocus();
   }
 
-  _PendingChatAttachment _buildPendingAttachment({
+  PendingChatAttachment _buildPendingAttachment({
     required String fileName,
     required Uint8List bytes,
+    String? purchaseInvoiceId,
+    String? purchaseInvoiceNumber,
   }) {
     final validation = MessagingAttachmentService.validateBeforeRead(
       fileName: fileName,
@@ -2186,18 +2713,20 @@ class _ChatWindowState extends State<ChatWindow> {
     final ext = validation.extension;
     final isImage = validation.contentType.startsWith('image/');
     _pendingAttachmentSerial += 1;
-    return _PendingChatAttachment(
+    return PendingChatAttachment(
       id: 'pending-${DateTime.now().microsecondsSinceEpoch}-$_pendingAttachmentSerial',
       fileName: fileName.trim().isEmpty ? 'archivo' : fileName.trim(),
       bytes: bytes,
       extension: ext,
       isImage: isImage,
+      purchaseInvoiceId: purchaseInvoiceId,
+      purchaseInvoiceNumber: purchaseInvoiceNumber,
     );
   }
 
   void _removePendingAttachment(String id) {
     final attachment =
-        _pendingAttachments.cast<_PendingChatAttachment?>().firstWhere(
+        _pendingAttachments.cast<PendingChatAttachment?>().firstWhere(
               (item) => item?.id == id,
               orElse: () => null,
             );
@@ -2242,34 +2771,65 @@ class _ChatWindowState extends State<ChatWindow> {
     if (_guardPendingAttachmentMutation()) return;
 
     final caption = _messageController.text.trim();
-    final attachments = List<_PendingChatAttachment>.from(_pendingAttachments);
-    setState(() => _isSendingPendingAttachments = true);
+    final conversationId = widget.conversation.id;
+    final reply = _replyToMessage;
+    final attachments = List<PendingChatAttachment>.from(_pendingAttachments);
+    if (reply != null && !attachments.first.outcomeUnknown) {
+      attachments[0] = attachments.first.withReply(reply);
+    }
+    final chatProvider = context.read<ChatProvider>();
+    final composerSession = chatProvider.composerSession;
+    final purchaseService = attachments.any((a) => a.purchaseInvoiceId != null)
+        ? context.read<PurchaseService>()
+        : null;
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Row(children: [
-          const SizedBox(
-            width: 20,
-            height: 20,
-            child:
-                CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-          ),
-          const SizedBox(width: 12),
-          Text(
-            attachments.length == 1
-                ? 'Subiendo adjunto...'
-                : 'Subiendo ${attachments.length} adjuntos...',
-          ),
-        ]),
-        duration: const Duration(seconds: 60),
-      ),
-    );
+    // Like WhatsApp: the composer is free the moment «enviar» is pressed and
+    // every file is already a bubble, drawn from the bytes on this device.
+    // The upload and the provider's answer update that bubble; a rejection
+    // brings the file back into the composer with its reason.
+    setState(() {
+      _isSendingPendingAttachments = true;
+      _pendingAttachments.clear();
+      _replyToMessage = null;
+      _messageController.clear();
+    });
+    _restoreComposerFocus();
 
-    final unresolved = <_PendingChatAttachment>[];
-    var rejectedCount = 0;
-    var unknownCount = 0;
+    _saveAttachmentDraft(conversationId);
+    final optimisticIds = <String, String>{};
     for (var i = 0; i < attachments.length; i += 1) {
       final attachment = attachments[i];
+      final optimisticId = _seedOptimisticAttachment(
+        chatProvider,
+        attachment,
+        caption: attachment.outcomeUnknown
+            ? attachment.replayCaption
+            : i == 0 && caption.isNotEmpty
+                ? caption
+                : null,
+      );
+      if (optimisticId != null) optimisticIds[attachment.id] = optimisticId;
+    }
+
+    final unresolved = <PendingChatAttachment>[];
+    final confirmedPurchaseDocuments = <PendingChatAttachment>[];
+    var rejectedCount = 0;
+    var unknownCount = 0;
+    var confirmedCount = 0;
+    for (var i = 0; i < attachments.length; i += 1) {
+      final attachment = attachments[i];
+      final optimisticId = optimisticIds[attachment.id];
+      // Navigation never retargets the rest of a batch to the new recipient.
+      if (!mounted ||
+          widget.conversation.id != conversationId ||
+          chatProvider.composerSession != composerSession) {
+        for (final skipped in attachments.skip(i)) {
+          final skippedId = optimisticIds[skipped.id];
+          if (skippedId != null) chatProvider.removeMessageById(skippedId);
+          unresolved.add(skipped);
+        }
+        break;
+      }
       final result = await _sendAttachmentBytes(
         fileName: attachment.fileName,
         bytes: attachment.bytes,
@@ -2281,45 +2841,86 @@ class _ChatWindowState extends State<ChatWindow> {
                 : null,
         existingReservation: attachment.reservation,
         retryUpload: attachment.retryUpload,
+        optimisticMessageId: optimisticId,
+        localMediaKey: attachment.id,
+        durationSeconds: attachment.durationSeconds,
+        reply: attachment.reply,
       );
       switch (result.outcome) {
-        case _AttachmentDispatchOutcome.confirmed:
+        case AttachmentDispatchOutcome.confirmed:
+          confirmedCount += 1;
+          if (attachment.purchaseInvoiceId != null) {
+            confirmedPurchaseDocuments.add(attachment);
+          }
           break;
-        case _AttachmentDispatchOutcome.rejected:
+        case AttachmentDispatchOutcome.rejected:
           // A confirmed rejection can start over with a fresh reservation on
           // the next explicit user attempt. Never reuse the failed row.
+          if (optimisticId != null)
+            chatProvider.removeMessageById(optimisticId);
           unresolved.add(attachment.resetForNewAttempt());
           rejectedCount += 1;
           break;
-        case _AttachmentDispatchOutcome.outcomeUnknown:
+        case AttachmentDispatchOutcome.outcomeUnknown:
+          if (optimisticId != null) {
+            chatProvider.updateMessageMetadataById(optimisticId, {
+              'pending': false,
+              'outcome_unknown': true,
+            });
+          }
           unresolved.add(attachment.markOutcomeUnknown(result));
           // Stop the batch after an ambiguous provider result. The remaining
           // files were never attempted and stay in the composer. A native
           // attachment keeps its exact reservation for an idempotent replay;
           // provider sends remain blocked from blind retries.
-          unresolved.addAll(attachments.skip(i + 1));
+          for (final skipped in attachments.skip(i + 1)) {
+            final skippedId = optimisticIds[skipped.id];
+            if (skippedId != null) chatProvider.removeMessageById(skippedId);
+            unresolved.add(skipped);
+          }
           unknownCount += 1;
           break;
       }
-      if (!mounted) return;
-      if (result.outcome == _AttachmentDispatchOutcome.outcomeUnknown) break;
+      if (result.outcome == AttachmentDispatchOutcome.outcomeUnknown) break;
     }
 
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).hideCurrentSnackBar();
+    if (purchaseService != null) {
+      await _markPurchaseDocumentsAsSent(confirmedPurchaseDocuments,
+          purchaseService: purchaseService, conversationId: conversationId);
+    }
+    if (chatProvider.composerSession != composerSession) return;
+    if (!mounted || widget.conversation.id != conversationId) {
+      if (unresolved.isNotEmpty) {
+        chatProvider.saveComposerAttachments(
+            conversationId,
+            [
+              ...chatProvider.getComposerAttachments(conversationId),
+              ...unresolved
+            ],
+            session: composerSession);
+        if (confirmedCount == 0)
+          _restoreFailedDraft(
+              chatProvider, conversationId, caption, reply, composerSession);
+      }
+      return;
+    }
     setState(() {
       _isSendingPendingAttachments = false;
-      _pendingAttachments
-        ..clear()
-        ..addAll(unresolved);
-      if (unresolved.isEmpty) {
-        _messageController.clear();
+      _pendingAttachments.addAll(unresolved);
+      if (unresolved.isNotEmpty &&
+          confirmedCount == 0 &&
+          _replyToMessage == null) {
+        _replyToMessage = reply;
+      }
+      if (unresolved.isNotEmpty &&
+          confirmedCount == 0 &&
+          caption.isNotEmpty &&
+          _messageController.text.trim().isEmpty) {
+        _messageController.text = caption;
       }
     });
 
-    if (unresolved.isEmpty) {
-      _restoreComposerFocus();
-    } else {
+    if (unresolved.isNotEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(unknownCount > 0
@@ -2332,10 +2933,84 @@ class _ChatWindowState extends State<ChatWindow> {
               : rejectedCount == 1
                   ? 'No se pudo enviar 1 adjunto.'
                   : 'No se pudieron enviar $rejectedCount adjuntos.'),
-          backgroundColor: unknownCount > 0 ? null : Colors.red,
+          backgroundColor: unknownCount > 0
+              ? null
+              : VinabikeThemeRoles.of(context).danger.accent,
         ),
       );
     }
+  }
+
+  /// The bubble a file gets before anything has been uploaded. Its bytes go
+  /// into the device cache under the composer's key, so the thumbnail is
+  /// full on the first frame and the same bytes serve the server row later.
+  /// Returns `null` when the file cannot be sent at all (the send path then
+  /// reports the reason).
+  String? _seedOptimisticAttachment(
+    ChatProvider chatProvider,
+    PendingChatAttachment attachment, {
+    String? caption,
+  }) {
+    if (attachment.outcomeUnknown) return null;
+    final MessagingAttachmentValidation validation;
+    try {
+      validation = MessagingAttachmentService.validateBeforeRead(
+        fileName: attachment.fileName,
+        sizeBytes: attachment.bytes.length,
+      );
+    } catch (_) {
+      return null;
+    }
+    _pendingAttachmentSerial += 1;
+    final optimisticId =
+        'temp-file-${DateTime.now().microsecondsSinceEpoch}-$_pendingAttachmentSerial';
+    final isImage = validation.contentType.startsWith('image/');
+    final isAudio = validation.contentType.startsWith('audio/');
+    final cleanCaption = caption?.trim();
+    unawaited(
+      ChatMediaCache.instance.put(
+        'local:${attachment.id}',
+        attachment.bytes,
+        fileExtension: attachment.extension,
+      ),
+    );
+    chatProvider.addOptimisticMessage(
+      Message(
+        id: optimisticId,
+        conversationId: widget.conversation.id,
+        senderId: _messagingService.currentUserId,
+        content: cleanCaption?.isNotEmpty == true
+            ? cleanCaption!
+            : attachment.fileName,
+        type: isAudio
+            ? 'audio'
+            : isImage
+                ? 'image'
+                : 'file',
+        metadata: {
+          'pending': true,
+          if (attachment.reply != null) 'reply_to': attachment.reply!.toJson(),
+          'client_message_id': optimisticId,
+          'local_media_key': attachment.id,
+          'filename': attachment.fileName,
+          'extension': attachment.extension,
+          'content_type': validation.contentType,
+          if (attachment.durationSeconds != null)
+            'duration_seconds': attachment.durationSeconds,
+          if (cleanCaption != null && cleanCaption.isNotEmpty)
+            'caption': cleanCaption,
+          if (_isWhatsAppConversation) ...{
+            'channel': 'whatsapp',
+            'provider': 'whatsapp',
+          },
+          if (_activeThreadRootMessageId != null)
+            'thread_root_message_id': _activeThreadRootMessageId,
+        },
+        createdAt: DateTime.now(),
+        isMe: true,
+      ),
+    );
+    return optimisticId;
   }
 
   String _droppedFileName(XFile file) {
@@ -2346,33 +3021,51 @@ class _ChatWindowState extends State<ChatWindow> {
     return 'archivo';
   }
 
-  Future<_AttachmentDispatchResult> _sendAttachmentBytes({
+  Future<AttachmentDispatchResult> _sendAttachmentBytes({
     required String fileName,
     required Uint8List bytes,
     bool showUploadingSnackBar = true,
     String? caption,
     ReservedMessagingAttachment? existingReservation,
     bool retryUpload = false,
+    String? optimisticMessageId,
+    String? localMediaKey,
+    int? durationSeconds,
+    MessageReply? reply,
+    Conversation? destination,
+    bool Function()? forwardLease,
   }) async {
     if (!mounted || bytes.isEmpty) {
-      return const _AttachmentDispatchResult.rejected();
+      return const AttachmentDispatchResult.rejected();
     }
-    if (!_supportsOutgoingAttachments) {
+    final conversation = destination ?? widget.conversation;
+    if (destination == null && !_supportsOutgoingAttachments) {
       _showErrorSnackBar(
         context,
         'Los adjuntos aún no están habilitados para ${widget.conversation.shortChannelLabel}.',
       );
-      return const _AttachmentDispatchResult.rejected();
+      return const AttachmentDispatchResult.rejected();
     }
 
     final fallbackContext = context;
-    final conversationId = widget.conversation.id;
-    final isWhatsAppConversation = _isWhatsAppConversation;
+    final conversationId = conversation.id;
+    final threadRootMessageId =
+        destination == null ? _activeThreadRootMessageId : null;
+    final isWhatsAppConversation = conversation.isWhatsApp;
     final chatProvider = context.read<ChatProvider>();
-    final contextType = _effectiveContextType;
-    final contextId = _effectiveContextId;
-    final contactFuture =
-        isWhatsAppConversation ? _getWhatsAppContactFuture() : null;
+    final contextType = conversation.effectiveContextType;
+    final contextId = conversation.effectiveContextId;
+    final contactFuture = isWhatsAppConversation
+        ? destination == null
+            ? _getWhatsAppContactFuture()
+            : _messagingService.getSupportConversationContact(conversationId,
+                rethrowOnError: true)
+        : null;
+    if (destination != null && contactFuture != null) await contactFuture;
+    if (!mounted) return const AttachmentDispatchResult.rejected();
+    if (forwardLease != null && !forwardLease()) {
+      return const AttachmentDispatchResult.rejected();
+    }
     final cleanCaption = caption?.trim();
     final MessagingAttachmentValidation validation;
     try {
@@ -2382,7 +3075,7 @@ class _ChatWindowState extends State<ChatWindow> {
       );
     } catch (error) {
       _showErrorSnackBar(context, 'No se puede adjuntar el archivo: $error');
-      return const _AttachmentDispatchResult.rejected();
+      return const AttachmentDispatchResult.rejected();
     }
 
     if (showUploadingSnackBar) {
@@ -2416,7 +3109,7 @@ class _ChatWindowState extends State<ChatWindow> {
           context,
           'La reserva del adjunto ya no coincide con esta conversación.',
         );
-        return const _AttachmentDispatchResult.rejected();
+        return const AttachmentDispatchResult.rejected();
       }
       reservation = existingReservation;
     } else {
@@ -2430,14 +3123,36 @@ class _ChatWindowState extends State<ChatWindow> {
         if (showUploadingSnackBar && fallbackContext.mounted) {
           ScaffoldMessenger.of(fallbackContext).hideCurrentSnackBar();
         }
-        if (mounted) {
+        if (mounted && widget.conversation.id == conversationId) {
           _showErrorSnackBar(
             context,
             'No se pudo reservar el adjunto: $error',
           );
         }
-        return const _AttachmentDispatchResult.rejected();
+        return const AttachmentDispatchResult.rejected();
       }
+    }
+
+    if (forwardLease != null && !forwardLease()) {
+      return const AttachmentDispatchResult.rejected();
+    }
+    // The bytes this device is about to upload are the bytes it will be
+    // asked to show under the server's path: keep them, never re-download.
+    unawaited(
+      ChatMediaCache.instance.put(
+        'path:${reservation.path}',
+        bytes,
+        fileExtension: reservation.extension,
+      ),
+    );
+    if (optimisticMessageId != null) {
+      chatProvider.updateMessageMetadataById(
+        optimisticMessageId,
+        {
+          ...reservation.messageMetadata,
+          if (localMediaKey != null) 'local_media_key': localMediaKey,
+        },
+      );
     }
 
     if (existingReservation == null || retryUpload) {
@@ -2452,13 +3167,13 @@ class _ChatWindowState extends State<ChatWindow> {
           ScaffoldMessenger.of(fallbackContext).hideCurrentSnackBar();
         }
         if (MessagingAttachmentService.isUploadOutcomeAmbiguous(error)) {
-          if (mounted) {
+          if (mounted && widget.conversation.id == conversationId) {
             _showErrorSnackBar(
               context,
               'No llegó la confirmación de carga. Se conserva la misma reserva para un reintento seguro.',
             );
           }
-          return _AttachmentDispatchResult.outcomeUnknown(
+          return AttachmentDispatchResult.outcomeUnknown(
             reservation: reservation,
             retryUpload: true,
             canRetrySafely: !isWhatsAppConversation,
@@ -2469,10 +3184,10 @@ class _ChatWindowState extends State<ChatWindow> {
           reservation,
           code: 'flutter_upload_rejected',
         );
-        if (mounted) {
+        if (mounted && widget.conversation.id == conversationId) {
           _showErrorSnackBar(context, 'La carga del adjunto fue rechazada.');
         }
-        return const _AttachmentDispatchResult.rejected();
+        return const AttachmentDispatchResult.rejected();
       }
     }
 
@@ -2480,12 +3195,20 @@ class _ChatWindowState extends State<ChatWindow> {
       ScaffoldMessenger.of(fallbackContext).hideCurrentSnackBar();
     }
 
-    final msgType =
-        validation.contentType.startsWith('image/') ? 'image' : 'file';
+    final msgType = validation.contentType.startsWith('image/')
+        ? 'image'
+        : validation.contentType.startsWith('audio/')
+            ? 'audio'
+            : 'file';
+    if (forwardLease != null && !forwardLease()) {
+      return const AttachmentDispatchResult.rejected();
+    }
     final metadata = {
       ...reservation.messageMetadata,
+      if (reply != null) 'reply_to': reply.toJson(),
       if (cleanCaption != null && cleanCaption.isNotEmpty)
         'caption': cleanCaption,
+      if (durationSeconds != null) 'duration_seconds': durationSeconds,
     };
 
     if (isWhatsAppConversation) {
@@ -2496,6 +3219,7 @@ class _ChatWindowState extends State<ChatWindow> {
         messageType: msgType,
         metadata: metadata,
         caption: cleanCaption,
+        existingOptimisticMessageId: optimisticMessageId,
         fallbackContext: fallbackContext.mounted ? fallbackContext : null,
         conversationId: conversationId,
         contextType: contextType,
@@ -2503,12 +3227,12 @@ class _ChatWindowState extends State<ChatWindow> {
         contactFuture: contactFuture!,
       );
       switch (outcome) {
-        case _AttachmentDispatchOutcome.confirmed:
-          return const _AttachmentDispatchResult.confirmed();
-        case _AttachmentDispatchOutcome.rejected:
-          return const _AttachmentDispatchResult.rejected();
-        case _AttachmentDispatchOutcome.outcomeUnknown:
-          return _AttachmentDispatchResult.outcomeUnknown(
+        case AttachmentDispatchOutcome.confirmed:
+          return const AttachmentDispatchResult.confirmed();
+        case AttachmentDispatchOutcome.rejected:
+          return const AttachmentDispatchResult.rejected();
+        case AttachmentDispatchOutcome.outcomeUnknown:
+          return AttachmentDispatchResult.outcomeUnknown(
             reservation: reservation,
             retryUpload: false,
             canRetrySafely: false,
@@ -2521,16 +3245,26 @@ class _ChatWindowState extends State<ChatWindow> {
       await _messagingAttachmentService.publish(
         reservation: reservation,
         caption: cleanCaption,
+        threadRootMessageId: threadRootMessageId,
+        replyToMessageId: reply?.messageId,
       );
-      return const _AttachmentDispatchResult.confirmed();
+      if (optimisticMessageId != null) {
+        // The database wrote the row; realtime prunes the bubble by
+        // attachment id when it arrives.
+        chatProvider.updateMessageMetadataById(optimisticMessageId, {
+          'pending': false,
+          'server_ack_durable': true,
+        });
+      }
+      return const AttachmentDispatchResult.confirmed();
     } on MessagingAttachmentPublishOutcomeUnknown {
-      if (mounted) {
+      if (mounted && widget.conversation.id == conversationId) {
         _showErrorSnackBar(
           context,
           'No llegó la confirmación de envío. El adjunto conserva su reserva y puede reintentarse sin duplicarlo.',
         );
       }
-      return _AttachmentDispatchResult.outcomeUnknown(
+      return AttachmentDispatchResult.outcomeUnknown(
         reservation: reservation,
         retryUpload: false,
         canRetrySafely: true,
@@ -2541,15 +3275,15 @@ class _ChatWindowState extends State<ChatWindow> {
         reservation,
         code: error.failureCode,
       );
-      if (mounted) {
+      if (mounted && widget.conversation.id == conversationId) {
         _showErrorSnackBar(context, 'El envío del adjunto fue rechazado.');
       }
-      return const _AttachmentDispatchResult.rejected();
+      return const AttachmentDispatchResult.rejected();
     } catch (_) {
       // A non-contract exception after publish started is never evidence that
       // the transaction rolled back. Preserve the reservation for read-back
       // or exact replay instead of failing/deleting it.
-      return _AttachmentDispatchResult.outcomeUnknown(
+      return AttachmentDispatchResult.outcomeUnknown(
         reservation: reservation,
         retryUpload: false,
         canRetrySafely: true,
@@ -2558,7 +3292,7 @@ class _ChatWindowState extends State<ChatWindow> {
     }
   }
 
-  Future<_AttachmentDispatchOutcome> _sendWhatsAppAttachment({
+  Future<AttachmentDispatchOutcome> _sendWhatsAppAttachment({
     required ChatProvider chatProvider,
     required ReservedMessagingAttachment reservation,
     required String fileName,
@@ -2570,9 +3304,10 @@ class _ChatWindowState extends State<ChatWindow> {
     required String? contextType,
     required String? contextId,
     required Future<Map<String, dynamic>?> contactFuture,
+    String? existingOptimisticMessageId,
   }) {
-    final optimisticMessageId =
-        'temp-wa-file-${DateTime.now().millisecondsSinceEpoch}';
+    final optimisticMessageId = existingOptimisticMessageId ??
+        'temp-wa-file-${DateTime.now().microsecondsSinceEpoch}';
     final sendMetadata = {
       ...metadata,
       'channel': 'whatsapp',
@@ -2583,21 +3318,26 @@ class _ChatWindowState extends State<ChatWindow> {
       ...sendMetadata,
       'pending': true,
     };
-
-    chatProvider.addOptimisticMessage(
-      Message(
-        id: optimisticMessageId,
-        conversationId: widget.conversation.id,
-        senderId: _messagingService.currentUserId,
-        content:
-            caption?.trim().isNotEmpty == true ? caption!.trim() : fileName,
-        type: messageType,
-        metadata: optimisticMetadata,
-        createdAt: DateTime.now(),
-        isMe: true,
-      ),
-    );
-
+    if (existingOptimisticMessageId != null) {
+      chatProvider.updateMessageMetadataById(
+        optimisticMessageId,
+        optimisticMetadata,
+      );
+    } else {
+      chatProvider.addOptimisticMessage(
+        Message(
+          id: optimisticMessageId,
+          conversationId: conversationId,
+          senderId: _messagingService.currentUserId,
+          content:
+              caption?.trim().isNotEmpty == true ? caption!.trim() : fileName,
+          type: messageType,
+          metadata: optimisticMetadata,
+          createdAt: DateTime.now(),
+          isMe: true,
+        ),
+      );
+    }
     return _dispatchWhatsAppAttachment(
       chatProvider: chatProvider,
       optimisticMessageId: optimisticMessageId,
@@ -2614,7 +3354,7 @@ class _ChatWindowState extends State<ChatWindow> {
     );
   }
 
-  Future<_AttachmentDispatchOutcome> _dispatchWhatsAppAttachment({
+  Future<AttachmentDispatchOutcome> _dispatchWhatsAppAttachment({
     required ChatProvider chatProvider,
     required String optimisticMessageId,
     required ReservedMessagingAttachment reservation,
@@ -2645,7 +3385,7 @@ class _ChatWindowState extends State<ChatWindow> {
             'La conversación de WhatsApp no tiene un teléfono asociado.',
           );
         }
-        return _AttachmentDispatchOutcome.rejected;
+        return AttachmentDispatchOutcome.rejected;
       }
 
       final receipt = await whatsappService.sendAttachment(
@@ -2687,7 +3427,7 @@ class _ChatWindowState extends State<ChatWindow> {
               'Resultado incierto: verifica la conversación antes de reenviar el archivo.',
             );
           }
-          return _AttachmentDispatchOutcome.outcomeUnknown;
+          return AttachmentDispatchOutcome.outcomeUnknown;
         }
         await _messagingAttachmentService.fail(
           reservation,
@@ -2698,22 +3438,22 @@ class _ChatWindowState extends State<ChatWindow> {
           final errorMessage = receipt.errorRequiresServerFix
               ? 'Meta rechazó el envío porque el token de WhatsApp Cloud API expiró. Hay que actualizar WHATSAPP_ACCESS_TOKEN en Supabase.'
               : receipt.errorRequiresCustomerReply
-                  ? 'Meta no permite enviar archivos fuera de la ventana de 24 horas. Envía una plantilla y espera respuesta del cliente antes de compartir la imagen.'
+                  ? 'Meta no permite enviar archivos fuera de la ventana de 24 horas. Envía primero un mensaje autorizado y espera la respuesta antes de compartir la imagen.'
                   : 'No se pudo enviar el archivo por WhatsApp';
           _showErrorSnackBar(context, errorMessage);
         }
-        return _AttachmentDispatchOutcome.rejected;
+        return AttachmentDispatchOutcome.rejected;
       }
 
       if (receipt.deliveryMethod == WhatsAppDeliveryMethod.cloudApi) {
         chatProvider.updateMessageById(
           optimisticMessageId,
           metadataUpdates: {
-            // A 2xx includes the durable ERP and Meta receipts.
+            // The durable queue can acknowledge before Meta receives the file.
             'pending': false,
             'server_ack_durable': true,
             'server_message_id': receipt.messageId,
-            'external_status': 'accepted',
+            'external_status': receipt.externalStatus,
             'external_message_id': receipt.externalMessageId,
           },
         );
@@ -2729,7 +3469,7 @@ class _ChatWindowState extends State<ChatWindow> {
           );
         }
       }
-      return _AttachmentDispatchOutcome.confirmed;
+      return AttachmentDispatchOutcome.confirmed;
     } catch (e) {
       await _messagingAttachmentService.fail(
         reservation,
@@ -2739,8 +3479,348 @@ class _ChatWindowState extends State<ChatWindow> {
       if (mounted) {
         _showErrorSnackBar(context, 'No se pudo enviar el archivo: $e');
       }
-      return _AttachmentDispatchOutcome.rejected;
+      return AttachmentDispatchOutcome.rejected;
     }
+  }
+
+  int _replyCountForRoot(List<Message> messages, String rootMessageId) {
+    return messages
+        .where(
+          (message) =>
+              message.threadRootMessageId == rootMessageId &&
+              message.type != 'system',
+        )
+        .length;
+  }
+
+  List<Message> _channelTimelineMessages(List<Message> messages) {
+    return messages
+        .where(
+          (message) =>
+              message.isTopLevelMessage ||
+              message.metadata['also_send_to_channel'] == true,
+        )
+        .toList(growable: false);
+  }
+
+  Widget _buildChannelTimelineEntry(
+    BuildContext context,
+    Message message,
+    List<Message> allMessages,
+    List<Message> channelMessages,
+  ) {
+    final taskId = message.isTopLevelMessage ? _taskIdForRoot(message) : null;
+    final rootMessageId = message.threadRootMessageId ?? message.id;
+    final replyCount = _replyCountForRoot(allMessages, rootMessageId);
+
+    if (taskId != null) {
+      return _buildTaskThreadRoot(
+        context,
+        taskId,
+        replyCount,
+        fallbackTitle: message.content,
+        onOpenReplies: () => _openThreadReplies(message.id),
+      );
+    }
+
+    final canOpenThread = widget.conversation.isInternal &&
+        message.type != 'system' &&
+        message.type != 'action_request';
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _buildMessageBubble(context, message, channelMessages),
+        if (canOpenThread || replyCount > 0)
+          Padding(
+            padding: const EdgeInsets.only(left: 38, bottom: 4),
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: TextButton.icon(
+                key: ValueKey<String>('open-thread-$rootMessageId'),
+                onPressed: () => _openThreadReplies(rootMessageId),
+                icon: const Icon(Icons.forum_outlined, size: 14),
+                label: Text(
+                  message.isThreadReply
+                      ? 'Respuesta en hilo · Ver conversación'
+                      : replyCount == 0
+                          ? 'Responder en hilo'
+                          : replyCount == 1
+                              ? '1 respuesta'
+                              : '$replyCount respuestas',
+                ),
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+
+  Widget _buildThreadRootEntry(
+    BuildContext context,
+    Message root,
+    List<Message> allMessages,
+  ) {
+    final taskId = _taskIdForRoot(root);
+    final replyCount = _replyCountForRoot(allMessages, root.id);
+    if (taskId != null) {
+      return _buildTaskThreadRoot(
+        context,
+        taskId,
+        replyCount,
+        fallbackTitle: root.content,
+      );
+    }
+    return _buildMessageBubble(context, root, <Message>[root]);
+  }
+
+  Widget _buildThreadPane(
+    BuildContext context,
+    ChatProvider chatProvider,
+    List<Message> allMessages, {
+    required bool canWriteConversation,
+  }) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final rootMessageId = _activeThreadRootMessageId;
+    if (rootMessageId == null) return const SizedBox.shrink();
+
+    final matchingRoots =
+        allMessages.where((message) => message.id == rootMessageId);
+    final root = matchingRoots.isEmpty ? null : matchingRoots.first;
+    final replies = allMessages
+        .where((message) => message.threadRootMessageId == rootMessageId)
+        .toList(growable: false);
+    final timelineItems = _buildTimelineItems(replies);
+
+    return ColoredBox(
+      key: const ValueKey<String>('message-thread-pane'),
+      color: colorScheme.surface,
+      child: Column(
+        children: [
+          _buildTaskThreadNavigation(context, replies.length),
+          Expanded(
+            child: ColoredBox(
+              color: _chatTimelineBackground(theme),
+              child: root == null
+                  ? const Center(child: CircularProgressIndicator())
+                  : ListView.builder(
+                      controller: _threadScrollController,
+                      reverse: true,
+                      cacheExtent: 1600,
+                      padding: const EdgeInsets.fromLTRB(12, 10, 12, 16),
+                      itemCount: timelineItems.length + 1,
+                      itemBuilder: (context, index) {
+                        if (index < timelineItems.length) {
+                          final item =
+                              timelineItems[timelineItems.length - 1 - index];
+                          if (item is _UnreadMessagesMarker) {
+                            return const SizedBox.shrink();
+                          }
+                          if (item is _TimelineDaySeparator) {
+                            return _buildTimelineDaySeparator(
+                              context,
+                              item.day,
+                            );
+                          }
+                          return _buildMessageBubble(
+                            context,
+                            item as Message,
+                            replies,
+                          );
+                        }
+
+                        return Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            _buildThreadRootEntry(
+                              context,
+                              root,
+                              allMessages,
+                            ),
+                            Padding(
+                              padding: const EdgeInsets.symmetric(vertical: 8),
+                              child: Row(
+                                children: [
+                                  Expanded(
+                                    child: Divider(
+                                      color: colorScheme.outlineVariant,
+                                    ),
+                                  ),
+                                  Padding(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 8,
+                                    ),
+                                    child: Text(
+                                      replies.length == 1
+                                          ? '1 respuesta'
+                                          : '${replies.length} respuestas',
+                                      style:
+                                          theme.textTheme.labelSmall?.copyWith(
+                                        color: colorScheme.onSurfaceVariant,
+                                      ),
+                                    ),
+                                  ),
+                                  Expanded(
+                                    child: Divider(
+                                      color: colorScheme.outlineVariant,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        );
+                      },
+                    ),
+            ),
+          ),
+          if (canWriteConversation)
+            Container(
+              padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
+              decoration: BoxDecoration(
+                color: colorScheme.surface,
+                border: Border(
+                  top: BorderSide(color: colorScheme.outlineVariant),
+                ),
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Row(
+                    children: [
+                      Checkbox(
+                        value: _alsoSendThreadReplyToChannel,
+                        onChanged: (value) => setState(
+                          () => _alsoSendThreadReplyToChannel = value ?? false,
+                        ),
+                      ),
+                      Expanded(
+                        child: Text(
+                          'También mostrar esta respuesta en el canal',
+                          style: theme.textTheme.labelMedium?.copyWith(
+                            color: colorScheme.onSurfaceVariant,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  _buildComposer(context),
+                ],
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildChannelBody(
+    BuildContext context,
+    ChatProvider chatProvider,
+    List<Message> allMessages, {
+    required bool isLoading,
+    required bool canWriteConversation,
+    required bool threadOpenBesideChannel,
+  }) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final channelMessages = _channelTimelineMessages(allMessages);
+    final timelineItems = _buildTimelineItems(channelMessages);
+    final showHistoryBoundary = channelMessages.isNotEmpty ||
+        chatProvider.isLoadingOlderMessages(widget.conversation.id) ||
+        chatProvider.olderMessagesErrorForConversation(
+              widget.conversation.id,
+            ) !=
+            null;
+
+    return Column(
+      children: [
+        Expanded(
+          child: Container(
+            color: _chatTimelineBackground(theme),
+            child: isLoading && allMessages.isEmpty
+                ? const Center(child: CircularProgressIndicator())
+                : Stack(
+                    children: [
+                      ListView.builder(
+                        controller: _scrollController,
+                        reverse: true,
+                        cacheExtent: 2400,
+                        padding: const EdgeInsets.fromLTRB(16, 12, 16, 22),
+                        itemCount: timelineItems.length +
+                            (showHistoryBoundary ? 1 : 0),
+                        itemBuilder: (context, index) {
+                          if (index < timelineItems.length) {
+                            final item =
+                                timelineItems[timelineItems.length - 1 - index];
+                            if (item is _UnreadMessagesMarker) {
+                              return _buildUnreadMessagesMarker(item.count);
+                            }
+                            if (item is _TimelineDaySeparator) {
+                              return _buildTimelineDaySeparator(
+                                context,
+                                item.day,
+                              );
+                            }
+                            return _buildChannelTimelineEntry(
+                              context,
+                              item as Message,
+                              allMessages,
+                              channelMessages,
+                            );
+                          }
+
+                          return _buildHistoryBoundary(
+                            context,
+                            chatProvider,
+                            hasMessages: allMessages.isNotEmpty,
+                            boundaryLabel: 'Inicio del canal',
+                          );
+                        },
+                      ),
+                      Positioned(
+                        right: 14,
+                        bottom: 10,
+                        child: IgnorePointer(
+                          ignoring: !_showJumpToLatest,
+                          child: AnimatedScale(
+                            scale: _showJumpToLatest ? 1 : 0.82,
+                            duration: const Duration(milliseconds: 150),
+                            child: AnimatedOpacity(
+                              opacity: _showJumpToLatest ? 1 : 0,
+                              duration: const Duration(milliseconds: 150),
+                              child: Material(
+                                color: colorScheme.surface,
+                                elevation: 3,
+                                shape: const CircleBorder(),
+                                child: IconButton(
+                                  tooltip: 'Ir al mensaje más reciente',
+                                  onPressed: _jumpToLatest,
+                                  icon: const Icon(
+                                    Icons.keyboard_arrow_down_rounded,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+          ),
+        ),
+        if (canWriteConversation && !threadOpenBesideChannel)
+          Container(
+            padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
+            decoration: BoxDecoration(
+              color: colorScheme.surface,
+              border: Border(
+                top: BorderSide(color: colorScheme.outlineVariant),
+              ),
+            ),
+            child: _buildComposer(context),
+          ),
+      ],
+    );
   }
 
   @override
@@ -2753,19 +3833,19 @@ class _ChatWindowState extends State<ChatWindow> {
     final messages =
         chatProvider.messagesForConversation(widget.conversation.id);
     _schedulePendingAttachmentReconciliation(messages);
-    final timelineItems = _buildTimelineItems(messages);
     final isLoading =
         chatProvider.isConversationLoading(widget.conversation.id);
     final streamError = chatProvider.messageStreamErrorForConversation(
       widget.conversation.id,
     );
-    final showHistoryBoundary = messages.isNotEmpty ||
-        chatProvider.isLoadingOlderMessages(widget.conversation.id) ||
-        chatProvider.olderMessagesErrorForConversation(
-              widget.conversation.id,
-            ) !=
-            null;
-    if (!_showChatInfoPanel && messages.isNotEmpty) {
+    // Sólo para el primer llenado: si el timeline aún no alcanza a llenar el
+    // viewport no hay scroll que dispare la carga. Con contenido desplazable el
+    // dueño de la paginación es el scroll ya detenido, no cada build — dos
+    // disparadores compitiendo era la otra mitad del salto.
+    if (!_showChatInfoPanel &&
+        messages.isNotEmpty &&
+        (!_scrollController.hasClients ||
+            _scrollController.position.maxScrollExtent <= 0)) {
       _scheduleOlderMessagesIfAtStart(chatProvider);
     }
     final pendingDraft =
@@ -2773,112 +3853,91 @@ class _ChatWindowState extends State<ChatWindow> {
     final canWriteConversation = widget.conversation.status == 'active' ||
         widget.conversation.status == 'pending';
 
-    final chatContent = Column(
-      children: [
-        _buildHeader(context, chatProvider),
+    final chatContent = PopScope(
+      canPop: _selectedMessages.isEmpty,
+      onPopInvokedWithResult: (didPop, result) {
+        if (!didPop && _selectedMessages.isNotEmpty) {
+          setState(_selectedMessages.clear);
+        }
+      },
+      child: Column(
+        children: [
+          if (_selectedMessages.isEmpty || !widget.compact)
+            _buildHeader(context, chatProvider),
+          if (_selectedMessages.isNotEmpty) _buildMessageSelectionToolbar(),
+          if (pendingDraft != null) _buildPreparedHandoffBanner(pendingDraft),
 
-        if (pendingDraft != null) _buildPreparedHandoffBanner(pendingDraft),
+          // Pending Chat Request Banner (for employees reviewing customer requests)
+          if (widget.conversation.type == 'support' &&
+              widget.conversation.status == 'pending')
+            _buildPendingRequestBanner(context),
 
-        // Pending Chat Request Banner (for employees reviewing customer requests)
-        if (widget.conversation.type == 'support' &&
-            widget.conversation.status == 'pending')
-          _buildPendingRequestBanner(context),
-
-        if (streamError != null)
-          _buildMessageStreamErrorBanner(
-            context,
-            chatProvider,
-            streamError,
-          ),
-
-        if (_showChatInfoPanel)
-          Expanded(
-            child: _buildChatInfoPanel(context, chatProvider, messages),
-          )
-        else ...[
-          // Messages
-          Expanded(
-            child: Container(
-              color: _chatTimelineBackground(theme),
-              child: isLoading && messages.isEmpty
-                  ? const Center(child: CircularProgressIndicator())
-                  : Stack(
-                      children: [
-                        ListView.builder(
-                          controller: _scrollController,
-                          reverse: true,
-                          padding: const EdgeInsets.fromLTRB(16, 12, 16, 22),
-                          itemCount: timelineItems.length +
-                              (showHistoryBoundary ? 1 : 0),
-                          itemBuilder: (context, index) {
-                            if (showHistoryBoundary &&
-                                index == timelineItems.length) {
-                              return _buildHistoryBoundary(
-                                context,
-                                chatProvider,
-                                hasMessages: messages.isNotEmpty,
-                              );
-                            }
-                            final item =
-                                timelineItems[timelineItems.length - 1 - index];
-                            if (item is _UnreadMessagesMarker) {
-                              return _buildUnreadMessagesMarker(item.count);
-                            }
-                            if (item is _TimelineDaySeparator) {
-                              return _buildTimelineDaySeparator(
-                                context,
-                                item.day,
-                              );
-                            }
-
-                            final msg = item as Message;
-                            return _buildMessageBubble(context, msg, messages);
-                          },
-                        ),
-                        Positioned(
-                          right: 14,
-                          bottom: 10,
-                          child: IgnorePointer(
-                            ignoring: !_showJumpToLatest,
-                            child: AnimatedScale(
-                              scale: _showJumpToLatest ? 1 : 0.82,
-                              duration: const Duration(milliseconds: 150),
-                              child: AnimatedOpacity(
-                                opacity: _showJumpToLatest ? 1 : 0,
-                                duration: const Duration(milliseconds: 150),
-                                child: Material(
-                                  color: colorScheme.surface,
-                                  elevation: 3,
-                                  shape: const CircleBorder(),
-                                  child: IconButton(
-                                    tooltip: 'Ir al mensaje más reciente',
-                                    onPressed: _jumpToLatest,
-                                    icon: const Icon(
-                                      Icons.keyboard_arrow_down_rounded,
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
+          if (streamError != null)
+            _buildMessageStreamErrorBanner(
+              context,
+              chatProvider,
+              streamError,
             ),
-          ),
 
-          if (canWriteConversation)
-            Container(
-              padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
-              decoration: BoxDecoration(
-                color: colorScheme.surface,
-                border: Border(
-                  top: BorderSide(color: colorScheme.outlineVariant),
-                ),
-              ),
-              child: _buildComposer(context),
+          if (_showChatInfoPanel)
+            Expanded(
+              child: _buildChatInfoPanel(context, chatProvider, messages),
             )
           else
+            Expanded(
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  final hasOpenThread = _activeThreadRootMessageId != null;
+                  // Reuse the same width contract as the canonical messaging
+                  // context inspector. Compact/right-rail hosts get a focused
+                  // thread screen; the full desktop inbox keeps channel + pane.
+                  final showThreadBesideChannel = hasOpenThread &&
+                      !widget.compact &&
+                      constraints.maxWidth >= 760;
+
+                  if (hasOpenThread && !showThreadBesideChannel) {
+                    return _buildThreadPane(
+                      context,
+                      chatProvider,
+                      messages,
+                      canWriteConversation: canWriteConversation,
+                    );
+                  }
+
+                  final channel = _buildChannelBody(
+                    context,
+                    chatProvider,
+                    messages,
+                    isLoading: isLoading,
+                    canWriteConversation: canWriteConversation,
+                    threadOpenBesideChannel: showThreadBesideChannel,
+                  );
+                  if (!showThreadBesideChannel) return channel;
+
+                  final threadPaneWidth =
+                      (constraints.maxWidth * 0.38).clamp(380.0, 440.0);
+                  return Row(
+                    children: [
+                      Expanded(child: channel),
+                      VerticalDivider(
+                        width: 1,
+                        color: colorScheme.outlineVariant,
+                      ),
+                      SizedBox(
+                        width: threadPaneWidth,
+                        child: _buildThreadPane(
+                          context,
+                          chatProvider,
+                          messages,
+                          canWriteConversation: canWriteConversation,
+                        ),
+                      ),
+                    ],
+                  );
+                },
+              ),
+            ),
+          if (!_showChatInfoPanel && !canWriteConversation)
             Container(
               width: double.infinity,
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
@@ -2908,7 +3967,7 @@ class _ChatWindowState extends State<ChatWindow> {
               ),
             ),
         ],
-      ],
+      ),
     );
 
     if (!_supportsOutgoingAttachments) return chatContent;
@@ -3035,7 +4094,7 @@ class _ChatWindowState extends State<ChatWindow> {
             'Solicitud de chat pendiente',
             style: TextStyle(
               fontWeight: FontWeight.bold,
-              color: Colors.orange[900],
+              color: VinabikeThemeRoles.of(context).warning.onContainer,
             ),
           ),
           const SizedBox(height: 2),
@@ -3043,7 +4102,7 @@ class _ChatWindowState extends State<ChatWindow> {
             'El cliente espera respuesta. Acepta para comenzar a chatear.',
             style: TextStyle(
               fontSize: 12,
-              color: Colors.orange[800],
+              color: VinabikeThemeRoles.of(context).warning.onContainer,
             ),
           ),
         ],
@@ -3054,7 +4113,7 @@ class _ChatWindowState extends State<ChatWindow> {
       OutlinedButton(
         onPressed: () => _showRejectDialog(context),
         style: OutlinedButton.styleFrom(
-          foregroundColor: Colors.red[700],
+          foregroundColor: VinabikeThemeRoles.of(context).danger.accent,
         ),
         child: const Text('Rechazar'),
       ),
@@ -3063,7 +4122,7 @@ class _ChatWindowState extends State<ChatWindow> {
         icon: const Icon(Icons.check, size: 18),
         label: const Text('Aceptar'),
         style: FilledButton.styleFrom(
-          backgroundColor: Colors.green[600],
+          backgroundColor: VinabikeThemeRoles.of(context).success.accent,
         ),
       ),
     ];
@@ -3074,9 +4133,10 @@ class _ChatWindowState extends State<ChatWindow> {
         vertical: 12,
       ),
       decoration: BoxDecoration(
-        color: Colors.orange[50],
+        color: VinabikeThemeRoles.of(context).warning.container,
         border: Border(
-          bottom: BorderSide(color: Colors.orange[200]!),
+          bottom:
+              BorderSide(color: VinabikeThemeRoles.of(context).warning.border),
         ),
       ),
       child: widget.compact
@@ -3086,7 +4146,8 @@ class _ChatWindowState extends State<ChatWindow> {
                 Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Icon(Icons.pending_actions, color: Colors.orange[700]),
+                    Icon(Icons.pending_actions,
+                        color: VinabikeThemeRoles.of(context).warning.accent),
                     const SizedBox(width: 10),
                     textBlock,
                   ],
@@ -3101,7 +4162,8 @@ class _ChatWindowState extends State<ChatWindow> {
             )
           : Row(
               children: [
-                Icon(Icons.pending_actions, color: Colors.orange[700]),
+                Icon(Icons.pending_actions,
+                    color: VinabikeThemeRoles.of(context).warning.accent),
                 const SizedBox(width: 12),
                 textBlock,
                 const SizedBox(width: 12),
@@ -3137,6 +4199,7 @@ class _ChatWindowState extends State<ChatWindow> {
       ),
       child: Row(
         children: [
+          if (widget.headerLeading != null) widget.headerLeading!,
           Expanded(
             child: Material(
               color: Colors.transparent,
@@ -3200,7 +4263,7 @@ class _ChatWindowState extends State<ChatWindow> {
             ),
           ),
           const SizedBox(width: 8),
-          if (_canStartWhatsAppFromConversation)
+          if (!widget.compact && _canStartWhatsAppFromConversation)
             IconButton(
               icon: const Icon(Icons.phone_in_talk_outlined),
               color: colorScheme.primary,
@@ -3209,7 +4272,8 @@ class _ChatWindowState extends State<ChatWindow> {
                   ? null
                   : () => _openWhatsAppConversationForCurrentContext(context),
             ),
-          if (hasSupportedContextPanel &&
+          if (!widget.compact &&
+              hasSupportedContextPanel &&
               widget.isContextPanelClosed &&
               _canOpenCurrentContext)
             IconButton(
@@ -3220,20 +4284,55 @@ class _ChatWindowState extends State<ChatWindow> {
               tooltip: 'Mostrar detalles',
               onPressed: _openCurrentContext,
             ),
-          if (!conversation.isSupplierConversation)
-            IconButton(
-              icon: Icon(
-                hasContext ? Icons.link : Icons.link_off,
-                color: hasJobContext
-                    ? jobContextColor
-                    : hasContext
-                        ? colorScheme.primary
-                        : colorScheme.onSurfaceVariant,
+          if (!widget.compact && !conversation.isSupplierConversation)
+            if (!conversation.isTaskThread)
+              IconButton(
+                icon: Icon(
+                  hasContext ? Icons.link : Icons.link_off,
+                  color: hasJobContext
+                      ? jobContextColor
+                      : hasContext
+                          ? colorScheme.primary
+                          : colorScheme.onSurfaceVariant,
+                ),
+                tooltip: hasContext
+                    ? '${conversation.hasLinkedContext ? 'Contexto vinculado' : 'Contexto detectado'}: ${_contextLabel(contextType)}'
+                    : 'Vincular contexto del chat',
+                onPressed: () => _showAssignContextDialog(context),
               ),
-              tooltip: hasContext
-                  ? '${conversation.hasLinkedContext ? 'Contexto vinculado' : 'Contexto detectado'}: ${_contextLabel(contextType)}'
-                  : 'Vincular contexto del chat',
-              onPressed: () => _showAssignContextDialog(context),
+          if (widget.compact)
+            PopupMenuButton<String>(
+              key: const ValueKey('chat-options'),
+              tooltip: 'Opciones del chat',
+              onSelected: (action) {
+                switch (action) {
+                  case 'info':
+                    _toggleChatInfoPanel();
+                  case 'link':
+                    _showAssignContextDialog(context);
+                  case 'context':
+                    _openCurrentContext();
+                  case 'contact':
+                    _openWhatsAppConversationForCurrentContext(context);
+                }
+              },
+              itemBuilder: (_) => [
+                const PopupMenuItem(
+                    value: 'info', child: Text('Información del chat')),
+                if (hasSupportedContextPanel && _canOpenCurrentContext)
+                  const PopupMenuItem(
+                      value: 'context', child: Text('Mostrar detalles')),
+                if (!conversation.isSupplierConversation &&
+                    !conversation.isTaskThread)
+                  PopupMenuItem(
+                      value: 'link',
+                      child: Text(hasContext
+                          ? 'Cambiar contexto vinculado'
+                          : 'Vincular contexto del chat')),
+                if (_canStartWhatsAppFromConversation)
+                  const PopupMenuItem(
+                      value: 'contact', child: Text('Contactar por WhatsApp')),
+              ],
             ),
           ...widget.headerActions,
         ],
@@ -3298,6 +4397,19 @@ class _ChatWindowState extends State<ChatWindow> {
         'Trabajo',
       if (hint?.jobStatus?.trim().isNotEmpty == true) hint!.jobStatus!.trim(),
     ].join(' · ');
+
+    if (widget.compact) {
+      // Only the primary operational reference belongs next to the person.
+      // Complete jobs/bikes/documents remain in the shared information panel.
+      final summary = jobLabel.isNotEmpty
+          ? jobLabel
+          : purchaseInvoiceLabel ?? invoiceLabel ?? bikeName ?? fallback;
+      return Text(summary,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: theme.textTheme.bodySmall
+              ?.copyWith(color: colorScheme.onSurfaceVariant));
+    }
 
     return SizedBox(
       height: 22,
@@ -3565,7 +4677,7 @@ class _ChatWindowState extends State<ChatWindow> {
                 _buildChatInfoNavItem(
                   section: _ChatInfoSection.media,
                   icon: Icons.perm_media_outlined,
-                  label: 'Multimedia y docs',
+                  label: 'Archivos',
                   badge: '${mediaCount + fileCount}',
                 ),
                 _buildChatInfoNavItem(
@@ -3778,6 +4890,9 @@ class _ChatWindowState extends State<ChatWindow> {
     );
   }
 
+  /// Info responde «¿con quién hablo y sobre qué?». Los contadores de
+  /// mensajes cargados eran diagnóstico, no información; el nombre ya está en
+  /// la cabecera; y las acciones viven en Gestión.
   Widget _buildChatInfoOverview({
     required ThemeData theme,
     required String title,
@@ -3785,61 +4900,57 @@ class _ChatWindowState extends State<ChatWindow> {
     required List<Message> messages,
     required List<_ChatAttachment> attachments,
   }) {
-    final inboundCount = messages.where((message) => !message.isMe).length;
-    final outboundCount = messages.where((message) => message.isMe).length;
+    final conversation = widget.conversation;
+    final contactHint = conversation.contextHint;
+    final contactPerson = contactHint?.contactPersonName?.trim();
+    final contactPersonLine = contactPerson == null || contactPerson.isEmpty
+        ? null
+        : [
+            contactPerson,
+            if (contactHint?.contactPersonRole?.trim().isNotEmpty == true)
+              contactHint!.contactPersonRole!.trim(),
+            if (contactHint?.contactPersonIsActive == false)
+              'contacto anterior',
+          ].join(' · ');
     final lastMessageAt = messages.isEmpty ? null : messages.last.createdAt;
+    final hasContext = conversation.hasLinkedContext ||
+        conversation.contextHint?.hasOperationalContext == true;
+    final canLinkContext = conversation.isSupport &&
+        !conversation.isSupplierConversation &&
+        !conversation.isTaskThread;
 
     return _buildChatInfoContentShell(
       theme: theme,
       title: 'Info',
       subtitle: title,
       children: [
-        Wrap(
-          spacing: 18,
-          runSpacing: 9,
-          children: [
-            _buildChatStat(
-              Icons.forum_outlined,
-              '${messages.length} mensajes cargados',
-            ),
-            _buildChatStat(
-              Icons.call_received_outlined,
-              '$inboundCount entrantes cargados',
-            ),
-            _buildChatStat(
-              Icons.call_made_outlined,
-              '$outboundCount salientes cargados',
-            ),
-            _buildChatStat(
-              Icons.attach_file,
-              '${attachments.length} archivos cargados',
-            ),
-          ],
-        ),
-        const SizedBox(height: 18),
+        _buildPanelSectionTitle(theme, 'Conversación'),
+        const SizedBox(height: 10),
         _buildPanelBlock(
           theme: theme,
           children: [
-            _buildInfoRowTile(
-              icon: Icons.badge_outlined,
-              title: 'Nombre',
-              value: title,
-            ),
-            if (widget.conversation.isSupport) _buildContactPhoneInfoRow(),
+            if (conversation.isSupport)
+              _buildContactPhoneInfoRow(
+                title: _isWhatsAppConversation ? 'Número' : 'Teléfono',
+              ),
+            if (contactPersonLine != null)
+              _buildInfoRowTile(
+                icon: Icons.person_outline,
+                title: 'Contacto',
+                value: contactPersonLine,
+              ),
             _buildInfoRowTile(
               icon: Icons.route_outlined,
               title: 'Canal',
-              value: widget.conversation.channelLabel,
+              value: conversation.channelLabel,
             ),
             _buildInfoRowTile(
               icon: Icons.flag_outlined,
               title: 'Estado',
-              value: _statusLabel(widget.conversation.status),
-            ),
-            _buildInfoRowTile(
-              icon: _contextIcon(_effectiveContextType),
-              title: 'Contexto',
-              value: _contextLabel(_effectiveContextType) ?? 'Sin contexto',
+              trailing: VbStatusBadge(
+                label: _statusLabel(conversation.status),
+                tone: _statusTone(conversation.status),
+              ),
             ),
             _buildInfoRowTile(
               icon: Icons.schedule_outlined,
@@ -3850,17 +4961,34 @@ class _ChatWindowState extends State<ChatWindow> {
             ),
           ],
         ),
-        if (widget.conversation.contextHint?.hasOperationalContext == true) ...[
+        if (hasContext) ...[
           const SizedBox(height: 18),
-          _buildOperationalContextCard(theme),
-        ],
-        const SizedBox(height: 14),
-        Text(
-          '$subtitle · Las acciones están ordenadas en Gestión.',
-          style: theme.textTheme.bodySmall?.copyWith(
-            color: theme.colorScheme.onSurfaceVariant,
+          _buildPanelSectionTitle(
+            theme,
+            conversation.hasLinkedContext
+                ? 'Vinculado a'
+                : 'Contexto detectado',
           ),
-        ),
+          const SizedBox(height: 10),
+          _buildOperationalContextCard(theme),
+        ] else if (canLinkContext) ...[
+          const SizedBox(height: 18),
+          _buildPanelSectionTitle(theme, 'Vinculado a'),
+          const SizedBox(height: 10),
+          _buildPanelBlock(
+            theme: theme,
+            children: [
+              _buildManagementActionTile(
+                icon: Icons.link,
+                color: theme.colorScheme.primary,
+                title: 'Vincular contexto',
+                subtitle:
+                    'Este chat no está unido a un cliente, trabajo, venta o pedido',
+                onTap: () => _showAssignContextDialog(context),
+              ),
+            ],
+          ),
+        ],
       ],
     );
   }
@@ -3874,8 +5002,10 @@ class _ChatWindowState extends State<ChatWindow> {
 
     return _buildChatInfoContentShell(
       theme: theme,
-      title: 'Multimedia y documentos',
-      subtitle: '${attachments.length} elementos en los mensajes cargados',
+      title: 'Archivos',
+      subtitle: attachments.length == 1
+          ? '1 archivo en esta conversación'
+          : '${attachments.length} archivos en esta conversación',
       trailing: FilledButton.icon(
         onPressed: () => _pickAndSendFile('file'),
         icon: const Icon(Icons.add, size: 18),
@@ -3891,7 +5021,7 @@ class _ChatWindowState extends State<ChatWindow> {
           )
         else ...[
           if (media.isNotEmpty) ...[
-            _buildPanelSectionTitle(theme, 'Multimedia'),
+            _buildPanelSectionTitle(theme, 'Fotos'),
             const SizedBox(height: 10),
             GridView.builder(
               shrinkWrap: true,
@@ -3946,6 +5076,7 @@ class _ChatWindowState extends State<ChatWindow> {
           ? 'Revisar proveedor ${hint!.supplierLabel!.trim()}'
           : 'Revisar proveedor vinculado',
       'order' || 'online_order' => 'Revisar pedido online',
+      'task' => 'Abrir la tarea raíz',
       _ => 'Revisar contexto operativo',
     };
     final contextActionSubtitle = switch (contextType) {
@@ -3966,9 +5097,8 @@ class _ChatWindowState extends State<ChatWindow> {
           if (hint?.purchaseInvoiceBalance != null)
             'Saldo ${_formatPanelCurrency(hint!.purchaseInvoiceBalance)}',
         ].join(' · '),
-      'supplier' => hint?.supplierPhone?.trim().isNotEmpty == true
-          ? hint!.supplierPhone!.trim()
-          : 'Ficha y abastecimiento del proveedor',
+      'supplier' => 'Ficha, compras y portal del proveedor',
+      'task' => 'Ver asignación, trabajo, servicios y ciclo de la tarea',
       _ => 'Abrir sus datos sin abandonar la conversación',
     };
     final canResolve = widget.conversation.type == 'support' &&
@@ -3981,66 +5111,85 @@ class _ChatWindowState extends State<ChatWindow> {
     return _buildChatInfoContentShell(
       theme: theme,
       title: 'Gestión',
-      subtitle: 'Estado, vínculo ERP y acciones operativas',
+      subtitle: 'Acciones sobre esta conversación',
       children: [
-        _buildPanelBlock(
-          theme: theme,
-          children: [
-            if (!widget.conversation.isSupplierConversation)
-              _buildManagementActionTile(
-                icon: Icons.link,
-                color: theme.colorScheme.primary,
-                title: widget.conversation.hasLinkedContext
-                    ? 'Cambiar contexto'
-                    : widget.conversation.hasDetectedContext
-                        ? 'Confirmar contexto detectado'
-                        : 'Vincular contexto',
-                subtitle: _contextLabel(contextType) ??
-                    'Conecta este chat con cliente, trabajo, factura o pedido',
-                onTap: () => _showAssignContextDialog(context),
-              ),
-            if (hasSupportedContextPanel && _canOpenCurrentContext)
-              _buildManagementActionTile(
-                icon: _contextIcon(contextType),
-                color: theme.colorScheme.primary,
-                title: contextActionTitle,
-                subtitle: contextActionSubtitle.isEmpty
-                    ? 'Abrir sus datos sin abandonar la conversación'
-                    : contextActionSubtitle,
-                onTap: _openCurrentContext,
-              ),
-            if (canSendOperationalActions)
-              _buildManagementActionTile(
-                icon: Icons.flash_on,
-                color: theme.colorScheme.tertiary,
-                title: smartActions.hasInteractiveActions
-                    ? 'Preparar solicitud al cliente'
-                    : 'Mensajes para el cliente',
-                subtitle: smartActions.hasInteractiveActions
-                    ? 'Solo muestra acciones válidas para el contexto actual'
-                    : smartActions.explanation ??
-                        'Mensajes preparados con contexto del ERP',
-                onTap: () => _showSmartActions(context),
-              ),
-            if (_canStartWhatsAppFromConversation)
-              _buildManagementActionTile(
-                icon: Icons.phone_in_talk_outlined,
-                color: const Color(0xFF059669),
-                title: 'Abrir WhatsApp',
-                subtitle: 'Crea o recupera el hilo WhatsApp de este cliente',
-                onTap: () => _openWhatsAppConversationForCurrentContext(
-                  context,
-                ),
-              ),
-            if (canResolve)
-              _buildManagementActionTile(
-                icon: Icons.check_circle_outline,
-                color: const Color(0xFF0F766E),
-                title: 'Marcar como resuelto',
-                subtitle: 'Cierra la conversación en la bandeja de clientes',
-                onTap: _resolveCurrentConversation,
-              ),
-          ],
+        FutureBuilder<_SupplierPhoneMismatch?>(
+          future: _getSupplierPhoneMismatchFuture(),
+          builder: (context, snapshot) {
+            final mismatch = snapshot.data;
+            return _buildPanelBlock(
+              theme: theme,
+              children: [
+                if (mismatch != null)
+                  _buildManagementActionTile(
+                    icon: Icons.swap_horiz,
+                    color: theme.colorScheme.primary,
+                    title: _writeToPrimaryContactLabel,
+                    subtitle:
+                        '${_formatContactPhone(mismatch.registeredPhone)} · este hilo es con ${widget.conversation.contextHint?.contactPersonName ?? _formatContactPhone(mismatch.threadPhone)}',
+                    onTap: () => _openRegisteredSupplierChat(mismatch),
+                  ),
+                if (!widget.conversation.isSupplierConversation &&
+                    !widget.conversation.isTaskThread)
+                  _buildManagementActionTile(
+                    icon: Icons.link,
+                    color: theme.colorScheme.primary,
+                    title: widget.conversation.hasLinkedContext
+                        ? 'Cambiar contexto'
+                        : widget.conversation.hasDetectedContext
+                            ? 'Confirmar contexto detectado'
+                            : 'Vincular contexto',
+                    subtitle: _contextLabel(contextType) ??
+                        'Conecta este chat con cliente, trabajo, factura o pedido',
+                    onTap: () => _showAssignContextDialog(context),
+                  ),
+                if (hasSupportedContextPanel && _canOpenCurrentContext)
+                  _buildManagementActionTile(
+                    icon: _contextIcon(contextType),
+                    color: theme.colorScheme.primary,
+                    title: contextActionTitle,
+                    subtitle: contextActionSubtitle.isEmpty
+                        ? 'Abrir sus datos sin abandonar la conversación'
+                        : contextActionSubtitle,
+                    onTap: _openCurrentContext,
+                  ),
+                if (canSendOperationalActions)
+                  _buildManagementActionTile(
+                    icon: Icons.flash_on,
+                    color: theme.colorScheme.tertiary,
+                    title: smartActions.hasInteractiveActions
+                        ? 'Preparar solicitud al cliente'
+                        : 'Mensajes para el cliente',
+                    subtitle: smartActions.hasInteractiveActions
+                        ? 'Solo muestra acciones válidas para el contexto actual'
+                        : smartActions.explanation ??
+                            'Mensajes preparados con contexto del ERP',
+                    onTap: () => _showSmartActions(context),
+                  ),
+                if (_canStartWhatsAppFromConversation)
+                  _buildManagementActionTile(
+                    icon: Icons.phone_in_talk_outlined,
+                    color: const Color(0xFF059669),
+                    title: 'Abrir WhatsApp',
+                    subtitle:
+                        'Crea o recupera el hilo WhatsApp de este cliente',
+                    onTap: () => _openWhatsAppConversationForCurrentContext(
+                      context,
+                    ),
+                  ),
+                if (canResolve)
+                  _buildManagementActionTile(
+                    icon: Icons.check_circle_outline,
+                    color: const Color(0xFF0F766E),
+                    title: 'Marcar como resuelto',
+                    subtitle: widget.conversation.isSupplierConversation
+                        ? 'Cierra la conversación en la bandeja de proveedores'
+                        : 'Cierra la conversación en la bandeja de clientes',
+                    onTap: _resolveCurrentConversation,
+                  ),
+              ],
+            );
+          },
         ),
       ],
     );
@@ -4054,25 +5203,20 @@ class _ChatWindowState extends State<ChatWindow> {
     return _buildChatInfoContentShell(
       theme: theme,
       title: 'Respaldo',
-      subtitle: 'Exportación auditada de esta conversación',
+      subtitle: 'Descarga esta conversación como archivo',
       children: [
         _buildPanelBlock(
           theme: theme,
           children: [
             _buildInfoRowTile(
+              icon: Icons.description_outlined,
+              title: 'Formato',
+              value: 'JSON',
+            ),
+            _buildInfoRowTile(
               icon: Icons.forum_outlined,
-              title: 'Mensajes cargados',
-              value: '${messages.length}',
-            ),
-            _buildInfoRowTile(
-              icon: Icons.attach_file,
-              title: 'Archivos referenciados',
-              value: '${attachments.length}',
-            ),
-            _buildInfoRowTile(
-              icon: Icons.cloud_done_outlined,
-              title: 'Respaldo general',
-              value: 'Incluye chats y WhatsApp',
+              title: 'Contenido',
+              value: 'Mensajes, vínculos ERP y archivos',
             ),
           ],
         ),
@@ -4095,7 +5239,7 @@ class _ChatWindowState extends State<ChatWindow> {
         ),
         const SizedBox(height: 14),
         Text(
-          'El archivo JSON conserva conversación, participantes, vínculos ERP, mensajes, metadatos externos, estados WhatsApp y referencias a archivos.',
+          'El archivo se genera desde el servidor con todos los mensajes, no sólo los cargados en pantalla: participantes, vínculos con el ERP, estados de entrega de WhatsApp y referencias a los archivos.',
           style: theme.textTheme.bodySmall?.copyWith(
             color: theme.colorScheme.onSurfaceVariant,
             height: 1.35,
@@ -4190,24 +5334,119 @@ class _ChatWindowState extends State<ChatWindow> {
 
   String _formatPanelCurrency(double? amount) {
     if (amount == null) return '-';
-    return NumberFormat.currency(
-      locale: 'es_CL',
-      symbol: r'$',
-      decimalDigits: 0,
-    ).format(amount);
+    return ChileanUtils.formatCurrency(amount);
   }
 
+  /// Lo que el chat tiene detrás: proveedor o cliente, trabajo, venta o
+  /// compra, y el botón que abre cada cosa por su nombre. En un chat de
+  /// proveedor el «cliente» es la ficha técnica que WhatsApp crea por número:
+  /// no es información, no se muestra.
   Widget _buildOperationalContextCard(ThemeData theme) {
-    final hint = widget.conversation.contextHint;
-    if (hint == null || !hint.hasOperationalContext) {
+    final conversation = widget.conversation;
+    final hint = conversation.contextHint;
+    final hasHint = hint != null && hint.hasOperationalContext;
+    if (!hasHint && !conversation.hasLinkedContext) {
       return const SizedBox.shrink();
     }
 
     final colorScheme = theme.colorScheme;
-    final statusColor = _colorFromHex(
-      hint.jobStatusColor,
-      colorScheme.primary,
+    final isSupplierChat = conversation.isSupplierConversation;
+
+    return FutureBuilder<_SupplierPhoneMismatch?>(
+      future: _getSupplierPhoneMismatchFuture(),
+      builder: (context, snapshot) {
+        final mismatch = snapshot.data;
+        return Container(
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: colorScheme.surface,
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: colorScheme.outlineVariant),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              if (hint != null && hasHint)
+                ..._buildOperationalContextRows(theme, hint)
+              else
+                _buildOperationalContextRow(
+                  icon: _contextIcon(_effectiveContextType),
+                  title: _contextLabel(_effectiveContextType) ??
+                      'Registro vinculado',
+                  value: '',
+                ),
+              const SizedBox(height: 12),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  // Este hilo no es con el contacto principal: la salida es
+                  // una sola, escribirle a quien corresponde hoy.
+                  if (mismatch != null)
+                    FilledButton.icon(
+                      onPressed: _isSendingMessage
+                          ? null
+                          : () => _openRegisteredSupplierChat(mismatch),
+                      icon: const Icon(Icons.swap_horiz, size: 16),
+                      label: Text(_writeToPrimaryContactLabel),
+                    ),
+                  if (_canOpenCurrentContext)
+                    if (mismatch != null)
+                      OutlinedButton.icon(
+                        onPressed: _openCurrentContext,
+                        icon: const Icon(Icons.open_in_new, size: 16),
+                        label: Text(_openContextActionLabel),
+                      )
+                    else
+                      FilledButton.icon(
+                        onPressed: _openCurrentContext,
+                        icon: const Icon(Icons.open_in_new, size: 16),
+                        label: Text(_openContextActionLabel),
+                      ),
+                  if (hint != null &&
+                      hint.hasPurchaseInvoice &&
+                      _effectiveContextType != 'purchase_invoice')
+                    OutlinedButton.icon(
+                      onPressed: () =>
+                          context.read<WorkspaceManager>().openRouteInWorkspace(
+                                '/purchases/${hint.purchaseInvoiceId!}',
+                              ),
+                      icon: const Icon(Icons.inventory_2_outlined, size: 16),
+                      label: const Text('Abrir compra'),
+                    ),
+                  if (hint != null &&
+                      hint.hasSupplier &&
+                      _effectiveContextType != 'supplier')
+                    OutlinedButton.icon(
+                      onPressed: () =>
+                          context.read<WorkspaceManager>().openRouteInWorkspace(
+                                '/purchases/suppliers/${hint.supplierId!}',
+                              ),
+                      icon: const Icon(Icons.storefront_outlined, size: 16),
+                      label: const Text('Abrir proveedor'),
+                    ),
+                  if (!isSupplierChat && !conversation.hasLinkedContext)
+                    OutlinedButton.icon(
+                      onPressed: () => _showAssignContextDialog(context),
+                      icon: const Icon(Icons.link, size: 16),
+                      label: const Text('Vincular contexto'),
+                    ),
+                ],
+              ),
+            ],
+          ),
+        );
+      },
     );
+  }
+
+  List<Widget> _buildOperationalContextRows(
+    ThemeData theme,
+    ConversationContextHint hint,
+  ) {
+    final colorScheme = theme.colorScheme;
+    final statusColor = _colorFromHex(hint.jobStatusColor, colorScheme.primary);
+    final isSupplierChat = widget.conversation.isSupplierConversation;
     final invoiceSummary = [
       if (hint.invoiceStatus != null) hint.invoiceStatus!,
       if (hint.invoiceBalance != null)
@@ -4219,152 +5458,79 @@ class _ChatWindowState extends State<ChatWindow> {
         'Saldo ${_formatPanelCurrency(hint.purchaseInvoiceBalance)}',
     ].join(' · ');
 
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: colorScheme.surface,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: colorScheme.outlineVariant),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Container(
-                width: 34,
-                height: 34,
-                decoration: BoxDecoration(
-                  color: statusColor.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Icon(
-                  _contextIcon(_effectiveContextType),
-                  color: statusColor,
-                  size: 18,
-                ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      widget.conversation.hasLinkedContext
-                          ? 'Contexto operativo'
-                          : 'Contexto detectado',
-                      style: theme.textTheme.bodyMedium?.copyWith(
-                        fontWeight: FontWeight.w900,
-                      ),
-                    ),
-                    Text(
-                      widget.conversation.hasLinkedContext
-                          ? 'Vinculado al chat'
-                          : 'Resuelto desde cliente, WhatsApp y trabajos activos',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: theme.textTheme.labelSmall?.copyWith(
-                        color: colorScheme.onSurfaceVariant,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 14),
-          if (hint.customerLabel != null)
-            _buildOperationalContextRow(
-              icon: Icons.person_outline,
-              title: 'Cliente',
-              value: hint.customerLabel!,
-            ),
-          if (hint.hasSupplier)
-            _buildOperationalContextRow(
-              icon: Icons.storefront_outlined,
-              title: 'Proveedor',
-              value: [
-                if (hint.supplierLabel != null) hint.supplierLabel!,
-                if (hint.supplierPhone?.trim().isNotEmpty == true)
-                  hint.supplierPhone!.trim(),
-              ].join(' · '),
-            ),
-          if (hint.hasJob)
-            _buildOperationalContextRow(
-              icon: Icons.build_outlined,
-              title: hint.jobLabel ?? 'Trabajo activo',
-              value: [
-                if (hint.jobStatus != null) hint.jobStatus!,
-                if (hint.bikeName != null) hint.bikeName!,
-              ].join(' · '),
-              color: statusColor,
-            ),
-          if (hint.hasInvoice)
-            _buildOperationalContextRow(
-              icon: Icons.receipt_long_outlined,
-              title: hint.invoiceLabel ?? 'Factura vinculada',
-              value: invoiceSummary.isEmpty
-                  ? _formatPanelCurrency(hint.invoiceTotal)
-                  : invoiceSummary,
-            ),
-          if (hint.hasPurchaseInvoice)
-            _buildOperationalContextRow(
-              icon: Icons.inventory_2_outlined,
-              title: hint.purchaseInvoiceLabel ?? 'Compra vinculada',
-              value: purchaseInvoiceSummary.isEmpty
-                  ? _formatPanelCurrency(hint.purchaseInvoiceTotal)
-                  : purchaseInvoiceSummary,
-              color: _purchaseInvoiceStatusColor(
-                hint.purchaseInvoiceStatus,
-              ),
-            ),
-          const SizedBox(height: 12),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: [
-              if (_canOpenCurrentContext)
-                FilledButton.icon(
-                  onPressed: _openCurrentContext,
-                  icon: const Icon(Icons.open_in_new, size: 16),
-                  label: Text(
-                    widget.onShowContextPanel != null
-                        ? 'Abrir panel'
-                        : 'Abrir registro',
-                  ),
-                ),
-              if (hint.hasPurchaseInvoice &&
-                  _effectiveContextType != 'purchase_invoice')
-                OutlinedButton.icon(
-                  onPressed: () =>
-                      context.read<WorkspaceManager>().openRouteInWorkspace(
-                            '/purchases/${hint.purchaseInvoiceId!}',
-                          ),
-                  icon: const Icon(Icons.inventory_2_outlined, size: 16),
-                  label: const Text('Abrir compra'),
-                ),
-              if (hint.hasSupplier && _effectiveContextType != 'supplier')
-                OutlinedButton.icon(
-                  onPressed: () =>
-                      context.read<WorkspaceManager>().openRouteInWorkspace(
-                            '/purchases/suppliers/${hint.supplierId!}',
-                          ),
-                  icon: const Icon(Icons.storefront_outlined, size: 16),
-                  label: const Text('Abrir proveedor'),
-                ),
-              if (!widget.conversation.isSupplierConversation &&
-                  !widget.conversation.hasLinkedContext)
-                OutlinedButton.icon(
-                  onPressed: () => _showAssignContextDialog(context),
-                  icon: const Icon(Icons.link, size: 16),
-                  label: const Text('Fijar contexto'),
-                ),
-            ],
-          ),
-        ],
-      ),
-    );
+    return [
+      if (!isSupplierChat && hint.customerLabel != null)
+        _buildOperationalContextRow(
+          icon: Icons.person_outline,
+          title: 'Cliente',
+          value: hint.customerLabel!,
+        ),
+      if (hint.hasSupplier)
+        _buildOperationalContextRow(
+          icon: Icons.storefront_outlined,
+          title: 'Proveedor',
+          value: hint.supplierLabel ?? '',
+        ),
+      if (hint.hasJob)
+        _buildOperationalContextRow(
+          icon: Icons.build_outlined,
+          title: hint.jobLabel ?? 'Trabajo activo',
+          value: [
+            if (hint.jobStatus != null) hint.jobStatus!,
+            if (hint.bikeName != null) hint.bikeName!,
+          ].join(' · '),
+          color: statusColor,
+        ),
+      if (hint.hasInvoice)
+        _buildOperationalContextRow(
+          icon: Icons.receipt_long_outlined,
+          title: hint.invoiceLabel ?? 'Factura vinculada',
+          value: invoiceSummary.isEmpty
+              ? _formatPanelCurrency(hint.invoiceTotal)
+              : invoiceSummary,
+        ),
+      if (hint.hasPurchaseInvoice)
+        _buildOperationalContextRow(
+          icon: Icons.inventory_2_outlined,
+          title: hint.purchaseInvoiceLabel ?? 'Compra vinculada',
+          value: purchaseInvoiceSummary.isEmpty
+              ? _formatPanelCurrency(hint.purchaseInvoiceTotal)
+              : purchaseInvoiceSummary,
+          color: _purchaseInvoiceStatusColor(hint.purchaseInvoiceStatus),
+        ),
+    ];
   }
+
+  /// «Escribir al contacto actual: Víctor», o sólo «Escribir al contacto
+  /// actual» cuando la ficha no tiene nombre para el principal.
+  String get _writeToPrimaryContactLabel {
+    final primary =
+        widget.conversation.contextHint?.supplierPrimaryContactName?.trim();
+    return primary == null || primary.isEmpty
+        ? 'Escribir al contacto actual'
+        : 'Escribir al contacto actual: $primary';
+  }
+
+  /// El botón dice qué abre; «Abrir panel» y «Abrir registro» no decían nada.
+  String get _openContextActionLabel => switch (_effectiveContextType) {
+        'supplier' => 'Abrir ficha del proveedor',
+        'customer' => 'Abrir ficha del cliente',
+        'job' => 'Abrir trabajo',
+        'bike' => 'Abrir bicicleta',
+        'invoice' => 'Abrir venta',
+        'purchase_invoice' => 'Abrir compra',
+        'order' || 'online_order' => 'Abrir pedido',
+        'task' => 'Abrir tarea',
+        'product' => 'Abrir producto',
+        _ => 'Abrir registro',
+      };
+
+  VbStatusTone _statusTone(String status) => switch (status) {
+        'active' => VbStatusTone.success,
+        'pending' => VbStatusTone.warning,
+        'rejected' => VbStatusTone.danger,
+        _ => VbStatusTone.neutral,
+      };
 
   Widget _buildOperationalContextRow({
     required IconData icon,
@@ -4414,26 +5580,7 @@ class _ChatWindowState extends State<ChatWindow> {
     );
   }
 
-  Widget _buildChatStat(IconData icon, String label) {
-    final colorScheme = Theme.of(context).colorScheme;
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Icon(icon, size: 16, color: colorScheme.onSurfaceVariant),
-        const SizedBox(width: 6),
-        Text(
-          label,
-          style: TextStyle(
-            color: colorScheme.onSurface,
-            fontSize: 12,
-            fontWeight: FontWeight.w700,
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildContactPhoneInfoRow() {
+  Widget _buildContactPhoneInfoRow({required String title}) {
     return FutureBuilder<Map<String, dynamic>?>(
       future: _getConversationContactFuture(),
       builder: (context, snapshot) {
@@ -4443,12 +5590,15 @@ class _ChatWindowState extends State<ChatWindow> {
 
         return _buildInfoRowTile(
           icon: Icons.phone_iphone_outlined,
-          title: 'Teléfono',
+          title: title,
           value: hasPhone
               ? _formatContactPhone(rawPhone)
               : isLoading
                   ? 'Buscando...'
                   : 'Sin teléfono registrado',
+          onCopy: hasPhone
+              ? () => _copyPanelValue(rawPhone, label: 'Número')
+              : null,
         );
       },
     );
@@ -4457,8 +5607,11 @@ class _ChatWindowState extends State<ChatWindow> {
   Widget _buildInfoRowTile({
     required IconData icon,
     required String title,
-    required String value,
+    String? value,
+    Widget? trailing,
+    VoidCallback? onCopy,
   }) {
+    assert(value != null || trailing != null);
     final colorScheme = Theme.of(context).colorScheme;
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
@@ -4476,18 +5629,29 @@ class _ChatWindowState extends State<ChatWindow> {
             ),
           ),
           const SizedBox(width: 12),
-          Flexible(
-            child: Text(
-              value,
-              textAlign: TextAlign.right,
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                color: colorScheme.onSurfaceVariant,
-                fontWeight: FontWeight.w600,
+          if (trailing != null)
+            Flexible(child: trailing)
+          else
+            Flexible(
+              child: Text(
+                value!,
+                textAlign: TextAlign.right,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  color: colorScheme.onSurfaceVariant,
+                  fontWeight: FontWeight.w600,
+                ),
               ),
             ),
-          ),
+          if (onCopy != null) ...[
+            const SizedBox(width: 6),
+            VbSurfaceIconButton(
+              icon: Icons.copy_outlined,
+              tooltip: 'Copiar',
+              onPressed: onCopy,
+            ),
+          ],
         ],
       ),
     );
@@ -4600,29 +5764,10 @@ class _ChatWindowState extends State<ChatWindow> {
 
   Widget _buildMediaTile(_ChatAttachment attachment) {
     final colorScheme = Theme.of(context).colorScheme;
-    Widget buildPreview(String? url) {
-      if (url == null || url.isEmpty) {
-        return Container(
+    Widget placeholder(IconData icon) => Container(
           color: colorScheme.surfaceContainerHighest,
-          child: Icon(
-            attachment.isExternal
-                ? Icons.link_outlined
-                : Icons.image_not_supported_outlined,
-          ),
+          child: Icon(icon, color: colorScheme.onSurfaceVariant),
         );
-      }
-      return Image.network(
-        url,
-        fit: BoxFit.cover,
-        errorBuilder: (_, __, ___) => Container(
-          color: colorScheme.surfaceContainerHighest,
-          child: Icon(
-            Icons.broken_image_outlined,
-            color: colorScheme.onSurfaceVariant,
-          ),
-        ),
-      );
-    }
 
     return InkWell(
       borderRadius: BorderRadius.circular(8),
@@ -4632,15 +5777,21 @@ class _ChatWindowState extends State<ChatWindow> {
         child: Stack(
           fit: StackFit.expand,
           children: [
-            if (attachment.url != null || attachment.isExternal)
-              buildPreview(attachment.url)
+            if (attachment.isExternal)
+              placeholder(Icons.link_outlined)
+            else if (ChatMediaCache.keyFor(attachment.message) == null &&
+                (attachment.url == null || attachment.url!.isEmpty))
+              placeholder(Icons.image_not_supported_outlined)
             else
-              FutureBuilder<String?>(
-                future: _whatsAppMediaFutureCache.putIfAbsent(
-                  attachment.message.id,
-                  () => _resolveWhatsAppMediaUrl(attachment.message),
+              LayoutBuilder(
+                builder: (context, constraints) => ChatMediaThumbnail(
+                  message: attachment.message,
+                  width: constraints.maxWidth,
+                  height: constraints.maxHeight,
+                  borderRadius: 0,
+                  resolveUrl: () => _resolveAttachmentUrl(attachment),
+                  unavailable: (_) => placeholder(Icons.broken_image_outlined),
                 ),
-                builder: (_, snapshot) => buildPreview(snapshot.data),
               ),
             Positioned(
               left: 0,
@@ -4860,9 +6011,40 @@ class _ChatWindowState extends State<ChatWindow> {
     return null;
   }
 
-  Future<String?> _resolveWhatsAppMediaUrl(Message message) async {
+  String? _messageFileCaption(Message message) {
+    final explicit = message.metadata['caption']?.toString().trim();
+    if (explicit != null && explicit.isNotEmpty) return explicit;
+    final raw = message.metadata['raw_payload'];
+    final inbound = raw is Map ? raw['message'] : null;
+    final document = inbound is Map ? inbound['document'] : null;
+    final original =
+        document is Map ? document['caption']?.toString().trim() : null;
+    if (original != null && original.isNotEmpty) return original;
+    final content = message.content.trim();
+    final fileName = _messageAttachmentName(message, '').trim();
+    if (content.isEmpty ||
+        content == fileName ||
+        content == 'Archivo: $fileName' ||
+        content == 'Documento recibido' ||
+        content == 'Archivo recibido' ||
+        content == _messageAttachmentUrl(message)) return null;
+    return content;
+  }
+
+  Future<String?> _resolveWhatsAppMediaUrl(
+    Message message, {
+    bool playback = false,
+  }) async {
     try {
       if (MessagingAttachmentService.hasPrivateReference(message)) {
+        final playbackPath = playback
+            ? MessagingAttachmentService.playbackStoragePath(message)
+            : null;
+        if (playbackPath != null) {
+          return _messagingAttachmentService.createSignedUrlForPath(
+            playbackPath,
+          );
+        }
         return _messagingAttachmentService.createCachedPreviewSignedUrl(
           message,
         );
@@ -4870,7 +6052,11 @@ class _ChatWindowState extends State<ChatWindow> {
 
       final response = await Supabase.instance.client.functions.invoke(
         'whatsapp-media',
-        body: {'messageId': message.id},
+        headers: kSupabaseFunctionsRegionHeaders,
+        body: {
+          'messageId': message.id,
+          if (playback) 'variant': 'playback',
+        },
       );
 
       if (response.status < 200 || response.status >= 300) {
@@ -4906,54 +6092,40 @@ class _ChatWindowState extends State<ChatWindow> {
 
   Widget _buildImageMessage(
     BuildContext context,
-    Message message,
-    String url,
-  ) {
+    Message message, {
+    String? url,
+  }) {
     final caption = _messageImageCaption(message);
 
     return GestureDetector(
       onTap: () {
-        _openMessageAttachmentViewer(message, url);
+        _openMessageAttachmentViewer(message, url ?? '');
       },
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,
         children: [
-          ClipRRect(
-            borderRadius: BorderRadius.circular(8),
-            child: Image.network(
-              url,
-              width: 220,
-              fit: BoxFit.cover,
-              loadingBuilder: (context, child, loadingProgress) {
-                if (loadingProgress == null) return child;
-                return Container(
-                  width: 220,
-                  height: 160,
-                  color: Colors.grey[300],
-                  child: const Center(
-                    child: SizedBox(
-                      width: 22,
-                      height: 22,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    ),
-                  ),
-                );
-              },
-              errorBuilder: (context, error, stackTrace) =>
-                  _buildImageUnavailableMessage(
-                title: 'No se pudo cargar la imagen',
-                subtitle: 'Toca para intentar abrirla.',
-                onTap: () => _openMessageAttachmentViewer(message, url),
-              ),
+          // Alto FIJO, no libre: una miniatura de tamaño conocido no hace
+          // oscilar la estimación de largo del ListView. Los bytes vienen de
+          // este equipo (memoria, disco o la copia del compositor de un
+          // archivo recién enviado); la red se toca una vez por adjunto por
+          // equipo, nunca en cada reapertura.
+          ChatMediaThumbnail(
+            message: message,
+            resolveUrl: () => _resolveWhatsAppMediaUrl(message),
+            placeholderColor: Theme.of(context).colorScheme.outlineVariant,
+            unavailable: (retry) => _buildImageUnavailableMessage(
+              title: 'No se pudo cargar la imagen',
+              subtitle: 'Toca para intentar de nuevo.',
+              onTap: retry,
             ),
           ),
           if (caption != null) ...[
             const SizedBox(height: 6),
             Text(
               caption,
-              style: const TextStyle(
-                color: Colors.black87,
+              style: TextStyle(
+                color: Theme.of(context).colorScheme.onSurface,
                 fontSize: 13,
                 height: 1.25,
               ),
@@ -4968,35 +6140,9 @@ class _ChatWindowState extends State<ChatWindow> {
     BuildContext context,
     Message message,
   ) {
-    final future = _whatsAppMediaFutureCache.putIfAbsent(
-      message.id,
-      () => _resolveWhatsAppMediaUrl(message),
-    );
-
-    return FutureBuilder<String?>(
-      future: future,
-      builder: (context, snapshot) {
-        final resolvedUrl = snapshot.data;
-        if (resolvedUrl != null && resolvedUrl.isNotEmpty) {
-          return _buildImageMessage(context, message, resolvedUrl);
-        }
-
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return _buildImageLoadingMessage();
-        }
-
-        return _buildImageUnavailableMessage(
-          title: 'Imagen pendiente',
-          subtitle:
-              'No se pudo descargar desde WhatsApp. Toca para reintentar.',
-          onTap: () {
-            setState(() {
-              _whatsAppMediaFutureCache.remove(message.id);
-            });
-          },
-        );
-      },
-    );
+    // The thumbnail resolves the WhatsApp media only when this device has
+    // never stored it; a URL is minted on tap, for the viewer.
+    return _buildImageMessage(context, message);
   }
 
   Widget _buildImageLoadingMessage() {
@@ -5134,26 +6280,27 @@ class _ChatWindowState extends State<ChatWindow> {
           _openMessageAttachmentViewer(message, fileUrl);
           return;
         }
-
         if (failed) {
           setState(() {
             _whatsAppMediaFutureCache.remove(message.id);
           });
+          return;
+        }
+        if (ChatMediaCache.keyFor(message) != null) {
+          _openMessageAttachmentViewer(message, '');
         }
       },
       child: Container(
-        padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          color: isMe ? Colors.white.withValues(alpha: 0.3) : Colors.grey[100],
-          borderRadius: BorderRadius.circular(8),
-        ),
+        // The bubble already owns the surface. A file is a content row, not
+        // a second card; name/type/action retain their own hierarchy.
+        padding: const EdgeInsets.symmetric(vertical: 8),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
             Icon(
               _getFileIcon(extension),
-              color: isMe ? Colors.black87 : Colors.blue[600],
-              size: 32,
+              color: Theme.of(context).colorScheme.primary,
+              size: 24,
             ),
             const SizedBox(width: 8),
             Flexible(
@@ -5162,8 +6309,8 @@ class _ChatWindowState extends State<ChatWindow> {
                 children: [
                   Text(
                     fileName,
-                    style: const TextStyle(
-                      color: Colors.black87,
+                    style: TextStyle(
+                      color: Theme.of(context).colorScheme.onSurface,
                       fontWeight: FontWeight.w500,
                     ),
                     maxLines: 1,
@@ -5172,7 +6319,9 @@ class _ChatWindowState extends State<ChatWindow> {
                   Text(
                     subtitle,
                     style: TextStyle(
-                      color: failed ? Colors.red[600] : Colors.grey[600],
+                      color: failed
+                          ? VinabikeThemeRoles.of(context).danger.accent
+                          : Theme.of(context).colorScheme.onSurfaceVariant,
                       fontSize: 11,
                     ),
                     maxLines: 2,
@@ -5191,7 +6340,9 @@ class _ChatWindowState extends State<ChatWindow> {
             else
               Icon(
                 failed ? Icons.refresh : Icons.download,
-                color: failed ? Colors.red[500] : Colors.grey[500],
+                color: failed
+                    ? VinabikeThemeRoles.of(context).danger.accent
+                    : Theme.of(context).colorScheme.onSurfaceVariant,
                 size: 20,
               ),
           ],
@@ -5205,38 +6356,9 @@ class _ChatWindowState extends State<ChatWindow> {
     Message message,
     bool isMe,
   ) {
-    final future = _whatsAppMediaFutureCache.putIfAbsent(
-      message.id,
-      () => _resolveWhatsAppMediaUrl(message),
-    );
-
-    return FutureBuilder<String?>(
-      future: future,
-      builder: (context, snapshot) {
-        final resolvedUrl = snapshot.data;
-        if (resolvedUrl != null && resolvedUrl.isNotEmpty) {
-          return _buildFileMessage(context, message, resolvedUrl, isMe);
-        }
-
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return _buildFileMessage(
-            context,
-            message,
-            null,
-            isMe,
-            isLoading: true,
-          );
-        }
-
-        return _buildFileMessage(
-          context,
-          message,
-          null,
-          isMe,
-          failed: true,
-        );
-      },
-    );
+    // A document tile needs its name and kind, both in the row already. The
+    // bytes are fetched — or served from this device — when it is opened.
+    return _buildFileMessage(context, message, null, isMe);
   }
 
   String _messageAttachmentName(Message message, String extension) {
@@ -5332,35 +6454,84 @@ class _ChatWindowState extends State<ChatWindow> {
       await _openExternalAttachmentLink(attachment.message);
       return;
     }
-    // Signed URLs last only a few minutes. Always mint a fresh one for a
-    // private object when the user opens it; preview futures are not authority.
-    final resolvedUrl =
-        MessagingAttachmentService.hasPrivateReference(attachment.message)
-            ? await _resolveWhatsAppMediaUrl(attachment.message)
-            : attachment.url ??
-                await _whatsAppMediaFutureCache.putIfAbsent(
-                  attachment.message.id,
-                  () => _resolveWhatsAppMediaUrl(attachment.message),
-                );
+    await _openViewerForMessage(
+      attachment.message,
+      knownUrl: attachment.url,
+      fileName: attachment.name,
+      extension: attachment.extension,
+      isImage: attachment.isImage,
+    );
+  }
+
+  /// One URL for an attachment the panel lists: its legacy public URL when
+  /// it has one, otherwise a fresh authorisation.
+  Future<String?> _resolveAttachmentUrl(_ChatAttachment attachment) {
+    final url = attachment.url;
+    if (url != null && url.isNotEmpty) return Future.value(url);
+    return _resolveWhatsAppMediaUrl(attachment.message);
+  }
+
+  /// Opens the viewer on the bytes this device already holds. Signed URLs
+  /// last minutes, so one is never reused — but one is also never requested
+  /// for a file that is already here.
+  Future<void> _openViewerForMessage(
+    Message message, {
+    required String? knownUrl,
+    required String fileName,
+    required String extension,
+    required bool isImage,
+  }) async {
+    final cache = ChatMediaCache.instance;
+    final key = ChatMediaCache.keyFor(message);
+    final cachedBytes = key == null ? null : await cache.read(key);
     if (!mounted) return;
-    if (resolvedUrl == null || resolvedUrl.isEmpty) {
-      _showErrorSnackBar(context, 'No se pudo autorizar este adjunto.');
-      return;
+
+    String? url;
+    if (cachedBytes == null) {
+      url = MessagingAttachmentService.hasPrivateReference(message)
+          ? await _resolveWhatsAppMediaUrl(message)
+          : (knownUrl != null && knownUrl.isNotEmpty)
+              ? knownUrl
+              : await _whatsAppMediaFutureCache.putIfAbsent(
+                  message.id,
+                  () => _resolveWhatsAppMediaUrl(message),
+                );
+      if (!mounted) return;
+      if (url == null || url.isEmpty) {
+        _whatsAppMediaFutureCache.remove(message.id);
+        _showErrorSnackBar(context, 'No se pudo autorizar este adjunto.');
+        return;
+      }
+    } else {
+      url = (knownUrl != null && knownUrl.isNotEmpty)
+          ? knownUrl
+          : 'cache://${Uri.encodeComponent(key!)}';
     }
+    final contentType = _messageAttachmentContentType(message);
+    final resolvedUrl = url;
     ChatAttachmentViewer.show(
       context,
       url: resolvedUrl,
-      fileName: attachment.name,
-      extension: attachment.extension,
-      contentType: _messageAttachmentContentType(attachment.message),
-      isImage: attachment.isImage,
+      fileName: fileName,
+      extension: extension,
+      contentType: contentType,
+      isImage: isImage,
+      loadBytes: () async {
+        if (cachedBytes != null) return cachedBytes;
+        if (key == null) return null;
+        return cache.fetch(
+          key,
+          resolveUrl: () async => resolvedUrl,
+          fileExtension: extension,
+        );
+      },
       fileContext: _attachmentFileContext(
-        attachment.message,
+        message,
         url: resolvedUrl,
-        fileName: attachment.name,
-        extension: attachment.extension,
-        contentType: _messageAttachmentContentType(attachment.message),
-        isImage: attachment.isImage,
+        fileName: fileName,
+        extension: extension,
+        contentType: contentType,
+        isImage: isImage,
       ),
     );
   }
@@ -5370,39 +6541,18 @@ class _ChatWindowState extends State<ChatWindow> {
     String url,
   ) async {
     if (!mounted) return;
-
-    final resolvedUrl = MessagingAttachmentService.hasPrivateReference(message)
-        ? await _resolveWhatsAppMediaUrl(message)
-        : url;
-    if (!mounted) return;
-    if (resolvedUrl == null || resolvedUrl.isEmpty) {
-      _whatsAppMediaFutureCache.remove(message.id);
-      _showErrorSnackBar(context, 'No se pudo renovar el acceso al adjunto.');
-      return;
-    }
-
     final contentType = _messageAttachmentContentType(message);
-    final extension =
-        _messageAttachmentExtension(message, resolvedUrl, contentType);
+    final extension = _messageAttachmentExtension(message, url, contentType);
     final isImage = message.type == 'image' ||
         contentType.toLowerCase().startsWith('image/') ||
         ['jpg', 'jpeg', 'png', 'gif', 'webp'].contains(extension);
-
-    ChatAttachmentViewer.show(
-      context,
-      url: resolvedUrl,
+    await _openViewerForMessage(
+      message,
+      knownUrl:
+          MessagingAttachmentService.hasPrivateReference(message) ? null : url,
       fileName: _messageAttachmentName(message, extension),
       extension: extension,
-      contentType: contentType,
       isImage: isImage,
-      fileContext: _attachmentFileContext(
-        message,
-        url: resolvedUrl,
-        fileName: _messageAttachmentName(message, extension),
-        extension: extension,
-        contentType: contentType,
-        isImage: isImage,
-      ),
     );
   }
 
@@ -5551,7 +6701,7 @@ class _ChatWindowState extends State<ChatWindow> {
       scaffoldMessenger.showSnackBar(
         SnackBar(
           content: Text('Respaldo descargado: $fileName'),
-          backgroundColor: Colors.green,
+          backgroundColor: VinabikeThemeRoles.of(context).success.accent,
         ),
       );
     } catch (e) {
@@ -5560,7 +6710,7 @@ class _ChatWindowState extends State<ChatWindow> {
       scaffoldMessenger.showSnackBar(
         SnackBar(
           content: Text('No se pudo descargar el respaldo: $e'),
-          backgroundColor: Colors.red,
+          backgroundColor: VinabikeThemeRoles.of(context).danger.accent,
         ),
       );
     } finally {
@@ -5576,9 +6726,9 @@ class _ChatWindowState extends State<ChatWindow> {
       await context.read<ChatProvider>().loadConversations();
       if (!mounted) return;
       scaffoldMessenger.showSnackBar(
-        const SnackBar(
+        SnackBar(
           content: Text('Conversación marcada como resuelta'),
-          backgroundColor: Colors.green,
+          backgroundColor: VinabikeThemeRoles.of(context).success.accent,
         ),
       );
     } catch (e) {
@@ -5586,7 +6736,7 @@ class _ChatWindowState extends State<ChatWindow> {
       scaffoldMessenger.showSnackBar(
         SnackBar(
           content: Text('No se pudo actualizar la conversación: $e'),
-          backgroundColor: Colors.red,
+          backgroundColor: VinabikeThemeRoles.of(context).danger.accent,
         ),
       );
     }
@@ -5602,7 +6752,7 @@ class _ChatWindowState extends State<ChatWindow> {
         children: [
           Expanded(
             child: Divider(
-              color: Colors.grey.shade300,
+              color: Theme.of(context).colorScheme.outlineVariant,
               thickness: 1,
               endIndent: 10,
             ),
@@ -5631,7 +6781,7 @@ class _ChatWindowState extends State<ChatWindow> {
           ),
           Expanded(
             child: Divider(
-              color: Colors.grey.shade300,
+              color: Theme.of(context).colorScheme.outlineVariant,
               thickness: 1,
               indent: 10,
             ),
@@ -5677,6 +6827,7 @@ class _ChatWindowState extends State<ChatWindow> {
     BuildContext context,
     ChatProvider provider, {
     required bool hasMessages,
+    String boundaryLabel = 'Inicio de la conversación',
   }) {
     final conversationId = widget.conversation.id;
     final theme = Theme.of(context);
@@ -5734,7 +6885,7 @@ class _ChatWindowState extends State<ChatWindow> {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 10),
       child: Text(
-        'Inicio de la conversación',
+        boundaryLabel,
         textAlign: TextAlign.center,
         style: theme.textTheme.labelSmall?.copyWith(
           color: colorScheme.onSurfaceVariant,
@@ -5781,6 +6932,12 @@ class _ChatWindowState extends State<ChatWindow> {
   }
 
   String _buildConversationSubtitle(Conversation conversation) {
+    if (conversation.isTaskThread) {
+      final count = conversation.taskThreadContexts.length;
+      return count == 1
+          ? 'Canal de tareas · 1 tarea'
+          : 'Canal de tareas · $count tareas';
+    }
     final parts = <String>[conversation.channelLabel];
 
     final contextLabel = _contextLabel(conversation.effectiveContextType);
@@ -5800,6 +6957,7 @@ class _ChatWindowState extends State<ChatWindow> {
       'bike' => 'Bicicleta',
       'product' => 'Producto',
       'customer' => 'Cliente',
+      'task' => 'Tarea',
       _ => null,
     };
   }
@@ -5811,6 +6969,7 @@ class _ChatWindowState extends State<ChatWindow> {
       'invoice' => Icons.receipt_long_outlined,
       'purchase_invoice' => Icons.inventory_2_outlined,
       'supplier' => Icons.storefront_outlined,
+      'task' => Icons.task_alt_outlined,
       _ => Icons.article_outlined,
     };
   }
@@ -5832,7 +6991,8 @@ class _ChatWindowState extends State<ChatWindow> {
       decoration: BoxDecoration(
         color: const Color(0xFFEFF6FF),
         border: Border(
-          bottom: BorderSide(color: Colors.blueGrey[100]!),
+          bottom:
+              BorderSide(color: Theme.of(context).colorScheme.outlineVariant),
         ),
       ),
       child: Row(
@@ -5854,7 +7014,9 @@ class _ChatWindowState extends State<ChatWindow> {
                 const SizedBox(height: 3),
                 Text(
                   draft.subtitle,
-                  style: TextStyle(fontSize: 12, color: Colors.blueGrey[700]),
+                  style: TextStyle(
+                      fontSize: 12,
+                      color: Theme.of(context).colorScheme.onSurfaceVariant),
                 ),
                 const SizedBox(height: 8),
                 Container(
@@ -5863,7 +7025,8 @@ class _ChatWindowState extends State<ChatWindow> {
                   decoration: BoxDecoration(
                     color: Colors.white,
                     borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: Colors.blueGrey[100]!),
+                    border: Border.all(
+                        color: Theme.of(context).colorScheme.outlineVariant),
                   ),
                   child: Text(
                     draft.body,
@@ -5963,9 +7126,9 @@ class _ChatWindowState extends State<ChatWindow> {
 
       if (!mounted) return;
       messenger.showSnackBar(
-        const SnackBar(
+        SnackBar(
           content: Text('Conversación de WhatsApp abierta aparte.'),
-          backgroundColor: Colors.green,
+          backgroundColor: VinabikeThemeRoles.of(context).success.accent,
         ),
       );
     } catch (e) {
@@ -5973,7 +7136,7 @@ class _ChatWindowState extends State<ChatWindow> {
       messenger.showSnackBar(
         SnackBar(
           content: Text('No se pudo abrir WhatsApp: $e'),
-          backgroundColor: Colors.red,
+          backgroundColor: VinabikeThemeRoles.of(context).danger.accent,
         ),
       );
     } finally {
@@ -6030,7 +7193,7 @@ class _ChatWindowState extends State<ChatWindow> {
         decoration: BoxDecoration(
           color: theme.colorScheme.surface,
           borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: const Color(0xFFE5E7EB)),
+          border: Border.all(color: theme.colorScheme.outlineVariant),
           boxShadow: [
             BoxShadow(
               color: Colors.black.withValues(alpha: 0.18),
@@ -6075,7 +7238,7 @@ class _ChatWindowState extends State<ChatWindow> {
                         Text(
                           headerTitle,
                           style: theme.textTheme.titleSmall?.copyWith(
-                            color: Colors.white,
+                            color: theme.colorScheme.onSurface,
                             fontWeight: FontWeight.w800,
                           ),
                         ),
@@ -6093,10 +7256,10 @@ class _ChatWindowState extends State<ChatWindow> {
                     IconButton(
                       tooltip: 'Volver',
                       visualDensity: VisualDensity.compact,
-                      icon: const Icon(
+                      icon: Icon(
                         Icons.arrow_back,
                         size: 18,
-                        color: Colors.white,
+                        color: Theme.of(context).colorScheme.onSurface,
                       ),
                       onPressed: () {
                         setState(() => _showAutomaticMessagesPanel = false);
@@ -6966,7 +8129,9 @@ class _ChatWindowState extends State<ChatWindow> {
     } catch (e) {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
+          SnackBar(
+              content: Text('Error: $e'),
+              backgroundColor: VinabikeThemeRoles.of(context).danger.accent),
         );
       }
     }
@@ -6979,14 +8144,34 @@ class _ChatWindowState extends State<ChatWindow> {
     );
   }
 
-  Future<Map<String, dynamic>?> _resolveConversationWhatsAppContact() {
-    if (!_isWhatsAppConversation) {
-      return Future.value(null);
+  Future<Map<String, dynamic>?> _resolveConversationWhatsAppContact({
+    bool rethrowOnError = false,
+  }) async {
+    final conversation = widget.conversation;
+    if (!conversation.isWhatsApp) {
+      return null;
     }
 
-    return _messagingService.getSupportConversationContact(
-      widget.conversation.id,
+    final contact = await _messagingService.getSupportConversationContact(
+      conversation.id,
+      rethrowOnError: rethrowOnError,
     );
+    if (!conversation.isSupplierConversation) return contact;
+
+    final supplierId = conversation.contextHint?.supplierId ??
+        (conversation.effectiveContextType == 'supplier'
+            ? conversation.effectiveContextId
+            : null);
+    final templateContactName =
+        await _messagingService.getSupplierTemplateContactName(
+      conversationId: conversation.id,
+      supplierId: supplierId,
+      rethrowOnError: rethrowOnError,
+    );
+    return <String, dynamic>{
+      ...?contact,
+      'template_contact_name': templateContactName,
+    };
   }
 
   Future<Map<String, dynamic>?> _resolvePotentialWhatsAppContact() {
@@ -7151,15 +8336,16 @@ class _ChatWindowState extends State<ChatWindow> {
             ? 'WhatsApp: ventana cerrada'
             : isOpen
                 ? 'WhatsApp: ${_formatWindowDuration(remaining)} disponibles'
-                : 'WhatsApp: requiere plantilla';
-        final color = isOpen ? const Color(0xFF16A34A) : Colors.amber[800]!;
+                : 'WhatsApp: sólo mensajes autorizados';
+        final roles = VinabikeThemeRoles.of(context);
+        final color = isOpen ? roles.success.accent : roles.warning.accent;
 
         return Tooltip(
           message: lastInboundAt == null
-              ? 'El cliente no ha respondido en esta conversación. Para escribir por Cloud API necesitas una plantilla aprobada.'
+              ? 'El contacto no ha respondido. Puedes iniciar con un mensaje utilitario de Direct Send; marketing aún requiere plantilla.'
               : isOpen
                   ? 'La ventana de 24 horas empezó con la última respuesta del cliente.'
-                  : 'La ventana de 24 horas expiró. El próximo envío debe ser una plantilla aprobada.',
+                  : 'La ventana expiró. El próximo envío debe ser utilitario o una plantilla de marketing aprobada.',
           child: Row(
             children: [
               Icon(
@@ -7174,7 +8360,8 @@ class _ChatWindowState extends State<ChatWindow> {
                   child: LinearProgressIndicator(
                     minHeight: 3,
                     value: isOpen ? progress : 1,
-                    backgroundColor: Colors.grey[200],
+                    backgroundColor:
+                        Theme.of(context).colorScheme.surfaceContainerHighest,
                     valueColor: AlwaysStoppedAnimation<Color>(color),
                   ),
                 ),
@@ -7185,7 +8372,7 @@ class _ChatWindowState extends State<ChatWindow> {
                 style: TextStyle(
                   fontSize: 11,
                   fontWeight: FontWeight.w600,
-                  color: Colors.grey[700],
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
                 ),
               ),
             ],
@@ -7293,6 +8480,12 @@ class _ChatWindowState extends State<ChatWindow> {
     String? pendingText,
     GlobalKey? anchorKey,
   }) {
+    // El estado de revisión se pide también para las conversaciones de
+    // cliente: una plantilla recién corregida queda PENDING en Meta y el envío
+    // falla con 132001 hasta que la aprueban. Verlo aquí evita que el taller
+    // interprete un rechazo temporal como una falla del sistema.
+    final supplierStatusFuture =
+        WhatsAppService().getSupplierTemplateReviewStatuses();
     _toggleComposerMenu(
       name: 'whatsapp_templates',
       anchorKey: anchorKey ?? _composerActionsButtonKey,
@@ -7301,17 +8494,214 @@ class _ChatWindowState extends State<ChatWindow> {
       panelBuilder: (overlayContext) => _buildWhatsAppTemplatePanel(
         overlayContext,
         pendingText: pendingText?.trim(),
+        supplierStatusFuture: supplierStatusFuture,
       ),
+    );
+  }
+
+  /// Manda a Meta el texto que el ERP considera correcto para las plantillas
+  /// cuyo cuerpo aprobado difiere. Editar las devuelve a revisión: mientras
+  /// estén pendientes, un envío con ese nombre puede fallar, y por eso se
+  /// avisa con el detalle de cuáles se tocaron.
+  Future<void> _syncWhatsAppTemplateBodies() async {
+    final messenger = ScaffoldMessenger.of(context);
+    messenger.showSnackBar(
+      const SnackBar(content: Text('Corrigiendo textos en Meta…')),
+    );
+    try {
+      final resultado = await WhatsAppService().syncApprovedTemplateBodies();
+      // El aviso en pantalla es efímero y esta operación toca la cuenta de
+      // Meta: queda también en el log, que es donde se puede auditar después.
+      debugPrint(
+        '[WhatsAppTemplates] editadas=${resultado.editadas} '
+        'sinCambios=${resultado.sinCambios} faltan=${resultado.faltan}',
+      );
+      if (!mounted) return;
+      final editadas = resultado.editadas;
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(
+            editadas.isEmpty
+                ? 'Los textos aprobados ya estaban correctos.'
+                : 'Enviadas a revisión de Meta: ${editadas.join(', ')}. '
+                    'Mientras revisan, esos envíos pueden fallar.',
+          ),
+          duration: const Duration(seconds: 8),
+        ),
+      );
+    } catch (error) {
+      debugPrint('[WhatsAppTemplates] falló la corrección: $error');
+      if (!mounted) return;
+      messenger.showSnackBar(
+        SnackBar(content: Text('No se pudo corregir en Meta: $error')),
+      );
+    }
+  }
+
+  /// Abre —o cierra— la revisión de una plantilla dentro del panel. Enviar sin
+  /// ver el texto era lo que permitía que un mensaje saliera diciendo algo
+  /// distinto de lo que el operador creía.
+  Future<void> _reviewWhatsAppTemplate(WhatsAppTemplateOption option) async {
+    final yaAbierta = _reviewingTemplate?.key == option.key;
+    if (yaAbierta) {
+      setState(_resetWhatsAppTemplatePreview);
+      _composerMenuOverlayEntry?.markNeedsBuild();
+      return;
+    }
+    await _loadWhatsAppTemplatePreview(option);
+  }
+
+  Future<void> _loadWhatsAppTemplatePreview(
+    WhatsAppTemplateOption option, {
+    bool refreshContact = false,
+  }) async {
+    if (refreshContact && widget.whatsAppTemplatePreviewLoader == null) {
+      _clearWhatsAppContactCache();
+    }
+
+    final generation = ++_reviewingTemplateGeneration;
+    setState(() {
+      _reviewingTemplate = option;
+      _reviewingTemplateText = null;
+      _reviewingTemplateError = null;
+      _isReviewingTemplateLoading = true;
+      _reviewingTemplateNeedsSupplierContact = false;
+    });
+    _composerMenuOverlayEntry?.markNeedsBuild();
+
+    try {
+      final loader = widget.whatsAppTemplatePreviewLoader;
+      final text = await (loader == null
+              ? _resolveWhatsAppTemplatePreview(option)
+              : loader(option))
+          .timeout(_whatsAppTemplatePreviewTimeout);
+      if (!_ownsWhatsAppTemplatePreview(option, generation)) return;
+
+      final normalized = text?.trim();
+      if (normalized == null || normalized.isEmpty) {
+        setState(() {
+          _reviewingTemplateError = widget.conversation.isSupplierConversation
+              ? 'Falta el nombre del contacto o vendedor en el perfil del proveedor.'
+              : 'La conversación no tiene un nombre de contacto asociado.';
+          _reviewingTemplateNeedsSupplierContact =
+              widget.conversation.isSupplierConversation;
+          _isReviewingTemplateLoading = false;
+        });
+      } else {
+        setState(() {
+          _reviewingTemplateText = normalized;
+          _isReviewingTemplateLoading = false;
+        });
+      }
+    } on _WhatsAppTemplatePreviewFailure catch (error) {
+      if (!_ownsWhatsAppTemplatePreview(option, generation)) return;
+      setState(() {
+        _reviewingTemplateError = error.message;
+        _isReviewingTemplateLoading = false;
+      });
+    } on TimeoutException {
+      if (!_ownsWhatsAppTemplatePreview(option, generation)) return;
+      setState(() {
+        _reviewingTemplateError =
+            'La vista previa tardó demasiado en cargar. Vuelve a intentarlo.';
+        _isReviewingTemplateLoading = false;
+      });
+    } catch (error) {
+      debugPrint('⚠️ No se pudo previsualizar la plantilla: $error');
+      if (!_ownsWhatsAppTemplatePreview(option, generation)) return;
+      setState(() {
+        _reviewingTemplateError =
+            'No se pudo cargar la vista previa. Vuelve a intentarlo.';
+        _isReviewingTemplateLoading = false;
+      });
+    }
+    _composerMenuOverlayEntry?.markNeedsBuild();
+  }
+
+  bool _ownsWhatsAppTemplatePreview(
+    WhatsAppTemplateOption option,
+    int generation,
+  ) =>
+      mounted &&
+      _reviewingTemplate?.key == option.key &&
+      _reviewingTemplateGeneration == generation;
+
+  String? get _supplierProfileRouteForTemplatePreview {
+    final supplierId = widget.conversation.contextHint?.supplierId?.trim() ??
+        (_effectiveContextType == 'supplier'
+            ? _effectiveContextId?.trim()
+            : null);
+    return supplierId == null || supplierId.isEmpty
+        ? null
+        : '/purchases/suppliers/$supplierId';
+  }
+
+  void _openSupplierProfileFromTemplatePreview() {
+    final route = _supplierProfileRouteForTemplatePreview;
+    if (route == null) return;
+    _removeComposerMenuOverlay(notify: true);
+    context.read<WorkspaceManager>().openRouteInWorkspace(route);
+  }
+
+  /// El texto exacto que recibirá el contacto con esta plantilla, resuelto con
+  /// los mismos valores que usará el envío. Un dato faltante se conserva como
+  /// ausencia para que el owner visible lo convierta en una corrección precisa,
+  /// nunca en un estado de carga perpetuo.
+  Future<String?> _resolveWhatsAppTemplatePreview(
+    WhatsAppTemplateOption option,
+  ) async {
+    final conversationId = widget.conversation.id;
+    final contact = await _resolveConversationWhatsAppContact(
+      rethrowOnError: true,
+    );
+    // The exact successful preview read is also the contact snapshot the
+    // subsequent send should reuse. A late result from another chat cannot
+    // enter this cache.
+    if (widget.conversation.id == conversationId) {
+      _whatsAppContactFutureConversationId = conversationId;
+      _whatsAppContactFuture = Future.value(contact);
+    }
+    // La clave se elige antes de indexar: `cond ? mapa?[a] : mapa?[b]`
+    // confunde al parser de Dart, que lee el `?[` como otro condicional.
+    final contactKey = widget.conversation.isSupplierConversation
+        ? 'template_contact_name'
+        : 'name';
+    final recipientName = contact?[contactKey]?.toString().trim();
+    if (recipientName == null || recipientName.isEmpty) return null;
+    String? agentName;
+    if (option.parameterLayout ==
+        WhatsAppTemplateParameterLayout.contactAndAgent) {
+      final currentUserId = _messagingService.currentUserId;
+      final senderInfo =
+          currentUserId == null ? null : await _getSenderInfo(currentUserId);
+      agentName = senderInfo?['name']?.toString().trim();
+      if (option.requiresAgentName &&
+          (agentName == null || agentName.isEmpty)) {
+        throw const _WhatsAppTemplatePreviewFailure(
+          'No pudimos resolver el nombre del usuario que inició sesión.',
+        );
+      }
+    }
+    return WhatsAppService().buildTemplatePreviewText(
+      option: option,
+      customerName: recipientName,
+      businessName: await WhatsAppService().resolveBusinessNameForPreview(),
+      agentName: agentName,
     );
   }
 
   Widget _buildWhatsAppTemplatePanel(
     BuildContext overlayContext, {
     String? pendingText,
+    Future<Map<String, WhatsAppTemplateReviewStatus>>? supplierStatusFuture,
   }) {
     final theme = Theme.of(overlayContext);
-    const options = WhatsAppService.templateOptions;
+    final options = WhatsAppService.templateOptionsForConversation(
+      isSupplier: widget.conversation.isSupplierConversation,
+    );
     final hasPendingText = pendingText != null && pendingText.isNotEmpty;
+    final counterparty =
+        widget.conversation.isSupplierConversation ? 'proveedor' : 'cliente';
 
     return Material(
       color: Colors.transparent,
@@ -7344,20 +8734,31 @@ class _ChatWindowState extends State<ChatWindow> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         const Text(
-                          'Plantillas WhatsApp',
+                          'Mensajes WhatsApp',
                           style: TextStyle(fontWeight: FontWeight.w800),
                         ),
                         Text(
                           hasPendingText
-                              ? 'El texto escrito queda como borrador hasta que el cliente responda.'
-                              : 'Elige la plantilla aprobada para esta ocasión.',
+                              ? 'El texto libre queda como borrador. Elige un mensaje autorizado para contactar al $counterparty.'
+                              : 'Elige el motivo correcto. Los utilitarios usan Direct Send; marketing usa plantilla.',
                           style: TextStyle(
                             fontSize: 12,
-                            color: Colors.grey[600],
+                            color: theme.colorScheme.onSurfaceVariant,
                           ),
                         ),
                       ],
                     ),
+                  ),
+                  // Corregir el texto de una plantilla aprobada no tenía
+                  // camino: `deploy_defaults` sólo crea lo que falta, así que
+                  // un cuerpo mal escrito se quedaba para siempre. Vive acá
+                  // porque es el lugar donde ya se ven las plantillas y su
+                  // estado de revisión.
+                  IconButton(
+                    key: const Key('whatsapp-template-sync'),
+                    tooltip: 'Corregir textos en Meta',
+                    onPressed: _syncWhatsAppTemplateBodies,
+                    icon: const Icon(Icons.cloud_sync_outlined, size: 18),
                   ),
                   IconButton(
                     tooltip: 'Cerrar',
@@ -7370,64 +8771,275 @@ class _ChatWindowState extends State<ChatWindow> {
               ),
             ),
             const Divider(height: 1),
-            ...options.map(
-              (option) => InkWell(
-                onTap: () => _sendSelectedWhatsAppTemplate(
+            if (supplierStatusFuture == null)
+              ...options.map(
+                (option) => _buildWhatsAppTemplateOption(
+                  overlayContext,
                   option,
                   pendingText: pendingText,
                 ),
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
-                  child: Row(
+              )
+            else
+              FutureBuilder<Map<String, WhatsAppTemplateReviewStatus>>(
+                future: supplierStatusFuture,
+                builder: (context, snapshot) {
+                  final isLoading =
+                      snapshot.connectionState == ConnectionState.waiting;
+                  final statuses = snapshot.data ??
+                      const <String, WhatsAppTemplateReviewStatus>{};
+                  return Column(
+                    mainAxisSize: MainAxisSize.min,
                     children: [
-                      Container(
-                        width: 34,
-                        height: 34,
-                        decoration: BoxDecoration(
-                          color: _accentBlue.withValues(alpha: 0.08),
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Icon(option.icon, color: _accentBlue, size: 18),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              option.label,
-                              style: const TextStyle(
-                                fontWeight: FontWeight.w700,
-                              ),
-                            ),
-                            const SizedBox(height: 2),
-                            Text(
-                              option.description,
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                fontSize: 12,
-                                color: Colors.grey[600],
-                              ),
-                            ),
-                          ],
+                      if (isLoading)
+                        const LinearProgressIndicator(minHeight: 2),
+                      ...options.map(
+                        (option) => _buildWhatsAppTemplateOption(
+                          context,
+                          option,
+                          pendingText: pendingText,
+                          reviewStatus: statuses[option.defaultTemplateName],
+                          isCheckingReview: isLoading,
+                          reviewCheckFailed: snapshot.hasError,
                         ),
                       ),
-                      const Icon(Icons.chevron_right, size: 18),
                     ],
-                  ),
-                ),
+                  );
+                },
               ),
-            ),
           ],
         ),
       ),
     );
   }
 
+  Widget _buildWhatsAppTemplateOption(
+    BuildContext context,
+    WhatsAppTemplateOption option, {
+    String? pendingText,
+    WhatsAppTemplateReviewStatus? reviewStatus,
+    bool isCheckingReview = false,
+    bool reviewCheckFailed = false,
+  }) {
+    // Direct Send no necesita una plantilla aprobada. Marketing sí: intentar
+    // quitarle esa puerta sería clasificar publicidad como utilidad y arriesga
+    // que Meta bloquee Direct Send para toda la cuenta.
+    final requiresLiveApproval =
+        option.category != WhatsAppMessageCategory.utility;
+    final isEnabled = !requiresLiveApproval || reviewStatus?.isApproved == true;
+    final availabilityLabel = !requiresLiveApproval
+        ? null
+        : isCheckingReview
+            ? 'Revisando…'
+            : reviewCheckFailed
+                ? 'Sin confirmar'
+                : reviewStatus == null
+                    ? 'No disponible'
+                    : switch (reviewStatus.status) {
+                        'PENDING' => 'En revisión',
+                        'REJECTED' => 'Rechazada',
+                        'PAUSED' => 'Pausada',
+                        'DISABLED' => 'Deshabilitada',
+                        'APPROVED' => null,
+                        _ => 'No disponible',
+                      };
+
+    return Opacity(
+      opacity: isEnabled ? 1 : 0.62,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          InkWell(
+            // Revisar el texto se puede siempre. Marketing requiere APPROVED;
+            // utilidad sale por Direct Send y conserva la plantilla como respaldo.
+            onTap: () => _reviewWhatsAppTemplate(option),
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+              child: Row(
+                children: [
+                  Container(
+                    width: 34,
+                    height: 34,
+                    decoration: BoxDecoration(
+                      color: _accentBlue.withValues(alpha: 0.08),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Icon(option.icon, color: _accentBlue, size: 18),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          option.label,
+                          style: const TextStyle(fontWeight: FontWeight.w700),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          option.description,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: 12,
+                            color:
+                                Theme.of(context).colorScheme.onSurfaceVariant,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  if (availabilityLabel == null)
+                    const Icon(Icons.chevron_right, size: 18)
+                  else
+                    Text(
+                      availabilityLabel,
+                      style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                            color:
+                                Theme.of(context).colorScheme.onSurfaceVariant,
+                            fontWeight: FontWeight.w700,
+                          ),
+                    ),
+                ],
+              ),
+            ),
+          ),
+          if (_reviewingTemplate?.key == option.key)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+              child: _buildWhatsAppTemplatePreviewState(
+                context,
+                option,
+                isEnabled: isEnabled,
+                availabilityLabel: availabilityLabel,
+                pendingText: pendingText,
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildWhatsAppTemplatePreviewState(
+    BuildContext context,
+    WhatsAppTemplateOption option, {
+    required bool isEnabled,
+    required String? availabilityLabel,
+    required String? pendingText,
+  }) {
+    if (_isReviewingTemplateLoading) {
+      return Semantics(
+        label: 'Cargando vista previa del mensaje',
+        child: const Center(
+          child: Padding(
+            padding: EdgeInsets.symmetric(vertical: 8),
+            child: SizedBox(
+              key: Key('whatsapp-template-preview-loading'),
+              width: 18,
+              height: 18,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            ),
+          ),
+        ),
+      );
+    }
+
+    final error = _reviewingTemplateError;
+    if (error != null) {
+      final colorScheme = Theme.of(context).colorScheme;
+      final profileRoute = _supplierProfileRouteForTemplatePreview;
+      return Semantics(
+        liveRegion: true,
+        child: Container(
+          key: const Key('whatsapp-template-preview-error'),
+          padding: const EdgeInsets.fromLTRB(12, 10, 8, 8),
+          decoration: BoxDecoration(
+            color: colorScheme.errorContainer,
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Icon(
+                    Icons.info_outline_rounded,
+                    size: 18,
+                    color: colorScheme.onErrorContainer,
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      error,
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                            color: colorScheme.onErrorContainer,
+                            height: 1.35,
+                          ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 4),
+              Wrap(
+                alignment: WrapAlignment.end,
+                spacing: 4,
+                runSpacing: 4,
+                children: [
+                  if (_reviewingTemplateNeedsSupplierContact &&
+                      profileRoute != null)
+                    TextButton.icon(
+                      key: const Key('whatsapp-template-open-supplier'),
+                      onPressed: _openSupplierProfileFromTemplatePreview,
+                      icon: const Icon(Icons.storefront_outlined, size: 17),
+                      label: const Text('Abrir ficha'),
+                    ),
+                  TextButton.icon(
+                    key: const Key('whatsapp-template-preview-retry'),
+                    onPressed: () => unawaited(
+                      _loadWhatsAppTemplatePreview(
+                        option,
+                        refreshContact: true,
+                      ),
+                    ),
+                    icon: const Icon(Icons.refresh_rounded, size: 17),
+                    label: const Text('Reintentar'),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    final reviewedText = _reviewingTemplateText;
+    if (reviewedText == null) return const SizedBox.shrink();
+    return WhatsAppOutgoingPreview(
+      key: const Key('whatsapp-template-preview'),
+      text: reviewedText,
+      disabledReason: isEnabled
+          ? null
+          : 'No se puede enviar: ${availabilityLabel ?? 'sin aprobación de Meta'}.',
+      onCancel: () {
+        setState(_resetWhatsAppTemplatePreview);
+        _composerMenuOverlayEntry?.markNeedsBuild();
+      },
+      onSend: () {
+        final textToSend = _reviewingTemplateText;
+        setState(_resetWhatsAppTemplatePreview);
+        _sendSelectedWhatsAppTemplate(
+          option,
+          pendingText: pendingText,
+          previewText: textToSend,
+        );
+      },
+    );
+  }
+
   Future<void> _sendSelectedWhatsAppTemplate(
     WhatsAppTemplateOption option, {
     String? pendingText,
+    String? previewText,
   }) async {
     if (_isSendingMessage) return;
 
@@ -7438,59 +9050,216 @@ class _ChatWindowState extends State<ChatWindow> {
     final contextType = _effectiveContextType;
     final contextId = _effectiveContextId;
     final contactFuture = _getWhatsAppContactFuture();
-    setState(() => _isSendingMessage = true);
+    final currentUserId = _messagingService.currentUserId;
+    final needsAgent = option.parameterLayout ==
+        WhatsAppTemplateParameterLayout.contactAndAgent;
+    // Everything the send needs is asked for at once, not one after the
+    // other: the contact, the agent's name and (inside the service) the
+    // template settings and the business name.
+    final senderInfoFuture = needsAgent && currentUserId != null
+        ? _getSenderInfo(currentUserId)
+        : Future<Map<String, dynamic>?>.value(null);
 
+    // The bubble goes up now, with the text the operator just reviewed; the
+    // provider's answer updates it. This is what a text message already did.
+    final sendStartedAt = DateTime.now();
+    final optimisticMessageId =
+        'temp-wa-template-${sendStartedAt.microsecondsSinceEpoch}';
+    final bubbleText = (previewText?.trim().isNotEmpty ?? false)
+        ? previewText!.trim()
+        : option.label;
+    chatProvider.addOptimisticMessage(
+      Message(
+        id: optimisticMessageId,
+        conversationId: conversationId,
+        senderId: currentUserId,
+        content: bubbleText,
+        type: 'text',
+        metadata: {
+          'channel': 'whatsapp',
+          'provider': 'whatsapp',
+          'external_provider': 'whatsapp',
+          'pending': true,
+          'client_message_id': optimisticMessageId,
+          'template_purpose': option.key,
+          'template_name': option.defaultTemplateName,
+          'message_category': option.category.name,
+        },
+        createdAt: sendStartedAt,
+        isMe: true,
+      ),
+    );
+
+    final pending = pendingText?.trim();
+    if (mounted && _messageController.text.trim() == pending) {
+      _messageController.clear();
+    }
+    // The composer is free from here; the dispatch continues behind it.
+    unawaited(
+      _dispatchWhatsAppTemplate(
+        chatProvider: chatProvider,
+        whatsappService: whatsappService,
+        option: option,
+        optimisticMessageId: optimisticMessageId,
+        contactFuture: contactFuture,
+        senderInfoFuture: senderInfoFuture,
+        conversationId: conversationId,
+        contextType: contextType,
+        contextId: contextId,
+        pendingText: pending,
+      ),
+    );
+  }
+
+  Future<void> _dispatchWhatsAppTemplate({
+    required ChatProvider chatProvider,
+    required WhatsAppService whatsappService,
+    required WhatsAppTemplateOption option,
+    required String optimisticMessageId,
+    required Future<Map<String, dynamic>?> contactFuture,
+    required Future<Map<String, dynamic>?> senderInfoFuture,
+    required String conversationId,
+    required String? contextType,
+    required String? contextId,
+    required String? pendingText,
+  }) async {
     try {
-      final contact = await contactFuture;
+      final reviewFuture = option.isSupplier &&
+              option.category != WhatsAppMessageCategory.utility
+          ? whatsappService.getSupplierTemplateReviewStatuses()
+          : Future<Map<String, WhatsAppTemplateReviewStatus>>.value(const {});
+      final results = await Future.wait<Object?>([
+        contactFuture,
+        senderInfoFuture,
+        reviewFuture,
+      ]);
+      final contact = results[0] as Map<String, dynamic>?;
+      final senderInfo = results[1] as Map<String, dynamic>?;
+      final statuses = results[2] as Map<String, WhatsAppTemplateReviewStatus>;
+
+      if (option.isSupplier &&
+          option.category != WhatsAppMessageCategory.utility) {
+        final review = statuses[option.defaultTemplateName];
+        if (review?.isApproved != true) {
+          throw Exception(
+            review?.status == 'PENDING'
+                ? 'Meta todavía está revisando esta plantilla.'
+                : 'Meta no tiene este mensaje de marketing aprobado para enviar.',
+          );
+        }
+      }
+
       final phone = contact?['phone']?.toString();
-      final customerName = contact?['name']?.toString().trim();
+      final bindingContactName = contact?['name']?.toString().trim();
+      final supplierTemplateContactName =
+          contact?['template_contact_name']?.toString().trim();
+      final recipientName = widget.conversation.isSupplierConversation
+          ? supplierTemplateContactName
+          : bindingContactName;
 
       if (phone == null || phone.isEmpty) {
         throw Exception('La conversación no tiene teléfono asociado.');
+      }
+      if (recipientName == null || recipientName.isEmpty) {
+        throw Exception(
+          widget.conversation.isSupplierConversation
+              ? 'Falta el nombre del contacto o vendedor en el perfil del proveedor.'
+              : 'La conversación no tiene un nombre de contacto asociado.',
+        );
+      }
+      String? agentName;
+      if (option.parameterLayout ==
+          WhatsAppTemplateParameterLayout.contactAndAgent) {
+        agentName = senderInfo?['name']?.toString().trim();
+        if (option.requiresAgentName &&
+            (agentName == null || agentName.isEmpty)) {
+          throw Exception(
+            'No pudimos resolver el nombre del usuario que inició sesión.',
+          );
+        }
       }
 
       final receipt = await whatsappService.sendTemplateMessage(
         option: option,
         customerPhone: phone,
-        customerName: customerName == null || customerName.isEmpty
-            ? 'cliente'
-            : customerName,
+        customerName: recipientName,
+        agentName: agentName,
+        bindingContactName: bindingContactName,
         conversationId: conversationId,
         contextType: contextType,
         contextId: contextId,
+        clientMessageId: optimisticMessageId,
       );
 
       if (!receipt.isSuccess) {
-        throw Exception('Meta rechazó la plantilla seleccionada.');
+        if (receipt.unsafeToFallback) {
+          chatProvider.updateMessageMetadataById(optimisticMessageId, {
+            'pending': false,
+            'external_status': 'outcome_unknown',
+            'outcome_unknown': true,
+            'retry_disabled': true,
+            if (receipt.messageId != null)
+              'server_message_id': receipt.messageId,
+            if (receipt.externalMessageId != null)
+              'external_message_id': receipt.externalMessageId,
+          });
+          if (mounted) {
+            _showErrorSnackBar(
+              context,
+              'Resultado incierto: verifica la conversación antes de reenviar.',
+            );
+          }
+          return;
+        }
+        throw Exception('Meta rechazó el mensaje seleccionado.');
       }
 
-      final pending = pendingText?.trim();
-      if (pending != null && pending.isNotEmpty) {
+      if (receipt.deliveryMethod == WhatsAppDeliveryMethod.cloudApi) {
+        chatProvider.updateMessageById(
+          optimisticMessageId,
+          content: receipt.resolvedMessageText?.trim().isNotEmpty == true
+              ? receipt.resolvedMessageText!.trim()
+              : null,
+          metadataUpdates: {
+            'pending': false,
+            'server_ack_durable': true,
+            'server_message_id': receipt.messageId,
+            'external_status': receipt.externalStatus,
+            'external_message_id': receipt.externalMessageId,
+          },
+        );
+      } else {
+        // The manual fallback opened WhatsApp outside the ERP; nothing was
+        // recorded here, so nothing stays in the timeline.
+        chatProvider.removeMessageById(optimisticMessageId);
+      }
+
+      if (pendingText != null && pendingText.isNotEmpty) {
         chatProvider.setConversationDraft(
           conversationId,
-          pending,
+          pendingText,
           title: 'Mensaje pendiente de ventana WhatsApp',
           subtitle:
-              'Se envió "${option.label}". Cuando el cliente responda, puedes enviar este texto.',
+              'Se envió "${option.label}". Cuando el ${widget.conversation.isSupplierConversation ? 'proveedor' : 'cliente'} responda, puedes enviar este texto libre.',
         );
       }
 
       if (!mounted) return;
-      if (_messageController.text.trim() == pending) {
-        _messageController.clear();
-      }
-
       _showWhatsAppResultSnackbar(
         context: context,
         deliveryMethod: receipt.deliveryMethod,
-        successMessage: 'Plantilla enviada: ${option.label}',
-        fallbackMessage: 'WhatsApp abierto con la plantilla prellenada',
+        successMessage: 'Mensaje enviado: ${option.label}',
+        fallbackMessage: 'WhatsApp abierto con el mensaje prellenado',
       );
     } catch (e) {
+      chatProvider.removeMessageById(optimisticMessageId);
       if (!mounted) return;
-      _showErrorSnackBar(context, 'No se pudo enviar la plantilla: $e');
-    } finally {
-      if (mounted) setState(() => _isSendingMessage = false);
+      if (pendingText != null &&
+          pendingText.isNotEmpty &&
+          _messageController.text.trim().isEmpty) {
+        _messageController.text = pendingText;
+      }
+      _showErrorSnackBar(context, 'No se pudo enviar el mensaje: $e');
     }
   }
 
@@ -7539,6 +9308,8 @@ class _ChatWindowState extends State<ChatWindow> {
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
+        if (_replyToMessage != null)
+          _buildMessageQuote(_replyToMessage!, composing: true),
         if (_isWhatsAppConversation) ...[
           _buildWhatsAppServiceWindowGauge(context),
           const SizedBox(height: 8),
@@ -7556,13 +9327,18 @@ class _ChatWindowState extends State<ChatWindow> {
           _buildPendingAttachmentTray(context),
           const SizedBox(height: 8),
         ],
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.end,
-          children: [
-            KeyedSubtree(
-              key: _composerActionsButtonKey,
-              child: Padding(
-                padding: const EdgeInsets.only(bottom: 1),
+        if (_voiceRecorder.isRecording)
+          ChatVoiceRecordingBar(
+            controller: _voiceRecorder,
+            onCancel: _cancelVoiceNote,
+            onSend: _finishVoiceNote,
+          )
+        else
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              KeyedSubtree(
+                key: _composerActionsButtonKey,
                 child: IconButton(
                   tooltip: hasBlockingOutcomeUnknownAttachment
                       ? 'Esperando confirmación del adjunto'
@@ -7579,7 +9355,8 @@ class _ChatWindowState extends State<ChatWindow> {
                   style: IconButton.styleFrom(
                     foregroundColor: colorScheme.onSurfaceVariant,
                     backgroundColor: colorScheme.surfaceContainerHighest,
-                    minimumSize: const Size.square(42),
+                    // F-06: every composer action retains a 48 px touch target.
+                    minimumSize: const Size.square(kMinInteractiveDimension),
                   ),
                   icon: AnimatedRotation(
                     turns: _activeComposerMenuName == 'composer_actions' ||
@@ -7591,87 +9368,125 @@ class _ChatWindowState extends State<ChatWindow> {
                   ),
                 ),
               ),
-            ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: CompositedTransformTarget(
-                link: _layerLink,
-                child: CallbackShortcuts(
-                  bindings: {
-                    const SingleActivator(LogicalKeyboardKey.enter): () =>
-                        unawaited(_sendComposer()),
-                    const SingleActivator(LogicalKeyboardKey.numpadEnter): () =>
-                        unawaited(_sendComposer()),
-                  },
-                  child: TextField(
-                    controller: _messageController,
-                    focusNode: _focusNode,
-                    enabled: composerEnabled,
-                    minLines: 1,
-                    maxLines: 5,
-                    keyboardType: TextInputType.multiline,
-                    textInputAction: TextInputAction.newline,
-                    textCapitalization: TextCapitalization.sentences,
-                    decoration: InputDecoration(
-                      hintText: _isMetaConversation && !composerEnabled
-                          ? metaStateError != null
-                              ? 'Verificación de Meta pendiente'
-                              : isCheckingMetaWindow
-                                  ? 'Verificando ventana de respuesta...'
-                                  : 'Espera un nuevo mensaje del cliente'
-                          : 'Escribe un mensaje... (# para ref)',
-                      filled: true,
-                      fillColor: colorScheme.surfaceContainerLowest,
-                      contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 14,
-                        vertical: 11,
-                      ),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(11),
-                        borderSide:
-                            BorderSide(color: colorScheme.outlineVariant),
-                      ),
-                      enabledBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(11),
-                        borderSide:
-                            BorderSide(color: colorScheme.outlineVariant),
-                      ),
-                      focusedBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(11),
-                        borderSide: BorderSide(
-                          color: colorScheme.primary,
-                          width: 1.4,
+              const SizedBox(width: 8),
+              Expanded(
+                child: CompositedTransformTarget(
+                  link: _layerLink,
+                  child: CallbackShortcuts(
+                    bindings: {
+                      const SingleActivator(LogicalKeyboardKey.enter): () =>
+                          unawaited(_sendComposer()),
+                      const SingleActivator(LogicalKeyboardKey.numpadEnter):
+                          () => unawaited(_sendComposer()),
+                    },
+                    child: TextField(
+                      key: const ValueKey<String>('chat-message-composer'),
+                      controller: _messageController,
+                      focusNode: _focusNode,
+                      enabled: composerEnabled,
+                      minLines: 1,
+                      maxLines: 5,
+                      keyboardType: TextInputType.multiline,
+                      textInputAction: TextInputAction.newline,
+                      textCapitalization: TextCapitalization.sentences,
+                      decoration: InputDecoration(
+                        hintText: _activeThreadRootMessageId != null
+                            ? 'Agregar una respuesta…'
+                            : _isMetaConversation && !composerEnabled
+                                ? metaStateError != null
+                                    ? 'Verificación de Meta pendiente'
+                                    : isCheckingMetaWindow
+                                        ? 'Verificando ventana de respuesta...'
+                                        : 'Espera un nuevo mensaje del cliente'
+                                : widget.compact
+                                    ? 'Mensaje'
+                                    : 'Escribe un mensaje... (# para ref)',
+                        filled: true,
+                        fillColor: colorScheme.surfaceContainerLowest,
+                        // El texto de ayuda NO envuelve. En un teléfono angosto
+                        // «Escribe un mensaje... (# para ref)» se partía en dos
+                        // líneas y el campo vacío medía 66 px contra 44 de los
+                        // botones: por eso se veía descuadrado. El campo sigue
+                        // creciendo con texto real, hasta cinco líneas.
+                        hintMaxLines: 1,
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 14,
+                          vertical: 12,
+                        ),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8),
+                          borderSide:
+                              BorderSide(color: colorScheme.outlineVariant),
+                        ),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8),
+                          borderSide:
+                              BorderSide(color: colorScheme.outlineVariant),
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8),
+                          borderSide: BorderSide(
+                            color: colorScheme.primary,
+                            width: 1.5,
+                          ),
                         ),
                       ),
                     ),
                   ),
                 ),
               ),
-            ),
-            const SizedBox(width: 8),
-            FilledButton(
-              style: FilledButton.styleFrom(
-                minimumSize: const Size.square(42),
-                maximumSize: const Size.square(42),
-                padding: EdgeInsets.zero,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(11),
-                ),
+              const SizedBox(width: 8),
+              // The field's own listenable decides between microphone and
+              // send, so typing never rebuilds the whole window.
+              ValueListenableBuilder<TextEditingValue>(
+                valueListenable: _messageController,
+                builder: (context, _, __) {
+                  if (_showsVoiceButton) {
+                    return FilledButton(
+                      key: const ValueKey<String>('chat-voice-record'),
+                      style: FilledButton.styleFrom(
+                        minimumSize:
+                            const Size.square(kMinInteractiveDimension),
+                        maximumSize:
+                            const Size.square(kMinInteractiveDimension),
+                        padding: EdgeInsets.zero,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                      ),
+                      onPressed: hasBlockingOutcomeUnknownAttachment ||
+                              !composerEnabled
+                          ? null
+                          : _startVoiceNote,
+                      child: const Icon(Icons.mic_rounded, size: 20),
+                    );
+                  }
+                  return FilledButton(
+                    key: const ValueKey<String>('chat-message-send'),
+                    style: FilledButton.styleFrom(
+                      minimumSize: const Size.square(kMinInteractiveDimension),
+                      maximumSize: const Size.square(kMinInteractiveDimension),
+                      padding: EdgeInsets.zero,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                    ),
+                    onPressed: _isSendingPendingAttachments ||
+                            hasBlockingOutcomeUnknownAttachment ||
+                            !composerEnabled
+                        ? null
+                        : () => _sendComposer(),
+                    child: _isSendingPendingAttachments
+                        ? const SizedBox.square(
+                            dimension: 17,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.send_rounded, size: 19),
+                  );
+                },
               ),
-              onPressed: _isSendingPendingAttachments ||
-                      hasBlockingOutcomeUnknownAttachment ||
-                      !composerEnabled
-                  ? null
-                  : () => _sendComposer(),
-              child: _isSendingPendingAttachments
-                  ? const SizedBox.square(
-                      dimension: 17,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : const Icon(Icons.send_rounded, size: 19),
-            ),
-          ],
-        ),
+            ],
+          ),
       ],
     );
   }
@@ -7681,11 +9496,14 @@ class _ChatWindowState extends State<ChatWindow> {
     required bool showSmartActions,
   }) {
     final smartActions = _smartActionCapabilities;
+    final purchaseSupplierId =
+        _supportsOutgoingAttachments ? _supplierContextId : null;
     _toggleComposerMenu(
       name: 'composer_actions',
       anchorKey: _composerActionsButtonKey,
       width: 330,
-      estimatedHeight: _isWhatsAppConversation ? 330 : 275,
+      estimatedHeight: (_isWhatsAppConversation ? 330 : 275) +
+          (purchaseSupplierId == null ? 0 : 56),
       panelBuilder: (overlayContext) => _buildComposerPopoverPanel(
         context: overlayContext,
         icon: Icons.add_circle_outline_rounded,
@@ -7699,6 +9517,17 @@ class _ChatWindowState extends State<ChatWindow> {
               title: 'Foto o archivo',
               subtitle: 'Previsualiza antes de enviar',
               onTap: () => _showAttachmentOptions(
+                anchorKey: _composerActionsButtonKey,
+              ),
+            ),
+          if (purchaseSupplierId != null)
+            _buildComposerPopoverAction(
+              icon: Icons.receipt_long_outlined,
+              color: _purchaseDocumentAccent,
+              title: 'Documento de compra',
+              subtitle: 'Envía un borrador o reenvía uno enviado',
+              onTap: () => _showPurchaseDocumentPicker(
+                supplierId: purchaseSupplierId,
                 anchorKey: _composerActionsButtonKey,
               ),
             ),
@@ -7729,8 +9558,8 @@ class _ChatWindowState extends State<ChatWindow> {
             _buildComposerPopoverAction(
               icon: Icons.dynamic_form_outlined,
               color: const Color(0xFF0F766E),
-              title: 'Plantilla WhatsApp',
-              subtitle: 'Abrir o reabrir la ventana de 24 horas',
+              title: 'Mensaje WhatsApp',
+              subtitle: 'Utilidad por Direct Send o marketing aprobado',
               onTap: () => _showWhatsAppTemplatePicker(
                 pendingText: _messageController.text.trim(),
                 anchorKey: _composerActionsButtonKey,
@@ -7739,6 +9568,360 @@ class _ChatWindowState extends State<ChatWindow> {
         ],
       ),
     );
+  }
+
+  /// Supplier behind this thread, when there is one.
+  ///
+  /// The inbox binds a supplier by phone even when nothing was linked by hand,
+  /// so the hint is the reliable source and the explicit context is the
+  /// fallback.
+  String? get _supplierContextId {
+    if (!widget.conversation.isSupplierConversation) return null;
+    final hinted = widget.conversation.contextHint?.supplierId?.trim();
+    if (hinted != null && hinted.isNotEmpty) return hinted;
+    if (_effectiveContextType == 'supplier') {
+      final contextId = _effectiveContextId?.trim();
+      if (contextId != null && contextId.isNotEmpty) return contextId;
+    }
+    return null;
+  }
+
+  void _showPurchaseDocumentPicker({
+    required String supplierId,
+    GlobalKey? anchorKey,
+  }) {
+    final documentsFuture = _loadSupplierSendableDocuments(supplierId);
+    _toggleComposerMenu(
+      name: 'purchase_documents',
+      anchorKey: anchorKey ?? _composerActionsButtonKey,
+      width: 400,
+      estimatedHeight: 330,
+      panelBuilder: (overlayContext) => _buildPurchaseDocumentPanel(
+        overlayContext,
+        documentsFuture: documentsFuture,
+      ),
+    );
+  }
+
+  Future<List<PurchaseInvoice>> _loadSupplierSendableDocuments(
+    String supplierId,
+  ) async {
+    final purchaseService = context.read<PurchaseService>();
+    final invoices = await purchaseService.getInvoicesBySupplier(supplierId);
+    return invoices
+        .where(
+          (invoice) =>
+              invoice.id != null &&
+              (invoice.status == PurchaseInvoiceStatus.draft ||
+                  invoice.status == PurchaseInvoiceStatus.sent),
+        )
+        .toList();
+  }
+
+  Widget _buildPurchaseDocumentPanel(
+    BuildContext overlayContext, {
+    required Future<List<PurchaseInvoice>> documentsFuture,
+  }) {
+    return _buildComposerPopoverPanel(
+      context: overlayContext,
+      icon: Icons.receipt_long_outlined,
+      iconColor: _purchaseDocumentAccent,
+      title: 'Borradores y enviados',
+      children: [
+        FutureBuilder<List<PurchaseInvoice>>(
+          future: documentsFuture,
+          builder: (context, snapshot) {
+            if (snapshot.connectionState == ConnectionState.waiting) {
+              return const Padding(
+                padding: EdgeInsets.fromLTRB(16, 14, 16, 18),
+                child: LinearProgressIndicator(minHeight: 2),
+              );
+            }
+            if (snapshot.hasError) {
+              return _buildPurchaseDocumentNotice(
+                context,
+                'No se pudieron cargar los documentos de este proveedor.',
+              );
+            }
+            final documents = snapshot.data ?? const <PurchaseInvoice>[];
+            if (documents.isEmpty) {
+              return _buildPurchaseDocumentNotice(
+                context,
+                'Este proveedor no tiene documentos de compra en borrador ni enviados.',
+              );
+            }
+            return ConstrainedBox(
+              constraints: const BoxConstraints(maxHeight: 244),
+              child: ListView.builder(
+                shrinkWrap: true,
+                padding: EdgeInsets.zero,
+                itemCount: documents.length,
+                itemBuilder: (context, index) => _buildPurchaseDocumentOption(
+                  context,
+                  documents[index],
+                ),
+              ),
+            );
+          },
+        ),
+      ],
+    );
+  }
+
+  Widget _buildPurchaseDocumentNotice(BuildContext context, String message) {
+    final theme = Theme.of(context);
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+      child: Text(
+        message,
+        style: theme.textTheme.bodySmall?.copyWith(
+          color: theme.colorScheme.onSurfaceVariant,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPurchaseDocumentOption(
+    BuildContext context,
+    PurchaseInvoice invoice,
+  ) {
+    final theme = Theme.of(context);
+    final lineCount = invoice.items.length;
+    return InkWell(
+      onTap: () => _queuePurchaseDocumentAttachment(invoice),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+        child: Row(
+          children: [
+            Container(
+              width: 34,
+              height: 34,
+              decoration: BoxDecoration(
+                color: _purchaseDocumentAccent.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(9),
+              ),
+              child: const Icon(
+                Icons.description_outlined,
+                color: _purchaseDocumentAccent,
+                size: 19,
+              ),
+            ),
+            const SizedBox(width: 11),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'N° ${invoice.invoiceNumber}',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    '${invoice.status.displayName} · '
+                    '${ChileanUtils.formatDate(invoice.date)} · '
+                    '$lineCount ${lineCount == 1 ? 'línea' : 'líneas'} · '
+                    '${ChileanUtils.formatCurrency(invoice.total)}',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Icon(
+              Icons.arrow_forward_ios_rounded,
+              size: 13,
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// Build the document the supplier receives and leave it in the composer.
+  ///
+  /// The draft only becomes «Enviada» once the transport confirms the send, so
+  /// nothing is written to the document here.
+  Future<void> _queuePurchaseDocumentAttachment(PurchaseInvoice invoice) async {
+    final invoiceId = invoice.id;
+    if (invoiceId == null || _isPreparingPurchaseDocument) return;
+    _removeComposerMenuOverlay(notify: true);
+    if (_guardPendingAttachmentMutation()) return;
+    final conversationId = widget.conversation.id;
+    final session = _composerSession;
+
+    final appearanceService = context.read<AppearanceService>();
+    final inventoryService = context.read<InventoryService>();
+    final messenger = ScaffoldMessenger.of(context);
+
+    setState(() => _isPreparingPurchaseDocument = true);
+    try {
+      final bytes = await PurchaseDocumentPdfGenerator.generateBytes(
+        invoice,
+        appearanceService: appearanceService,
+        inventoryService: inventoryService,
+      );
+      if (!_isCurrentComposer(conversationId, session)) return;
+      _addPendingAttachments([
+        _buildPendingAttachment(
+          fileName: PurchaseDocumentPdfGenerator.fileNameFor(
+            invoice.invoiceNumber,
+          ),
+          bytes: bytes,
+          purchaseInvoiceId: invoiceId,
+          purchaseInvoiceNumber: invoice.invoiceNumber,
+        ),
+      ]);
+      if (_messageController.text.trim().isEmpty) {
+        _messageController.text =
+            'Te enviamos el documento de compra N° ${invoice.invoiceNumber}.';
+      }
+      messenger
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          SnackBar(
+            content: Text(
+              'Documento N° ${invoice.invoiceNumber} listo para enviar.',
+            ),
+          ),
+        );
+    } catch (error) {
+      if (!mounted) return;
+      messenger
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          SnackBar(
+            content: Text('No se pudo preparar el documento: $error'),
+            backgroundColor: VinabikeThemeRoles.of(context).danger.accent,
+          ),
+        );
+    } finally {
+      if (mounted) setState(() => _isPreparingPurchaseDocument = false);
+    }
+  }
+
+  /// Open the queued purchase document, and take back whatever the operator
+  /// saved while it was open.
+  ///
+  /// Editing happens in the canonical document form, so the file that leaves
+  /// the chat is rebuilt from the stored document rather than from the copy
+  /// generated when it was queued.
+  Future<void> _openPurchaseDocumentPreview(
+    PendingChatAttachment attachment,
+  ) async {
+    final invoiceId = attachment.purchaseInvoiceId;
+    if (invoiceId == null) return;
+
+    final isReserved = attachment.reservation != null;
+    final revision = await showPurchaseDocumentPreviewDialog(
+      context,
+      invoiceId: invoiceId,
+      invoiceNumber: attachment.purchaseInvoiceNumber ?? '',
+      bytes: attachment.bytes,
+      canEdit: !isReserved && !_isSendingPendingAttachments,
+      lockedReason: isReserved
+          ? 'Este adjunto ya está reservado para envío; no admite cambios.'
+          : null,
+    );
+    if (revision == null || !mounted) return;
+
+    final index = _pendingAttachments.indexWhere(
+      (item) => item.id == attachment.id,
+    );
+    if (index == -1) return;
+    setState(() {
+      _pendingAttachments[index] = _pendingAttachments[index].withRevision(
+        bytes: revision.bytes,
+        fileName: revision.fileName,
+        invoiceNumber: revision.invoiceNumber,
+      );
+    });
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          content: Text(
+            'Se enviará la versión guardada del documento '
+            'N° ${revision.invoiceNumber}.',
+          ),
+        ),
+      );
+  }
+
+  /// Move each confirmed draft from «Borrador» to «Enviada».
+  ///
+  /// A document already sent or advanced is left alone: the chat send is not
+  /// allowed to walk the purchase workflow backwards.
+  Future<void> _markPurchaseDocumentsAsSent(
+    List<PendingChatAttachment> attachments, {
+    required PurchaseService purchaseService,
+    required String conversationId,
+  }) async {
+    if (attachments.isEmpty) return;
+
+    final messenger = mounted ? ScaffoldMessenger.maybeOf(context) : null;
+    final marked = <String>[];
+    final failed = <String>[];
+
+    for (final attachment in attachments) {
+      final invoiceId = attachment.purchaseInvoiceId;
+      if (invoiceId == null) continue;
+      final label = attachment.purchaseInvoiceNumber ?? invoiceId;
+      try {
+        final outcome = await purchaseService.markDocumentSentAfterDispatch(
+          invoiceId,
+        );
+        switch (outcome) {
+          case PurchaseDocumentSendOutcome.marked:
+            marked.add(label);
+          case PurchaseDocumentSendOutcome.alreadyAdvanced:
+            break;
+          case PurchaseDocumentSendOutcome.missing:
+            failed.add(label);
+        }
+      } catch (error) {
+        debugPrint(
+            'No se pudo marcar el documento $label como enviada: $error');
+        failed.add(label);
+      }
+    }
+
+    if (!mounted ||
+        widget.conversation.id != conversationId ||
+        messenger == null) return;
+    if (failed.isNotEmpty) {
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(
+            failed.length == 1
+                ? 'El documento N° ${failed.first} se envió, pero sigue en '
+                    'borrador. Cámbialo en Documentos de compra.'
+                : '${failed.length} documentos se enviaron, pero siguen en '
+                    'borrador. Cámbialos en Documentos de compra.',
+          ),
+          backgroundColor: VinabikeThemeRoles.of(context).danger.accent,
+        ),
+      );
+      return;
+    }
+    if (marked.isNotEmpty) {
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(
+            marked.length == 1
+                ? 'Documento N° ${marked.first} quedó como enviada.'
+                : '${marked.length} documentos quedaron como enviada.',
+          ),
+        ),
+      );
+    }
   }
 
   Widget _buildPendingAttachmentTray(BuildContext context) {
@@ -7764,7 +9947,9 @@ class _ChatWindowState extends State<ChatWindow> {
     );
 
     return Container(
-      constraints: BoxConstraints(maxHeight: hasBlockingOutcome ? 166 : 142),
+      // No height cap: the tray's content is already bounded (header + one
+      // 82 px row), and a hardcoded ceiling only clips — or overflows — when
+      // the text renders taller than the number someone measured once.
       padding: const EdgeInsets.all(10),
       decoration: BoxDecoration(
         color: colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
@@ -7870,7 +10055,7 @@ class _ChatWindowState extends State<ChatWindow> {
 
   Widget _buildPendingAttachmentTile(
     BuildContext context,
-    _PendingChatAttachment attachment,
+    PendingChatAttachment attachment,
   ) {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
@@ -7879,95 +10064,105 @@ class _ChatWindowState extends State<ChatWindow> {
         : attachment.extension.toUpperCase();
     final removalBlocked =
         attachment.outcomeUnknown && !attachment.canRetrySafely;
+    final isPurchaseDocument = attachment.purchaseInvoiceId != null;
 
     return SizedBox(
       width: 112,
       child: Stack(
         clipBehavior: Clip.none,
         children: [
-          Container(
-            width: 112,
-            height: 82,
-            clipBehavior: Clip.antiAlias,
-            decoration: BoxDecoration(
-              color: colorScheme.surface,
+          Tooltip(
+            message: isPurchaseDocument ? 'Ver o editar el documento' : '',
+            child: InkWell(
+              onTap: isPurchaseDocument
+                  ? () => _openPurchaseDocumentPreview(attachment)
+                  : null,
               borderRadius: BorderRadius.circular(10),
-              border: Border.all(color: colorScheme.outlineVariant),
+              child: Container(
+                width: 112,
+                height: 82,
+                clipBehavior: Clip.antiAlias,
+                decoration: BoxDecoration(
+                  color: colorScheme.surface,
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: colorScheme.outlineVariant),
+                ),
+                child: attachment.isImage
+                    ? Stack(
+                        fit: StackFit.expand,
+                        children: [
+                          Image.memory(
+                            attachment.bytes,
+                            fit: BoxFit.cover,
+                            gaplessPlayback: true,
+                          ),
+                          Align(
+                            alignment: Alignment.bottomCenter,
+                            child: Container(
+                              width: double.infinity,
+                              padding: const EdgeInsets.fromLTRB(7, 12, 7, 5),
+                              decoration: BoxDecoration(
+                                gradient: LinearGradient(
+                                  begin: Alignment.topCenter,
+                                  end: Alignment.bottomCenter,
+                                  colors: [
+                                    Colors.transparent,
+                                    Colors.black.withValues(alpha: 0.62),
+                                  ],
+                                ),
+                              ),
+                              child: Text(
+                                attachment.fileName,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 10.5,
+                                  fontWeight: FontWeight.w700,
+                                  letterSpacing: 0,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      )
+                    : Padding(
+                        padding: const EdgeInsets.all(8),
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(
+                              _getFileIcon(attachment.extension),
+                              size: 24,
+                              color: colorScheme.primary,
+                            ),
+                            const SizedBox(height: 5),
+                            Text(
+                              attachment.fileName,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              textAlign: TextAlign.center,
+                              style: theme.textTheme.labelSmall?.copyWith(
+                                fontWeight: FontWeight.w800,
+                                letterSpacing: 0,
+                              ),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              '$extensionLabel · ${_formatAttachmentSize(attachment.bytes.length)}',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: theme.textTheme.labelSmall?.copyWith(
+                                color: colorScheme.onSurfaceVariant,
+                                fontSize: 9.5,
+                                letterSpacing: 0,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+              ),
             ),
-            child: attachment.isImage
-                ? Stack(
-                    fit: StackFit.expand,
-                    children: [
-                      Image.memory(
-                        attachment.bytes,
-                        fit: BoxFit.cover,
-                        gaplessPlayback: true,
-                      ),
-                      Align(
-                        alignment: Alignment.bottomCenter,
-                        child: Container(
-                          width: double.infinity,
-                          padding: const EdgeInsets.fromLTRB(7, 12, 7, 5),
-                          decoration: BoxDecoration(
-                            gradient: LinearGradient(
-                              begin: Alignment.topCenter,
-                              end: Alignment.bottomCenter,
-                              colors: [
-                                Colors.transparent,
-                                Colors.black.withValues(alpha: 0.62),
-                              ],
-                            ),
-                          ),
-                          child: Text(
-                            attachment.fileName,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 10.5,
-                              fontWeight: FontWeight.w700,
-                              letterSpacing: 0,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ],
-                  )
-                : Padding(
-                    padding: const EdgeInsets.all(8),
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(
-                          _getFileIcon(attachment.extension),
-                          size: 24,
-                          color: colorScheme.primary,
-                        ),
-                        const SizedBox(height: 5),
-                        Text(
-                          attachment.fileName,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          textAlign: TextAlign.center,
-                          style: theme.textTheme.labelSmall?.copyWith(
-                            fontWeight: FontWeight.w800,
-                            letterSpacing: 0,
-                          ),
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          '$extensionLabel · ${_formatAttachmentSize(attachment.bytes.length)}',
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: theme.textTheme.labelSmall?.copyWith(
-                            color: colorScheme.onSurfaceVariant,
-                            fontSize: 9.5,
-                            letterSpacing: 0,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
           ),
           Positioned(
             top: -7,
@@ -8122,7 +10317,7 @@ class _ChatWindowState extends State<ChatWindow> {
         decoration: BoxDecoration(
           color: theme.colorScheme.surface,
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: Colors.grey.shade300),
+          border: Border.all(color: theme.colorScheme.outlineVariant),
           boxShadow: [
             BoxShadow(
               color: Colors.black.withValues(alpha: 0.16),
@@ -8195,7 +10390,9 @@ class _ChatWindowState extends State<ChatWindow> {
           height: 26,
           alignment: Alignment.center,
           decoration: BoxDecoration(
-            color: selected ? Colors.grey.shade200 : Colors.transparent,
+            color: selected
+                ? theme.colorScheme.surfaceContainerHighest
+                : Colors.transparent,
             borderRadius: BorderRadius.circular(5),
           ),
           child: Text(
@@ -8203,7 +10400,8 @@ class _ChatWindowState extends State<ChatWindow> {
             style: TextStyle(
               fontSize: 12,
               fontWeight: FontWeight.w700,
-              color: selected ? Colors.black87 : Colors.grey.shade500,
+              color:
+                  selected ? theme.colorScheme.onSurface : Colors.grey.shade500,
             ),
           ),
         ),
@@ -8214,9 +10412,9 @@ class _ChatWindowState extends State<ChatWindow> {
       height: 30,
       padding: const EdgeInsets.all(2),
       decoration: BoxDecoration(
-        color: Colors.grey.shade100,
+        color: theme.colorScheme.surfaceContainerLow,
         borderRadius: BorderRadius.circular(7),
-        border: Border.all(color: Colors.grey.shade300),
+        border: Border.all(color: theme.colorScheme.outlineVariant),
       ),
       child: Row(
         children: [
@@ -8241,7 +10439,7 @@ class _ChatWindowState extends State<ChatWindow> {
               style: TextStyle(
                 fontSize: 12,
                 fontWeight: FontWeight.w800,
-                color: Colors.grey.shade700,
+                color: theme.colorScheme.onSurfaceVariant,
               ),
             ),
           ),
@@ -8286,7 +10484,8 @@ class _ChatWindowState extends State<ChatWindow> {
       height: 44,
       decoration: BoxDecoration(
         color: Colors.grey.shade50,
-        border: Border(top: BorderSide(color: Colors.grey.shade300)),
+        border:
+            Border(top: BorderSide(color: theme.colorScheme.outlineVariant)),
       ),
       child: SingleChildScrollView(
         scrollDirection: Axis.horizontal,
@@ -8313,13 +10512,17 @@ class _ChatWindowState extends State<ChatWindow> {
                   height: 34,
                   margin: const EdgeInsets.symmetric(horizontal: 1),
                   decoration: BoxDecoration(
-                    color: selected ? Colors.grey.shade200 : Colors.transparent,
+                    color: selected
+                        ? theme.colorScheme.surfaceContainerHighest
+                        : Colors.transparent,
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: Icon(
                     item.icon,
                     size: 19,
-                    color: selected ? _accentBlue : Colors.grey.shade600,
+                    color: selected
+                        ? _accentBlue
+                        : theme.colorScheme.onSurfaceVariant,
                   ),
                 ),
               ),
@@ -8393,14 +10596,16 @@ class _ChatWindowState extends State<ChatWindow> {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(content),
-        backgroundColor: Colors.green,
+        backgroundColor: VinabikeThemeRoles.of(context).success.accent,
       ),
     );
   }
 
   void _showErrorSnackBar(BuildContext context, String message) {
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message), backgroundColor: Colors.red),
+      SnackBar(
+          content: Text(message),
+          backgroundColor: VinabikeThemeRoles.of(context).danger.accent),
     );
   }
 
@@ -8408,7 +10613,7 @@ class _ChatWindowState extends State<ChatWindow> {
     if (name == 'Cliente') return Colors.blue[800]!;
 
     final colors = [
-      Colors.orange[800]!,
+      VinabikeThemeRoles.of(context).warning.onContainer!,
       Colors.purple[700]!,
       Colors.pink[700]!,
       Colors.teal[700]!,
@@ -8465,19 +10670,26 @@ class _ChatWindowState extends State<ChatWindow> {
     bool isMe,
   ) {
     final preview = _routeSharePreviewFor(message);
+    // La tinta va SOBRE la burbuja, y la burbuja sale de la paleta. Con
+    // `theme.colorScheme.onSurface` fijo el texto quedaba negro sobre una burbuja oscura.
+    final theme = Theme.of(context);
+    final roles = theme.extension<VinabikeThemeRoles>();
+    final onBubble = isMe
+        ? roles?.onSelectionContainer ?? theme.colorScheme.onPrimaryContainer
+        : theme.colorScheme.onSurface;
     if (preview == null) {
       return ParsedMessageText(
         text: message.content,
         isMe: isMe,
         onReferenceTap: widget.onReferenceTap,
-        style: const TextStyle(
-          color: Colors.black87,
+        style: TextStyle(
+          color: onBubble,
           fontSize: 14,
         ),
       );
     }
 
-    const textStyle = TextStyle(color: Colors.black87, fontSize: 14);
+    final textStyle = TextStyle(color: onBubble, fontSize: 14);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -8668,6 +10880,257 @@ class _ChatWindowState extends State<ChatWindow> {
     return !gap.isNegative && gap <= const Duration(minutes: 4);
   }
 
+  bool _canSelectMessage(Message message) =>
+      message.conversationId == widget.conversation.id &&
+      message.type != 'system' &&
+      !message.id.startsWith('temp-') &&
+      message.metadata['pending'] != true;
+
+  bool _canForwardMessage(Message message) =>
+      _canSelectMessage(message) &&
+      const {'text', 'image', 'file', 'audio'}.contains(message.type) &&
+      (message.type != 'text' || message.content.trim().isNotEmpty) &&
+      message.metadata['type'] != 'quote_request' &&
+      message.metadata['outcome_unknown'] != true;
+
+  void _toggleMessageSelection(Message message) {
+    if (!_canSelectMessage(message)) return;
+    _focusNode.unfocus();
+    setState(() {
+      if (_selectedMessages.remove(message.id) == null) {
+        _selectedMessages[message.id] = message;
+      }
+    });
+  }
+
+  Widget _messageSelectionRow(Message message, {required Widget child}) =>
+      ChatMessageRow(
+        key: ValueKey('chat-message-row-${message.id}'),
+        selected: _selectedMessages.containsKey(message.id),
+        selectionOnLeading: message.isMe,
+        selecting: _selectedMessages.isNotEmpty,
+        onSelect: _canSelectMessage(message)
+            ? () => _toggleMessageSelection(message)
+            : null,
+        child: child,
+      );
+
+  List<Message> get _orderedSelection => _selectedMessages.values.toList()
+    ..sort((a, b) => a.createdAt.compareTo(b.createdAt));
+
+  Future<void> _copySelectedMessages() async {
+    final conversationId = widget.conversation.id;
+    final session = _composerSession;
+    final selected = _orderedSelection;
+    final text = selected
+        .map((message) => message.type == 'image'
+            ? _messageImageCaption(message) ??
+                _messageAttachmentName(message, '')
+            : message.type == 'file'
+                ? _messageFileCaption(message) ??
+                    _messageAttachmentName(message, '')
+                : message.content)
+        .join('\n');
+    await Clipboard.setData(ClipboardData(text: text));
+    if (_isCurrentComposer(conversationId, session)) {
+      setState(() {
+        for (final message in selected) {
+          _selectedMessages.remove(message.id);
+        }
+      });
+    }
+  }
+
+  Widget _buildMessageSelectionToolbar() {
+    final messages = _orderedSelection;
+    return CallbackShortcuts(
+      bindings: {
+        const SingleActivator(LogicalKeyboardKey.escape): () =>
+            setState(_selectedMessages.clear)
+      },
+      child: Focus(
+        autofocus: true,
+        child: Material(
+          color: Theme.of(context).colorScheme.surface,
+          child: Row(children: [
+            IconButton(
+              key: const ValueKey('chat-selection-cancel'),
+              tooltip: 'Cancelar selección',
+              onPressed: () => setState(_selectedMessages.clear),
+              icon: const Icon(Icons.close),
+            ),
+            Expanded(
+                child: Text(
+                    messages.length == 1
+                        ? '1 seleccionado'
+                        : '${messages.length} seleccionados',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis)),
+            if (messages.length == 1 && _canQuoteMessage(messages.single))
+              IconButton(
+                tooltip: 'Responder al mensaje',
+                onPressed: () {
+                  final message = messages.single;
+                  setState(_selectedMessages.clear);
+                  _selectReply(message);
+                },
+                icon: const Icon(Icons.reply),
+              ),
+            IconButton(
+              key: const ValueKey('chat-selection-copy'),
+              tooltip: 'Copiar mensajes',
+              onPressed: _copySelectedMessages,
+              icon: const Icon(Icons.copy_outlined),
+            ),
+            Builder(
+                builder: (anchor) => IconButton(
+                      key: const ValueKey('chat-selection-forward'),
+                      tooltip: 'Reenviar mensajes',
+                      onPressed: messages.every(_canForwardMessage)
+                          ? () => _forwardMessages(messages, anchor)
+                          : null,
+                      icon: const Icon(Icons.forward),
+                    )),
+          ]),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _forwardMessages(
+      List<Message> messages, BuildContext anchor) async {
+    final sourceConversation = widget.conversation.id;
+    final session = _composerSession;
+    final provider = context.read<ChatProvider>();
+    final frozen = List<Message>.unmodifiable(messages);
+    final destinations = provider.conversations
+        .where((conversation) =>
+            conversation.status == 'active' &&
+            (conversation.isInternal || conversation.isWhatsApp))
+        .toList();
+    if (!destinations.any((c) => c.id == sourceConversation) &&
+        widget.conversation.status == 'active' &&
+        (widget.conversation.isInternal || widget.conversation.isWhatsApp)) {
+      destinations.add(widget.conversation);
+    }
+    await showVbSurface<void>(
+      anchorContext: anchor,
+      title:
+          'Reenviar ${frozen.length == 1 ? 'mensaje' : '${frozen.length} mensajes'}',
+      builder: (surfaceContext) => ConstrainedBox(
+        constraints: BoxConstraints(
+            maxHeight: MediaQuery.sizeOf(surfaceContext).height * 0.45),
+        child: ChatForwardPicker(
+          messages: frozen,
+          destinations: destinations,
+          titleFor: provider.getChatTitle,
+          onSend: (destination) async {
+            for (final message in frozen) {
+              if (!_isCurrentComposer(sourceConversation, session)) {
+                throw StateError(
+                    'El chat cambió. Los mensajes restantes no se enviaron.');
+              }
+              await _forwardMessage(message, destination,
+                  isCurrent: () =>
+                      _isCurrentComposer(sourceConversation, session));
+              if (_isCurrentComposer(sourceConversation, session)) {
+                setState(() => _selectedMessages.remove(message.id));
+              }
+            }
+            if (mounted && _isCurrentComposer(sourceConversation, session)) {
+              ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                  content: Text(
+                      'Reenviado a ${provider.getChatTitle(destination)}')));
+            }
+          },
+        ),
+      ),
+    );
+  }
+
+  Future<void> _forwardMessage(Message message, Conversation destination,
+      {required bool Function() isCurrent}) async {
+    final provider = context.read<ChatProvider>();
+    final contact = destination.isWhatsApp
+        ? await _messagingService.getSupportConversationContact(destination.id,
+            rethrowOnError: true)
+        : null;
+    if (!isCurrent()) throw StateError('El chat cambió antes del envío.');
+    final inbound =
+        DateTime.tryParse(contact?['last_inbound_at']?.toString() ?? '');
+    if (destination.isWhatsApp &&
+        (inbound == null ||
+            DateTime.now().toUtc().difference(inbound.toUtc()) >=
+                const Duration(hours: 24))) {
+      throw StateError(
+          'Este contacto debe responder primero para abrir la ventana de WhatsApp.');
+    }
+    if (message.type == 'text') {
+      if (destination.isWhatsApp) {
+        final phone = contact?['phone']?.toString();
+        if (phone == null || phone.isEmpty) {
+          throw StateError('El chat no tiene teléfono.');
+        }
+        final receipt = await WhatsAppService().sendMessage(
+          customerPhone: phone,
+          message: message.content,
+          conversationId: destination.id,
+          contactName: contact?['name']?.toString(),
+          contextType: destination.effectiveContextType,
+          contextId: destination.effectiveContextId,
+          lastInboundAt: inbound,
+          allowTemplateFallback: false,
+          clientMessageId: 'forward-${DateTime.now().microsecondsSinceEpoch}',
+        );
+        if (!receipt.isDurable) {
+          throw StateError(receipt.unsafeToFallback
+              ? 'No llegó confirmación. Revisa el chat destino antes de volver a enviar.'
+              : 'WhatsApp no aceptó el reenvío. Los mensajes restantes no se enviaron.');
+        }
+      } else {
+        await provider.sendMessage(message.content,
+            conversationId: destination.id);
+      }
+      return;
+    }
+    // Authorize the source afresh, even when this device has cached its bytes.
+    // The destination always gets a NEW private reservation, never a copied URL.
+    final url = MessagingAttachmentService.hasPrivateReference(message)
+        ? await _messagingAttachmentService.createRuntimeSignedUrl(message)
+        : await _resolveWhatsAppMediaUrl(message);
+    if (url == null || !isCurrent()) {
+      throw StateError('El adjunto ya no está disponible.');
+    }
+    final extension = _messageAttachmentExtension(
+        message, url, _messageAttachmentContentType(message));
+    final bytes = await ChatMediaCache.instance.fetch(
+      ChatMediaCache.keyFor(message) ?? 'forward-source-${message.id}',
+      resolveUrl: () async => url,
+      fileExtension: extension,
+    );
+    if (bytes == null || !isCurrent()) {
+      throw StateError('No se pudo leer el adjunto.');
+    }
+    final result = await _sendAttachmentBytes(
+      destination: destination,
+      forwardLease: isCurrent,
+      fileName: _messageAttachmentName(message, extension),
+      bytes: bytes,
+      caption: message.type == 'image'
+          ? _messageImageCaption(message)
+          : message.type == 'file'
+              ? _messageFileCaption(message)
+              : null,
+      showUploadingSnackBar: false,
+    );
+    if (result.outcome != AttachmentDispatchOutcome.confirmed) {
+      throw StateError(result.outcome ==
+              AttachmentDispatchOutcome.outcomeUnknown
+          ? 'No llegó confirmación. Revisa el chat destino antes de volver a enviar.'
+          : 'No se pudo reenviar el adjunto. Los mensajes restantes no se enviaron.');
+    }
+  }
+
   Widget _buildMessageBubble(
     BuildContext context,
     Message msg,
@@ -8676,10 +11139,17 @@ class _ChatWindowState extends State<ChatWindow> {
     return LayoutBuilder(
       builder: (context, constraints) {
         final isMe = msg.isMe;
+        final isThreadReply =
+            widget.conversation.isInternal && msg.isThreadReply;
+        final contentIsMe = isThreadReply ? false : isMe;
         final senderId = msg.senderId;
         final grouping = _messageGroupingFor(msg, messages);
-        final bubbleMaxWidth =
-            constraints.maxWidth > 0 ? constraints.maxWidth * 0.72 : 280.0;
+        final bubbleMaxWidth = constraints.maxWidth > 0
+            ? widget.compact
+                ? (constraints.maxWidth - kMinInteractiveDimension)
+                    .clamp(0.0, constraints.maxWidth)
+                : constraints.maxWidth * 0.72
+            : 280.0;
 
         return FutureBuilder<Map<String, dynamic>?>(
           future:
@@ -8688,13 +11158,13 @@ class _ChatWindowState extends State<ChatWindow> {
             final senderInfo = snapshot.data;
             final senderName =
                 isMe ? 'Tú' : _resolveIncomingSenderName(msg, senderInfo);
-            final senderAvatar = senderInfo?['avatar_url'];
+            final senderAvatar = senderInfo?['avatar_url']?.toString();
             // Message Content Widget
             Widget contentWidget;
             if (msg.type == 'image') {
               final mediaUrl = _messageAttachmentUrl(msg);
               if (mediaUrl != null) {
-                contentWidget = _buildImageMessage(context, msg, mediaUrl);
+                contentWidget = _buildImageMessage(context, msg, url: mediaUrl);
               } else if (MessagingAttachmentService.hasPrivateReference(msg) ||
                   _messageHasRemoteWhatsAppMedia(msg)) {
                 contentWidget = _buildDeferredWhatsAppImageMessage(
@@ -8705,6 +11175,10 @@ class _ChatWindowState extends State<ChatWindow> {
                       .externalUrlCandidate(msg) !=
                   null) {
                 contentWidget = _buildExternalAttachmentMessage(msg);
+              } else if (ChatMediaCache.keyFor(msg) != null) {
+                // A file this device holds — the composer's own copy of a
+                // photo just sent — before the server has named it.
+                contentWidget = _buildImageMessage(context, msg);
               } else {
                 contentWidget = _buildImageUnavailableMessage(
                   title: 'Imagen sin archivo',
@@ -8712,15 +11186,30 @@ class _ChatWindowState extends State<ChatWindow> {
                 );
               }
             } else if (msg.metadata['type'] == 'quote_request') {
-              contentWidget = _buildQuoteCard(context, msg, isMe);
+              contentWidget = _buildQuoteCard(context, msg, contentIsMe);
+            } else if (msg.type == 'audio' ||
+                _messageAttachmentContentType(msg)
+                    .toLowerCase()
+                    .startsWith('audio/')) {
+              contentWidget = ChatAudioMessage(
+                key: ValueKey('audio-${msg.id}'),
+                message: msg,
+                isMe: contentIsMe,
+                resolveUrl: () => _resolveWhatsAppMediaUrl(msg, playback: true),
+              );
             } else if (msg.type == 'file') {
               final fileUrl = _messageAttachmentUrl(msg);
               if (fileUrl != null) {
-                contentWidget = _buildFileMessage(context, msg, fileUrl, isMe);
-              } else if (MessagingAttachmentService.hasPrivateReference(msg) ||
-                  _messageHasRemoteWhatsAppMedia(msg)) {
                 contentWidget =
-                    _buildDeferredWhatsAppFileMessage(context, msg, isMe);
+                    _buildFileMessage(context, msg, fileUrl, contentIsMe);
+              } else if (MessagingAttachmentService.hasPrivateReference(msg) ||
+                  _messageHasRemoteWhatsAppMedia(msg) ||
+                  ChatMediaCache.keyFor(msg) != null) {
+                contentWidget = _buildDeferredWhatsAppFileMessage(
+                  context,
+                  msg,
+                  contentIsMe,
+                );
               } else if (_messagingAttachmentService
                       .externalUrlCandidate(msg) !=
                   null) {
@@ -8730,25 +11219,89 @@ class _ChatWindowState extends State<ChatWindow> {
                   context,
                   msg,
                   null,
-                  isMe,
+                  contentIsMe,
                   failed: true,
                 );
               }
             } else if (msg.type == 'action_request') {
               // Staff see the request and its customer response, but never
               // answer an action card on the customer's behalf.
-              contentWidget = _buildActionRequestCard(context, msg, isMe);
+              contentWidget =
+                  _buildActionRequestCard(context, msg, contentIsMe);
             } else {
               // Text Message
-              contentWidget = _buildRouteShareMessage(context, msg, isMe);
+              contentWidget =
+                  _buildRouteShareMessage(context, msg, contentIsMe);
+            }
+
+            final fileCaption =
+                msg.type == 'file' ? _messageFileCaption(msg) : null;
+            if (fileCaption != null) {
+              contentWidget = Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  contentWidget,
+                  const SizedBox(height: 6),
+                  Text(fileCaption,
+                      style: TextStyle(
+                          color: Theme.of(context).colorScheme.onSurface,
+                          fontSize: 13,
+                          height: 1.25)),
+                ],
+              );
+            }
+
+            final quote = MessageReply.fromMetadata(msg, messages);
+            if (quote != null) {
+              contentWidget = Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _buildMessageQuote(quote),
+                  const SizedBox(height: 6),
+                  contentWidget
+                ],
+              );
             }
 
             // Timestamp
             final timeStr = DateFormat('HH:mm').format(msg.createdAt);
 
+            if (isThreadReply) {
+              return _buildTaskThreadReply(
+                context,
+                message: msg,
+                isMe: isMe,
+                senderName: senderName,
+                senderAvatar: senderAvatar,
+                timeLabel: timeStr,
+                content: contentWidget,
+              );
+            }
+
             // Bubble Decoration
+            // Las burbujas salen de la PALETA elegida en Apariencia, no de un
+            // hex. Antes eran `0xFFD9FDD3` y blanco fijos, así que en modo
+            // oscuro se veían idénticas al claro —dos manchas claras sobre un
+            // fondo oscuro— y no seguían la paleta.
+            //
+            // `selectionContainer` es el rol correcto para la propia: su
+            // contrato dice que es para un bloque que se lee «como elegido o
+            // como propio del operador». La ajena usa una superficie neutra
+            // elevada, que es lo que es.
+            final theme = Theme.of(context);
+            final roles = theme.extension<VinabikeThemeRoles>();
+            final bubbleColor = isMe
+                ? roles?.selectionContainer ??
+                    theme.colorScheme.primaryContainer
+                : theme.colorScheme.surfaceContainerHigh;
+            final onBubbleColor = isMe
+                ? roles?.onSelectionContainer ??
+                    theme.colorScheme.onPrimaryContainer
+                : theme.colorScheme.onSurface;
             final bubbleDecoration = BoxDecoration(
-              color: isMe ? const Color(0xFFD9FDD3) : Colors.white,
+              color: bubbleColor,
               borderRadius: BorderRadius.only(
                 topLeft: Radius.circular(grouping.withPrevious ? 5 : 12),
                 topRight: Radius.circular(grouping.withPrevious ? 5 : 12),
@@ -8769,7 +11322,10 @@ class _ChatWindowState extends State<ChatWindow> {
               ),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.08),
+                  // La sombra sale del rol, no de negro fijo: sobre un lienzo
+                  // oscuro un negro al 8% no separa nada.
+                  color: roles?.shadow ??
+                      theme.colorScheme.shadow.withValues(alpha: 0.08),
                   blurRadius: 1,
                   offset: const Offset(0, 1),
                 ),
@@ -8778,7 +11334,8 @@ class _ChatWindowState extends State<ChatWindow> {
 
             if (!isMe) {
               // INCOMING MESSAGE
-              return SelectionArea(
+              return _messageSelectionRow(
+                msg,
                 child: Padding(
                   padding: EdgeInsets.only(
                     bottom: grouping.withNext ? 3 : 10,
@@ -8786,70 +11343,104 @@ class _ChatWindowState extends State<ChatWindow> {
                   child: Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      // Avatar
-                      if (grouping.withPrevious)
-                        const SizedBox(width: 28)
-                      else
-                        CircleAvatar(
-                          radius: 14,
-                          backgroundColor: Colors.grey[200],
-                          backgroundImage: senderAvatar != null
-                              ? NetworkImage(senderAvatar)
-                              : null,
-                          child: senderAvatar == null
-                              ? Icon(
-                                  Icons.person,
-                                  size: 16,
-                                  color: Colors.grey[500],
-                                )
-                              : null,
-                        ),
-                      const SizedBox(width: 8),
+                      // Individual conversations already identify the person
+                      // in the header; group messages still need the avatar.
+                      if (widget.conversation.isGroup) ...[
+                        if (grouping.withPrevious)
+                          const SizedBox(width: 28)
+                        else
+                          CircleAvatar(
+                            radius: 14,
+                            backgroundColor:
+                                theme.colorScheme.surfaceContainerHighest,
+                            backgroundImage: senderAvatar != null
+                                ? NetworkImage(senderAvatar)
+                                : null,
+                            child: senderAvatar == null
+                                ? Icon(
+                                    Icons.person,
+                                    size: 16,
+                                    color: theme.colorScheme.onSurfaceVariant,
+                                  )
+                                : null,
+                          ),
+                        const SizedBox(width: 8),
+                      ],
 
                       // Bubble
                       Flexible(
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 10, vertical: 6),
-                          constraints: BoxConstraints(
-                            maxWidth: bubbleMaxWidth,
-                          ),
-                          decoration: bubbleDecoration,
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              // Sender Name (Colored)
-                              if (!grouping.withPrevious) ...[
-                                Text(
-                                  senderName,
-                                  style: TextStyle(
-                                    fontSize: 13,
-                                    fontWeight: FontWeight.bold,
-                                    color: _getNameColor(senderName),
-                                  ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Builder(
+                              builder: (bubbleContext) => ChatMessageBubble(
+                                key: ValueKey(
+                                    'chat-bubble-${msg.id}-$_composerSession'),
+                                selecting: _selectedMessages.isNotEmpty,
+                                onReply: _canQuoteMessage(msg)
+                                    ? () => _selectReply(msg)
+                                    : null,
+                                onReact: () => _showMessageActions(
+                                  bubbleContext,
+                                  msg,
+                                  isMe: false,
                                 ),
-                                const SizedBox(height: 2),
-                              ],
+                                onContextMenu: () => _showMessageActions(
+                                  bubbleContext,
+                                  msg,
+                                  isMe: false,
+                                  contextActions: true,
+                                ),
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 10, vertical: 6),
+                                  constraints: BoxConstraints(
+                                    maxWidth: bubbleMaxWidth,
+                                  ),
+                                  decoration: bubbleDecoration,
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      // Sender Name (Colored)
+                                      if (!grouping.withPrevious) ...[
+                                        Text(
+                                          senderName,
+                                          style: TextStyle(
+                                            fontSize: 13,
+                                            fontWeight: FontWeight.bold,
+                                            color: _getNameColor(senderName),
+                                          ),
+                                        ),
+                                        const SizedBox(height: 2),
+                                      ],
 
-                              contentWidget,
+                                      contentWidget,
 
-                              // Timestamp
-                              Align(
-                                alignment: Alignment.bottomRight,
-                                child: Padding(
-                                  padding:
-                                      const EdgeInsets.only(top: 4, left: 8),
-                                  child: Text(
-                                    timeStr,
-                                    style: TextStyle(
-                                      color: Colors.grey[500],
-                                      fontSize: 10,
-                                    ),
+                                      // Timestamp
+                                      Align(
+                                        alignment: Alignment.bottomRight,
+                                        child: Padding(
+                                          padding: const EdgeInsets.only(
+                                              top: 4, left: 8),
+                                          child: Text(
+                                            timeStr,
+                                            style: TextStyle(
+                                              color: onBubbleColor.withValues(
+                                                  alpha: 0.65),
+                                              fontSize: 10,
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                    ],
                                   ),
                                 ),
                               ),
-                            ],
-                          ),
+                            ),
+                            _buildReactionStrip(context, msg, isMe: false),
+                          ],
                         ),
                       ),
                       const SizedBox(width: 40),
@@ -8860,7 +11451,8 @@ class _ChatWindowState extends State<ChatWindow> {
             }
 
             // OUTGOING MESSAGE
-            return SelectionArea(
+            return _messageSelectionRow(
+              msg,
               child: Padding(
                 padding: EdgeInsets.only(
                   bottom: grouping.withNext ? 3 : 10,
@@ -8871,40 +11463,56 @@ class _ChatWindowState extends State<ChatWindow> {
                   children: [
                     const SizedBox(width: 40),
                     Flexible(
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 10, vertical: 6),
-                        constraints: BoxConstraints(
-                          maxWidth: bubbleMaxWidth,
-                        ),
-                        decoration: bubbleDecoration,
-                        child: Stack(
-                          children: [
-                            Padding(
-                              padding: const EdgeInsets.only(bottom: 16),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  if (msg.metadata[
-                                          'recovered_outbound_attempt'] ==
-                                      true) ...[
-                                    _buildRecoveredMetaAttemptNotice(msg),
-                                    const SizedBox(height: 5),
-                                  ],
-                                  contentWidget,
-                                ],
-                              ),
-                            ),
-                            Positioned(
-                              bottom: 0,
-                              right: 0,
-                              child: _buildOutgoingMessageFooter(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Builder(
+                            builder: (bubbleContext) => ChatMessageBubble(
+                              key: ValueKey(
+                                  'chat-bubble-${msg.id}-$_composerSession'),
+                              selecting: _selectedMessages.isNotEmpty,
+                              onReply: _canQuoteMessage(msg)
+                                  ? () => _selectReply(msg)
+                                  : null,
+                              onReact: () => _showMessageActions(
+                                bubbleContext,
                                 msg,
-                                timeStr,
+                                isMe: true,
+                              ),
+                              onContextMenu: () => _showMessageActions(
+                                bubbleContext,
+                                msg,
+                                isMe: true,
+                                contextActions: true,
+                              ),
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 10, vertical: 6),
+                                constraints: BoxConstraints(
+                                  maxWidth: bubbleMaxWidth,
+                                ),
+                                decoration: bubbleDecoration,
+                                child: Column(
+                                  mainAxisSize: MainAxisSize.min,
+                                  crossAxisAlignment: CrossAxisAlignment.end,
+                                  children: [
+                                    if (msg.metadata[
+                                            'recovered_outbound_attempt'] ==
+                                        true) ...[
+                                      _buildRecoveredMetaAttemptNotice(msg),
+                                      const SizedBox(height: 5),
+                                    ],
+                                    contentWidget,
+                                    const SizedBox(height: 4),
+                                    _buildOutgoingMessageFooter(msg, timeStr),
+                                  ],
+                                ),
                               ),
                             ),
-                          ],
-                        ),
+                          ),
+                          _buildReactionStrip(context, msg, isMe: true),
+                        ],
                       ),
                     ),
                   ],
@@ -8914,6 +11522,126 @@ class _ChatWindowState extends State<ChatWindow> {
           },
         );
       },
+    );
+  }
+
+  /// Presentación de una respuesta dentro del hilo canónico de una tarea.
+  ///
+  /// A diferencia de un chat de ida y vuelta, todas las respuestas cuelgan de
+  /// la misma raíz y por eso comparten una sola columna. El autor y la hora se
+  /// mantienen visibles sin convertir cada respuesta en una burbuja aislada.
+  Widget _buildTaskThreadReply(
+    BuildContext context, {
+    required Message message,
+    required bool isMe,
+    required String senderName,
+    required String? senderAvatar,
+    required String timeLabel,
+    required Widget content,
+  }) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final avatarUrl = senderAvatar?.trim();
+
+    return Semantics(
+      container: true,
+      label: 'Respuesta de $senderName en el hilo',
+      child: _messageSelectionRow(
+        message,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(2, 9, 2, 0),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              CircleAvatar(
+                radius: 14,
+                backgroundColor: colorScheme.surfaceContainerHighest,
+                backgroundImage: avatarUrl != null && avatarUrl.isNotEmpty
+                    ? NetworkImage(avatarUrl)
+                    : null,
+                child: avatarUrl == null || avatarUrl.isEmpty
+                    ? Icon(
+                        Icons.person_outline,
+                        size: 16,
+                        color: colorScheme.onSurfaceVariant,
+                      )
+                    : null,
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Builder(
+                  builder: (replyContext) => ChatMessageBubble(
+                    key:
+                        ValueKey('chat-bubble-${message.id}-$_composerSession'),
+                    selecting: _selectedMessages.isNotEmpty,
+                    onReply: _canQuoteMessage(message)
+                        ? () => _selectReply(message)
+                        : null,
+                    onReact: () => _showMessageActions(
+                      replyContext,
+                      message,
+                      isMe: false,
+                    ),
+                    onContextMenu: () => _showMessageActions(
+                      replyContext,
+                      message,
+                      isMe: false,
+                      contextActions: true,
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                senderName,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: theme.textTheme.labelMedium?.copyWith(
+                                  color: isMe
+                                      ? colorScheme.primary
+                                      : colorScheme.onSurface,
+                                  fontWeight: FontWeight.w800,
+                                ),
+                              ),
+                            ),
+                            if (isMe)
+                              _buildOutgoingMessageFooter(message, timeLabel)
+                            else
+                              Text(
+                                timeLabel,
+                                style: theme.textTheme.labelSmall?.copyWith(
+                                  color: colorScheme.onSurfaceVariant,
+                                ),
+                              ),
+                          ],
+                        ),
+                        const SizedBox(height: 3),
+                        if (message.metadata['recovered_outbound_attempt'] ==
+                            true) ...[
+                          _buildRecoveredMetaAttemptNotice(message),
+                          const SizedBox(height: 5),
+                        ],
+                        content,
+                        _buildReactionStrip(
+                          context,
+                          message,
+                          isMe: false,
+                        ),
+                        Divider(
+                          height: 18,
+                          color: colorScheme.outlineVariant,
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 
@@ -8940,6 +11668,285 @@ class _ChatWindowState extends State<ChatWindow> {
     }
   }
 
+  /// Los chips de reacción, colgando del borde inferior de la burbuja como en
+  /// WhatsApp. El margen negativo es lo que produce el solape característico;
+  /// sin él quedan flotando y se leen como otro mensaje.
+  ///
+  /// Un chip propio se marca y volver a tocarlo la retira, que es la regla de
+  /// WhatsApp: una reacción por persona, no un contador acumulable.
+  Widget _buildReactionStrip(
+    BuildContext context,
+    Message msg, {
+    required bool isMe,
+  }) {
+    final provider = context.watch<ChatProvider>();
+    final groups = provider.reactionGroupsFor(msg.id);
+    if (groups.isEmpty) return const SizedBox.shrink();
+
+    final theme = Theme.of(context);
+    // El solape va por traslación y no por padding negativo: `RenderPadding`
+    // exige valores no negativos y un `top: -6` revienta apenas se pinta.
+    return Transform.translate(
+      offset: const Offset(0, -6),
+      child: Padding(
+        padding: EdgeInsets.only(
+          left: isMe ? 0 : 8,
+          right: isMe ? 8 : 0,
+          bottom: 2,
+        ),
+        child: Wrap(
+          spacing: 4,
+          runSpacing: 4,
+          alignment: isMe ? WrapAlignment.end : WrapAlignment.start,
+          children: [
+            for (final group in groups)
+              Tooltip(
+                message: group.tooltip,
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(12),
+                  onTap: () => _toggleReaction(msg, group.emoji),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 6,
+                      vertical: 2,
+                    ),
+                    // Los dos chips se ven igual, entrante o saliente. La única
+                    // diferencia es un tinte suave cuando la reacción es tuya:
+                    // el anillo de color fuerte los hacía parecer controles
+                    // distintos según de qué lado colgaran.
+                    decoration: BoxDecoration(
+                      color: group.includesCurrentUser
+                          ? theme.colorScheme.primaryContainer
+                              .withValues(alpha: 0.55)
+                          : Colors.white,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: theme.colorScheme.outlineVariant,
+                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.08),
+                          blurRadius: 1,
+                          offset: const Offset(0, 1),
+                        ),
+                      ],
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(group.emoji, style: const TextStyle(fontSize: 13)),
+                        if (group.count > 1) ...[
+                          const SizedBox(width: 3),
+                          Text(
+                            '${group.count}',
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: theme.colorScheme.onSurfaceVariant,
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// Los seis de WhatsApp, en su orden. No es un selector de emoji completo a
+  /// propósito: la reacción rápida vive de ser un gesto, no de un buscador.
+  /// Valor que devuelve el «+». No es un emoji, así que no puede chocar con
+  /// uno elegido de verdad.
+  static const String _moreReactionsSentinel = '__mas_emojis__';
+
+  static const List<String> _quickReactionEmojis = [
+    '👍',
+    '❤️',
+    '😂',
+    '😮',
+    '😢',
+    '🙏',
+  ];
+
+  /// Abre la barra rápida COLGADA DE LA BURBUJA, como en WhatsApp: justo
+  /// encima del mensaje y alineada a su lado, no donde cayó el dedo.
+  ///
+  /// [context] tiene que ser el de la burbuja —por eso cada una va envuelta en
+  /// un `Builder`—: anclarla al contexto del constructor la pegaba al borde de
+  /// la fila completa, que es ancho, y la barra quedaba flotando lejos del
+  /// mensaje al que pertenece.
+  ///
+  /// Se usa `useRootNavigator` porque el menú, en el navegador anidado, se
+  /// acomoda dentro del overlay del área de contenido —que no incluye el rail
+  /// derecho— y terminaba dibujado sobre el dashboard.
+  Future<void> _showMessageActions(
+    BuildContext context,
+    Message msg, {
+    required bool isMe,
+    bool contextActions = false,
+  }) async {
+    final session = _composerSession;
+    if (!_canSelectMessage(msg)) return;
+    final overlay = Overlay.of(context, rootOverlay: true)
+        .context
+        .findRenderObject() as RenderBox?;
+    final bubble = context.findRenderObject() as RenderBox?;
+    if (overlay == null || bubble == null || !bubble.hasSize) return;
+
+    const emojiSlot = kMinInteractiveDimension;
+    final columns = ((overlay.size.width - 24) / emojiSlot).floor().clamp(1, 7);
+    final barHeight = ((7 / columns).ceil()) * emojiSlot;
+    const gap = 6.0;
+    // +1 por el botón «+», que abre el catálogo completo igual que WhatsApp:
+    // los seis rápidos son un atajo, no el límite de lo que se puede poner.
+    final barWidth = columns * emojiSlot;
+
+    final origin = bubble.localToGlobal(Offset.zero, ancestor: overlay);
+    final bubbleRect = origin & bubble.size;
+
+    // Alineada al lado del que sale la burbuja, igual que WhatsApp.
+    var left = isMe ? bubbleRect.right - barWidth : bubbleRect.left;
+    // Encima del mensaje; si no cabe arriba, se pasa abajo en vez de salirse.
+    var top = bubbleRect.top - barHeight - gap;
+    if (top < 0) top = bubbleRect.bottom + gap;
+
+    left = left.clamp(
+      0.0,
+      (overlay.size.width - barWidth).clamp(0.0, double.infinity),
+    );
+    top = top.clamp(
+      0.0,
+      (overlay.size.height - barHeight).clamp(0.0, double.infinity),
+    );
+
+    final mine = context.read<ChatProvider>().myReactionFor(msg.id);
+    final theme = Theme.of(context);
+
+    final selected = await showMenu<String>(
+      context: context,
+      useRootNavigator: true,
+      position: RelativeRect.fromLTRB(
+        left,
+        top,
+        overlay.size.width - left - barWidth,
+        overlay.size.height - top,
+      ),
+      menuPadding: EdgeInsets.zero,
+      constraints: BoxConstraints(minWidth: barWidth, maxWidth: barWidth),
+      items: [
+        if (contextActions && _canQuoteMessage(msg))
+          const PopupMenuItem<String>(value: 'reply', child: Text('Responder')),
+        if (contextActions)
+          const PopupMenuItem<String>(
+              value: 'select', child: Text('Seleccionar mensaje')),
+        if (contextActions && _canForwardMessage(msg))
+          const PopupMenuItem<String>(
+              value: 'forward', child: Text('Reenviar mensaje')),
+        if (contextActions && msg.content.isNotEmpty)
+          const PopupMenuItem<String>(
+              value: 'copy', child: Text('Copiar mensaje')),
+        _MessageReactionsMenuEntry(
+          height: barHeight,
+          child: Wrap(
+            alignment: WrapAlignment.center,
+            children: [
+              for (final emoji in _quickReactionEmojis)
+                Semantics(
+                    container: true,
+                    button: true,
+                    label: 'Reaccionar con $emoji',
+                    onTap: () =>
+                        Navigator.of(context, rootNavigator: true).pop(emoji),
+                    child: ExcludeSemantics(
+                        child: InkWell(
+                      borderRadius: BorderRadius.circular(15),
+                      onTap: () =>
+                          Navigator.of(context, rootNavigator: true).pop(emoji),
+                      child: Container(
+                        width: emojiSlot,
+                        height: emojiSlot,
+                        alignment: Alignment.center,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          // El que ya pusiste se ve elegido; tocarlo lo retira.
+                          color: emoji == mine
+                              ? theme.colorScheme.primaryContainer
+                              : Colors.transparent,
+                        ),
+                        child:
+                            Text(emoji, style: const TextStyle(fontSize: 17)),
+                      ),
+                    ))),
+              InkWell(
+                borderRadius: BorderRadius.circular(15),
+                onTap: () => Navigator.of(context, rootNavigator: true)
+                    .pop(_moreReactionsSentinel),
+                child: Container(
+                  width: emojiSlot,
+                  height: emojiSlot,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: theme.colorScheme.surfaceContainerHighest,
+                  ),
+                  child: Icon(
+                    Icons.add_rounded,
+                    size: 18,
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+
+    if (selected == null ||
+        !mounted ||
+        !_isCurrentComposer(msg.conversationId, session)) return;
+    if (selected == 'select') {
+      _toggleMessageSelection(msg);
+      return;
+    }
+    if (selected == 'forward') {
+      if (context.mounted) await _forwardMessages([msg], context);
+      return;
+    }
+    if (selected == 'reply') {
+      _selectReply(msg);
+      return;
+    }
+    if (selected == 'copy') {
+      await Clipboard.setData(ClipboardData(text: msg.content));
+      return;
+    }
+    if (selected == _moreReactionsSentinel) {
+      if (!mounted) return;
+      _openEmojiPickerForReaction(msg);
+      return;
+    }
+    await _toggleReaction(msg, selected);
+  }
+
+  Future<void> _toggleReaction(Message msg, String emoji) async {
+    final messenger = ScaffoldMessenger.maybeOf(context);
+    try {
+      await context.read<ChatProvider>().toggleMyReaction(
+            message: msg,
+            emoji: emoji,
+          );
+    } catch (error) {
+      debugPrint('No se pudo cambiar la reacción: $error');
+      messenger?.showSnackBar(
+        const SnackBar(content: Text('No se pudo cambiar la reacción')),
+      );
+    }
+  }
+
   Widget _buildOutgoingMessageFooter(
     Message msg,
     String timeStr,
@@ -8952,7 +11959,7 @@ class _ChatWindowState extends State<ChatWindow> {
         Text(
           timeStr,
           style: TextStyle(
-            color: Colors.grey[500],
+            color: Theme.of(context).colorScheme.onSurfaceVariant,
             fontSize: 10,
           ),
         ),
@@ -9029,10 +12036,15 @@ class _ChatWindowState extends State<ChatWindow> {
     // High contrast colors for both sender (green bubble) and receiver (white bubble)
     // On green bubble (isMe), we use Dark Green/Black text.
     // On white bubble (!isMe), we use Green/Black text.
-    final headerIconColor = isMe ? Colors.green[900] : Colors.green;
-    final headerTextColor = isMe ? Colors.green[900] : Colors.green[800];
-    final headerBgColor =
-        isMe ? Colors.black.withValues(alpha: 0.05) : Colors.green[50];
+    final headerIconColor = isMe
+        ? VinabikeThemeRoles.of(context).success.onContainer
+        : VinabikeThemeRoles.of(context).success.accent;
+    final headerTextColor = isMe
+        ? VinabikeThemeRoles.of(context).success.onContainer
+        : VinabikeThemeRoles.of(context).success.onContainer;
+    final headerBgColor = isMe
+        ? Colors.black.withValues(alpha: 0.05)
+        : VinabikeThemeRoles.of(context).success.container;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -9071,9 +12083,11 @@ class _ChatWindowState extends State<ChatWindow> {
             children: [
               Text(
                 msg.content.split('\n').first,
-                style: const TextStyle(
+                style: TextStyle(
                   fontWeight: FontWeight.w600,
-                  color: Colors.black87, // Always dark for readability
+                  color: Theme.of(context)
+                      .colorScheme
+                      .onSurface, // Always dark for readability
                 ),
               ),
               const SizedBox(height: 4),
@@ -9098,7 +12112,9 @@ class _ChatWindowState extends State<ChatWindow> {
             padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
             child: Row(
               children: [
-                Icon(Icons.history, size: 15, color: Colors.grey[600]),
+                Icon(Icons.history,
+                    size: 15,
+                    color: Theme.of(context).colorScheme.onSurfaceVariant),
                 const SizedBox(width: 7),
                 Expanded(
                   child: Text(
@@ -9106,7 +12122,7 @@ class _ChatWindowState extends State<ChatWindow> {
                     style: TextStyle(
                       fontSize: 11,
                       height: 1.3,
-                      color: Colors.grey[700],
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
                     ),
                   ),
                 ),
@@ -9120,7 +12136,9 @@ class _ChatWindowState extends State<ChatWindow> {
             child: Center(
               child: Text('✅ Confirmado',
                   style: TextStyle(
-                      color: Colors.green[800], // Always visible
+                      color: VinabikeThemeRoles.of(context)
+                          .success
+                          .onContainer, // Always visible
                       fontWeight: FontWeight.bold)),
             ),
           ),
@@ -9144,22 +12162,23 @@ class _ChatWindowState extends State<ChatWindow> {
     // Feature colors (icons/titles) should be dark versions of their accent.
 
     Color iconColor;
-    Color titleColor = Colors.black87;
-    Color headerBgColor =
-        isMe ? Colors.black.withValues(alpha: 0.05) : Colors.grey[50]!;
+    Color titleColor = Theme.of(context).colorScheme.onSurface;
+    Color headerBgColor = isMe
+        ? Colors.black.withValues(alpha: 0.05)
+        : Theme.of(context).colorScheme.surfaceContainerLow!;
 
     switch (actionType) {
       case 'approve_quote':
         icon = Icons.description;
         if (status == 'accepted') {
           title = 'Presupuesto Aprobado';
-          accentColor = Colors.green;
+          accentColor = VinabikeThemeRoles.of(context).success.accent;
         } else if (status == 'declined') {
           title = 'Presupuesto Rechazado';
-          accentColor = Colors.red;
+          accentColor = VinabikeThemeRoles.of(context).danger.accent;
         } else {
           title = 'Presupuesto Enviado';
-          accentColor = Colors.orange;
+          accentColor = VinabikeThemeRoles.of(context).warning.accent;
         }
         // Use darker shade for icon to ensure visibility on light green
         iconColor = isMe ? Colors.black54 : accentColor;
@@ -9167,9 +12186,10 @@ class _ChatWindowState extends State<ChatWindow> {
       case 'pay_now':
         icon = Icons.payment;
         title = 'Solicitud de Pago';
-        accentColor = Colors.green;
-        iconColor =
-            isMe ? Colors.green[900]! : accentColor; // Visible green on green
+        accentColor = VinabikeThemeRoles.of(context).success.accent;
+        iconColor = isMe
+            ? VinabikeThemeRoles.of(context).success.onContainer!
+            : accentColor; // Visible green on green
         break;
       case 'confirm_delivery':
         icon = Icons.local_shipping;
@@ -9182,7 +12202,7 @@ class _ChatWindowState extends State<ChatWindow> {
         icon = Icons.help_outline;
         title = 'Acción Requerida';
         accentColor = Colors.grey;
-        iconColor = Colors.grey[700]!;
+        iconColor = Theme.of(context).colorScheme.onSurfaceVariant!;
     }
 
     // Build status badge
@@ -9191,19 +12211,28 @@ class _ChatWindowState extends State<ChatWindow> {
       statusBadge = Container(
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
         decoration: BoxDecoration(
-          color: (isMe ? Colors.black : Colors.green).withValues(alpha: 0.05),
+          color: (isMe
+                  ? Colors.black
+                  : VinabikeThemeRoles.of(context).success.accent)
+              .withValues(alpha: 0.05),
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: Colors.green.withValues(alpha: 0.5)),
+          border: Border.all(
+              color: VinabikeThemeRoles.of(context)
+                  .success
+                  .accent
+                  .withValues(alpha: 0.5)),
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.check_circle, size: 14, color: Colors.green[800]),
+            Icon(Icons.check_circle,
+                size: 14,
+                color: VinabikeThemeRoles.of(context).success.onContainer),
             const SizedBox(width: 4),
             Text('Aceptado',
                 style: TextStyle(
                     fontSize: 12,
-                    color: Colors.green[900],
+                    color: VinabikeThemeRoles.of(context).success.onContainer,
                     fontWeight: FontWeight.bold)),
           ],
         ),
@@ -9212,9 +12241,16 @@ class _ChatWindowState extends State<ChatWindow> {
       statusBadge = Container(
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
         decoration: BoxDecoration(
-          color: (isMe ? Colors.black : Colors.red).withValues(alpha: 0.05),
+          color: (isMe
+                  ? Colors.black
+                  : VinabikeThemeRoles.of(context).danger.accent)
+              .withValues(alpha: 0.05),
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: Colors.red.withValues(alpha: 0.5)),
+          border: Border.all(
+              color: VinabikeThemeRoles.of(context)
+                  .danger
+                  .accent
+                  .withValues(alpha: 0.5)),
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
@@ -9264,8 +12300,10 @@ class _ChatWindowState extends State<ChatWindow> {
           padding: const EdgeInsets.all(12),
           child: Text(
             msg.content,
-            style: const TextStyle(
-                color: Colors.black87, fontSize: 13, height: 1.4),
+            style: TextStyle(
+                color: Theme.of(context).colorScheme.onSurface,
+                fontSize: 13,
+                height: 1.4),
           ),
         ),
         if (responseNote != null && responseNote.isNotEmpty)
@@ -9279,8 +12317,8 @@ class _ChatWindowState extends State<ChatWindow> {
                 Expanded(
                   child: Text(
                     responseNote,
-                    style: const TextStyle(
-                      color: Colors.black87,
+                    style: TextStyle(
+                      color: Theme.of(context).colorScheme.onSurface,
                       fontSize: 12,
                       height: 1.35,
                     ),
@@ -9314,4 +12352,28 @@ class _ChatWindowState extends State<ChatWindow> {
       ],
     );
   }
+}
+
+/// A row of independent actions must not inherit PopupMenuItem's
+/// MergeSemantics, which turns every emoji into one inaccessible action.
+class _MessageReactionsMenuEntry extends PopupMenuEntry<String> {
+  const _MessageReactionsMenuEntry({required this.height, required this.child});
+
+  @override
+  final double height;
+  final Widget child;
+
+  @override
+  bool represents(String? value) => false;
+
+  @override
+  State<_MessageReactionsMenuEntry> createState() =>
+      _MessageReactionsMenuEntryState();
+}
+
+class _MessageReactionsMenuEntryState
+    extends State<_MessageReactionsMenuEntry> {
+  @override
+  Widget build(BuildContext context) =>
+      SizedBox(height: widget.height, child: widget.child);
 }

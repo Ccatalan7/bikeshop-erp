@@ -19,9 +19,12 @@ bool hasMatchingServerMessage({
       _messageIdentityValue(optimistic.metadata['client_message_id']);
   final externalMessageId =
       _messageIdentityValue(optimistic.metadata['external_message_id']);
+  final attachmentId =
+      _messageIdentityValue(optimistic.metadata['attachment_id']);
   final hasDurableIdentity = serverMessageId != null ||
       clientMessageId != null ||
-      externalMessageId != null;
+      externalMessageId != null ||
+      attachmentId != null;
 
   for (final message in serverMessages) {
     if (message.id == optimistic.id) return true;
@@ -37,6 +40,14 @@ bool hasMatchingServerMessage({
     final messageExternalId =
         _messageIdentityValue(message.metadata['external_message_id']);
     if (externalMessageId != null && messageExternalId == externalMessageId) {
+      return true;
+    }
+
+    // An attachment published through the registry gets its message row from
+    // the database, which knows the attachment id but not the client id.
+    final messageAttachmentId =
+        _messageIdentityValue(message.metadata['attachment_id']);
+    if (attachmentId != null && messageAttachmentId == attachmentId) {
       return true;
     }
 

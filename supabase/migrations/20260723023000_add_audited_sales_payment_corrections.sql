@@ -1,4 +1,7 @@
--- Deployment status: NOT DEPLOYED.
+-- Deployment status: SUPERSEDED, never deploy this file. Production received the
+-- same objects through 20260910123000_install_audited_sales_payment_corrections
+-- (2026-09-10) with the 2026-08-19 body; applying this file now would regress
+-- validate_sales_payment_integrity() to the invoice-pinned tax treatment.
 -- Adds the payment-owned, replay-safe correction command used by the sales
 -- payment detail form. The payment continues to settle accounts receivable
 -- only; revenue, IVA and inventory remain owned by the invoice/source flow.

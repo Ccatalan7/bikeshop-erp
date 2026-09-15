@@ -1,0 +1,166 @@
+{
+  "schema_version": 1,
+  "product_id": "3851271a-8631-4942-a7dc-776853ae0408",
+  "researcher": "codex",
+  "status": "reviewed",
+  "based_on": {
+    "spec_revision": 0,
+    "updated_at": "2026-05-22T22:33:41.227011+00:00",
+    "template_id": "9c93c819-cd05-4615-9e57-091af95cf1f0",
+    "contract_version": 24,
+    "snapshot_sha256": "fc17b21b7192ec2ad11079d25bc6335bc300de98e2d07598c8bc33d90365daf4"
+  },
+  "identity": [
+    {
+      "field": "model",
+      "current": null,
+      "proposed": "CL573R",
+      "evidence": [
+        "product-name",
+        "kmc-model"
+      ],
+      "reason": "El nombre identifica explícitamente CL573R; KMC documenta ese mismo modelo. No se deduce desde las velocidades."
+    }
+  ],
+  "reference": {
+    "id": "kmc-cl573r-global-20260906",
+    "binding_level": "model",
+    "evidence": [
+      "product-name",
+      "kmc-model"
+    ],
+    "reason": "Coincidencia del código de modelo; presentación, MPN y cantidad de envase permanecen sin determinar."
+  },
+  "facts": [
+    {
+      "key": "chain_speeds",
+      "current": {
+        "value": null,
+        "source": null
+      },
+      "proposed": [
+        "6",
+        "7",
+        "8"
+      ],
+      "unit": null,
+      "method": "Declaración OEM; el servidor deriva este valor de la referencia",
+      "origin": "reference",
+      "evidence": [
+        "kmc-model"
+      ],
+      "scope": "Sólo el modelo CL573R y el alcance declarado por esta referencia",
+      "reason": "Completar desde la edición documentada; no enviar como observación manual."
+    },
+    {
+      "key": "chain_link_reusable",
+      "current": {
+        "value": null,
+        "source": null
+      },
+      "proposed": true,
+      "unit": null,
+      "method": "Declaración OEM; el servidor deriva este valor de la referencia",
+      "origin": "reference",
+      "evidence": [
+        "kmc-model"
+      ],
+      "scope": "Sólo el modelo CL573R y el alcance declarado por esta referencia",
+      "reason": "Completar desde la edición documentada; no enviar como observación manual."
+    },
+    {
+      "key": "chain_connector_type",
+      "current": {
+        "value": null,
+        "source": null
+      },
+      "proposed": "Missing link",
+      "unit": null,
+      "method": "Declaración OEM; el servidor deriva este valor de la referencia",
+      "origin": "reference",
+      "evidence": [
+        "kmc-model"
+      ],
+      "scope": "Sólo el modelo CL573R y el alcance declarado por esta referencia",
+      "reason": "Completar desde la edición documentada; no enviar como observación manual."
+    },
+    {
+      "key": "chain_connector_target",
+      "current": {
+        "value": null,
+        "source": null
+      },
+      "proposed": "KMC X8, KMC Z8.3, KMC Z7, KMC Z6",
+      "unit": null,
+      "method": "Declaración OEM; el servidor deriva este valor de la referencia",
+      "origin": "reference",
+      "evidence": [
+        "kmc-model"
+      ],
+      "scope": "Sólo el modelo CL573R y el alcance declarado por esta referencia",
+      "reason": "Completar desde la edición documentada; no enviar como observación manual."
+    },
+    {
+      "key": "chain_connector_directional",
+      "current": {
+        "value": null,
+        "source": null
+      },
+      "proposed": false,
+      "unit": null,
+      "method": "Declaración OEM; el servidor deriva este valor de la referencia",
+      "origin": "reference",
+      "evidence": [
+        "kmc-model"
+      ],
+      "scope": "Sólo el modelo CL573R y el alcance declarado por esta referencia",
+      "reason": "Completar desde la edición documentada; no enviar como observación manual."
+    },
+    {
+      "key": "spec_evidence_source",
+      "current": {
+        "value": null,
+        "source": null
+      },
+      "proposed": "https://www.kmcchain.com/en/product/connector-missing-link-cl573r-8s-7s-6s-speed",
+      "unit": null,
+      "method": "Declaración OEM; el servidor deriva este valor de la referencia",
+      "origin": "reference",
+      "evidence": [
+        "kmc-model"
+      ],
+      "scope": "Sólo el modelo CL573R y el alcance declarado por esta referencia",
+      "reason": "La vinculación deriva también la URL; debe figurar en la simulación y en la comparación completa posterior."
+    }
+  ],
+  "evidence": [
+    {
+      "id": "product-name",
+      "kind": "name_quote",
+      "source": "ERP product 3851271a-8631-4942-a7dc-776853ae0408",
+      "locator": "products.name",
+      "consulted_on": "2026-09-06",
+      "scope": "Identidad comercial existente; no confirma presentación física",
+      "finding": "Conexión De Cadena Kmc Cl573r 6/7/8 Plata 2p",
+      "sha256": null
+    },
+    {
+      "id": "kmc-model",
+      "kind": "oem_page",
+      "source": "https://www.kmcchain.com/en/product/connector-missing-link-cl573r-8s-7s-6s-speed",
+      "locator": "Product details / Compatibility; archivo: docs/development/product-specs-research-2026-09-05/research/research-001/evidence/kmc-cl573r-20260906.md",
+      "consulted_on": "2026-09-06",
+      "scope": "KMC CL573R global, datos del modelo; no SKU de envase",
+      "finding": "CL573R: eslabón rápido reutilizable, sin sentido de montaje, clase 6/7/8; cadenas KMC X8/Z8.3/Z7/Z6. La página muestra Gold; el producto del ERP dice Plata. La propuesta sólo toma datos del modelo y deja color y presentación sin determinar.",
+      "sha256": "0de6d5cb01e3c7f37239f3fa1bfb9e5da15e4e80b5ce01a871beb4a9d1b59ac2"
+    }
+  ],
+  "conflicts": [],
+  "review": {
+    "by": "claude",
+    "verdict": "accepted",
+    "date": "2026-09-06",
+    "reviewed_proposal_sha256": "fedb856da7350021c744752416daaefdbc6496b1e0d7680736b4287b4ebaa9f3",
+    "notes": "Aceptación condicional del veredicto independiente sobre CL573R, al final de catalog-fill-claude-plan-2026-09-06.md. Sólo se añadieron la URL derivada y el archivo/hash de evidencia con descripción corregida. El hash corresponde al JSON canónico sin el bloque review. No aplicado; requiere el aplicador y canal autenticado documentados."
+  }
+}

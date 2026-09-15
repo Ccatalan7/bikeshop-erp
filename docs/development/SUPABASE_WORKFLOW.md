@@ -27,12 +27,12 @@ which must not be persisted in `.env` or shell startup files.
 | Authorized hosted SQL write | `scripts/db/query.sh ... --write` with the exact write confirmation |
 | Local pgTAP | `scripts/db/test.sh` / `just db-test` |
 | Canonical bootstrap gate | `just db-gate` |
-| Production-derived compatibility tests | `scripts/db/production_validation.sh` |
-| Trace, fingerprint, drift, health | Guarded recipes under `scripts/db/` |
+| Production compatibility | Guarded direct read-only queries, then authorized deploy plus live read-back |
+| Trace, fingerprint, drift, health, CPU profile | Guarded recipes under `scripts/db/` and `just db-cpu` |
 | Project status, secrets, functions, backups | `scripts/supabase_cli.sh` with explicit project ref |
 | Verified migration-history registration | `scripts/supabase_cli.sh migration repair --linked` after exact read-back |
 | Authenticated REST/RLS behavior | Publishable key and a synthetic authenticated user; privileged secret key only when the test explicitly requires admin behavior |
-| Production schema capture | `scripts/db/production_validation.sh prepare` / explicit `refresh` |
+| Production schema capture | Deprecated; do not use as compatibility evidence |
 
 Do not use raw `supabase db query`, `supabase db push`, ad hoc remote `psql`, or
 the Supabase SQL Editor as an agent SQL path. The database wrapper supplies the
@@ -133,26 +133,47 @@ just db-test stock_ledger_continuity sales_credit_note_kernel
 just db-query local "select count(*) from stock_movements"
 ```
 
-`db-start` reuses the running local stack when the recorded canonical-schema
-hash is unchanged. It rebuilds only when the schema inputs changed, required
+`db-start` reuses the running local stack when the recorded historical-fixture
+hash is unchanged. It rebuilds only when the fixture inputs changed, required
 sentinel objects are missing, no verified hash exists, or `--reset` was
 requested.
 
 `db-test` calls `ensure_local.sh`, then runs only the selected pgTAP files.
 Every ordinary pgTAP rerun reuses the already prepared local database. It does
-not copy production and does not rebuild from scratch unless the canonical
-schema inputs actually changed.
+not copy production and does not rebuild from scratch unless the local fixture
+inputs actually changed.
 
-Run the full bootstrap gate only when `core_schema.sql` or an included schema
-input changed, or at a deliberate checkpoint:
+**Trampa del seed de tenant en fixtures pgTAP (2026-08-26).** El seed de
+inicialización que corre al insertar una fila en `tenants` deja
+`request.jwt.claim.sub` apuntando **al id del tenant** y no lo restaura. Desde
+ese punto `auth.uid()` devuelve el tenant, y cualquier trigger que capture
+actor (`set_mechanic_job_created_by`, guards de identidad) escribe ese uuid
+como si fuera un usuario: el síntoma es un
+`mechanic_jobs_created_by_fkey violation` en un INSERT de fixture que parecía
+correcto, y costó una ronda completa encontrarlo. Regla: **después de insertar
+tenants y antes de cualquier otra fila**, limpia el contexto:
+
+```sql
+select set_config('request.jwt.claims', '{}', true);
+select set_config('request.jwt.claim.sub', '', true);
+```
+
+Varias suites antiguas (`mechanic_job_archive`,
+`ai_assistant_filtered_operational_reads`, entre otras) no lo hacen y hoy
+abortan en local por esta causa, no por el cambio que estés probando: verifica
+la preexistencia con teardown/reaplicación antes de atribuirte la falla.
+
+Run the full legacy-fixture gate only when `core_schema.sql` or an included
+fixture input changed, or at a deliberate checkpoint:
 
 ```bash
 just db-gate
 ```
 
 This gate drops and rebuilds the disposable local `public` schema, applies the
-canonical snapshot, and runs all pgTAP files. It proves the bootstrap mirror,
-not compatibility with production.
+incomplete historical fixture, and runs all pgTAP files. It proves only that
+the fixture remains internally usable—not completeness or compatibility with
+production.
 
 ## Guarded SQL reads
 
@@ -226,108 +247,146 @@ just db-trace production tenant 00000000-0000-4000-8000-000000000000
 just db-fingerprint production
 just db-drift local production
 just db-health production
+just db-cpu production
 ```
 
 Full manifests and verbose output stay under ignored `.tmp/db/`.
 
+### A Supabase "high CPU usage" email is answered with measurements, not by reading code
+
+2026-09-15. The project is small and still received the >80% CPU alert every
+Saturday night for three weeks. Reading the code produced five plausible
+suspects (per-minute pg_cron workers, the in-database backup, storefront and
+ERP polling, RLS helpers evaluated per row, Realtime). None was the cause. The
+measurement found it in minutes:
+
+- **The cause was one client retrying a rejected RPC in a loop.** A trigger
+  rejected a stale `record_supplier_need_portal_search_v1` receipt with
+  errcode `40001` (serialization_failure). To every client that code means
+  «retry the same transaction», so the ERP retried it ~900 times per second
+  for 16 days: 1.14 billion aborted transactions, PostgREST's whole pool busy,
+  `tenants` and `user_profiles` sequentially scanned 1.16 billion times by
+  `user_tenant_id()` inside each attempt. Changing the errcode to `23514`
+  (class 23, «rejected, do not retry») stopped it within the minute.
+  `supabase/migrations/20260915190000_reject_stale_need_portal_search_definitively.sql`
+  is the exact deployed body.
+  Stamped as APPLIED on 2026-09-15 20:00 UTC through
+  `scripts/db/deploy_migration.sh` (idempotent re-apply, read-back file
+  `supabase/manual_checks/verification/20260915190000_reject_stale_need_portal_search_definitively.sql`,
+  then `migration repair`); the MCP deploy alone leaves no stamp. The same
+  day the ERP client stopped treating any class 22/23 or `P0001` answer from
+  `record_supplier_need_portal_search_v1` as transport: it surfaces
+  `SupplierNeedSearchRejected`, drops the reading, reloads the need and never
+  enqueues a retry chain (`lib/shared/services/supplier_availability_service.dart`,
+  `intelligent_purchasing_workspace_page.dart`).
+- **The debug build was not the runaway client.** The canonical macOS debug
+  session (`screen -x payroll`, 12 days of `run.log`, 33 MB) contains zero
+  `40001` or «recibo falló» lines, and its bounded receipt retry waits 5–120 s
+  between five attempts. A hot restart was done anyway on 2026-09-15; the
+  storm had already stopped with the errcode change. The ~900/s caller was a
+  Flutter build on the owner's network with a bearer issued 2026-08-30: look
+  at an installed Release app or another device before blaming this session.
+- **A failing-request storm is invisible in `pg_stat_statements`.** It only
+  records statements that complete, so §2–§4 of the profile showed Realtime
+  as 66% of tracked time while the real burner was untracked. The tells are
+  `pg_stat_database.xact_rollback` (§12d), the ERROR rate in `postgres_logs`,
+  and PostgREST backends all `active` or `idle in transaction (aborted)` on
+  the same statement (§5).
+- **Identify a PostgREST caller from inside the database.** Nothing in the
+  edge logs matched, so the trigger's exception message temporarily included
+  `current_setting('request.headers', true)`: `x-client-info` named the
+  Flutter app, `x-forwarded-for` the owner's own network, and the bearer's
+  `iat` dated the runaway session to 2026-08-30. One `create or replace`,
+  read the next log lines, put the original back.
+- **Supabase re-sends the CPU alert weekly while the condition persists.**
+  Three emails at the same hour on consecutive weekends were the same
+  continuous storm, not a weekly job.
+- **`40001` is an instruction, not a label.** Raise it only when re-running
+  the identical transaction can succeed. A receipt stamped with a superseded
+  version can never be accepted; that is class 23 or `P0001`, with `detail`
+  and `hint` telling the client what to reload.
+
+The measured secondary loads, in order, once the storm was gone: Realtime
+`list_changes` (~11% of one core continuously, 21 published tables, ~19 live
+subscriptions), ~300 RLS policies comparing `tenant_id = public.user_tenant_id()`
+without `(select …)`, the ERP shell's 20 s / 30 s pollers, the storefront's
+30 s / 60 s freshness pulses per open tab, and the per-minute pg_cron workers
+with `cron.job_run_details` never purged (215k rows). They are backlog, not
+the alert.
+
+`supabase/manual_checks/diagnostics/cpu_pressure_profile.sql` (`just db-cpu`)
+measures all of it: execution time by role and by statement, calls per hour,
+live activity, rollbacks, replication-slot lag, seq-scan pressure, bloat, the
+backup schedule, the worker runtimes, pg_cron run history, pg_net responses
+and live Realtime subscriptions. Read §12d and §5 first; then §2/§3. Trailing
+sections read the `cron`, `net` and `realtime` schemas and may stop on a
+permission error without invalidating the earlier ones.
+
 ## Authorized production writes
 
 Production writes must already be in task scope and satisfy the policy
-contract. Preview the live state read-only, then execute the smallest
-idempotent migration:
+contract. A **standalone migration** means one immutable, uniquely versioned
+`supabase/migrations/YYYYMMDDHHMMSS_slug.sql` file containing the complete
+forward change. It never means a fragment copied from `core_schema.sql`, an ad
+hoc SQL Editor paste, or an unversioned file under `supabase/sql/`.
+
+Encode exact definition and business-invariant checks in one or more read-only
+SQL files that fail at SQL level when the expected state is absent. Then use the
+single apply → verify → stamp command:
 
 ```bash
 VINABIKE_DB_WRITE_CONFIRM=production \
-  bash scripts/db/query.sh production \
-  --write \
-  --file supabase/migrations/YYYYMMDDHHMMSS_change_name.sql
+  scripts/db/deploy_migration.sh \
+  --migration supabase/migrations/YYYYMMDDHHMMSS_change_name.sql \
+  --verify supabase/manual_checks/verification/YYYYMMDDHHMMSS_change_name.sql
 ```
 
-Immediately run guarded read-back and business-invariant queries. Only after
-the deployed definition passes verification, register the exact version as
-applied:
+That wrapper refuses non-migration paths and duplicate/legacy version formats,
+applies only the standalone file through `query.sh`, runs every verification
+read-only, registers the exact version through the guarded CLI, reads the stamp
+back, and writes a secondary ignored receipt under
+`.tmp/db/migration-receipts/`. If deployment succeeds but verification fails,
+the version intentionally remains unregistered until the live state is
+diagnosed and this same idempotent path completes.
+
+At any time, ask production—not a file comment—whether one or more candidates
+are stamped:
 
 ```bash
-VINABIKE_DB_WRITE_CONFIRM=production \
-  scripts/supabase_cli.sh migration repair \
-  --linked \
-  --status applied \
-  YYYYMMDDHHMMSS
+scripts/db/migration_status.sh \
+  supabase/migrations/YYYYMMDDHHMMSS_change_name.sql
 ```
 
-Read `supabase_migrations.schema_migrations` back through
-`scripts/db/query.sh` and confirm the one exact version. Migration repair is a
-history-metadata operation, not a schema deployment path. Never run the entire
-`core_schema.sql` against production.
+`APPLIED` means the exact version exists in
+`supabase_migrations.schema_migrations`; `NOT_APPLIED` means it does not. A
+successful SQL exit without that row is an incomplete deployment, not a
+finished migration. Migration repair remains a history-metadata operation, not
+a schema deployment path.
 
-Every schema change needs both:
-
-1. a unique, idempotent forward migration under `supabase/migrations/`; and
-2. the same final objects/logic mirrored in idempotent
-   `supabase/sql/core_schema.sql`.
-
-The migration file must state its deployment status and verification. A local
-pass is not a production deployment.
+Every schema change needs the unique standalone forward migration. Do not edit
+an applied migration. `core_schema.sql` is merely an incomplete historical and
+best-effort local reference; mirroring there is optional and never a deployment
+gate. The migration file may describe intended verification, but its production
+status comes only from remote migration history. A local pass is not a
+production deployment.
 
 Historical migrations are not a replayable baseline, so CLI migrations are
 intentionally disabled in `supabase/config.toml`. Until a clean forward
 migration stream is enabled, deploy the reviewed standalone file through the
-guarded wrapper and repair/register migration history only after exact live
-read-back. `supabase db push` is not the deployment path.
+guarded wrapper above. `supabase db push`, `migration up`, SQL Editor and
+`core_schema.sql` are not deployment paths.
 
-## Production-derived validation session
+## Production compatibility: no schema-copy substitute
 
-Use this layer for SQL/schema behavior intended for production. Follow the
-reuse and redump rules in `docs/runbooks/STAGING_SUPABASE.md`.
-
-Prepare once for a task:
-
-```bash
-bash scripts/db/production_validation.sh prepare \
-  --task expense-notifications \
-  --migration supabase/migrations/YYYYMMDDHHMMSS_change_name.sql
-```
-
-`prepare` performs one cheap live read-only identity check using the production
-catalog fingerprint, migration head, and PostgreSQL version. It reuses the
-matching immutable local template and downloads a new schema-only capture only
-on an exact cache miss. Captures exclude production rows and validate the
-archive contents before use.
-
-Run and rerun focused pgTAP without a production/network call:
-
-```bash
-bash scripts/db/production_validation.sh test \
-  --task expense-notifications \
-  --migration supabase/migrations/YYYYMMDDHHMMSS_change_name.sql \
-  --test expense_notifications
-```
-
-`test` requires a prior `prepare` or `reuse`. It reuses the task scratch
-database. If the local candidate file, hash, or application order changes after
-it was applied to that scratch, the wrapper rebuilds only the scratch database
-from the cached immutable local template; it does not redownload production.
-
-Use the last cached baseline explicitly when offline:
-
-```bash
-bash scripts/db/production_validation.sh reuse \
-  --task expense-notifications \
-  --migration supabase/migrations/YYYYMMDDHHMMSS_change_name.sql
-```
-
-Inspect cache/task state or clean only the task scratch:
-
-```bash
-bash scripts/db/production_validation.sh status --task expense-notifications
-bash scripts/db/production_validation.sh cleanup --task expense-notifications
-```
-
-Evidence and caches live under ignored
-`.tmp/db/production-validation/`. `cleanup --task` retains immutable templates
-and schema captures for later tasks. Use `refresh --task ...` only when policy
-requires a forced new capture. Do not use `cleanup --all --include-templates`
-as routine cleanup.
+Do not run `scripts/db/production_validation.sh` as an implementation or
+release gate. It is retained only so old evidence remains interpretable. Run
+focused pgTAP against the disposable local database, then inspect the live
+production target directly with bounded read-only queries through
+`scripts/db/query.sh production`. Confirm migration history, exact signatures,
+columns, dependencies, effective ACLs, reference catalogs, materialized state
+and relevant invariants. A property introduced by an undeployed migration stays
+explicitly unverified until authorized deploy plus executable live read-back;
+never replace that gap with a schema-only restore.
 
 ## Supabase CLI: wrapped control plane/metadata only
 
@@ -347,6 +406,14 @@ Use `--no-verify-jwt` only when the reviewed function intentionally implements
 its own authentication, such as a verified webhook. After a function
 deployment, invoke the affected path and verify logs/behavior.
 
+**2026-08-14 — local Edge bundler fallback.** If a reviewed function passes
+`deno check` but the wrapped deploy fails before upload with
+`failed to open eszip ... output.eszip`, repeat the same wrapped command with
+`--use-api`. That flag moves bundling to Supabase's API and avoids the broken
+local temporary eszip path; it does not relax project identity or function
+authentication. Read back the resulting active version and exercise the real
+endpoint before treating the deployment as complete.
+
 For hosted outages, first compare the wrapped project-list result, project DNS,
 and the Auth health endpoint. A healthy hosted project plus a failed local
 status is a local Docker issue. Backup and recovery operations follow
@@ -364,6 +431,22 @@ consumer. Use that consumer's own approved secret (the local-maintenance key
 for local agent work), load it without printing it, limit the request to the
 required columns/tenant, then unset it.
 
+**2026-08-27 — legacy writes cannot own new evidence or race a decision.**
+When an additive migration must keep an older client writing a shared table,
+every new actor/timestamp/version column remains server-owned: the row guard
+normalizes it on `INSERT` and preserves or derives it on `UPDATE`, even when
+the legacy route itself stays authorized. RLS saying who may update a row does
+not stop that actor from spoofing newly added audit columns. Likewise, a
+read-then-write conflict check is not a concurrency guarantee. If two commands
+decide ownership of the same business identities, take deterministic
+transaction-scoped locks for those identities before checking and writing.
+Every participating command must acquire shared business-identity locks and
+row locks in the same global order; sorting only the identities inside one
+helper does not prevent a cycle if another path already holds its task row.
+The minimum regression must exercise a forged legacy write against a row that
+provably exists and verify the lock is reached before task-row locking on every
+command path that can make the decision.
+
 ## Autonomous finish checklist
 
 Agents complete these steps themselves when they are in scope and authorized:
@@ -372,7 +455,6 @@ Agents complete these steps themselves when they are in scope and authorized:
 - credential-presence checks;
 - local startup and affected tests;
 - guarded production inspection;
-- production-derived validation without repeated redumps;
 - guarded deployment and migration registration;
 - exact live read-back, health checks, and application smoke; and
 - cleanup of disposable databases/processes while retaining ignored evidence.
@@ -381,3 +463,12 @@ Ask for human intervention only for missing provider access, billing/MFA/legal
 UI, ambiguous target or authorization, destructive scope expansion, or a
 failed gate requiring a business decision. Do not hand the user routine SQL,
 tests, or deployment commands to run on the agent's behalf.
+
+
+**2026-09-06 — serializar wrappers que aseguran el stack local.** Dos procesos
+`query.sh local`/`db-test` simultáneos pueden competir por
+`.tmp/db/ensure-local.lock/owner`: se observó `No such file or directory` al
+crear owner tras liberar el lock desde otro proceso. Hasta corregir el owner
+del lock, ejecutar esos wrappers de forma secuencial; las pruebas Flutter y
+lecturas remotas independientes pueden correr a la vez. No confundir ese fallo
+de arranque con un error del SQL. Costó una consulta repetida, sin mutaciones.

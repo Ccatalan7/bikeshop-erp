@@ -135,7 +135,7 @@ void main() {
     expect(prepareHelper, contains('chmod 600'));
     expect(
       prepareHelper,
-      contains('VINABIKE_ERP_RELEASE_BRANCH:-smartpegas1.0'),
+      contains('VINABIKE_ERP_RELEASE_BRANCH:-main'),
     );
     expect(
       prepareHelper,
@@ -169,18 +169,15 @@ void main() {
     expect(
       prepareHelper,
       contains(
-        'select(\n'
-        '        .schema_version == 1\n'
-        '        and .from_commit == \$from',
+        'Gemini Flash will generate the shared release notes inside protected CI.',
       ),
     );
-    expect(prepareHelper, contains('local -a release_notes_args=('));
+    expect(prepareHelper, contains("release_notes_candidate_b64=''"));
+    expect(prepareHelper, contains("release_notes_candidate_sha256=''"));
+    expect(prepareHelper, isNot(contains('--notes-candidate')));
+    expect(prepareHelper, isNot(contains('generate_codex_release_notes.mjs')));
     expect(
-      prepareHelper,
-      contains('release_notes_args+=(--candidate-file "\$NOTES_CANDIDATE")'),
-    );
-    expect(prepareHelper, contains('"\${release_notes_args[@]}"'));
-    expect(prepareHelper, isNot(contains('"\${candidate_flags[@]}"')));
+        prepareHelper.toLowerCase(), isNot(contains('require_command codex')));
     expect(prepareHelper, isNot(contains('SIGNING_PASSWORD')));
     expect(prepareHelper, isNot(contains('SUPABASE_RELEASE_SECRET')));
   });
@@ -276,6 +273,12 @@ void main() {
       androidWorkflowPublisher,
       contains('state.releaseNotesFromCommit'),
     );
+    expect(
+      androidWorkflow,
+      contains('if (.release_notes | type) == "object" then'),
+      reason: 'a legacy plain-text manifest must fail closed cleanly instead '
+          'of crashing jq while resolving a same-commit retry',
+    );
     for (final workflow in [macosWorkflow, androidWorkflow]) {
       expect(workflow, contains('actions: read'));
       expect(workflow, contains('integrity_run_id:'));
@@ -285,6 +288,34 @@ void main() {
       expect(workflow, contains("inputs.integrity_run_id != ''"));
       expect(workflow, contains('always() && !cancelled()'));
     }
+  });
+
+  test('macOS accepts only a shared baseline that covers its own range', () {
+    final publishJob = macosWorkflow.indexOf('\n  publish:');
+    final androidRoute = macosWorkflow.indexOf('\n  android:', publishJob);
+    final protectedPublish = macosWorkflow.substring(publishJob, androidRoute);
+
+    expect(protectedPublish, contains('authoritative_base_commit'));
+    expect(
+      protectedPublish,
+      contains(
+        'git merge-base --is-ancestor \\\n'
+        '                "\$RELEASE_NOTES_FROM_COMMIT" \\\n'
+        '                "\$authoritative_base_commit"',
+      ),
+    );
+    expect(
+      protectedPublish,
+      contains('base_commit="\$RELEASE_NOTES_FROM_COMMIT"'),
+    );
+    expect(
+      protectedPublish,
+      isNot(
+        contains(
+          '"\$RELEASE_NOTES_FROM_COMMIT" != "\$base_commit"',
+        ),
+      ),
+    );
   });
 
   test('standalone platform tasks remain selectable', () {

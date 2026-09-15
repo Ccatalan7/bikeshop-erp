@@ -1,0 +1,1245 @@
+{
+  "schema_version": 1,
+  "reviewed_on": "2026-09-07",
+  "status": "root_research_adjudication_only",
+  "source_review_sha256": "852577ba7176e438be9a145be4327d70d936e464ca613a6571eb46d15a9b155a",
+  "local_catalogue_sha256": "e709158d0ac49603ab01dfde19326d1f9f2fd0d0ce50723cb5d0076390226d9d",
+  "production_preimage_captured_at": "2026-09-07 14:05:53 UTC",
+  "evidence_scope": "Independent review plus Root inspection of AP02, AP06, AP07, AP08, AP09 and AP15 images; source attribution retained.",
+  "counts": {
+    "preserve_assignment": 7,
+    "delta_adjudicated_pending_global_gates": 10,
+    "delta_waiting_for_content_contract": 1,
+    "identity_research_pending": 2
+  },
+  "adjudications": [
+    {
+      "review_id": "AP01",
+      "product_id": "0053e6df-a4f5-4b2e-bfa0-d29b8b9e54c0",
+      "sku": "6938112671129",
+      "decision": "preserve_assignment",
+      "reason": "Foto de cámara y denominación inequívoca de cámara. Las dos descripciones de ancho en el mismo nombre representan una variante sin resolver, no dos rangos confirmados.",
+      "local_gate": null,
+      "review_preimage_sha256": "40e51fd1790c1988103ce1fb83882ad4c364e75879408f94d316cdd7424588a3",
+      "before_binding": {
+        "product_id": "0053e6df-a4f5-4b2e-bfa0-d29b8b9e54c0",
+        "category_id": "f8f5bf86-0ec9-47e7-9c8c-d05a28ba36a4",
+        "template_id": "e1adfef6-6dba-467d-838b-159dc65d8a7b",
+        "template_key": "tube",
+        "binding_source": "category",
+        "contract_version": 6,
+        "technical_family": "tube",
+        "explicit_template_id": null
+      },
+      "template_target": {
+        "id": "e1adfef6-6dba-467d-838b-159dc65d8a7b",
+        "key": "tube",
+        "family": "tube",
+        "local_template_sha256": "bef92d86ec2dbcecda75f73f36cc56273c57322d21159a41e0ede2476ea1656c"
+      },
+      "reviewed_delta": null,
+      "next_research_action": {
+        "owner": "Codex/Claude",
+        "action": "Cruzar la línea e76605bb-011a-40a3-96ee-afa2929653b8 y el documento de compra RBX con el código 17557/GTIN real; recuperar etiqueta o imagen de esa variante desde la fuente conservada. La línea migrada repite el nombre contradictorio.",
+        "requires_routine_owner_entry": false,
+        "external_message_sent": false
+      },
+      "unresolved": "Marca, rango de anchura, longitud efectiva del vástago y pertenencia del SKU a la variante Ornate.",
+      "preservation_note": "Sin delta de familia; conservar los siete facts con sus IDs. No promocionar wheel_size, anchos ni valve_length legacy a filas nuevas; Butilo/false son inferencias sin recibo y no evidencia OEM.",
+      "apply_allowed": false,
+      "identity_model_confirmed": false,
+      "mechanical_approval": false,
+      "fill_allowed": false
+    },
+    {
+      "review_id": "AP02",
+      "product_id": "07e4b2d0-7637-4e3d-afbe-e319dcd1e776",
+      "sku": "NNV55",
+      "decision": "delta_adjudicated_pending_global_gates",
+      "reason": "La imagen corresponde a un freno encerrado con brazo de reacción, no al objeto que describe la ficha de cáliper. hub_brake admite subtipos y desconocido sin inventar un mecanismo.",
+      "local_gate": null,
+      "review_preimage_sha256": "5b0f462937b6cee6ac9a5483fd324f01218a221eb35e6bcd4c8abb572b7b1395",
+      "before_binding": {
+        "product_id": "07e4b2d0-7637-4e3d-afbe-e319dcd1e776",
+        "category_id": "095e20f5-3036-4673-ad94-148ec93fa267",
+        "template_id": "9d97103e-d49f-4d77-974d-23f775fb49c8",
+        "template_key": "brake_caliper",
+        "binding_source": "category",
+        "contract_version": 2,
+        "technical_family": "brake_caliper",
+        "explicit_template_id": null
+      },
+      "template_target": {
+        "id": "0ab39e1e-88fb-5d00-8bec-7cc68002ac74",
+        "key": "hub_brake",
+        "family": "hub_brake",
+        "local_template_sha256": "24e7278b8f34fded4f55fd4619e709df0b862f25add5a48f7d2dcea598c0f652"
+      },
+      "reviewed_delta": {
+        "id": "APD02",
+        "product_id": "07e4b2d0-7637-4e3d-afbe-e319dcd1e776",
+        "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+        "review_id": "AP02",
+        "kind": "assignment_only_proposal",
+        "scope": "directo",
+        "before": {
+          "spec_template_id": null,
+          "spec_reference_id": null,
+          "category_id": "095e20f5-3036-4673-ad94-148ec93fa267",
+          "spec_revision": 0,
+          "updated_at": "2026-05-22T22:33:41.227011+00:00",
+          "resolved_binding": {
+            "product_id": "07e4b2d0-7637-4e3d-afbe-e319dcd1e776",
+            "category_id": "095e20f5-3036-4673-ad94-148ec93fa267",
+            "template_id": "9d97103e-d49f-4d77-974d-23f775fb49c8",
+            "template_key": "brake_caliper",
+            "binding_source": "category",
+            "contract_version": 2,
+            "technical_family": "brake_caliper",
+            "explicit_template_id": null
+          }
+        },
+        "after": {
+          "spec_template_id": "0ab39e1e-88fb-5d00-8bec-7cc68002ac74"
+        },
+        "family_after": "hub_brake",
+        "fact_payload_changes": [],
+        "identity_changes": [],
+        "commercial_changes": [],
+        "erp_set_changes": [],
+        "category_mapping_changes": [],
+        "apply_allowed": false,
+        "gates": [
+          "Root adjudica propuesta y alcance de conjunto/especialización.",
+          "Plantilla destino publicada y releída con contrato exacto aprobado.",
+          "Releer preimagen/revisión/binding y abortar ante deriva; usar escritor autenticado de asignación, no UPDATE amplio de categoría.",
+          "Verificar preservación de facts/options/readings/legacy y campos comerciales/identidad antes y después de cualquier futura aplicación."
+        ],
+        "review_template_key_after": "hub_brake",
+        "template_key_after": "hub_brake"
+      },
+      "next_research_action": {
+        "owner": "Codex/Claude",
+        "action": "Recuperar la referencia Padro Bikes asociada al NNV55 y una ficha/explosión del fabricante.",
+        "requires_routine_owner_entry": false,
+        "external_message_sent": false
+      },
+      "unresolved": "Banda frente a tambor/roller; qué significa 90 mm; anclaje, eje y tiraje.",
+      "preservation_note": "Asignar sólo hub_brake. No rellenar hub_brake_kind con banda por apariencia ni drum_diameter_mm con 90 del título.",
+      "apply_allowed": false,
+      "identity_model_confirmed": false,
+      "mechanical_approval": false,
+      "fill_allowed": false
+    },
+    {
+      "review_id": "AP03",
+      "product_id": "1b7fd36f-b4d7-44bb-a6e3-9eab34d1f74e",
+      "sku": "NNV114",
+      "decision": "preserve_assignment",
+      "reason": "La familia actual revisada abarca pastilla de disco y patín de llanta; no exigir un cambio de plantilla por faltar el subtipo. El producto está inactivo y debe conservar ese estado.",
+      "local_gate": null,
+      "review_preimage_sha256": "87d6e2cdd78165022abc99c7d6f75039e2d21ccc4e12df06f0ac3e7df5342518",
+      "before_binding": {
+        "product_id": "1b7fd36f-b4d7-44bb-a6e3-9eab34d1f74e",
+        "category_id": "7c580490-496d-4c12-b0ce-1239466b9359",
+        "template_id": "0251857d-dbc1-49fc-94c7-0cba60aa8921",
+        "template_key": "brake_pad",
+        "binding_source": "category",
+        "contract_version": 2,
+        "technical_family": "brake_pad",
+        "explicit_template_id": null
+      },
+      "template_target": {
+        "id": "0251857d-dbc1-49fc-94c7-0cba60aa8921",
+        "key": "brake_pad",
+        "family": "brake_pad",
+        "local_template_sha256": "b6250774b43aaea8a75f9bce4fff753e98735d960267be0f25fa7adf349a955c"
+      },
+      "reviewed_delta": null,
+      "next_research_action": {
+        "owner": "Codex/Claude",
+        "action": "Recuperar documento/foto de la compra Betta Bikes o su código de proveedor; cruzarlo con un modelo Ozono exacto, sin elegir por marca.",
+        "requires_routine_owner_entry": false,
+        "external_message_sent": false
+      },
+      "unresolved": "Superficie de frenado, forma, compuesto, retención y referencia exacta.",
+      "preservation_note": "No activar el producto ni rellenar compatibilidad por Ozono. La familia permanece y el subtipo sigue desconocido.",
+      "apply_allowed": false,
+      "identity_model_confirmed": false,
+      "mechanical_approval": false,
+      "fill_allowed": false
+    },
+    {
+      "review_id": "AP04",
+      "product_id": "1d3f2d8b-d39a-4843-b265-449762467d68",
+      "sku": "8092",
+      "decision": "delta_adjudicated_pending_global_gates",
+      "reason": "Es un resorte de recambio, no un freno de llanta completo. La clase nominal antigua brake_return_spring se representa ahora con brake_small_part.",
+      "local_gate": null,
+      "review_preimage_sha256": "10ae4fda942b3689179cf82cbd2f981abbe5bb06cd2bc87a72c57e944f96171d",
+      "before_binding": {
+        "product_id": "1d3f2d8b-d39a-4843-b265-449762467d68",
+        "category_id": "a3a26955-9fd2-475f-a60e-c7578eb9ea40",
+        "template_id": "3a76d564-008d-487b-bd70-0c6179dec598",
+        "template_key": "rim_brake",
+        "binding_source": "category",
+        "contract_version": 2,
+        "technical_family": "rim_brake",
+        "explicit_template_id": null
+      },
+      "template_target": {
+        "id": "bdae0fde-f2e2-56c9-8c17-593926d0e292",
+        "key": "brake_small_part",
+        "family": "brake_small_part",
+        "local_template_sha256": "06d87f300f3dd67344391959c4d7243b961e2344fcd873e39a0df73076c7455c"
+      },
+      "reviewed_delta": {
+        "id": "APD04",
+        "product_id": "1d3f2d8b-d39a-4843-b265-449762467d68",
+        "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+        "review_id": "AP04",
+        "kind": "assignment_only_proposal",
+        "scope": "directo",
+        "before": {
+          "spec_template_id": null,
+          "spec_reference_id": null,
+          "category_id": "a3a26955-9fd2-475f-a60e-c7578eb9ea40",
+          "spec_revision": 0,
+          "updated_at": "2026-07-08T16:42:35.172886+00:00",
+          "resolved_binding": {
+            "product_id": "1d3f2d8b-d39a-4843-b265-449762467d68",
+            "category_id": "a3a26955-9fd2-475f-a60e-c7578eb9ea40",
+            "template_id": "3a76d564-008d-487b-bd70-0c6179dec598",
+            "template_key": "rim_brake",
+            "binding_source": "category",
+            "contract_version": 2,
+            "technical_family": "rim_brake",
+            "explicit_template_id": null
+          }
+        },
+        "after": {
+          "spec_template_id": "bdae0fde-f2e2-56c9-8c17-593926d0e292"
+        },
+        "family_after": "brake_small_part",
+        "fact_payload_changes": [],
+        "identity_changes": [],
+        "commercial_changes": [],
+        "erp_set_changes": [],
+        "category_mapping_changes": [],
+        "apply_allowed": false,
+        "gates": [
+          "Root adjudica propuesta y alcance de conjunto/especialización.",
+          "Plantilla destino publicada y releída con contrato exacto aprobado.",
+          "Releer preimagen/revisión/binding y abortar ante deriva; usar escritor autenticado de asignación, no UPDATE amplio de categoría.",
+          "Verificar preservación de facts/options/readings/legacy y campos comerciales/identidad antes y después de cualquier futura aplicación."
+        ],
+        "review_template_key_after": "brake_small_part",
+        "template_key_after": "brake_small_part"
+      },
+      "next_research_action": {
+        "owner": "Codex/Claude",
+        "action": "Vincular el código comercial 8092 a catálogo/compra de Andes y recuperar el modelo de freno destinatario.",
+        "requires_routine_owner_entry": false,
+        "external_message_sent": false
+      },
+      "unresolved": "Geometría, orientación, medidas y contenido real de la unidad de venta.",
+      "preservation_note": "No usar ausencia de una segunda pieza en foto para negar el par; no deducir compatibilidad V-brake/MTB universal.",
+      "apply_allowed": false,
+      "identity_model_confirmed": false,
+      "mechanical_approval": false,
+      "fill_allowed": false
+    },
+    {
+      "review_id": "AP05",
+      "product_id": "2101db4f-e8e1-4bce-9803-625acda32589",
+      "sku": "BPS005",
+      "decision": "delta_adjudicated_pending_global_gates",
+      "reason": "Coinciden la denominación del ERP y la página primaria del mismo proveedor: es un núcleo Presta por unidad. No es una válvula tubeless completa.",
+      "local_gate": null,
+      "review_preimage_sha256": "fd3be0ab3ebf189741635a58122b5883497dc356333f81363b0b70998b489a6b",
+      "before_binding": {
+        "product_id": "2101db4f-e8e1-4bce-9803-625acda32589",
+        "category_id": "14d2d632-1f5f-406c-9a7c-16f55a5fc1ae",
+        "template_id": "1819b68d-72d4-464a-b69d-ba3f2eaa59b3",
+        "template_key": "tubeless_valve",
+        "binding_source": "category",
+        "contract_version": 2,
+        "technical_family": "tubeless_valve",
+        "explicit_template_id": null
+      },
+      "template_target": {
+        "id": "1ed4bdde-e825-5772-bc12-7e9fc50a63a2",
+        "key": "valve_small_part",
+        "family": "valve_small_part",
+        "local_template_sha256": "778bafa200a1eb13d5d79534de4a3fe40df9ccd5564a192b208bcb4f8bb7313c"
+      },
+      "reviewed_delta": {
+        "id": "APD05",
+        "product_id": "2101db4f-e8e1-4bce-9803-625acda32589",
+        "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+        "review_id": "AP05",
+        "kind": "assignment_only_proposal",
+        "scope": "directo",
+        "before": {
+          "spec_template_id": null,
+          "spec_reference_id": null,
+          "category_id": "14d2d632-1f5f-406c-9a7c-16f55a5fc1ae",
+          "spec_revision": 0,
+          "updated_at": "2026-05-22T22:33:41.227011+00:00",
+          "resolved_binding": {
+            "product_id": "2101db4f-e8e1-4bce-9803-625acda32589",
+            "category_id": "14d2d632-1f5f-406c-9a7c-16f55a5fc1ae",
+            "template_id": "1819b68d-72d4-464a-b69d-ba3f2eaa59b3",
+            "template_key": "tubeless_valve",
+            "binding_source": "category",
+            "contract_version": 2,
+            "technical_family": "tubeless_valve",
+            "explicit_template_id": null
+          }
+        },
+        "after": {
+          "spec_template_id": "1ed4bdde-e825-5772-bc12-7e9fc50a63a2"
+        },
+        "family_after": "valve_small_part",
+        "fact_payload_changes": [],
+        "identity_changes": [],
+        "commercial_changes": [],
+        "erp_set_changes": [],
+        "category_mapping_changes": [],
+        "apply_allowed": false,
+        "gates": [
+          "Root adjudica propuesta y alcance de conjunto/especialización.",
+          "Plantilla destino publicada y releída con contrato exacto aprobado.",
+          "Releer preimagen/revisión/binding y abortar ante deriva; usar escritor autenticado de asignación, no UPDATE amplio de categoría.",
+          "Verificar preservación de facts/options/readings/legacy y campos comerciales/identidad antes y después de cualquier futura aplicación."
+        ],
+        "review_template_key_after": "valve_small_part",
+        "template_key_after": "valve_small_part"
+      },
+      "next_research_action": {
+        "owner": "Codex/Claude",
+        "action": "Archivar la ficha exacta Bike Point Store y vincular BPS005 a su identidad de proveedor; obtener datos de la interfaz si existen.",
+        "requires_routine_owner_entry": false,
+        "external_message_sent": false
+      },
+      "unresolved": "Código OEM y alcance dimensional/de modelos del núcleo.",
+      "preservation_note": "No copiar largo del vástago ni afirmar compatibilidad con toda válvula Presta; núcleo extraíble es requisito real.",
+      "apply_allowed": false,
+      "identity_model_confirmed": false,
+      "mechanical_approval": false,
+      "fill_allowed": false
+    },
+    {
+      "review_id": "AP06",
+      "product_id": "23b2fd3d-f55f-432f-af67-dbf5b3e0f701",
+      "sku": "C494",
+      "decision": "preserve_assignment",
+      "reason": "Conservar bearing: su construcción de canastillo y aplicación Pedalier ya se representan. La especialización editorial no corrige una incompatibilidad demostrada; Thompson no implica Americano.",
+      "local_gate": null,
+      "review_preimage_sha256": "fcb2b8ee2d64c4d2d006d8e369f9541ac2d86c2a9aa87769511f599498e5c47d",
+      "before_binding": {
+        "product_id": "23b2fd3d-f55f-432f-af67-dbf5b3e0f701",
+        "category_id": "407c429d-4e24-4744-8189-441cf865dc05",
+        "template_id": "d293dc44-f47a-4dd8-801f-3de0c5749da3",
+        "template_key": "bearing",
+        "binding_source": "category",
+        "contract_version": 2,
+        "technical_family": "bearing",
+        "explicit_template_id": null
+      },
+      "template_target": {
+        "id": "d293dc44-f47a-4dd8-801f-3de0c5749da3",
+        "key": "bearing",
+        "family": "bearing",
+        "local_template_sha256": "076c94fb3bc2d81d7e8d3f084138f668f9be994c5105ed6b42c2e07ffeb0bddc"
+      },
+      "reviewed_delta": null,
+      "next_research_action": {
+        "owner": "Codex/Claude",
+        "action": "Resolver la entrada C494 en catálogo/compra MKR y confirmar cómo se vende el paquete.",
+        "requires_routine_owner_entry": false,
+        "external_message_sent": false
+      },
+      "unresolved": "Diámetro de bolas/jaula, número por canastillo, sistema exacto y si 20 Unid describe el paquete.",
+      "preservation_note": "Retirar del diagnóstico la equivalencia Thompson=americano/one-piece. Propuesta opcional de especialización; no llenar valores físicos ni convertir 20 en cantidad de bolas.",
+      "apply_allowed": false,
+      "identity_model_confirmed": false,
+      "mechanical_approval": false,
+      "fill_allowed": false
+    },
+    {
+      "review_id": "AP07",
+      "product_id": "35e9adc9-c948-41f3-b093-a9404ab367c8",
+      "sku": "J253",
+      "decision": "delta_waiting_for_content_contract",
+      "reason": "Las bielas son el objeto principal y el título declara cubetas acompañantes. crankset permite kit_members. No hay prueba de cadena/cassette/mando que haga necesaria la ficha general de kit de transmisión.",
+      "local_gate": "AG01: quantity/row cardinality, content evidence and downstream consumption remain open.",
+      "review_preimage_sha256": "5ba92b1fdf1ca00a4f401223533a728880296f48f1cd05fad6ce5796d2704324",
+      "before_binding": {
+        "product_id": "35e9adc9-c948-41f3-b093-a9404ab367c8",
+        "category_id": "9307b385-e9f7-46d2-8906-e5da8ab15ad6",
+        "template_id": "6d80cd0c-81ac-41c1-af17-7a59a2b04b61",
+        "template_key": "drivetrain_kit",
+        "binding_source": "category",
+        "contract_version": 3,
+        "technical_family": "drivetrain_kit",
+        "explicit_template_id": null
+      },
+      "template_target": {
+        "id": "91a0c6d5-9c0a-443f-b2e9-2e0ab5f431ce",
+        "key": "crankset",
+        "family": "crankset",
+        "local_template_sha256": "bff86212db92e8f7eff4bdc3972eb74ec74e87e6b78206b4aba80c32b8cb03c6"
+      },
+      "reviewed_delta": {
+        "id": "APD07",
+        "product_id": "35e9adc9-c948-41f3-b093-a9404ab367c8",
+        "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+        "review_id": "AP07",
+        "kind": "assignment_only_proposal",
+        "scope": "condicionado",
+        "before": {
+          "spec_template_id": null,
+          "spec_reference_id": null,
+          "category_id": "9307b385-e9f7-46d2-8906-e5da8ab15ad6",
+          "spec_revision": 0,
+          "updated_at": "2026-05-22T22:33:41.227011+00:00",
+          "resolved_binding": {
+            "product_id": "35e9adc9-c948-41f3-b093-a9404ab367c8",
+            "category_id": "9307b385-e9f7-46d2-8906-e5da8ab15ad6",
+            "template_id": "6d80cd0c-81ac-41c1-af17-7a59a2b04b61",
+            "template_key": "drivetrain_kit",
+            "binding_source": "category",
+            "contract_version": 3,
+            "technical_family": "drivetrain_kit",
+            "explicit_template_id": null
+          }
+        },
+        "after": {
+          "spec_template_id": "91a0c6d5-9c0a-443f-b2e9-2e0ab5f431ce"
+        },
+        "family_after": "crankset",
+        "fact_payload_changes": [],
+        "identity_changes": [],
+        "commercial_changes": [],
+        "erp_set_changes": [],
+        "category_mapping_changes": [],
+        "apply_allowed": false,
+        "gates": [
+          "Root adjudica propuesta y alcance de conjunto/especialización.",
+          "Plantilla destino publicada y releída con contrato exacto aprobado.",
+          "Releer preimagen/revisión/binding y abortar ante deriva; usar escritor autenticado de asignación, no UPDATE amplio de categoría.",
+          "Verificar preservación de facts/options/readings/legacy y campos comerciales/identidad antes y después de cualquier futura aplicación.",
+          "Resolver AG01 antes de llenar; asignación sola no fija cantidad de platos ni capacidades."
+        ],
+        "review_template_key_after": "crankset",
+        "template_key_after": "crankset"
+      },
+      "next_research_action": {
+        "owner": "Codex/Claude",
+        "action": "Recuperar ficha y lista de contenido J253 de MKR; distinguir eje incluido, cubetas/rodamientos y elementos opcionales.",
+        "requires_routine_owner_entry": false,
+        "external_message_sent": false
+      },
+      "unresolved": "Modelo, interfaz del eje, medidas y contenido exhaustivo. Además debe aclararse el significado de chainring_count antes del fill.",
+      "preservation_note": "La asignación propuesta no crea un set ERP. Gap AG01: cantidad de platos obligatoria positiva mezcla potencialmente capacidad de montaje con contenido; no rellenar 1 ni 0 desde la foto.",
+      "apply_allowed": false,
+      "identity_model_confirmed": false,
+      "mechanical_approval": false,
+      "fill_allowed": false
+    },
+    {
+      "review_id": "AP08",
+      "product_id": "62a41771-119d-4d1d-8168-ad17ce4337c2",
+      "sku": "17137",
+      "decision": "delta_adjudicated_pending_global_gates",
+      "reason": "Nombre con referencia PMA7-15T y construcción de corona fija en foto apoyan fixed_cog. freewheel describe otro mecanismo.",
+      "local_gate": null,
+      "review_preimage_sha256": "d96379c02f72985100995df516db5df71e33c8c31102e1256fbd23b2d2e44ea4",
+      "before_binding": {
+        "product_id": "62a41771-119d-4d1d-8168-ad17ce4337c2",
+        "category_id": "4ddce44d-f508-41de-9325-b92b39f8eb64",
+        "template_id": "c97799a4-b611-43c5-83f1-de4a407dd8f6",
+        "template_key": "freewheel",
+        "binding_source": "category",
+        "contract_version": 4,
+        "technical_family": "freewheel",
+        "explicit_template_id": null
+      },
+      "template_target": {
+        "id": "be18a720-6f16-42e3-be65-44d6a9c8ce35",
+        "key": "fixed_cog",
+        "family": "fixed_cog",
+        "local_template_sha256": "14acf048ab410ab198b126b27ab5d0fa5175f11595faf01f6329c77023c12ced"
+      },
+      "reviewed_delta": {
+        "id": "APD08",
+        "product_id": "62a41771-119d-4d1d-8168-ad17ce4337c2",
+        "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+        "review_id": "AP08",
+        "kind": "assignment_only_proposal",
+        "scope": "directo",
+        "before": {
+          "spec_template_id": null,
+          "spec_reference_id": null,
+          "category_id": "4ddce44d-f508-41de-9325-b92b39f8eb64",
+          "spec_revision": 0,
+          "updated_at": "2026-05-22T22:33:41.227011+00:00",
+          "resolved_binding": {
+            "product_id": "62a41771-119d-4d1d-8168-ad17ce4337c2",
+            "category_id": "4ddce44d-f508-41de-9325-b92b39f8eb64",
+            "template_id": "c97799a4-b611-43c5-83f1-de4a407dd8f6",
+            "template_key": "freewheel",
+            "binding_source": "category",
+            "contract_version": 4,
+            "technical_family": "freewheel",
+            "explicit_template_id": null
+          }
+        },
+        "after": {
+          "spec_template_id": "be18a720-6f16-42e3-be65-44d6a9c8ce35"
+        },
+        "family_after": "fixed_cog",
+        "fact_payload_changes": [],
+        "identity_changes": [],
+        "commercial_changes": [],
+        "erp_set_changes": [],
+        "category_mapping_changes": [],
+        "apply_allowed": false,
+        "gates": [
+          "Root adjudica propuesta y alcance de conjunto/especialización.",
+          "Plantilla destino publicada y releída con contrato exacto aprobado.",
+          "Releer preimagen/revisión/binding y abortar ante deriva; usar escritor autenticado de asignación, no UPDATE amplio de categoría.",
+          "Verificar preservación de facts/options/readings/legacy y campos comerciales/identidad antes y después de cualquier futura aplicación."
+        ],
+        "review_template_key_after": "fixed_cog",
+        "template_key_after": "fixed_cog"
+      },
+      "next_research_action": {
+        "owner": "Codex/Claude",
+        "action": "Recuperar ficha Andes 17137/PMA7-15T y dimensiones OEM de rosca/ancho/contratuerca.",
+        "requires_routine_owner_entry": false,
+        "external_message_sent": false
+      },
+      "unresolved": "Identidad de fabricante, rosca, ancho y condiciones de montaje fijo con retención.",
+      "preservation_note": "No aprobar un montaje fijo por rosca nominal coincidente; ni transferir propiedades de un piñón de 16T o de otro proveedor.",
+      "apply_allowed": false,
+      "identity_model_confirmed": false,
+      "mechanical_approval": false,
+      "fill_allowed": false
+    },
+    {
+      "review_id": "AP09",
+      "product_id": "64e9e200-ca3a-4b76-aa85-86fad70cf3fd",
+      "sku": "PO02664000473",
+      "decision": "delta_adjudicated_pending_global_gates",
+      "reason": "La foto del conjunto y el uso freestyle corresponden al rotor/desenredador de cable BMX. La ficha rotor de disco de freno es ajena al objeto.",
+      "local_gate": null,
+      "review_preimage_sha256": "107c50479841a57d88dcd0b55e2e6642713cf29bbd5bc8fef40f90d95d4eae90",
+      "before_binding": {
+        "product_id": "64e9e200-ca3a-4b76-aa85-86fad70cf3fd",
+        "category_id": "85db0f6c-b296-401f-9e9b-ec028eefa6bf",
+        "template_id": "a2ba0aad-9c5c-4563-a4f5-75cf2611a43a",
+        "template_key": "rotor",
+        "binding_source": "category",
+        "contract_version": 3,
+        "technical_family": "rotor",
+        "explicit_template_id": null
+      },
+      "template_target": {
+        "id": "9e85c3f5-d7fb-5fa7-b93b-dee112f414ab",
+        "key": "bmx_cable_detangler",
+        "family": "bmx_cable_detangler",
+        "local_template_sha256": "0f0ac87ecb18eaa062bfd9b52d3f317639adecfad5d8d966a8acb724a94286be"
+      },
+      "reviewed_delta": {
+        "id": "APD09",
+        "product_id": "64e9e200-ca3a-4b76-aa85-86fad70cf3fd",
+        "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+        "review_id": "AP09",
+        "kind": "assignment_only_proposal",
+        "scope": "directo",
+        "before": {
+          "spec_template_id": null,
+          "spec_reference_id": null,
+          "category_id": "85db0f6c-b296-401f-9e9b-ec028eefa6bf",
+          "spec_revision": 0,
+          "updated_at": "2026-05-22T22:33:41.227011+00:00",
+          "resolved_binding": {
+            "product_id": "64e9e200-ca3a-4b76-aa85-86fad70cf3fd",
+            "category_id": "85db0f6c-b296-401f-9e9b-ec028eefa6bf",
+            "template_id": "a2ba0aad-9c5c-4563-a4f5-75cf2611a43a",
+            "template_key": "rotor",
+            "binding_source": "category",
+            "contract_version": 3,
+            "technical_family": "rotor",
+            "explicit_template_id": null
+          }
+        },
+        "after": {
+          "spec_template_id": "9e85c3f5-d7fb-5fa7-b93b-dee112f414ab"
+        },
+        "family_after": "bmx_cable_detangler",
+        "fact_payload_changes": [],
+        "identity_changes": [],
+        "commercial_changes": [],
+        "erp_set_changes": [],
+        "category_mapping_changes": [],
+        "apply_allowed": false,
+        "gates": [
+          "Root adjudica propuesta y alcance de conjunto/especialización.",
+          "Plantilla destino publicada y releída con contrato exacto aprobado.",
+          "Releer preimagen/revisión/binding y abortar ante deriva; usar escritor autenticado de asignación, no UPDATE amplio de categoría.",
+          "Verificar preservación de facts/options/readings/legacy y campos comerciales/identidad antes y después de cualquier futura aplicación."
+        ],
+        "review_template_key_after": "bmx_cable_detangler",
+        "template_key_after": "bmx_cable_detangler"
+      },
+      "next_research_action": {
+        "owner": "Codex/Claude",
+        "action": "Recuperar entrada Andes 473 y su fabricante/modelo; documentar miembros y montaje del conjunto.",
+        "requires_routine_owner_entry": false,
+        "external_message_sent": false
+      },
+      "unresolved": "Compatibilidad de dirección/potencia, cableado y piezas incluidas.",
+      "preservation_note": "NECO compatible no demuestra fabricante NECO. Preservar marca/comercial, sin convertir el paquete a ERP is_set.",
+      "apply_allowed": false,
+      "identity_model_confirmed": false,
+      "mechanical_approval": false,
+      "fill_allowed": false
+    },
+    {
+      "review_id": "AP10",
+      "product_id": "6ed9f4df-69bf-4c57-a52c-871bac3750c3",
+      "sku": "GZ0009",
+      "decision": "identity_research_pending",
+      "reason": "El nombre y las dos líneas de compra sólo dicen líquido tubular. La categoría existente no es evidencia independiente de que sea sellante tubeless.",
+      "local_gate": null,
+      "review_preimage_sha256": "d75643a9b45adcb8ed7a95a6bfa53afc43516e7c7d111280d4a025b6c462f907",
+      "before_binding": {
+        "product_id": "6ed9f4df-69bf-4c57-a52c-871bac3750c3",
+        "category_id": "e2014395-26a3-4fa0-8b1b-e2d049c6a0df",
+        "template_id": "786de6d8-351a-4297-a8d2-70bf41c2da9c",
+        "template_key": "tubeless_consumable",
+        "binding_source": "category",
+        "contract_version": 3,
+        "technical_family": "tubeless_consumable",
+        "explicit_template_id": null
+      },
+      "template_target": null,
+      "reviewed_delta": null,
+      "next_research_action": {
+        "owner": "Codex/Claude",
+        "action": "Investigar documentos fuente de las compras 540a9d49-f291-4e7d-b4fb-956410739640 y 6b1950de-c2c0-492b-bc18-22515691b52c; extraer etiqueta/formulación y referencia de Garozzo. Agotar evidencia conservada antes de cualquier gestión externa.",
+        "requires_routine_owner_entry": false,
+        "external_message_sent": false
+      },
+      "unresolved": "Qué producto es: sellante, adhesivo u otro; uso tubular/tubeless, formulación y envase.",
+      "preservation_note": "No cambiar ni aprobar la familia vigente. Candidatas tubeless_consumable si la fuente confirma ese uso, o workshop_chemical para adhesivo/otro químico según contrato; un sellante sólo tubular requiere revisar alcance de la ficha.",
+      "apply_allowed": false,
+      "identity_model_confirmed": false,
+      "mechanical_approval": false,
+      "fill_allowed": false
+    },
+    {
+      "review_id": "AP11",
+      "product_id": "7da9c57b-a351-4c0b-b91a-bd04a60e1dcd",
+      "sku": "AE0234",
+      "decision": "delta_adjudicated_pending_global_gates",
+      "reason": "Texto obús y foto de núcleos extraíbles apoyan repuesto de válvula. El atributo 26 mm de la imagen no sería longitud de vástago de una válvula completa.",
+      "local_gate": null,
+      "review_preimage_sha256": "9d862ce897aa038cd29044a058325f9b42ca9fa2167507b19f0c52b3e3c3778f",
+      "before_binding": {
+        "product_id": "7da9c57b-a351-4c0b-b91a-bd04a60e1dcd",
+        "category_id": "14d2d632-1f5f-406c-9a7c-16f55a5fc1ae",
+        "template_id": "1819b68d-72d4-464a-b69d-ba3f2eaa59b3",
+        "template_key": "tubeless_valve",
+        "binding_source": "category",
+        "contract_version": 2,
+        "technical_family": "tubeless_valve",
+        "explicit_template_id": null
+      },
+      "template_target": {
+        "id": "1ed4bdde-e825-5772-bc12-7e9fc50a63a2",
+        "key": "valve_small_part",
+        "family": "valve_small_part",
+        "local_template_sha256": "778bafa200a1eb13d5d79534de4a3fe40df9ccd5564a192b208bcb4f8bb7313c"
+      },
+      "reviewed_delta": {
+        "id": "APD11",
+        "product_id": "7da9c57b-a351-4c0b-b91a-bd04a60e1dcd",
+        "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+        "review_id": "AP11",
+        "kind": "assignment_only_proposal",
+        "scope": "directo",
+        "before": {
+          "spec_template_id": null,
+          "spec_reference_id": null,
+          "category_id": "14d2d632-1f5f-406c-9a7c-16f55a5fc1ae",
+          "spec_revision": 0,
+          "updated_at": "2026-05-22T22:33:41.227011+00:00",
+          "resolved_binding": {
+            "product_id": "7da9c57b-a351-4c0b-b91a-bd04a60e1dcd",
+            "category_id": "14d2d632-1f5f-406c-9a7c-16f55a5fc1ae",
+            "template_id": "1819b68d-72d4-464a-b69d-ba3f2eaa59b3",
+            "template_key": "tubeless_valve",
+            "binding_source": "category",
+            "contract_version": 2,
+            "technical_family": "tubeless_valve",
+            "explicit_template_id": null
+          }
+        },
+        "after": {
+          "spec_template_id": "1ed4bdde-e825-5772-bc12-7e9fc50a63a2"
+        },
+        "family_after": "valve_small_part",
+        "fact_payload_changes": [],
+        "identity_changes": [],
+        "commercial_changes": [],
+        "erp_set_changes": [],
+        "category_mapping_changes": [],
+        "apply_allowed": false,
+        "gates": [
+          "Root adjudica propuesta y alcance de conjunto/especialización.",
+          "Plantilla destino publicada y releída con contrato exacto aprobado.",
+          "Releer preimagen/revisión/binding y abortar ante deriva; usar escritor autenticado de asignación, no UPDATE amplio de categoría.",
+          "Verificar preservación de facts/options/readings/legacy y campos comerciales/identidad antes y después de cualquier futura aplicación."
+        ],
+        "review_template_key_after": "valve_small_part",
+        "template_key_after": "valve_small_part"
+      },
+      "next_research_action": {
+        "owner": "Codex/Claude",
+        "action": "Recuperar anuncio y opción de compra AE0234/Deemount; contrastar rosca/modelo y presentación.",
+        "requires_routine_owner_entry": false,
+        "external_message_sent": false
+      },
+      "unresolved": "Referencia exacta, tolerancias, materiales y cantidad efectivamente recibida.",
+      "preservation_note": "No copiar las cotas a campos de vástago; no afirmar universalidad Presta por marca o foto.",
+      "apply_allowed": false,
+      "identity_model_confirmed": false,
+      "mechanical_approval": false,
+      "fill_allowed": false
+    },
+    {
+      "review_id": "AP12",
+      "product_id": "8163d705-e49a-4a1e-a84d-c0aab796c306",
+      "sku": "P3287",
+      "decision": "preserve_assignment",
+      "reason": "La foto es una pareja de pastillas de disco. brake_pad revisada dispone de braking_surface para expresar el subtipo; no hace falta crear otra plantilla.",
+      "local_gate": null,
+      "review_preimage_sha256": "123ff5f6bfffd06d34f401d6813c42e419ebbe06dd1954b1037dcecfe6c821c7",
+      "before_binding": {
+        "product_id": "8163d705-e49a-4a1e-a84d-c0aab796c306",
+        "category_id": "7c580490-496d-4c12-b0ce-1239466b9359",
+        "template_id": "0251857d-dbc1-49fc-94c7-0cba60aa8921",
+        "template_key": "brake_pad",
+        "binding_source": "category",
+        "contract_version": 2,
+        "technical_family": "brake_pad",
+        "explicit_template_id": null
+      },
+      "template_target": {
+        "id": "0251857d-dbc1-49fc-94c7-0cba60aa8921",
+        "key": "brake_pad",
+        "family": "brake_pad",
+        "local_template_sha256": "b6250774b43aaea8a75f9bce4fff753e98735d960267be0f25fa7adf349a955c"
+      },
+      "reviewed_delta": null,
+      "next_research_action": {
+        "owner": "Codex/Claude",
+        "action": "Resolver P3287 en el catálogo/compra MKR; recuperar referencia de freno Fantom y dibujo dimensional oficial.",
+        "requires_routine_owner_entry": false,
+        "external_message_sent": false
+      },
+      "unresolved": "Código de forma, compuesto, retención y lista de modelos declarada.",
+      "preservation_note": "El color rojo y similitud con una pastilla conocida no prueban compuesto ni compatibilidad de cáliper.",
+      "apply_allowed": false,
+      "identity_model_confirmed": false,
+      "mechanical_approval": false,
+      "fill_allowed": false
+    },
+    {
+      "review_id": "AP13",
+      "product_id": "8a42698c-19b0-4952-8e55-8350519bac8e",
+      "sku": "AE0353",
+      "decision": "delta_adjudicated_pending_global_gates",
+      "reason": "El título declara extensión y la imagen actual muestra pieza corta con punto de fijación superior y punto desplazado inferior. No es una patilla de recambio específica del cuadro.",
+      "local_gate": null,
+      "review_preimage_sha256": "cceafbd7671e0517b292b3931305ee5522c2fd2b9a059e9bcb68d21a3e231352",
+      "before_binding": {
+        "product_id": "8a42698c-19b0-4952-8e55-8350519bac8e",
+        "category_id": "505cd451-9ad4-44a0-b743-98c2df35577f",
+        "template_id": "a505c7c6-ef02-4706-900b-25d927886669",
+        "template_key": "derailleur_hanger",
+        "binding_source": "category",
+        "contract_version": 2,
+        "technical_family": "derailleur_hanger",
+        "explicit_template_id": null
+      },
+      "template_target": {
+        "id": "abd10f88-3db9-5c6b-8365-7817c2586922",
+        "key": "derailleur_hanger_extender",
+        "family": "derailleur_hanger_extender",
+        "local_template_sha256": "12df3efecb844656950e1a749ed237f3f49163bffd62abc09f324fc5379df2b7"
+      },
+      "reviewed_delta": {
+        "id": "APD13",
+        "product_id": "8a42698c-19b0-4952-8e55-8350519bac8e",
+        "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+        "review_id": "AP13",
+        "kind": "assignment_only_proposal",
+        "scope": "directo",
+        "before": {
+          "spec_template_id": null,
+          "spec_reference_id": null,
+          "category_id": "505cd451-9ad4-44a0-b743-98c2df35577f",
+          "spec_revision": 0,
+          "updated_at": "2026-08-28T19:26:42.292209+00:00",
+          "resolved_binding": {
+            "product_id": "8a42698c-19b0-4952-8e55-8350519bac8e",
+            "category_id": "505cd451-9ad4-44a0-b743-98c2df35577f",
+            "template_id": "a505c7c6-ef02-4706-900b-25d927886669",
+            "template_key": "derailleur_hanger",
+            "binding_source": "category",
+            "contract_version": 2,
+            "technical_family": "derailleur_hanger",
+            "explicit_template_id": null
+          }
+        },
+        "after": {
+          "spec_template_id": "abd10f88-3db9-5c6b-8365-7817c2586922"
+        },
+        "family_after": "derailleur_hanger_extender",
+        "fact_payload_changes": [],
+        "identity_changes": [],
+        "commercial_changes": [],
+        "erp_set_changes": [],
+        "category_mapping_changes": [],
+        "apply_allowed": false,
+        "gates": [
+          "Root adjudica propuesta y alcance de conjunto/especialización.",
+          "Plantilla destino publicada y releída con contrato exacto aprobado.",
+          "Releer preimagen/revisión/binding y abortar ante deriva; usar escritor autenticado de asignación, no UPDATE amplio de categoría.",
+          "Verificar preservación de facts/options/readings/legacy y campos comerciales/identidad antes y después de cualquier futura aplicación."
+        ],
+        "review_template_key_after": "derailleur_hanger_extender",
+        "template_key_after": "derailleur_hanger_extender"
+      },
+      "next_research_action": {
+        "owner": "Codex/Claude",
+        "action": "Recuperar anuncio/opción del pedido AE0353 y geometría de montaje ZTTO; la línea migrada f248317f-1da8-4b8b-9e0d-7a5779090f86 no trae URL.",
+        "requires_routine_owner_entry": false,
+        "external_message_sent": false
+      },
+      "unresolved": "Modelo, generación, geometría y configuraciones de cambio/cassette expresamente soportadas.",
+      "preservation_note": "No generalizar la ficha RoadLink a ZTTO ni deducir tamaño máximo de cassette o capacidad del cambio.",
+      "apply_allowed": false,
+      "identity_model_confirmed": false,
+      "mechanical_approval": false,
+      "fill_allowed": false
+    },
+    {
+      "review_id": "AP14",
+      "product_id": "a514aeca-f7f1-4ad0-9756-d7843c744add",
+      "sku": "C1087",
+      "decision": "preserve_assignment",
+      "reason": "La foto muestra copas con rodamientos y piezas acompañantes. La plantilla revisada ya representa bearing_included y kit_members, por lo que el antiguo diagnóstico de falta de contenido queda superado para asignación.",
+      "local_gate": null,
+      "review_preimage_sha256": "434ec721f8e15a2c6593672f0b64ce8708fc6d8f3bfae73e08cbc2a58dec66ce",
+      "before_binding": {
+        "product_id": "a514aeca-f7f1-4ad0-9756-d7843c744add",
+        "category_id": "fb1a9cab-d3cf-4536-be0c-4d33a54de21d",
+        "template_id": "50c9c0f2-5aec-4ffb-a54e-fad0c62124f4",
+        "template_key": "bottom_bracket_cup",
+        "binding_source": "category",
+        "contract_version": 4,
+        "technical_family": "bottom_bracket_cup",
+        "explicit_template_id": null
+      },
+      "template_target": {
+        "id": "50c9c0f2-5aec-4ffb-a54e-fad0c62124f4",
+        "key": "bottom_bracket_cup",
+        "family": "bottom_bracket_cup",
+        "local_template_sha256": "4974a7533ff47b314c764d3de063bec57aefd47f51145856df4ce4354bc0d256"
+      },
+      "reviewed_delta": null,
+      "next_research_action": {
+        "owner": "Codex/Claude",
+        "action": "Vincular C1087 a ficha MKR y declarar composición del juego; verificar interfaz del eje aceptado con evidencia específica.",
+        "requires_routine_owner_entry": false,
+        "external_message_sent": false
+      },
+      "unresolved": "Medidas e interfaces exactas y contenido;19mm no demuestra un eje incluido.",
+      "preservation_note": "Conservar los tres facts originales, incluido bb_shell_standard legacy y spindle_diameter_mm fuera de plantilla. No transformar automáticamente Americano 51,5 mm en otra cota de una tabla histórica.",
+      "apply_allowed": false,
+      "identity_model_confirmed": false,
+      "mechanical_approval": false,
+      "fill_allowed": false
+    },
+    {
+      "review_id": "AP15",
+      "product_id": "b7fb996c-410d-4599-8478-d03c04a52092",
+      "sku": "1062",
+      "decision": "delta_adjudicated_pending_global_gates",
+      "reason": "Asignación de conjunto aceptada: rótulo y contrato local no presumen manillas ni lista completa. AG02 de representación resuelto localmente; Logan/Ozono, revisión y contenido exacto continúan pendientes, sin cambios de identidad ni facts.",
+      "local_gate": null,
+      "review_preimage_sha256": "6fd6a161736821bef468b2c2ad7c5ac49d37a11c9b96d3bb506d588bbc0db414",
+      "before_binding": {
+        "product_id": "b7fb996c-410d-4599-8478-d03c04a52092",
+        "category_id": "095e20f5-3036-4673-ad94-148ec93fa267",
+        "template_id": "9d97103e-d49f-4d77-974d-23f775fb49c8",
+        "template_key": "brake_caliper",
+        "binding_source": "category",
+        "contract_version": 2,
+        "technical_family": "brake_caliper",
+        "explicit_template_id": null
+      },
+      "template_target": {
+        "id": "b6df9356-898e-4f0b-aea8-d27db45e96d1",
+        "key": "mechanical_disc_brake",
+        "family": "complete_brake",
+        "local_template_sha256": "cb085aa52a6c7acaf03b947108187fb6258caa9a226684d5220714e012a40a0d"
+      },
+      "reviewed_delta": {
+        "id": "APD15",
+        "product_id": "b7fb996c-410d-4599-8478-d03c04a52092",
+        "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+        "review_id": "AP15",
+        "kind": "assignment_only_proposal",
+        "scope": "condicionado",
+        "before": {
+          "spec_template_id": null,
+          "spec_reference_id": null,
+          "category_id": "095e20f5-3036-4673-ad94-148ec93fa267",
+          "spec_revision": 0,
+          "updated_at": "2026-06-17T17:27:39.698414+00:00",
+          "resolved_binding": {
+            "product_id": "b7fb996c-410d-4599-8478-d03c04a52092",
+            "category_id": "095e20f5-3036-4673-ad94-148ec93fa267",
+            "template_id": "9d97103e-d49f-4d77-974d-23f775fb49c8",
+            "template_key": "brake_caliper",
+            "binding_source": "category",
+            "contract_version": 2,
+            "technical_family": "brake_caliper",
+            "explicit_template_id": null
+          }
+        },
+        "after": {
+          "spec_template_id": "b6df9356-898e-4f0b-aea8-d27db45e96d1"
+        },
+        "family_after": "complete_brake",
+        "fact_payload_changes": [],
+        "identity_changes": [],
+        "commercial_changes": [],
+        "erp_set_changes": [],
+        "category_mapping_changes": [],
+        "apply_allowed": false,
+        "gates": [
+          "Root adjudica propuesta y alcance de conjunto/especialización.",
+          "Plantilla destino publicada y releída con contrato exacto aprobado.",
+          "Releer preimagen/revisión/binding y abortar ante deriva; usar escritor autenticado de asignación, no UPDATE amplio de categoría.",
+          "Verificar preservación de facts/options/readings/legacy y campos comerciales/identidad antes y después de cualquier futura aplicación.",
+          "Resolver AG02 sobre semántica de completo/kit parcial y conservar conflicto histórico Logan/Ozono."
+        ],
+        "review_template_key_after": "mechanical_disc_brake",
+        "template_key_after": "mechanical_disc_brake"
+      },
+      "next_research_action": {
+        "owner": "Codex/Claude",
+        "action": "Cruzar SKU1062 histórico de TeknoBike con factura/imagen y revisión del catálogo. Resolver discrepancia Logan/Ozono sin sobrescribir la identidad comercial.",
+        "requires_routine_owner_entry": false,
+        "external_message_sent": false
+      },
+      "unresolved": "Marca/modelo exactos, revisión, lista exhaustiva del paquete y si incluye manetas/cables.",
+      "preservation_note": "Gate AG02: confirmar que asignar esta ficha no convierte un conjunto parcial en sistema completo. No rellenar levers_included=false por ausencia en foto ni escoger modelo Ozono por código coincidente.",
+      "apply_allowed": false,
+      "identity_model_confirmed": false,
+      "mechanical_approval": false,
+      "fill_allowed": false
+    },
+    {
+      "review_id": "AP16",
+      "product_id": "d365f9b8-0df6-477a-99c9-bcdeb20b8d0c",
+      "sku": "AE0208",
+      "decision": "preserve_assignment",
+      "reason": "La imagen actual muestra vástagos independientes con base de sellado y tuerca. Corresponde a válvula tubeless completa, aunque el nombre comercial diga tubular.",
+      "local_gate": null,
+      "review_preimage_sha256": "20ee6241730da50b11ce5b36768cdd0457eddc38d1482bdda14a2520089c898f",
+      "before_binding": {
+        "product_id": "d365f9b8-0df6-477a-99c9-bcdeb20b8d0c",
+        "category_id": "14d2d632-1f5f-406c-9a7c-16f55a5fc1ae",
+        "template_id": "1819b68d-72d4-464a-b69d-ba3f2eaa59b3",
+        "template_key": "tubeless_valve",
+        "binding_source": "category",
+        "contract_version": 2,
+        "technical_family": "tubeless_valve",
+        "explicit_template_id": null
+      },
+      "template_target": {
+        "id": "1819b68d-72d4-464a-b69d-ba3f2eaa59b3",
+        "key": "tubeless_valve",
+        "family": "tubeless_valve",
+        "local_template_sha256": "9b9a783a9796a323e4ee2b7cb51df6292766e907e1ab558095a0c09dd863f6cd"
+      },
+      "reviewed_delta": null,
+      "next_research_action": {
+        "owner": "Codex/Claude",
+        "action": "Recuperar anuncio y opción exacta AE0208 para vincular foto, contenido y modelo; conservar la distinción largo del vástago frente a longitud total.",
+        "requires_routine_owner_entry": false,
+        "external_message_sent": false
+      },
+      "unresolved": "Modelo/interfaz de base, aro/neumático compatible y cantidad vendida; fotografía promocional no equivale a recibo.",
+      "preservation_note": "No adoptar 2 unidades como unidad de inventario ni cotejar 57 mm total con 40 mm nominal como si fueran la misma medida.",
+      "apply_allowed": false,
+      "identity_model_confirmed": false,
+      "mechanical_approval": false,
+      "fill_allowed": false
+    },
+    {
+      "review_id": "AP17",
+      "product_id": "d62dd5f5-6b6f-4e7d-aa54-479e378c2745",
+      "sku": "GZ0010",
+      "decision": "identity_research_pending",
+      "reason": "Título genérico y categoría/compra heredada son la única evidencia. Redonda y a presión no identifican superficie, mecanismo ni pieza exacta. Se conserva la asignación como provisional, sin confirmarla para fill.",
+      "local_gate": null,
+      "review_preimage_sha256": "5a1fbfbad6205fa2d16f33d3165cc4fd75b9b79918eeb6f4fe2edfabedb2a7e6",
+      "before_binding": {
+        "product_id": "d62dd5f5-6b6f-4e7d-aa54-479e378c2745",
+        "category_id": "7c580490-496d-4c12-b0ce-1239466b9359",
+        "template_id": "0251857d-dbc1-49fc-94c7-0cba60aa8921",
+        "template_key": "brake_pad",
+        "binding_source": "category",
+        "contract_version": 2,
+        "technical_family": "brake_pad",
+        "explicit_template_id": null
+      },
+      "template_target": {
+        "id": "0251857d-dbc1-49fc-94c7-0cba60aa8921",
+        "key": "brake_pad",
+        "family": "brake_pad",
+        "local_template_sha256": "b6250774b43aaea8a75f9bce4fff753e98735d960267be0f25fa7adf349a955c"
+      },
+      "reviewed_delta": null,
+      "next_research_action": {
+        "owner": "Codex/Claude",
+        "action": "Examinar documento fuente 3e73a96a-27b6-4764-a3ad-ad3d20355d66 y cualquier imagen asociada a GZ0010; localizar referencia Garozzo y geometría del recambio.",
+        "requires_routine_owner_entry": false,
+        "external_message_sent": false
+      },
+      "unresolved": "Confirmar que es una pastilla/patín y su freno destinatario; dimensiones, retención y material.",
+      "preservation_note": "No asignar braking_surface=Disco o un código circular por palabras genéricas. No reemplazar familia hasta resolver objeto.",
+      "apply_allowed": false,
+      "identity_model_confirmed": false,
+      "mechanical_approval": false,
+      "fill_allowed": false
+    },
+    {
+      "review_id": "AP18",
+      "product_id": "e0275b3d-3f09-4592-863c-08cb8ff20482",
+      "sku": "P002773019334",
+      "decision": "preserve_assignment",
+      "reason": "La foto muestra cuerpo de rueda libre de una corona. La fuente Eastman confirma que el fabricante ofrece esta familia, pero varias referencias comparten acabado y dentado.",
+      "local_gate": null,
+      "review_preimage_sha256": "c45eb04a11a4f284d9db06ee61c0d008b1368e9b6eda2f798bb3ba27edf9e900",
+      "before_binding": {
+        "product_id": "e0275b3d-3f09-4592-863c-08cb8ff20482",
+        "category_id": "4ddce44d-f508-41de-9325-b92b39f8eb64",
+        "template_id": "c97799a4-b611-43c5-83f1-de4a407dd8f6",
+        "template_key": "freewheel",
+        "binding_source": "category",
+        "contract_version": 4,
+        "technical_family": "freewheel",
+        "explicit_template_id": null
+      },
+      "template_target": {
+        "id": "c97799a4-b611-43c5-83f1-de4a407dd8f6",
+        "key": "freewheel",
+        "family": "freewheel",
+        "local_template_sha256": "2697ce310711ef9c4cea750ae550d0dd968a60e9b3f984214565db7f1b34f243"
+      },
+      "reviewed_delta": null,
+      "next_research_action": {
+        "owner": "Codex/Claude",
+        "action": "Vincular Andes 19334 a referencia exacta Eastman y revisión de embalaje; distinguir modelos visualmente próximos.",
+        "requires_routine_owner_entry": false,
+        "external_message_sent": false
+      },
+      "unresolved": "Modelo y rosca/ancho/retención exactos.",
+      "preservation_note": "No adoptar FW-110 o FW-111 sólo por 16 dientes/dorado, ni transferir datos de Eastman China a la variante denominada India.",
+      "apply_allowed": false,
+      "identity_model_confirmed": false,
+      "mechanical_approval": false,
+      "fill_allowed": false
+    },
+    {
+      "review_id": "AP19",
+      "product_id": "eb82020b-a2b6-45f8-8513-f5ea66291d18",
+      "sku": "AE0143",
+      "decision": "delta_adjudicated_pending_global_gates",
+      "reason": "Foto y denominación muestran extensión que se fija a una patilla existente; la familia de patillas de recambio es incorrecta.",
+      "local_gate": null,
+      "review_preimage_sha256": "bb3f2c234fec1fd6f32a4c30b40550c7dfe433d22acfd1a55233f9a57cae1dc1",
+      "before_binding": {
+        "product_id": "eb82020b-a2b6-45f8-8513-f5ea66291d18",
+        "category_id": "505cd451-9ad4-44a0-b743-98c2df35577f",
+        "template_id": "a505c7c6-ef02-4706-900b-25d927886669",
+        "template_key": "derailleur_hanger",
+        "binding_source": "category",
+        "contract_version": 2,
+        "technical_family": "derailleur_hanger",
+        "explicit_template_id": null
+      },
+      "template_target": {
+        "id": "abd10f88-3db9-5c6b-8365-7817c2586922",
+        "key": "derailleur_hanger_extender",
+        "family": "derailleur_hanger_extender",
+        "local_template_sha256": "12df3efecb844656950e1a749ed237f3f49163bffd62abc09f324fc5379df2b7"
+      },
+      "reviewed_delta": {
+        "id": "APD19",
+        "product_id": "eb82020b-a2b6-45f8-8513-f5ea66291d18",
+        "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+        "review_id": "AP19",
+        "kind": "assignment_only_proposal",
+        "scope": "directo",
+        "before": {
+          "spec_template_id": null,
+          "spec_reference_id": null,
+          "category_id": "505cd451-9ad4-44a0-b743-98c2df35577f",
+          "spec_revision": 0,
+          "updated_at": "2026-05-22T22:33:41.227011+00:00",
+          "resolved_binding": {
+            "product_id": "eb82020b-a2b6-45f8-8513-f5ea66291d18",
+            "category_id": "505cd451-9ad4-44a0-b743-98c2df35577f",
+            "template_id": "a505c7c6-ef02-4706-900b-25d927886669",
+            "template_key": "derailleur_hanger",
+            "binding_source": "category",
+            "contract_version": 2,
+            "technical_family": "derailleur_hanger",
+            "explicit_template_id": null
+          }
+        },
+        "after": {
+          "spec_template_id": "abd10f88-3db9-5c6b-8365-7817c2586922"
+        },
+        "family_after": "derailleur_hanger_extender",
+        "fact_payload_changes": [],
+        "identity_changes": [],
+        "commercial_changes": [],
+        "erp_set_changes": [],
+        "category_mapping_changes": [],
+        "apply_allowed": false,
+        "gates": [
+          "Root adjudica propuesta y alcance de conjunto/especialización.",
+          "Plantilla destino publicada y releída con contrato exacto aprobado.",
+          "Releer preimagen/revisión/binding y abortar ante deriva; usar escritor autenticado de asignación, no UPDATE amplio de categoría.",
+          "Verificar preservación de facts/options/readings/legacy y campos comerciales/identidad antes y después de cualquier futura aplicación."
+        ],
+        "review_template_key_after": "derailleur_hanger_extender",
+        "template_key_after": "derailleur_hanger_extender"
+      },
+      "next_research_action": {
+        "owner": "Codex/Claude",
+        "action": "Recuperar anuncio/opción AE0143 y documentación Risk de la pieza exacta; conservar la marca visible como indicio sin inventar generación.",
+        "requires_routine_owner_entry": false,
+        "external_message_sent": false
+      },
+      "unresolved": "Interfaz, medidas y conjuntos expresamente soportados; qué significa el rango declarado.",
+      "preservation_note": "34–52T del título no es autorización universal ni aumento de capacidad de recogida de cadena.",
+      "apply_allowed": false,
+      "identity_model_confirmed": false,
+      "mechanical_approval": false,
+      "fill_allowed": false
+    },
+    {
+      "review_id": "AP20",
+      "product_id": "ff0c6d4b-32d8-47c9-a540-757667a934c2",
+      "sku": "AE0236",
+      "decision": "delta_adjudicated_pending_global_gates",
+      "reason": "Foto y título muestran prolongador de patilla, no patilla específica del cuadro. Se conserva OUO como identidad comercial ya existente.",
+      "local_gate": null,
+      "review_preimage_sha256": "05bddaa94e923b2d4b580bb6fa0c27604f31f85d2c6ff47223d4fe61a915c625",
+      "before_binding": {
+        "product_id": "ff0c6d4b-32d8-47c9-a540-757667a934c2",
+        "category_id": "505cd451-9ad4-44a0-b743-98c2df35577f",
+        "template_id": "a505c7c6-ef02-4706-900b-25d927886669",
+        "template_key": "derailleur_hanger",
+        "binding_source": "category",
+        "contract_version": 2,
+        "technical_family": "derailleur_hanger",
+        "explicit_template_id": null
+      },
+      "template_target": {
+        "id": "abd10f88-3db9-5c6b-8365-7817c2586922",
+        "key": "derailleur_hanger_extender",
+        "family": "derailleur_hanger_extender",
+        "local_template_sha256": "12df3efecb844656950e1a749ed237f3f49163bffd62abc09f324fc5379df2b7"
+      },
+      "reviewed_delta": {
+        "id": "APD20",
+        "product_id": "ff0c6d4b-32d8-47c9-a540-757667a934c2",
+        "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+        "review_id": "AP20",
+        "kind": "assignment_only_proposal",
+        "scope": "directo",
+        "before": {
+          "spec_template_id": null,
+          "spec_reference_id": null,
+          "category_id": "505cd451-9ad4-44a0-b743-98c2df35577f",
+          "spec_revision": 0,
+          "updated_at": "2026-05-22T22:33:41.227011+00:00",
+          "resolved_binding": {
+            "product_id": "ff0c6d4b-32d8-47c9-a540-757667a934c2",
+            "category_id": "505cd451-9ad4-44a0-b743-98c2df35577f",
+            "template_id": "a505c7c6-ef02-4706-900b-25d927886669",
+            "template_key": "derailleur_hanger",
+            "binding_source": "category",
+            "contract_version": 2,
+            "technical_family": "derailleur_hanger",
+            "explicit_template_id": null
+          }
+        },
+        "after": {
+          "spec_template_id": "abd10f88-3db9-5c6b-8365-7817c2586922"
+        },
+        "family_after": "derailleur_hanger_extender",
+        "fact_payload_changes": [],
+        "identity_changes": [],
+        "commercial_changes": [],
+        "erp_set_changes": [],
+        "category_mapping_changes": [],
+        "apply_allowed": false,
+        "gates": [
+          "Root adjudica propuesta y alcance de conjunto/especialización.",
+          "Plantilla destino publicada y releída con contrato exacto aprobado.",
+          "Releer preimagen/revisión/binding y abortar ante deriva; usar escritor autenticado de asignación, no UPDATE amplio de categoría.",
+          "Verificar preservación de facts/options/readings/legacy y campos comerciales/identidad antes y después de cualquier futura aplicación."
+        ],
+        "review_template_key_after": "derailleur_hanger_extender",
+        "template_key_after": "derailleur_hanger_extender"
+      },
+      "next_research_action": {
+        "owner": "Codex/Claude",
+        "action": "Recuperar anuncio/opción AE0236 y documento OUO correspondiente al límite 50T declarado.",
+        "requires_routine_owner_entry": false,
+        "external_message_sent": false
+      },
+      "unresolved": "Modelo, material certificado, interfaz y alcance de compatibilidad por configuración.",
+      "preservation_note": "50TMax no basta para aprobar cassette/cambio/cuadro; no derivar compatibilidad ni material de una inscripción comercial sin fuente trazable.",
+      "apply_allowed": false,
+      "identity_model_confirmed": false,
+      "mechanical_approval": false,
+      "fill_allowed": false
+    }
+  ],
+  "global_gates": {
+    "catalogue_published_and_verified": false,
+    "all_family_sanitation_complete": false,
+    "fresh_authenticated_preimage": false,
+    "assignment_only_applicator_verified": false,
+    "legacy_recovery_verified_in_postgresql": false
+  },
+  "assignments_applied": 0,
+  "products_filled": 0
+}

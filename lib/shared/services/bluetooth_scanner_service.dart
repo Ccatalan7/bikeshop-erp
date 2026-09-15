@@ -9,23 +9,23 @@ class BluetoothScannerService extends ChangeNotifier {
   BluetoothDevice? _connectedDevice;
   StreamSubscription<BluetoothConnectionState>? _connectionSubscription;
   StreamSubscription<List<int>>? _dataSubscription;
-  
+
   final StreamController<String> _barcodeController =
       StreamController<String>.broadcast();
   Stream<String> get barcodeStream => _barcodeController.stream;
-  
+
   bool _isScanning = false;
   bool get isScanning => _isScanning;
-  
+
   bool _isConnected = false;
   bool get isConnected => _isConnected;
-  
+
   String? _connectedDeviceName;
   String? get connectedDeviceName => _connectedDeviceName;
-  
+
   List<BluetoothDevice> _availableDevices = [];
   List<BluetoothDevice> get availableDevices => _availableDevices;
-  
+
   final StringBuffer _dataBuffer = StringBuffer();
 
   /// Check if permissions are granted
@@ -37,10 +37,10 @@ class BluetoothScannerService extends ChangeNotifier {
         final bluetoothScan = await Permission.bluetoothScan.status;
         final bluetoothConnect = await Permission.bluetoothConnect.status;
         final location = await Permission.location.status;
-        
-        return bluetoothScan.isGranted && 
-               bluetoothConnect.isGranted && 
-               location.isGranted;
+
+        return bluetoothScan.isGranted &&
+            bluetoothConnect.isGranted &&
+            location.isGranted;
       } else if (defaultTargetPlatform == TargetPlatform.iOS) {
         final bluetooth = await Permission.bluetooth.status;
         return bluetooth.isGranted;
@@ -63,14 +63,14 @@ class BluetoothScannerService extends ChangeNotifier {
           Permission.bluetoothConnect,
           Permission.location,
         ].request();
-        
+
         if (kDebugMode) {
           print('Permission statuses:');
           statuses.forEach((permission, status) {
             print('  $permission: $status');
           });
         }
-        
+
         return statuses.values.every((status) => status.isGranted);
       } else if (defaultTargetPlatform == TargetPlatform.iOS) {
         final status = await Permission.bluetooth.request();
@@ -92,10 +92,10 @@ class BluetoothScannerService extends ChangeNotifier {
         final bluetoothScan = await Permission.bluetoothScan.status;
         final bluetoothConnect = await Permission.bluetoothConnect.status;
         final location = await Permission.location.status;
-        
-        return bluetoothScan.isPermanentlyDenied || 
-               bluetoothConnect.isPermanentlyDenied || 
-               location.isPermanentlyDenied;
+
+        return bluetoothScan.isPermanentlyDenied ||
+            bluetoothConnect.isPermanentlyDenied ||
+            location.isPermanentlyDenied;
       } else if (defaultTargetPlatform == TargetPlatform.iOS) {
         final bluetooth = await Permission.bluetooth.status;
         return bluetooth.isPermanentlyDenied;
@@ -113,7 +113,7 @@ class BluetoothScannerService extends ChangeNotifier {
       if (await FlutterBluePlus.isSupported == false) {
         return false;
       }
-      
+
       final adapterState = await FlutterBluePlus.adapterState.first;
       return adapterState == BluetoothAdapterState.on;
     } catch (e) {
@@ -139,7 +139,7 @@ class BluetoothScannerService extends ChangeNotifier {
   Future<void> startScan(
       {Duration timeout = const Duration(seconds: 10)}) async {
     if (_isScanning) return;
-    
+
     _isScanning = true;
     _availableDevices.clear();
     notifyListeners();
@@ -156,14 +156,14 @@ class BluetoothScannerService extends ChangeNotifier {
 
       // Start scanning
       await FlutterBluePlus.startScan(timeout: timeout);
-      
+
       // Wait for timeout
       await Future.delayed(timeout);
-      
+
       // Stop scanning
       await FlutterBluePlus.stopScan();
       await subscription.cancel();
-      
+
       _isScanning = false;
       notifyListeners();
     } catch (e) {
@@ -198,7 +198,7 @@ class BluetoothScannerService extends ChangeNotifier {
 
       // Discover services
       List<BluetoothService> services = await device.discoverServices();
-      
+
       // Find characteristics that support notifications (typical for barcode scanners)
       for (BluetoothService service in services) {
         for (BluetoothCharacteristic characteristic
@@ -206,7 +206,7 @@ class BluetoothScannerService extends ChangeNotifier {
           if (characteristic.properties.notify) {
             // Subscribe to notifications
             await characteristic.setNotifyValue(true);
-            
+
             _dataSubscription = characteristic.lastValueStream.listen((value) {
               _processIncomingData(value);
             });
@@ -227,23 +227,23 @@ class BluetoothScannerService extends ChangeNotifier {
   void _processIncomingData(List<int> data) {
     try {
       String text = String.fromCharCodes(data);
-      
+
       // Accumulate data in buffer
       _dataBuffer.write(text);
-      
+
       // Check for newline/carriage return (end of barcode)
       String bufferContent = _dataBuffer.toString();
       if (bufferContent.contains('\n') || bufferContent.contains('\r')) {
         // Extract barcode (remove control characters)
         String barcode =
             bufferContent.replaceAll('\n', '').replaceAll('\r', '').trim();
-        
+
         if (barcode.isNotEmpty) {
           // Emit barcode
           _barcodeController.add(barcode);
           if (kDebugMode) print('Barcode scanned: $barcode');
         }
-        
+
         // Clear buffer
         _dataBuffer.clear();
       }
@@ -260,7 +260,7 @@ class BluetoothScannerService extends ChangeNotifier {
     _dataSubscription = null;
     _connectedDevice = null;
     notifyListeners();
-    
+
     if (kDebugMode) print('Device disconnected');
   }
 
@@ -269,11 +269,11 @@ class BluetoothScannerService extends ChangeNotifier {
     try {
       await _dataSubscription?.cancel();
       await _connectionSubscription?.cancel();
-      
+
       if (_connectedDevice != null) {
         await _connectedDevice!.disconnect();
       }
-      
+
       _handleDisconnection();
     } catch (e) {
       if (kDebugMode) print('Error disconnecting: $e');

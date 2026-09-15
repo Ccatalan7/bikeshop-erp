@@ -10,13 +10,22 @@ import {
   type JsonValue,
   type LogicalModelRole,
 } from "../contracts.ts";
-import { type AgentModelProvider, ProviderError } from "./provider.ts";
-import { discardProviderBody, readProviderJson } from "./http.ts";
+import { type AgentModelProvider, ProviderError, requiredToolNameFor } from "./provider.ts";
+import {
+  discardProviderBody,
+  providerRejectionReason,
+  readProviderJson,
+} from "./http.ts";
 
 const defaultModels: Readonly<Record<LogicalModelRole, string>> = {
-  fast: "gemini-2.5-flash-lite",
-  deep: "gemini-2.5-flash",
-  vision: "gemini-2.5-flash",
+  fast: "gemini-3.6-flash",
+  // `gemini-3.7-flash` es el Flash estable más nuevo y el que Google describe
+  // para «agentic workflows and reliable multi-step execution», que es
+  // exactamente esta carga: el asistente encadena herramientas en varios
+  // pasos. Reemplazó a `gemini-3.1-pro-preview` el 2026-08-21, cuando ese
+  // preview empezó a rechazar por cuota 12 de cada 12 llamadas.
+  deep: "gemini-3.7-flash",
+  vision: "gemini-3.6-flash",
 };
 
 export interface GeminiAgentProviderConfig {
@@ -48,52 +57,112 @@ export function createGeminiAgentProvider(config: GeminiAgentProviderConfig): Ag
   );
   const modelByRole = config.modelByRole ?? defaultModels;
   const allowedModels = new Set(
-    config.allowedModels ?? ["gemini-2.5-flash-lite", "gemini-2.5-flash"],
+    config.allowedModels ??
+      ["gemini-3.7-flash", "gemini-3.6-flash", "gemini-3.1-pro-preview"],
   );
   assertServerModelConfiguration(modelByRole, allowedModels);
 
   return {
     id: "gemini",
+    modelFor: (role) => modelByRole[role],
     async generate(request, signal) {
       const model = modelByRole[request.modelRole];
       const endpoint = new URL(`models/${encodeURIComponent(model)}:generateContent`, endpointBase);
       const continuation = decodeGeminiContinuation(request.continuationToken);
-      const payload = {
-        systemInstruction: { parts: [{ text: request.systemInstruction }] },
-        contents: geminiContents(request.messages, continuation.groups),
-        tools: request.tools.length === 0 ? undefined : [{
-          functionDeclarations: request.tools.map((tool) => ({
-            name: tool.name,
-            description: tool.description,
-            parametersJsonSchema: tool.parameters,
-          })),
-        }],
-        generationConfig: { maxOutputTokens: request.maxOutputTokens },
+      const requiredToolName = requiredToolNameFor(request);
+      // `narrowToolName` deja declarada **sólo** esa herramienta. Es el
+      // repliegue cuando el proveedor rechaza `mode: ANY`: si la restricción no
+      // se puede expresar en el transporte, se expresa en el catálogo, porque
+      // un modelo no puede llamar a una función que no ve.
+      const buildPayload = (
+        forcedToolName: string | undefined,
+        narrowToolName: string | undefined,
+      ) => {
+        const declared = narrowToolName === undefined
+          ? request.tools
+          : request.tools.filter((tool) => tool.name === narrowToolName);
+        return {
+          systemInstruction: { parts: [{ text: request.systemInstruction }] },
+          contents: geminiContents(request.messages, continuation.groups),
+          tools: declared.length === 0 ? undefined : [{
+            functionDeclarations: declared.map((tool) => ({
+              name: tool.name,
+              description: tool.description,
+              parametersJsonSchema: tool.parameters,
+            })),
+          }],
+          toolConfig: forcedToolName
+            ? {
+              functionCallingConfig: {
+                mode: "ANY",
+                allowedFunctionNames: [forcedToolName],
+              },
+            }
+            : undefined,
+          generationConfig: { maxOutputTokens: request.maxOutputTokens },
+        };
       };
 
-      let response: Response;
-      try {
-        response = await fetchImpl(endpoint, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "x-goog-api-key": apiKey,
-          },
-          body: JSON.stringify(payload),
-          signal,
-        });
-      } catch (_) {
-        throw new ProviderError("provider_unavailable", 503, true);
+      const send = async (
+        forcedToolName: string | undefined,
+        narrowToolName?: string,
+      ): Promise<Response> => {
+        try {
+          return await fetchImpl(endpoint, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "x-goog-api-key": apiKey,
+            },
+            body: JSON.stringify(buildPayload(forcedToolName, narrowToolName)),
+            signal,
+          });
+        } catch (_) {
+          throw new ProviderError("provider_unavailable", 503, !signal.aborted);
+        }
+      };
+
+      const rejectionIsRetryable = (status: number) =>
+        status === 408 || status === 429 || status >= 500;
+
+      let response = await send(requiredToolName, undefined);
+
+      // **Forzar la herramienta es una pista, no el contrato.**
+      //
+      // `functionCallingConfig.mode = "ANY"` le pide al modelo que la llamada
+      // terminal sea sí o sí una función concreta. Un modelo que no admite esa
+      // restricción rechaza la petición entera con 4xx, y entonces se pierde no
+      // la pista sino la conversación completa: el 2026-08-18 el Asistente de
+      // compras fallaba SIEMPRE en la sexta llamada —las cinco anteriores
+      // respondían `tool_calls` sin problema— porque esa sexta es la única que
+      // fuerza `prepare_supply_request`. Ningún borrador podía cerrarse nunca.
+      //
+      // Quien de verdad garantiza el contrato es `assertRequiredProviderToolTurn`
+      // en el runtime, que exige que el turno traiga esa herramienta y sólo esa.
+      // Por eso degradar la pista es seguro: si el modelo no la llama, sigue
+      // fallando con su error tipado de siempre; lo que ya no ocurre es tirar la
+      // corrida por una restricción de transporte que el proveedor no acepta.
+      if (
+        !response.ok && requiredToolName !== undefined &&
+        !rejectionIsRetryable(response.status)
+      ) {
+        await discardProviderBody(response);
+        response = await send(undefined, requiredToolName);
       }
 
       if (!response.ok) {
+        const retryable = rejectionIsRetryable(response.status);
+        // Un rechazo no reintentable es el único que hay que poder diagnosticar
+        // después: se rescata su enum de estado y se descarta el resto.
+        const reason = retryable
+          ? undefined
+          : await providerRejectionReason(response);
         await discardProviderBody(response);
-        const retryable = response.status === 408 || response.status === 429 ||
-          response.status >= 500;
         throw new ProviderError(
           retryable ? "provider_unavailable" : "provider_rejected",
           response.status,
           retryable,
+          reason,
         );
       }
 
@@ -241,12 +310,36 @@ function normalizeGeminiResponse(
 function parseGeminiUsage(value: unknown): AgentUsage {
   if (!value || typeof value !== "object" || Array.isArray(value)) return emptyUsage();
   const usage = value as Record<string, unknown>;
-  const inputTokens = safeTokenCount(usage.promptTokenCount);
-  const outputTokens = safeTokenCount(usage.candidatesTokenCount);
+  // Gemini reports tool-schema/tool-use prompt tokens separately from the
+  // ordinary prompt and thinking tokens separately from visible candidates.
+  // Both are billable: tool-use prompt tokens are input, while thinking tokens
+  // are output. Keep the ledger decomposition exact so pricing and quota
+  // checks do not reject a perfectly valid thinking-model response.
+  const inputTokens = safeTokenSum(
+    safeTokenCount(usage.promptTokenCount),
+    safeTokenCount(usage.toolUsePromptTokenCount),
+  );
+  let outputTokens = safeTokenSum(
+    safeTokenCount(usage.candidatesTokenCount),
+    safeTokenCount(usage.thoughtsTokenCount),
+  );
+  const reportedTotal = safeTokenCount(usage.totalTokenCount);
+  const componentTotal = safeTokenSum(inputTokens, outputTokens);
+  // A future Gemini metadata revision may expose another internal token class
+  // before this adapter knows its name. Preserve total billed usage and charge
+  // any positive residual at the more conservative output rate.
+  if (reportedTotal > componentTotal) {
+    outputTokens = safeTokenSum(outputTokens, reportedTotal - componentTotal);
+  }
   return {
+    // Cuántos de los tokens de entrada los sirvió el caché del proveedor. El
+    // 70% de cada petición es prefijo idéntico —catálogo de herramientas y
+    // reglas—, así que saber si Gemini lo está descontando decide si vale la
+    // pena implementar caché explícito o ya no hace falta.
+    cachedInputTokens: safeTokenCount(usage.cachedContentTokenCount),
     inputTokens,
     outputTokens,
-    totalTokens: safeTokenCount(usage.totalTokenCount) || inputTokens + outputTokens,
+    totalTokens: safeTokenSum(inputTokens, outputTokens),
   };
 }
 
@@ -262,6 +355,12 @@ function geminiFinishReason(value: unknown, calls: readonly AgentToolCall[]): Ag
     case "BLOCKLIST":
     case "PROHIBITED_CONTENT":
       return "blocked";
+    // El modelo quiso llamar una herramienta y escribió JSON inválido. Es un
+    // fallo de formato suyo, no del proveedor, y no es determinista: se
+    // distingue para poder volver a preguntar en vez de perder el turno.
+    case "MALFORMED_FUNCTION_CALL":
+    case "UNEXPECTED_TOOL_CALL":
+      return "malformed_tool_call";
     default:
       return "unknown";
   }
@@ -292,6 +391,14 @@ function requireValue(value: string, label: string): string {
 
 function safeTokenCount(value: unknown): number {
   return typeof value === "number" && Number.isSafeInteger(value) && value >= 0 ? value : 0;
+}
+
+function safeTokenSum(left: number, right: number): number {
+  const total = left + right;
+  if (!Number.isSafeInteger(total) || total < 0) {
+    throw new ProviderError("provider_invalid_response", 502, false);
+  }
+  return total;
 }
 
 function encodeContinuation(value: GeminiContinuationState): string {

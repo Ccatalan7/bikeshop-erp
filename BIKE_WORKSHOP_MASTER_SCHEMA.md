@@ -1,8 +1,8 @@
 # Bike Workshop Master Schema
 
-Last updated: 2026-07-16
+Last updated: 2026-09-06
 Status: Living architecture document
-Scope: Bike encyclopedia, bike profile, diagnosis, workshop items, service wizard, bike memory kernel, sync pipeline, and visible bike history
+Scope: Bike encyclopedia, bike profile, diagnosis, workshop items, service wizard, supply needs and commitments, bike memory kernel, sync pipeline, and visible bike history
 
 Compatibility concepts companion: `BIKE_WORKSHOP_COMPATIBILITY_CONCEPTS.md`
 
@@ -629,10 +629,68 @@ The existing generic product spec engine should therefore be used progressively,
 - the shared workshop product autocomplete may keep a bounded mixed-catalog preview for fast opening, but exclusive product/service filters and subsequent typed searches must carry `product_type` into the catalog query; a preview page is never the authoritative universe for compatibility ranking or visible filter counts
 - when product spec coverage is sparse, products with no detailed spec rows should remain neutral unless a controlled coarse technical-family mapping already proves an obvious incompatibility
 - compatibility hints in workshop suggestion UI should be driven first by `bike_profiles.technical_profile.values`, then by `product_spec_values` / `spec_definitions.key`, and may use `category_tech_mappings.technical_family` as a coarse fallback; they must not be driven by raw `products.category_name` or page-local keyword matching
+- AI inventory discovery is another consumer of this same product-side backbone. The model separates catalog category, product identity and technical facts instead of flattening all three into a Product List keyword. For any measurement, range, standard or compatibility request it must first call the tenant-bound schema inspector, which resolves active `product_categories` plus descendants, `category_tech_mappings`, template fields, canonical `spec_definitions.key`, data types, units, supported operators and actual populated/total coverage. Only a later model round may call inventory search with those typed predicates (`eq`, `neq`, numeric inequalities, `between`, `in` or text `contains` where the discovered type permits it). Matching `product_spec_values` are authoritative and a populated conflict eliminates the row. Identity text may fill an unpopulated field only for exact equality/membership when the product's curated identity states the value; it never proves a range or inequality, so a name such as `68x122.5` cannot satisfy `eje < 125`. That fallback is labelled separately and never claims the ficha was populated. SKU/barcode substrings, descriptions and compatibility prose never satisfy a technical predicate. Availability is applied in the same server projection before result IDs are returned. When the inspector proves zero structured coverage for the needed fact, the assistant must disclose the missing data instead of returning name matches or calling the source unavailable.
+- Intelligent purchasing reuses that same discovery contract for durable demand. One natural request is decomposed by the model into one to eight ordered lines, but the server accepts a technical predicate only when its key, type, operator and values are valid for a real active filterable `spec_definitions` field. An exact product must also satisfy its authoritative `product_spec_values`; an unresolved line may retain the literal request and an allowed predicate even when coverage is zero, but it must not claim compatibility or an exact identity. If one measurement could describe the product itself or the bike/wheel/system where it will be installed, the model preserves the relationship exactly as stated and asks that semantic fork before requesting downstream compatibility facts. This is a general ambiguity rule, not a per-part subwizard. The closed review card remains editable; only an explicit user confirmation creates all reviewed `supply_needs`, their AI interpretation revisions and one replay receipt atomically. Preparation and review create no purchase document, payment, receipt, stock movement or accounting entry.
 - ficha controls for finite workshop vocabularies must use standardized selectors or bounded numeric ranges, not arbitrary free text when the bike world already works with known counts, diameters, widths, tooth ranges, and driver families
 - when one product-spec field is downstream of stronger upstream selections such as chain width, drivetrain speeds, declared profile, brand family, or freehub family, the ficha UI must filter, lock, or suppress incompatible options instead of letting the user save contradictory combinations that later poison the compatibility layer
 
 ### Commercial Brand Is Not Compatibility Family
+
+**2026-09-05 — researched target; baseline implemented 2026-09-06.** The
+[product ficha contract](docs/architecture/product-technical-specifications-contract.md),
+[family matrix](docs/architecture/product-spec-family-matrix.md) and
+[source-backed mechanics](docs/architecture/bicycle-compatibility-knowledge.md)
+supersede the April target's universal singular-ecosystem hierarchy and
+width-to-speed inference. Commercial identity, intrinsic measurements and
+scoped compatibility relationships are separate. Multi-system products need
+conditional relationship rows, not one compulsory ecosystem owner. Manual
+conflicts remain in a draft; only coherent accepted facts feed compatibility.
+Shared vocabulary and `spec_facts` remain the backbone. A catalogue revision
+must not rewrite installed `bike_profiles` facts or historical workshop snapshots.
+The April field layout and observations below are migration context, not proof
+that old rules are mechanically sufficient. See the
+[implementation result](docs/development/product-specs-research-2026-09-05/implementation-result.md)
+for exact coverage and evidence; the broader target remains incremental.
+
+The deployed baseline adds versioned template contracts, immutable manufacturer
+reference editions, `products.spec_revision` and an atomic identity/facts/set
+command (`save_product_with_specs_v1`). `spec_facts` remains authoritative.
+`get_product_spec_contexts_v1` supplies normalized accepted facts, scoped claims
+and issues to the workshop consumer. Incomplete prerequisites are nonblocking;
+explicit contradictions are blocking. Public specs keep known incomplete facts
+and exclude private sources/retired fields and the affected blocking fields.
+Unchanged observations preserve source and readings on commercial edits. Neither
+catalog references nor this migration rewrite installed-bike facts. No existing
+product was backfilled or saved during verification. Chain scoring removes the
+outer-width oracle and retains a named caution for exclusive LINKGLIDE claims
+when the bike platform is unknown. The three seeded editions do not constitute
+a complete mechanical catalogue for the 36 families.
+
+**2026-09-06, chain/connector extension:** `20260906103000` adds target-chain
+declarations and connector direction, type/source prerequisites and reviewed
+reuse rules, with six connector models and two exact chain presentations.
+The connector consumer does not equate chain class with bicycle cog count;
+installed-chain identity is required before fitment can be established. Numeric
+bands from a glossary are not universal physical limits. Explicitly submitted
+facts keep their existing provenance when equal to the selected reference;
+the reference's sources coexist with independent operator evidence. The exact
+[delivery result](docs/development/product-specs-research-2026-09-05/chain-connector-implementation-2026-09-06.md)
+records production read-back and UI proof. The owner also assigned catalogue
+research/filling to Codex and Claude; the [prepared queue and execution plan](docs/development/product-specs-research-2026-09-05/catalog-fill-execution-plan-2026-09-06.md)
+cover all physical product categories, with no bulk product writes yet.
+
+**2026-09-06, global catalogue audit:** the audit includes 1,664 records,
+1,605 physical products, 59 services and all 136 definitions/280 template-field
+uses. Numeric-domain migration `20260906150000` is deployed for 35 definitions
+in 22 templates; this does not establish mechanical fitment. Product-owned
+template binding (`20260906160000`) is under local validation. Workshop family
+and facts now come from the same `get_product_spec_contexts_v1` projection in
+the pending client change; category caches cannot override an explicit binding.
+Retained facts outside that template remain review evidence, never active
+fitment inputs. Search, purchasing and the job recommender must use the same
+resolution. See the [global checkpoint](docs/development/product-specs-research-2026-09-05/global-audit-and-sanitation-2026-09-06.md).
+Fill follows global sanitation; no early chain pilot and no exclusion of real
+non-bicycle merchandise from its own appropriate product attributes.
 
 This must be explicit because the drivetrain slice already drifted here once.
 
@@ -643,7 +701,7 @@ This must be explicit because the drivetrain slice already drifted here once.
   - a mandatory singular top anchor for the product's main drivetrain branch or ecosystem truth
   - optional explicit cross-ecosystem compatibility claims printed on packaging
   - narrower downstream platform/profile/actuation refinements
-- the corrected target model is:
+- the 2026-04-27 field model retained here as migration context was:
   - `drivetrain_mode` (or equivalent) as the top branch: at minimum `single_speed_bmx_igh` vs `derailleur`; this is mandatory for chain-family templates and may be implicit for other drivetrain templates when category already proves the branch
   - when stronger chain-side signals such as standardized width family, confirmed chain speeds, declared platform, or anchored profile already prove that branch, the ficha UI should keep `drivetrain_mode` implicit/hidden instead of re-showing it as a second locked pseudo-field; persist it manually only when the branch is still unresolved and really needs explicit upstream confirmation
   - `drivetrain_primary_ecosystem` (user-facing: `Familia tecnica / ecosistema principal`) as a mandatory single-select anchor for modern derailleur-compatible products when the manufacturer declares one; this is the real top hierarchy field for Shimano/SRAM/Campagnolo/Microshift-style truth
@@ -686,7 +744,11 @@ Live verification on 2026-04-27:
 - live Viñabike drivetrain catalog audit shows current ficha coverage is near-empty for these drivetrain compatibility fields, while product names usually declare speed first, width sometimes, and only occasionally platform or cross-brand compatibility claims
 - the first production deployment intentionally backfilled only from existing structured drivetrain signals and inserted `0` live product rows, so current catalog reality still does not justify dense optimistic inference from sparse drivetrain packaging claims
 
-The architectural gap is no longer "missing the ecosystem split". That split now exists in the active ficha layer. The real remaining gap is data density and disciplined use: the catalog still needs better explicit population of primary ecosystem, declared compatible ecosystems, and downstream platform/profile truth without regressing into commercial-text inference.
+The April assessment treated data density as the remaining gap. The read-only
+2026-09-05 audit also demonstrates a structural gap: independent ecosystem,
+profile, speed and width decisions can contradict one another. More population
+alone does not solve it. The new target requires contextual relationships,
+identity binding and joint server validation, without commercial-text inference.
 
 ### Backbone boundary for this concept
 
@@ -1180,6 +1242,396 @@ the native Galaxy S23 Ultra landscape canary remains to be proven; customer
 selection/creation, add-bicycle, the service wizard, and some deep item rows
 still retain legacy dialogs or layouts and need their own touch/keyboard audit.
 
+### Supply needs and pre-invoice commitments (2026-08-16)
+
+A missing workshop part is now represented by `supply_needs`, not by a status
+name, a `mechanic_job_items` placeholder or an unstructured expense note. A
+need preserves its original description verbatim, optional confirmed catalog
+product, quantity/unit, identity state, sourcing state, optimistic version and
+exact `mechanic_job_id` / optional `mechanic_job_bikes.id` provenance. A null
+`job_bike_id` remains intentional `General` scope; it is never filled from a
+primary-bike guess.
+
+`job_statuses_custom.prompts_supply_need_capture` is a semantic UI capability.
+The audited `set_job_status_supply_need_capability_v1` command owns changes to
+that flag, and `mechanic_job_supply_attention_v1` derives whether a job whose
+current state requests parts still has no active need. Renaming or recoloring a
+status cannot change this behavior. Selecting such a status first completes
+the canonical job transition; only after success may its anchored surface
+offer product-autocomplete or verbatim-description capture.
+
+**Jobs traceability correction (2026-08-24).** The status is only an invitation
+to capture demand; it is never the demand record. Jobs now reads the exact live
+`mechanic_job_supply_attention_v1.requires_supply_definition` projection,
+keeps the active-need count visible even after the job leaves the prompting
+status, and exposes the complete job-origin history (including covered and
+cancelled rows) with product/SKU or verbatim description, quantity, bicycle
+scope, lifecycle state and timestamps. One linked bicycle is selected
+automatically and shown as read-only context. Two or more linked bicycles have
+no honest default: the operator must choose one exact
+`mechanic_job_bikes.id` or intentional `General` scope before save. The same
+status writer is used by the Jobs list, embedded calendar and per-bike status
+host; a per-bike transition starts with that exact bike selected.
+
+`20260824720000_workshop_supply_need_traceability.sql` adds
+`update_workshop_supply_need_v1`. It is the only Jobs-origin editor for product
+identity, original description, quantity/unit and job-bike attribution. The
+command validates tenant, optimistic version, editable lifecycle, same-job
+bicycle and active physical product, serializes its replay key, appends the
+normal `supply_need_events` receipt, and creates an interpretation revision only
+when interpretation actually changed. A bike-only correction therefore leaves
+the product interpretation history honest. Jobs and Intelligent Purchasing
+read the same `supply_needs` row; `/purchases/assistant?need=<id>&job=<id>` is
+only a context-preserving handoff, not a copy. The legacy
+`smart_purchase_list` remains a separate historical feature and must not become
+a second owner of workshop demand. The migration was applied, read back and
+registered in Viñabike production on 2026-08-24; the live function grants
+execute only to `authenticated` and its definition contains the same-job bike,
+optimistic-version, durable-receipt and replay-serialization guards.
+
+`workshop_inventory_commitments` is the pre-invoice physical promise for a
+confirmed need. It is versioned by append-only
+`workshop_inventory_commitment_events`, reduces common ATP, and never writes
+`products.stock_quantity`, `stock_movements`, COGS, revenue or journals.
+`active_inventory_commitments_v1` combines workshop commitments with active
+online reservations, while `inventory_available_quantity_v1` and
+`inventory_availability_v1` are the shared ATP authority. Product edits,
+set-component edits and every physical consumer protect that combined reserved
+floor.
+
+**Purchase-priority provenance correction (2026-08-25).** A workshop entry in
+`purchase_priority_feed_v1` is the existing `supply_needs` row, never a loose
+product suggestion. Its `jobContext` carries the exact `mechanic_job_id`, job
+number, intentional `whole_job` or exact-bike scope, `job_bike_id`, underlying
+bike id and the bicycle identity fields read through the tenant-safe
+`mechanic_job_bikes → bikes` graph. Purchasing renders that job/bicycle scope
+as separate `Trabajo` and `Bicicleta` columns beside the product; `signalAt`
+for this source is the need's immutable `created_at`, shown as `Ingresado`.
+Taking one row rereads and opens the same need; it must not call the ad-hoc
+create command, duplicate demand or sever the provenance that Jobs owns. A
+NULL `job_bike_id` remains `Todo el trabajo` and is never replaced with the
+job's primary bicycle.
+
+`take_purchase_priority_batch_v1` is the 1..8-row handoff from that priority
+table to the existing Purchasing basket. It accepts only opaque
+`source + entityId` pairs and re-reads the authoritative feed in one
+transaction. Workshop rows are returned unchanged; current stock signals use
+the canonical ad-hoc need writer with manual/system provenance rather than an
+AI batch. One immutable receipt makes a lost response replay-safe, and a
+per-product transaction lock makes concurrent priority batches converge on one
+open need. Checking rows performs no write; only `Buscar juntos` invokes this
+command, then the normal basket coverage/scenario workflow continues.
+
+`assign_supply_need_from_stock_v1` atomically proves capacity and creates the
+commitment. `release_supply_need_stock_v1` releases it without a stock
+movement. If assignable stock is deliberately unsuitable, the operator records
+a reason through `reject_supply_need_internal_stock_v1` before external
+alternatives become eligible. The reason is workflow evidence, not technical
+truth about the bicycle or product.
+
+**Family-lane resolution (Fase B1, 2026-08-17 — in the working tree, tested
+locally, NOT deployed).** `reject_supply_need_internal_stock_v1` requires a
+confirmed exact product, so a need resolved only to a category could never
+record the rejection that opens external alternatives: it was stuck with
+neither stock nor purchase.
+`20260817160000_supply_need_family_resolution_b1.sql` closes that lane without
+touching v1. `supply_need_resolution_context_internal_v1` is the single owner of
+which interpretation revision governs — the highest `revision_no`, never the
+latest clock time. `supply_need_eligible_products_internal_v1` resolves
+technical eligibility over **active catalog products of the category and its
+active descendants**, not over `purchase_candidate_metrics_v1`, which only knows
+what the shop already bought; it evaluates every predicate through the shared
+inventory evaluator **before any cut**, because cutting first would let a run of
+contradictions hide the valid product behind them, and it answers
+`needs_refinement` with counts and the template fields that can narrow the set
+rather than truncating silently. Evidence aggregates strictest-wins: a
+contradiction excludes the product entirely, ficha evidence is strong, a value
+read from the name is weak, and an unanswerable criterion is `unverified` —
+unknown, never compatible. `get_supply_need_stock_resolution_v1` is the
+stock-first read: per-product ATP through `inventory_available_quantity_v1`,
+coverage against the need's quantity, full counts beside a bounded page, and one
+blocking rule — only a full candidate with usable evidence forces the operator
+to look before comparing suppliers. `unverified` is shown but never blocks,
+since charging the operator for a gap in the ERP would invent a decision. The
+family ATP aggregate is informational and explicitly does not prove coverage:
+combining two variants is a workshop decision, not a property of inventory.
+`reject_supply_need_internal_stock_v2` keeps v1 semantics for the exact lane and
+adds the family one, bound to both the need version and the governing revision.
+`confirm_supply_need_family_choice_v1` converges an explicitly chosen
+non-contradicting alternative — `unverified` included, because the choice is a
+person's — revalidating tenant, category and eligibility under lock, and copying
+`category_id`, `constraints` and `clarifications` into the new interpretation.
+That copy is the point: `update_supply_need_v1` writes its manual revision with
+empty constraints and no category, so converging through it would have erased
+the Fase A provenance and left the next family calculation blind. The new
+revision stores only stable match evidence, keeps an earlier family rejection
+standing, adds a typed ledger action, and neither assigns stock nor creates a
+plan. External scoring, typed commercial preference and the UI are not part of
+this cut.
+
+The linked `sales_invoices` document remains the only owner of physical
+consumption and accounting. Its posting path transitions matching commitments
+`active -> consuming -> consumed` around the exact invoice-owned stock
+movements; reopening the invoice reactivates the commitment. A mismatch or
+partial consumption aborts the transaction instead of leaving ATP and on-hand
+truth divergent.
+
+**Category provenance on the interpretation revision (Fase A, 2026-08-17 — in
+the working tree, tested locally, NOT deployed).**
+`supply_need_interpretation_revisions.category_id` existed from the kernel and
+was never written: a category the assistant had already resolved from the
+operator's phrase died at capture, so a need without an exact product carried no
+family at all. `20260817150000_supply_request_category_provenance.sql` closes
+that: `assistant_inspect_inventory_schema_v3` publishes the resolved category
+identity, `assistant_prepare_supply_request_v2` accepts it as a turn-scoped
+opaque reference, and `create_supply_need_batch_v2` persists it.
+
+Authority is explicit and does not change the layers above. **An exact catalog
+product owns its category**, derived server-side from the ficha; a category sent
+alongside it that disagrees is an error, not a preference. Only a line without a
+product may carry a model-resolved category, and **a technical predicate needs
+complete grounding**: a resolved category, an active spec template for it, and
+membership of every field in that template. With no active mapping or no
+resolvable template the line is admitted only with empty predicates — the need
+and its category survive, no unfounded criterion does. There is no fallback to a
+global `is_filterable` rule: that let any filterable definition of the catalog
+bound any category, so a tyre width could constrain a chain, and such a criterion
+would later govern a ranking with nobody able to say where it came from.
+
+Derived labels never reach durable storage. `technical_family` and the category
+path come from `category_tech_mappings` and `product_categories` and move when
+someone reorganizes the tree, so the command strips them before building any
+snapshot: they are absent from the interpretation evidence, from the durable
+event, and from `supply_need_batch_receipts.request_snapshot`. **The idempotency
+snapshot rests on stable identities**, because a glossed one would break replay
+the moment a category is renamed. They travel transiently inside the closed card
+so a surface can label them, and the durable command sends only `category_id`.
+Rewriting a line's description clears product, category, family and predicates
+together, because all of them came from interpreting the previous phrase.
+
+Nothing here reaches ranking: `rank_purchase_candidates_v1` and its `p_query`
+lexical fallback are untouched, and the purchasing capture stage still advertises
+only schema inspection, inventory search, capability gap and supply-request
+preparation.
+
+**Typed commercial target (Fase B2 cut, 2026-08-17 — in the working tree, tested
+locally, NOT deployed).** A supply need's commercial preference used to be a
+free-text `commercial_preference` entry inside `constraints` that nothing read
+and nothing validated, and the ranking's `gama` argument was fed only by a UI
+selector, never by the need. `supply_need_commercial_revisions` replaces that
+with an append-only stream of typed preferences: band, preferred brand identity,
+maximum landed unit cost and minimum gross margin ratio.
+
+It is a **separate stream, not columns on the interpretation revision**, and the
+reason is demonstrated in this schema: `update_supply_need_v1` writes its manual
+revision with empty constraints and no category. A writer that drops fields
+already exists, so nullable columns there would force every writer to copy them
+forward and the first one that forgets erases the preference silently. One
+stream, one writer, no such surface — proven by regressions that run the generic
+update and the family confirmation and assert the target survives both.
+
+The currency is **server-owned** from `tenants.currency` and is not
+representable in the input: a payload carrying `currencyCode` is rejected rather
+than ignored. It is also **denominated per revision, not per read**: a target
+reads back in the currency it was set in, with today's shop currency reported
+separately, so a shop that switches from CLP to USD cannot silently reinterpret
+a stored ceiling. When the currency did change and a ceiling exists, an edit
+that does not explicitly replace or clear that ceiling is refused, and
+explicitly re-entering it **re-denominates even when the number is identical**,
+because the explicit act is what changes what the number means. No number is
+ever converted: there is no exchange rate to convert it with. There is no FX in this system, so a target only ever states the
+shop's own currency, and comparing it against a candidate in another one is a
+question the future evaluation answers `unknown` — never a conversion. A
+preferred brand must be **active and visible** to the tenant, global or its own;
+a foreign or retired brand is refused, because the operator believes they chose
+something. No derived gloss is stored: brand names and category paths are
+resolved at read time from their owners.
+
+A payload is a patch: an absent key preserves, an explicit null clears that
+field, and a null target clears everything and leaves a revision marked
+`cleared`, which is not the same fact as never having had one. Setting serializes on its
+operation key before reading its receipt, so two identical concurrent requests
+end in a replay rather than a version conflict or a raw unique violation. It is
+optimistic on both the need version and the commercial revision, an effective
+change bumps the need version so in-flight reads are invalidated, and a no-op
+writes no revision and moves no version but still **consumes its operation
+key**, so replay and collision keep meaning. The read is self-contained: it
+carries the need version and supply state the command demands, and a covered or
+cancelled need takes no further commercial decisions. `create_supply_need_batch_v3` creates needs and their
+first target atomically while delegating every existing rule to v2. Its internal delegation key is derived from a
+seed generated inside the transaction after the external lock — never from the
+public key, which a same-tenant actor could pre-seed to make v3 replay someone
+else's batch and hang new targets on it — and that seed is the receipt identity,
+so internal keys trace back without being guessable. It owns its
+receipt in the shared batch namespace, keyed on the **normalized** request —
+v2-normalized items without derived glosses, plus only actionable targets
+indexed by the real line reference — so a cosmetic difference replays and a real
+one collides, and its internal keys are fixed size so the public 160-byte
+operation-key limit is untouched. a line with
+no actionable target writes no empty revision and still reads back the
+server-owned currency with revision zero. Targets are soft preferences: none of
+them removes a candidate, which stays reserved for demonstrated technical
+contradiction.
+
+**External supply candidates (Fase B2 cut 5, 2026-08-17 — in the working tree,
+tested locally, NOT deployed).** `get_supply_need_external_candidates_v1` is the
+first server-owned read that carries one `SupplyNeed` from its governing
+technical interpretation and ATP state into historical supplier alternatives.
+It calls `supply_need_stock_bundle_internal_v1` exactly once. If a known internal
+alternative covers the requested quantity and no operator has recorded why it
+is unsuitable, the read raises `P0001 stock_first_required` before scoring; an
+empty list must never let a UI describe that case as “no suppliers”. Closed,
+unresolved, refinement, technical-conflict, no-eligible-product, no-history and
+excessive-fanout states remain distinct because they require different next
+actions. Historical purchase evidence never claims current supplier
+availability.
+
+**Need-scoped supplier portal search (2026-08-28).** Supplier history and a
+live portal lookup remain different evidence. The historical supplier row may
+search the open `supply_need` only through a provider-specific
+`need_search_url_template`; it must never substitute the global low-stock
+`supplier_availability_targets_v1` sweep. An exact catalog product keeps the
+separate code/SKU probe. For an unresolved need, `category_id` resolves the
+authoritative `SpecTemplate`; its `technical_family`, field definitions and the
+already validated typed predicates become the request contract. The provider's
+versioned `need_search_adapter` then supplies its search vocabulary, optional
+native navigation, result columns, value aliases and observed composite
+patterns. A provider-wide word search may be enabled only by the reviewed
+`generic_family_search` capability. It requires the durable category and
+technical family, derives the family head from the canonical taxonomy, tries
+that head plus one compact typed identity predicate first, and falls back to
+the head alone only when the narrower query yields no non-conflicting
+candidate. Product names and SKUs never become need-search terms. The portal
+returns catalog rows, and the shared identity extractor
+plus deterministic predicate evaluator eliminate explicit contradictions
+before ranking. `exact` requires every requested predicate to be visible in
+the structured columns or supplier text; an omitted measurement remains
+`possible`. The durable
+`supplier_need_portal_searches` record is tenant-, supplier- and need-scoped,
+so revisiting another need cannot inherit the answer. RBX exposes catalog
+presence and price but not quantity, therefore this result never claims live
+units or stock availability.
+
+This capability is adapter-backed, not a universal promise about arbitrary
+websites. The runner and matcher contain no supplier-hostname or product-family
+branch: a new explicit route/provider-wide word-search is enabled by a reviewed
+adapter row, while a missing or malformed capability fails closed and the
+action is not offered. RBX's legacy empty-result JavaScript alert is
+acknowledged only for its exact known phrase and origin and becomes
+`no_matches`; all other JavaScript alerts remain visible. For
+RBX the configured `bottom_bracket` family navigates the native `TRANSMISION Y
+PARTES > MOTOR (MOVIMIENTO CENTRAL)` category and maps the catalog's composite
+`ancho x largo` notation to its two registered spec keys. The legacy
+catalog requires an authenticated customer session. Its logged-out state does
+not redirect: `Sesion:` is empty and the price query fails near `=`. Both
+signals are classified as `session_expired` before any result is interpreted.
+The modern RBX login page ultimately submits to the supplier's HTTP legacy
+endpoint, so the ERP may prefill but must not silently submit credentials over
+that downgrade; the operator re-establishes the portal session explicitly and
+then retries the need search.
+
+Candidate identity remains product + supplier + currency. The orchestrator
+resolves the complete historical candidate set for every non-conflicting
+eligible product in one view read, then calls the shared scoring kernel once and
+scores before reranking, splitting or pagination. A server-owned fanout ceiling
+protects the analysis budget. Strong/weak/no-criteria candidates are actionable;
+technically unverified ones remain visible in a separately counted and paged
+lane. This preserves access to plausible alternatives without presenting an
+unknown ficha result as compatibility.
+
+Commercial targets only rerank. Preferred brand, landed-cost ceiling and gross
+margin floor contribute only when their evidence is known; `gama` is already
+owned by the kernel and is not counted twice. With no known signal, the legacy
+score is returned exactly. With known signals, the blend is 75% kernel and 25%
+their mean, ordered at full precision before the public number is rounded.
+Currency mismatch has no FX fallback. Landed cost, projected profit and margin
+are not considered comparable unless purchase cost and catalog price share a
+currency and freight evidence is `complete` or `none`; incomplete freight makes
+the economic signal unknown rather than optimistic. This cut changes neither
+bike truth, ficha authority, visit diagnosis nor stock. Its focused database
+regressions pass 110/110, and the seven-file supply suite passes 439/439; the
+entire migration chain remains undeployed at this checkpoint.
+
+**Client decision coherence (Fase B2 cut 6, 2026-08-17 — in the working tree,
+tested locally, NOT deployed).** The purchasing workspace consumes the stock
+resolution, commercial target and external-candidate envelopes as one decision,
+but it does not pretend they were one database snapshot. It commits them to the
+visible state only when need identity, need version, supply state, technical
+revision and commercial revision agree. A mismatch is a recoverable concurrency
+conflict; an initial conflict owns one reload notice, while an incremental
+conflict preserves the last coherent decision. A generic initial read failure
+owns one dedicated failure surface. Neither condition may fall through to an
+empty-history conclusion or an identity-confirmation action, because no coherent
+evidence was committed.
+
+`stock_first_required` is accepted as a workflow state only when the stock
+resolution already read by the client independently corroborates blocking
+coverage and a closed external lane. Otherwise the two reads describe different
+moments and the client reloads. Technical compatibility is always derived from
+the server-authored `matchState`; purchase/freight evidence quality remains a
+separate economic axis and can never promote an unverified technical match to
+compatible. Stock, supplier and target commands are optimistic, and a failed
+command preserves the last coherent read while exposing its own retry path.
+The focused client suite passes 231/231 tests, but this does not constitute a
+production smoke: migrations `20260817150000` through `20260817220000` remain
+undeployed at this checkpoint.
+
+This addition strengthens the existing backbone without moving facts between
+its technical layers:
+
+- `bike_catalog` and `bike_profiles.technical_profile.values` still own durable
+  baseline technical truth;
+- `mechanic_job_bikes.diagnosis_sheet_data` still owns visit findings;
+- ficha fields in `product_spec_values` remain the authority used to interpret
+  and filter a requested part;
+- `mechanic_job_items` still represents billable/executed work, not unmet
+  demand; and
+- bike memory remains derived from confirmed profile, diagnosis and executed
+  work, never from an unconfirmed supply description.
+
+The purchasing workspace can use the need's workshop provenance as fitment
+context, but it must keep request compliance distinct from compatibility. It
+may ask a schema-derived clarification when one phrase or measurement admits
+materially different technical meanings; it must not encode per-product
+branches such as a dedicated spoke workflow.
+
+The first purchasing-driven extension of the product ficha backbone is the
+system `tire` template. It reuses canonical `wheel_size` and adds filterable
+`tire_width_in`, `tire_width_mm`, `tire_etrto`, `tire_bead_type` and
+`tire_tubeless_ready` facts. The exact active category
+`Componentes / Ruedas / Neumáticos` maps to that template for every tenant that
+owns it. Existing commercial names are deliberately not backfilled into
+`product_spec_values`: until an operator or an authoritative import confirms a
+fact, schema inspection must report zero coverage and the assistant must offer
+a broader search instead of claiming that a range or fitment was proven.
+
+The production AI runtime consumes this backbone through the governed
+`inspect_inventory_schema`, `search_inventory`,
+`rank_purchase_candidates` and `build_purchase_scenarios` tools. Schema and
+catalog references exposed to the model remain opaque; the server resolves
+them to tenant-scoped product IDs, ATP, ficha predicates and purchase evidence.
+Every advertised purchasing tool must also exist in the durable receipt
+contract. A ranked supplier candidate hash is evidence for one calculation,
+not product identity; receipts and navigation use the exact canonical product
+UUID. This keeps flexible model planning separate from authoritative identity,
+fitment, economics and writes.
+
+A local or emergency purchase opened from this workspace remains a canonical
+purchase document. `purchase_invoices.source_document_kind` cites the
+server-owned `purchase_source_document_kinds` vocabulary; a boleta, ticket,
+no-tax document or other direct evidence skips the fictional supplier-send
+step but does not bypass confirmation, receiving or payment ownership. The
+seeded line carries the exact need through
+`purchase_invoice_lines.source_need_id`, whose composite tenant FK and
+immutable trigger guard preserve provenance after normalization. This link does
+not transition `supply_needs`, receive stock, pay the supplier or post
+accounting implicitly. Those remain separate explicit commands. An unresolved
+description stays reviewable; a confirmed product remains a canonical product
+link. Locality is also explicit supplier-relationship evidence through
+`local_workshop` / `emergency_local`; no legacy supplier default or document
+kind silently creates that assignment. Merchandise bought for resale or a
+workshop job is therefore never hidden in a generic expense note.
+
 ### Jobs load ownership and surgical realtime (2026-08-04)
 
 The Jobs workspace has one explicit owner for competing full loads. Initial
@@ -1215,6 +1667,58 @@ incrementally; extract a shared coordinator only after multiple proven users
 show the same invariant. Minimum regression for Jobs remains out-of-order
 success/error, authority cancellation, dispose, current real error and proof
 that service notifications keep the cache-only surgical route.
+
+#### Status-transition delta closure (2026-08-24)
+
+The State chip no longer throws away the authoritative job snapshot returned
+by `transition_mechanic_job_status` and then reloads the complete Jobs graph.
+`BikeshopService.transitionJobStatus` publishes that one row only into the
+still-owned tenant lease; `PegasTablePage` adopts the same row directly while
+preserving filters, sort, selection and scroll, and the calendar uses the same
+delta. The server remains the sole owner of `status`, `status_id`, lifecycle
+timestamps, invoice serialization and the immutable receipt.
+
+The cache merge may retain `subjectData`, service-warranty and lifecycle
+projections only from the exact same job and tenant. The selected custom status
+is display metadata and decorates the row only when its ID and tenant match the
+acknowledged snapshot. Lifecycle metrics refresh asynchronously for that one
+job with lease, status and `updated_at` guards; an older projection response
+cannot overwrite a newer transition. Realtime row refreshes hydrate those same
+three projections concurrently, and a cold full Jobs load now hydrates them in
+one parallel round instead of three sequential rounds. Supply-attention chunks
+are parallel too. A rejection or unresolved acknowledgement invalidates the
+cache and retains the full-load fallback; success does not.
+
+Canonical implementation and regression:
+
+- `lib/modules/bikeshop/services/mechanic_job_cache_reconciler.dart`
+- `lib/modules/bikeshop/services/bikeshop_service.dart`
+- `lib/modules/bikeshop/pages/pegas_table_page.dart`
+- `lib/modules/bikeshop/widgets/pegas_calendar_widget.dart`
+- `test/unit/workshop_job_status_cache_reconciliation_test.dart`
+
+The collection reconciler is also the cardinality boundary for realtime
+changes. Since 2026-08-26 it copies any incoming full-load snapshot into a
+growable projection before insert/update/delete. The preceding parallel
+hydrator returned a fixed-length list: status replacement still worked, while
+new jobs raised `Unsupported operation: Cannot add to a fixed-length list` and
+were visible in the independent notification projection but not in Jobs until
+a full refresh. The regression therefore starts with a fixed-length snapshot
+and proves all three surgical operations; an existing-row status test alone is
+not sufficient evidence for realtime freshness.
+
+The routed/embedded existing-job editor follows the same ownership boundary at
+the detail level. Its blocking load contains only the exact job, linked
+invoice/payment state, exact customer and bicycles, persisted job-bike/item
+rows, referenced catalog products and the service profiles needed by those
+rows. It no longer waits for the complete customer catalog, a generic product
+preview, all alternate statuses/subjects, an unfocused product autocomplete or
+the collapsed chat. Those selector/read-model owners load on explicit
+interaction (or reuse an already eligible cache), while service-profile
+mapping, targets and questions are hydrated once per distinct profile batch
+instead of once per line. This changes no workshop, invoice, diagnosis, bike
+profile or memory truth; it removes unrelated read models from the editor's
+critical path and keeps exact persistence dependencies fail-closed.
 
 ### Invoice-linked inventory integrity (current rule)
 
@@ -1274,6 +1778,43 @@ Purpose:
 
 - overall visit container
 - customer, status, timing, costing, invoice linkage, attachments
+
+Registration authorship is part of that visit container's audit boundary:
+
+- `mechanic_jobs.created_by` stores the server-enforced authenticated user who
+  registered each new job; an ordinary client cannot supply another user's ID.
+- `create_mechanic_job_erp_notification` resolves that actor through the
+  tenant-bounded identity helper and freezes `recorded_by_name` into the
+  notification's durable payload, so the Right Toolbar can show `REGISTRÓ`
+  without a per-row identity query.
+- rows created before 2026-08-14 remain nullable when no authoritative actor
+  evidence survived. An exact authenticated API creation log may support a
+  bounded, identity-bound repair; attendance, a later invoice, a later status
+  actor, or whichever user is currently signed in may not.
+- migration `20260814210000_mechanic_job_registration_actor.sql` was deployed
+  and registered in production on 2026-08-14; it intentionally backfilled zero
+  historical rows.
+- migration
+  `20260814213000_backfill_recent_mechanic_job_registration_actor.sql` was
+  deployed and registered in production on 2026-08-14. It recovered exactly
+  the eleven jobs in the fixed seven-day window PG-00499–PG-00509 from their
+  unique successful authenticated `POST /rest/v1/mechanic_jobs` edge logs:
+  PG-00499–PG-00508 belong to Claudio Catalán and PG-00509 to Vicente Díaz.
+  The repair stores the opaque log identity/timestamp in notification evidence,
+  preserves every job `updated_at`, and aborts on a partial or conflicting
+  source graph; older jobs without equivalent evidence remain unknown.
+- this audit projection changes no bicycle/profile truth, visit diagnosis,
+  executed-work metadata, invoice ownership, or derived bike-memory state.
+- the Right Toolbar notification is also a lifecycle projection of this same
+  visit identity, not a second job record. An active row is
+  `mechanic_job_created`; the audited `set_mechanic_job_archived` transition
+  converts that exact notification in place to `mechanic_job_archived` / `Trabajo
+  eliminado`, and restore converts it back without changing the original
+  notification `id`, `created_at`, or `read_at`. The briefing's `Trabajos`
+  counter therefore counts unique active job IDs only. Historical notification
+  rows whose source job is archived or no longer exists are reconciled to the
+  inactive type; no workshop, bicycle, invoice, stock, accounting, diagnosis,
+  or bike-memory fact is rewritten by that repair.
 
 ### `mechanic_job_bikes`
 
@@ -1353,6 +1894,53 @@ Current fields:
 - `rotorContaminationStatus`
 - `symptomKeys`
 - `notes`
+
+### AI assistant workshop action boundary
+
+The assistant may change workshop truth only through the same canonical owners
+used by the job editor. Natural language never becomes a free-form database
+patch.
+
+The general action sequence is:
+
+1. resolve an exact job from job number, customer, any linked bike, or linked
+   sales invoice and expose only a random request-local `jobRef` to the model;
+2. read the exact `mechanic_job_bikes` target, linked invoice, mutable state and
+   optimistic revision;
+3. inspect the server-owned diagnosis field registry or resolve an exact active
+   catalog product/service through a request-local `catalogItemRef`;
+4. create a frozen approval preview without changing business data;
+5. after an explicit operator click, recheck authority, tenant, revision,
+   lifecycle and financial locks, apply one transaction and read the result
+back before success.
+
+`jobRef` and `catalogItemRef` are typed opaque capabilities for one agent run,
+not business UUIDs and not Flutter navigation references. Edge retains their
+server-owned ID map, resolves it immediately before the fixed RPC, and rejects
+unknown, cross-type or stale references. This allows arbitrary tool chaining
+without disclosing business IDs to the model or accepting IDs it invented.
+
+Diagnosis field paths use the persisted snake-case JSON keys under
+`mechanic_job_bikes.diagnosis_sheet_data`, for example
+`drivetrain.chain_wear_percent`; Dart property names such as
+`chainWearPercent` are application projections, not database keys. The field
+registry owns type, stored unit, accepted input units, allowed values and
+bounds. A chain-gauge reading expressed as `0.6` with input unit
+`display_fraction` is normalized to the canonical stored percentage `60`; it is
+not stored as an ambiguous raw fraction.
+
+Adding a product or service uses `products.id` as the frozen input. Name, SKU,
+product/service classification and unit price are server-owned and revalidated
+at confirmation. The action writes `mechanic_job_items`, preserves optional
+`job_bike_id`, and invokes the existing job→invoice synchronization only when
+the exact linked invoice is still mutable. A paid invoice, any live payment,
+an altered price, a stale job, a delivered/completed job or an ambiguous bike
+aborts the action; the assistant must never create a parallel invoice writer.
+
+Current typed actions are deliberately narrow primitives, not prompt cases:
+task creation, scalar diagnosis update, and catalog-backed workshop item
+addition. An unsupported mutation must be reported as a missing capability
+instead of being approximated through names, notes or UI automation.
 
 ### Diagnosis Field Semantics Rule
 
@@ -1483,6 +2071,103 @@ Recent implementation moved service targeting inline on the row:
 - structured service wizard answers now persist on the same executed row as `service_configuration_data`; any diagnosis-linked truths still project separately into `mechanic_job_bikes.diagnosis_sheet_data`
 
 This is the correct direction because target metadata belongs to the executed service line, not hidden in a disconnected modal.
+
+## Work Tray Layer: Taller ↔ `smart_tasks` (2026-08-27)
+
+La bandeja de trabajo del ERP (`smart_tasks`) es un sistema DISTINTO del
+checklist técnico del trabajo, y el vínculo entre ambos quedó normalizado en el
+kernel `20260826220000_smart_task_work_tray_kernel`:
+
+- **`smart_tasks`** es la bandeja canónica: quién debe hacer qué y cuándo.
+  Tipo `task`/`note`, visibilidad `private`/`team`/`company`, ciclo de vida
+  `pending → in_progress → blocked → completed/cancelled` con recepción
+  separada (`acknowledged_at`), versión optimista y sellos de actor. Toda
+  mutación va por comandos RPC idempotentes (`smart_task_create_v1`,
+  `smart_task_command_v1`); la escritura directa legada sigue admitida en
+  fase de compatibilidad, pero el guard de la base la limita por actor y los
+  triggers la auditan (INSERT y UPDATE) en `smart_task_events` con
+  `source='direct'`. La bandeja **cancela, no borra**: el DELETE de cliente
+  está revocado y el ledger (`FK RESTRICT`) impide el borrado físico.
+- **`mechanic_job_tasks`** sigue siendo el checklist técnico/facturable por
+  línea del trabajo (auto-parseado, sincroniza ítems/precios ad-hoc por
+  triggers). No tiene asignado ni ciclo de vida y NO se fusiona con la
+  bandeja. Desde este kernel sí está en la publicación Realtime (antes su
+  suscripción era inerte).
+- **Contexto principal opcional**: una tarea o nota nace neutral y puede quedar
+  sin vínculo, o enlazar exactamente un trabajo del taller, cliente, proveedor,
+  venta/factura o compra/documento. Los catálogos se consultan sólo después de
+  elegir el módulo; el compositor no muestra controles del Taller por defecto.
+  El guard `20260827220000_smart_task_primary_context_guard` impone máximo un
+  contexto y valida que la entidad pertenezca al mismo tenant también para
+  clientes antiguos y escrituras internas. El vínculo aporta navegación y
+  evidencia; completar la tarea no cambia silenciosamente el estado comercial
+  del registro vinculado. Las automatizaciones de negocio requieren una regla
+  explícita y auditada, no se infieren del vínculo.
+- **`smart_task_job_items`** es el puente: una tarea de la bandeja respalda
+  uno o varios servicios REALES del trabajo (`mechanic_job_items` de tipo
+  `service`/`adhoc`; nunca productos), con snapshot de contexto (nombre,
+  instrucciones operativas de `mechanic_job_items.notes`, `job_number`,
+  bicicleta) e identidad propia. El nombre identifica el servicio; las
+  instrucciones describen qué debe realizarse y nunca se descartan ni se
+  reemplazan por el título. Borrar o editar la línea en el taller NO borra el
+  vínculo: lo marca (`invalidated_at` / `context_changed_at`) y la tarea sigue
+  resoluble. Una edición de `notes` también marca cambio de contexto, pero no
+  reescribe silenciosamente el snapshot que recibió el trabajador. El detalle
+  de la tarea muestra el texto completo y conduce al trabajo para revisar la
+  versión actual. Repartir un trabajo =
+  varias tareas sobre líneas distintas; un solape con otra tarea activa exige
+  decisión deliberada (`collaborate`/`transfer`) auditada.
+  Sólo después de elegir `Trabajo del taller` en el contexto opcional, la
+  relación se elige jerárquicamente: primero un trabajo del alcance canónico
+  **Trabajos: Activos** y luego
+  `Trabajo completo` (todas sus líneas reales) o `Por servicios` (una o más
+  líneas explícitas, agrupadas por bicicleta). La solicitud del cliente puede
+  ayudar a buscar el trabajo, pero no se dibuja como una opción hermana de sus
+  servicios. El selector reutiliza la misma política operativa de la tabla:
+  excluye archivados, pruebas, cancelados, cotizaciones cerradas, ventas ya
+  pagadas y entregados que ya salieron del alcance activo; un trabajo
+  finalizado aún no entregado o entregado pendiente de pago sigue activo.
+- **Identidad**: `assigned_to`/`created_by` son usuarios auth. La cara de
+  trabajador se resuelve por `get_smart_task_assignment_directory_v1`
+  (principals ERP ∪ cuentas de portal activas ∪ empleados sin cuenta como
+  `access='none'` para «Invitar»; un principal canónico por persona). El
+  principal corporativo `erp_owner` representa al tenant y permanece sin
+  vínculo a `employees`; su etiqueta es la identidad de cuenta/empresa. La
+  ficha laboral y su autoservicio se vinculan bilateralmente al usuario ERP
+  personal correspondiente, nunca a la cuenta genérica de la empresa. El
+  portal del trabajador consume solo `get_my_worker_tasks_v1` (proyección sin
+  precios, multi-bici real, nombre e instrucciones completas de cada servicio
+  desde los vínculos) y `worker_task_command_v1` acotado a su ciclo.
+- **Canales, hilos y notificaciones**: las tareas `team/company` comparten el
+  canal interno tenant-wide `Tareas del equipo`; las tareas `private` comparten
+  `Mis tareas` sólo con su dueño. `smart_task_thread_get_or_create_v1` crea una
+  publicación raíz por tarea dentro del canal que corresponde a su audiencia,
+  no una conversación paralela por tarea. `conversation_contexts` conserva la
+  identidad tarea→raíz y `messages.thread_root_message_id` conserva cada
+  respuesta, texto o adjunto. Mensajería intercala las raíces entre las demás
+  publicaciones del canal; el contador abre el hilo exacto y en escritorio lo
+  mantiene al costado del canal, mientras compacto entra al hilo y vuelve al
+  mismo canal. El compositor del hilo dice `Agregar una respuesta…` y puede
+  mostrar además esa respuesta en el canal sólo por decisión explícita. El
+  enlace `Conversar` transporta conversación+raíz y abre directamente ese hilo.
+  El canal compartido nunca proyecta una tarea como contexto escalar —ni desde
+  un `context_hint` rezagado—: la tarea visible la determina exclusivamente la
+  raíz seleccionada, para que otro hilo del mismo canal no invada su panel.
+  Cambiar visibilidad reubica la misma raíz y todas sus respuestas sin perder
+  identidad ni evidencia. La audiencia del canal de equipo sigue los perfiles
+  ERP activos; un principal de portal no es principal de mensajería y no se le
+  finge acceso. El contexto `task` sigue server-owned y no se cambia ni se
+  desvincula desde Mensajería. Las notificaciones de tarea son dirigidas
+  (`erp_notifications.recipient_user_id`, upsert por tipo+entidad).
+- **`mechanic_jobs.assigned_to` NO se usa**: su FK apunta a `customers(id)`
+  (defecto heredado, 0/467 filas). La asignación de trabajo vive en la
+  bandeja; esa columna no debe reutilizarse mientras la FK esté rota.
+
+Verdad de cada capa: el trabajo y su checklist responden «qué hay que hacerle a
+la bici y qué se cobra»; la bandeja responde «quién lo hace, cuándo y en qué
+estado va». La tarea PROYECTA el contexto del taller (snapshot + marcas),
+nunca lo reescribe.
+
 
 ## Guided Service Layer
 
@@ -2792,8 +3477,11 @@ the retained audit row.
   `Facturar ahora` explicitly preserves the existing immediate-invoice path.
   This default is never retroactively applied when loading an existing
   billable service. Converting a service budget reuses every persisted
-  `mechanic_job_bikes` relationship and never asks the worker to replace the
-  received bicycle; only standalone Cotización chooses its approved outcome.
+  `mechanic_job_bikes` relationship, preserves every existing line attribution
+  and leaves intentional `job_bike_id = NULL` General lines as job-wide work.
+  It never asks the worker to replace the received bicycle; only standalone
+  Cotización chooses its approved outcome and may assign previously unscoped
+  lines to the bicycle selected during conversion.
   A product-only Cotización may become `sale/none` without inventing physical
   intake; otherwise it uses the bicycle/component intake picker. The approved
   `Presupuesto` or `Cotización` chip in the table's existing invoice column is
@@ -2828,7 +3516,11 @@ the retained audit row.
 - after a service-budget decision leaves `pending`, its
   `mechanic_job_bikes` aggregate (received bikes, ficha and diagnosis) is
   database-immutable until the audited proposal command reopens it. The
-  conversion command may only replay its idempotent no-op upsert.
+  conversion command validates and reuses that frozen graph without an upsert
+  and without rewriting `mechanic_job_items.job_bike_id`. The 2026-08-15
+  correction removed the former conversion-time NULL-line assignment because
+  its cost-rollup trigger attempted to mutate the frozen bike graph and because
+  NULL is a valid General scope, not missing data.
 - a `sale/none` row means a real product sale tracked operationally in the same
   workshop table without any bicycle or loose component received. It has no
   diagnosis or service-warranty window and never contributes to bicycle or
@@ -2987,9 +3679,12 @@ the retained audit row.
 
 This strengthens centralization around bike profile truth because real service flows can now create the first durable `bike_profiles.technical_profile.values` record for bikes that previously had no profile at all, while historical data remains untouched until there is real structured evidence worth promoting. It also strengthens validation discipline because compatibility/backbone work now has a repeatable hidden debug harness instead of relying on production-visible test UI or repeated manual setup.
 
-## Next Session Priority Queue (2026-07-16)
+## Next Session Priority Queue (reviewed 2026-08-24)
 
 This is the ordered queue a fresh agent should assume unless the user explicitly redirects the work.
+
+The Jobs status-latency slice above is closed and does not add an open queue
+item; the remaining priorities retain their existing order.
 
 Validation rule for every queued item below: use the debug-only `Prueba rápida` harness in `lib/modules/bikeshop/pages/pegas_table_page.dart` and record which scenario/stage proved the change before widening scope or calling the slice done.
 
@@ -3106,3 +3801,656 @@ This architecture will be considered coherent when:
 - visible bike history reads from the kernel clearly
 
 Until then, this document must continue to record both the intended direction and the real current state.
+
+## Ficha de pedalier: cascada guiada y registro unificado (2026-08-21)
+
+Esta sección reemplaza la idea de que la ficha técnica es una lista plana de
+campos independientes. Un pedalier no se describe con campos sueltos: la caja
+del cuadro decide qué preguntas existen, y algunas respuestas **agregan**
+campos en vez de sólo esconderlos.
+
+### Dos mecanismos distintos, no uno
+
+- `spec_template_fields.visibility_rules` decide **si el campo existe**.
+- `spec_template_fields.option_rules` decide **qué opciones quedan** dentro de
+  un campo que sí existe. Es columna nueva; antes esto no se podía expresar y
+  por eso se podía elegir «Rodamiento sellado» en una caja *a presión*, que es
+  imposible.
+
+El evaluador de Dart (`SpecEngineService.allowedOptionsFor`) intersecta las
+reglas que calzan y entiende `is_set` / `not_set`, para poder preguntar por el
+orden de la cascada y no sólo por valores.
+
+### La cascada empieza por la caja, no por el producto
+
+`bb_shell_standard` («Caja de motor») es la primera pregunta y gobierna a las
+demás. Elegir `BSA / Caja inglesa 34,8 mm (1.37") x 24` con construcción
+`Cubetas y canastillo` lleva la ficha de 3 a 8 campos: aparecen mano de la
+rosca, diámetro exterior de cubeta, tamaño y cantidad de bolitas. Elegir
+`A presión` elimina la rosca por completo.
+
+Las combinaciones están simuladas: 15 cajas × las construcciones que cada una
+admite, 70 combinaciones verificadas en `test/unit/spec_cascade_bottom_bracket_test.dart`.
+
+### Un campo se esconde sólo cuando se sabe que no aplica
+
+`spindle_length_mm` **no** se esconde mientras la interfaz del eje esté sin
+responder. La razón es concreta: `saveProductSpecValues` borra las
+definiciones de la plantilla que no vienen en el payload, así que esconder un
+campo por «todavía no sé» habría borrado 118 mm de 29 productos en el primer
+guardado. La regla usa una lista `not_in` de paso: se esconde ante una
+interfaz que lo hace inaplicable, nunca ante el desconocimiento.
+
+### El vocabulario es chileno y sale del catálogo real
+
+`Rodamiento sellado`, `Cubetas y canastillo`, `Integrado`, `A presión`,
+`Caja de motor`. Las medidas van en milímetros con la pulgada entre
+paréntesis y sólo en la caja: `BSA / Caja inglesa 34,8 mm (1.37") x 24`.
+
+Los valores acotados de las medidas se derivaron del catálogo, no de memoria:
+una lista escrita a mano rechazaba 12 de 34 pedaliers reales (110,5 · 113,5 ·
+118,5 · 124 · 124,5 · 125 · 125,5 · 127). Misma causa detrás del defecto ya
+corregido de `valve_length_mm`, que no admitía 40 ni 48 —las dos longitudes
+Presta más comunes del catálogo— y por eso el asistente no las podía buscar.
+
+### La migración terminada (2026-08-21)
+
+**Los seis lectores y la escritura leen y escriben el registro.**
+
+| capa | estado | cómo se comprobó |
+|---|---|---|
+| `get_public_product_technical_specs` (tienda) | movido | 5 filas correctas + la página real |
+| `assistant_inspect_inventory_schema_v3` | movido | cobertura y vocabulario del registro |
+| `assistant_inventory_technical_predicate_source_internal_v1` | movido | calza por construcción y largo, rechaza lo que no |
+| `SpecEngineService.getProductSpecValues` | movido | forma de la consulta contra producción |
+| `BikeProductCompatibilityService` | movido | 49/49 tests |
+| `BulkProductEditService` | movido | analizador limpio |
+| `service_profile_questions_resolved_v1` (wizard) | movido | opciones del registro, preguntas de visita intactas |
+| **escritura** | movida | `save_product_spec_facts_v1`, transacción única |
+
+**El espejo se dio vuelta.** La app escribe `spec_facts` y un trigger mantiene
+`product_spec_values` al día como copia. No hay trigger en las dos direcciones,
+así que no hay ciclo posible; el read-back lo afirma.
+
+**`display_value` desapareció del camino de escritura.** Era una copia
+congelada de la etiqueta y era justo lo que obligaba a reescribir productos al
+renombrar un valor.
+
+### La prueba, hecha en producción
+
+Un `UPDATE 1` sobre `spec_definition_values.label` cambió al instante lo que
+muestran **la tienda, la ficha del producto y el vocabulario que ve el
+asistente**, sin tocar un producto, una regla ni una migración. Esa misma
+operación esa mañana costó cuatro lugares y se escapó uno.
+
+Y escribir un hecho en el registro actualizó la copia sola, verificado con un
+antes y un después.
+
+### Lo que queda, y por qué no se hizo hoy
+
+- **Los siete canonizadores de Dart** siguen en pie porque el lado de la bici y
+  el wizard aún guardan su vocabulario en blobs y `options_json`. Borrarlos
+  exige migrar la escritura de esas dos capas, que es otra fase.
+- **`product_spec_values` y los blobs siguen existiendo** como copia. Retirarlos
+  es seguro sólo cuando nada los lea; hoy ya nada de la app lo hace, pero
+  conviene dejar la copia viva un tiempo antes de borrar la tabla.
+
+
+### El buscador traduce la frase del operador (2026-08-21)
+
+El operador no escribe predicados: escribe «motores de caja BSA con ancho de
+caja 68 y largo de eje 118». Esa frase entraba al buscador como texto libre, y
+el filtro de texto exige que **cada** palabra esté en el nombre del producto:
+ningún motor se llama «caja» ni «BSA», así que la respuesta era cero.
+
+Con el vocabulario convertido en filas, el servidor traduce la frase él mismo
+en `assistant_infer_technical_predicates_internal_v1`, en tres reglas de la más
+fuerte a la más débil:
+
+1. una palabra que aparece en un solo valor de todo el vocabulario nombra ese
+   valor;
+2. un número precedido —dentro de cuatro palabras— por una palabra que aparece
+   en un solo rótulo del alcance se amarra a ese campo;
+3. un número suelto se amarra si dentro del alcance hay un solo campo cuyos
+   hechos reales lo contengan.
+
+El alcance es el más angosto que la frase justifique: la plantilla que probó el
+vocabulario, o —si no hubo— las plantillas de la categoría nombrada. Unirlos
+ensancharía el alcance y volvería ambiguo un rótulo genérico como «Ancho», que
+existe en llantas, neumáticos y cajas por igual.
+
+Detalles que costaron una ronda cada uno:
+
+- **El normalizador de búsqueda borra el punto decimal**: «122.5» se vuelve
+  «122» y «5». Para leer una medida hay que tokenizar el texto crudo.
+- **Las palabras de función del idioma no son evidencia.** «Con uña / claw» es
+  un valor real de patilla trasera, así que «hola necesito ayuda con una
+  boleta» inferían un filtro de patilla. Hay una lista de palabras vacías de
+  español —no de bicicletas— y una palabra de tres letras sin dígitos nunca
+  sobrevive como texto libre: «con» exigía «con» en cada nombre y devolvía cero.
+- **Sobre un mismo campo manda el valor deducido, no el del modelo.** El
+  modelo abrevia («BSA»); el registro tiene la etiqueta completa. Su
+  abreviatura no resuelve y filtra a cero.
+- **El validador del ejecutor tenía la invariante contraria.**
+  `validateInventorySearch` exigía que sin `technicalPredicates` toda fila
+  volviera con `technicalMatch = not_applicable`. Con traducción del lado del
+  servidor esa invariante quedó falsa, y el ejecutor convertía los tres motores
+  correctos en «fuente no disponible». Es el defecto que más caro salió: el
+  síntoma lo redactaba el modelo en primera persona («no ejecuté la consulta»)
+  mientras `pg_stat_statements` mostraba la RPC corriendo.
+
+Verificado en la app contra la base, el 2026-08-21: «dame los motores de caja
+BSA con ancho de caja 68 y largo de eje 118» → 3 productos; «necesito un motor
+con largo de eje 122.5» → 7; «cuántos motores tengo de rodamiento sellado» →
+12 modelos y 27 unidades. Los tres números coinciden con la consulta directa.
+
+### Lo que la batería de preguntas obligó a corregir (2026-08-21)
+
+Las tres primeras preguntas de prueba estaban hechas a la medida de lo
+construido. Una batería más amplia encontró cuatro defectos reales:
+
+- **Un valor de lista puede ser un número.** `rotor_diameter_mm` es una lista
+  con valores `160`, `180`, `203`; el rodado es `29"`; los rayos son `36`. La
+  inferencia sólo miraba palabras para el vocabulario y campos numéricos para
+  las medidas, así que «discos de freno de 160» devolvía cero teniendo quince
+  en bodega. Se compara contra el rótulo despojado de puntuación —el
+  normalizador borra el punto decimal— y por igualdad, para que `160` no se
+  lleve `160/140`.
+- **La rama nombrada tiene que volver como filtro.** Las palabras que nombran
+  una categoría se consumen del texto libre —si no, matan el filtro: ningún
+  rotor se llama «discos»— pero antes no volvían como nada. «Discos de freno de
+  160» calzaba 23 productos, de los cuales ocho eran bielas y cadenas con 160
+  en el nombre. Ahora la inferencia devuelve las categorías y el buscador acota
+  por ellas: 15, todas dentro de frenos.
+- **La palabra de un rótulo no es evidencia de un valor.** «Caja» está en «Caja
+  de motor» y en «Ancho caja motor», y por aparecer además dentro de un único
+  valor hacía que «motor caja 73» amarrara BSA en silencio. Y cuando una
+  palabra sí es de un valor pero vive en varios campos —«bsa» está en cuatro—,
+  decide el catálogo: gana el campo que el taller realmente llena, y sólo si
+  gana solo.
+- **La negación es un filtro.** «Motores que no traen eje» devolvía cero
+  habiendo cinco. Entre los campos *booleanos* del alcance, «eje» sí es
+  distintivo, y eso alcanza sin inventarle sinónimos al idioma. Sólo se amarra
+  la negación: afirmar es ambiguo —«con largo de eje 118» habla de la medida—
+  y estrecharía de más.
+
+**Límite que queda, y es del catálogo, no del motor.** La palabra del operador
+tiene que ser una que el catálogo use. «Aros de 36 rayos» no resuelve porque
+aquí esa categoría se llama **Llantas**; con «llantas de 36 rayos» funciona.
+Poner una lista de sinónimos sería inventar vocabulario en vez de leerlo, que
+es justo lo que esta arquitectura evita. Si el taller quiere que «aros»
+funcione, el lugar de arreglarlo es el nombre o un alias de la categoría.
+
+### Soltar el filtro más débil antes de rendirse (2026-08-21)
+
+La frase del dueño —«Necesito un motor para una caja inglesa de 68 mm con eje
+cuadrado de 118 mm. ¿Qué tengo en bodega?»— deducía **los cuatro filtros
+correctos** y devolvía cero. El culpable era el cuarto:
+`spindle_interface_accepted` tiene ficha cargada en cinco productos y ninguno
+es un motor, así que exigirlo borraba el resultado entero.
+
+Los predicados deducidos salen ordenados por cuánta ficha respalda a cada
+campo, y el buscador suelta el último y reintenta —hasta tres veces— antes de
+contestar que no hay nada. Un campo casi vacío es el primero en sobrar.
+
+Con eso, esa frase devuelve un resultado y respeta el «¿qué tengo en bodega?»
+como filtro de stock: el único de los tres motores que calzan y además tiene
+existencias.
+
+### Segunda batería: dos defectos más de la misma raíz (2026-08-21)
+
+- **Nombrar una rama ya es haber dicho algo.** «Cuáles son los 5 motores más
+  caros» devolvía cero teniendo treinta y cuatro. La frase no trae ningún
+  filtro técnico, así que el texto libre se conservaba entero: el buscador
+  acotaba a la rama de motores **y además** exigía la palabra «motores» dentro
+  del nombre del producto. El texto se reemplaza por el residuo en cuanto la
+  frase aportó algo, sea un filtro o el nombre de una rama.
+- **Una marca no es ruido.** «Qué motores shimano tengo en stock» devolvía diez
+  o más teniendo uno. «Shimano» se consumía por aparecer dentro del valor
+  «Shimano HG» —de piñones— sin convertirse en ningún filtro, y la marca se
+  perdía en silencio. Ahora sólo se consumen las palabras que **nombran un
+  campo**; lo que no llegó a ser filtro vuelve al texto libre, donde todavía
+  tiene que existir en algún producto de la rama para sobrevivir.
+
+**Dos decisiones que NO son del taller, y por qué (corrección del dueño,
+2026-08-21):** ambas se habían dejado como «decisión suya». No lo eran: la
+lógica correcta la decide quien conoce el dominio y los datos.
+
+- **«Bajo stock mínimo» incluye lo agotado.** Respondía 102 —los que aún tienen
+  existencias por debajo del mínimo— y dejaba fuera los 114 que están en cero.
+  Un producto en cero está *más* bajo su mínimo que uno que todavía tiene dos, y
+  es el más urgente de reponer: esconderlo del conteo responde de menos. El
+  contrato de `find_inventory_risks` ahora define `any` como «por debajo del
+  mínimo, incluido lo agotado» y lo señala como la respuesta a «qué me falta» o
+  «qué hay que reponer»; `low_stock` queda sólo para cuando el operador excluye
+  lo agotado a propósito.
+- **El ranking por cliente se construyó.** `assistant_rank_sales_customers_v1`
+  ordena los clientes de un período por cuánto compraron, reusando el mismo
+  cálculo de período y la misma distinción `issued`/`collected` que
+  `assistant_analyze_sales_period_v1` —para que dos preguntas del mismo día no
+  puedan contradecirse— y contando el mostrador sin ficha como un cliente más.
+
+### El ranking por cliente vive dentro de la herramienta de ventas (2026-08-21)
+
+Se construyó primero como herramienta aparte, `rank_sales_customers`:
+desplegada, alcanzable, registrada en el allowlist de recibos y anunciada al
+modelo —que la nombraba sola al preguntarle qué herramientas de ventas tenía—.
+Ante «quién fue mi mejor cliente este mes» igual declaraba una carencia y
+**nunca la ejecutó**: cero llamadas en `pg_stat_statements` tras cuatro
+correcciones por descripción, instrucción del sistema y contrato.
+
+Los mismos datos, colgados de `analyze_sales_period` —la herramienta que el
+modelo ya usa para toda pregunta de ventas del período— funcionaron a la
+primera, y el modelo agregó por su cuenta la distinción que un operador quiere:
+separar la boleta genérica del mostrador del mejor cliente individualizado.
+
+El modelo no falla ejecutando, falla eligiendo. Cada herramienta nueva es una
+decisión más de ruteo. La RPC `assistant_rank_sales_customers_v1` se conserva
+para cablearla a una pantalla del ERP, donde no depende de ese criterio.
+
+**Registrar una herramienta del asistente son cuatro lugares**, no dos: la RPC,
+el contrato del ejecutor, el esquema del registry y
+`assistant_runtime.assistant_tool_receipt_contract_internal_v1`. Si falta en ese
+allowlist, la corrida muere con un 500 opaco sin llegar nunca a la base.
+
+### Barrido de la superficie del asistente (2026-08-21)
+
+Medido con `pg_stat_statements`: de las herramientas anunciadas, nueve no se
+habían ejecutado **nunca**. Se probó una pregunta natural por cada una y se
+corrigió lo que devolvía la respuesta automática de «no tengo una herramienta
+autorizada». Dos causas, ninguna del modelo:
+
+- **Un listado sin término de búsqueda era inexpresable.** `search_suppliers`,
+  `search_customers` y `search_purchase_invoices` exigían un `query` de entre 1
+  y 240 bytes, así que «qué proveedores tengo» no se podía formular y el modelo
+  concluía que la herramienta no servía. Un query vacío ahora significa
+  «lístamelos», acotado por `limit`.
+- **Compras no tenía análisis por período.** El equivalente de
+  `analyze_sales_period` no existía de ese lado: «qué le compré a mis
+  proveedores este mes» declaraba una carencia y después mostraba facturas de
+  julio. `search_purchase_invoices` recibió `relativePeriod` y devuelve
+  `matchedCount`, `matchedTotal` y `matchedBalance` del conjunto completo del
+  período —no de la página—, siguiendo el patrón de `search_inventory`.
+
+El principio que gobierna las dos correcciones: **la capacidad se cuelga de la
+herramienta que el modelo ya usa**, y el servidor entrega totales verificados
+para que el modelo narre en vez de calcular.
+
+### Dos huecos del lado de productos y fichas (2026-08-21)
+
+Auditado el buscador con el mismo criterio que el resto de la superficie:
+
+- **Podía filtrar por ficha pero no leerla.** Ante «qué mano de rosca tiene la
+  cubeta NAKASAWA» el asistente sacaba las medidas del **nombre** del producto
+  —funciona sólo porque el backfill llenó la ficha desde esos mismos nombres— y
+  cuando el nombre no traía el dato se iba a buscarlo **a internet**, a un
+  catálogo en Scribd, teniéndolo en su propia base. Ahora cada fila del
+  buscador viaja con `technicalSpecs`: la ficha resuelta, rótulo y valor,
+  leídos del registro.
+- **Una pista numérica amarraba cualquier número.** «Cubeta NAKASAWA 10561»
+  devolvía cero: «cubeta» es palabra del rótulo «Diámetro de rosca de cubeta»,
+  así que la inferencia amarró el **SKU** como un diámetro de 10.561 mm —los
+  reales rondan 34,8—. Un SKU, un año o un teléfono podían envenenar cualquier
+  búsqueda en silencio. Ahora la pista sólo amarra un número dentro del rango
+  que el catálogo tiene cargado para ese campo; lo que queda fuera vuelve al
+  texto libre, donde un SKU encuentra su producto.
+
+El segundo defecto lo introdujo la propia inferencia de esta jornada, y sólo
+apareció al probar una interacción distinta —preguntar por un producto concreto
+en vez de filtrar por medidas—. Vale como recordatorio: una capacidad nueva se
+prueba en los usos que no la motivaron.
+
+### Opciones clickeables en el chat: la mitad del servidor (2026-08-21)
+
+Contactar a un cliente por WhatsApp tiene una regla que el operador no debería
+tener que recordar: fuera de las 24 horas desde su último mensaje **entrante**,
+Meta sólo acepta plantillas aprobadas. Hoy eso se descubre al intentar escribir.
+
+Construido y desplegado:
+
+- **`AgentCardOption`**: el contrato de tarjeta ahora admite opciones
+  excluyentes y un `optionKind`. Elegir una NO ejecuta: abre la revisión de lo
+  que se hará. Es el primitivo que faltaba para todas las acciones —agregar
+  productos a una factura, actualizar un trabajo, contactar a un cliente—.
+- **`assistant_prepare_customer_contact_v1`**: resuelve el cliente, su
+  conversación y si la ventana está abierta. No envía nada. El teléfono no
+  viaja: sólo si existe.
+- **Las plantillas se movieron a `_shared/whatsapp_templates.ts`**, para que el
+  gestor que las despliega en Meta y el asistente que las previsualiza lean el
+  mismo texto. Duplicarlas era garantizar que un día dijeran cosas distintas.
+- **La tarjeta trae el texto exacto** que recibiría el cliente, con su nombre y
+  el del negocio ya sustituidos en el cuerpo aprobado.
+
+**Un esquema compartido no sirve para una herramienta que exige su parámetro.**
+La de contacto se registró con `boundedSearchSchema`, donde `query` admite
+`null` desde este mismo día. El modelo mandaba `null`, la función lo rechazaba
+y la corrida moría. Con un esquema propio y mínimo, la RPC se ejecutó a la
+primera.
+
+**Falta la mitad del cliente**: renderizar las opciones en el chat, abrir el
+previsualizado al elegir una y enviar recién al confirmar.
+
+### Cuánto cuesta el asistente, y con qué modelo (2026-08-21)
+
+Medido en `assistant_runs` y `assistant_provider_attempts`, no estimado.
+
+**El modelo quedó en `gemini-3.7-flash`**, el Flash estable más nuevo, que Google
+describe para «agentic workflows and reliable multi-step execution» —exactamente
+esta carga, donde el asistente encadena herramientas—. Antes era
+`gemini-3.1-pro-preview`.
+
+| | Pro preview | 3.7 Flash |
+|---|---|---|
+| nivel gratuito | **no tiene** | sí |
+| precio entrada / salida por millón | $2,00 / $12,00 | $0,75 / $3,75 |
+| costo por pregunta, medido | $0,067 | **$0,023** |
+| 50 preguntas diarias, al mes | ~$112 | **~$35** |
+| fallas en la misma ventana | 12 de 12 | 0 de 8 |
+
+**Que el Pro preview no tenga nivel gratuito es la causa de los 429**, no una
+caída de Google: se le estaba pidiendo a un modelo de sólo pago que respondiera
+sin facturación habilitada.
+
+**El catálogo de precios estaba mal.** `AI_AGENT_MODEL_PRICING_JSON` tarifaba a
+los Flash a $1,50/$7,50 —los precios que rigen desde enero de 2027— así que todo
+costo que el sistema informaba de un Flash venía al doble. Se corrigió con los
+vigentes. El catálogo es de exigencia estricta: un modelo sin entrada hace
+fallar la corrida entera con «AI routed model has no pricing entry» —correcto,
+nunca gastar sin saber cuánto— pero hay que recordarlo al cambiar de modelo.
+
+**Lo que sigue caro es el preámbulo.** Cada llamada manda **10.777 tokens antes
+del texto del operador**, y una pregunta usa ~2 llamadas. De eso, ~7.200 son
+descripciones de herramientas y ~1.700 el bloque de reglas: el 83% de la cuenta
+no es la pregunta ni la respuesta. Se infló al escribir descripciones largas
+para corregir el ruteo del modelo. Podarlo, y el caché de contexto —el preámbulo
+es idéntico en cada llamada—, son las dos palancas que quedan.
+
+### Qué se puede optimizar del preámbulo, medido (2026-08-21)
+
+El catálogo de herramientas se puede serializar exactamente como se le manda al
+modelo. Medido así, con el filtro real del runtime —`prepare_supply_request`
+no se anuncia fuera del asistente de compras—:
+
+| | caracteres | ≈ tokens |
+|---|---|---|
+| descripciones de herramientas | 8.307 → **6.768** | 2.077 → **1.692** |
+| esquemas | 22.603 → **22.190** | 5.651 → **5.548** |
+| **total por llamada** | 30.910 → **28.958** | 7.728 → **7.240** |
+
+**Los esquemas pesan tres veces más que las descripciones**, al revés de lo que
+parecía: el 77% del catálogo son las propiedades, sus tipos y sus enums, no la
+prosa. Por eso podar texto rinde poco —bajó el costo por pregunta un 4%— y
+conviene no seguir recortando reglas a cambio de tan poco.
+
+**Los tokens por pregunta se triplicaron en diez días**: 9.804 el 12 de agosto,
+26.470 hoy. Creció el catálogo, no la conversación.
+
+**La palanca grande es el caché de contexto, y ni siquiera sabemos si ya está
+actuando.** Unos 8.900 tokens por llamada —catálogo más reglas— son idénticos
+en cada petición, y una pregunta hace ~2,2 llamadas: el 70% de la entrada es
+prefijo repetido. Gemini informa `cachedContentTokenCount` en su metadata de
+uso y **nuestro parser lo ignora**, así que el ledger cobra como nuevo lo que
+Google quizá ya descuenta. El primer paso no es optimizar sino medir: registrar
+ese contador, igual que se hizo con el estado HTTP de los fallos.
+
+### El caché del proveedor no está actuando, y se midió (2026-08-21)
+
+`assistant_provider_attempts.cached_input_tokens` registra cuántos tokens de
+entrada sirvió Gemini desde su caché. Medido tras instrumentarlo: **0 en todos
+los intentos**, con 13.400–16.100 tokens de entrada por llamada.
+
+La razón es estructural, no un ajuste que falte: el bulto repetido —catálogo de
+herramientas y bloque de reglas— viaja en `systemInstruction` y `tools`, campos
+aparte de `contents`. El caché implícito de Gemini trabaja sobre el prefijo de
+`contents`, y ahí lo primero que va es el mensaje del operador, distinto en cada
+pregunta. Por eso nunca puede haber acierto: **hace falta caché explícito**
+(`CachedContent`), que sí admite herramientas e instrucción de sistema.
+
+Tamaño del premio: ~8.900 tokens por llamada × ~2,2 llamadas por pregunta = el
+**70% de la entrada**.
+
+**Cómo se instrumentó, que importa tanto como el dato:** el cuerpo del recibo se
+valida con claves exactas y ese ledger es obligatorio —si falla, muere la
+corrida—. Por eso la función de base acepta a propósito **las dos formas** del
+cuerpo, con y sin `p_cached_input_tokens`, y así el orden de despliegue entre la
+base y la función de borde deja de importar.
+
+### Opciones clickeables en el chat, funcionando (2026-08-21)
+
+«Contacta al cliente X» resuelve la ventana de servicio de 24 horas, ofrece las
+plantillas aprobadas como controles, y al elegir una muestra **el texto exacto**
+que recibirá el cliente con Cancelar y Enviar. Elegir no envía nunca.
+
+- **La revisión es inline y se ve como el mensaje real.** Vive dentro de la
+  misma tarjeta del chat —no en un diálogo del sistema— y usa la gramática de
+  la ventana de conversación: burbuja propia sobre el rol `selectionContainer`,
+  alineada a la derecha, cola abajo a la derecha y hora al pie. Lo único que el
+  operador necesita juzgar antes de confirmar es **cómo le llegará al cliente**,
+  y un texto plano dentro de un modal no permite juzgar eso.
+- **Cada lado sustituye lo que le pertenece, y por eso la revisión no puede
+  mentir.** El cuerpo va aprobado por Meta desde `_shared/whatsapp_templates.ts`
+  —el mismo módulo que las despliega— con el nombre del negocio ya puesto, y el
+  saludo lo resuelve en el cliente `resolveWhatsAppTemplateGreetingName`, la
+  misma función que arma los parámetros del envío real.
+
+  Esto surgió de una pregunta del dueño: «¿renderiza tal cual como se enviaría?
+  Yo pedí que fuera sólo el nombre, sin apellido». No lo hacía: la primera
+  versión rendía el nombre completo en el servidor y el mensaje salía con el
+  nombre solo. La regla además no es «la primera palabra» —conserva compuestos
+  como «José Luis»—, así que replicarla en TypeScript habría garantizado que
+  algún día divergieran. Verificado: «Marcelo Silva» → «Hola Marcelo»;
+  «Jose Luis Campodónico» → «Hola Jose Luis».
+- El teléfono no viaja al modelo. El servidor informa sólo si existe; el cliente
+  lo resuelve al confirmar.
+- Las plantillas viven en `_shared/whatsapp_templates.ts`, compartidas con el
+  gestor que las despliega en Meta.
+
+**Una tarjeta nueva del asistente se registra en SEIS lugares**, y ninguno avisa
+del otro. Encontrarlos costó una madrugada de despliegues a ciegas:
+
+1. la RPC de la herramienta;
+2. el contrato del ejecutor (`toolContracts`);
+3. el esquema y la herramienta en el registry;
+4. el allowlist de recibos, `assistant_tool_receipt_contract_internal_v1`;
+5. `public.assistant_cards_valid_v1` en la base —claves, destino por tipo y
+   pareja tipo/entidad—;
+6. el cliente Dart: `validateStoredCards`, el mapa destino→tipo y la pareja
+   `entityRef`/destino.
+
+**La lección de método, que vale más que la feature:** los seis validan con
+listas cerradas —correcto— pero **todos rechazaban en silencio**, con un código
+genérico. Se instrumentaron dos: `AgentRuntimeError` conserva ahora un
+discriminador seguro del error (`assistant_unavailable_complete_run_v2_...`,
+`..._invalid_stored_card`) y el parser Dart nombra qué comprobación rechazó la
+tarjeta. Con eso, los tres últimos obstáculos cayeron en una vuelta cada uno;
+los tres primeros habían costado seis.
+
+**Un discriminador tiene que caber donde se guarda.** `assistant_runs.error_code`
+exige `^[a-z][a-z0-9_]{0,63}$`: lo distintivo va primero, porque con el prefijo
+genérico por delante el corte se comía justo el nombre de la RPC.
+
+### La bandeja archivaba algo distinto de lo enviado (2026-08-21)
+
+Envío real al teléfono del dueño, con su autorización. Llegó
+*«Hola Test, tu bicicleta **esta** lista para retiro en Viñabike»* —el cuerpo
+aprobado por Meta, sin tildes— y la previsualización del asistente decía
+exactamente eso. Pero la copia que el ERP archiva en la conversación decía
+*«**está** lista»*: `WhatsAppService.renderPreview` tenía su propia redacción,
+con tildes, distinta de los cuerpos publicados.
+
+O sea que el historial del taller mostraba un texto que el cliente nunca
+recibió. Las tres plantillas de cliente se alinearon literalmente con
+`_shared/whatsapp_templates.ts`, que es el módulo que las despliega en Meta.
+
+**El guardia importa más que el arreglo.** `whatsapp_customer_template_contract_test`
+lee ese archivo TypeScript y compara cuerpo por cuerpo contra la copia de Dart;
+se verificó que falla reintroduciendo una tilde. Sin él, la próxima redacción
+«mejorada» vuelve a separarlos y nadie se entera hasta que un cliente pregunta
+por qué el mensaje dice otra cosa.
+
+### Corregir una plantilla aprobada tiene costo operativo (2026-08-21)
+
+`deploy_defaults` sólo crea lo que falta y **salta** lo existente, así que un
+cuerpo mal escrito se quedaba aprobado para siempre. Se agregó `sync_bodies` al
+gestor: compara cada cuerpo vivo en Meta contra
+`_shared/whatsapp_templates.ts` y edita las que difieren, con su botón en el
+panel de plantillas del chat.
+
+Se corrigieron las tildes de las tres de cliente y se agregó al módulo la de
+primer contacto, con la redacción del dueño: *«Hola {{1}}, hablas con {{2}} de
+Viñabike. Te escribo por el servicio de tu bicicleta.»* —dos parámetros,
+cliente y quien escribe, porque así la manda `contactAndAgent`—.
+
+**Editar manda la plantilla de vuelta a revisión, y mientras está PENDING el
+envío falla con el error 132001 de Meta.** Se comprobó enviando: el mensaje se
+registró en la conversación pero sin `external_message_id`. Es un corte real de
+la capacidad de escribirle a un cliente fuera de la ventana de 24 horas, que
+dura lo que Meta demore en aprobar.
+
+Por eso el estado de revisión dejó de ser exclusivo de las plantillas de
+proveedor: ahora **todas** exigen aprobación viva y el panel muestra «En
+revisión», «Aprobada» o «Rechazada». Sin eso el taller sólo veía «no se pudo
+enviar», sin saber por qué ni hasta cuándo.
+
+### La previsualización la arma el cliente, con los parámetros del envío (2026-08-21)
+
+El servidor rendía el texto y ponía el negocio en `{{2}}`. Sirve para tres de
+las cuatro plantillas, pero **no para la de primer contacto**, donde ese
+parámetro es quien escribe: la revisión decía «hablas con Viñabike de Viñabike».
+Es el mismo error de ORDEN que el guardia de Dart ya vigilaba, cometido del lado
+del servidor.
+
+Ahora la tarjeta pide el texto resuelto al cliente, que lo arma con
+`renderPreview` usando exactamente los valores del envío —cliente, negocio y
+**quien tiene la sesión abierta**—. El orden de parámetros vive en un solo lugar,
+`bodyParameters`, y el guardia lo pinea contra el cuerpo aprobado.
+
+De paso apareció un segundo defecto, invisible en la previsualización anterior:
+el envío del asistente **no pasaba `agentName`**, así que una plantilla que se
+presenta por persona habría salido firmada «parte del equipo». Ahora firma con
+el nombre del operador, igual que un envío hecho a mano desde el chat.
+
+**Y quien escribe se presenta por su nombre, no por su nombre completo.** Se
+aplica la misma `resolveWhatsAppTemplateGreetingName` que al cliente —conserva
+compuestos como «José Luis» y deja fuera el apellido—, en `renderPreview` y en
+`bodyParameters` a la vez, para que revisión y envío no puedan separarse. Queda
+«hablas con Claudio», no «hablas con Claudio Catalán». Cubierto por tres
+pruebas: apellido fuera, compuesto entero, y firma neutra cuando no hay nombre
+resuelto en vez de dejar el hueco en blanco.
+
+
+### Precisión de ficha activa y configuración (2026-09-06)
+
+El contexto del producto se resuelve por vínculo explícito o default de categoría; hechos retirados/fuera de la ficha se conservan y quedan fuera del juicio. Las nuevas restricciones de escritura directa de producto no cambian los sujetos `bike` y `job_bike`. El rótulo de rodado, la válvula instalada y el diámetro del rotor actual describen una configuración, no todas las configuraciones permitidas: diferencias aisladas requieren revisar interfaces y límites documentados. Véase K31 en `docs/architecture/bicycle-compatibility-knowledge.md`; no se declara cobertura global del taller con estas correcciones.
+
+
+### 2026-09-06 — configuraciones técnicas indivisibles por fila
+
+El contrato de producto admite observaciones tipadas en `spec_facts.value_json`
+mediante esquema versionado en la definición. BSD/rango, posición/medida y sus
+fuentes permanecen en una fila; no se genera producto cartesiano. Los hechos de
+bike/job_bike retienen sus permisos por tenant y no se reflejan en productos.
+El transporte `get_product_spec_typed_configurations_v1` entrega tipo y revisión
+explícitos para las próximas evaluaciones de interfaces. No reemplaza todavía
+el perfil de bicicleta ni declara compatibles montajes por lectura de una fila.
+Referencia: `docs/architecture/product-technical-specifications-contract.md`.
+
+**2026-09-08 — motor publicado de orden dimensional estricto.** Las filas v2
+pueden declarar dos cotas del mismo cuerpo en orden estricto, conservando la
+comparación inclusiva de los rangos. No heredan restricciones por tener nombres
+iguales a campos escalares. La adopción inicial en direcciones separa ID/OD por
+extremo; no aprueba SHIS ni altera sujetos o permisos del taller. El esquema
+publicado y sus sobres permanecen inmutables sin una migración explícita.
+Ver `docs/development/product-specs-research-2026-09-05/strict-row-order-readiness-2026-09-08.md`
+para las pruebas y la publicación verificada `20260908185800`. El despliegue
+conservó las 93 definiciones de filas existentes; no activó esquemas v2 ni
+cambió productos. La adopción de las fichas y la distribución del cliente
+compatible siguen pendientes.
+
+**2026-09-14 — alcance del consumidor de kits (código local).** El despacho de
+`drivetrain_kit` ya no usa el evaluador de bielas, ni su resultado general ni el
+detallado. Una fila de contenido de cadena disparaba una descripción `1x · Mid`
+tomada de la bicicleta y pedía una transmisión trasera sin que el kit la
+incluyera. Ahora conserva cautela por las fichas de sus componentes y las
+uniones del conjunto pendientes. Regresión reproducida antes del cambio,
+83 pruebas de servicio y analizador aprobados; la prueba focal también pasó
+con el sobre real de filas. Esto no implementa evaluación mecánica por miembro
+ni demuestra ejecución/distribución del nuevo cliente. Continuidad y límite:
+`docs/development/product-specs-research-2026-09-05/member-profiles-integration-2026-09-14.md`.
+
+
+**2026-09-06 — requisitos de ficha, no aprobación mecánica.** Migración
+`20260906200000`: las plantillas pueden declarar condiciones tipadas de
+aplicabilidad/completitud y opciones locales, validadas en SQL y Dart. El motor
+mecánico conserva su contrato de relaciones: que una pregunta aplique no
+aprueba un montaje. El catálogo de 105 plantillas propuesto sigue en revisión y
+no debe usarse como señal de cobertura completa. Ver el contrato de fichas y el
+checkpoint global de saneamiento para estado aplicado y gates de llenado.
+
+**2026-09-07 — lectura exacta de fichas.** La migración `20260907010000`
+publica editor y referencias v2 con decimales escalares y límites como texto,
+junto con la plantilla y revisión en una instantánea SQL. El editor conserva
+las entradas exactas hasta el escritor agregado. Los lectores v1 y sujetos
+`bike`/`job_bike` permanecen intactos; el taller debe adoptar su transporte
+tipado antes de atribuir esta precisión a sus propias comparaciones.
+
+
+**2026-09-07 — coherencia entre filas de ficha (0200 aplicado/verificado en producción).**
+`form_contract.row_coherence` vincula por ID estable dos configuraciones dentro
+la misma ficha. El DTO tipado conserva IDs y añade `row_labels` sólo como
+presentación; el matcher no convierte etiquetas ni enlaces en prueba de ajuste.
+`scalar_ordered_pairs` compara extremos exactos de igual unidad. Guardas
+centrales y diferidas rechazan contradicción conocida, preservan el borrador
+pendiente y la evidencia anterior de una lectura rechazada. El catálogo local
+A/B actualizado y sus 55 casos no autorizan el llenado ni el ajuste mecánico.
+Continuidad: `docs/development/product-specs-research-2026-09-05/row-coherence-integration-2026-09-07.md`.
+
+**2026-09-07 — consumidor de frenos.** `fluid_type` ya no implica superficie
+de disco ni entrada hidráulica: HY/RD y HS33 demuestran ambas separaciones.
+`braking_surface` se compara sólo cuando ambos extremos la establecen; la
+coincidencia deja pendientes montaje, accionamiento y modelo. Las declaraciones
+schema2 aún necesitan proyección por extremo instalada/producto antes de
+evaluarse aquí. Evidencia y límites en
+`docs/development/product-specs-research-2026-09-05/brake-consumer-integration-2026-09-07.md`.
+
+**2026-09-07 — requisitos dentro de cada configuración (2200 aplicado/verificado).**
+`row_conditions` conserva la indivisibilidad de una fila al determinar qué
+columnas aplican, cuáles faltan y qué opciones admite esa plantilla. Campos de
+otra fila o escalares no satisfacen esos requisitos. No certifica montaje por
+superar la captura. La publicación se serializa con hechos/referencias; se
+comprobó la carrera de producto nuevo y referencia, y su rechazo en ambos
+órdenes. La corrección no altera hechos `bike`/`job_bike`. El catálogo ampliado
+sigue local, sin asignaciones ni llenado; su contexto global está en el
+checkpoint de saneamiento y el contrato de fichas técnicas.
+
+**2026-09-07 — rueda frente a receta de armado.** El consumidor de productos
+conserva `bike.spokeCount` como agregado sin lado. No lo copia a
+`frontSpokeHoles`/`rearSpokeHoles`, ni declara incompatible una maza o llanta
+por ese conteo de la bicicleta. La diferencia exige identificar la contraparte
+y el armado; coincidencia de agujeros tampoco aprueba el montaje. La revisión
+del largo del rayo requiere la receta y geometría por lado. La calculadora de
+armado y su búsqueda por tolerancia siguen siendo consumidores separados.
+Evidencia: `docs/development/product-specs-research-2026-09-05/spoke-wheel-consumer-integration-2026-09-07.md`.
+# Corrección del consumidor de compatibilidad — 2026-09-07
+
+`BikeProductCompatibilityService` despacha por identidad antes de interpretar
+campos compartidos. Un atributo de freno en una maza no debe omitir su interfaz
+con el cuadro/horquilla. El único `brakeType` de `BikeProfile.technicalValues`
+es agregado: no prueba el sistema de cada rueda ni el alcance del trabajo, por
+lo que no rechaza una manilla delantera desde un contrapedal trasero. La ficha
+de diagnóstico por rueda conserva desgaste/estado, pero no aporta un modelo o
+tipo de freno que permita suplantar esa carencia. El consumidor mantiene
+precaución hasta contar con las contrapartes y configuraciones necesarias.
+
+Biela, caja del cuadro y pedalier tienen interfaces diferentes. El estándar
+de caja sólo se compara con otro estándar de caja reconocido; etiquetas de eje
+o construcción no lo sustituyen. Una medida escalar de ancho no es una lista
+exhaustiva de configuraciones de un modelo. Las alternativas aceptadas de eje
+siguen necesitando el montaje completo. Un mando sin lado o Universal no se
+expande a ambos extremos; la familia de indexado trasera no rechaza un mando
+izquierdo. Cambiar la cantidad de platos requiere definir y validar una
+conversión, sin presumir posiciones sobrantes ni convertibilidad del cuadro.
+
+Fuentes, adjudicación de Claude y 82 regresiones del consumidor:
+[consumer-scope-integration-2026-09-07.md](docs/development/product-specs-research-2026-09-05/consumer-scope-integration-2026-09-07.md).
+Persisten los gates globales de saneamiento, publicación de metadatos y llenado.

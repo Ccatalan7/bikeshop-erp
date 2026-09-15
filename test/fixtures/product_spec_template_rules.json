@@ -1,0 +1,441 @@
+{
+  "cases": [
+    {
+      "id": "always",
+      "expression": {
+        "kind": "always"
+      },
+      "values": {},
+      "expected": "yes"
+    },
+    {
+      "id": "never",
+      "expression": {
+        "kind": "never"
+      },
+      "values": {},
+      "expected": "no"
+    },
+    {
+      "id": "both_and_match",
+      "expression": {
+        "kind": "when",
+        "rows": [
+          [
+            {
+              "field": "actuation",
+              "operator": "eq",
+              "value_type": "token",
+              "value": "Hydraulic"
+            },
+            {
+              "field": "circuit",
+              "operator": "eq",
+              "value_type": "token",
+              "value": "A"
+            }
+          ],
+          [
+            {
+              "field": "actuation",
+              "operator": "eq",
+              "value_type": "token",
+              "value": "Mechanical"
+            }
+          ]
+        ]
+      },
+      "values": {
+        "actuation": "Hydraulic",
+        "circuit": "A"
+      },
+      "expected": "yes"
+    },
+    {
+      "id": "no_cartesian_rows",
+      "expression": {
+        "kind": "when",
+        "rows": [
+          [
+            {
+              "field": "actuation",
+              "operator": "eq",
+              "value_type": "token",
+              "value": "Hydraulic"
+            },
+            {
+              "field": "circuit",
+              "operator": "eq",
+              "value_type": "token",
+              "value": "A"
+            }
+          ],
+          [
+            {
+              "field": "actuation",
+              "operator": "eq",
+              "value_type": "token",
+              "value": "Mechanical"
+            }
+          ]
+        ]
+      },
+      "values": {
+        "actuation": "Hydraulic",
+        "circuit": "B"
+      },
+      "expected": "no"
+    },
+    {
+      "id": "independent_alternative",
+      "expression": {
+        "kind": "when",
+        "rows": [
+          [
+            {
+              "field": "actuation",
+              "operator": "eq",
+              "value_type": "token",
+              "value": "Hydraulic"
+            },
+            {
+              "field": "circuit",
+              "operator": "eq",
+              "value_type": "token",
+              "value": "A"
+            }
+          ],
+          [
+            {
+              "field": "actuation",
+              "operator": "eq",
+              "value_type": "token",
+              "value": "Mechanical"
+            }
+          ]
+        ]
+      },
+      "values": {
+        "actuation": "Mechanical"
+      },
+      "expected": "yes"
+    },
+    {
+      "id": "missing_is_unknown",
+      "expression": {
+        "kind": "when",
+        "rows": [
+          [
+            {
+              "field": "actuation",
+              "operator": "eq",
+              "value_type": "token",
+              "value": "Hydraulic"
+            },
+            {
+              "field": "circuit",
+              "operator": "eq",
+              "value_type": "token",
+              "value": "A"
+            }
+          ],
+          [
+            {
+              "field": "actuation",
+              "operator": "eq",
+              "value_type": "token",
+              "value": "Mechanical"
+            }
+          ]
+        ]
+      },
+      "values": {
+        "actuation": "Hydraulic"
+      },
+      "expected": "unknown"
+    },
+    {
+      "id": "known_negative",
+      "expression": {
+        "kind": "when",
+        "rows": [
+          [
+            {
+              "field": "actuation",
+              "operator": "eq",
+              "value_type": "token",
+              "value": "Hydraulic"
+            },
+            {
+              "field": "circuit",
+              "operator": "eq",
+              "value_type": "token",
+              "value": "A"
+            }
+          ],
+          [
+            {
+              "field": "actuation",
+              "operator": "eq",
+              "value_type": "token",
+              "value": "Mechanical"
+            }
+          ]
+        ]
+      },
+      "values": {
+        "actuation": "Other"
+      },
+      "expected": "no"
+    },
+    {
+      "id": "unknown_does_not_override_other_match",
+      "expression": {
+        "kind": "when",
+        "rows": [
+          [
+            {
+              "field": "actuation",
+              "operator": "eq",
+              "value_type": "token",
+              "value": "Hydraulic"
+            },
+            {
+              "field": "circuit",
+              "operator": "eq",
+              "value_type": "token",
+              "value": "A"
+            }
+          ],
+          [
+            {
+              "field": "actuation",
+              "operator": "eq",
+              "value_type": "token",
+              "value": "Mechanical"
+            }
+          ]
+        ]
+      },
+      "values": {
+        "actuation": "Mechanical",
+        "circuit": "Desconocido / sin confirmar"
+      },
+      "expected": "yes"
+    },
+    {
+      "id": "false_is_answer",
+      "expression": {
+        "kind": "when",
+        "rows": [
+          [
+            {
+              "field": "included",
+              "operator": "eq",
+              "value_type": "boolean",
+              "value": false
+            }
+          ]
+        ]
+      },
+      "values": {
+        "included": false
+      },
+      "expected": "yes"
+    },
+    {
+      "id": "string_false_unknown",
+      "expression": {
+        "kind": "when",
+        "rows": [
+          [
+            {
+              "field": "included",
+              "operator": "eq",
+              "value_type": "boolean",
+              "value": false
+            }
+          ]
+        ]
+      },
+      "values": {
+        "included": "false"
+      },
+      "expected": "unknown"
+    },
+    {
+      "id": "literal_model_01",
+      "expression": {
+        "kind": "when",
+        "rows": [
+          [
+            {
+              "field": "model",
+              "operator": "eq",
+              "value_type": "token",
+              "value": "01"
+            }
+          ]
+        ]
+      },
+      "values": {
+        "model": "1"
+      },
+      "expected": "no"
+    },
+    {
+      "id": "literal_model_01_matches",
+      "expression": {
+        "kind": "when",
+        "rows": [
+          [
+            {
+              "field": "model",
+              "operator": "eq",
+              "value_type": "token",
+              "value": "01"
+            }
+          ]
+        ]
+      },
+      "values": {
+        "model": "01"
+      },
+      "expected": "yes"
+    },
+    {
+      "id": "list_is_not_one_model",
+      "expression": {
+        "kind": "when",
+        "rows": [
+          [
+            {
+              "field": "model",
+              "operator": "eq",
+              "value_type": "token",
+              "value": "01"
+            }
+          ]
+        ]
+      },
+      "values": {
+        "model": [
+          "01"
+        ]
+      },
+      "expected": "unknown"
+    },
+    {
+      "id": "exact_decimal",
+      "expression": {
+        "kind": "when",
+        "rows": [
+          [
+            {
+              "field": "diameter",
+              "operator": "gte",
+              "value_type": "decimal",
+              "value": "9007199254740993.1"
+            }
+          ]
+        ]
+      },
+      "values": {
+        "diameter": "9007199254740993.0"
+      },
+      "expected": "no"
+    },
+    {
+      "id": "ordinary_json_number_projected",
+      "expression": {
+        "kind": "when",
+        "rows": [
+          [
+            {
+              "field": "diameter",
+              "operator": "gte",
+              "value_type": "decimal",
+              "value": "2"
+            }
+          ]
+        ]
+      },
+      "values": {
+        "diameter": 2
+      },
+      "expected": "yes"
+    }
+  ],
+  "invalid": [
+    {},
+    {
+      "kind": "sometimes"
+    },
+    {
+      "kind": "always",
+      "rows": []
+    },
+    {
+      "kind": "when",
+      "rows": []
+    },
+    {
+      "kind": "when",
+      "rows": [
+        []
+      ]
+    },
+    {
+      "kind": "when",
+      "rows": [
+        [
+          {
+            "field": "x",
+            "operator": "eq",
+            "value_type": "token",
+            "value": false
+          }
+        ]
+      ]
+    },
+    {
+      "kind": "when",
+      "rows": [
+        [
+          {
+            "field": "x",
+            "operator": "gte",
+            "value_type": "token",
+            "value": "01"
+          }
+        ]
+      ]
+    },
+    {
+      "kind": "when",
+      "rows": [
+        [
+          {
+            "field": "diameter",
+            "operator": "gte",
+            "value_type": "decimal",
+            "value": "2,5"
+          }
+        ]
+      ]
+    },
+    {
+      "kind": "when",
+      "rows": [
+        [
+          {
+            "field": "diameter",
+            "operator": "gte",
+            "value_type": "decimal",
+            "value": " 2 "
+          }
+        ]
+      ]
+    }
+  ]
+}

@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:timezone/timezone.dart' as tz;
 
 import 'package:vinabike_erp/modules/hr/models/hr_models.dart';
 import 'package:vinabike_erp/modules/hr/services/hr_service.dart';
@@ -73,6 +74,63 @@ void main() {
     expect(find.text('Turnos finalizados hoy'), findsOneWidget);
     expect(find.text('Vicente'), findsOneWidget);
     expect(find.text('Turno finalizado'), findsOneWidget);
+  });
+
+  testWidgets(
+      'a period that ended before today lists its closed shifts, '
+      'not who is in the store now', (tester) async {
+    final service = _FakeHRService([
+      _currentEntry(),
+      _closedEntry(
+        attendanceId: 'attendance-vicente',
+        employeeId: 'employee-vicente',
+        firstName: 'Vicente',
+        checkIn: DateTime.utc(2026, 8, 2, 14),
+        checkOut: DateTime.utc(2026, 8, 2, 23, 30),
+      ),
+      _closedEntry(
+        attendanceId: 'attendance-ana',
+        employeeId: 'employee-ana',
+        firstName: 'Ana',
+        checkIn: DateTime.utc(2026, 8, 2, 14),
+        checkOut: DateTime.utc(2026, 8, 2, 20),
+      ),
+    ]);
+    addTearDown(service.dispose);
+
+    await _pumpPanel(tester, service);
+    expect(find.text('Ahora en el local'), findsOneWidget);
+
+    await tester
+        .tap(find.byKey(const ValueKey<String>('notification-period-trigger')));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.tap(find.text('Ayer'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+
+    // The service was asked for yesterday's business day, not today's.
+    final requested = service.lastWindow!;
+    final chile = tz.getLocation('America/Santiago');
+    final today = tz.TZDateTime.now(chile);
+    // A civil day can span 23 or 25 hours at a DST transition. Assert the
+    // actual business-date boundaries instead of a fixed elapsed duration.
+    expect(requested.start,
+        tz.TZDateTime(chile, today.year, today.month, today.day - 1).toUtc());
+    expect(requested.end,
+        tz.TZDateTime(chile, today.year, today.month, today.day).toUtc());
+    expect(requested.end.isBefore(today), isTrue);
+
+    expect(find.text('Asistencia de ayer'), findsOneWidget);
+    expect(find.text('Ahora en el local'), findsNothing);
+    expect(find.text('2 turnos'), findsOneWidget);
+    expect(find.text('Jornada en curso'), findsNothing,
+        reason: "Lucas is in the store today; that is not yesterday's fact.");
+    expect(find.text('Lucas'), findsNothing);
+    expect(find.text('Vicente'), findsOneWidget);
+    expect(find.text('Ana'), findsOneWidget);
+    expect(find.text('Turno finalizado'), findsNWidgets(2));
+    expect(find.text('Turnos finalizados hoy'), findsNothing);
   });
 
   testWidgets('a truly empty day keeps the daily empty state', (tester) async {
@@ -167,11 +225,14 @@ class _FakeHRService extends HRService {
         );
 
   final List<DailyAttendanceBriefingEntry> entries;
+  ({DateTime start, DateTime end})? lastWindow;
 
   @override
   Future<List<DailyAttendanceBriefingEntry>> getDailyAttendanceBriefing({
     required DateTime startsAt,
     required DateTime endsAt,
-  }) async =>
-      entries;
+  }) async {
+    lastWindow = (start: startsAt, end: endsAt);
+    return entries;
+  }
 }

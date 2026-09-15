@@ -1,6 +1,11 @@
+import 'dart:async';
+
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
+import 'browser_workspace_favicon.dart';
 import 'vb_anchored_popover.dart';
 import 'vb_shell_icon_button.dart';
 
@@ -29,13 +34,132 @@ class WorkspaceTabBar extends StatefulWidget {
   State<WorkspaceTabBar> createState() => _WorkspaceTabBarState();
 }
 
-class _WorkspaceTabBarState extends State<WorkspaceTabBar> {
+class _WorkspaceTabBarState extends State<WorkspaceTabBar>
+    with WidgetsBindingObserver {
   String? _draggingWorkspaceId;
   int? _hoveringWorkspaceIndex;
+  final GlobalKey _browserStackTrigger = GlobalKey();
+  final GlobalKey _browserStackAnchor = GlobalKey();
+  final GlobalKey _browserStackMenu = GlobalKey();
+  bool _browserStackPopoverOpen = false;
+  bool _browserStackPopoverLocked = false;
+  Timer? _browserStackHoverOpenTimer;
+  Timer? _browserStackHoverCloseTimer;
 
   static const double _regularTabWidth = 152;
   static const double _pinnedTabWidth = 144;
   static const double _trailingDropWidth = 24;
+
+  NavigatorState? _browserStackNavigator;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    GestureBinding.instance.pointerRouter.addGlobalRoute(
+      _handleGlobalPointerEvent,
+    );
+  }
+
+  @override
+  void dispose() {
+    _browserStackHoverOpenTimer?.cancel();
+    _browserStackHoverCloseTimer?.cancel();
+    GestureBinding.instance.pointerRouter.removeGlobalRoute(
+      _handleGlobalPointerEvent,
+    );
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeMetrics() {
+    _browserStackHoverOpenTimer?.cancel();
+    if (!_browserStackPopoverOpen) return;
+    final navigator = _browserStackNavigator;
+    if (navigator != null && navigator.mounted) {
+      navigator.maybePop();
+    }
+  }
+
+  Rect? _globalRectFor(GlobalKey key) {
+    final renderObject = key.currentContext?.findRenderObject();
+    if (renderObject is! RenderBox || !renderObject.hasSize) return null;
+    return renderObject.localToGlobal(Offset.zero) & renderObject.size;
+  }
+
+  void _handleGlobalPointerEvent(PointerEvent event) {
+    if (!_browserStackPopoverOpen ||
+        _browserStackPopoverLocked ||
+        event is! PointerHoverEvent && event is! PointerMoveEvent) {
+      return;
+    }
+
+    final triggerRect = _globalRectFor(_browserStackTrigger);
+    final menuRect = _globalRectFor(_browserStackMenu);
+    if (triggerRect == null || menuRect == null) return;
+
+    // The extension overlaps the shell hairline, so these two real painted
+    // rectangles touch. No invisible hover corridor extends beside the menu.
+    if (triggerRect.contains(event.position) ||
+        menuRect.contains(event.position)) {
+      _browserStackHoverCloseTimer?.cancel();
+      _browserStackHoverCloseTimer = null;
+      return;
+    }
+    _scheduleBrowserStackHoverClose();
+  }
+
+  void _handleBrowserStackHover(
+    bool hovered,
+    List<Workspace> workspaces,
+    WorkspaceChromeStyleData chrome,
+  ) {
+    if (!hovered) {
+      if (!_browserStackPopoverOpen) {
+        _browserStackHoverOpenTimer?.cancel();
+        _browserStackHoverOpenTimer = null;
+      }
+      return;
+    }
+
+    _browserStackHoverCloseTimer?.cancel();
+    _browserStackHoverCloseTimer = null;
+    if (_browserStackPopoverOpen || _browserStackHoverOpenTimer != null) {
+      return;
+    }
+    // F-05 gives O-02 a 200 ms base motion budget. Reusing that same beat as
+    // hover intent prevents accidental fly-outs while preserving immediacy.
+    _browserStackHoverOpenTimer = Timer(
+      const Duration(milliseconds: 200),
+      () {
+        _browserStackHoverOpenTimer = null;
+        if (mounted) {
+          _openBrowserStack(
+            workspaces,
+            locked: false,
+            chrome: chrome,
+          );
+        }
+      },
+    );
+  }
+
+  void _scheduleBrowserStackHoverClose() {
+    if (_browserStackHoverCloseTimer != null) return;
+    _browserStackHoverCloseTimer = Timer(
+      const Duration(milliseconds: 120),
+      () {
+        _browserStackHoverCloseTimer = null;
+        if (_browserStackPopoverOpen && !_browserStackPopoverLocked) {
+          final navigator = _browserStackNavigator;
+          if (navigator != null && navigator.mounted) {
+            navigator.maybePop();
+          }
+        }
+      },
+    );
+  }
 
   void _startDrag(String workspaceId) {
     setState(() {
@@ -117,15 +241,48 @@ class _WorkspaceTabBarState extends State<WorkspaceTabBar> {
         .toInt();
   }
 
-  double _tabWidthFor(Workspace workspace) =>
-      workspace.isPinned ? _pinnedTabWidth : _regularTabWidth;
+  double _tabWidthFor(_WorkspaceStripItem item) => item.isBrowserStack
+      ? _regularTabWidth
+      : item.workspace!.isPinned
+          ? _pinnedTabWidth
+          : _regularTabWidth;
 
-  List<_WorkspaceTabPlacement> _placementsFor(List<Workspace> workspaces) {
+  List<_WorkspaceStripItem> _stripItemsFor(List<Workspace> workspaces) {
+    final browserStack = workspaces
+        .where(
+          (workspace) => workspace.isBrowserWorkspace && !workspace.isPinned,
+        )
+        .toList(growable: false);
+    if (browserStack.length < 2) {
+      return workspaces
+          .map(_WorkspaceStripItem.workspace)
+          .toList(growable: false);
+    }
+
+    final browserIds = browserStack.map((workspace) => workspace.id).toSet();
+    var insertedStack = false;
+    final items = <_WorkspaceStripItem>[];
+    for (final workspace in workspaces) {
+      if (!browserIds.contains(workspace.id)) {
+        items.add(_WorkspaceStripItem.workspace(workspace));
+        continue;
+      }
+      if (!insertedStack) {
+        items.add(_WorkspaceStripItem.browserStack(browserStack));
+        insertedStack = true;
+      }
+    }
+    return items;
+  }
+
+  List<_WorkspaceTabPlacement> _placementsFor(
+    List<_WorkspaceStripItem> items,
+  ) {
     var left = 0.0;
-    return workspaces.map((workspace) {
-      final width = _tabWidthFor(workspace);
+    return items.map((item) {
+      final width = _tabWidthFor(item);
       final placement = _WorkspaceTabPlacement(
-        workspace: workspace,
+        item: item,
         left: left,
         width: width,
       );
@@ -138,18 +295,67 @@ class _WorkspaceTabBarState extends State<WorkspaceTabBar> {
     List<Workspace> workspaces,
   ) {
     var left = 0.0;
-    return workspaces.asMap().entries.map((entry) {
-      final workspace = entry.value;
-      final width = _tabWidthFor(workspace);
+    final items = _stripItemsFor(workspaces);
+    return items.map((item) {
+      final firstWorkspace = item.workspaces.first;
+      final width = _tabWidthFor(item);
       final placement = _WorkspaceDropPlacement(
-        workspace: workspace,
-        targetIndex: entry.key,
+        itemId: item.id,
+        targetIndex: workspaces.indexWhere(
+          (workspace) => workspace.id == firstWorkspace.id,
+        ),
         left: left,
         width: width,
       );
       left += width;
       return placement;
     }).toList();
+  }
+
+  Future<void> _openBrowserStack(
+    List<Workspace> workspaces, {
+    required bool locked,
+    required WorkspaceChromeStyleData chrome,
+  }) async {
+    _browserStackHoverOpenTimer?.cancel();
+    _browserStackHoverOpenTimer = null;
+    if (_browserStackPopoverOpen) {
+      _browserStackPopoverLocked = _browserStackPopoverLocked || locked;
+      return;
+    }
+    if (workspaces.length < 2) return;
+
+    _browserStackNavigator = Navigator.of(context, rootNavigator: true);
+    _browserStackPopoverLocked = locked;
+    setState(() => _browserStackPopoverOpen = true);
+    final selectedWorkspaceId = await showVbAnchoredPopover<String>(
+      anchorContext: _browserStackAnchor.currentContext ?? context,
+      // The visible tab is two pixels narrower than its reorder slot. The
+      // extension anchors to that painted surface and preserves its width.
+      minWidth: _regularTabWidth - 2,
+      // Overlap the strip's one-pixel bottom hairline so tab and extension
+      // read as one continuous control rather than two adjacent surfaces.
+      gap: -1,
+      barrierLabel: 'Cerrar la lista de pestañas web',
+      contentTransitionBuilder: _browserStackExtensionTransition,
+      builder: (context) => _BrowserWorkspaceStackMenu(
+        key: _browserStackMenu,
+        workspaces: List<Workspace>.unmodifiable(workspaces),
+        activeWorkspaceId: context.read<WorkspaceManager>().activeWorkspace?.id,
+        chrome: chrome,
+      ),
+    );
+    if (!mounted) return;
+    _browserStackHoverCloseTimer?.cancel();
+    _browserStackHoverCloseTimer = null;
+    _browserStackNavigator = null;
+    _browserStackPopoverLocked = false;
+    setState(() => _browserStackPopoverOpen = false);
+    if (selectedWorkspaceId != null) {
+      context
+          .read<WorkspaceManager>()
+          .switchToWorkspaceById(selectedWorkspaceId);
+    }
   }
 
   @override
@@ -159,7 +365,7 @@ class _WorkspaceTabBarState extends State<WorkspaceTabBar> {
         WorkspaceChromeStyleData.vinabike;
     final displayedWorkspaces =
         _displayedWorkspaces(workspaceManager.workspaces);
-    final placements = _placementsFor(displayedWorkspaces);
+    final placements = _placementsFor(_stripItemsFor(displayedWorkspaces));
     final dropPlacements = _dropPlacementsFor(workspaceManager.workspaces);
     final stripWidth = placements.fold<double>(
           0,
@@ -202,45 +408,74 @@ class _WorkspaceTabBarState extends State<WorkspaceTabBar> {
                     for (var index = 0; index < placements.length; index++)
                       AnimatedPositioned(
                         key: ValueKey(
-                            'workspace-tab-position-${placements[index].workspace.id}'),
+                          'workspace-tab-position-${placements[index].item.id}',
+                        ),
                         duration: const Duration(milliseconds: 180),
                         curve: Curves.easeOutCubic,
                         left: placements[index].left,
                         top: 0,
                         width: placements[index].width,
                         height: 40,
-                        child: _WorkspaceTab(
-                          key: ValueKey(
-                              'workspace-tab-${placements[index].workspace.id}'),
-                          index: index,
-                          workspace: placements[index].workspace,
-                          isActive: placements[index].workspace.id ==
-                              workspaceManager.activeWorkspace?.id,
-                          isDragging: placements[index].workspace.id ==
-                              _draggingWorkspaceId,
-                          onTap: () {
-                            workspaceManager.switchToWorkspaceById(
-                              placements[index].workspace.id,
-                            );
-                          },
-                          onTogglePin: () =>
-                              workspaceManager.toggleWorkspacePinned(
-                            workspaceManager.workspaces.indexWhere(
-                              (w) => w.id == placements[index].workspace.id,
-                            ),
-                          ),
-                          onDragStarted: () =>
-                              _startDrag(placements[index].workspace.id),
-                          onDragEnded: _finishDrag,
-                          onClose: workspaceManager.workspaces.length > 1
-                              ? () async {
-                                  await workspaceManager
-                                      .requestCloseWorkspaceById(
-                                    placements[index].workspace.id,
+                        child: placements[index].item.isBrowserStack
+                            ? KeyedSubtree(
+                                key: _browserStackTrigger,
+                                child: _BrowserWorkspaceStackTab(
+                                  anchorKey: _browserStackAnchor,
+                                  workspaces: placements[index].item.workspaces,
+                                  activeWorkspaceId:
+                                      workspaceManager.activeWorkspace?.id,
+                                  isOpen: _browserStackPopoverOpen,
+                                  onOpen: () => _openBrowserStack(
+                                    placements[index].item.workspaces,
+                                    locked: true,
+                                    chrome: chrome,
+                                  ),
+                                  onHoverChanged: (hovered) =>
+                                      _handleBrowserStackHover(
+                                    hovered,
+                                    placements[index].item.workspaces,
+                                    chrome,
+                                  ),
+                                ),
+                              )
+                            : _WorkspaceTab(
+                                key: ValueKey(
+                                  'workspace-tab-${placements[index].item.workspace!.id}',
+                                ),
+                                index: index,
+                                workspace: placements[index].item.workspace!,
+                                isActive:
+                                    placements[index].item.workspace!.id ==
+                                        workspaceManager.activeWorkspace?.id,
+                                isDragging:
+                                    placements[index].item.workspace!.id ==
+                                        _draggingWorkspaceId,
+                                onTap: () {
+                                  workspaceManager.switchToWorkspaceById(
+                                    placements[index].item.workspace!.id,
                                   );
-                                }
-                              : null,
-                        ),
+                                },
+                                onTogglePin: () =>
+                                    workspaceManager.toggleWorkspacePinned(
+                                  workspaceManager.workspaces.indexWhere(
+                                    (workspace) =>
+                                        workspace.id ==
+                                        placements[index].item.workspace!.id,
+                                  ),
+                                ),
+                                onDragStarted: () => _startDrag(
+                                  placements[index].item.workspace!.id,
+                                ),
+                                onDragEnded: _finishDrag,
+                                onClose: workspaceManager.workspaces.length > 1
+                                    ? () async {
+                                        await workspaceManager
+                                            .requestCloseWorkspaceById(
+                                          placements[index].item.workspace!.id,
+                                        );
+                                      }
+                                    : null,
+                              ),
                       ),
                     if (_draggingWorkspaceId != null) ...[
                       for (final placement in dropPlacements)
@@ -250,7 +485,7 @@ class _WorkspaceTabBarState extends State<WorkspaceTabBar> {
                           width: placement.width,
                           height: 40,
                           child: _WorkspaceTabDropTarget(
-                            workspaceId: placement.workspace.id,
+                            workspaceId: placement.itemId,
                             targetIndex: placement.targetIndex,
                             draggingWorkspaceId: _draggingWorkspaceId,
                             onHoverIndex: _hoverIndex,
@@ -441,6 +676,530 @@ class ModuleCommandBar extends StatelessWidget {
   }
 }
 
+class _BrowserWorkspaceStackTab extends StatefulWidget {
+  const _BrowserWorkspaceStackTab({
+    required this.anchorKey,
+    required this.workspaces,
+    required this.activeWorkspaceId,
+    required this.isOpen,
+    required this.onOpen,
+    required this.onHoverChanged,
+  });
+
+  final GlobalKey anchorKey;
+  final List<Workspace> workspaces;
+  final String? activeWorkspaceId;
+  final bool isOpen;
+  final VoidCallback onOpen;
+  final ValueChanged<bool> onHoverChanged;
+
+  @override
+  State<_BrowserWorkspaceStackTab> createState() =>
+      _BrowserWorkspaceStackTabState();
+}
+
+class _BrowserWorkspaceStackTabState extends State<_BrowserWorkspaceStackTab> {
+  bool _isHovered = false;
+  bool _isFocused = false;
+  final FocusNode _focusNode = FocusNode(
+    debugLabel: 'workspace-browser-stack-tab',
+  );
+
+  @override
+  void dispose() {
+    _focusNode.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final chrome = WorkspaceChromeStyle.maybeOf(context) ??
+        WorkspaceChromeStyleData.vinabike;
+    final theme = Theme.of(context);
+    final activeWorkspaceIndex = widget.workspaces.indexWhere(
+      (workspace) => workspace.id == widget.activeWorkspaceId,
+    );
+    final activeWorkspace = activeWorkspaceIndex < 0
+        ? null
+        : widget.workspaces[activeWorkspaceIndex];
+    final active = activeWorkspace != null;
+    final extended = active || widget.isOpen;
+    final title = activeWorkspace?.title ?? 'Pestañas web';
+    const tabWidth = _WorkspaceTabBarState._regularTabWidth;
+
+    return Semantics(
+      button: true,
+      selected: active,
+      expanded: widget.isOpen,
+      label: 'Pestañas web, ${widget.workspaces.length} abiertas',
+      hint: 'Presiona Enter para elegir una pestaña web',
+      excludeSemantics: true,
+      child: InkWell(
+        key: const ValueKey<String>('workspace-browser-stack-tab'),
+        focusNode: _focusNode,
+        mouseCursor: SystemMouseCursors.click,
+        onTap: widget.onOpen,
+        onHover: (hovered) {
+          setState(() => _isHovered = hovered);
+          widget.onHoverChanged(hovered);
+        },
+        onFocusChange: (focused) => setState(() => _isFocused = focused),
+        overlayColor: const WidgetStatePropertyAll<Color>(Colors.transparent),
+        child: SizedBox(
+          width: tabWidth,
+          height: WorkspaceShellScope.workspaceBarHeight,
+          child: Align(
+            alignment: Alignment.bottomLeft,
+            // Anchor the route to the painted tab's outer rectangle, not to
+            // AnimatedContainer's decorated child. A Border contributes its
+            // own padding, which otherwise shifts the overlay one pixel and
+            // makes the extension read as a detached menu.
+            child: SizedBox(
+              key: widget.anchorKey,
+              width: tabWidth - 2,
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 120),
+                height: extended ? 32 : 30,
+                width: tabWidth - 2,
+                padding: const EdgeInsets.symmetric(horizontal: 10),
+                decoration: extended
+                    ? BoxDecoration(
+                        color: chrome.raised,
+                        borderRadius: const BorderRadius.only(
+                          topLeft: Radius.circular(8),
+                          topRight: Radius.circular(8),
+                        ),
+                        border: Border(
+                          top: BorderSide(
+                            color: _isFocused ? chrome.accent : chrome.edge,
+                          ),
+                          left: BorderSide(
+                            color: _isFocused ? chrome.accent : chrome.edge,
+                          ),
+                          right: BorderSide(
+                            color: _isFocused ? chrome.accent : chrome.edge,
+                          ),
+                        ),
+                      )
+                    : BoxDecoration(
+                        color: _isFocused
+                            ? chrome.accent.withValues(alpha: 0.12)
+                            : _isHovered || widget.isOpen
+                                ? chrome.raised.withValues(alpha: 0.58)
+                                : Colors.transparent,
+                        borderRadius: const BorderRadius.only(
+                          topLeft: Radius.circular(8),
+                          topRight: Radius.circular(8),
+                        ),
+                        border: _isFocused
+                            ? Border.all(color: chrome.accent)
+                            : null,
+                      ),
+                child: Row(
+                  children: [
+                    if (active) ...[
+                      Container(
+                        width: 6,
+                        height: 6,
+                        decoration: BoxDecoration(
+                          color: chrome.accent,
+                          shape: BoxShape.circle,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                    ],
+                    BrowserWorkspaceFavicon(
+                      key: const ValueKey<String>(
+                        'workspace-browser-stack-active-favicon',
+                      ),
+                      faviconUrl: activeWorkspace?.browserFaviconUrl,
+                      size: 14,
+                      fallbackColor:
+                          extended ? chrome.foreground : chrome.mutedForeground,
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        '$title · ${widget.workspaces.length}',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.textTheme.labelMedium?.copyWith(
+                          fontSize: 11.5,
+                          height: 1.2,
+                          color: extended
+                              ? chrome.foreground
+                              : chrome.mutedForeground,
+                          fontWeight:
+                              extended ? FontWeight.w700 : FontWeight.w500,
+                        ),
+                      ),
+                    ),
+                    AnimatedRotation(
+                      turns: widget.isOpen ? 0.5 : 0,
+                      duration: const Duration(milliseconds: 120),
+                      child: Icon(
+                        Icons.expand_more_rounded,
+                        size: 16,
+                        color: extended
+                            ? chrome.foreground
+                            : chrome.mutedForeground,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _BrowserWorkspaceStackMenu extends StatefulWidget {
+  const _BrowserWorkspaceStackMenu({
+    super.key,
+    required this.workspaces,
+    required this.activeWorkspaceId,
+    required this.chrome,
+  });
+
+  final List<Workspace> workspaces;
+  final String? activeWorkspaceId;
+  final WorkspaceChromeStyleData chrome;
+
+  @override
+  State<_BrowserWorkspaceStackMenu> createState() =>
+      _BrowserWorkspaceStackMenuState();
+}
+
+class _BrowserWorkspaceStackMenuState
+    extends State<_BrowserWorkspaceStackMenu> {
+  late int _highlightedIndex = _initialHighlight();
+
+  int _initialHighlight() {
+    final activeIndex = widget.workspaces.indexWhere(
+      (workspace) => workspace.id == widget.activeWorkspaceId,
+    );
+    return activeIndex < 0 ? 0 : activeIndex;
+  }
+
+  void _moveHighlight(int delta) {
+    final nextIndex = (_highlightedIndex + delta)
+        .clamp(0, widget.workspaces.length - 1)
+        .toInt();
+    if (nextIndex != _highlightedIndex) {
+      setState(() => _highlightedIndex = nextIndex);
+    }
+  }
+
+  void _select(Workspace workspace) {
+    Navigator.of(context).pop(workspace.id);
+  }
+
+  void _togglePinned(Workspace workspace) {
+    final manager = context.read<WorkspaceManager>();
+    final index = manager.workspaces.indexWhere(
+      (candidate) => candidate.id == workspace.id,
+    );
+    if (index < 0) return;
+    manager.toggleWorkspacePinned(index);
+    Navigator.of(context).pop();
+  }
+
+  Future<void> _close(Workspace workspace) async {
+    final navigator = Navigator.of(context);
+    final closed = await context
+        .read<WorkspaceManager>()
+        .requestCloseWorkspaceById(workspace.id);
+    if (closed && navigator.mounted) {
+      navigator.maybePop();
+    }
+  }
+
+  String _hostFor(Workspace workspace) {
+    final directUrl = workspace.browserUrl?.trim();
+    final routeUrl =
+        Uri.tryParse(workspace.currentRoute)?.queryParameters['url']?.trim();
+    final uri = Uri.tryParse(
+      directUrl?.isNotEmpty == true ? directUrl! : routeUrl ?? '',
+    );
+    final host = uri?.host ?? '';
+    if (host.isEmpty) return 'Navegador web';
+    return host.startsWith('www.') ? host.substring(4) : host;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Focus(
+      autofocus: true,
+      onKeyEvent: (node, event) {
+        if (event is! KeyDownEvent) return KeyEventResult.ignored;
+        if (event.logicalKey == LogicalKeyboardKey.arrowDown) {
+          _moveHighlight(1);
+          return KeyEventResult.handled;
+        }
+        if (event.logicalKey == LogicalKeyboardKey.arrowUp) {
+          _moveHighlight(-1);
+          return KeyEventResult.handled;
+        }
+        if (event.logicalKey == LogicalKeyboardKey.enter ||
+            event.logicalKey == LogicalKeyboardKey.numpadEnter ||
+            event.logicalKey == LogicalKeyboardKey.space) {
+          _select(widget.workspaces[_highlightedIndex]);
+          return KeyEventResult.handled;
+        }
+        return KeyEventResult.ignored;
+      },
+      child: Material(
+        key: const ValueKey<String>(
+          'workspace-browser-stack-extension-surface',
+        ),
+        color: widget.chrome.raised,
+        elevation: 0,
+        borderRadius: const BorderRadius.only(
+          bottomLeft: Radius.circular(8),
+          bottomRight: Radius.circular(8),
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: Container(
+          key: const ValueKey<String>('workspace-browser-stack-popover'),
+          width: _WorkspaceTabBarState._regularTabWidth - 2,
+          decoration: BoxDecoration(
+            borderRadius: const BorderRadius.only(
+              bottomLeft: Radius.circular(8),
+              bottomRight: Radius.circular(8),
+            ),
+            border: Border(
+              left: BorderSide(color: widget.chrome.edge),
+              right: BorderSide(color: widget.chrome.edge),
+              bottom: BorderSide(color: widget.chrome.edge),
+            ),
+          ),
+          child: SingleChildScrollView(
+            primary: false,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                for (var index = 0; index < widget.workspaces.length; index++)
+                  _BrowserWorkspaceExtensionRow(
+                    key: ValueKey<String>(
+                      'workspace-browser-stack-row-${widget.workspaces[index].id}',
+                    ),
+                    workspace: widget.workspaces[index],
+                    host: _hostFor(widget.workspaces[index]),
+                    chrome: widget.chrome,
+                    isActive:
+                        widget.workspaces[index].id == widget.activeWorkspaceId,
+                    isHighlighted: index == _highlightedIndex,
+                    showTopDivider: index > 0,
+                    onHover: () => setState(() => _highlightedIndex = index),
+                    onTap: () => _select(widget.workspaces[index]),
+                    onPin: () => _togglePinned(widget.workspaces[index]),
+                    onClose: () => _close(widget.workspaces[index]),
+                  ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _BrowserWorkspaceExtensionRow extends StatefulWidget {
+  const _BrowserWorkspaceExtensionRow({
+    super.key,
+    required this.workspace,
+    required this.host,
+    required this.chrome,
+    required this.isActive,
+    required this.isHighlighted,
+    required this.showTopDivider,
+    required this.onHover,
+    required this.onTap,
+    required this.onPin,
+    required this.onClose,
+  });
+
+  final Workspace workspace;
+  final String host;
+  final WorkspaceChromeStyleData chrome;
+  final bool isActive;
+  final bool isHighlighted;
+  final bool showTopDivider;
+  final VoidCallback onHover;
+  final VoidCallback onTap;
+  final VoidCallback onPin;
+  final VoidCallback onClose;
+
+  @override
+  State<_BrowserWorkspaceExtensionRow> createState() =>
+      _BrowserWorkspaceExtensionRowState();
+}
+
+class _BrowserWorkspaceExtensionRowState
+    extends State<_BrowserWorkspaceExtensionRow> {
+  bool _isHovered = false;
+  bool _isFocused = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final showActions = _isHovered || _isFocused || widget.isHighlighted;
+    return Semantics(
+      container: true,
+      button: true,
+      selected: widget.isActive,
+      label:
+          'Pestaña web ${widget.workspace.title}, ${widget.host}${widget.isActive ? ', activa' : ''}',
+      child: InkWell(
+        key: ValueKey<String>(
+          'workspace-browser-stack-item-${widget.workspace.id}',
+        ),
+        onTap: widget.onTap,
+        onHover: (hovered) {
+          setState(() => _isHovered = hovered);
+          if (hovered) widget.onHover();
+        },
+        onFocusChange: (focused) => setState(() => _isFocused = focused),
+        overlayColor: const WidgetStatePropertyAll<Color>(Colors.transparent),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 120),
+          height: WorkspaceShellScope.workspaceBarHeight,
+          padding: const EdgeInsets.symmetric(horizontal: 10),
+          decoration: BoxDecoration(
+            color: widget.isHighlighted
+                ? widget.chrome.accent.withValues(alpha: 0.12)
+                : Colors.transparent,
+            border: widget.showTopDivider
+                ? Border(top: BorderSide(color: widget.chrome.edge))
+                : null,
+          ),
+          child: Row(
+            children: [
+              BrowserWorkspaceFavicon(
+                key: ValueKey<String>(
+                  'workspace-browser-stack-favicon-${widget.workspace.id}',
+                ),
+                faviconUrl: widget.workspace.browserFaviconUrl,
+                size: 14,
+                fallbackColor: widget.isActive
+                    ? widget.chrome.accent
+                    : widget.chrome.mutedForeground,
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Tooltip(
+                  message: '${widget.workspace.title}\n${widget.host}',
+                  child: Text(
+                    widget.workspace.title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: theme.textTheme.labelMedium?.copyWith(
+                      fontSize: 11.5,
+                      height: 1.2,
+                      color: widget.chrome.foreground,
+                      fontWeight: widget.isHighlighted
+                          ? FontWeight.w700
+                          : FontWeight.w500,
+                    ),
+                  ),
+                ),
+              ),
+              if (showActions) ...[
+                _BrowserWorkspaceExtensionAction(
+                  actionKey: ValueKey<String>(
+                    'workspace-browser-stack-pin-${widget.workspace.id}',
+                  ),
+                  icon: Icons.push_pin_outlined,
+                  label: 'Fijar ${widget.workspace.title}',
+                  color: widget.chrome.mutedForeground,
+                  onTap: widget.onPin,
+                ),
+                _BrowserWorkspaceExtensionAction(
+                  actionKey: ValueKey<String>(
+                    'workspace-browser-stack-close-${widget.workspace.id}',
+                  ),
+                  icon: Icons.close_rounded,
+                  label: 'Cerrar ${widget.workspace.title}',
+                  color: widget.chrome.mutedForeground,
+                  onTap: widget.onClose,
+                ),
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _BrowserWorkspaceExtensionAction extends StatelessWidget {
+  const _BrowserWorkspaceExtensionAction({
+    required this.actionKey,
+    required this.icon,
+    required this.label,
+    required this.color,
+    required this.onTap,
+  });
+
+  final Key actionKey;
+  final IconData icon;
+  final String label;
+  final Color color;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Tooltip(
+      message: label,
+      child: Semantics(
+        key: actionKey,
+        button: true,
+        label: label,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(12),
+          child: SizedBox(
+            width: 24,
+            height: 24,
+            child: Icon(icon, size: 12, color: color),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+Widget _browserStackExtensionTransition(
+  BuildContext context,
+  Animation<double> animation,
+  Widget child,
+) {
+  final curved = CurvedAnimation(
+    parent: animation,
+    curve: const Cubic(0.22, 1, 0.36, 1),
+    reverseCurve: Curves.easeOutCubic,
+  );
+  if (MediaQuery.disableAnimationsOf(context)) {
+    return FadeTransition(opacity: curved, child: child);
+  }
+  return AnimatedBuilder(
+    animation: curved,
+    child: child,
+    builder: (context, child) => ClipRect(
+      child: Align(
+        alignment: Alignment.topCenter,
+        widthFactor: 1,
+        heightFactor: curved.value,
+        child: child,
+      ),
+    ),
+  );
+}
+
 class _WorkspaceTab extends StatefulWidget {
   final int index;
   final Workspace workspace;
@@ -622,20 +1381,38 @@ class _WorkspaceTabState extends State<_WorkspaceTab> {
                           ),
                         ),
                       ),
-                    Expanded(
-                      child: Text(
-                        widget.workspace.title,
-                        style: theme.textTheme.labelMedium?.copyWith(
-                          fontSize: 11.5,
-                          height: 1.2,
-                          color: active
-                              ? chrome.foreground
-                              : chrome.mutedForeground,
-                          fontWeight:
-                              active ? FontWeight.w700 : FontWeight.w500,
+                    if (widget.workspace.isBrowserWorkspace) ...[
+                      BrowserWorkspaceFavicon(
+                        key: ValueKey<String>(
+                          'workspace-tab-favicon-${widget.workspace.id}',
                         ),
-                        overflow: TextOverflow.ellipsis,
-                        maxLines: 1,
+                        faviconUrl: widget.workspace.browserFaviconUrl,
+                        size: 14,
+                        fallbackColor:
+                            active ? chrome.foreground : chrome.mutedForeground,
+                      ),
+                      const SizedBox(width: 8),
+                    ],
+                    Expanded(
+                      child: Tooltip(
+                        message: widget.workspace.isBrowserWorkspace
+                            ? '${widget.workspace.title}\n'
+                                '${widget.workspace.browserUrl ?? ''}'
+                            : widget.workspace.title,
+                        child: Text(
+                          widget.workspace.title,
+                          style: theme.textTheme.labelMedium?.copyWith(
+                            fontSize: 11.5,
+                            height: 1.2,
+                            color: active
+                                ? chrome.foreground
+                                : chrome.mutedForeground,
+                            fontWeight:
+                                active ? FontWeight.w700 : FontWeight.w500,
+                          ),
+                          overflow: TextOverflow.ellipsis,
+                          maxLines: 1,
+                        ),
                       ),
                     ),
                     if (widget.onClose != null && showTabTools)
@@ -809,26 +1586,51 @@ class _WorkspaceDropSlot extends StatelessWidget {
   }
 }
 
+class _WorkspaceStripItem {
+  const _WorkspaceStripItem._({
+    required this.workspace,
+    required this.workspaces,
+  });
+
+  _WorkspaceStripItem.workspace(Workspace workspace)
+      : this._(
+          workspace: workspace,
+          workspaces: List<Workspace>.unmodifiable([workspace]),
+        );
+
+  _WorkspaceStripItem.browserStack(List<Workspace> workspaces)
+      : this._(
+          workspace: null,
+          workspaces: List<Workspace>.unmodifiable(workspaces),
+        );
+
+  final Workspace? workspace;
+  final List<Workspace> workspaces;
+
+  bool get isBrowserStack => workspace == null;
+  String get id => isBrowserStack ? 'browser-workspace-stack' : workspace!.id;
+}
+
 class _WorkspaceTabPlacement {
-  final Workspace workspace;
+  final _WorkspaceStripItem item;
   final double left;
   final double width;
 
   const _WorkspaceTabPlacement({
-    required this.workspace,
+    required this.item,
     required this.left,
     required this.width,
   });
 }
 
 class _WorkspaceDropPlacement {
-  final Workspace workspace;
+  final String itemId;
   final int targetIndex;
   final double left;
   final double width;
 
   const _WorkspaceDropPlacement({
-    required this.workspace,
+    required this.itemId,
     required this.targetIndex,
     required this.left,
     required this.width,

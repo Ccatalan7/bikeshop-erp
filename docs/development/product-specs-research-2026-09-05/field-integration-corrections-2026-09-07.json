@@ -1,0 +1,455 @@
+{
+  "schema_version": 1,
+  "title": "Correcciones de integración de Codex sobre los addenda A/B",
+  "new_definitions": {},
+  "patches": [
+    {
+      "id": "ROOT-grip-sold_as",
+      "template": "grip",
+      "key": "sold_as",
+      "op": "replace_field_contract",
+      "before": {
+        "allowed_options": [
+          "Par",
+          "Unidad"
+        ]
+      },
+      "after": {
+        "allowed_options": [
+          "Par",
+          "Unidad izquierda",
+          "Unidad derecha",
+          "Unidad"
+        ]
+      },
+      "reason": "FB02: habilitar presentaciones existentes en el vocabulario, con medida por lado; no afirma que un SKU se venda separado."
+    },
+    {
+      "id": "ROOT-light-power_source",
+      "template": "light",
+      "key": "power_source",
+      "op": "replace_field_contract",
+      "before": {
+        "allowed_when": {
+          "kind": "always"
+        }
+      },
+      "after": {
+        "allowed_when": {
+          "kind": "when",
+          "rows": [
+            [
+              {
+                "field": "light_position",
+                "operator": "in",
+                "value_type": "token",
+                "value": [
+                  "Delantera",
+                  "Trasera",
+                  "Casco / otra"
+                ]
+              }
+            ]
+          ]
+        }
+      },
+      "reason": "FA07: el juego no tiene una alimentación ni fijación común; los miembros conservan sus configuraciones. La coherencia entre campos de luz individual y sus filas aún es gate."
+    },
+    {
+      "id": "ROOT-light-light_mount_kind",
+      "template": "light",
+      "key": "light_mount_kind",
+      "op": "replace_field_contract",
+      "before": {
+        "allowed_when": {
+          "kind": "always"
+        }
+      },
+      "after": {
+        "allowed_when": {
+          "kind": "when",
+          "rows": [
+            [
+              {
+                "field": "light_position",
+                "operator": "in",
+                "value_type": "token",
+                "value": [
+                  "Delantera",
+                  "Trasera",
+                  "Casco / otra"
+                ]
+              }
+            ]
+          ]
+        }
+      },
+      "reason": "FA07: el juego no tiene una alimentación ni fijación común; los miembros conservan sus configuraciones. La coherencia entre campos de luz individual y sus filas aún es gate."
+    },
+    {
+      "id": "ROOT-consumer_electronics-rated_power_w",
+      "template": "consumer_electronics",
+      "key": "rated_power_w",
+      "op": "replace_field_contract",
+      "before": {
+        "allowed_when": {
+          "kind": "when",
+          "rows": [
+            [
+              {
+                "field": "device_kind",
+                "operator": "in",
+                "value_type": "token",
+                "value": [
+                  "Cable de datos/carga",
+                  "Cargador"
+                ]
+              }
+            ]
+          ]
+        }
+      },
+      "after": {
+        "allowed_when": {
+          "kind": "when",
+          "rows": [
+            [
+              {
+                "field": "device_kind",
+                "operator": "in",
+                "value_type": "token",
+                "value": [
+                  "Cargador"
+                ]
+              }
+            ]
+          ]
+        }
+      },
+      "reason": "FA16: el cable conserva su capacidad en cable_power_capacity_w; el total es del cargador."
+    },
+    {
+      "id": "ROOT-head-drive-single-owner",
+      "template": null,
+      "key": "head_drive",
+      "op": "replace_unpublished_options",
+      "before": [
+        "Hexagonal interior (Allen)",
+        "Torx T25",
+        "Torx T30",
+        "Hexagonal exterior",
+        "Otra",
+        "Torx",
+        "Phillips",
+        "Plana",
+        "Cuadrado interior"
+      ],
+      "after": [
+        "Hexagonal interior (Allen)",
+        "Hexagonal exterior",
+        "Otra",
+        "Torx",
+        "Phillips",
+        "Plana",
+        "Cuadrado interior"
+      ],
+      "reason": "FA02 y revisión Claude: familia de accionamiento y código Torx en sus respectivos campos; todos estos tokens son nuevos y aún no publicados."
+    },
+    {
+      "id": "ROOT-light-row_coherence",
+      "template": "light",
+      "key": "row_coherence",
+      "op": "replace_template_coherence",
+      "before": {
+        "present": false,
+        "value": null
+      },
+      "after": {
+        "version": 1,
+        "links": [
+          {
+            "id": "light_member_link",
+            "field": "light_mode_configurations",
+            "column": "member_id",
+            "target_field": "light_member_configurations",
+            "label_columns": [
+              "member_id"
+            ]
+          }
+        ]
+      },
+      "reason": "FA09: el origen conserva row.id del destino; la etiqueta no es identidad. Validación Dart/SQL, borrado sin cascada y rótulos derivados."
+    },
+    {
+      "id": "ROOT-consumer_electronics-row_coherence",
+      "template": "consumer_electronics",
+      "key": "row_coherence",
+      "op": "replace_template_coherence",
+      "before": {
+        "present": false,
+        "value": null
+      },
+      "after": {
+        "version": 1,
+        "links": [
+          {
+            "id": "consumer_electronics_member_link",
+            "field": "power_budget_configurations",
+            "column": "port_id",
+            "target_field": "power_port_configurations",
+            "label_columns": [
+              "port_id"
+            ]
+          }
+        ]
+      },
+      "reason": "FA09: el origen conserva row.id del destino; la etiqueta no es identidad. Validación Dart/SQL, borrado sin cascada y rótulos derivados."
+    },
+    {
+      "id": "ROOT-chain_guide-scalar_ordered_pairs",
+      "template": "chain_guide",
+      "key": "scalar_ordered_pairs",
+      "op": "replace_template_coherence",
+      "before": {
+        "present": false,
+        "value": null
+      },
+      "after": [
+        [
+          "chainring_teeth_min",
+          "chainring_teeth_max"
+        ]
+      ],
+      "reason": "Orden de extremos de la misma magnitud y unidad. La igualdad es válida; no convierte un rango declarado en prueba de ajuste de otra pieza."
+    },
+    {
+      "id": "ROOT-rear_derailleur-scalar_ordered_pairs",
+      "template": "rear_derailleur",
+      "key": "scalar_ordered_pairs",
+      "op": "replace_template_coherence",
+      "before": {
+        "present": false,
+        "value": null
+      },
+      "after": [
+        [
+          "rear_derailleur_min_teeth",
+          "rear_derailleur_max_teeth"
+        ]
+      ],
+      "reason": "Orden de extremos de la misma magnitud y unidad. La igualdad es válida; no convierte un rango declarado en prueba de ajuste de otra pieza."
+    },
+    {
+      "id": "ROOT-rim_brake-scalar_ordered_pairs",
+      "template": "rim_brake",
+      "key": "scalar_ordered_pairs",
+      "op": "replace_template_coherence",
+      "before": {
+        "present": false,
+        "value": null
+      },
+      "after": [
+        [
+          "reach_min_mm",
+          "reach_max_mm"
+        ]
+      ],
+      "reason": "Orden de extremos de la misma magnitud y unidad. La igualdad es válida; no convierte un rango declarado en prueba de ajuste de otra pieza."
+    },
+    {
+      "id": "ROOT-saddle_cover-scalar_ordered_pairs",
+      "template": "saddle_cover",
+      "key": "scalar_ordered_pairs",
+      "op": "replace_template_coherence",
+      "before": {
+        "present": false,
+        "value": null
+      },
+      "after": [
+        [
+          "fits_saddle_length_min_mm",
+          "fits_saddle_length_max_mm"
+        ]
+      ],
+      "reason": "Orden de extremos de la misma magnitud y unidad. La igualdad es válida; no convierte un rango declarado en prueba de ajuste de otra pieza."
+    },
+    {
+      "id": "ROOT-tire_liner-scalar_ordered_pairs",
+      "template": "tire_liner",
+      "key": "scalar_ordered_pairs",
+      "op": "replace_template_coherence",
+      "before": {
+        "present": false,
+        "value": null
+      },
+      "after": [
+        [
+          "tire_width_min_mm",
+          "tire_width_max_mm"
+        ]
+      ],
+      "reason": "Orden de extremos de la misma magnitud y unidad. La igualdad es válida; no convierte un rango declarado en prueba de ajuste de otra pieza."
+    },
+    {
+      "id": "ROOT-chainring_guard-scalar_ordered_pairs",
+      "template": "chainring_guard",
+      "key": "scalar_ordered_pairs",
+      "op": "replace_template_coherence",
+      "before": {
+        "present": false,
+        "value": null
+      },
+      "after": [
+        [
+          "covers_teeth_min",
+          "covers_teeth_max"
+        ]
+      ],
+      "reason": "Orden de extremos de la misma magnitud y unidad. La igualdad es válida; no convierte un rango declarado en prueba de ajuste de otra pieza."
+    },
+    {
+      "id": "ROOT-light-scalar_ordered_pairs",
+      "template": "light",
+      "key": "scalar_ordered_pairs",
+      "op": "replace_template_coherence",
+      "before": {
+        "present": false,
+        "value": null
+      },
+      "after": [
+        [
+          "mount_diameter_min_mm",
+          "mount_diameter_max_mm"
+        ]
+      ],
+      "reason": "Orden de extremos de la misma magnitud y unidad. La igualdad es válida; no convierte un rango declarado en prueba de ajuste de otra pieza."
+    },
+    {
+      "id": "ROOT-audible_signal-scalar_ordered_pairs",
+      "template": "audible_signal",
+      "key": "scalar_ordered_pairs",
+      "op": "replace_template_coherence",
+      "before": {
+        "present": false,
+        "value": null
+      },
+      "after": [
+        [
+          "mount_diameter_min_mm",
+          "mount_diameter_max_mm"
+        ]
+      ],
+      "reason": "Orden de extremos de la misma magnitud y unidad. La igualdad es válida; no convierte un rango declarado en prueba de ajuste de otra pieza."
+    },
+    {
+      "id": "ROOT-accessory_mount-scalar_ordered_pairs",
+      "template": "accessory_mount",
+      "key": "scalar_ordered_pairs",
+      "op": "replace_template_coherence",
+      "before": {
+        "present": false,
+        "value": null
+      },
+      "after": [
+        [
+          "bar_diameter_min_mm",
+          "bar_diameter_max_mm"
+        ],
+        [
+          "device_width_min_mm",
+          "device_width_max_mm"
+        ]
+      ],
+      "reason": "Orden de extremos de la misma magnitud y unidad. La igualdad es válida; no convierte un rango declarado en prueba de ajuste de otra pieza."
+    },
+    {
+      "id": "ROOT-bottle_cage-scalar_ordered_pairs",
+      "template": "bottle_cage",
+      "key": "scalar_ordered_pairs",
+      "op": "replace_template_coherence",
+      "before": {
+        "present": false,
+        "value": null
+      },
+      "after": [
+        [
+          "frame_tube_width_min_mm",
+          "frame_tube_width_max_mm"
+        ]
+      ],
+      "reason": "Orden de extremos de la misma magnitud y unidad. La igualdad es válida; no convierte un rango declarado en prueba de ajuste de otra pieza."
+    },
+    {
+      "id": "ROOT-kickstand-scalar_ordered_pairs",
+      "template": "kickstand",
+      "key": "scalar_ordered_pairs",
+      "op": "replace_template_coherence",
+      "before": {
+        "present": false,
+        "value": null
+      },
+      "after": [
+        [
+          "installed_height_min_mm",
+          "installed_height_max_mm"
+        ],
+        [
+          "length_min_mm",
+          "length_max_mm"
+        ]
+      ],
+      "reason": "Orden de extremos de la misma magnitud y unidad. La igualdad es válida; no convierte un rango declarado en prueba de ajuste de otra pieza."
+    },
+    {
+      "id": "ROOT-rider_bag-scalar_ordered_pairs",
+      "template": "rider_bag",
+      "key": "scalar_ordered_pairs",
+      "op": "replace_template_coherence",
+      "before": {
+        "present": false,
+        "value": null
+      },
+      "after": [
+        [
+          "fits_volume_min_l",
+          "fits_volume_max_l"
+        ]
+      ],
+      "reason": "Orden de extremos de la misma magnitud y unidad. La igualdad es válida; no convierte un rango declarado en prueba de ajuste de otra pieza."
+    },
+    {
+      "id": "ROOT-helmet-scalar_ordered_pairs",
+      "template": "helmet",
+      "key": "scalar_ordered_pairs",
+      "op": "replace_template_coherence",
+      "before": {
+        "present": false,
+        "value": null
+      },
+      "after": [
+        [
+          "head_circumference_min_cm",
+          "head_circumference_max_cm"
+        ]
+      ],
+      "reason": "Orden de extremos de la misma magnitud y unidad. La igualdad es válida; no convierte un rango declarado en prueba de ajuste de otra pieza."
+    },
+    {
+      "id": "ROOT-bicycle-scalar_ordered_pairs",
+      "template": "bicycle",
+      "key": "scalar_ordered_pairs",
+      "op": "replace_template_coherence",
+      "before": {
+        "present": false,
+        "value": null
+      },
+      "after": [
+        [
+          "rider_height_min_cm",
+          "rider_height_max_cm"
+        ]
+      ],
+      "reason": "Orden de extremos de la misma magnitud y unidad. La igualdad es válida; no convierte un rango declarado en prueba de ajuste de otra pieza."
+    }
+  ]
+}

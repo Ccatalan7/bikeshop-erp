@@ -1391,6 +1391,76 @@ test("Gemini failures keep the fallback without OpenAI failover or secret leakag
   }
 });
 
+test("un rechazo del validador se corrige en el segundo intento", async (t) => {
+  const { repoDir, fromCommit, toCommit } = await createFixtureRepo(t);
+  const outputPath = path.join(repoDir, "out", "gemini-retry.json");
+  const inventory = collectReleaseInventory({ repoDir, fromCommit, toCommit });
+
+  const bueno = candidateForInventory(inventory);
+  const malo = candidateForInventory(inventory);
+  malo.modules[0].evidence_ids = ["change_999"];
+
+  // Antes de esto el rechazo hacía `break` y el texto salía determinista sin
+  // que nadie supiera por qué. El segundo intento recibe el motivo exacto.
+  const cuerpos = [];
+  const result = await generateReleaseNotes({
+    repoDir,
+    fromCommit,
+    toCommit,
+    outputPath,
+    geminiApiKey: "test-only-gemini-key",
+    maxAttempts: 2,
+    fetchImpl: async (_endpoint, init) => {
+      cuerpos.push(JSON.parse(init.body));
+      return geminiResponseWithCandidate(cuerpos.length === 1 ? malo : bueno);
+    },
+  });
+
+  assert.equal(result.source, "ai");
+  assert.equal(result.reason, null);
+  assert.equal(cuerpos.length, 2);
+
+  const partesPrimera = cuerpos[0].contents[0].parts;
+  const partesSegunda = cuerpos[1].contents[0].parts;
+  assert.equal(partesPrimera.length, 1);
+  assert.equal(partesSegunda.length, 2);
+  assert.match(partesSegunda[1].text, /rechazada por este motivo/u);
+
+  assert.equal(
+    JSON.parse(await readFile(outputPath, "utf8")).release_notes.source,
+    "ai",
+  );
+});
+
+test("el prompt no le pide al modelo lo que el validador rechaza", async (t) => {
+  const { repoDir, fromCommit, toCommit } = await createFixtureRepo(t);
+  const outputPath = path.join(repoDir, "out", "gemini-prompt.json");
+  const inventory = collectReleaseInventory({ repoDir, fromCommit, toCommit });
+
+  let systemInstruction = "";
+  await generateReleaseNotes({
+    repoDir,
+    fromCommit,
+    toCommit,
+    outputPath,
+    geminiApiKey: "test-only-gemini-key",
+    maxAttempts: 1,
+    fetchImpl: async (_endpoint, init) => {
+      systemInstruction =
+        JSON.parse(init.body).systemInstruction.parts[0].text;
+      return geminiResponseWithCandidate(candidateForInventory(inventory));
+    },
+  });
+
+  // La instrucción cerraba invitando a «un ajuste de estabilidad con
+  // prudencia», que es literalmente lo que `validateReleaseNotesQuality`
+  // rechaza por genérico. El modelo obedecía y perdía el texto entero.
+  assert.doesNotMatch(systemInstruction, /ajuste de estabilidad/iu);
+  assert.match(systemInstruction, /mejoras de estabilidad/iu);
+  assert.match(systemInstruction, /supabase/iu);
+  assert.match(systemInstruction, /ocho palabras/iu);
+});
+
 test("Gemini output still passes the exact evidence validator before replacing fallback", async (t) => {
   const { repoDir, fromCommit, toCommit } = await createFixtureRepo(t);
   const outputPath = path.join(repoDir, "out", "gemini-invalid.json");
@@ -1413,7 +1483,9 @@ test("Gemini output still passes the exact evidence validator before replacing f
   });
 
   assert.equal(result.source, "fallback");
-  assert.equal(result.reason, "invalid_ai_release_notes");
+  // El motivo lleva el detalle del validador desde el 2026-08-22: sin él,
+  // «cuota agotada» y «rechazado por genérico» eran la misma etiqueta.
+  assert.match(result.reason, /^invalid_ai_release_notes(?::|$)/u);
   assert.equal(
     JSON.parse(await readFile(outputPath, "utf8")).release_notes.source,
     "fallback",
@@ -1455,7 +1527,11 @@ test("hallucinated private identifiers in AI text never replace the safe fallbac
     });
 
     assert.equal(result.source, "fallback", privateText);
-    assert.equal(result.reason, "invalid_ai_release_notes", privateText);
+    assert.match(
+      result.reason,
+      /^invalid_ai_release_notes(?::|$)/u,
+      privateText,
+    );
     const saved = await readFile(outputPath, "utf8");
     assert.equal(saved.includes(privateText), false, privateText);
   }

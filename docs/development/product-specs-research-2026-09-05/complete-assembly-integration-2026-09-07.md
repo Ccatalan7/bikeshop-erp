@@ -1,0 +1,11 @@
+# Bicicleta, cuadro y rueda: integración verificada
+
+Migración `20260908030000_complete_assembly_spec_templates.sql` APPLIED y verificada a2026-09-08T03:32:49Z. Tres plantillas nuevas: bicycle,frame,wheel. Total nuevo acumulado67 de68; queda mando combinado. Las37originales siguen pendientes de actualización/adjudicación y no hay asignaciones ni llenado aplicados.
+
+53 Dart,50 casos SQL y cinco regresiones del publicador verdes. Revisión Claude:30 sondas independientes y11 mutantes; dictamen publicable. Su objeción sobre unidad local se rechazó con evidencia exacta en la adjudicación root: confundía la preimagen de producción con el fixture de la base local. El código, nueve hashes y restantes límites fueron confirmados. [Adjudicación y hashes](complete-assembly-root-decisions-2026-09-07.md), [dictamen](complete-assembly-candidate-review-2026-09-07.md).
+
+Paquete SHA-256 `21a405153ff7cc72d9847fb85f304bb2a461dfa2d33dc01f866d894b31ee3439`; migración `8a37090862b795fb99ab37640b1261500ac157c346c082412091a7672805ee59`; verificador `783201d90e23c44e02f6ff6b25ed6b61c8d9f566c175e8a527f293652c122831`. Backup `20260908T031518Z-complete-assembly-metadata`, bajo Product Specs Legacy, con bytes/hash/permisos verificados. Preverificador rechazó por ausencia y verificador posterior pasó.
+
+Lectura API autenticada a2026-09-08T03:33:06.317945Z:3 plantillas,101usos,71definiciones,165opciones; referencias vacías para las tres familias; writes0. Recibo `.tmp/db/migration-receipts/20260908030000.receipt`, evidencia API `.tmp/product-spec-catalog/complete-assembly-authenticated-readback.json`. Comparación `.tmp/db/complete-assembly-immediate-before.json` contra `complete-assembly-live-after.json`: sólo checked_at/latest_migration cambiaron; productos,hechos,default y motor preservados.
+
+Variante documental única, configuraciones suministradas/alternativas separadas, ruedas y componentes por miembro, geometría con datum, interfaces físicas distintas de aceptación OEM. Legacy se conserva sin interpretación; no se afirma que rechace cualquier payload ni que las observaciones documentales certifiquen identidad del inventario. Sin frames nuevos de editor y sin aprobación mecánica global. Pendientes globales:37originales,binding efectivo,consumidores/editor y aplicador de llenado respaldado por evidencia/revisión.

@@ -1,0 +1,422 @@
+{
+  "schema_version": 1,
+  "title": "Root cross-engine brake representation boundaries",
+  "mechanical_coverage_complete": false,
+  "automatic_fill_authorized": false,
+  "cases": [
+    {
+      "id": "brake_local_hydraulic_no_external_hose",
+      "template": "brake_caliper",
+      "values": {
+        "braking_surface": "Disco",
+        "brake_actuation": "Híbrido (cable a hidráulico)",
+        "brake_external_hose_connection": false,
+        "hose_system_code": "Fixture hose"
+      },
+      "kind": "synthetic_negative",
+      "source_urls": [],
+      "evidence_kind": "synthetic_invariant_not_oem_facts",
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false,
+      "expected_blocking": [
+        {
+          "code": "field_applicability",
+          "field": "hose_system_code"
+        }
+      ]
+    },
+    {
+      "id": "brake_external_hose_known",
+      "template": "brake_caliper",
+      "values": {
+        "braking_surface": "Disco",
+        "brake_actuation": "Híbrido (cable a hidráulico)",
+        "brake_external_hose_connection": true,
+        "hose_system_code": "Fixture hose"
+      },
+      "kind": "synthetic_partial_representation",
+      "source_urls": [],
+      "evidence_kind": "synthetic_invariant_not_oem_facts",
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false,
+      "expected_blocking": []
+    },
+    {
+      "id": "brake_external_hose_unknown",
+      "template": "brake_caliper",
+      "values": {
+        "braking_surface": "Disco",
+        "brake_actuation": "Híbrido (cable a hidráulico)",
+        "hose_system_code": "Fixture hose"
+      },
+      "kind": "synthetic_partial_representation",
+      "source_urls": [],
+      "evidence_kind": "synthetic_invariant_not_oem_facts",
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false,
+      "expected_blocking": []
+    },
+    {
+      "id": "brake_disc_rotor_nominal",
+      "template": "brake_caliper",
+      "values": {
+        "braking_surface": "Disco",
+        "brake_actuation": "Híbrido (cable a hidráulico)",
+        "caliper_rotor_nominal_thickness_mm": "1.8"
+      },
+      "kind": "synthetic_partial_representation",
+      "source_urls": [],
+      "evidence_kind": "synthetic_invariant_not_oem_facts",
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false,
+      "expected_blocking": []
+    },
+    {
+      "id": "brake_rim_cannot_have_rotor_nominal",
+      "template": "brake_caliper",
+      "values": {
+        "braking_surface": "Llanta",
+        "brake_actuation": "Híbrido (cable a hidráulico)",
+        "caliper_rotor_nominal_thickness_mm": "1.8"
+      },
+      "kind": "synthetic_negative",
+      "source_urls": [],
+      "evidence_kind": "synthetic_invariant_not_oem_facts",
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false,
+      "expected_blocking": [
+        {
+          "code": "field_applicability",
+          "field": "caliper_rotor_nominal_thickness_mm"
+        }
+      ]
+    },
+    {
+      "id": "brake_hydraulic_rim_no_cable_pull",
+      "template": "rim_brake",
+      "values": {
+        "brake_actuation": "Hidráulico",
+        "rim_brake_style": "Otra arquitectura documentada",
+        "rim_brake_frame_mount": "HSi"
+      },
+      "kind": "synthetic_partial_representation",
+      "source_urls": [],
+      "evidence_kind": "synthetic_invariant_not_oem_facts",
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false,
+      "expected_blocking": []
+    },
+    {
+      "id": "brake_hydraulic_rim_rejects_cable_pull",
+      "template": "rim_brake",
+      "values": {
+        "brake_actuation": "Hidráulico",
+        "rim_brake_style": "Otra arquitectura documentada",
+        "rim_brake_frame_mount": "HSi",
+        "lever_pull_required": "Tiro corto (ruta / cantilever / caliper)"
+      },
+      "kind": "synthetic_negative",
+      "source_urls": [],
+      "evidence_kind": "synthetic_invariant_not_oem_facts",
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false,
+      "expected_blocking": [
+        {
+          "code": "field_applicability",
+          "field": "lever_pull_required"
+        }
+      ]
+    },
+    {
+      "id": "brake_rim_stud_not_inferred_from_actuation",
+      "template": "rim_brake",
+      "values": {
+        "brake_actuation": "Hidráulico",
+        "rim_pad_stud_type": "Espárrago roscado"
+      },
+      "kind": "synthetic_partial_representation",
+      "source_urls": [],
+      "evidence_kind": "synthetic_invariant_not_oem_facts",
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false,
+      "expected_blocking": []
+    },
+    {
+      "id": "brake_hydraulic_combined_no_cable_pull",
+      "template": "brake_shift_combined_control",
+      "values": {
+        "brake_actuation": "Hidráulico",
+        "lever_cable_pull": "Tiro corto (ruta / cantilever / caliper)"
+      },
+      "kind": "synthetic_negative",
+      "source_urls": [],
+      "evidence_kind": "synthetic_invariant_not_oem_facts",
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false,
+      "expected_blocking": [
+        {
+          "code": "field_applicability",
+          "field": "lever_cable_pull"
+        }
+      ]
+    },
+    {
+      "id": "brake_dot5_is_distinct_stock_description",
+      "template": "brake_fluid",
+      "values": {
+        "fluid_type": "DOT 5",
+        "volume_ml": "100"
+      },
+      "kind": "synthetic_partial_representation",
+      "source_urls": [],
+      "evidence_kind": "synthetic_invariant_not_oem_facts",
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false,
+      "expected_blocking": []
+    },
+    {
+      "id": "brake_front_rear_keep_own_dimensions",
+      "template": "hydraulic_disc_brake",
+      "values": {
+        "brake_assembly_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "front-id",
+              "values": {
+                "circuit_id": "front-label",
+                "position": "Delantero",
+                "hose_length_mm": "950.5",
+                "rotor_diameter_mm": "180",
+                "source_url": "https://example.com/fixture"
+              },
+              "sources": []
+            },
+            {
+              "id": "rear-id",
+              "values": {
+                "circuit_id": "rear-label",
+                "position": "Trasero",
+                "hose_length_mm": "1650.5",
+                "rotor_diameter_mm": "160",
+                "source_url": "https://example.com/fixture"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "kind": "synthetic_partial_representation",
+      "source_urls": [],
+      "evidence_kind": "synthetic_invariant_not_oem_facts",
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false,
+      "expected_blocking": []
+    },
+    {
+      "id": "brake_link_exact_circuit_row_id",
+      "template": "hydraulic_disc_brake",
+      "values": {
+        "brake_assembly_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "front-id",
+              "values": {
+                "circuit_id": "front-label",
+                "position": "Delantero",
+                "hose_length_mm": "950.5",
+                "rotor_diameter_mm": "180",
+                "source_url": "https://example.com/fixture"
+              },
+              "sources": []
+            },
+            {
+              "id": "rear-id",
+              "values": {
+                "circuit_id": "rear-label",
+                "position": "Trasero",
+                "hose_length_mm": "1650.5",
+                "rotor_diameter_mm": "160",
+                "source_url": "https://example.com/fixture"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "brake_hydraulic_connections": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "port",
+              "values": {
+                "circuit_id": "front-id",
+                "component_role": "Cáliper",
+                "end_role": "Entrada",
+                "component_brand": "Fixture",
+                "component_model": "Fixture",
+                "hose_brand": "Fixture",
+                "hose_model": "Fixture",
+                "source_url": "https://example.com/fixture"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "kind": "synthetic_partial_representation",
+      "source_urls": [],
+      "evidence_kind": "synthetic_invariant_not_oem_facts",
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false,
+      "expected_blocking": []
+    },
+    {
+      "id": "brake_link_label_is_not_id",
+      "template": "hydraulic_disc_brake",
+      "values": {
+        "brake_assembly_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "front-id",
+              "values": {
+                "circuit_id": "front-label",
+                "position": "Delantero",
+                "hose_length_mm": "950.5",
+                "rotor_diameter_mm": "180",
+                "source_url": "https://example.com/fixture"
+              },
+              "sources": []
+            },
+            {
+              "id": "rear-id",
+              "values": {
+                "circuit_id": "rear-label",
+                "position": "Trasero",
+                "hose_length_mm": "1650.5",
+                "rotor_diameter_mm": "160",
+                "source_url": "https://example.com/fixture"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "brake_hydraulic_connections": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "port",
+              "values": {
+                "circuit_id": "front-label",
+                "component_role": "Cáliper",
+                "end_role": "Entrada",
+                "component_brand": "Fixture",
+                "component_model": "Fixture",
+                "hose_brand": "Fixture",
+                "hose_model": "Fixture",
+                "source_url": "https://example.com/fixture"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "kind": "synthetic_negative",
+      "source_urls": [],
+      "evidence_kind": "synthetic_invariant_not_oem_facts",
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false,
+      "expected_blocking": [
+        {
+          "code": "row_reference_unresolved",
+          "field": "brake_hydraulic_connections"
+        }
+      ]
+    },
+    {
+      "id": "brake_link_target_unknown",
+      "template": "hydraulic_disc_brake",
+      "values": {
+        "brake_hydraulic_connections": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "port",
+              "values": {
+                "circuit_id": "front-id",
+                "component_role": "Cáliper",
+                "end_role": "Entrada",
+                "component_brand": "Fixture",
+                "component_model": "Fixture",
+                "hose_brand": "Fixture",
+                "hose_model": "Fixture",
+                "source_url": "https://example.com/fixture"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "kind": "synthetic_partial_representation",
+      "source_urls": [],
+      "evidence_kind": "synthetic_invariant_not_oem_facts",
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false,
+      "expected_blocking": []
+    },
+    {
+      "id": "brake_rim_reach_inverted",
+      "template": "rim_brake",
+      "values": {
+        "brake_actuation": "Mecánico (cable)",
+        "rim_brake_style": "Dual pivot",
+        "reach_min_mm": "57.5",
+        "reach_max_mm": "39"
+      },
+      "kind": "synthetic_negative",
+      "source_urls": [],
+      "evidence_kind": "synthetic_invariant_not_oem_facts",
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false,
+      "expected_blocking": [
+        {
+          "code": "range_order",
+          "field": "reach_max_mm"
+        },
+        {
+          "code": "range_order",
+          "field": "reach_min_mm"
+        }
+      ]
+    },
+    {
+      "id": "brake_missing_model_fluid_source_remains_partial",
+      "template": "brake_caliper",
+      "values": {
+        "braking_surface": "Disco",
+        "brake_actuation": "Hidráulico",
+        "brake_fluid_approvals": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "f",
+              "values": {
+                "system_brand": "Fixture",
+                "system_model": "Fixture",
+                "fluid_class": "DOT 4"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "kind": "synthetic_partial_representation",
+      "source_urls": [],
+      "evidence_kind": "synthetic_invariant_not_oem_facts",
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false,
+      "expected_blocking": []
+    }
+  ]
+}

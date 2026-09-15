@@ -13,13 +13,13 @@ class JobRoleService extends ChangeNotifier {
   Future<List<JobRole>> getJobRoles({bool activeOnly = true}) async {
     try {
       final data = await _db.select('job_roles', orderBy: 'sort_order');
-      
+
       List<JobRole> roles = data.map((json) => JobRole.fromJson(json)).toList();
-      
+
       if (activeOnly) {
         roles = roles.where((r) => r.isActive).toList();
       }
-      
+
       return roles;
     } catch (e) {
       if (kDebugMode) print('❌ Error fetching job roles: $e');
@@ -32,14 +32,14 @@ class JobRoleService extends ChangeNotifier {
     try {
       final tenantId = await _getTenantId();
       if (tenantId == null) return null;
-      
+
       final data = await _client
           .from('job_roles')
           .select()
           .eq('tenant_id', tenantId)
           .eq('system_role', systemRole)
           .maybeSingle();
-      
+
       if (data == null) return null;
       return JobRole.fromJson(data);
     } catch (e) {
@@ -76,8 +76,8 @@ class JobRoleService extends ChangeNotifier {
       final roles = await getJobRoles(activeOnly: true);
       return roles
           .map((r) => {
-        'code': r.systemRole,
-        'name': r.displayName,
+                'code': r.systemRole,
+                'name': r.displayName,
               })
           .toList();
     } catch (e) {

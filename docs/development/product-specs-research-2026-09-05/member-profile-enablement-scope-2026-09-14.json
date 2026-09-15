@@ -1,0 +1,433 @@
+{
+  "status": "candidate_scope_only_not_enabled",
+  "snapshot_at": "2026-09-14T22:45:57.045606+00:00",
+  "snapshot_sha256": "a2ed68fcc5729bb74094807f270817d8d94a16940dcebd503bf0182244b46cbf",
+  "successor_catalog_sha256": "e0cccea8cdea5835e47301d11060bc735454334a9bdf6e0666b9bb5b5d87b28d",
+  "targets": [
+    {
+      "template": "bicycle",
+      "template_id": "b9d02ff3-3672-579e-8bfa-287f04c369dc",
+      "source": "published",
+      "current_contract_version": 47,
+      "member_profiles": {
+        "version": 1,
+        "collections": [
+          {
+            "field": "kit_members",
+            "family_column": "family",
+            "identity_columns": [
+              "member_role",
+              "position",
+              "identity_brand",
+              "identity_model"
+            ]
+          }
+        ]
+      },
+      "other_content_fields": []
+    },
+    {
+      "template": "bmx_cable_detangler",
+      "template_id": "9e85c3f5-d7fb-5fa7-b93b-dee112f414ab",
+      "source": "published",
+      "current_contract_version": 8,
+      "member_profiles": {
+        "version": 1,
+        "collections": [
+          {
+            "field": "kit_members",
+            "family_column": "family",
+            "identity_columns": [
+              "member_role",
+              "position",
+              "identity_brand",
+              "identity_model"
+            ]
+          }
+        ]
+      },
+      "other_content_fields": []
+    },
+    {
+      "template": "brake_lever",
+      "template_id": "dee33c12-b165-48ea-ac1a-7a10b0144d1a",
+      "source": "original_successor",
+      "current_contract_version": 2,
+      "member_profiles": {
+        "version": 1,
+        "collections": [
+          {
+            "field": "kit_members",
+            "family_column": "family",
+            "identity_columns": [
+              "member_role",
+              "position",
+              "identity_brand",
+              "identity_model"
+            ]
+          }
+        ]
+      },
+      "other_content_fields": []
+    },
+    {
+      "template": "drivetrain_kit",
+      "template_id": "6d80cd0c-81ac-41c1-af17-7a59a2b04b61",
+      "source": "original_successor",
+      "current_contract_version": 3,
+      "member_profiles": {
+        "version": 1,
+        "collections": [
+          {
+            "field": "kit_members",
+            "family_column": "family",
+            "identity_columns": [
+              "member_role",
+              "position",
+              "identity_brand",
+              "identity_model"
+            ]
+          }
+        ]
+      },
+      "other_content_fields": [
+        "drivetrain_kit_member_evidence"
+      ]
+    },
+    {
+      "template": "fender",
+      "template_id": "9393fb8f-5a71-50a1-b0b4-c679c68c7be5",
+      "source": "published",
+      "current_contract_version": 9,
+      "member_profiles": {
+        "version": 1,
+        "collections": [
+          {
+            "field": "kit_members",
+            "family_column": "family",
+            "identity_columns": [
+              "member_role",
+              "position",
+              "identity_brand",
+              "identity_model"
+            ]
+          }
+        ]
+      },
+      "other_content_fields": []
+    },
+    {
+      "template": "handlebar_covering",
+      "template_id": "30a5664f-8dbb-5a1c-9fdd-61b59c33eca2",
+      "source": "published",
+      "current_contract_version": 11,
+      "member_profiles": {
+        "version": 1,
+        "collections": [
+          {
+            "field": "kit_members",
+            "family_column": "family",
+            "identity_columns": [
+              "member_role",
+              "position",
+              "identity_brand",
+              "identity_model"
+            ]
+          }
+        ]
+      },
+      "other_content_fields": [
+        "pack_quantity",
+        "end_plugs_included"
+      ]
+    },
+    {
+      "template": "headset_small_part",
+      "template_id": "6f0f4ec1-689e-593d-bef7-d42ef79f0587",
+      "source": "published",
+      "current_contract_version": 11,
+      "member_profiles": {
+        "version": 1,
+        "collections": [
+          {
+            "field": "kit_members",
+            "family_column": "family",
+            "identity_columns": [
+              "member_role",
+              "position",
+              "identity_brand",
+              "identity_model"
+            ]
+          }
+        ]
+      },
+      "other_content_fields": []
+    },
+    {
+      "template": "hydraulic_disc_brake",
+      "template_id": "22fdca94-afe0-4221-a436-959c8ce94a81",
+      "source": "original_successor",
+      "current_contract_version": 3,
+      "member_profiles": {
+        "version": 1,
+        "collections": [
+          {
+            "field": "kit_members",
+            "family_column": "family",
+            "identity_columns": [
+              "member_role",
+              "position",
+              "identity_brand",
+              "identity_model"
+            ]
+          }
+        ]
+      },
+      "other_content_fields": [
+        "brake_assembly_configurations"
+      ]
+    },
+    {
+      "template": "light",
+      "template_id": "08bb78ab-542a-51e8-9045-327a8d8f132a",
+      "source": "published",
+      "current_contract_version": 17,
+      "member_profiles": {
+        "version": 1,
+        "collections": [
+          {
+            "field": "kit_members",
+            "family_column": "family",
+            "identity_columns": [
+              "member_role",
+              "position",
+              "identity_brand",
+              "identity_model"
+            ]
+          }
+        ]
+      },
+      "other_content_fields": [
+        "light_member_configurations"
+      ]
+    },
+    {
+      "template": "lock",
+      "template_id": "e10888b6-e20d-56e5-b69a-9c1ec3a026a8",
+      "source": "published",
+      "current_contract_version": 16,
+      "member_profiles": {
+        "version": 1,
+        "collections": [
+          {
+            "field": "kit_members",
+            "family_column": "family",
+            "identity_columns": [
+              "member_role",
+              "position",
+              "identity_brand",
+              "identity_model"
+            ]
+          }
+        ]
+      },
+      "other_content_fields": [
+        "keys_included",
+        "mount_bracket_included"
+      ]
+    },
+    {
+      "template": "mechanical_disc_brake",
+      "template_id": "b6df9356-898e-4f0b-aea8-d27db45e96d1",
+      "source": "original_successor",
+      "current_contract_version": 2,
+      "member_profiles": {
+        "version": 1,
+        "collections": [
+          {
+            "field": "kit_members",
+            "family_column": "family",
+            "identity_columns": [
+              "member_role",
+              "position",
+              "identity_brand",
+              "identity_model"
+            ]
+          }
+        ]
+      },
+      "other_content_fields": [
+        "brake_assembly_configurations"
+      ]
+    },
+    {
+      "template": "rider_protection",
+      "template_id": "280ded31-d4c3-5b14-8d10-f93ba64c7945",
+      "source": "published",
+      "current_contract_version": 10,
+      "member_profiles": {
+        "version": 1,
+        "collections": [
+          {
+            "field": "kit_members",
+            "family_column": "family",
+            "identity_columns": [
+              "member_role",
+              "position",
+              "identity_brand",
+              "identity_model"
+            ]
+          }
+        ]
+      },
+      "other_content_fields": []
+    },
+    {
+      "template": "rim_brake",
+      "template_id": "3a76d564-008d-487b-bd70-0c6179dec598",
+      "source": "original_successor",
+      "current_contract_version": 2,
+      "member_profiles": {
+        "version": 1,
+        "collections": [
+          {
+            "field": "kit_members",
+            "family_column": "family",
+            "identity_columns": [
+              "member_role",
+              "position",
+              "identity_brand",
+              "identity_model"
+            ]
+          }
+        ]
+      },
+      "other_content_fields": [
+        "brake_assembly_configurations"
+      ]
+    },
+    {
+      "template": "training_wheel",
+      "template_id": "13dfea15-7884-561a-8460-ebbae4584d2d",
+      "source": "published",
+      "current_contract_version": 6,
+      "member_profiles": {
+        "version": 1,
+        "collections": [
+          {
+            "field": "kit_members",
+            "family_column": "family",
+            "identity_columns": [
+              "member_role",
+              "position",
+              "identity_brand",
+              "identity_model"
+            ]
+          }
+        ]
+      },
+      "other_content_fields": []
+    },
+    {
+      "template": "tube_repair",
+      "template_id": "aed136bd-5c8f-50a0-95c1-cac9ce7532cc",
+      "source": "published",
+      "current_contract_version": 9,
+      "member_profiles": {
+        "version": 1,
+        "collections": [
+          {
+            "field": "kit_members",
+            "family_column": "family",
+            "identity_columns": [
+              "member_role",
+              "position",
+              "identity_brand",
+              "identity_model"
+            ]
+          }
+        ]
+      },
+      "other_content_fields": [
+        "glue_volume_ml",
+        "patch_count"
+      ]
+    },
+    {
+      "template": "tubeless_repair",
+      "template_id": "f011e67f-686e-5eb6-b995-f7b9cc078883",
+      "source": "published",
+      "current_contract_version": 8,
+      "member_profiles": {
+        "version": 1,
+        "collections": [
+          {
+            "field": "kit_members",
+            "family_column": "family",
+            "identity_columns": [
+              "member_role",
+              "position",
+              "identity_brand",
+              "identity_model"
+            ]
+          }
+        ]
+      },
+      "other_content_fields": [
+        "plug_count",
+        "tool_included"
+      ]
+    },
+    {
+      "template": "wheel",
+      "template_id": "0e394fd0-c79a-5839-ab87-99d5e76ff194",
+      "source": "published",
+      "current_contract_version": 23,
+      "member_profiles": {
+        "version": 1,
+        "collections": [
+          {
+            "field": "kit_members",
+            "family_column": "family",
+            "identity_columns": [
+              "member_role",
+              "position",
+              "identity_brand",
+              "identity_model"
+            ]
+          }
+        ]
+      },
+      "other_content_fields": []
+    }
+  ],
+  "excluded": [
+    {
+      "template": "crankset",
+      "reason": "kit_members is legacy"
+    },
+    {
+      "template": "hydraulic_fitting",
+      "reason": "kit_members is legacy"
+    },
+    {
+      "template": "hydraulic_hose",
+      "reason": "kit_members is legacy"
+    },
+    {
+      "template": "shifter",
+      "reason": "kit_members is legacy"
+    },
+    {
+      "template": "tubeless_consumable",
+      "reason": "kit_members is legacy"
+    }
+  ],
+  "templates_currently_enabled": 0,
+  "product_fills": 0,
+  "review_needed": [
+    "duplicate ownership of included components across content fields",
+    "member facts remain separate from root and consumer approvals",
+    "exact current metadata preimage and expected contract revisions"
+  ]
+}

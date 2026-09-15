@@ -59,6 +59,93 @@ EmailSenderIdentity? resolveEmailSenderIdentity(
   return available.first;
 }
 
+/// A provider-owned throttle window normalized for every mail integration.
+///
+/// Providers expose this in incompatible shapes (HTTP 429, Retry-After,
+/// RESOURCE_EXHAUSTED, or only a textual lock). Keeping one typed signal lets
+/// the unified inbox preserve its cache and stop all local polling until the
+/// provider says it is safe to resume.
+@immutable
+class EmailProviderRateLimitException implements Exception {
+  final String providerId;
+  final DateTime retryAt;
+
+  const EmailProviderRateLimitException({
+    required this.providerId,
+    required this.retryAt,
+  });
+
+  bool isActiveAt(DateTime now) => retryAt.isAfter(now);
+
+  static EmailProviderRateLimitException? tryParse(
+    String providerId,
+    Object? error, {
+    DateTime? now,
+  }) {
+    if (error is EmailProviderRateLimitException) return error;
+
+    final text = error?.toString() ?? '';
+    final normalized = text.toLowerCase();
+    final isRateLimited = const [
+      'status: 429',
+      'status:429',
+      'code: 429',
+      'code:429',
+      'provider_rate_limited',
+      'rate limit',
+      'rate-limit',
+      'too many requests',
+      'resource_exhausted',
+    ].any(normalized.contains);
+    if (!isRateLimited) return null;
+
+    final current = (now ?? DateTime.now()).toUtc();
+    DateTime? requested;
+    final isoMatch = RegExp(
+      r'''retry(?:[_ -]?after)?[\s:'"=]+(\d{4}-\d{2}-\d{2}t[0-9:.+\-]+z?)''',
+      caseSensitive: false,
+    ).firstMatch(text);
+    if (isoMatch != null) {
+      requested = DateTime.tryParse(isoMatch.group(1)!)?.toUtc();
+    }
+
+    if (requested == null) {
+      final durationMatch = RegExp(
+        r'''retry(?:[_ -]?after)?[\s:'"=]+(\d+)\s*(seconds?|secs?|minutes?|mins?)''',
+        caseSensitive: false,
+      ).firstMatch(text);
+      if (durationMatch != null) {
+        final amount = int.tryParse(durationMatch.group(1)!);
+        if (amount != null) {
+          final unit = durationMatch.group(2)!.toLowerCase();
+          requested = current.add(
+            unit.startsWith('m')
+                ? Duration(minutes: amount)
+                : Duration(seconds: amount),
+          );
+        }
+      }
+    }
+
+    final minimum = current.add(const Duration(minutes: 1));
+    final maximum = current.add(const Duration(hours: 1));
+    requested ??= current.add(const Duration(minutes: 5));
+    final bounded = requested.isBefore(minimum)
+        ? minimum
+        : requested.isAfter(maximum)
+            ? maximum
+            : requested;
+    return EmailProviderRateLimitException(
+      providerId: providerId,
+      retryAt: bounded,
+    );
+  }
+
+  @override
+  String toString() => 'EmailProviderRateLimitException(provider: $providerId, '
+      'retryAt: ${retryAt.toUtc().toIso8601String()})';
+}
+
 /// Provider-neutral attachment metadata for an email.
 class EmailAttachment {
   final String id;
@@ -128,6 +215,8 @@ class Email {
   final String? summary;
   final String? content;
   final String? threadId; // Gmail specific
+  final String? rfcMessageId;
+  final String? references;
   final List<EmailAttachment> attachments;
 
   Email({
@@ -145,6 +234,8 @@ class Email {
     this.summary,
     this.content,
     this.threadId,
+    this.rfcMessageId,
+    this.references,
     this.attachments = const [],
   });
 
@@ -183,6 +274,8 @@ class Email {
     String? summary,
     String? content,
     String? threadId,
+    String? rfcMessageId,
+    String? references,
     List<EmailAttachment>? attachments,
   }) {
     return Email(
@@ -200,6 +293,8 @@ class Email {
       summary: summary ?? this.summary,
       content: content ?? this.content,
       threadId: threadId ?? this.threadId,
+      rfcMessageId: rfcMessageId ?? this.rfcMessageId,
+      references: references ?? this.references,
       attachments: attachments ?? this.attachments,
     );
   }
@@ -333,6 +428,14 @@ abstract class EmailProvider with ChangeNotifier {
   Future<bool> replyToEmail({
     required String emailId,
     required String content,
+    required String to,
+    required String subject,
+    String? fromAddress,
+    String? cc,
+    String? bcc,
+    String? threadId,
+    String? rfcMessageId,
+    String? references,
     bool replyAll = false,
   });
 

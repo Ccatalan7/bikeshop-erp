@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -6,6 +7,7 @@ import '../../modules/ai_assistant/services/ai_assistant_context_service.dart';
 import '../../modules/ai_assistant/widgets/ai_chat_bubble.dart';
 import '../../modules/messaging/providers/chat_provider.dart';
 import '../../modules/storage/widgets/app_files_panel.dart';
+import '../../modules/tasks/services/task_service.dart';
 import '../../modules/settings/services/appearance_service.dart';
 import '../services/notification_service.dart';
 import '../services/query_performance_service.dart';
@@ -214,13 +216,9 @@ class _RightToolbarState extends State<RightToolbar> {
       case ToolbarTool.aiAssistant:
         final aiContext = context.watch<AIAssistantContextService>();
         final useJobsContext = aiContext.hasVisibleJobsContext;
-        debugPrint(
-          '[AI_CTX][RightToolbar.aiPanel] contextId=${identityHashCode(aiContext)} '
-          'hasContext=${aiContext.hasVisibleJobsContext} '
-          'useJobsContext=$useJobsContext count=${aiContext.visibleJobs.length} '
-          'scope="${aiContext.visibleJobsScopeLabel}" '
-          'jobs=[${aiContext.visibleJobs.take(12).map((job) => job.jobNumber ?? job.id ?? 'sin-numero').join(', ')}]',
-        );
+        if (kDebugMode) {
+          debugPrint('[AI_CTX] Assistant panel context resolved.');
+        }
         return AIChatPanel(
           jobs: useJobsContext ? aiContext.visibleJobs : const [],
           embedded: true,
@@ -267,9 +265,15 @@ class _RightToolbarState extends State<RightToolbar> {
     );
   }
 
+  TaskService? _taskServiceForBadges;
+
   int _toolBadgeCount(ToolbarTool tool, ChatProvider chatProvider) {
     if (tool == ToolbarTool.notifications) {
       return NotificationService().unreadNotificationsCount.value;
+    }
+    if (tool == ToolbarTool.tasks) {
+      // Mi bandeja: por aceptar + sin ver, del usuario autenticado.
+      return _taskServiceForBadges?.myInboxBadgeCount ?? 0;
     }
     if (tool == ToolbarTool.messages) {
       return chatProvider.conversations.fold(0, (sum, conversation) {
@@ -386,6 +390,7 @@ class _RightToolbarState extends State<RightToolbar> {
     final theme = Theme.of(context);
     final desktopUpdateService = context.watch<DesktopUpdateService>();
     final chatProvider = context.watch<ChatProvider>();
+    _taskServiceForBadges = context.watch<TaskService?>();
     final appearanceService = context.watch<AppearanceService>();
     final visibleTools = resolveVisibleToolbarTools(
       canManageHr: canManageHr,

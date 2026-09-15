@@ -1,6 +1,9 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+
+import '../../../shared/services/whatsapp_service.dart';
+import '../../../shared/widgets/whatsapp_outgoing_preview.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
@@ -22,6 +25,7 @@ import '../models/ai_assistant_session_state.dart';
 import '../services/ai_assistant_context_service.dart';
 import '../services/ai_assistant_session_service.dart';
 import '../services/ai_service.dart';
+import 'ai_assistant_compact_action_tile.dart';
 
 class AIAssistantButton extends StatelessWidget {
   final List<MechanicJob> jobs;
@@ -46,6 +50,7 @@ class AIChatPanel extends StatefulWidget {
   final bool jobsAreCurrentView;
   final String? jobsScopeLabel;
   final bool allowJobCacheFallback;
+  final AIAssistantTurnServices? turnServicesOverride;
 
   const AIChatPanel({
     super.key,
@@ -54,6 +59,7 @@ class AIChatPanel extends StatefulWidget {
     this.jobsAreCurrentView = false,
     this.jobsScopeLabel,
     this.allowJobCacheFallback = true,
+    @visibleForTesting this.turnServicesOverride,
   });
 
   @override
@@ -90,27 +96,170 @@ class _AIChatPanelState extends State<AIChatPanel> {
   // failure loop the operator never asked for. Backfilling is catalog
   // maintenance, not a side effect of looking at a panel.
 
-  /// Performs the effect registered for a card's destination.
+  /// Performs the effect registered for a verified card.
   ///
   /// The card supplies an identifier from a closed set; the resolver owns the
   /// route table and the toolbar table. An unregistered identifier produces no
   /// effect at all rather than a guessed route.
-  void _handleDestination(AIAssistantDestination destination) {
+  /// El texto exacto que recibirá el cliente, armado con los MISMOS valores
+  /// que usará el envío: su nombre, el del negocio y el de quien tiene la
+  /// sesión abierta. Devuelve null si falta algo y la tarjeta cae a lo que
+  /// mandó el servidor.
+  /// Continuaciones que una tarjeta puede ofrecer, por su identificador.
+  ///
+  /// El catálogo vive **en el cliente** a propósito: la tarjeta la arma el
+  /// servidor a partir de lo que devolvió una herramienta, así que dejar que
+  /// traiga el texto sería dejar que algo de afuera escriba un mensaje en
+  /// nombre del operador. El servidor elige cuál continuación ofrecer; qué
+  /// dice, lo decide esta lista.
+  static const Map<String, String> _followUpPrompts = <String, String>{
+    'restock_by_supplier':
+        'Agrupa por proveedor lo que tengo que reponer, y dime qué pedirle '
+            'a cada uno.',
+    'restock_only_moving':
+        'Muéstrame sólo lo que necesito reponer y que además se haya vendido '
+            'en los últimos 90 días.',
+    'collections_priority':
+        'De lo que me deben, ¿a quién le cobro primero? Ordénalo por monto y '
+            'por cuánto lleva vencido.',
+    'collections_contact':
+        'Contacta al cliente que más me debe por su factura vencida.',
+    'sales_top_customers': '¿Quién me compró más en ese mismo período?',
+    'sales_compare_previous':
+        'Compara ese período con el anterior: vendido, cobrado y cantidad de '
+            'facturas.',
+    'workshop_blockers':
+        'De esos trabajos, ¿cuáles están frenados y por qué? Separa los que '
+            'esperan repuestos, los que esperan aprobación y los en pausa.',
+    'workshop_notify_ready':
+        'Contacta al cliente del primer trabajo de esa lista para avisarle '
+            'cómo va su bicicleta.',
+    'tasks_overdue_first':
+        'De esas tareas, ¿cuáles están atrasadas? Ordénalas por fecha de '
+            'vencimiento, primero las más vencidas.',
+  };
+
+  Future<String?> _previewCardOption(
+    AIAssistantActionCard card,
+    AIAssistantCardOption option,
+  ) async {
+    if (card.optionKind != 'whatsapp_template') return null;
+    final customerId = card.entityRef?.id;
+    if (customerId == null) return null;
+    final template = WhatsAppService.customerTemplateOptions
+        .where((candidate) => candidate.defaultTemplateName == option.id)
+        .firstOrNull;
+    if (template == null) return null;
+    final service = WhatsAppService();
+    final contact = await service.customerContactForAssistant(customerId);
+    if (contact == null) return null;
+    return service.buildTemplatePreviewText(
+      option: template,
+      customerName: contact.name,
+      businessName: contact.businessName,
+      agentName: contact.agentName,
+    );
+  }
+
+  /// Se llama sólo cuando el operador ya revisó el texto en la tarjeta y
+  /// apretó Enviar. La revisión vive en el chat, no en un diálogo del sistema:
+  /// lo que hay que poder juzgar es cómo le llegará el mensaje al cliente.
+  Future<void> _handleCardOption(
+    AIAssistantActionCard card,
+    AIAssistantCardOption option,
+  ) async {
+    if (card.optionKind == 'follow_up') {
+      final prompt = _followUpPrompts[option.id];
+      // Un id que este cliente no conoce no hace nada. Es la misma disciplina
+      // que las plantillas: lista cerrada acá, elección allá.
+      if (prompt == null) return;
+      await _sendMessage(overrideText: prompt);
+      return;
+    }
+    if (card.optionKind != 'whatsapp_template') return;
+    final customerId = card.entityRef?.id;
+    if (customerId == null) return;
+    final template = WhatsAppService.customerTemplateOptions
+        .where((candidate) => candidate.defaultTemplateName == option.id)
+        .firstOrNull;
+    if (template == null) return;
+
+    final service = WhatsAppService();
+    final contact = await service.customerContactForAssistant(customerId);
+    if (!mounted) return;
+    if (contact == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Ese cliente no tiene teléfono registrado.'),
+        ),
+      );
+      return;
+    }
+
+    final receipt = await service.sendTemplateMessage(
+      option: template,
+      customerPhone: contact.phone,
+      customerName: contact.name,
+      // Sin esto, una plantilla que se presenta por persona sale firmada como
+      // «parte del equipo» en vez de con el nombre del operador.
+      agentName: contact.agentName,
+      contextType: 'customer',
+      contextId: customerId,
+    );
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          receipt.isSuccess
+              ? 'Mensaje enviado a ${contact.name}.'
+              : 'No se pudo enviar. Revisa la conversación.',
+        ),
+      ),
+    );
+  }
+
+  void _handleCard(AIAssistantActionCard card) {
+    final inventoryList = card.inventoryListRef;
+    if (inventoryList != null) {
+      final inventoryService = widget.turnServicesOverride?.inventoryService ??
+          context.read<InventoryService>();
+      inventoryService.applyExternalSearch(
+        // A complete server projection is an exact ID selection, not a local
+        // keyword search. Keep the search box empty so the Product List does
+        // not misrepresent structured category/spec filtering as typed text.
+        inventoryList.entityIds == null ? inventoryList.query : '',
+        matchedProductIds: inventoryList.entityIds,
+        stockFilter: switch (inventoryList.availability) {
+          AIAssistantInventoryAvailability.any =>
+            InventoryExternalStockFilter.any,
+          AIAssistantInventoryAvailability.inStock =>
+            InventoryExternalStockFilter.inStock,
+          AIAssistantInventoryAvailability.lowStock =>
+            InventoryExternalStockFilter.lowStock,
+          AIAssistantInventoryAvailability.outOfStock =>
+            InventoryExternalStockFilter.outOfStock,
+        },
+      );
+    }
     final workspaceManager = context.read<WorkspaceManager>();
     final toolbar = context.read<RightToolbarService>();
     final resolver = AIAssistantDestinationResolver(
       navigateWorkspace: (route) {
         WidgetsBinding.instance.addPostFrameCallback((_) {
-          workspaceManager.navigateActiveWorkspace(route);
+          workspaceManager.openRouteInWorkspace(route);
         });
       },
       openToolbarTool: toolbar.openTool,
     );
 
-    final dispatched = resolver.dispatch(destination);
+    final dispatched = resolver.dispatch(
+      card.destination,
+      entityRef: card.entityRef,
+    );
     if (!dispatched && !kReleaseMode) {
       debugPrint(
-        '🧭 [AIChatPanel] Destination $destination has no registered effect; '
+        '🧭 [AIChatPanel] Card destination ${card.destination} has no '
+        'compatible registered effect; '
         'ignored.',
       );
     }
@@ -136,14 +285,16 @@ class _AIChatPanelState extends State<AIChatPanel> {
     _scrollToBottom();
 
     final aiContext = context.read<AIAssistantContextService>();
-    final services = AIAssistantTurnServices(
-      customerService: context.read<CustomerService>(),
-      inventoryService: context.read<InventoryService>(),
-      bikeshopService: context.read<BikeshopService>(),
-      purchaseService: context.read<PurchaseService>(),
-      salesService: context.read<SalesService>(),
-      taskService: context.read<TaskService>(),
-    );
+    final services = widget.turnServicesOverride ??
+        AIAssistantTurnServices(
+          customerService: context.read<CustomerService>(),
+          inventoryService: context.read<InventoryService>(),
+          bikeshopService: context.read<BikeshopService>(),
+          purchaseService: context.read<PurchaseService>(),
+          salesService: context.read<SalesService>(),
+          taskService: context.read<TaskService>(),
+        );
+    final transcriptLengthBefore = session.transcript.length;
 
     await session.send(
       text,
@@ -157,6 +308,21 @@ class _AIChatPanelState extends State<AIChatPanel> {
 
     if (mounted) {
       _scrollToBottom();
+      final transcript = session.transcript;
+      if (transcript.length > transcriptLengthBefore) {
+        final newAssistantTurns = transcript
+            .skip(transcriptLengthBefore)
+            .where((entry) => entry.role == AIAssistantTranscriptRole.assistant)
+            .toList(growable: false);
+        if (newAssistantTurns.length == 1) {
+          final autoOpenCards = newAssistantTurns.single.cards
+              .where((card) => card.inventoryListRef?.autoOpen == true)
+              .toList(growable: false);
+          if (autoOpenCards.length == 1) {
+            _handleCard(autoOpenCards.single);
+          }
+        }
+      }
     }
   }
 
@@ -472,7 +638,15 @@ class _AIChatPanelState extends State<AIChatPanel> {
                           )
                         : _AssistantMessageBody(
                             message: msg,
-                            onDestination: _handleDestination,
+                            onCard: _handleCard,
+                            canResolveApproval: session.canResolveApproval,
+                            approvalInFlightId: session.approvalInFlightId,
+                            approvalDecisionInFlight:
+                                session.approvalDecisionInFlight,
+                            approvalErrorFor: session.approvalErrorFor,
+                            onApproval: session.resolveApproval,
+                            onOption: _handleCardOption,
+                            onOptionPreview: _previewCardOption,
                           ),
                   ),
                 );
@@ -607,11 +781,46 @@ class _AIChatPanelState extends State<AIChatPanel> {
 class _AssistantMessageBody extends StatelessWidget {
   const _AssistantMessageBody({
     required this.message,
-    required this.onDestination,
+    required this.onCard,
+    required this.canResolveApproval,
+    required this.approvalInFlightId,
+    required this.approvalDecisionInFlight,
+    required this.approvalErrorFor,
+    required this.onApproval,
+    required this.onOption,
+    required this.onOptionPreview,
   });
 
   final AIAssistantTranscriptEntry message;
-  final void Function(AIAssistantDestination destination) onDestination;
+  final void Function(AIAssistantActionCard card) onCard;
+  final bool Function(AIAssistantActionCard card) canResolveApproval;
+  final String? approvalInFlightId;
+  final AIAssistantApprovalDecision? approvalDecisionInFlight;
+  final String? Function(String approvalId) approvalErrorFor;
+  final Future<void> Function(
+    AIAssistantActionCard card,
+    AIAssistantApprovalDecision decision,
+  ) onApproval;
+  final void Function(
+    AIAssistantActionCard card,
+    AIAssistantCardOption option,
+  ) onOption;
+  final Future<String?> Function(
+    AIAssistantActionCard card,
+    AIAssistantCardOption option,
+  ) onOptionPreview;
+
+  void _openSourceInEmbeddedBrowser(BuildContext context, String? href) {
+    final uri = Uri.tryParse(href?.trim() ?? '');
+    if (uri == null ||
+        uri.scheme.toLowerCase() != 'https' ||
+        uri.host.isEmpty ||
+        uri.userInfo.isNotEmpty) {
+      return;
+    }
+
+    context.read<WorkspaceManager>().openBrowserWorkspace(uri.toString());
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -643,7 +852,11 @@ class _AssistantMessageBody extends StatelessWidget {
               ],
             )
           else
-            MarkdownBody(data: message.text),
+            MarkdownBody(
+              data: message.text,
+              onTapLink: (_, href, __) =>
+                  _openSourceInEmbeddedBrowser(context, href),
+            ),
         if (message.cards.isNotEmpty)
           Padding(
             padding: EdgeInsets.only(top: message.text.trim().isEmpty ? 0 : 10),
@@ -653,7 +866,21 @@ class _AssistantMessageBody extends StatelessWidget {
                         padding: const EdgeInsets.only(bottom: 8),
                         child: _AssistantActionCard(
                           card: card,
-                          onTap: () => onDestination(card.destination),
+                          onTap: () => onCard(card),
+                          approvalEnabled: canResolveApproval(card),
+                          approvalBusy:
+                              card.approvalRef?.id == approvalInFlightId,
+                          approvalDecisionInFlight:
+                              card.approvalRef?.id == approvalInFlightId
+                                  ? approvalDecisionInFlight
+                                  : null,
+                          approvalError: card.approvalRef == null
+                              ? null
+                              : approvalErrorFor(card.approvalRef!.id),
+                          onApproval: (decision) => onApproval(card, decision),
+                          onOption: (option) => onOption(card, option),
+                          onOptionPreview: (option) =>
+                              onOptionPreview(card, option),
                         ),
                       ))
                   .toList(),
@@ -664,17 +891,88 @@ class _AssistantMessageBody extends StatelessWidget {
   }
 }
 
-class _AssistantActionCard extends StatelessWidget {
+class _AssistantActionCard extends StatefulWidget {
   const _AssistantActionCard({
     required this.card,
     required this.onTap,
+    required this.approvalEnabled,
+    required this.approvalBusy,
+    required this.approvalDecisionInFlight,
+    required this.approvalError,
+    required this.onApproval,
+    required this.onOption,
+    required this.onOptionPreview,
   });
 
   final AIAssistantActionCard card;
   final VoidCallback onTap;
+  final void Function(AIAssistantCardOption option) onOption;
+
+  /// Devuelve el texto EXACTO que se enviará, resuelto con los mismos valores
+  /// que usa el envío: cliente, negocio y quien tiene la sesión abierta.
+  final Future<String?> Function(AIAssistantCardOption option) onOptionPreview;
+  final bool approvalEnabled;
+  final bool approvalBusy;
+  final AIAssistantApprovalDecision? approvalDecisionInFlight;
+  final String? approvalError;
+  final Future<void> Function(AIAssistantApprovalDecision decision) onApproval;
+
+  @override
+  State<_AssistantActionCard> createState() => _AssistantActionCardState();
+}
+
+class _AssistantActionCardState extends State<_AssistantActionCard> {
+  /// La opción que el operador está revisando. Elegir no envía: abre esta
+  /// revisión, y sólo «Enviar» ejecuta.
+  AIAssistantCardOption? _reviewing;
+  String? _reviewText;
+
+  /// Elegir abre la revisión; nunca envía. El texto se pide resuelto para que
+  /// sea el mismo que recibirá el cliente, no una aproximación.
+  /// Sólo se revisa antes de ejecutar lo que sale del taller. Una plantilla
+  /// llega a un cliente y no se puede deshacer; una continuación sólo le
+  /// vuelve a preguntar al asistente, así que exigirle confirmación agrega un
+  /// clic y no protege de nada.
+  bool get _optionNeedsReview => widget.card.optionKind == 'whatsapp_template';
+
+  Future<void> _choose(AIAssistantCardOption option) async {
+    if (!_optionNeedsReview) {
+      widget.onOption(option);
+      return;
+    }
+    await _review(option);
+  }
+
+  Future<void> _review(AIAssistantCardOption option) async {
+    if (_reviewing?.id == option.id) {
+      setState(() {
+        _reviewing = null;
+        _reviewText = null;
+      });
+      return;
+    }
+    setState(() {
+      _reviewing = option;
+      _reviewText = null;
+    });
+    final text = await widget.onOptionPreview(option);
+    if (!mounted || _reviewing?.id != option.id) return;
+    setState(() => _reviewText = text ?? option.description ?? option.label);
+  }
 
   @override
   Widget build(BuildContext context) {
+    final card = widget.card;
+    final onTap = widget.onTap;
+    final onOption = widget.onOption;
+    final approvalEnabled = widget.approvalEnabled;
+    final approvalBusy = widget.approvalBusy;
+    final approvalDecisionInFlight = widget.approvalDecisionInFlight;
+    final approvalError = widget.approvalError;
+    final onApproval = widget.onApproval;
+    if (card.inventoryListRef != null) {
+      return AIAssistantCompactActionTile(card: card, onTap: onTap);
+    }
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
     final accent = _accentFor(card.kind, theme);
@@ -695,14 +993,19 @@ class _AssistantActionCard extends StatelessWidget {
 
     // Two cards of the same kind can appear in one answer, so the key carries
     // the destination too.
-    final cardKey = 'ai-action-card-${card.kind}-${card.destination.name}';
+    final approvalKey = card.approvalRef?.id;
+    final cardKey = 'ai-action-card-${card.kind}-${card.destination.name}'
+        '${approvalKey == null ? '' : '-$approvalKey'}';
+    final isApprovalPreview = card.approvalRef != null;
 
     return Material(
       key: ValueKey<String>(cardKey),
       color: Colors.transparent,
       child: InkWell(
         borderRadius: BorderRadius.circular(16),
-        onTap: onTap,
+        // A preview is a governed command, not a navigation card. Only its
+        // explicit approve/discard controls may produce an effect.
+        onTap: isApprovalPreview ? null : onTap,
         child: Ink(
           key: ValueKey<String>('$cardKey-ink'),
           decoration: BoxDecoration(
@@ -804,21 +1107,133 @@ class _AssistantActionCard extends StatelessWidget {
                               .toList(),
                         ),
                       ],
-                      const SizedBox(height: 10),
-                      Row(
-                        children: [
-                          Text(
-                            card.ctaLabel,
-                            style: theme.textTheme.labelLarge?.copyWith(
-                              color: onCard,
-                              fontWeight: FontWeight.w800,
+                      if (card.options.isNotEmpty) ...[
+                        const SizedBox(height: 12),
+                        // Elegir una opción no envía: abre la revisión aquí
+                        // mismo, con la pinta que tendrá el mensaje en el chat
+                        // del cliente. El diálogo del sistema que había antes
+                        // sacaba al operador de la conversación para mostrarle
+                        // un texto plano que no se parecía a nada.
+                        for (final option in card.options)
+                          Padding(
+                            padding: const EdgeInsets.only(bottom: 6),
+                            child: SizedBox(
+                              width: double.infinity,
+                              child: OutlinedButton(
+                                // La clave incluye a quién pertenece la
+                                // tarjeta: dos contactos en el mismo hilo
+                                // ofrecen las mismas plantillas, y sin eso
+                                // comparten clave y se confunden.
+                                key: Key(
+                                  'ai-card-option-${card.kind}'
+                                  '-${card.entityRef?.id ?? card.title}'
+                                  '-${option.id}',
+                                ),
+                                onPressed: () => _choose(option),
+                                style: OutlinedButton.styleFrom(
+                                  alignment: Alignment.centerLeft,
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 12,
+                                    vertical: 10,
+                                  ),
+                                  backgroundColor: _reviewing?.id == option.id
+                                      ? accent.withValues(alpha: 0.10)
+                                      : null,
+                                  side: BorderSide(
+                                    color: accent.withValues(
+                                      alpha: _reviewing?.id == option.id
+                                          ? 0.55
+                                          : 0.35,
+                                    ),
+                                  ),
+                                ),
+                                child: Row(
+                                  children: [
+                                    Expanded(
+                                      child: Text(
+                                        option.label,
+                                        style: theme.textTheme.labelLarge
+                                            ?.copyWith(
+                                          color: scheme.onSurface,
+                                          fontWeight: FontWeight.w700,
+                                        ),
+                                      ),
+                                    ),
+                                    // El ícono promete lo que va a pasar. Un
+                                    // chevron dice «esto se despliega», y es
+                                    // cierto para la plantilla, que abre su
+                                    // previsualizado. Una continuación se
+                                    // ejecuta al tocar, así que un chevron ahí
+                                    // sería una promesa falsa.
+                                    Icon(
+                                      !_optionNeedsReview
+                                          ? Icons.arrow_forward_rounded
+                                          : _reviewing?.id == option.id
+                                              ? Icons.expand_less
+                                              : Icons.expand_more,
+                                      size: 18,
+                                      color: scheme.onSurfaceVariant,
+                                    ),
+                                  ],
+                                ),
+                              ),
                             ),
                           ),
-                          const SizedBox(width: 6),
-                          Icon(Icons.arrow_outward_rounded,
-                              color: onCard, size: 18),
-                        ],
-                      ),
+                        if (_reviewing != null && _reviewText == null)
+                          const Padding(
+                            padding: EdgeInsets.symmetric(vertical: 10),
+                            child: Center(
+                              child: SizedBox(
+                                width: 18,
+                                height: 18,
+                                child:
+                                    CircularProgressIndicator(strokeWidth: 2),
+                              ),
+                            ),
+                          ),
+                        if (_reviewing != null && _reviewText != null)
+                          WhatsAppOutgoingPreview(
+                            key: const Key('ai-card-option-preview'),
+                            text: _reviewText!,
+                            onCancel: () => setState(() {
+                              _reviewing = null;
+                              _reviewText = null;
+                            }),
+                            onSend: () {
+                              final chosen = _reviewing!;
+                              setState(() {
+                                _reviewing = null;
+                                _reviewText = null;
+                              });
+                              onOption(chosen);
+                            },
+                          ),
+                      ],
+                      const SizedBox(height: 10),
+                      if (isApprovalPreview)
+                        _ApprovalControls(
+                          approval: card.approvalRef!,
+                          enabled: approvalEnabled,
+                          busy: approvalBusy,
+                          decisionInFlight: approvalDecisionInFlight,
+                          error: approvalError,
+                          onDecision: onApproval,
+                        )
+                      else
+                        Row(
+                          children: [
+                            Text(
+                              card.ctaLabel,
+                              style: theme.textTheme.labelLarge?.copyWith(
+                                color: onCard,
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                            const SizedBox(width: 6),
+                            Icon(Icons.arrow_outward_rounded,
+                                color: onCard, size: 18),
+                          ],
+                        ),
                     ],
                   ),
                 ),
@@ -835,6 +1250,8 @@ class _AssistantActionCard extends StatelessWidget {
       case 'customer':
         return Icons.person_rounded;
       case 'job':
+      case 'diagnosis_preview':
+      case 'workshop_item_preview':
         return Icons.build_circle_rounded;
       case 'purchase_invoice':
         return Icons.receipt_long_rounded;
@@ -843,9 +1260,14 @@ class _AssistantActionCard extends StatelessWidget {
       case 'sales_invoice':
         return Icons.point_of_sale_rounded;
       case 'task':
+      case 'task_preview':
         return Icons.checklist_rounded;
       case 'supplier':
         return Icons.local_shipping_rounded;
+      case 'expense':
+        return Icons.receipt_rounded;
+      case 'conversation':
+        return Icons.forum_rounded;
       default:
         return Icons.link_rounded;
     }
@@ -856,10 +1278,13 @@ class _AssistantActionCard extends StatelessWidget {
       case 'customer':
         return const Color(0xFF7B1FA2);
       case 'job':
+      case 'diagnosis_preview':
+      case 'workshop_item_preview':
         return const Color(0xFF6D4C41);
       case 'purchase_invoice':
         return const Color(0xFFBF6A02);
       case 'task':
+      case 'task_preview':
         return theme.colorScheme.tertiary;
       case 'inventory':
         return const Color(0xFF1565C0);
@@ -867,8 +1292,174 @@ class _AssistantActionCard extends StatelessWidget {
         return const Color(0xFF00875A);
       case 'supplier':
         return const Color(0xFF6A1B9A);
+      case 'expense':
+        return theme.colorScheme.secondary;
+      case 'conversation':
+        return theme.colorScheme.primary;
       default:
         return theme.colorScheme.primary;
     }
   }
+}
+
+class _ApprovalControls extends StatelessWidget {
+  const _ApprovalControls({
+    required this.approval,
+    required this.enabled,
+    required this.busy,
+    required this.decisionInFlight,
+    required this.error,
+    required this.onDecision,
+  });
+
+  final AIAssistantApprovalRef approval;
+  final bool enabled;
+  final bool busy;
+  final AIAssistantApprovalDecision? decisionInFlight;
+  final String? error;
+  final Future<void> Function(AIAssistantApprovalDecision decision) onDecision;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final stateLabel = switch (approval.state) {
+      // «Vence» a secas se leía como el vencimiento de la TAREA, que puede ser
+      // mañana, cuando en realidad expira la propuesta y le quedan minutos.
+      // Y en UTC: al taller le sobran cuatro horas de diferencia mentales para
+      // algo que se decide ahora. Se dice cuánto queda.
+      AIAssistantApprovalState.pending =>
+        _approvalCountdownLabel(approval.expiresAt),
+      AIAssistantApprovalState.approved => switch (approval.action) {
+          AIAssistantApprovalAction.createTask => 'Tarea creada',
+          AIAssistantApprovalAction.updateDiagnosis =>
+            'Diagnóstico actualizado',
+          AIAssistantApprovalAction.addWorkshopItem => 'Línea agregada',
+        },
+      AIAssistantApprovalState.discarded => 'Propuesta descartada',
+      AIAssistantApprovalState.expired => 'Propuesta vencida',
+    };
+    final approveLabel = switch (approval.action) {
+      AIAssistantApprovalAction.createTask => 'Crear tarea',
+      AIAssistantApprovalAction.updateDiagnosis => 'Actualizar diagnóstico',
+      AIAssistantApprovalAction.addWorkshopItem => 'Agregar al trabajo',
+    };
+    final approvingLabel = switch (approval.action) {
+      AIAssistantApprovalAction.createTask => 'Creando...',
+      AIAssistantApprovalAction.updateDiagnosis => 'Actualizando...',
+      AIAssistantApprovalAction.addWorkshopItem => 'Agregando...',
+    };
+    final approveIcon = switch (approval.action) {
+      AIAssistantApprovalAction.createTask => Icons.add_task_rounded,
+      AIAssistantApprovalAction.updateDiagnosis => Icons.save_outlined,
+      AIAssistantApprovalAction.addWorkshopItem => Icons.playlist_add_rounded,
+    };
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          key: ValueKey<String>('ai-approval-${approval.id}-status'),
+          children: [
+            Icon(
+              switch (approval.state) {
+                AIAssistantApprovalState.pending => Icons.schedule_rounded,
+                AIAssistantApprovalState.approved => Icons.task_alt_rounded,
+                AIAssistantApprovalState.discarded => Icons.cancel_outlined,
+                AIAssistantApprovalState.expired => Icons.timer_off_outlined,
+              },
+              size: 16,
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
+            const SizedBox(width: 6),
+            Expanded(
+              child: Text(
+                stateLabel,
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+          ],
+        ),
+        if ((error ?? '').isNotEmpty) ...[
+          const SizedBox(height: 8),
+          Text(
+            error!,
+            key: ValueKey<String>('ai-approval-${approval.id}-error'),
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: theme.colorScheme.error,
+            ),
+          ),
+        ],
+        if (approval.state == AIAssistantApprovalState.pending) ...[
+          const SizedBox(height: 10),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              FilledButton.icon(
+                key: ValueKey<String>('ai-approval-${approval.id}-approve'),
+                onPressed: enabled
+                    ? () => unawaited(
+                          onDecision(AIAssistantApprovalDecision.approve),
+                        )
+                    : null,
+                icon: busy &&
+                        decisionInFlight == AIAssistantApprovalDecision.approve
+                    ? const SizedBox.square(
+                        dimension: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : Icon(approveIcon),
+                label: Text(
+                  busy &&
+                          decisionInFlight ==
+                              AIAssistantApprovalDecision.approve
+                      ? approvingLabel
+                      : approveLabel,
+                ),
+              ),
+              OutlinedButton.icon(
+                key: ValueKey<String>('ai-approval-${approval.id}-discard'),
+                onPressed: enabled
+                    ? () => unawaited(
+                          onDecision(AIAssistantApprovalDecision.discard),
+                        )
+                    : null,
+                icon: busy &&
+                        decisionInFlight == AIAssistantApprovalDecision.discard
+                    ? const SizedBox.square(
+                        dimension: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.close_rounded),
+                label: Text(
+                  busy &&
+                          decisionInFlight ==
+                              AIAssistantApprovalDecision.discard
+                      ? 'Descartando...'
+                      : 'Descartar',
+                ),
+              ),
+            ],
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+/// Cuánto le queda a la PROPUESTA, no a lo que propone.
+///
+/// Una cuenta regresiva no necesita zona horaria ni fecha, y por eso no puede
+/// confundirse con la fecha de vencimiento de la tarea que está al lado.
+String _approvalCountdownLabel(DateTime value) {
+  final restante = value.toUtc().difference(DateTime.now().toUtc());
+  if (restante.isNegative) return 'Propuesta vencida';
+  final minutos = restante.inMinutes;
+  if (minutos < 1) return 'Confirma en menos de 1 min';
+  if (minutos < 60) return 'Confirma en $minutos min';
+  final horas = restante.inHours;
+  return 'Confirma en $horas ${horas == 1 ? 'hora' : 'horas'}';
 }

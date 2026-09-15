@@ -54,13 +54,65 @@ class PayrollStatementMatcher {
     }
 
     final eligibleUseCountByRowId = <String, int>{};
-    for (final evaluations in evaluationsByLineId.values) {
+    final employeeIdsByRowId = <String, Set<String>>{};
+    for (final line in voucherLines) {
+      final evaluations = evaluationsByLineId[line.lineId];
+      if (evaluations == null) continue;
       for (final candidate in evaluations.where((value) => value.isEligible)) {
+        final rowId = candidate.statementRow.sourceRowId;
         eligibleUseCountByRowId.update(
-          candidate.statementRow.sourceRowId,
+          rowId,
           (count) => count + 1,
           ifAbsent: () => 1,
         );
+        employeeIdsByRowId
+            .putIfAbsent(rowId, () => <String>{})
+            .add(line.employeeId);
+      }
+    }
+
+    // **Un movimiento que podría ser de dos PERSONAS distintas no se asigna
+    // jamás.** Ninguna regla de orden puede decidir de quién es un pago; eso lo
+    // decide un humano mirando la evidencia.
+    final contestedRowIds = <String>{
+      for (final entry in employeeIdsByRowId.entries)
+        if (entry.value.length > 1) entry.key,
+    };
+
+    // **Asignación cronológica entre semanas de la MISMA persona.**
+    //
+    // La ventana normal (cierre a cierre +5) separa semanas consecutivas. Este
+    // orden sigue protegiendo periodos duplicados o excepcionalmente
+    // solapados: una misma fila bancaria nunca puede proponerse dos veces.
+    //
+    // La regla es la que usaría cualquiera: **la semana más antigua se queda
+    // con el pago más antiguo que le sirve**, y lo que queda libre pasa a la
+    // siguiente. No adivina cuando queda duda de verdad: si a una semana le
+    // siguen quedando dos pagos libres en su turno, sigue siendo pregunta
+    // humana, porque dos pagos iguales para una sola deuda pueden ser un pago
+    // partido o un pago que no era de nómina.
+    final orderedLines = [...voucherLines]..sort(_compareLinesByPeriod);
+    final assignedRowIdByLineId = <String, String>{};
+    final contendedLineIds = <String>{};
+    final takenRowIds = <String>{};
+    for (final line in orderedLines) {
+      final evaluations = evaluationsByLineId[line.lineId];
+      if (evaluations == null) continue;
+      final free = evaluations
+          .where(
+            (candidate) =>
+                candidate.isEligible &&
+                !contestedRowIds.contains(candidate.statementRow.sourceRowId) &&
+                !takenRowIds.contains(candidate.statementRow.sourceRowId),
+          )
+          .toList()
+        ..sort(_compareCandidatesByDate);
+      if (free.length == 1) {
+        final rowId = free.single.statementRow.sourceRowId;
+        assignedRowIdByLineId[line.lineId] = rowId;
+        takenRowIds.add(rowId);
+      } else if (free.length > 1) {
+        contendedLineIds.add(line.lineId);
       }
     }
 
@@ -86,19 +138,30 @@ class PayrollStatementMatcher {
       final eligibleForLine = originalEvaluations
           .where((candidate) => candidate.isEligible)
           .toList();
+      final assignedRowId = assignedRowIdByLineId[line.lineId];
+      final resolvedByOrder =
+          assignedRowId != null && eligibleForLine.length > 1;
       final hasMultipleTransactions = eligibleForLine.length > 1;
       final finalEvaluations = originalEvaluations.map((candidate) {
         if (!candidate.isEligible) return candidate;
 
+        final rowId = candidate.statementRow.sourceRowId;
         final reasons = <PayrollCandidateReason>[...candidate.reasons];
         if (hasMultipleTransactions) {
           reasons.add(PayrollCandidateReason.multipleTransactionsForLine);
         }
-        if ((eligibleUseCountByRowId[candidate.statementRow.sourceRowId] ?? 0) >
-            1) {
+        if ((eligibleUseCountByRowId[rowId] ?? 0) > 1) {
           reasons.add(
             PayrollCandidateReason.transactionMatchesMultipleLines,
           );
+        }
+        if (contestedRowIds.contains(rowId)) {
+          reasons.add(
+            PayrollCandidateReason.transactionMatchesMultipleEmployees,
+          );
+        }
+        if (resolvedByOrder && rowId == assignedRowId) {
+          reasons.add(PayrollCandidateReason.assignedByWeekOrder);
         }
         return candidate.copyWith(reasons: reasons);
       }).toList(growable: false)
@@ -124,24 +187,12 @@ class PayrollStatementMatcher {
         continue;
       }
 
-      final lineReasons = <PayrollLineMatchReason>[];
-      if (finalEligible.length > 1) {
-        lineReasons.add(
-          PayrollLineMatchReason.multipleTransactionsForLine,
-        );
-      }
-      final rowIsShared = finalEligible.any(
+      // Ambigüedad de PERSONA: no se resuelve sola, nunca.
+      final touchesContestedRow = finalEligible.any(
         (candidate) =>
-            (eligibleUseCountByRowId[candidate.statementRow.sourceRowId] ?? 0) >
-            1,
+            contestedRowIds.contains(candidate.statementRow.sourceRowId),
       );
-      if (rowIsShared) {
-        lineReasons.add(
-          PayrollLineMatchReason.transactionMatchesMultipleLines,
-        );
-      }
-
-      if (lineReasons.isNotEmpty) {
+      if (touchesContestedRow) {
         lineResults.add(
           PayrollReconciliationLineResult(
             voucherLine: line,
@@ -149,20 +200,76 @@ class PayrollStatementMatcher {
             status: PayrollLineMatchStatus.needsReview,
             evaluatedCandidates: finalEvaluations,
             proposedMatch: null,
-            reasons: lineReasons,
+            reasons: const [
+              PayrollLineMatchReason.transactionMatchesMultipleEmployees,
+            ],
           ),
         );
         continue;
       }
 
+      // A esta semana le seguían quedando dos pagos libres en su turno: dos
+      // pagos iguales para una sola deuda pueden ser un pago partido o uno que
+      // no era de nómina, así que sigue siendo pregunta humana.
+      if (contendedLineIds.contains(line.lineId)) {
+        lineResults.add(
+          PayrollReconciliationLineResult(
+            voucherLine: line,
+            employee: employee,
+            status: PayrollLineMatchStatus.needsReview,
+            evaluatedCandidates: finalEvaluations,
+            proposedMatch: null,
+            reasons: const [
+              PayrollLineMatchReason.multipleTransactionsForLine,
+            ],
+          ),
+        );
+        continue;
+      }
+
+      if (assignedRowId == null) {
+        // Había pagos que calzaban, pero se los llevaron semanas anteriores de
+        // la misma persona. Decirlo así es distinto —y más útil— que «no hay
+        // movimiento elegible».
+        lineResults.add(
+          PayrollReconciliationLineResult(
+            voucherLine: line,
+            employee: employee,
+            status: PayrollLineMatchStatus.unmatched,
+            evaluatedCandidates: finalEvaluations,
+            proposedMatch: null,
+            reasons: const [
+              PayrollLineMatchReason.transactionsTakenByOlderWeeks,
+            ],
+          ),
+        );
+        continue;
+      }
+
+      final assigned = finalEligible.firstWhere(
+        (candidate) => candidate.statementRow.sourceRowId == assignedRowId,
+      );
       lineResults.add(
         PayrollReconciliationLineResult(
           voucherLine: line,
           employee: employee,
           status: PayrollLineMatchStatus.suggested,
           evaluatedCandidates: finalEvaluations,
-          proposedMatch: finalEligible.single,
-          reasons: const [PayrollLineMatchReason.uniqueCandidate],
+          // **Una asignación por orden nunca llega a confianza alta.** El monto
+          // y la fecha pueden ser perfectos; a qué semana pertenece el pago lo
+          // dedujo una regla, no lo dijo el banco.
+          proposedMatch: resolvedByOrder
+              ? assigned.copyWith(
+                  confidence: switch (assigned.confidence) {
+                    PayrollMatchConfidence.high =>
+                      PayrollMatchConfidence.medium,
+                    final other => other,
+                  },
+                )
+              : assigned,
+          reasons: resolvedByOrder
+              ? const [PayrollLineMatchReason.assignedByWeekOrder]
+              : const [PayrollLineMatchReason.uniqueCandidate],
         ),
       );
     }
@@ -200,27 +307,34 @@ class PayrollStatementMatcher {
     final daysAfterPeriodEnd = row.bookingDate == null
         ? null
         : line.periodEnd.daysUntil(row.bookingDate!);
-    final daysAfterPeriodStart = row.bookingDate == null
-        ? null
-        : line.periodStart.daysUntil(row.bookingDate!);
-    final dateIsEligible = daysAfterPeriodStart != null &&
-        daysAfterPeriodStart >= 0 &&
-        daysAfterPeriodEnd != null &&
+    final dateIsEligible = daysAfterPeriodEnd != null &&
+        daysAfterPeriodEnd >= 0 &&
         daysAfterPeriodEnd <= config.paymentWindowDays;
-    // Tolerance is intentionally asymmetric. A small positive variance may be
-    // the shop's usual bank rounding and can be suggested for explicit review.
-    // Any smaller debit is a possible partial payment, never a rounding match;
-    // it must stay unmatched until an operator links it manually.
+    // The amount rule is symmetric: a bank movement may be proposed when its
+    // absolute difference is at most CLP 1,000. A non-zero difference is only
+    // a review proposal; it never posts or confirms a payment by itself.
     final amountIsWithinTolerance = absoluteVariance <= tolerance;
-    final amountIsEligible = variance >= 0 && amountIsWithinTolerance;
+    final amountIsEligible = amountIsWithinTolerance;
     final isEligible = dateIsEligible && amountIsEligible;
 
     final reasons = <PayrollCandidateReason>[
       PayrollCandidateReason.outgoingMovement,
-      beneficiaryMatch.kind == PayrollBeneficiaryMatchKind.primaryName
-          ? PayrollCandidateReason.primaryNameMatched
-          : PayrollCandidateReason.configuredAliasMatched,
-      PayrollCandidateReason.paymentMethodIsTransfer,
+      switch (beneficiaryMatch.kind) {
+        PayrollBeneficiaryMatchKind.primaryName =>
+          PayrollCandidateReason.primaryNameMatched,
+        PayrollBeneficiaryMatchKind.configuredAlias =>
+          PayrollCandidateReason.configuredAliasMatched,
+        PayrollBeneficiaryMatchKind.shortName =>
+          PayrollCandidateReason.shortNameMatched,
+      },
+      if (line.paymentMethod == PayrollReconciliationPaymentMethod.transfer)
+        PayrollCandidateReason.paymentMethodIsTransfer
+      else
+        // El método de la ficha es una preferencia, no una prueba de cómo se
+        // resolvió esta semana. La cartola puede mostrar una transferencia
+        // aunque normalmente la persona cobre en efectivo; se conserva como
+        // candidato y el workspace decide la composición final.
+        PayrollCandidateReason.paymentMethodDiffersFromPreference,
     ];
     if (daysAfterPeriodEnd == null) {
       reasons.add(PayrollCandidateReason.dateMissing);
@@ -232,17 +346,16 @@ class PayrollStatementMatcher {
 
     if (absoluteVariance == 0) {
       reasons.add(PayrollCandidateReason.amountExact);
-    } else if (variance < 0) {
-      reasons.add(PayrollCandidateReason.amountBelowPendingBalance);
-      if (!amountIsWithinTolerance) {
-        reasons.add(PayrollCandidateReason.amountOutsideTolerance);
-      }
-      reasons.add(PayrollCandidateReason.nonZeroVariance);
-    } else if (amountIsWithinTolerance) {
-      reasons.add(PayrollCandidateReason.amountWithinTolerance);
-      reasons.add(PayrollCandidateReason.nonZeroVariance);
     } else {
-      reasons.add(PayrollCandidateReason.amountOutsideTolerance);
+      if (variance < 0) {
+        reasons.add(PayrollCandidateReason.amountBelowPendingBalance);
+      }
+      reasons.add(
+        amountIsWithinTolerance
+            ? PayrollCandidateReason.amountWithinTolerance
+            : PayrollCandidateReason.amountOutsideTolerance,
+      );
+      reasons.add(PayrollCandidateReason.nonZeroVariance);
     }
 
     return PayrollReconciliationCandidate(
@@ -262,6 +375,7 @@ class PayrollStatementMatcher {
       ),
       confidence: _candidateConfidence(
         isEligible: isEligible,
+        beneficiaryMatchKind: beneficiaryMatch.kind,
         daysAfterPeriodEnd: daysAfterPeriodEnd,
         absoluteVarianceClp: absoluteVariance,
       ),
@@ -281,12 +395,6 @@ class PayrollStatementMatcher {
     }
     if (line.pendingAmountClp <= 0) {
       return const [PayrollLineMatchReason.pendingAmountIsNotPositive];
-    }
-    if (line.paymentMethod == PayrollReconciliationPaymentMethod.cash) {
-      return const [PayrollLineMatchReason.paymentMethodIsCash];
-    }
-    if (line.paymentMethod != PayrollReconciliationPaymentMethod.transfer) {
-      return const [PayrollLineMatchReason.paymentMethodIsNotTransfer];
     }
     return const [];
   }
@@ -347,9 +455,17 @@ bool _namesEmployee(
   final haystack = normalizePayrollReconciliationText(observed);
   final primaryName = normalizePayrollReconciliationText(employee.displayName);
   if (_containsWholePhrase(haystack, primaryName)) return true;
-  return employee.bankBeneficiaryAliases
+  if (employee.bankBeneficiaryAliases
       .map(normalizePayrollReconciliationText)
-      .any((alias) => _containsWholePhrase(haystack, alias));
+      .any((alias) => _containsWholePhrase(haystack, alias))) {
+    return true;
+  }
+  // La forma corta cuenta también acá, y en la dirección segura: reconocer que
+  // el cargo nombra a alguien de la nómina sólo puede sacarlo de la
+  // clasificación automática «no es nómina» y devolverlo a una decisión
+  // explícita. Nunca crea un pago por sí sola.
+  return payrollShortNameForms(employee.displayName)
+      .any((form) => _containsWholePhrase(haystack, form));
 }
 
 _BeneficiaryMatch? _matchBeneficiary(
@@ -381,6 +497,24 @@ _BeneficiaryMatch? _matchBeneficiary(
       );
     }
   }
+
+  // Último recurso, y el más débil de los tres: la forma corta que el banco
+  // imprime cuando el titular guardó al destinatario como `nombre apellido`.
+  // Se prueban de la más larga a la más corta para que la evidencia que quede
+  // registrada sea la más específica que calzó.
+  final shortForms = payrollShortNameForms(employee.displayName).toList()
+    ..sort((left, right) {
+      final byLength = right.length.compareTo(left.length);
+      return byLength != 0 ? byLength : left.compareTo(right);
+    });
+  for (final form in shortForms) {
+    if (_containsWholePhrase(row.normalizedDescription, form)) {
+      return _BeneficiaryMatch(
+        kind: PayrollBeneficiaryMatchKind.shortName,
+        normalizedValue: form,
+      );
+    }
+  }
   return null;
 }
 
@@ -395,8 +529,14 @@ int _candidateScore({
   required int absoluteVarianceClp,
   required int toleranceClp,
 }) {
-  var score =
-      beneficiaryMatchKind == PayrollBeneficiaryMatchKind.primaryName ? 25 : 22;
+  // La evidencia del nombre puntúa por lo específica que es: el nombre
+  // registrado completo, después un alias que una persona configuró a mano, y
+  // al final la forma corta que el propio ERP dedujo del nombre.
+  var score = switch (beneficiaryMatchKind) {
+    PayrollBeneficiaryMatchKind.primaryName => 25,
+    PayrollBeneficiaryMatchKind.configuredAlias => 22,
+    PayrollBeneficiaryMatchKind.shortName => 18,
+  };
   score += 10;
 
   if (daysAfterPeriodEnd != null) {
@@ -414,11 +554,22 @@ int _candidateScore({
 
 PayrollMatchConfidence _candidateConfidence({
   required bool isEligible,
+  required PayrollBeneficiaryMatchKind beneficiaryMatchKind,
   required int? daysAfterPeriodEnd,
   required int absoluteVarianceClp,
 }) {
   if (!isEligible || daysAfterPeriodEnd == null) {
     return PayrollMatchConfidence.none;
+  }
+  // **Una forma corta nunca llega a `CALZA`.** El nombre que el banco imprimió
+  // no es el que alguien registró: es una deducción del ERP, y decir «alta»
+  // sobre una deducción propia es afirmar una certeza que nadie tomó. El monto
+  // y la fecha pueden ser perfectos; la identidad sigue siendo lo que hay que
+  // mirar, y por eso el operador la ve como `REVISA`.
+  if (beneficiaryMatchKind == PayrollBeneficiaryMatchKind.shortName) {
+    return daysAfterPeriodEnd.abs() <= 4
+        ? PayrollMatchConfidence.medium
+        : PayrollMatchConfidence.low;
   }
   if (daysAfterPeriodEnd.abs() <= 4 && absoluteVarianceClp <= 250) {
     return PayrollMatchConfidence.high;
@@ -427,6 +578,36 @@ PayrollMatchConfidence _candidateConfidence({
     return PayrollMatchConfidence.medium;
   }
   return PayrollMatchConfidence.low;
+}
+
+/// Semana más antigua primero. Es el orden en que se paga una deuda.
+int _compareLinesByPeriod(
+  PayrollReconciliationVoucherLine left,
+  PayrollReconciliationVoucherLine right,
+) {
+  final byEnd = left.periodEnd.compareTo(right.periodEnd);
+  if (byEnd != 0) return byEnd;
+  final byStart = left.periodStart.compareTo(right.periodStart);
+  if (byStart != 0) return byStart;
+  return left.lineId.compareTo(right.lineId);
+}
+
+/// Pago más antiguo primero; a igual fecha, el de mejor puntaje. El orden es
+/// total y estable: la misma cartola produce siempre la misma asignación.
+int _compareCandidatesByDate(
+  PayrollReconciliationCandidate left,
+  PayrollReconciliationCandidate right,
+) {
+  final byDate = _compareNullableDates(
+    left.statementRow.bookingDate,
+    right.statementRow.bookingDate,
+  );
+  if (byDate != 0) return byDate;
+  final byScore = right.score.compareTo(left.score);
+  if (byScore != 0) return byScore;
+  return left.statementRow.sourceRowId.compareTo(
+    right.statementRow.sourceRowId,
+  );
 }
 
 int _compareCandidates(

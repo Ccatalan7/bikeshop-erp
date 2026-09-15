@@ -1,0 +1,31 @@
+{
+  "schema_version": 1,
+  "new_definitions": {},
+  "patches": [
+    {
+      "id": "CARD-01",
+      "op": "replace_template_coherence",
+      "template": "crankset",
+      "key": "row_coherence",
+      "before": {
+        "present": false,
+        "value": null
+      },
+      "after": {
+        "version": 2,
+        "links": [],
+        "cardinalities": [
+          {
+            "id": "included_crown_occurrences",
+            "field": "chainring_teeth_rows",
+            "total_field": "included_chainring_count"
+          }
+        ]
+      }
+    }
+  ],
+  "source_review_sha256": "6d112ece1b1dc41c282dea5a3fa751ff779636f7871aaca36da571a8941d0fdd",
+  "required_server_migration": "20260907025000",
+  "mechanical_coverage_complete": false,
+  "automatic_fill_authorized": false
+}

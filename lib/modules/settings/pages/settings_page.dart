@@ -134,6 +134,12 @@ class _SettingsPageState extends State<SettingsPage> {
             route: '/settings/payment-methods',
           ),
           _SettingsEntry(
+            icon: Icons.point_of_sale_outlined,
+            title: 'Terminales y abonos',
+            subtitle: 'Débito, crédito, comisiones y plazos por terminal',
+            route: '/settings/payment-terminals',
+          ),
+          _SettingsEntry(
             icon: Icons.account_tree_outlined,
             title: 'Plan de cuentas',
             subtitle: 'Cuentas contables usadas por ventas y pagos',

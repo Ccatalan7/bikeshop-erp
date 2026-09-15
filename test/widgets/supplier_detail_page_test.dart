@@ -13,6 +13,7 @@ import 'package:vinabike_erp/shared/themes/app_theme.dart';
 import 'package:vinabike_erp/shared/themes/appearance_preset.dart';
 
 void main() {
+  group('Contactos', _contactsTests);
   const tenantId = '10000000-0000-0000-0000-000000000001';
   const supplierId = '20000000-0000-0000-0000-000000000002';
   const partyId = '30000000-0000-0000-0000-000000000003';
@@ -233,11 +234,13 @@ void main() {
           find.byKey(const ValueKey('supplier-detail-section-select'));
       await tester.tap(sectionSelect);
       await tester.pumpAndSettle();
-      await tester.tap(find.text('Para qué lo usamos').last);
+      // «Para qué lo usamos» vive dentro de Datos desde el rediseño.
+      await tester.tap(find.text('Datos').last);
       await tester.pumpAndSettle();
 
       expect(find.text('Para qué lo usamos'), findsWidgets);
-      expect(find.text('Servicios digitales'), findsOneWidget);
+      // En la cabecera del registro y en el panel de clasificación.
+      expect(find.text('Servicios digitales'), findsWidgets);
       expect(find.text('Qué puede hacer'), findsNothing);
       expect(find.text('Etiquetas'), findsNothing);
     },
@@ -572,6 +575,96 @@ void main() {
     expect(find.text('Documento de compra'), findsOneWidget);
   });
 
+  testWidgets(
+      'desktop summary lays out the metric strip and the rail without exceptions',
+      (tester) async {
+    final summaries = [
+      SupplierEconomicSummaryReadModel.fromJson(const {
+        'tenant_id': tenantId,
+        'supplier_id': supplierId,
+        'party_id': partyId,
+        'currency_code': 'CLP',
+        'purchase_document_count': 8,
+        'purchase_payment_count': 8,
+        'purchase_gross_amount': 562757,
+        'purchase_paid_amount': 562757,
+        'purchase_balance_amount': 0,
+        'expense_document_count': 0,
+        'expense_payment_count': 0,
+        'total_document_count': 8,
+        'payment_count': 8,
+        'traced_document_count': 8,
+        'untraced_document_count': 0,
+        'unclassified_line_count': 0,
+        'payment_state_anomaly_count': 0,
+        'expense_payment_ledger_gap_document_count': 0,
+        'excluded_lifecycle_document_count': 0,
+        'provenance_status': 'complete',
+        'data_quality_status': 'complete',
+      }),
+    ];
+    final source = _FakeSupplierDetailDataSource(
+      profile: _profile(
+        tenantId: tenantId,
+        supplierId: supplierId,
+        partyId: partyId,
+        name: 'Comercial Ciclo',
+        hasCredential: false,
+        accountingPolicyStatus: 'configured',
+        recognizedDocumentCount: 8,
+        freeEngagement: false,
+      ),
+      summaries: summaries,
+      timeline: _timeline(
+        tenantId: tenantId,
+        supplierId: supplierId,
+        partyId: partyId,
+      ),
+      canReadCredentialMetadata: true,
+    )..contacts = [
+        SupplierContact(
+          id: 'c-victor',
+          tenantId: tenantId,
+          supplierId: supplierId,
+          name: 'Victor',
+          role: 'Vendedor',
+          phone: '+56934867574',
+          isPrimary: true,
+          updatedAt: DateTime.utc(2026, 9, 1),
+        ),
+      ];
+
+    await pumpDetail(tester, source: source, size: const Size(1440, 900));
+
+    // Cabecera: nombre, estado y las dos acciones.
+    expect(find.text('Comercial Ciclo'), findsWidgets);
+    expect(find.text('Activo'), findsOneWidget);
+    expect(find.text('Escribir a Victor'), findsOneWidget);
+    expect(find.text('Editar'), findsOneWidget);
+    // Pestañas T-04 bajo la cabecera, con clave por sección.
+    expect(
+      find.byKey(const Key('vb-sub-tab-_SupplierDetailSection.movements')),
+      findsOneWidget,
+    );
+    expect(find.text('8 documentos'), findsWidgets);
+    // Cifras del resumen, en fila.
+    expect(find.text('REGISTRADO'), findsOneWidget);
+    expect(find.text(r'$562.757'), findsWidgets);
+    expect(find.text('al día'), findsOneWidget);
+    expect(find.text('Contacto principal'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+
+    // La tabla de movimientos en escritorio.
+    await tester.tap(
+      find.byKey(const Key('vb-sub-tab-_SupplierDetailSection.movements')),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('FECHA'), findsOneWidget);
+    expect(find.text('FV-100'), findsOneWidget);
+    expect(find.text('Documento de compra'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('back uses ReturnNavigation fallback on a direct detail link',
       (tester) async {
     tester.view.physicalSize = const Size(390, 844);
@@ -686,6 +779,96 @@ class _FakeSupplierDetailDataSource implements SupplierDetailDataSource {
 
   @override
   Future<SupplierProfile?> getProfile(String supplierId) async => profile;
+
+  List<SupplierContact> contacts = const [];
+  final List<Object> contactCommands = [];
+  String? imageUrl;
+
+  @override
+  Future<void> updateImage(String supplierId, String? imageUrl) async {
+    this.imageUrl = imageUrl;
+  }
+
+  @override
+  Future<List<SupplierContact>> listContacts(String supplierId) async =>
+      contacts;
+
+  @override
+  Future<SupplierContactCommandResult> saveContact(
+    SaveSupplierContactCommand command,
+  ) async {
+    contactCommands.add(command);
+    final saved = SupplierContact(
+      id: command.contactId ?? 'contact-${contactCommands.length}',
+      tenantId: profile.relationship.tenantId,
+      supplierId: command.supplierId,
+      name: command.name,
+      role: command.role,
+      phone: command.phone,
+      email: command.email,
+      isPrimary: command.isPrimary ?? false,
+      updatedAt: DateTime.utc(2026, 9, 3),
+    );
+    contacts = [
+      for (final contact in contacts)
+        if (contact.id != saved.id)
+          (saved.isPrimary && contact.isPrimary
+              ? SupplierContact(
+                  id: contact.id,
+                  tenantId: contact.tenantId,
+                  supplierId: contact.supplierId,
+                  name: contact.name,
+                  role: contact.role,
+                  phone: contact.phone,
+                  email: contact.email,
+                  isPrimary: false,
+                  isActive: contact.isActive,
+                  deactivatedAt: contact.deactivatedAt,
+                  updatedAt: contact.updatedAt,
+                )
+              : contact),
+      saved,
+    ];
+    return SupplierContactCommandResult(
+      operationId: command.operationId,
+      tenantId: profile.relationship.tenantId,
+      supplierId: command.supplierId,
+      contact: saved,
+      idempotentReplay: false,
+    );
+  }
+
+  @override
+  Future<SupplierContactCommandResult> setContactStatus(
+    SetSupplierContactStatusCommand command,
+  ) async {
+    contactCommands.add(command);
+    final current = contacts.firstWhere((c) => c.id == command.contactId);
+    final saved = SupplierContact(
+      id: current.id,
+      tenantId: current.tenantId,
+      supplierId: current.supplierId,
+      name: current.name,
+      role: current.role,
+      phone: current.phone,
+      email: current.email,
+      isPrimary: command.isActive && current.isPrimary,
+      isActive: command.isActive,
+      deactivatedAt: command.isActive ? null : DateTime.utc(2026, 9, 3),
+      updatedAt: DateTime.utc(2026, 9, 3, 1),
+    );
+    contacts = [
+      for (final contact in contacts)
+        if (contact.id == saved.id) saved else contact,
+    ];
+    return SupplierContactCommandResult(
+      operationId: command.operationId,
+      tenantId: profile.relationship.tenantId,
+      supplierId: command.supplierId,
+      contact: saved,
+      idempotentReplay: false,
+    );
+  }
 }
 
 SupplierProfile _profile({
@@ -871,4 +1054,184 @@ class _TrackingCredentialGateway implements SupplierCredentialGateway {
     lastParams = Map<String, dynamic>.from(params);
     return response;
   }
+}
+
+/// Contactos: las personas del proveedor con una principal. Desactivar
+/// conserva a la persona y sus chats; agregar la primera la vuelve principal.
+void _contactsTests() {
+  const tenantId = '10000000-0000-0000-0000-000000000001';
+  const supplierId = '20000000-0000-0000-0000-000000000002';
+  const partyId = '30000000-0000-0000-0000-000000000003';
+
+  SupplierContact contact({
+    required String id,
+    required String name,
+    String? role,
+    String? phone,
+    bool isPrimary = false,
+    String source = 'manual',
+  }) =>
+      SupplierContact(
+        id: id,
+        tenantId: tenantId,
+        supplierId: supplierId,
+        name: name,
+        role: role,
+        phone: phone,
+        isPrimary: isPrimary,
+        source: source,
+        updatedAt: DateTime.utc(2026, 9, 1),
+      );
+
+  Future<void> pumpContacts(
+    WidgetTester tester,
+    _FakeSupplierDetailDataSource source,
+  ) async {
+    tester.view.physicalSize = const Size(1100, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: AppTheme.resolve(
+          preset: AppearancePresets.vinabike,
+          brightness: Brightness.light,
+        ),
+        // Fuera del shell no hay Scaffold: el que pone el snackbar de cada
+        // comando lo aporta el harness.
+        home: Scaffold(
+          body: SupplierDetailPage(
+            supplierId: supplierId,
+            dataSource: source,
+            includeWorkspaceShell: false,
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 50));
+    await tester.tap(find.text('Contactos').last);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 50));
+  }
+
+  _FakeSupplierDetailDataSource source() => _FakeSupplierDetailDataSource(
+        profile: _profile(
+          tenantId: tenantId,
+          supplierId: supplierId,
+          partyId: partyId,
+          name: 'Comercial Ciclo',
+          hasCredential: false,
+          accountingPolicyStatus: 'not_applicable',
+          recognizedDocumentCount: 0,
+          freeEngagement: true,
+        ),
+        canReadCredentialMetadata: false,
+      );
+
+  testWidgets('la lista muestra a la principal y a quien llegó por WhatsApp',
+      (tester) async {
+    final data = source()
+      ..contacts = [
+        contact(
+          id: 'c-victor',
+          name: 'Victor',
+          role: 'Vendedor',
+          phone: '+56934867574',
+          isPrimary: true,
+        ),
+        contact(
+          id: 'c-fabiola',
+          name: 'Fabiola',
+          phone: '+56988155152',
+          source: 'whatsapp_backfill',
+        ),
+      ];
+    await pumpContacts(tester, data);
+
+    expect(find.text('Victor'), findsOneWidget);
+    expect(find.text('Principal'), findsOneWidget);
+    expect(find.text('Vendedor · +56934867574'), findsOneWidget);
+    expect(find.text('Fabiola'), findsOneWidget);
+    expect(find.text('Conocido por un chat de WhatsApp'), findsOneWidget);
+    // El vendedor ya no se repite en Identidad: vive aquí.
+    expect(find.text('WhatsApp del vendedor'), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('desactivar conserva a la persona y lo dice', (tester) async {
+    final data = source()
+      ..contacts = [
+        contact(id: 'c-victor', name: 'Victor', isPrimary: true),
+        contact(id: 'c-fabiola', name: 'Fabiola', phone: '+56988155152'),
+      ];
+    await pumpContacts(tester, data);
+
+    await tester.tap(
+      find.byKey(const ValueKey('supplier-contact-menu-c-fabiola')),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Desactivar'));
+    await tester.pumpAndSettle();
+
+    final command = data.contactCommands.single;
+    expect(command, isA<SetSupplierContactStatusCommand>());
+    expect((command as SetSupplierContactStatusCommand).isActive, isFalse);
+    expect(command.contactId, 'c-fabiola');
+    expect(find.text('Fabiola'), findsOneWidget);
+    expect(find.text('Inactivo'), findsOneWidget);
+    expect(find.textContaining('sus chats se conservan'), findsWidgets);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('la primera persona que se agrega es la principal',
+      (tester) async {
+    final data = source();
+    await pumpContacts(tester, data);
+
+    expect(find.text('Sin contactos todavía'), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('supplier-contacts-add')));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const ValueKey('supplier-contact-name')),
+      'Macarena',
+    );
+    await tester.enterText(
+      find.byKey(const ValueKey('supplier-contact-phone')),
+      '+56 22 510 4634',
+    );
+    await tester.tap(find.byKey(const ValueKey('supplier-contact-save')));
+    await tester.pumpAndSettle();
+
+    final command = data.contactCommands.single as SaveSupplierContactCommand;
+    expect(command.name, 'Macarena');
+    expect(command.phone, '+56 22 510 4634');
+    expect(command.isPrimary, isTrue);
+    expect(command.contactId, isNull);
+    expect(find.text('Macarena'), findsOneWidget);
+    expect(find.text('Principal'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('un número corto no se guarda', (tester) async {
+    final data = source();
+    await pumpContacts(tester, data);
+
+    await tester.tap(find.byKey(const ValueKey('supplier-contacts-add')));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const ValueKey('supplier-contact-name')),
+      'Isabel',
+    );
+    await tester.enterText(
+      find.byKey(const ValueKey('supplier-contact-phone')),
+      '1234',
+    );
+    await tester.tap(find.byKey(const ValueKey('supplier-contact-save')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Un número necesita al menos 8 dígitos'), findsOneWidget);
+    expect(data.contactCommands, isEmpty);
+    expect(tester.takeException(), isNull);
+  });
 }

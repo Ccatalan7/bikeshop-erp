@@ -1,0 +1,3194 @@
+{
+  "schema_version": 1,
+  "purpose": "Synthetic serialization and pairing cases, not OEM product compatibility",
+  "cases": [
+    {
+      "id": "separate_configurations",
+      "schema": {
+        "version": 1,
+        "columns": [
+          {
+            "key": "bsd",
+            "label": "Asiento nominal",
+            "type": "integer",
+            "unit": "mm",
+            "required": true,
+            "validation": {
+              "positive": true
+            }
+          },
+          {
+            "key": "width_min",
+            "label": "Ancho mínimo",
+            "type": "decimal",
+            "unit": "mm",
+            "required": true,
+            "validation": {
+              "positive": true
+            }
+          },
+          {
+            "key": "width_max",
+            "label": "Ancho máximo",
+            "type": "decimal",
+            "unit": "mm",
+            "required": true,
+            "validation": {
+              "positive": true
+            }
+          },
+          {
+            "key": "position",
+            "label": "Posición",
+            "type": "integer",
+            "validation": {
+              "positive": true
+            }
+          },
+          {
+            "key": "token",
+            "label": "Modelo",
+            "type": "token",
+            "allowed_values": [
+              "01",
+              "1",
+              "A",
+              "B"
+            ]
+          },
+          {
+            "key": "adapter",
+            "label": "Adaptador",
+            "type": "boolean"
+          },
+          {
+            "key": "manual",
+            "label": "Manual",
+            "type": "url"
+          }
+        ],
+        "ordered_pairs": [
+          [
+            "width_min",
+            "width_max"
+          ]
+        ],
+        "unique_by": [
+          [
+            "position"
+          ]
+        ]
+      },
+      "value": {
+        "schema_version": 1,
+        "rows": [
+          {
+            "id": "row-a",
+            "values": {
+              "bsd": "622",
+              "width_min": "28",
+              "width_max": "47",
+              "position": "1",
+              "token": "01",
+              "adapter": false
+            },
+            "sources": [
+              "https://example.test/model-a"
+            ]
+          },
+          {
+            "id": "row-b",
+            "values": {
+              "bsd": "584",
+              "width_min": "40",
+              "width_max": "62",
+              "position": "2",
+              "token": "1"
+            },
+            "sources": [
+              "https://example.test/model-b"
+            ]
+          }
+        ]
+      },
+      "valid": true,
+      "missing_required": 0
+    },
+    {
+      "id": "decimal_precision",
+      "schema": {
+        "version": 1,
+        "columns": [
+          {
+            "key": "bsd",
+            "label": "Asiento nominal",
+            "type": "integer",
+            "unit": "mm",
+            "required": true,
+            "validation": {
+              "positive": true
+            }
+          },
+          {
+            "key": "width_min",
+            "label": "Ancho mínimo",
+            "type": "decimal",
+            "unit": "mm",
+            "required": true,
+            "validation": {
+              "positive": true
+            }
+          },
+          {
+            "key": "width_max",
+            "label": "Ancho máximo",
+            "type": "decimal",
+            "unit": "mm",
+            "required": true,
+            "validation": {
+              "positive": true
+            }
+          },
+          {
+            "key": "position",
+            "label": "Posición",
+            "type": "integer",
+            "validation": {
+              "positive": true
+            }
+          },
+          {
+            "key": "token",
+            "label": "Modelo",
+            "type": "token",
+            "allowed_values": [
+              "01",
+              "1",
+              "A",
+              "B"
+            ]
+          },
+          {
+            "key": "adapter",
+            "label": "Adaptador",
+            "type": "boolean"
+          },
+          {
+            "key": "manual",
+            "label": "Manual",
+            "type": "url"
+          }
+        ],
+        "ordered_pairs": [
+          [
+            "width_min",
+            "width_max"
+          ]
+        ],
+        "unique_by": [
+          [
+            "position"
+          ]
+        ]
+      },
+      "value": {
+        "schema_version": 1,
+        "rows": [
+          {
+            "id": "row-a",
+            "values": {
+              "bsd": "622",
+              "width_min": "28",
+              "width_max": "47",
+              "position": "1",
+              "token": "01",
+              "adapter": false
+            },
+            "sources": [
+              "https://example.test/model-a"
+            ]
+          },
+          {
+            "id": "row-b",
+            "values": {
+              "bsd": "584",
+              "width_min": "9007199254740993.1",
+              "width_max": "9007199254740993.2",
+              "position": "2",
+              "token": "1"
+            },
+            "sources": [
+              "https://example.test/model-b"
+            ]
+          }
+        ]
+      },
+      "valid": true,
+      "missing_required": 0
+    },
+    {
+      "id": "canonical_decimal",
+      "schema": {
+        "version": 1,
+        "columns": [
+          {
+            "key": "bsd",
+            "label": "Asiento nominal",
+            "type": "integer",
+            "unit": "mm",
+            "required": true,
+            "validation": {
+              "positive": true
+            }
+          },
+          {
+            "key": "width_min",
+            "label": "Ancho mínimo",
+            "type": "decimal",
+            "unit": "mm",
+            "required": true,
+            "validation": {
+              "positive": true
+            }
+          },
+          {
+            "key": "width_max",
+            "label": "Ancho máximo",
+            "type": "decimal",
+            "unit": "mm",
+            "required": true,
+            "validation": {
+              "positive": true
+            }
+          },
+          {
+            "key": "position",
+            "label": "Posición",
+            "type": "integer",
+            "validation": {
+              "positive": true
+            }
+          },
+          {
+            "key": "token",
+            "label": "Modelo",
+            "type": "token",
+            "allowed_values": [
+              "01",
+              "1",
+              "A",
+              "B"
+            ]
+          },
+          {
+            "key": "adapter",
+            "label": "Adaptador",
+            "type": "boolean"
+          },
+          {
+            "key": "manual",
+            "label": "Manual",
+            "type": "url"
+          }
+        ],
+        "ordered_pairs": [
+          [
+            "width_min",
+            "width_max"
+          ]
+        ],
+        "unique_by": [
+          [
+            "position"
+          ]
+        ]
+      },
+      "value": {
+        "schema_version": 1,
+        "rows": [
+          {
+            "id": "row-a",
+            "values": {
+              "bsd": "622",
+              "width_min": "28",
+              "width_max": "47",
+              "position": "1",
+              "token": "01",
+              "adapter": false
+            },
+            "sources": [
+              "https://example.test/model-a"
+            ]
+          },
+          {
+            "id": "row-b",
+            "values": {
+              "bsd": "584",
+              "width_min": "4.00e1",
+              "width_max": "062.000",
+              "position": "2",
+              "token": "1"
+            },
+            "sources": [
+              "https://example.test/model-b"
+            ]
+          }
+        ]
+      },
+      "valid": true,
+      "missing_required": 0
+    },
+    {
+      "id": "partial_is_unknown",
+      "schema": {
+        "version": 1,
+        "columns": [
+          {
+            "key": "bsd",
+            "label": "Asiento nominal",
+            "type": "integer",
+            "unit": "mm",
+            "required": true,
+            "validation": {
+              "positive": true
+            }
+          },
+          {
+            "key": "width_min",
+            "label": "Ancho mínimo",
+            "type": "decimal",
+            "unit": "mm",
+            "required": true,
+            "validation": {
+              "positive": true
+            }
+          },
+          {
+            "key": "width_max",
+            "label": "Ancho máximo",
+            "type": "decimal",
+            "unit": "mm",
+            "required": true,
+            "validation": {
+              "positive": true
+            }
+          },
+          {
+            "key": "position",
+            "label": "Posición",
+            "type": "integer",
+            "validation": {
+              "positive": true
+            }
+          },
+          {
+            "key": "token",
+            "label": "Modelo",
+            "type": "token",
+            "allowed_values": [
+              "01",
+              "1",
+              "A",
+              "B"
+            ]
+          },
+          {
+            "key": "adapter",
+            "label": "Adaptador",
+            "type": "boolean"
+          },
+          {
+            "key": "manual",
+            "label": "Manual",
+            "type": "url"
+          }
+        ],
+        "ordered_pairs": [
+          [
+            "width_min",
+            "width_max"
+          ]
+        ],
+        "unique_by": [
+          [
+            "position"
+          ]
+        ]
+      },
+      "value": {
+        "schema_version": 1,
+        "rows": [
+          {
+            "id": "row-a",
+            "values": {
+              "bsd": "622",
+              "width_min": "28",
+              "position": "1",
+              "token": "01",
+              "adapter": false
+            },
+            "sources": [
+              "https://example.test/model-a"
+            ]
+          },
+          {
+            "id": "row-b",
+            "values": {
+              "bsd": "584",
+              "width_min": "40",
+              "width_max": "62",
+              "position": "2",
+              "token": "1"
+            },
+            "sources": [
+              "https://example.test/model-b"
+            ]
+          }
+        ]
+      },
+      "valid": true,
+      "missing_required": 1
+    },
+    {
+      "id": "json_number_is_not_exact",
+      "schema": {
+        "version": 1,
+        "columns": [
+          {
+            "key": "bsd",
+            "label": "Asiento nominal",
+            "type": "integer",
+            "unit": "mm",
+            "required": true,
+            "validation": {
+              "positive": true
+            }
+          },
+          {
+            "key": "width_min",
+            "label": "Ancho mínimo",
+            "type": "decimal",
+            "unit": "mm",
+            "required": true,
+            "validation": {
+              "positive": true
+            }
+          },
+          {
+            "key": "width_max",
+            "label": "Ancho máximo",
+            "type": "decimal",
+            "unit": "mm",
+            "required": true,
+            "validation": {
+              "positive": true
+            }
+          },
+          {
+            "key": "position",
+            "label": "Posición",
+            "type": "integer",
+            "validation": {
+              "positive": true
+            }
+          },
+          {
+            "key": "token",
+            "label": "Modelo",
+            "type": "token",
+            "allowed_values": [
+              "01",
+              "1",
+              "A",
+              "B"
+            ]
+          },
+          {
+            "key": "adapter",
+            "label": "Adaptador",
+            "type": "boolean"
+          },
+          {
+            "key": "manual",
+            "label": "Manual",
+            "type": "url"
+          }
+        ],
+        "ordered_pairs": [
+          [
+            "width_min",
+            "width_max"
+          ]
+        ],
+        "unique_by": [
+          [
+            "position"
+          ]
+        ]
+      },
+      "value": {
+        "schema_version": 1,
+        "rows": [
+          {
+            "id": "row-a",
+            "values": {
+              "bsd": "622",
+              "width_min": 28,
+              "width_max": "47",
+              "position": "1",
+              "token": "01",
+              "adapter": false
+            },
+            "sources": [
+              "https://example.test/model-a"
+            ]
+          },
+          {
+            "id": "row-b",
+            "values": {
+              "bsd": "584",
+              "width_min": "40",
+              "width_max": "62",
+              "position": "2",
+              "token": "1"
+            },
+            "sources": [
+              "https://example.test/model-b"
+            ]
+          }
+        ]
+      },
+      "valid": false,
+      "missing_required": 0
+    },
+    {
+      "id": "numeric_string_not_boolean",
+      "schema": {
+        "version": 1,
+        "columns": [
+          {
+            "key": "bsd",
+            "label": "Asiento nominal",
+            "type": "integer",
+            "unit": "mm",
+            "required": true,
+            "validation": {
+              "positive": true
+            }
+          },
+          {
+            "key": "width_min",
+            "label": "Ancho mínimo",
+            "type": "decimal",
+            "unit": "mm",
+            "required": true,
+            "validation": {
+              "positive": true
+            }
+          },
+          {
+            "key": "width_max",
+            "label": "Ancho máximo",
+            "type": "decimal",
+            "unit": "mm",
+            "required": true,
+            "validation": {
+              "positive": true
+            }
+          },
+          {
+            "key": "position",
+            "label": "Posición",
+            "type": "integer",
+            "validation": {
+              "positive": true
+            }
+          },
+          {
+            "key": "token",
+            "label": "Modelo",
+            "type": "token",
+            "allowed_values": [
+              "01",
+              "1",
+              "A",
+              "B"
+            ]
+          },
+          {
+            "key": "adapter",
+            "label": "Adaptador",
+            "type": "boolean"
+          },
+          {
+            "key": "manual",
+            "label": "Manual",
+            "type": "url"
+          }
+        ],
+        "ordered_pairs": [
+          [
+            "width_min",
+            "width_max"
+          ]
+        ],
+        "unique_by": [
+          [
+            "position"
+          ]
+        ]
+      },
+      "value": {
+        "schema_version": 1,
+        "rows": [
+          {
+            "id": "row-a",
+            "values": {
+              "bsd": "622",
+              "width_min": "28",
+              "width_max": "47",
+              "position": "1",
+              "token": "01",
+              "adapter": "false"
+            },
+            "sources": [
+              "https://example.test/model-a"
+            ]
+          },
+          {
+            "id": "row-b",
+            "values": {
+              "bsd": "584",
+              "width_min": "40",
+              "width_max": "62",
+              "position": "2",
+              "token": "1"
+            },
+            "sources": [
+              "https://example.test/model-b"
+            ]
+          }
+        ]
+      },
+      "valid": false,
+      "missing_required": 0
+    },
+    {
+      "id": "token_is_literal",
+      "schema": {
+        "version": 1,
+        "columns": [
+          {
+            "key": "bsd",
+            "label": "Asiento nominal",
+            "type": "integer",
+            "unit": "mm",
+            "required": true,
+            "validation": {
+              "positive": true
+            }
+          },
+          {
+            "key": "width_min",
+            "label": "Ancho mínimo",
+            "type": "decimal",
+            "unit": "mm",
+            "required": true,
+            "validation": {
+              "positive": true
+            }
+          },
+          {
+            "key": "width_max",
+            "label": "Ancho máximo",
+            "type": "decimal",
+            "unit": "mm",
+            "required": true,
+            "validation": {
+              "positive": true
+            }
+          },
+          {
+            "key": "position",
+            "label": "Posición",
+            "type": "integer",
+            "validation": {
+              "positive": true
+            }
+          },
+          {
+            "key": "token",
+            "label": "Modelo",
+            "type": "token",
+            "allowed_values": [
+              "01",
+              "1",
+              "A",
+              "B"
+            ]
+          },
+          {
+            "key": "adapter",
+            "label": "Adaptador",
+            "type": "boolean"
+          },
+          {
+            "key": "manual",
+            "label": "Manual",
+            "type": "url"
+          }
+        ],
+        "ordered_pairs": [
+          [
+            "width_min",
+            "width_max"
+          ]
+        ],
+        "unique_by": [
+          [
+            "position"
+          ]
+        ]
+      },
+      "value": {
+        "schema_version": 1,
+        "rows": [
+          {
+            "id": "row-a",
+            "values": {
+              "bsd": "622",
+              "width_min": "28",
+              "width_max": "47",
+              "position": "1",
+              "token": "001",
+              "adapter": false
+            },
+            "sources": [
+              "https://example.test/model-a"
+            ]
+          },
+          {
+            "id": "row-b",
+            "values": {
+              "bsd": "584",
+              "width_min": "40",
+              "width_max": "62",
+              "position": "2",
+              "token": "1"
+            },
+            "sources": [
+              "https://example.test/model-b"
+            ]
+          }
+        ]
+      },
+      "valid": false,
+      "missing_required": 0
+    },
+    {
+      "id": "foreign_cell",
+      "schema": {
+        "version": 1,
+        "columns": [
+          {
+            "key": "bsd",
+            "label": "Asiento nominal",
+            "type": "integer",
+            "unit": "mm",
+            "required": true,
+            "validation": {
+              "positive": true
+            }
+          },
+          {
+            "key": "width_min",
+            "label": "Ancho mínimo",
+            "type": "decimal",
+            "unit": "mm",
+            "required": true,
+            "validation": {
+              "positive": true
+            }
+          },
+          {
+            "key": "width_max",
+            "label": "Ancho máximo",
+            "type": "decimal",
+            "unit": "mm",
+            "required": true,
+            "validation": {
+              "positive": true
+            }
+          },
+          {
+            "key": "position",
+            "label": "Posición",
+            "type": "integer",
+            "validation": {
+              "positive": true
+            }
+          },
+          {
+            "key": "token",
+            "label": "Modelo",
+            "type": "token",
+            "allowed_values": [
+              "01",
+              "1",
+              "A",
+              "B"
+            ]
+          },
+          {
+            "key": "adapter",
+            "label": "Adaptador",
+            "type": "boolean"
+          },
+          {
+            "key": "manual",
+            "label": "Manual",
+            "type": "url"
+          }
+        ],
+        "ordered_pairs": [
+          [
+            "width_min",
+            "width_max"
+          ]
+        ],
+        "unique_by": [
+          [
+            "position"
+          ]
+        ]
+      },
+      "value": {
+        "schema_version": 1,
+        "rows": [
+          {
+            "id": "row-a",
+            "values": {
+              "bsd": "622",
+              "width_min": "28",
+              "width_max": "47",
+              "position": "1",
+              "token": "01",
+              "adapter": false,
+              "chain_speeds": [
+                "8"
+              ]
+            },
+            "sources": [
+              "https://example.test/model-a"
+            ]
+          },
+          {
+            "id": "row-b",
+            "values": {
+              "bsd": "584",
+              "width_min": "40",
+              "width_max": "62",
+              "position": "2",
+              "token": "1"
+            },
+            "sources": [
+              "https://example.test/model-b"
+            ]
+          }
+        ]
+      },
+      "valid": false,
+      "missing_required": 0
+    },
+    {
+      "id": "array_is_not_one_cell",
+      "schema": {
+        "version": 1,
+        "columns": [
+          {
+            "key": "bsd",
+            "label": "Asiento nominal",
+            "type": "integer",
+            "unit": "mm",
+            "required": true,
+            "validation": {
+              "positive": true
+            }
+          },
+          {
+            "key": "width_min",
+            "label": "Ancho mínimo",
+            "type": "decimal",
+            "unit": "mm",
+            "required": true,
+            "validation": {
+              "positive": true
+            }
+          },
+          {
+            "key": "width_max",
+            "label": "Ancho máximo",
+            "type": "decimal",
+            "unit": "mm",
+            "required": true,
+            "validation": {
+              "positive": true
+            }
+          },
+          {
+            "key": "position",
+            "label": "Posición",
+            "type": "integer",
+            "validation": {
+              "positive": true
+            }
+          },
+          {
+            "key": "token",
+            "label": "Modelo",
+            "type": "token",
+            "allowed_values": [
+              "01",
+              "1",
+              "A",
+              "B"
+            ]
+          },
+          {
+            "key": "adapter",
+            "label": "Adaptador",
+            "type": "boolean"
+          },
+          {
+            "key": "manual",
+            "label": "Manual",
+            "type": "url"
+          }
+        ],
+        "ordered_pairs": [
+          [
+            "width_min",
+            "width_max"
+          ]
+        ],
+        "unique_by": [
+          [
+            "position"
+          ]
+        ]
+      },
+      "value": {
+        "schema_version": 1,
+        "rows": [
+          {
+            "id": "row-a",
+            "values": {
+              "bsd": [
+                "584",
+                "622"
+              ],
+              "width_min": "28",
+              "width_max": "47",
+              "position": "1",
+              "token": "01",
+              "adapter": false
+            },
+            "sources": [
+              "https://example.test/model-a"
+            ]
+          },
+          {
+            "id": "row-b",
+            "values": {
+              "bsd": "584",
+              "width_min": "40",
+              "width_max": "62",
+              "position": "2",
+              "token": "1"
+            },
+            "sources": [
+              "https://example.test/model-b"
+            ]
+          }
+        ]
+      },
+      "valid": false,
+      "missing_required": 0
+    },
+    {
+      "id": "reversed_within_row",
+      "schema": {
+        "version": 1,
+        "columns": [
+          {
+            "key": "bsd",
+            "label": "Asiento nominal",
+            "type": "integer",
+            "unit": "mm",
+            "required": true,
+            "validation": {
+              "positive": true
+            }
+          },
+          {
+            "key": "width_min",
+            "label": "Ancho mínimo",
+            "type": "decimal",
+            "unit": "mm",
+            "required": true,
+            "validation": {
+              "positive": true
+            }
+          },
+          {
+            "key": "width_max",
+            "label": "Ancho máximo",
+            "type": "decimal",
+            "unit": "mm",
+            "required": true,
+            "validation": {
+              "positive": true
+            }
+          },
+          {
+            "key": "position",
+            "label": "Posición",
+            "type": "integer",
+            "validation": {
+              "positive": true
+            }
+          },
+          {
+            "key": "token",
+            "label": "Modelo",
+            "type": "token",
+            "allowed_values": [
+              "01",
+              "1",
+              "A",
+              "B"
+            ]
+          },
+          {
+            "key": "adapter",
+            "label": "Adaptador",
+            "type": "boolean"
+          },
+          {
+            "key": "manual",
+            "label": "Manual",
+            "type": "url"
+          }
+        ],
+        "ordered_pairs": [
+          [
+            "width_min",
+            "width_max"
+          ]
+        ],
+        "unique_by": [
+          [
+            "position"
+          ]
+        ]
+      },
+      "value": {
+        "schema_version": 1,
+        "rows": [
+          {
+            "id": "row-a",
+            "values": {
+              "bsd": "622",
+              "width_min": "48",
+              "width_max": "47",
+              "position": "1",
+              "token": "01",
+              "adapter": false
+            },
+            "sources": [
+              "https://example.test/model-a"
+            ]
+          },
+          {
+            "id": "row-b",
+            "values": {
+              "bsd": "584",
+              "width_min": "40",
+              "width_max": "62",
+              "position": "2",
+              "token": "1"
+            },
+            "sources": [
+              "https://example.test/model-b"
+            ]
+          }
+        ]
+      },
+      "valid": false,
+      "missing_required": 0
+    },
+    {
+      "id": "decimal_reversal_beyond_ieee",
+      "schema": {
+        "version": 1,
+        "columns": [
+          {
+            "key": "bsd",
+            "label": "Asiento nominal",
+            "type": "integer",
+            "unit": "mm",
+            "required": true,
+            "validation": {
+              "positive": true
+            }
+          },
+          {
+            "key": "width_min",
+            "label": "Ancho mínimo",
+            "type": "decimal",
+            "unit": "mm",
+            "required": true,
+            "validation": {
+              "positive": true
+            }
+          },
+          {
+            "key": "width_max",
+            "label": "Ancho máximo",
+            "type": "decimal",
+            "unit": "mm",
+            "required": true,
+            "validation": {
+              "positive": true
+            }
+          },
+          {
+            "key": "position",
+            "label": "Posición",
+            "type": "integer",
+            "validation": {
+              "positive": true
+            }
+          },
+          {
+            "key": "token",
+            "label": "Modelo",
+            "type": "token",
+            "allowed_values": [
+              "01",
+              "1",
+              "A",
+              "B"
+            ]
+          },
+          {
+            "key": "adapter",
+            "label": "Adaptador",
+            "type": "boolean"
+          },
+          {
+            "key": "manual",
+            "label": "Manual",
+            "type": "url"
+          }
+        ],
+        "ordered_pairs": [
+          [
+            "width_min",
+            "width_max"
+          ]
+        ],
+        "unique_by": [
+          [
+            "position"
+          ]
+        ]
+      },
+      "value": {
+        "schema_version": 1,
+        "rows": [
+          {
+            "id": "row-a",
+            "values": {
+              "bsd": "622",
+              "width_min": "9007199254740993.2",
+              "width_max": "9007199254740993.1",
+              "position": "1",
+              "token": "01",
+              "adapter": false
+            },
+            "sources": [
+              "https://example.test/model-a"
+            ]
+          },
+          {
+            "id": "row-b",
+            "values": {
+              "bsd": "584",
+              "width_min": "40",
+              "width_max": "62",
+              "position": "2",
+              "token": "1"
+            },
+            "sources": [
+              "https://example.test/model-b"
+            ]
+          }
+        ]
+      },
+      "valid": false,
+      "missing_required": 0
+    },
+    {
+      "id": "duplicate_position",
+      "schema": {
+        "version": 1,
+        "columns": [
+          {
+            "key": "bsd",
+            "label": "Asiento nominal",
+            "type": "integer",
+            "unit": "mm",
+            "required": true,
+            "validation": {
+              "positive": true
+            }
+          },
+          {
+            "key": "width_min",
+            "label": "Ancho mínimo",
+            "type": "decimal",
+            "unit": "mm",
+            "required": true,
+            "validation": {
+              "positive": true
+            }
+          },
+          {
+            "key": "width_max",
+            "label": "Ancho máximo",
+            "type": "decimal",
+            "unit": "mm",
+            "required": true,
+            "validation": {
+              "positive": true
+            }
+          },
+          {
+            "key": "position",
+            "label": "Posición",
+            "type": "integer",
+            "validation": {
+              "positive": true
+            }
+          },
+          {
+            "key": "token",
+            "label": "Modelo",
+            "type": "token",
+            "allowed_values": [
+              "01",
+              "1",
+              "A",
+              "B"
+            ]
+          },
+          {
+            "key": "adapter",
+            "label": "Adaptador",
+            "type": "boolean"
+          },
+          {
+            "key": "manual",
+            "label": "Manual",
+            "type": "url"
+          }
+        ],
+        "ordered_pairs": [
+          [
+            "width_min",
+            "width_max"
+          ]
+        ],
+        "unique_by": [
+          [
+            "position"
+          ]
+        ]
+      },
+      "value": {
+        "schema_version": 1,
+        "rows": [
+          {
+            "id": "row-a",
+            "values": {
+              "bsd": "622",
+              "width_min": "28",
+              "width_max": "47",
+              "position": "1",
+              "token": "01",
+              "adapter": false
+            },
+            "sources": [
+              "https://example.test/model-a"
+            ]
+          },
+          {
+            "id": "row-b",
+            "values": {
+              "bsd": "584",
+              "width_min": "40",
+              "width_max": "62",
+              "position": "1.000",
+              "token": "1"
+            },
+            "sources": [
+              "https://example.test/model-b"
+            ]
+          }
+        ]
+      },
+      "valid": false,
+      "missing_required": 0
+    },
+    {
+      "id": "duplicate_id",
+      "schema": {
+        "version": 1,
+        "columns": [
+          {
+            "key": "bsd",
+            "label": "Asiento nominal",
+            "type": "integer",
+            "unit": "mm",
+            "required": true,
+            "validation": {
+              "positive": true
+            }
+          },
+          {
+            "key": "width_min",
+            "label": "Ancho mínimo",
+            "type": "decimal",
+            "unit": "mm",
+            "required": true,
+            "validation": {
+              "positive": true
+            }
+          },
+          {
+            "key": "width_max",
+            "label": "Ancho máximo",
+            "type": "decimal",
+            "unit": "mm",
+            "required": true,
+            "validation": {
+              "positive": true
+            }
+          },
+          {
+            "key": "position",
+            "label": "Posición",
+            "type": "integer",
+            "validation": {
+              "positive": true
+            }
+          },
+          {
+            "key": "token",
+            "label": "Modelo",
+            "type": "token",
+            "allowed_values": [
+              "01",
+              "1",
+              "A",
+              "B"
+            ]
+          },
+          {
+            "key": "adapter",
+            "label": "Adaptador",
+            "type": "boolean"
+          },
+          {
+            "key": "manual",
+            "label": "Manual",
+            "type": "url"
+          }
+        ],
+        "ordered_pairs": [
+          [
+            "width_min",
+            "width_max"
+          ]
+        ],
+        "unique_by": [
+          [
+            "position"
+          ]
+        ]
+      },
+      "value": {
+        "schema_version": 1,
+        "rows": [
+          {
+            "id": "row-a",
+            "values": {
+              "bsd": "622",
+              "width_min": "28",
+              "width_max": "47",
+              "position": "1",
+              "token": "01",
+              "adapter": false
+            },
+            "sources": [
+              "https://example.test/model-a"
+            ]
+          },
+          {
+            "id": "row-a",
+            "values": {
+              "bsd": "584",
+              "width_min": "40",
+              "width_max": "62",
+              "position": "2",
+              "token": "1"
+            },
+            "sources": [
+              "https://example.test/model-b"
+            ]
+          }
+        ]
+      },
+      "valid": false,
+      "missing_required": 0
+    },
+    {
+      "id": "id_newline",
+      "schema": {
+        "version": 1,
+        "columns": [
+          {
+            "key": "bsd",
+            "label": "Asiento nominal",
+            "type": "integer",
+            "unit": "mm",
+            "required": true,
+            "validation": {
+              "positive": true
+            }
+          },
+          {
+            "key": "width_min",
+            "label": "Ancho mínimo",
+            "type": "decimal",
+            "unit": "mm",
+            "required": true,
+            "validation": {
+              "positive": true
+            }
+          },
+          {
+            "key": "width_max",
+            "label": "Ancho máximo",
+            "type": "decimal",
+            "unit": "mm",
+            "required": true,
+            "validation": {
+              "positive": true
+            }
+          },
+          {
+            "key": "position",
+            "label": "Posición",
+            "type": "integer",
+            "validation": {
+              "positive": true
+            }
+          },
+          {
+            "key": "token",
+            "label": "Modelo",
+            "type": "token",
+            "allowed_values": [
+              "01",
+              "1",
+              "A",
+              "B"
+            ]
+          },
+          {
+            "key": "adapter",
+            "label": "Adaptador",
+            "type": "boolean"
+          },
+          {
+            "key": "manual",
+            "label": "Manual",
+            "type": "url"
+          }
+        ],
+        "ordered_pairs": [
+          [
+            "width_min",
+            "width_max"
+          ]
+        ],
+        "unique_by": [
+          [
+            "position"
+          ]
+        ]
+      },
+      "value": {
+        "schema_version": 1,
+        "rows": [
+          {
+            "id": "row-a",
+            "values": {
+              "bsd": "622",
+              "width_min": "28",
+              "width_max": "47",
+              "position": "1",
+              "token": "01",
+              "adapter": false
+            },
+            "sources": [
+              "https://example.test/model-a"
+            ]
+          },
+          {
+            "id": "row-b\n",
+            "values": {
+              "bsd": "584",
+              "width_min": "40",
+              "width_max": "62",
+              "position": "2",
+              "token": "1"
+            },
+            "sources": [
+              "https://example.test/model-b"
+            ]
+          }
+        ]
+      },
+      "valid": false,
+      "missing_required": 0
+    },
+    {
+      "id": "source_credentials",
+      "schema": {
+        "version": 1,
+        "columns": [
+          {
+            "key": "bsd",
+            "label": "Asiento nominal",
+            "type": "integer",
+            "unit": "mm",
+            "required": true,
+            "validation": {
+              "positive": true
+            }
+          },
+          {
+            "key": "width_min",
+            "label": "Ancho mínimo",
+            "type": "decimal",
+            "unit": "mm",
+            "required": true,
+            "validation": {
+              "positive": true
+            }
+          },
+          {
+            "key": "width_max",
+            "label": "Ancho máximo",
+            "type": "decimal",
+            "unit": "mm",
+            "required": true,
+            "validation": {
+              "positive": true
+            }
+          },
+          {
+            "key": "position",
+            "label": "Posición",
+            "type": "integer",
+            "validation": {
+              "positive": true
+            }
+          },
+          {
+            "key": "token",
+            "label": "Modelo",
+            "type": "token",
+            "allowed_values": [
+              "01",
+              "1",
+              "A",
+              "B"
+            ]
+          },
+          {
+            "key": "adapter",
+            "label": "Adaptador",
+            "type": "boolean"
+          },
+          {
+            "key": "manual",
+            "label": "Manual",
+            "type": "url"
+          }
+        ],
+        "ordered_pairs": [
+          [
+            "width_min",
+            "width_max"
+          ]
+        ],
+        "unique_by": [
+          [
+            "position"
+          ]
+        ]
+      },
+      "value": {
+        "schema_version": 1,
+        "rows": [
+          {
+            "id": "row-a",
+            "values": {
+              "bsd": "622",
+              "width_min": "28",
+              "width_max": "47",
+              "position": "1",
+              "token": "01",
+              "adapter": false
+            },
+            "sources": [
+              "https://user:pass@example.test/source"
+            ]
+          },
+          {
+            "id": "row-b",
+            "values": {
+              "bsd": "584",
+              "width_min": "40",
+              "width_max": "62",
+              "position": "2",
+              "token": "1"
+            },
+            "sources": [
+              "https://example.test/model-b"
+            ]
+          }
+        ]
+      },
+      "valid": false,
+      "missing_required": 0
+    },
+    {
+      "id": "source_duplicate",
+      "schema": {
+        "version": 1,
+        "columns": [
+          {
+            "key": "bsd",
+            "label": "Asiento nominal",
+            "type": "integer",
+            "unit": "mm",
+            "required": true,
+            "validation": {
+              "positive": true
+            }
+          },
+          {
+            "key": "width_min",
+            "label": "Ancho mínimo",
+            "type": "decimal",
+            "unit": "mm",
+            "required": true,
+            "validation": {
+              "positive": true
+            }
+          },
+          {
+            "key": "width_max",
+            "label": "Ancho máximo",
+            "type": "decimal",
+            "unit": "mm",
+            "required": true,
+            "validation": {
+              "positive": true
+            }
+          },
+          {
+            "key": "position",
+            "label": "Posición",
+            "type": "integer",
+            "validation": {
+              "positive": true
+            }
+          },
+          {
+            "key": "token",
+            "label": "Modelo",
+            "type": "token",
+            "allowed_values": [
+              "01",
+              "1",
+              "A",
+              "B"
+            ]
+          },
+          {
+            "key": "adapter",
+            "label": "Adaptador",
+            "type": "boolean"
+          },
+          {
+            "key": "manual",
+            "label": "Manual",
+            "type": "url"
+          }
+        ],
+        "ordered_pairs": [
+          [
+            "width_min",
+            "width_max"
+          ]
+        ],
+        "unique_by": [
+          [
+            "position"
+          ]
+        ]
+      },
+      "value": {
+        "schema_version": 1,
+        "rows": [
+          {
+            "id": "row-a",
+            "values": {
+              "bsd": "622",
+              "width_min": "28",
+              "width_max": "47",
+              "position": "1",
+              "token": "01",
+              "adapter": false
+            },
+            "sources": [
+              "https://example.test/source",
+              "https://example.test/source"
+            ]
+          },
+          {
+            "id": "row-b",
+            "values": {
+              "bsd": "584",
+              "width_min": "40",
+              "width_max": "62",
+              "position": "2",
+              "token": "1"
+            },
+            "sources": [
+              "https://example.test/model-b"
+            ]
+          }
+        ]
+      },
+      "valid": false,
+      "missing_required": 0
+    },
+    {
+      "id": "source_invalid_escape",
+      "schema": {
+        "version": 1,
+        "columns": [
+          {
+            "key": "bsd",
+            "label": "Asiento nominal",
+            "type": "integer",
+            "unit": "mm",
+            "required": true,
+            "validation": {
+              "positive": true
+            }
+          },
+          {
+            "key": "width_min",
+            "label": "Ancho mínimo",
+            "type": "decimal",
+            "unit": "mm",
+            "required": true,
+            "validation": {
+              "positive": true
+            }
+          },
+          {
+            "key": "width_max",
+            "label": "Ancho máximo",
+            "type": "decimal",
+            "unit": "mm",
+            "required": true,
+            "validation": {
+              "positive": true
+            }
+          },
+          {
+            "key": "position",
+            "label": "Posición",
+            "type": "integer",
+            "validation": {
+              "positive": true
+            }
+          },
+          {
+            "key": "token",
+            "label": "Modelo",
+            "type": "token",
+            "allowed_values": [
+              "01",
+              "1",
+              "A",
+              "B"
+            ]
+          },
+          {
+            "key": "adapter",
+            "label": "Adaptador",
+            "type": "boolean"
+          },
+          {
+            "key": "manual",
+            "label": "Manual",
+            "type": "url"
+          }
+        ],
+        "ordered_pairs": [
+          [
+            "width_min",
+            "width_max"
+          ]
+        ],
+        "unique_by": [
+          [
+            "position"
+          ]
+        ]
+      },
+      "value": {
+        "schema_version": 1,
+        "rows": [
+          {
+            "id": "row-a",
+            "values": {
+              "bsd": "622",
+              "width_min": "28",
+              "width_max": "47",
+              "position": "1",
+              "token": "01",
+              "adapter": false
+            },
+            "sources": [
+              "https://example.test/%0X"
+            ]
+          },
+          {
+            "id": "row-b",
+            "values": {
+              "bsd": "584",
+              "width_min": "40",
+              "width_max": "62",
+              "position": "2",
+              "token": "1"
+            },
+            "sources": [
+              "https://example.test/model-b"
+            ]
+          }
+        ]
+      },
+      "valid": false,
+      "missing_required": 0
+    },
+    {
+      "id": "number_comma_wire",
+      "schema": {
+        "version": 1,
+        "columns": [
+          {
+            "key": "bsd",
+            "label": "Asiento nominal",
+            "type": "integer",
+            "unit": "mm",
+            "required": true,
+            "validation": {
+              "positive": true
+            }
+          },
+          {
+            "key": "width_min",
+            "label": "Ancho mínimo",
+            "type": "decimal",
+            "unit": "mm",
+            "required": true,
+            "validation": {
+              "positive": true
+            }
+          },
+          {
+            "key": "width_max",
+            "label": "Ancho máximo",
+            "type": "decimal",
+            "unit": "mm",
+            "required": true,
+            "validation": {
+              "positive": true
+            }
+          },
+          {
+            "key": "position",
+            "label": "Posición",
+            "type": "integer",
+            "validation": {
+              "positive": true
+            }
+          },
+          {
+            "key": "token",
+            "label": "Modelo",
+            "type": "token",
+            "allowed_values": [
+              "01",
+              "1",
+              "A",
+              "B"
+            ]
+          },
+          {
+            "key": "adapter",
+            "label": "Adaptador",
+            "type": "boolean"
+          },
+          {
+            "key": "manual",
+            "label": "Manual",
+            "type": "url"
+          }
+        ],
+        "ordered_pairs": [
+          [
+            "width_min",
+            "width_max"
+          ]
+        ],
+        "unique_by": [
+          [
+            "position"
+          ]
+        ]
+      },
+      "value": {
+        "schema_version": 1,
+        "rows": [
+          {
+            "id": "row-a",
+            "values": {
+              "bsd": "622",
+              "width_min": "28,5",
+              "width_max": "47",
+              "position": "1",
+              "token": "01",
+              "adapter": false
+            },
+            "sources": [
+              "https://example.test/model-a"
+            ]
+          },
+          {
+            "id": "row-b",
+            "values": {
+              "bsd": "584",
+              "width_min": "40",
+              "width_max": "62",
+              "position": "2",
+              "token": "1"
+            },
+            "sources": [
+              "https://example.test/model-b"
+            ]
+          }
+        ]
+      },
+      "valid": false,
+      "missing_required": 0
+    },
+    {
+      "id": "number_space_wire",
+      "schema": {
+        "version": 1,
+        "columns": [
+          {
+            "key": "bsd",
+            "label": "Asiento nominal",
+            "type": "integer",
+            "unit": "mm",
+            "required": true,
+            "validation": {
+              "positive": true
+            }
+          },
+          {
+            "key": "width_min",
+            "label": "Ancho mínimo",
+            "type": "decimal",
+            "unit": "mm",
+            "required": true,
+            "validation": {
+              "positive": true
+            }
+          },
+          {
+            "key": "width_max",
+            "label": "Ancho máximo",
+            "type": "decimal",
+            "unit": "mm",
+            "required": true,
+            "validation": {
+              "positive": true
+            }
+          },
+          {
+            "key": "position",
+            "label": "Posición",
+            "type": "integer",
+            "validation": {
+              "positive": true
+            }
+          },
+          {
+            "key": "token",
+            "label": "Modelo",
+            "type": "token",
+            "allowed_values": [
+              "01",
+              "1",
+              "A",
+              "B"
+            ]
+          },
+          {
+            "key": "adapter",
+            "label": "Adaptador",
+            "type": "boolean"
+          },
+          {
+            "key": "manual",
+            "label": "Manual",
+            "type": "url"
+          }
+        ],
+        "ordered_pairs": [
+          [
+            "width_min",
+            "width_max"
+          ]
+        ],
+        "unique_by": [
+          [
+            "position"
+          ]
+        ]
+      },
+      "value": {
+        "schema_version": 1,
+        "rows": [
+          {
+            "id": "row-a",
+            "values": {
+              "bsd": "622",
+              "width_min": " 28",
+              "width_max": "47",
+              "position": "1",
+              "token": "01",
+              "adapter": false
+            },
+            "sources": [
+              "https://example.test/model-a"
+            ]
+          },
+          {
+            "id": "row-b",
+            "values": {
+              "bsd": "584",
+              "width_min": "40",
+              "width_max": "62",
+              "position": "2",
+              "token": "1"
+            },
+            "sources": [
+              "https://example.test/model-b"
+            ]
+          }
+        ]
+      },
+      "valid": false,
+      "missing_required": 0
+    },
+    {
+      "id": "negative_dimension",
+      "schema": {
+        "version": 1,
+        "columns": [
+          {
+            "key": "bsd",
+            "label": "Asiento nominal",
+            "type": "integer",
+            "unit": "mm",
+            "required": true,
+            "validation": {
+              "positive": true
+            }
+          },
+          {
+            "key": "width_min",
+            "label": "Ancho mínimo",
+            "type": "decimal",
+            "unit": "mm",
+            "required": true,
+            "validation": {
+              "positive": true
+            }
+          },
+          {
+            "key": "width_max",
+            "label": "Ancho máximo",
+            "type": "decimal",
+            "unit": "mm",
+            "required": true,
+            "validation": {
+              "positive": true
+            }
+          },
+          {
+            "key": "position",
+            "label": "Posición",
+            "type": "integer",
+            "validation": {
+              "positive": true
+            }
+          },
+          {
+            "key": "token",
+            "label": "Modelo",
+            "type": "token",
+            "allowed_values": [
+              "01",
+              "1",
+              "A",
+              "B"
+            ]
+          },
+          {
+            "key": "adapter",
+            "label": "Adaptador",
+            "type": "boolean"
+          },
+          {
+            "key": "manual",
+            "label": "Manual",
+            "type": "url"
+          }
+        ],
+        "ordered_pairs": [
+          [
+            "width_min",
+            "width_max"
+          ]
+        ],
+        "unique_by": [
+          [
+            "position"
+          ]
+        ]
+      },
+      "value": {
+        "schema_version": 1,
+        "rows": [
+          {
+            "id": "row-a",
+            "values": {
+              "bsd": "622",
+              "width_min": "-1",
+              "width_max": "47",
+              "position": "1",
+              "token": "01",
+              "adapter": false
+            },
+            "sources": [
+              "https://example.test/model-a"
+            ]
+          },
+          {
+            "id": "row-b",
+            "values": {
+              "bsd": "584",
+              "width_min": "40",
+              "width_max": "62",
+              "position": "2",
+              "token": "1"
+            },
+            "sources": [
+              "https://example.test/model-b"
+            ]
+          }
+        ]
+      },
+      "valid": false,
+      "missing_required": 0
+    },
+    {
+      "id": "fractional_count",
+      "schema": {
+        "version": 1,
+        "columns": [
+          {
+            "key": "bsd",
+            "label": "Asiento nominal",
+            "type": "integer",
+            "unit": "mm",
+            "required": true,
+            "validation": {
+              "positive": true
+            }
+          },
+          {
+            "key": "width_min",
+            "label": "Ancho mínimo",
+            "type": "decimal",
+            "unit": "mm",
+            "required": true,
+            "validation": {
+              "positive": true
+            }
+          },
+          {
+            "key": "width_max",
+            "label": "Ancho máximo",
+            "type": "decimal",
+            "unit": "mm",
+            "required": true,
+            "validation": {
+              "positive": true
+            }
+          },
+          {
+            "key": "position",
+            "label": "Posición",
+            "type": "integer",
+            "validation": {
+              "positive": true
+            }
+          },
+          {
+            "key": "token",
+            "label": "Modelo",
+            "type": "token",
+            "allowed_values": [
+              "01",
+              "1",
+              "A",
+              "B"
+            ]
+          },
+          {
+            "key": "adapter",
+            "label": "Adaptador",
+            "type": "boolean"
+          },
+          {
+            "key": "manual",
+            "label": "Manual",
+            "type": "url"
+          }
+        ],
+        "ordered_pairs": [
+          [
+            "width_min",
+            "width_max"
+          ]
+        ],
+        "unique_by": [
+          [
+            "position"
+          ]
+        ]
+      },
+      "value": {
+        "schema_version": 1,
+        "rows": [
+          {
+            "id": "row-a",
+            "values": {
+              "bsd": "622",
+              "width_min": "28",
+              "width_max": "47",
+              "position": "1.5",
+              "token": "01",
+              "adapter": false
+            },
+            "sources": [
+              "https://example.test/model-a"
+            ]
+          },
+          {
+            "id": "row-b",
+            "values": {
+              "bsd": "584",
+              "width_min": "40",
+              "width_max": "62",
+              "position": "2",
+              "token": "1"
+            },
+            "sources": [
+              "https://example.test/model-b"
+            ]
+          }
+        ]
+      },
+      "valid": false,
+      "missing_required": 0
+    },
+    {
+      "id": "nonfinite",
+      "schema": {
+        "version": 1,
+        "columns": [
+          {
+            "key": "bsd",
+            "label": "Asiento nominal",
+            "type": "integer",
+            "unit": "mm",
+            "required": true,
+            "validation": {
+              "positive": true
+            }
+          },
+          {
+            "key": "width_min",
+            "label": "Ancho mínimo",
+            "type": "decimal",
+            "unit": "mm",
+            "required": true,
+            "validation": {
+              "positive": true
+            }
+          },
+          {
+            "key": "width_max",
+            "label": "Ancho máximo",
+            "type": "decimal",
+            "unit": "mm",
+            "required": true,
+            "validation": {
+              "positive": true
+            }
+          },
+          {
+            "key": "position",
+            "label": "Posición",
+            "type": "integer",
+            "validation": {
+              "positive": true
+            }
+          },
+          {
+            "key": "token",
+            "label": "Modelo",
+            "type": "token",
+            "allowed_values": [
+              "01",
+              "1",
+              "A",
+              "B"
+            ]
+          },
+          {
+            "key": "adapter",
+            "label": "Adaptador",
+            "type": "boolean"
+          },
+          {
+            "key": "manual",
+            "label": "Manual",
+            "type": "url"
+          }
+        ],
+        "ordered_pairs": [
+          [
+            "width_min",
+            "width_max"
+          ]
+        ],
+        "unique_by": [
+          [
+            "position"
+          ]
+        ]
+      },
+      "value": {
+        "schema_version": 1,
+        "rows": [
+          {
+            "id": "row-a",
+            "values": {
+              "bsd": "622",
+              "width_min": "Infinity",
+              "width_max": "47",
+              "position": "1",
+              "token": "01",
+              "adapter": false
+            },
+            "sources": [
+              "https://example.test/model-a"
+            ]
+          },
+          {
+            "id": "row-b",
+            "values": {
+              "bsd": "584",
+              "width_min": "40",
+              "width_max": "62",
+              "position": "2",
+              "token": "1"
+            },
+            "sources": [
+              "https://example.test/model-b"
+            ]
+          }
+        ]
+      },
+      "valid": false,
+      "missing_required": 0
+    },
+    {
+      "id": "empty_row",
+      "schema": {
+        "version": 1,
+        "columns": [
+          {
+            "key": "bsd",
+            "label": "Asiento nominal",
+            "type": "integer",
+            "unit": "mm",
+            "required": true,
+            "validation": {
+              "positive": true
+            }
+          },
+          {
+            "key": "width_min",
+            "label": "Ancho mínimo",
+            "type": "decimal",
+            "unit": "mm",
+            "required": true,
+            "validation": {
+              "positive": true
+            }
+          },
+          {
+            "key": "width_max",
+            "label": "Ancho máximo",
+            "type": "decimal",
+            "unit": "mm",
+            "required": true,
+            "validation": {
+              "positive": true
+            }
+          },
+          {
+            "key": "position",
+            "label": "Posición",
+            "type": "integer",
+            "validation": {
+              "positive": true
+            }
+          },
+          {
+            "key": "token",
+            "label": "Modelo",
+            "type": "token",
+            "allowed_values": [
+              "01",
+              "1",
+              "A",
+              "B"
+            ]
+          },
+          {
+            "key": "adapter",
+            "label": "Adaptador",
+            "type": "boolean"
+          },
+          {
+            "key": "manual",
+            "label": "Manual",
+            "type": "url"
+          }
+        ],
+        "ordered_pairs": [
+          [
+            "width_min",
+            "width_max"
+          ]
+        ],
+        "unique_by": [
+          [
+            "position"
+          ]
+        ]
+      },
+      "value": {
+        "schema_version": 1,
+        "rows": [
+          {
+            "id": "row-a",
+            "values": {},
+            "sources": [
+              "https://example.test/model-a"
+            ]
+          },
+          {
+            "id": "row-b",
+            "values": {
+              "bsd": "584",
+              "width_min": "40",
+              "width_max": "62",
+              "position": "2",
+              "token": "1"
+            },
+            "sources": [
+              "https://example.test/model-b"
+            ]
+          }
+        ]
+      },
+      "valid": false,
+      "missing_required": 0
+    },
+    {
+      "id": "null_is_omission_only",
+      "schema": {
+        "version": 1,
+        "columns": [
+          {
+            "key": "bsd",
+            "label": "Asiento nominal",
+            "type": "integer",
+            "unit": "mm",
+            "required": true,
+            "validation": {
+              "positive": true
+            }
+          },
+          {
+            "key": "width_min",
+            "label": "Ancho mínimo",
+            "type": "decimal",
+            "unit": "mm",
+            "required": true,
+            "validation": {
+              "positive": true
+            }
+          },
+          {
+            "key": "width_max",
+            "label": "Ancho máximo",
+            "type": "decimal",
+            "unit": "mm",
+            "required": true,
+            "validation": {
+              "positive": true
+            }
+          },
+          {
+            "key": "position",
+            "label": "Posición",
+            "type": "integer",
+            "validation": {
+              "positive": true
+            }
+          },
+          {
+            "key": "token",
+            "label": "Modelo",
+            "type": "token",
+            "allowed_values": [
+              "01",
+              "1",
+              "A",
+              "B"
+            ]
+          },
+          {
+            "key": "adapter",
+            "label": "Adaptador",
+            "type": "boolean"
+          },
+          {
+            "key": "manual",
+            "label": "Manual",
+            "type": "url"
+          }
+        ],
+        "ordered_pairs": [
+          [
+            "width_min",
+            "width_max"
+          ]
+        ],
+        "unique_by": [
+          [
+            "position"
+          ]
+        ]
+      },
+      "value": {
+        "schema_version": 1,
+        "rows": [
+          {
+            "id": "row-a",
+            "values": {
+              "bsd": "622",
+              "width_min": null,
+              "width_max": "47",
+              "position": "1",
+              "token": "01",
+              "adapter": false
+            },
+            "sources": [
+              "https://example.test/model-a"
+            ]
+          },
+          {
+            "id": "row-b",
+            "values": {
+              "bsd": "584",
+              "width_min": "40",
+              "width_max": "62",
+              "position": "2",
+              "token": "1"
+            },
+            "sources": [
+              "https://example.test/model-b"
+            ]
+          }
+        ]
+      },
+      "valid": false,
+      "missing_required": 0
+    },
+    {
+      "id": "future_version",
+      "schema": {
+        "version": 1,
+        "columns": [
+          {
+            "key": "bsd",
+            "label": "Asiento nominal",
+            "type": "integer",
+            "unit": "mm",
+            "required": true,
+            "validation": {
+              "positive": true
+            }
+          },
+          {
+            "key": "width_min",
+            "label": "Ancho mínimo",
+            "type": "decimal",
+            "unit": "mm",
+            "required": true,
+            "validation": {
+              "positive": true
+            }
+          },
+          {
+            "key": "width_max",
+            "label": "Ancho máximo",
+            "type": "decimal",
+            "unit": "mm",
+            "required": true,
+            "validation": {
+              "positive": true
+            }
+          },
+          {
+            "key": "position",
+            "label": "Posición",
+            "type": "integer",
+            "validation": {
+              "positive": true
+            }
+          },
+          {
+            "key": "token",
+            "label": "Modelo",
+            "type": "token",
+            "allowed_values": [
+              "01",
+              "1",
+              "A",
+              "B"
+            ]
+          },
+          {
+            "key": "adapter",
+            "label": "Adaptador",
+            "type": "boolean"
+          },
+          {
+            "key": "manual",
+            "label": "Manual",
+            "type": "url"
+          }
+        ],
+        "ordered_pairs": [
+          [
+            "width_min",
+            "width_max"
+          ]
+        ],
+        "unique_by": [
+          [
+            "position"
+          ]
+        ]
+      },
+      "value": {
+        "schema_version": 2,
+        "rows": [
+          {
+            "id": "row-a",
+            "values": {
+              "bsd": "622",
+              "width_min": "28",
+              "width_max": "47",
+              "position": "1",
+              "token": "01",
+              "adapter": false
+            },
+            "sources": [
+              "https://example.test/model-a"
+            ]
+          },
+          {
+            "id": "row-b",
+            "values": {
+              "bsd": "584",
+              "width_min": "40",
+              "width_max": "62",
+              "position": "2",
+              "token": "1"
+            },
+            "sources": [
+              "https://example.test/model-b"
+            ]
+          }
+        ]
+      },
+      "valid": false,
+      "missing_required": 0
+    },
+    {
+      "id": "extra_envelope_field",
+      "schema": {
+        "version": 1,
+        "columns": [
+          {
+            "key": "bsd",
+            "label": "Asiento nominal",
+            "type": "integer",
+            "unit": "mm",
+            "required": true,
+            "validation": {
+              "positive": true
+            }
+          },
+          {
+            "key": "width_min",
+            "label": "Ancho mínimo",
+            "type": "decimal",
+            "unit": "mm",
+            "required": true,
+            "validation": {
+              "positive": true
+            }
+          },
+          {
+            "key": "width_max",
+            "label": "Ancho máximo",
+            "type": "decimal",
+            "unit": "mm",
+            "required": true,
+            "validation": {
+              "positive": true
+            }
+          },
+          {
+            "key": "position",
+            "label": "Posición",
+            "type": "integer",
+            "validation": {
+              "positive": true
+            }
+          },
+          {
+            "key": "token",
+            "label": "Modelo",
+            "type": "token",
+            "allowed_values": [
+              "01",
+              "1",
+              "A",
+              "B"
+            ]
+          },
+          {
+            "key": "adapter",
+            "label": "Adaptador",
+            "type": "boolean"
+          },
+          {
+            "key": "manual",
+            "label": "Manual",
+            "type": "url"
+          }
+        ],
+        "ordered_pairs": [
+          [
+            "width_min",
+            "width_max"
+          ]
+        ],
+        "unique_by": [
+          [
+            "position"
+          ]
+        ]
+      },
+      "value": {
+        "schema_version": 1,
+        "rows": [
+          {
+            "id": "row-a",
+            "values": {
+              "bsd": "622",
+              "width_min": "28",
+              "width_max": "47",
+              "position": "1",
+              "token": "01",
+              "adapter": false
+            },
+            "sources": [
+              "https://example.test/model-a"
+            ]
+          },
+          {
+            "id": "row-b",
+            "values": {
+              "bsd": "584",
+              "width_min": "40",
+              "width_max": "62",
+              "position": "2",
+              "token": "1"
+            },
+            "sources": [
+              "https://example.test/model-b"
+            ]
+          }
+        ],
+        "compatible": true
+      },
+      "valid": false,
+      "missing_required": 0
+    },
+    {
+      "id": "nested_object",
+      "schema": {
+        "version": 1,
+        "columns": [
+          {
+            "key": "bsd",
+            "label": "Asiento nominal",
+            "type": "integer",
+            "unit": "mm",
+            "required": true,
+            "validation": {
+              "positive": true
+            }
+          },
+          {
+            "key": "width_min",
+            "label": "Ancho mínimo",
+            "type": "decimal",
+            "unit": "mm",
+            "required": true,
+            "validation": {
+              "positive": true
+            }
+          },
+          {
+            "key": "width_max",
+            "label": "Ancho máximo",
+            "type": "decimal",
+            "unit": "mm",
+            "required": true,
+            "validation": {
+              "positive": true
+            }
+          },
+          {
+            "key": "position",
+            "label": "Posición",
+            "type": "integer",
+            "validation": {
+              "positive": true
+            }
+          },
+          {
+            "key": "token",
+            "label": "Modelo",
+            "type": "token",
+            "allowed_values": [
+              "01",
+              "1",
+              "A",
+              "B"
+            ]
+          },
+          {
+            "key": "adapter",
+            "label": "Adaptador",
+            "type": "boolean"
+          },
+          {
+            "key": "manual",
+            "label": "Manual",
+            "type": "url"
+          }
+        ],
+        "ordered_pairs": [
+          [
+            "width_min",
+            "width_max"
+          ]
+        ],
+        "unique_by": [
+          [
+            "position"
+          ]
+        ]
+      },
+      "value": {
+        "schema_version": 1,
+        "rows": [
+          {
+            "id": "row-a",
+            "values": {
+              "bsd": "622",
+              "width_min": "28",
+              "width_max": "47",
+              "position": "1",
+              "token": {
+                "value": "01"
+              },
+              "adapter": false
+            },
+            "sources": [
+              "https://example.test/model-a"
+            ]
+          },
+          {
+            "id": "row-b",
+            "values": {
+              "bsd": "584",
+              "width_min": "40",
+              "width_max": "62",
+              "position": "2",
+              "token": "1"
+            },
+            "sources": [
+              "https://example.test/model-b"
+            ]
+          }
+        ]
+      },
+      "valid": false,
+      "missing_required": 0
+    },
+    {
+      "id": "zero_tiny_exponent",
+      "schema": {
+        "version": 1,
+        "columns": [
+          {
+            "key": "length",
+            "label": "Longitud",
+            "type": "decimal"
+          }
+        ]
+      },
+      "value": {
+        "schema_version": 1,
+        "rows": [
+          {
+            "id": "x",
+            "values": {
+              "length": "0e-9999999999999999"
+            },
+            "sources": []
+          }
+        ]
+      },
+      "valid": false,
+      "missing_required": 0
+    },
+    {
+      "id": "zero_input_scale_limit",
+      "schema": {
+        "version": 1,
+        "columns": [
+          {
+            "key": "length",
+            "label": "Longitud",
+            "type": "decimal"
+          }
+        ]
+      },
+      "value": {
+        "schema_version": 1,
+        "rows": [
+          {
+            "id": "x",
+            "values": {
+              "length": "0e-16383"
+            },
+            "sources": []
+          }
+        ]
+      },
+      "valid": true,
+      "missing_required": 0
+    },
+    {
+      "id": "zero_input_scale_overflow",
+      "schema": {
+        "version": 1,
+        "columns": [
+          {
+            "key": "length",
+            "label": "Longitud",
+            "type": "decimal"
+          }
+        ]
+      },
+      "value": {
+        "schema_version": 1,
+        "rows": [
+          {
+            "id": "x",
+            "values": {
+              "length": "0e-16384"
+            },
+            "sources": []
+          }
+        ]
+      },
+      "valid": false,
+      "missing_required": 0
+    },
+    {
+      "id": "zero_large_exponent",
+      "schema": {
+        "version": 1,
+        "columns": [
+          {
+            "key": "length",
+            "label": "Longitud",
+            "type": "decimal"
+          }
+        ]
+      },
+      "value": {
+        "schema_version": 1,
+        "rows": [
+          {
+            "id": "x",
+            "values": {
+              "length": "0e131073"
+            },
+            "sources": []
+          }
+        ]
+      },
+      "valid": true,
+      "missing_required": 0
+    },
+    {
+      "id": "zero_exponent_limit",
+      "schema": {
+        "version": 1,
+        "columns": [
+          {
+            "key": "length",
+            "label": "Longitud",
+            "type": "decimal"
+          }
+        ]
+      },
+      "value": {
+        "schema_version": 1,
+        "rows": [
+          {
+            "id": "x",
+            "values": {
+              "length": "0e1073741823"
+            },
+            "sources": []
+          }
+        ]
+      },
+      "valid": true,
+      "missing_required": 0
+    },
+    {
+      "id": "zero_exponent_overflow",
+      "schema": {
+        "version": 1,
+        "columns": [
+          {
+            "key": "length",
+            "label": "Longitud",
+            "type": "decimal"
+          }
+        ]
+      },
+      "value": {
+        "schema_version": 1,
+        "rows": [
+          {
+            "id": "x",
+            "values": {
+              "length": "0e1073741824"
+            },
+            "sources": []
+          }
+        ]
+      },
+      "valid": false,
+      "missing_required": 0
+    }
+  ]
+}

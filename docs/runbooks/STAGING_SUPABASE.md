@@ -11,7 +11,7 @@ production-compatibility evidence. The executable command guide is
 | Production | `xzdvtzdqjeyqxnkqprtf` | Authoritative | Current schema, migration history, provider configuration, and business invariants |
 | Staging | `bczzjhjrpmtpgwdvlbut` | Dormant and non-authoritative | Explicitly approved experiments only |
 | Local | Local Supabase stack | Disposable and reusable | Fast development, canonical-schema maintenance, and focused pgTAP |
-| Production-derived clone | Recorded per validation session | Disposable | Off-production compatibility testing against a production schema snapshot |
+| Production-derived clone | N/A | Deprecated | Never a compatibility or completion gate |
 
 The repository remains linked to production for deployment metadata. Do not
 relink it merely to inspect another environment.
@@ -25,8 +25,9 @@ owner may reactivate it explicitly.
 ## Non-negotiable boundaries
 
 - Production is the compatibility source of truth.
-- `supabase/sql/core_schema.sql` is the required idempotent bootstrap mirror,
-  not proof of the live deployed schema.
+- `supabase/sql/core_schema.sql` is an incomplete historical and best-effort
+  local reference. It is neither reproducible nor proof of the live deployed
+  schema, and it is never applied to a hosted database.
 - All SQL reads and writes use the guarded repository tooling described in
   `docs/development/SUPABASE_WORKFLOW.md`. Do not run raw Supabase CLI SQL or
   direct ad hoc `psql` commands against hosted environments.
@@ -62,57 +63,25 @@ required by the risk and release scope.
 
 1. **Fast local loop:** reuse the prepared local database and run only affected
    pgTAP files. This is the default while editing.
-2. **Canonical bootstrap gate:** rebuild from `core_schema.sql` and run the full
-   pgTAP suite only when the canonical schema changed or at a release/checkpoint
-   boundary. This validates the bootstrap mirror, not production compatibility.
-3. **Production-derived compatibility session:** for database behavior intended
-   for production, restore a schema-only dump from the verified production
-   project into a disposable database, apply only migrations absent from live
-   history, and run affected pgTAP contracts there.
-4. **Live read-only evidence:** inspect current migration history, catalogs,
+2. **Legacy local-fixture gate:** when useful, rebuild the disposable local
+   database from `core_schema.sql` and run pgTAP. This checks only the historical
+   fixture's internal consistency; it cannot establish completeness or
+   production compatibility.
+3. **Live read-only evidence:** inspect current migration history, catalogs,
    ACLs, configuration, counts, and business invariants before deployment.
-5. **Live deployment and read-back:** when authorized, apply the smallest
+4. **Live deployment and read-back:** when authorized, apply the smallest
    reviewed forward change, verify exact definitions and invariants, then
    register migration history.
 
-A schema-only clone contains no production customer data and does not reproduce
-live rows or every provider-managed behavior. Never describe it as fully
-representative; pair it with live read-only evidence and post-deployment
-verification.
+## Production-derived snapshots are deprecated
 
-## Reuse of a production-derived snapshot
-
-“Fresh” means that the snapshot has known provenance and still matches the
-production schema/migration identity recorded at the start of one coherent
-validation session. It does **not** mean taking a new dump for every pgTAP run.
-
-Record outside Git:
-
-- production project ref;
-- dump UTC time and SHA-256;
-- PostgreSQL version;
-- production migration head or equivalent schema fingerprint;
-- migrations absent from production when the session started.
-
-Reuse the same dump and prepared clone while that identity is unchanged. Rerun
-pgTAP, change test selectors, reset the disposable database from the same dump,
-and reapply an idempotent candidate migration without downloading production
-again.
-
-Use `scripts/db/production_validation.sh` for this cache. `prepare` performs a
-cheap live read-only identity check and downloads schema only on a cache miss;
-`reuse` and `test` make no production/network call. `refresh` is the explicit
-forced-capture operation.
-
-Take a new dump only when:
-
-- production migration history or the recorded schema fingerprint changed;
-- the prior dump has missing, unknown, or stale provenance;
-- the dump or disposable database is corrupt or incomplete; or
-- a final high-risk gate explicitly requires a newer snapshot.
-
-Do not redump merely because a test failed, a selector changed, the candidate
-SQL changed, or pgTAP is being rerun.
+`scripts/db/production_validation.sh` remains only as historical tooling; agents
+do not run it for implementation, release readiness, or completion evidence.
+A schema-only restore omits the very state that repeatedly distinguishes the
+live system: migration-seeded rows, materialized-view population, live history,
+provider-managed behavior and real data distributions. It can therefore pass a
+change that fails live or fail before the candidate SQL is reached. Local tests
+and live read-only checks must be reported separately and honestly.
 
 ## Production change contract
 
@@ -121,20 +90,25 @@ For a production database change:
 1. Inspect the intended target and relevant business evidence read-only.
 2. Search for existing objects and verify the live definition before designing
    a new one.
-3. Create a unique, idempotent forward migration and mirror the same
-   objects/logic in `supabase/sql/core_schema.sql`.
+3. Create one unique, idempotent standalone forward migration under
+   `supabase/migrations/`. Updating `core_schema.sql` is optional historical
+   curation and never part of the deploy gate.
 4. Document forward behavior, recovery behavior, lock/timeout risk, and any
    backfill scope.
 5. Run focused local tests during development.
-6. Run the affected contracts in one production-derived validation session and
-   combine them with live read-only checks.
+6. Query production read-only for the live migration head, exact dependency
+   definitions, ACLs, catalogs, materialized state and relevant business
+   invariants. Do not claim pre-deploy proof for behavior that only the new SQL
+   can provide.
 7. Immediately before deployment, verify the production ref, migration head,
    candidate checksum, and no-PII business fingerprint.
-8. Apply one smallest guarded migration at a time.
+8. Apply one smallest guarded migration at a time through
+   `scripts/db/deploy_migration.sh`, with executable read-back assertions.
 9. Read back functions, triggers, policies, grants, indexes, constraints, and
    affected business invariants before advancing.
-10. Register the exact migration version only after live read-back succeeds,
-    then run health checks and the relevant application smoke.
+10. Let that guarded command register the exact migration version only after
+    live read-back succeeds; confirm the remote `APPLIED` stamp, then run health
+    checks and the relevant application smoke.
 
 Backfills must be scoped, idempotent, auditable, previewed, and safe to replay.
 Stop on unexplained drift; never guess through a partial repair.
@@ -172,10 +146,11 @@ Human intervention is valid only when:
 
 ## Staging reactivation
 
-Only the owner may reactivate staging. Reactivation starts by rebuilding it from
-a current production-derived schema and proving catalog, extension, policy,
-grant, configuration, and fixture parity. Until that evidence exists, staging
-tests remain diagnostic and cannot support release-readiness claims.
+Only the owner may reactivate staging. Reactivation starts by comparing it
+directly with guarded live production catalogs and migration history, then
+installing reviewed forward migrations and synthetic fixtures. Until live
+read-back proves catalog, extension, policy, grant and configuration parity,
+staging tests remain diagnostic and cannot support release-readiness claims.
 
 Never import production customer names, emails, phone numbers, invoices,
 messages, files, or credentials. Hosted browser journeys use dedicated

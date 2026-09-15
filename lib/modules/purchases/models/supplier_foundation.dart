@@ -1343,6 +1343,10 @@ class SupplierLegacyOperationalDetails {
     this.city,
     this.region,
     this.comuna,
+    this.salesRepName,
+    this.salesRepPhone,
+    this.salesRepEmail,
+    this.imageUrl,
     this.type = SupplierType.local,
     this.paymentTerms = PaymentTerms.net30,
     this.defaultTaxTreatment = TaxTreatment.noTax,
@@ -1356,6 +1360,10 @@ class SupplierLegacyOperationalDetails {
       city: _nullableText(json['city']),
       region: _nullableText(json['region']),
       comuna: _nullableText(json['comuna']),
+      salesRepName: _nullableText(json['sales_rep_name']),
+      salesRepPhone: _nullableText(json['sales_rep_phone']),
+      salesRepEmail: _nullableText(json['sales_rep_email']),
+      imageUrl: _nullableText(json['image_url']),
       type: SupplierType.values.firstWhere(
         (item) => item.name == json['legacy_type']?.toString(),
         orElse: () => SupplierType.local,
@@ -1374,9 +1382,25 @@ class SupplierLegacyOperationalDetails {
   final String? city;
   final String? region;
   final String? comuna;
+
+  /// El vendedor: la persona a la que el ERP le escribe por WhatsApp.
+  /// Vive en `suppliers.sales_rep_*` y se edita con el comando estrecho
+  /// `update_supplier_sales_rep`, no con el perfil.
+  final String? salesRepName;
+  final String? salesRepPhone;
+  final String? salesRepEmail;
+
+  /// Logo o foto del proveedor (`suppliers.image_url`), que la ficha muestra
+  /// como avatar de su cabecera.
+  final String? imageUrl;
   final SupplierType type;
   final PaymentTerms paymentTerms;
   final TaxTreatment defaultTaxTreatment;
+
+  bool get hasSalesRep =>
+      (salesRepName ?? '').trim().isNotEmpty ||
+      (salesRepPhone ?? '').trim().isNotEmpty ||
+      (salesRepEmail ?? '').trim().isNotEmpty;
 }
 
 @immutable
@@ -2773,4 +2797,67 @@ dynamic _publicValue(dynamic value) {
     return List<dynamic>.unmodifiable(value.map(_publicValue));
   }
   return value;
+}
+
+/// Una persona del proveedor: a quien se le escribe, con cargo, WhatsApp y
+/// correo. Una es la principal (el destino del ERP); las demás pueden estar
+/// activas o desactivadas. Desactivar conserva sus chats y archivos: nunca
+/// se borra.
+@immutable
+class SupplierContact {
+  const SupplierContact({
+    required this.id,
+    required this.tenantId,
+    required this.supplierId,
+    required this.name,
+    this.role,
+    this.phone,
+    this.email,
+    this.notes,
+    this.isPrimary = false,
+    this.isActive = true,
+    this.deactivatedAt,
+    this.source = 'manual',
+    required this.updatedAt,
+  });
+
+  factory SupplierContact.fromJson(Map<String, dynamic> json) {
+    return SupplierContact(
+      id: json['id'].toString(),
+      tenantId: json['tenant_id'].toString(),
+      supplierId: json['supplier_id'].toString(),
+      name: json['name']?.toString().trim() ?? '',
+      role: _nullableText(json['role']),
+      phone: _nullableText(json['phone']),
+      email: _nullableText(json['email']),
+      notes: _nullableText(json['notes']),
+      isPrimary: json['is_primary'] == true,
+      isActive: json['is_active'] != false,
+      deactivatedAt: _nullableText(json['deactivated_at']) == null
+          ? null
+          : DateTime.parse(json['deactivated_at'].toString()).toUtc(),
+      source: json['source']?.toString() ?? 'manual',
+      updatedAt: DateTime.parse(json['updated_at'].toString()).toUtc(),
+    );
+  }
+
+  final String id;
+  final String tenantId;
+  final String supplierId;
+  final String name;
+  final String? role;
+  final String? phone;
+  final String? email;
+  final String? notes;
+  final bool isPrimary;
+  final bool isActive;
+  final DateTime? deactivatedAt;
+
+  /// `manual`, `sales_rep_backfill` o `whatsapp_backfill`: el último es una
+  /// persona que el ERP conoció por un hilo y a la que nadie ha puesto nombre.
+  final String source;
+  final DateTime updatedAt;
+
+  bool get hasPhone => (phone ?? '').trim().isNotEmpty;
+  bool get wasDiscoveredFromWhatsApp => source == 'whatsapp_backfill';
 }

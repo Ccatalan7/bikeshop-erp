@@ -199,10 +199,8 @@ void main() {
                 mode == ThemeMode.dark ? Brightness.dark : Brightness.light,
           );
 
+          // Ya no hay que elegir modo: el drawer es sólo navegación.
           final scaffoldState = await _openCompactDrawer(tester);
-          await tester.tap(
-            find.byKey(const ValueKey('mobile-drawer-mode-navigation')),
-          );
           await tester.pumpAndSettle();
 
           final drawer = tester.widget<Drawer>(
@@ -235,16 +233,6 @@ void main() {
             expectedChrome.mutedForeground,
           );
 
-          final modeSwitch = tester.widget<Container>(
-            find.byKey(const ValueKey('mobile-drawer-mode-switch')),
-          );
-          final modeDecoration = modeSwitch.decoration! as BoxDecoration;
-          expect(
-            modeDecoration.color,
-            expectedChrome.raised,
-            reason: '${palette.code}/${mode.name} mode switch',
-          );
-
           expect(
             tester.getSize(
               find.byKey(const ValueKey('mobile-drawer-close')),
@@ -252,8 +240,10 @@ void main() {
             const Size(48, 48),
           );
 
+          // La campana quedó dedicada a notificaciones desde el 2026-08-20;
+          // el contador combinado se repartió en tres íconos con nombre.
           final activity = find.byKey(
-            const ValueKey('main-layout-mobile-activity'),
+            const ValueKey('main-layout-mobile-notifications'),
           );
           final badgeText = tester.widget<Text>(
             find.descendant(of: activity, matching: find.text('3')),
@@ -269,22 +259,26 @@ void main() {
             expectedChrome.attention,
           );
 
+          // Las herramientas salieron del drawer y viven en la hoja del tercer
+          // ícono del encabezado. La herramienta abierta se sigue marcando.
+          scaffoldState.closeDrawer();
+          await tester.pumpAndSettle();
           await tester.tap(
-            find.byKey(const ValueKey('mobile-drawer-mode-tools')),
+            find.byKey(const ValueKey('main-layout-mobile-workspaces')),
           );
           await tester.pumpAndSettle();
           final selectedTool = tester.widget<ListTile>(
-            find.byKey(
-              const ValueKey(
-                'mobile-toolbar-tool-notifications',
-              ),
-            ),
+            find.byKey(const ValueKey('compact-tools-notifications')),
           );
           expect(selectedTool.selected, isTrue);
-          expect(
-            selectedTool.selectedTileColor,
-            scopedTheme.colorScheme.primaryContainer,
-          );
+          Navigator.of(
+            tester.element(
+              find.byKey(const ValueKey('compact-tools-notifications')),
+            ),
+          ).pop();
+          await tester.pumpAndSettle();
+          await _openCompactDrawer(tester);
+          await tester.pumpAndSettle();
 
           final scaffold = tester.widget<Scaffold>(
             find
@@ -325,17 +319,17 @@ void main() {
           themeMode: ThemeMode.system,
           platformBrightness: brightness,
         );
+        // El selector salió del modo Herramientas del drawer y vive en la hoja
+        // «Apariencia» del pie, junto a la paleta: en el teléfono la paleta no
+        // se podía elegir en ningún lado.
         final scaffoldState = await _openCompactDrawer(tester);
         await tester.tap(
-          find.byKey(const ValueKey('mobile-drawer-mode-tools')),
+          find.byKey(const ValueKey('mobile-drawer-appearance')),
         );
         await tester.pumpAndSettle();
 
         final selector = tester.widget<SegmentedButton<ThemeMode>>(
-          find.descendant(
-            of: find.byKey(const ValueKey('mobile-drawer-tools-mode')),
-            matching: find.byKey(const ValueKey('theme-mode-selector')),
-          ),
+          find.byKey(const ValueKey('theme-mode-selector')),
         );
         expect(selector.selected, const <ThemeMode>{ThemeMode.system});
         expect(harness.appearance.themeMode, ThemeMode.system);
@@ -343,18 +337,7 @@ void main() {
         expect(find.byKey(const ValueKey('theme-mode-light')), findsOneWidget);
         expect(find.byKey(const ValueKey('theme-mode-dark')), findsOneWidget);
 
-        final toolsScroll = find
-            .descendant(
-              of: find.byType(Drawer),
-              matching: find.byType(Scrollable),
-            )
-            .last;
         final darkMode = find.byKey(const ValueKey('theme-mode-dark'));
-        await tester.scrollUntilVisible(
-          darkMode,
-          240,
-          scrollable: toolsScroll,
-        );
         await tester.tap(darkMode);
         await tester.pumpAndSettle();
         expect(harness.appearance.themeMode, ThemeMode.dark);
@@ -363,6 +346,8 @@ void main() {
         await tester.pumpAndSettle();
         expect(harness.appearance.themeMode, ThemeMode.system);
         expect(tester.takeException(), isNull);
+        Navigator.of(tester.element(darkMode)).pop();
+        await tester.pumpAndSettle();
         scaffoldState.closeDrawer();
         await tester.pumpAndSettle();
       }
@@ -520,7 +505,7 @@ void main() {
   }
 
   testWidgets(
-    'compact drawer orders identity, modes and search like Design frame 6b',
+    'compact drawer orders identity and search like Design frame 6b',
     (tester) async {
       final harness = await _ShellHarness.create();
       addTearDown(harness.dispose);
@@ -542,12 +527,14 @@ void main() {
       final search = find.byKey(
         const ValueKey('mobile-drawer-search'),
       );
-      final modeSwitch = find.byKey(
-        const ValueKey('mobile-drawer-mode-switch'),
-      );
       expect(profile, findsOneWidget);
       expect(search, findsOneWidget);
-      expect(modeSwitch, findsOneWidget);
+      // El conmutador Navegación/Herramientas se retiró: el drawer es sólo
+      // navegación desde el 2026-08-20.
+      expect(
+        find.byKey(const ValueKey('mobile-drawer-mode-switch')),
+        findsNothing,
+      );
       expect(
         find.descendant(
           of: profile,
@@ -563,12 +550,9 @@ void main() {
         ),
         findsOneWidget,
       );
+      // Sin el conmutador en medio, el orden es identidad y luego buscador.
       expect(
         tester.getTopLeft(profile).dy,
-        lessThan(tester.getTopLeft(modeSwitch).dy),
-      );
-      expect(
-        tester.getTopLeft(modeSwitch).dy,
         lessThan(tester.getTopLeft(search).dy),
       );
       expect(tester.takeException(), isNull);
@@ -646,7 +630,11 @@ void main() {
   );
 
   testWidgets(
-    'compact drawer exposes 48px Navigation and Tools mode targets',
+    // 2026-08-20 · decisión del dueño: «saca del drawer tanto herramientas
+    // como el manejo de workspaces». El drawer queda sólo navegación, y las
+    // herramientas viven en la hoja del tercer ícono del encabezado. Antes
+    // había dos caminos al mismo sitio.
+    'compact drawer is navigation only and its footer targets are 48px',
     (tester) async {
       final harness = await _ShellHarness.create();
       addTearDown(harness.dispose);
@@ -664,30 +652,20 @@ void main() {
 
       expect(
         find.byKey(const ValueKey('mobile-drawer-mode-navigation')),
-        findsOneWidget,
+        findsNothing,
       );
       expect(
         find.byKey(const ValueKey('mobile-drawer-mode-tools')),
-        findsOneWidget,
+        findsNothing,
       );
-      expect(
-        tester
-            .getSize(
-              find.byKey(
-                const ValueKey('mobile-drawer-mode-navigation'),
-              ),
-            )
-            .height,
-        greaterThanOrEqualTo(48),
+      // Apariencia baja al pie junto a Configuración: el tema y la paleta no
+      // se perdieron al retirar el modo Herramientas.
+      final appearance = find.byKey(
+        const ValueKey('mobile-drawer-appearance'),
       );
+      expect(appearance, findsOneWidget);
       expect(
-        tester
-            .getSize(
-              find.byKey(
-                const ValueKey('mobile-drawer-mode-tools'),
-              ),
-            )
-            .height,
+        tester.getSize(appearance).height,
         greaterThanOrEqualTo(48),
       );
       expect(tester.takeException(), isNull);
@@ -745,20 +723,20 @@ void main() {
         reason: 'Nóminas must expose its selected state semantically.',
       );
 
-      await tester.tap(
-        find.byKey(const ValueKey('mobile-drawer-mode-tools')),
-      );
-      await tester.pumpAndSettle();
+      // El drawer ya no tiene modo Herramientas: es sólo navegación.
       expect(
-        find.byKey(const ValueKey('mobile-drawer-tools-mode')),
-        findsOneWidget,
+        find.byKey(const ValueKey('mobile-drawer-mode-tools')),
+        findsNothing,
       );
       expect(tester.takeException(), isNull);
     },
   );
 
   testWidgets(
-    'Activity opens Todas las herramientas directly in Tools mode',
+    // 2026-08-20 · las herramientas salieron del drawer y del panel de
+    // Actividad: viven en la hoja del tercer ícono del encabezado, que abre
+    // directamente en Herramientas y tiene una pestaña para las tareas.
+    'the third header icon opens Tools directly, with a Tasks tab',
     (tester) async {
       final harness = await _ShellHarness.create();
       addTearDown(harness.dispose);
@@ -770,33 +748,22 @@ void main() {
         routeAware: true,
       );
       await tester.tap(
-        find.byKey(const ValueKey('main-layout-mobile-activity')),
+        find.byKey(const ValueKey('main-layout-mobile-workspaces')),
       );
       await tester.pumpAndSettle();
 
-      expect(find.text('Actividad'), findsOneWidget);
+      expect(find.text('Tareas y herramientas'), findsOneWidget);
+      // Abre en Herramientas, sin un paso intermedio que sólo enlazaba.
       expect(
-        find.byKey(const ValueKey('compact-activity-open-tools')),
-        findsOneWidget,
-      );
-      await tester.tap(
-        find.byKey(const ValueKey('compact-activity-open-tools')),
-      );
-      await tester.pumpAndSettle();
-
-      expect(find.byType(Drawer), findsOneWidget);
-      expect(
-        find.byKey(const ValueKey('mobile-drawer-tools-mode')),
+        find.byKey(const ValueKey('compact-tools-notifications')),
         findsOneWidget,
       );
       expect(
-        find.byKey(const ValueKey('mobile-drawer-navigation-mode')),
-        findsNothing,
+        find.byKey(const ValueKey('compact-workspace-tools-tab-workspaces')),
+        findsOneWidget,
       );
-      expect(
-        find.byKey(const ValueKey('mobile-drawer-search')),
-        findsNothing,
-      );
+      // El drawer ya no participa: es sólo navegación.
+      expect(find.byType(Drawer), findsNothing);
       expect(tester.takeException(), isNull);
     },
   );

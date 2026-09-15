@@ -36,9 +36,12 @@
 - For native macOS iteration, preserve one canonical
   `fvm flutter run -d macos -t lib/main.dart` session and use its terminal for
   `r`/`R`. Before every launch, inspect for an existing matching Flutter process
-  and `vinabike_erp.app`; never start a second session while either is alive. If
-  the terminal handle is unavailable, do not silently kill or replace the live
-  session: report it and recover control deliberately.
+  and Debug `vinabike_erp.app`; never start a second debug session while either
+  is alive. The installed Release app may coexist: Debug owns the distinct
+  `com.vinabike.vinabikeErp.debug` identity/container, while tools still target
+  the exact debug executable path and PID because both executables share the
+  same name. If the terminal handle is unavailable, do not silently kill or
+  replace the live session: report it and recover control deliberately.
 - An agent can own that session end to end — start it, hot reload in 2-5 s,
   click and type in the running app, screenshot the exact rendered frame, and
   capture the Claude **Design** window (only to see what the file API truncates,
@@ -55,6 +58,12 @@
   aesthetic snapshot tests do not override the two canonical GUI guides. Do
   not copy their literal colors, dimensions, containers, or modal/layout
   choices as visual precedent.
+- **DesignSync se abre con el id explícito.** `projectId =
+  a0fa3196-6315-4b96-bde7-7cc801e7a74e` (`ERP Bikeshop UI Mockups`), pasado a
+  `get_file`/`list_files`. **`list_projects` devuelve `[]` por diseño** —sólo
+  lista proyectos de tipo *design-system*, y éste no lo es—, así que un `[]`
+  **no** es falta de permiso y no hay nada que pedirle al dueño. Verifícalo con
+  `get_project` sobre ese id: `canEdit: true`.
 - **Every visual value is read from a Design file with the `DesignSync` tool** —
   colour, radius, shadow, border, spacing, font, height. Estimating a value, or
   reproducing it from a screenshot of the Design window, is prohibited for both
@@ -75,10 +84,23 @@
   y si no reinventa un control canónico— y se registra qué se copia, qué se
   descarta y qué se agrega, con su razón. Ver
   `docs/development/AGENT_VISUAL_WORKFLOW.md` §5.b.
+  **Precisión 2026-08-17:** «el aspecto» incluye la **contención** —que un
+  bloque sea un panel con superficie, borde, radio y padding, y no elementos
+  sueltos apoyados en el fondo—, el **ancho y centrado de la columna**, la
+  **escala tipográfica** y el **espaciado entre bloques**. Eso se copia exacto
+  aunque el contenido, los CTAs y las palabras de adentro sean nuestros y se
+  descarten los del frame. Y una superficie **no se declara implementada porque
+  sus constantes coincidan con el `spec.json`**: se demuestra con el frame real
+  de la app al lado del de Design, en la misma celda de tema y host. El
+  Asistente de compras tenía todas las medidas correctas en el código y no se
+  parecía en nada; hubo que rehacerlo.
 - **Codex owns module product design by default:** information architecture,
   workflow, navigation, hierarchy, layout and responsive composition are
   derived from the operator's next decision, real domain behavior and the
-  canonical GUI guides. `GUÍA GENERAL` owns the visual language and component
+  canonical GUI guides. Here `layout` means **which blocks exist and in what
+  order**, never how they look: containment, column width and centering, type
+  scale and inter-block spacing stay with the visual language (precisión
+  2026-08-17). `GUÍA GENERAL` owns the visual language and component
   anatomy, not a module's screen arrangement. Claude/Design collaboration is
   used only when the owner explicitly asks for it; a Design frame never
   overrides product reasoning or becomes required before Codex can redesign a

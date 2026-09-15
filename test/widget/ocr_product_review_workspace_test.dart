@@ -1,4 +1,7 @@
+import 'dart:convert';
+import 'package:desktop_drop/desktop_drop.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:vinabike_erp/modules/inventory/models/brand_models.dart';
@@ -8,549 +11,829 @@ import 'package:vinabike_erp/modules/inventory/models/product_duplicate_candidat
 import 'package:vinabike_erp/shared/themes/app_theme.dart';
 import 'package:vinabike_erp/shared/themes/appearance_preset.dart';
 import 'package:vinabike_erp/shared/widgets/ocr_product_review_workspace.dart';
-import 'package:vinabike_erp/shared/widgets/vb_searchable_select.dart';
+import 'package:vinabike_erp/shared/widgets/ocr_review_evidence.dart';
+import 'package:vinabike_erp/shared/widgets/vb_button.dart';
+import 'package:vinabike_erp/shared/widgets/vb_skeleton.dart';
+import 'package:vinabike_erp/shared/widgets/vb_status_badge.dart';
+import 'package:vinabike_erp/shared/services/ocr_purchase_review_flow.dart';
 
-/// Contracts the owner set on 2026-08-09 for the reconciliation surface, after
-/// rejecting both the card wall and the fixed-width `DataTable` that replaced
-/// it. They are written as behaviour, not as a snapshot of the widget tree.
 void main() {
-  group('composición por ancho', () {
-    testWidgets('escritorio: una fila por línea, todas del mismo alto',
-        (tester) async {
-      // Filas ordinarias: sin validación pendiente ni advertencia. Ésas son
-      // las que tienen que quedar parejas para poder comparar una columna de
-      // un vistazo; una fila que sí tiene un motivo que decir crece, y eso se
-      // verifica aparte.
-      final lines = <OcrProductReviewLine>[
-        _line(id: 'l1', status: OcrProductReviewStatus.ready),
-        _line(id: 'l2', status: OcrProductReviewStatus.ready),
-        _line(id: 'l3', status: OcrProductReviewStatus.ready),
-      ];
-      await _pump(tester, size: const Size(1440, 900), lines: lines);
-
-      expect(find.byKey(const Key('ocr-review-table')), findsOneWidget);
-      expect(find.byKey(const Key('ocr-review-table-header')), findsOneWidget);
-
-      final heights = <double>[
-        for (final line in lines)
-          tester
-              .getSize(
-                  find.byKey(ValueKey<String>('ocr-review-row-${line.id}')))
-              .height,
-      ];
-      expect(heights.toSet(), hasLength(1),
-          reason: 'las filas variables son el defecto rechazado');
-    });
-
-    testWidgets('escritorio: la tabla llena el ancho, sin scroll horizontal',
-        (tester) async {
-      await _pump(tester, size: const Size(1440, 900), lines: _threeLines());
-
-      final table = tester.getSize(find.byKey(const Key('ocr-review-table')));
-      // El host descuenta su padding lateral; lo que importa es que la tabla no
-      // sea una lona fija más ancha que la ventana.
-      expect(table.width, lessThanOrEqualTo(1440));
-      expect(table.width, greaterThan(1200));
-      expect(tester.takeException(), isNull);
-    });
-
-    testWidgets('tablet 834: mismas decisiones, columnas reducidas',
-        (tester) async {
-      await _pump(tester, size: const Size(834, 1112), lines: _threeLines());
-
-      // 834 está bajo el umbral táctil: editor por línea, no tabla encogida.
-      expect(find.byKey(const Key('ocr-review-table')), findsNothing);
-      expect(
-        find.byKey(const ValueKey<String>('ocr-review-row-l1')),
-        findsOneWidget,
-      );
-      expect(find.byKey(const Key('ocr-review-sku-l1')), findsOneWidget);
-      expect(find.byKey(const Key('ocr-review-category-l1')), findsOneWidget);
-    });
-
-    testWidgets('phone 390: sin scroll horizontal y con objetivos táctiles',
-        (tester) async {
-      await _pump(tester, size: const Size(390, 844), lines: _threeLines());
-
-      expect(tester.takeException(), isNull);
-      final checkbox = tester.getSize(
-        find.byKey(const Key('ocr-review-select-l1')),
-      );
-      expect(checkbox.height, greaterThanOrEqualTo(kMinInteractiveDimension));
-    });
+  testWidgets(
+      'identity shows the OCR source and the real first inventory record',
+      (tester) async {
+    final line = _line(id: 'l1', status: OcrProductReviewStatus.ready);
+    Product? opened;
+    await _pump(tester,
+        size: const Size(1440, 900),
+        lines: [line],
+        callbacks: OcrProductReviewCallbacks(
+            onOpenInventoryProduct: (product) => opened = product));
+    expect(find.text('ARTÍCULO LEÍDO POR OCR'), findsOneWidget);
+    expect(find.text('COINCIDENCIA EN INVENTARIO'), findsOneWidget);
+    expect(find.text(line.originalTitle), findsOneWidget);
+    expect(find.byKey(const ValueKey('ocr-inventory-record-l1-p0')),
+        findsOneWidget);
+    expect(find.text(line.inventoryProduct!.name), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('ocr-inventory-open-l1-p0')));
+    expect(opened?.id, 'p0');
+    expect(find.byType(TextField), findsNothing);
+    expect(tester.takeException(), isNull);
   });
 
-  group('categoría y marca', () {
-    testWidgets('el selector cerrado dice el nombre corto, no la ruta',
-        (tester) async {
-      await _pump(tester, size: const Size(1440, 900), lines: _threeLines());
-
-      expect(find.text('Tee'), findsWidgets);
-      expect(
-        find.textContaining('Componentes / Dirección'),
-        findsNothing,
-        reason: 'la ruta completa dentro del campo cerrado fue rechazada',
-      );
-    });
-
-    testWidgets('es el selector canónico buscable, no una variante local',
-        (tester) async {
-      await _pump(tester, size: const Size(1440, 900), lines: _threeLines());
-
-      expect(
-        find.byType(VbSearchableSelect<Category>),
-        findsNWidgets(3),
-      );
-      expect(
-        find.byType(VbSearchableSelect<ProductBrand>),
-        findsNWidgets(3),
-      );
-    });
-
-    testWidgets('la ruta aparece dentro de resultados que comparten nombre',
-        (tester) async {
-      await _pump(
-        tester,
+  testWidgets('selecting identity does not apply a remembered decomposition',
+      (tester) async {
+    Product? selected;
+    var applied = 0;
+    var created = 0;
+    await _pump(tester,
         size: const Size(1440, 900),
-        lines: <OcrProductReviewLine>[
+        lines: [
           _line(
-            id: 'l1',
-            status: OcrProductReviewStatus.ready,
-            categories: _ambiguousCategories,
-          ),
+              id: 'l1', status: OcrProductReviewStatus.ready, remembered: true),
         ],
-        callbacks: OcrProductReviewCallbacks(onCategoryChanged: (_, __) {}),
-      );
+        callbacks: OcrProductReviewCallbacks(
+            onLinkCandidate: (_, product) => selected = product,
+            onConfirmRememberedResolution: (_) => applied++,
+            onConfirmNewProduct: (_) => created++));
+    expect(find.text('Aplicar regla guardada'), findsNothing);
+    expect(find.text('Regla por revisar'), findsNothing);
+    expect(find.text('Por decidir'), findsNothing);
+    await tester.tap(find.byKey(const Key('ocr-review-select-l1')));
+    expect(selected?.id, 'p0');
+    expect(applied, 0);
+    expect(created, 0);
+  });
 
-      await tester.tap(find.byKey(const Key('ocr-review-category-l1')));
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 350));
-
-      expect(find.text('Adaptadores'), findsWidgets);
-      expect(find.text('Accesorios / Adaptadores'), findsOneWidget);
-      expect(find.text('Componentes / Frenos / Adaptadores'), findsOneWidget);
-      // Un nombre único no arrastra su ruta al resultado.
-      expect(find.text('Componentes / Dirección / Tee'), findsNothing);
-    });
-
-    testWidgets('se puede buscar y elegir con teclado', (tester) async {
-      Category? chosen;
-      await _pump(
-        tester,
+  testWidgets('new identity marks the row without opening fields or creating',
+      (tester) async {
+    var marked = 0;
+    var created = 0;
+    await _pump(tester,
         size: const Size(1440, 900),
-        lines: <OcrProductReviewLine>[
+        lines: [
           _line(id: 'l1', status: OcrProductReviewStatus.ready),
         ],
         callbacks: OcrProductReviewCallbacks(
-          onCategoryChanged: (_, value) => chosen = value,
-        ),
-      );
-
-      await tester.tap(find.byKey(const Key('ocr-review-category-l1')));
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 350));
-      await tester.enterText(find.byType(TextField).last, 'rotor');
-      await tester.pump();
-      await tester.sendKeyEvent(LogicalKeyboardKey.enter);
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 350));
-
-      expect(chosen?.name, 'Rotores');
-    });
+            onPrepareNewProduct: (_) => marked++,
+            onConfirmNewProduct: (_) => created++));
+    await tester.tap(find.byKey(const Key('ocr-review-new-l1')));
+    expect(marked, 1);
+    expect(created, 0);
+    expect(find.byType(TextField), findsNothing);
   });
 
-  group('decisión de la fila', () {
-    testWidgets('los parecidos no se expanden dentro de la fila',
-        (tester) async {
-      var opened = <String>[];
-      await _pump(
-        tester,
+  testWidgets(
+      'alternatives and inventory search keep the current source identity',
+      (tester) async {
+    final requests = <String>[];
+    await _pump(tester,
         size: const Size(1440, 900),
-        lines: <OcrProductReviewLine>[
+        lines: [
           _line(
-            id: 'l1',
-            status: OcrProductReviewStatus.ready,
-            candidates: _candidates(3),
-          ),
+              id: 'l1',
+              status: OcrProductReviewStatus.ready,
+              viableCandidateCount: 2,
+              candidates: _candidates(2)),
+          _line(
+              id: 'l2',
+              status: OcrProductReviewStatus.abstained,
+              hasInventoryProduct: false),
+        ],
+        callbacks: OcrProductReviewCallbacks(onOpenCandidates: requests.add));
+    // One door into the picker per row: «Comparar (N)» when there is
+    // something to compare, «Buscar en inventario» when there is not.
+    expect(find.text('Comparar (2)'), findsOneWidget);
+    expect(find.byKey(const Key('ocr-review-inventory-l1')), findsNothing);
+    expect(find.text('Sin coincidencia recomendada'), findsOneWidget);
+    expect(find.text('Nada parecido en el inventario'), findsOneWidget);
+    await tester.tap(find.byKey(const Key('ocr-review-alternatives-l1')));
+    await tester.tap(find.byKey(const Key('ocr-review-inventory-l2')));
+    expect(requests, ['l1', 'l2']);
+  });
+
+  testWidgets('a row the matcher has not compared yet says so and waits',
+      (tester) async {
+    await _pump(tester, size: const Size(1440, 900), lines: [
+      _line(
+          id: 'l1',
+          status: OcrProductReviewStatus.needsSearch,
+          hasInventoryProduct: false),
+    ]);
+    expect(find.byKey(const Key('ocr-review-pending-l1')), findsOneWidget);
+    expect(find.text('Pendiente de comparar'), findsOneWidget);
+    expect(find.text('Sin coincidencias sugeridas'), findsNothing);
+    expect(find.byKey(const Key('ocr-review-select-l1')), findsNothing);
+    expect(find.byKey(const Key('ocr-review-new-l1')), findsNothing);
+    expect(find.byKey(const Key('ocr-review-alternatives-l1')), findsNothing);
+    expect(find.text('Esperando la comparación'), findsOneWidget);
+  });
+
+  testWidgets('a queued row draws its silhouette and never reads «pendiente»',
+      (tester) async {
+    await _pump(tester, size: const Size(1440, 900), lines: [
+      _line(
+          id: 'l1',
+          status: OcrProductReviewStatus.searching,
+          queued: true,
+          hasInventoryProduct: false),
+      _line(
+          id: 'l2',
+          status: OcrProductReviewStatus.searching,
+          hasInventoryProduct: false),
+    ]);
+    // Queued: the X-01 silhouette, an inert decision that says so, and none
+    // of the words that would suggest nothing is running.
+    expect(find.byKey(const Key('ocr-review-queued-l1')), findsOneWidget);
+    expect(
+        find.descendant(
+            of: find.byKey(const Key('ocr-review-queued-l1')),
+            matching: find.byType(VbSkeleton)),
+        findsNWidgets(3));
+    expect(find.byType(VbSkeletonGroup), findsOneWidget);
+    expect(find.text('En cola'), findsOneWidget);
+    expect(find.text('Pendiente de comparar'), findsNothing);
+    expect(find.textContaining('aún no corre'), findsNothing);
+    expect(find.byKey(const Key('ocr-review-select-l1')), findsNothing);
+    expect(find.byKey(const Key('ocr-review-new-l1')), findsNothing);
+    // Taken by a worker: the spinner, not the silhouette.
+    expect(find.text('Comparando con el inventario…'), findsOneWidget);
+    expect(find.byKey(const Key('ocr-review-queued-l2')), findsNothing);
+    expect(find.text('Comparando…'), findsOneWidget);
+  });
+
+  testWidgets('a settled table runs no skeleton clock', (tester) async {
+    await _pump(tester, size: const Size(1440, 900), lines: [
+      _line(id: 'l1', status: OcrProductReviewStatus.ready),
+    ]);
+    expect(find.byType(VbSkeletonGroup), findsNothing);
+    expect(find.byType(VbSkeleton), findsNothing);
+  });
+
+  testWidgets('the header publishes the running pass and hides the retry',
+      (tester) async {
+    var retries = 0;
+    await _pump(tester,
+        size: const Size(1440, 900),
+        callbacks: OcrProductReviewCallbacks(onSearchPending: () => retries++),
+        activity: const OcrProductReviewActivity(
+            label: 'Comparando con el inventario', completed: 2, total: 5),
+        lines: [
+          _line(
+              id: 'l1',
+              status: OcrProductReviewStatus.searching,
+              queued: true,
+              hasInventoryProduct: false),
+        ]);
+    expect(
+        find.byKey(const Key('ocr-review-activity-spinner')), findsOneWidget);
+    expect(find.text('Comparando con el inventario · 2 de 5'), findsOneWidget);
+    expect(find.textContaining('identificados'), findsNothing);
+    expect(find.text('Reintentar pendientes'), findsNothing);
+    expect(retries, 0);
+  });
+
+  testWidgets('without a running pass the header counts and offers the retry',
+      (tester) async {
+    await _pump(tester,
+        size: const Size(1440, 900),
+        callbacks: OcrProductReviewCallbacks(onSearchPending: () {}),
+        lines: [
+          _line(
+              id: 'l1',
+              status: OcrProductReviewStatus.needsSearch,
+              hasInventoryProduct: false),
+        ]);
+    expect(find.byKey(const Key('ocr-review-activity-spinner')), findsNothing);
+    expect(find.text('0 de 1 identificados'), findsOneWidget);
+    expect(find.text('Reintentar pendientes'), findsOneWidget);
+  });
+
+  testWidgets('evidence is on the row and «Podría ser» compares first',
+      (tester) async {
+    final requests = <String>[];
+    Product? selected;
+    await _pump(tester,
+        size: const Size(1440, 900),
+        lines: [
+          _line(
+              id: 'strong',
+              status: OcrProductReviewStatus.ready,
+              viableCandidateCount: 1,
+              bestEvidence: const OcrCandidateEvidence(
+                  'Muy parecido', VbStatusTone.info)),
+          _line(
+              id: 'weak',
+              status: OcrProductReviewStatus.ready,
+              viableCandidateCount: 3,
+              bestEvidence: const OcrCandidateEvidence(
+                  'Podría ser', VbStatusTone.neutral, needsComparison: true),
+              categoryObjection:
+                  'Está en otra categoría: Accesorios (seleccionada: Asientos).'),
         ],
         callbacks: OcrProductReviewCallbacks(
-          onOpenCandidates: opened.add,
-        ),
-      );
+            onOpenCandidates: requests.add,
+            onLinkCandidate: (_, product) => selected = product));
+    expect(find.byKey(const Key('ocr-review-evidence-strong')), findsOneWidget);
+    expect(find.text('Muy parecido'), findsOneWidget);
+    expect(find.text('Mejor coincidencia'), findsNWidgets(2));
+    expect(find.text('Primera coincidencia'), findsNothing);
+    final strongSelect = tester
+        .widget<VbButton>(find.byKey(const Key('ocr-review-select-strong')));
+    expect(strongSelect.onPressed, isNotNull);
+    expect(strongSelect.variant, VbButtonVariant.primary);
+    expect(find.text('Seleccionar'), findsOneWidget);
+    // Weak evidence: the primary button opens the comparison; selecting is
+    // secondary and says it is a choice against the evidence.
+    expect(find.byKey(const Key('ocr-review-compare-weak')), findsOneWidget);
+    expect(find.text('Seleccionar igual'), findsOneWidget);
+    expect(find.byKey(const Key('ocr-review-note-weak')), findsOneWidget);
+    await tester.tap(find.byKey(const Key('ocr-review-compare-weak')));
+    expect(requests, ['weak']);
+    await tester.tap(find.byKey(const Key('ocr-review-select-weak')));
+    expect(selected?.id, 'p0');
+  });
 
-      final before = tester
-          .getSize(find.byKey(const ValueKey<String>('ocr-review-row-l1')));
-      await tester.tap(find.byKey(const Key('ocr-review-alternatives-l1')));
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 350));
-      final after = tester
-          .getSize(find.byKey(const ValueKey<String>('ocr-review-row-l1')));
-
-      expect(opened, <String>['l1'], reason: 'abre el overlay centrado');
-      expect(after.height, before.height,
-          reason: 'la fila no crece: nada se despliega dentro');
-    });
-
-    testWidgets('vincular y crear nuevo son decisiones pares en la fila',
-        (tester) async {
-      Product? linked;
-      String? created;
-      await _pump(
-        tester,
+  testWidgets(
+      'a pack reading keeps the product on the row and can be re-compared',
+      (tester) async {
+    final retried = <String>[];
+    Product? selected;
+    final pack = _candidates(1).first.product;
+    final line = OcrProductReviewLine(
+      id: 'l1',
+      sku: 'AE0320',
+      originalTitle: 'Sillín de bicicleta hueco MTB',
+      controllers: OcrProductDraftControllers(
+        sku: TextEditingController(text: 'AE0320'),
+        name: TextEditingController(text: 'Sillín'),
+        cost: TextEditingController(text: '8645'),
+        price: TextEditingController(text: '17000'),
+      ),
+      status: OcrProductReviewStatus.abstained,
+      sourceQuantity: 2,
+      viableCandidateCount: 17,
+      candidates: _candidates(2),
+      aiCompositeProposal: '2 × AE0320 · Sillín Prostático Riderace',
+      aiCompositeProduct: pack,
+      aiCompositeUnits: 2,
+    );
+    await _pump(tester,
         size: const Size(1440, 900),
-        lines: <OcrProductReviewLine>[
-          _line(
-            id: 'l1',
-            status: OcrProductReviewStatus.ready,
-            candidates: _candidates(2),
-          ),
-        ],
+        lines: [line],
         callbacks: OcrProductReviewCallbacks(
-          onLinkCandidate: (_, product) => linked = product,
-          onConfirmNewProduct: (lineId) => created = lineId,
-        ),
-      );
-
-      await tester.tap(find.byKey(const Key('ocr-review-link-l1')));
-      await tester.pump();
-      expect(linked?.sku, 'AE0001');
-
-      await tester.tap(find.byKey(const Key('ocr-review-new-l1')));
-      await tester.pump();
-      expect(created, 'l1');
-    });
-
-    testWidgets('sin coincidencia se dice, no se rellena', (tester) async {
-      await _pump(
-        tester,
-        size: const Size(1440, 900),
-        lines: <OcrProductReviewLine>[
-          _line(id: 'l1', status: OcrProductReviewStatus.noCandidates),
-        ],
-      );
-
-      expect(find.text('Sin coincidencia fiable'), findsOneWidget);
-      expect(find.byKey(const Key('ocr-review-new-l1')), findsOneWidget);
-    });
-
-    testWidgets('ningún porcentaje aparece junto a un producto',
-        (tester) async {
-      await _pump(
-        tester,
-        size: const Size(1440, 900),
-        lines: <OcrProductReviewLine>[
-          _line(
-            id: 'l1',
-            status: OcrProductReviewStatus.ready,
-            candidates: _candidates(3),
-          ),
-        ],
-      );
-
-      final texts = tester
-          .widgetList<Text>(find.byType(Text))
-          .map((text) => text.data ?? '')
-          .toList();
-      expect(
-        texts.where((value) => RegExp(r'\d+\s*%').hasMatch(value)),
-        isEmpty,
-      );
-    });
+            onRetryLine: retried.add,
+            onLinkCandidate: (_, product) => selected = product));
+    // The product the AI named stays a record, not a sentence.
+    expect(find.byKey(const Key('ocr-review-pack-l1')), findsOneWidget);
+    expect(find.text(pack.name), findsOneWidget);
+    expect(find.text('Leído como pack'), findsOneWidget);
+    expect(find.textContaining('Coincide como pack:'), findsNothing);
+    expect(find.text('Definir contenido'), findsOneWidget);
+    await tester.tap(find.byKey(const Key('ocr-review-select-l1')));
+    expect(selected?.id, pack.id);
+    // Any compared row can be compared again with the current code.
+    expect(find.text('Volver a comparar'), findsOneWidget);
+    await tester.tap(find.byKey(const Key('ocr-review-retry-l1')));
+    expect(retried, ['l1']);
   });
 
-  group('pie de página', () {
-    testWidgets('dice el siguiente paso exacto', (tester) async {
-      await _pump(
-        tester,
-        size: const Size(1440, 900),
-        lines: <OcrProductReviewLine>[
-          _line(id: 'l1', status: OcrProductReviewStatus.ready),
-          _line(id: 'l2', status: OcrProductReviewStatus.linked),
-        ],
-      );
-
-      expect(
-        find.textContaining('Decide 1 línea'),
-        findsOneWidget,
-      );
-    });
-
-    testWidgets('todo decidido cambia la frase', (tester) async {
-      await _pump(
-        tester,
-        size: const Size(1440, 900),
-        lines: <OcrProductReviewLine>[
-          _line(id: 'l1', status: OcrProductReviewStatus.linked),
-          _line(id: 'l2', status: OcrProductReviewStatus.newProductReady),
-        ],
-      );
-
-      expect(find.textContaining('Todo decidido'), findsOneWidget);
-    });
+  testWidgets('two lines proposing the same product warn each other',
+      (tester) async {
+    await _pump(tester, size: const Size(1440, 900), lines: [
+      _line(
+          id: 'a',
+          status: OcrProductReviewStatus.ready,
+          sharedWithLineTitle: 'Luz trasera USB roja'),
+    ]);
+    expect(find.byKey(const Key('ocr-review-shared-a')), findsOneWidget);
+    expect(
+        find.textContaining('ya propone este producto: “Luz trasera USB roja”'),
+        findsOneWidget);
   });
 
-  group('anchos locales sin desbordes', () {
-    for (final width in const <double>[
-      900,
-      950,
-      1001,
-      1080,
-      1179,
-      1180,
-      1440
-    ]) {
-      testWidgets('$width px compone sin desbordar', (tester) async {
-        await _pump(
-          tester,
-          size: Size(width, 900),
-          lines: _threeLines(),
-          callbacks: const OcrProductReviewCallbacks(),
-        );
-
-        expect(
-          tester.takeException(),
-          isNull,
-          reason: 'ningún RenderFlex puede desbordar a $width px',
-        );
-      });
-    }
-
-    testWidgets('la tabla elige columnas según el ancho real que recibe',
-        (tester) async {
-      await _pump(tester, size: const Size(950, 900), lines: _threeLines());
-      // A 950 px no cabe la columna de precio; la decisión y la categoría sí.
-      expect(find.byKey(const Key('ocr-review-table')), findsOneWidget);
-      expect(find.text('Precio'), findsNothing);
-      expect(find.text('Decisión'), findsOneWidget);
-      expect(find.text('Categoría'), findsOneWidget);
-
-      await _pump(tester, size: const Size(1440, 900), lines: _threeLines());
-      expect(find.text('Precio'), findsOneWidget);
-      expect(find.text('Vende'), findsOneWidget);
-    });
-  });
-
-  group('validaciones visibles', () {
-    testWidgets('una fila con categoría faltante crece y muestra el motivo',
-        (tester) async {
-      final withError = _line(
+  testWidgets('amounts are prefilled and confirmed separately after identity',
+      (tester) async {
+    final line = _line(
         id: 'l1',
         status: OcrProductReviewStatus.ready,
-        categoryValidationMessage: 'Falta elegir la familia correcta.',
-        category: null,
-      );
-      await _pump(
-        tester,
+        identity: OcrProductIdentityDecision.existing,
+        remembered: true);
+    var confirmed = 0;
+    final fields = <String>[];
+    await _pump(tester,
         size: const Size(1440, 900),
-        lines: <OcrProductReviewLine>[
-          withError,
-          _line(id: 'l2', status: OcrProductReviewStatus.ready),
-        ],
-      );
-
-      expect(tester.takeException(), isNull);
-      expect(find.text('Falta elegir la familia correcta.'), findsOneWidget);
-
-      final tall = tester
-          .getSize(find.byKey(const ValueKey<String>('ocr-review-row-l1')))
-          .height;
-      final normal = tester
-          .getSize(find.byKey(const ValueKey<String>('ocr-review-row-l2')))
-          .height;
-      expect(
-        tall,
-        greaterThan(normal),
-        reason:
-            'el motivo del bloqueo no se recorta para dejar la tabla pareja',
-      );
-    });
-
-    testWidgets('la advertencia de marca sin evidencia también se lee',
-        (tester) async {
-      await _pump(
-        tester,
-        size: const Size(1440, 900),
-        lines: <OcrProductReviewLine>[
-          _line(
-            id: 'l1',
-            status: OcrProductReviewStatus.ready,
-            brandWarning: 'La marca sugerida no tiene evidencia de fabricante.',
-          ),
-        ],
-      );
-
-      expect(tester.takeException(), isNull);
-      expect(
-        find.text('La marca sugerida no tiene evidencia de fabricante.'),
-        findsOneWidget,
-      );
-    });
-
-    testWidgets('una hoja duplicada dice su rama después de elegirla',
-        (tester) async {
-      final ambiguous = _ambiguousCategories.firstWhere(
-        (category) => category.fullPath == 'Accesorios / Adaptadores',
-      );
-      await _pump(
-        tester,
-        size: const Size(1440, 900),
-        lines: <OcrProductReviewLine>[
-          _line(
-            id: 'l1',
-            status: OcrProductReviewStatus.ready,
-            categories: _ambiguousCategories,
-            category: ambiguous,
-          ),
-        ],
-      );
-
-      // El campo cerrado sigue diciendo el nombre corto…
-      expect(find.text('Adaptadores'), findsOneWidget);
-      // …y la rama que lo desambigua se publica al lado, no dentro del valor.
-      expect(find.text('en Accesorios'), findsOneWidget);
-      expect(find.text('Accesorios / Adaptadores'), findsNothing);
-    });
-
-    testWidgets('una hoja única no arrastra su rama', (tester) async {
-      await _pump(
-        tester,
-        size: const Size(1440, 900),
-        lines: <OcrProductReviewLine>[
-          _line(id: 'l1', status: OcrProductReviewStatus.ready),
-        ],
-      );
-      expect(find.textContaining('en Componentes'), findsNothing);
-    });
+        lines: [line],
+        step: OcrPurchaseReviewStep.amounts,
+        callbacks: OcrProductReviewCallbacks(
+            onConfirmAmounts: (_) => confirmed++,
+            onAmountsChanged: (_, field) => fields.add(field)));
+    expect(line.purchaseQuantityController!.text, '5');
+    expect(line.purchaseTotalController!.text, '40242');
+    // Step 2 is one table: header, a row per line, no per-row confirm button.
+    for (final header in [
+      'PRODUCTO',
+      'COMPRADO',
+      'COSTO/COMPRA',
+      'TOTAL LÍNEA',
+      'UNID./COMPRA',
+      'INGRESO A INVENTARIO',
+      'REGLA',
+      'ESTADO',
+    ]) {
+      expect(find.text(header), findsOneWidget, reason: header);
+    }
+    expect(find.text('Confirmar línea'), findsNothing);
+    expect(
+        find.byKey(const Key('ocr-review-confirm-amounts-l1')), findsNothing);
+    expect(find.byKey(const Key('ocr-review-apply-rule-l1')), findsOneWidget);
+    expect(find.byKey(const Key('ocr-review-reject-rule-l1')), findsOneWidget);
+    expect(find.text('Regla por decidir'), findsOneWidget);
+    expect(find.text('5 unidades'), findsOneWidget);
+    await tester.enterText(
+        find.byKey(const Key('ocr-purchase-quantity-l1')), '3');
+    expect(fields, ['quantity']);
+    expect(confirmed, 0);
   });
 
-  group('el SKU reservado se cuenta en la fila', () {
-    testWidgets('mientras reserva, la celda lo dice', (tester) async {
-      await _pump(
-        tester,
+  testWidgets('the amounts table shows an applied rule as component rows',
+      (tester) async {
+    const parts = [
+      OcrReviewComponent(
+          productId: 'front',
+          name: 'Maneta BUCKLOS delantera',
+          sku: 'AE0300',
+          unitsPerPurchase: 1,
+          totalQuantity: 3,
+          role: 'front',
+          costRatio: 0.5),
+      OcrReviewComponent(
+          productId: 'rear',
+          name: 'Maneta BUCKLOS trasera',
+          sku: 'AE0301',
+          unitsPerPurchase: 1,
+          totalQuantity: 3,
+          role: 'rear',
+          costRatio: 0.5),
+    ];
+    final line = _line(
+        id: 'l1',
+        status: OcrProductReviewStatus.ready,
+        identity: OcrProductIdentityDecision.existing,
+        appliedComposition: true,
+        resolutionComponents: parts,
+        ruleAttribution: 'confirmada por ti el 12/08/2026');
+    line.purchaseQuantityController!.text = '3';
+    line.purchaseTotalController!.text = '30000';
+    await _pump(tester,
         size: const Size(1440, 900),
-        lines: <OcrProductReviewLine>[
-          _line(
-            id: 'l1',
-            status: OcrProductReviewStatus.newProductReady,
-            isReservingSku: true,
-          ),
-        ],
-      );
+        lines: [line],
+        step: OcrPurchaseReviewStep.amounts);
+    expect(find.text('Regla aplicada'), findsOneWidget);
+    expect(find.text('confirmada por ti el 12/08/2026'), findsOneWidget);
+    expect(find.byKey(const Key('ocr-review-component-l1-0')), findsOneWidget);
+    expect(find.byKey(const Key('ocr-review-component-l1-1')), findsOneWidget);
+    expect(find.text('AE0300 · delantero'), findsOneWidget);
+    expect(find.text('3 × AE0300 + 3 × AE0301'), findsOneWidget);
+    expect(find.text('\$15.000'), findsNWidgets(2));
+    expect(find.byKey(const Key('ocr-purchase-units-l1')), findsNothing);
+    expect(find.text('Modificar'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
 
-      expect(
-        find.byKey(const Key('ocr-review-sku-reserving-l1')),
-        findsOneWidget,
-      );
-      expect(find.text('Reservando…'), findsOneWidget);
-      expect(tester.takeException(), isNull);
-    });
+  testWidgets('the amounts table becomes cards under 900 px, also in dark',
+      (tester) async {
+    final line = _line(
+        id: 'l1',
+        status: OcrProductReviewStatus.ready,
+        identity: OcrProductIdentityDecision.existing,
+        errorMessage:
+            'La compra sigue; no se guardó la regla para la próxima vez.');
+    await _pump(tester,
+        size: const Size(430, 900),
+        dark: true,
+        lines: [line],
+        step: OcrPurchaseReviewStep.amounts);
+    expect(find.text('PRODUCTO'), findsNothing);
+    expect(find.text('Comprado'), findsOneWidget);
+    expect(find.text('Unid./compra'), findsOneWidget);
+    expect(find.byKey(const Key('ocr-purchase-quantity-l1')), findsOneWidget);
+    expect(find.text('Ingreso a inventario: 5 unidades'), findsOneWidget);
+    expect(find.text('Con error'), findsOneWidget);
+    expect(find.text('Descomponer'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
 
-    testWidgets('si falla, lo dice y ofrece reintentar', (tester) async {
-      final retried = <String>[];
-      await _pump(
-        tester,
+  testWidgets('a remembered rule shows its author and can be changed',
+      (tester) async {
+    final line = _line(
+        id: 'l1',
+        status: OcrProductReviewStatus.ready,
+        identity: OcrProductIdentityDecision.existing,
+        remembered: true,
+        ruleAttribution:
+            'confirmada por ti el 12/08/2026 · compra del 12/08/2026');
+    var applied = 0;
+    var rejected = 0;
+    await _pump(tester,
         size: const Size(1440, 900),
-        lines: <OcrProductReviewLine>[
-          _line(
-            id: 'l1',
-            status: OcrProductReviewStatus.newProductReady,
-            skuErrorMessage: 'No se pudo reservar el SKU. Reintenta.',
-          ),
-        ],
+        lines: [line],
+        step: OcrPurchaseReviewStep.amounts,
         callbacks: OcrProductReviewCallbacks(
-          onRetrySkuReservation: retried.add,
-        ),
-      );
+            onConfirmRememberedResolution: (_) => applied++,
+            onRejectRememberedResolution: (_) => rejected++));
+    expect(find.text('confirmada por ti el 12/08/2026 · compra del 12/08/2026'),
+        findsOneWidget);
+    expect(find.text('Regla anterior'), findsOneWidget);
+    expect(find.text('Aplicar'), findsOneWidget);
+    expect(find.text('Cambiar'), findsOneWidget);
+    await tester.tap(find.byKey(const Key('ocr-review-reject-rule-l1')));
+    expect(rejected, 1);
+    expect(applied, 0);
+  });
 
-      expect(
-          find.text('No se pudo reservar el SKU. Reintenta.'), findsOneWidget);
-      await tester.tap(find.byKey(const Key('ocr-review-sku-retry-l1')));
-      await tester.pump();
-      expect(retried, <String>['l1']);
-      expect(tester.takeException(), isNull);
-    });
-
-    testWidgets('sin reserva pendiente, la celda es editable', (tester) async {
-      await _pump(
-        tester,
+  testWidgets('a changed rule says the confirmed choice will be saved',
+      (tester) async {
+    final line = _line(
+        id: 'l1',
+        status: OcrProductReviewStatus.ready,
+        identity: OcrProductIdentityDecision.existing,
+        ruleRejected: true);
+    await _pump(tester,
         size: const Size(1440, 900),
-        lines: <OcrProductReviewLine>[
-          _line(id: 'l1', status: OcrProductReviewStatus.ready),
-        ],
-      );
-      expect(find.byKey(const Key('ocr-review-sku-l1')), findsOneWidget);
-      expect(
-          find.byKey(const Key('ocr-review-sku-reserving-l1')), findsNothing);
-    });
+        lines: [line],
+        step: OcrPurchaseReviewStep.amounts);
+    expect(
+        find.byKey(const Key('ocr-review-rule-rejected-l1')), findsOneWidget);
+    expect(find.text('Se guardará tu elección'), findsOneWidget);
+    expect(find.byKey(const Key('ocr-review-apply-rule-l1')), findsNothing);
+  });
 
-    testWidgets('un código que da la base se muestra, no se edita',
-        (tester) async {
-      await _pump(
-        tester,
+  testWidgets(
+      'the bulk-creation step contains only new rows with fields in columns',
+      (tester) async {
+    await _pump(tester,
         size: const Size(1440, 900),
-        lines: <OcrProductReviewLine>[
+        step: OcrPurchaseReviewStep.newProducts,
+        lines: [
           _line(
-            id: 'l1',
-            status: OcrProductReviewStatus.newProductReady,
-            skuIsReadOnly: true,
-          ),
-        ],
-      );
-
-      // No text field: a number the database owns cannot be typed over, and a
-      // field that looks editable invites exactly that.
-      expect(find.byKey(const Key('ocr-review-sku-l1')), findsNothing);
-      expect(
-        find.byKey(const Key('ocr-review-sku-readonly-l1')),
-        findsOneWidget,
-      );
-      expect(find.text('AE0137'), findsWidgets);
-    });
-
-    testWidgets('mientras reserva, la fila no acepta otra decisión',
-        (tester) async {
-      final linked = <String>[];
-      final created = <String>[];
-      await _pump(
-        tester,
-        size: const Size(1440, 900),
-        lines: <OcrProductReviewLine>[
+              id: 'existing',
+              status: OcrProductReviewStatus.linked,
+              identity: OcrProductIdentityDecision.existing),
           _line(
+              id: 'new',
+              status: OcrProductReviewStatus.ready,
+              identity: OcrProductIdentityDecision.newProduct)
+        ]);
+    expect(
+        find.byKey(const Key('ocr-review-create-row-existing')), findsNothing);
+    final name = find.byKey(const Key('ocr-review-name-new'));
+    final cost = find.byKey(const Key('ocr-review-cost-new'));
+    final price = find.byKey(const Key('ocr-review-price-new'));
+    expect(name, findsOneWidget);
+    expect(cost, findsOneWidget);
+    expect(tester.getTopLeft(name).dx, lessThan(tester.getTopLeft(cost).dx));
+    expect(tester.getTopLeft(cost).dx, lessThan(tester.getTopLeft(price).dx));
+    expect(find.text('Configurar descomposición'), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('multiple new products expose their fields without row expansion',
+      (tester) async {
+    await _pump(tester,
+        size: const Size(1440, 900),
+        step: OcrPurchaseReviewStep.newProducts,
+        lines: [
+          for (final id in ['one', 'two'])
+            _line(
+                id: id,
+                status: OcrProductReviewStatus.ready,
+                identity: OcrProductIdentityDecision.newProduct),
+        ]);
+    expect(find.byType(ExpansionTile), findsNothing);
+    for (final id in ['one', 'two']) {
+      expect(
+          find.byKey(Key('ocr-review-name-$id')).hitTestable(), findsOneWidget);
+      expect(
+          find.byKey(Key('ocr-review-cost-$id')).hitTestable(), findsOneWidget);
+    }
+    expect(tester.takeException(), isNull);
+  });
+
+  for (final dark in [false, true]) {
+    for (final width in [390.0, 834.0, 900.0, 1311.0, 1312.0, 1440.0]) {
+      testWidgets(
+          'new-product grid retains fields and single errors at $width dark=$dark',
+          (tester) async {
+        final line = _line(
             id: 'l1',
             status: OcrProductReviewStatus.ready,
-            isReservingSku: true,
-          ),
-        ],
-        callbacks: OcrProductReviewCallbacks(
-          onLinkCandidate: (id, _) => linked.add(id),
-          onConfirmNewProduct: created.add,
-        ),
-      );
+            identity: OcrProductIdentityDecision.newProduct,
+            categoryValidationMessage: 'Selecciona una categoría',
+            errorMessage: 'Selecciona una categoría');
+        await _pump(tester,
+            size: Size(width, 1000),
+            dark: dark,
+            step: OcrPurchaseReviewStep.newProducts,
+            lines: [line]);
+        expect(find.text('Selecciona una categoría'), findsOneWidget);
+        expect(find.text('Unid./compra'), findsNothing);
+        expect(find.text('Unidades por compra'), findsNothing);
+        expect(find.byKey(const Key('ocr-review-new-units-l1')), findsNothing);
+        expect(
+            find.byKey(const Key('ocr-review-stock-receipt-l1')), findsNothing);
+        expect(line.newProductUnitsController!.text, '1');
+        expect(line.newProductInventoryQuantity, 5);
+        expect(find.byType(ExpansionTile), findsNothing);
+        final name = find.byKey(const Key('ocr-review-name-l1'));
+        final editable =
+            find.descendant(of: name, matching: find.byType(EditableText));
+        final border = InputDecorator.containerOf(tester.element(editable))!;
+        final touch = width - 32 < 900;
+        expect(border.size.height, closeTo(touch ? 48 : 34, .1));
+        if (width >= 1312) {
+          final inputs = ['name', 'sku', 'cost', 'price'];
+          for (final kind in inputs) {
+            final field = find.byKey(Key('ocr-review-$kind-l1'));
+            expect(tester.getTopLeft(field).dy,
+                closeTo(tester.getTopLeft(name).dy, .1));
+          }
+          // The frame wraps the batch rather than outlining a screen of empty space.
+          expect(
+              tester
+                  .getSize(find.byKey(const Key('ocr-new-products-table')))
+                  .height,
+              lessThan(180));
+          expect(find.text('Categoría'), findsOneWidget);
+          expect(find.text('Marca'), findsOneWidget);
+        }
+        final cost = find.byKey(const Key('ocr-review-cost-l1'));
+        await tester.ensureVisible(cost);
+        await tester.enterText(cost, '1234,5');
+        await tester.pump();
+        expect(line.controllers.cost.text, '1234,5');
+        expect(tester.takeException(), isNull);
+      });
+    }
+  }
 
-      for (final key in const <String>[
-        'ocr-review-link-l1',
-        'ocr-review-new-l1',
-      ]) {
-        final finder = find.byKey(Key(key));
-        if (finder.evaluate().isEmpty) continue;
-        await tester.tap(finder, warnIfMissed: false);
+  for (final isSold in [false, true]) {
+    testWidgets('step 3 workshop supply checkbox maps draft isSold=$isSold',
+        (tester) async {
+      var sold = <bool>[];
+      var copied = <String>[];
+      final line = OcrProductReviewLine(
+        id: 'l1',
+        isSold: isSold,
+        identityDecision: OcrProductIdentityDecision.newProduct,
+        isSelected: true,
+        sku: 'AE0140',
+        originalTitle: 'Luz trasera USB roja',
+        controllers: OcrProductDraftControllers(
+          sku: TextEditingController(text: 'AE0140'),
+          name: TextEditingController(text: 'Luz trasera USB'),
+          cost: TextEditingController(text: '3000'),
+          price: TextEditingController(text: '6000'),
+        ),
+        status: OcrProductReviewStatus.ready,
+        newProductUnitsController: TextEditingController(text: '1'),
+        newProductInventoryQuantity: 2,
+        sourceQuantity: 2,
+        categories: _categories,
+        brands: _brands,
+        category: _categories.first,
+        brand: _brands.first,
+        siblingLineId: 'l2',
+        siblingSuggestion:
+            'La línea “Luz trasera USB negra” comparte esta publicación.',
+      );
+      await _pump(tester,
+          size: const Size(1440, 900),
+          step: OcrPurchaseReviewStep.newProducts,
+          lines: [line],
+          callbacks: OcrProductReviewCallbacks(
+              onSoldChanged: (_, value) => sold.add(value),
+              onCopySibling: (_, sibling) => copied.add(sibling),
+              onReplaceImage: (_) {}));
+      expect(find.byKey(const Key('ocr-review-consumable-l1')), findsOneWidget);
+      expect(find.text('Insumo de taller'), findsOneWidget);
+      expect(
+          tester
+              .widget<Checkbox>(
+                  find.byKey(const Key('ocr-review-consumable-l1')))
+              .value,
+          !isSold);
+      await tester.tap(find.byKey(const Key('ocr-review-consumable-l1')));
+      expect(sold, [!isSold]);
+      await tester.tap(find.byKey(const Key('ocr-review-copy-sibling-l1')));
+      expect(copied, ['l2']);
+      expect(tester.takeException(), isNull);
+    });
+  }
+
+  for (final width in [1440.0, 390.0]) {
+    testWidgets('product images accept platform drops and click at $width',
+        (tester) async {
+      final drops = <String>[];
+      final clicks = <String>[];
+      await _pump(tester,
+          size: Size(width, 1000),
+          step: OcrPurchaseReviewStep.newProducts,
+          lines: [
+            for (final id in ['one', 'two'])
+              _line(
+                  id: id,
+                  status: OcrProductReviewStatus.ready,
+                  identity: OcrProductIdentityDecision.newProduct),
+          ],
+          callbacks: OcrProductReviewCallbacks(
+              onDropImage: (id, files) => drops.add('$id:${files.single.name}'),
+              onReplaceImage: clicks.add));
+      final image = find.byKey(const Key('ocr-review-image-one'));
+      final position = tester.getCenter(image);
+      const codec = StandardMethodCodec();
+      Future<void> send(String method, Object args) async {
+        await tester.binding.defaultBinaryMessenger.handlePlatformMessage(
+            'desktop_drop',
+            codec.encodeMethodCall(MethodCall(method, args)),
+            (_) {});
         await tester.pump();
       }
-      expect(linked, isEmpty);
-      expect(created, isEmpty);
+
+      await send('entered', [position.dx, position.dy]);
+      expect(find.byIcon(Icons.add_photo_alternate_outlined), findsOneWidget);
+      await send('performOperation', ['/tmp/product-test.png']);
+      expect(drops, ['one:product-test.png']);
+      expect(find.byIcon(Icons.add_photo_alternate_outlined), findsNothing);
+      await tester.tap(image);
+      await tester.pumpAndSettle();
+      for (final target
+          in tester.widgetList<DropTarget>(find.byType(DropTarget))) {
+        expect(target.enable, isFalse);
+      }
+      await tester.tap(find.text('Reemplazar imagen'));
+      await tester.pumpAndSettle();
+      expect(clicks, ['one']);
       expect(tester.takeException(), isNull);
     });
+  }
+
+  testWidgets('a locally staged image can be removed before upload',
+      (tester) async {
+    final removed = <String>[];
+    await _pump(tester,
+        size: const Size(1440, 900),
+        step: OcrPurchaseReviewStep.newProducts,
+        lines: [
+          _line(
+              id: 'l1',
+              status: OcrProductReviewStatus.ready,
+              identity: OcrProductIdentityDecision.newProduct,
+              imageBytes: base64Decode(
+                  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAACklEQVR4nGMAAQAABQABDQottAAAAABJRU5ErkJggg=='))
+        ],
+        callbacks: OcrProductReviewCallbacks(onRemoveImage: removed.add));
+    await tester.tap(find.byKey(const Key('ocr-review-image-l1')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Quitar imagen'));
+    await tester.pumpAndSettle();
+    expect(removed, ['l1']);
+    expect(tester.takeException(), isNull);
   });
 
-  testWidgets('modo oscuro no rompe la composición', (tester) async {
-    await _pump(
-      tester,
-      size: const Size(1440, 900),
-      lines: _threeLines(),
-      dark: true,
-    );
+  for (final dark in [false, true]) {
+    testWidgets('hover reveals a direct image remove action dark=$dark',
+        (tester) async {
+      final removed = <String>[];
+      await _pump(tester,
+          size: const Size(1440, 900),
+          dark: dark,
+          step: OcrPurchaseReviewStep.newProducts,
+          lines: [
+            _line(
+                id: 'l1',
+                status: OcrProductReviewStatus.ready,
+                identity: OcrProductIdentityDecision.newProduct,
+                imageBytes: base64Decode(
+                    'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAACklEQVR4nGMAAQAABQABDQottAAAAABJRU5ErkJggg=='))
+          ],
+          callbacks: OcrProductReviewCallbacks(onRemoveImage: removed.add));
+      final clear = find.byKey(const Key('ocr-review-clear-image-l1'));
+      expect(clear, findsNothing);
+      final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
+      await mouse.addPointer(location: Offset.zero);
+      await mouse.moveTo(
+          tester.getCenter(find.byKey(const Key('ocr-review-image-l1'))));
+      await tester.pumpAndSettle();
+      expect(clear.hitTestable(), findsOneWidget);
+      final imageRect =
+          tester.getRect(find.byKey(const Key('ocr-review-image-l1')));
+      final clearRect = tester.getRect(clear);
+      expect(clearRect.width * clearRect.height,
+          lessThan(imageRect.width * imageRect.height / 4));
+      expect(clearRect.topRight, imageRect.topRight);
+      // The rest of the thumbnail keeps its own action, not a hidden delete
+      // target larger than the visible cross.
+      await tester.tapAt(imageRect.bottomLeft + const Offset(4, -4));
+      await tester.pumpAndSettle();
+      expect(removed, isEmpty);
+      expect(
+          find.byKey(const Key('ocr-review-remove-image-l1')), findsOneWidget);
+      await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+      await tester.pumpAndSettle();
+      FocusManager.instance.primaryFocus?.unfocus();
+      await mouse.moveTo(Offset.zero);
+      await tester.pumpAndSettle();
+      expect(clear, findsNothing);
+      await mouse.moveTo(
+          tester.getCenter(find.byKey(const Key('ocr-review-image-l1'))));
+      await tester.pumpAndSettle();
+      await tester.tap(clear);
+      await tester.pumpAndSettle();
+      expect(removed, ['l1']);
+      expect(find.byType(PopupMenuItem), findsNothing);
+      await mouse.removePointer();
+      expect(tester.takeException(), isNull);
+    });
+  }
+
+  for (final locked in ['readOnly', 'loading']) {
+    testWidgets('image drop is disabled while $locked', (tester) async {
+      await _pump(tester,
+          size: const Size(1440, 900),
+          step: OcrPurchaseReviewStep.newProducts,
+          readOnly: locked == 'readOnly',
+          lines: [
+            _line(
+                id: 'l1',
+                status: OcrProductReviewStatus.ready,
+                isUploadingImage: locked == 'loading',
+                identity: OcrProductIdentityDecision.newProduct)
+          ],
+          callbacks: OcrProductReviewCallbacks(onDropImage: (_, __) {}));
+      expect(find.byType(DropTarget), findsNothing);
+    });
+  }
+
+  testWidgets('new-product edits survive compact recomposition',
+      (tester) async {
+    final line = _line(
+        id: 'l1',
+        status: OcrProductReviewStatus.ready,
+        identity: OcrProductIdentityDecision.newProduct);
+    await _pump(tester,
+        size: const Size(1440, 900),
+        step: OcrPurchaseReviewStep.newProducts,
+        lines: [line]);
+    await tester.enterText(
+        find.byKey(const Key('ocr-review-name-l1')), 'Tee corregida');
+    tester.view.physicalSize = const Size(390, 844);
+    await tester.pump();
+    expect(line.controllers.name.text, 'Tee corregida');
+    expect(find.byKey(const Key('ocr-review-name-l1')), findsOneWidget);
     expect(tester.takeException(), isNull);
-    expect(find.byKey(const Key('ocr-review-table')), findsOneWidget);
+  });
+
+  testWidgets(
+      'category selection preserves full branch identity and keyboard access',
+      (tester) async {
+    Category? chosen;
+    await _pump(tester,
+        size: const Size(1440, 900),
+        step: OcrPurchaseReviewStep.newProducts,
+        lines: [
+          _line(
+              id: 'l1',
+              status: OcrProductReviewStatus.ready,
+              identity: OcrProductIdentityDecision.newProduct,
+              categories: _ambiguousCategories)
+        ],
+        callbacks: OcrProductReviewCallbacks(
+            onCategoryChanged: (_, value) => chosen = value));
+    await tester.tap(find.byKey(const Key('ocr-review-category-l1')));
+    await tester.pumpAndSettle();
+    expect(find.text('Accesorios / Adaptadores'), findsOneWidget);
+    expect(find.text('Componentes / Frenos / Adaptadores'), findsOneWidget);
+    await tester.enterText(find.byType(TextField).last, 'Rotores');
+    await tester.pumpAndSettle();
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
+    await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+    await tester.pumpAndSettle();
+    expect(chosen?.name, 'Rotores');
+  });
+
+  testWidgets(
+      'compact dark identity keeps professional decisions and record access',
+      (tester) async {
+    await _pump(tester,
+        size: const Size(390, 844),
+        dark: true,
+        lines: [_line(id: 'l1', status: OcrProductReviewStatus.ready)]);
+    expect(find.text('Seleccionar'), findsOneWidget);
+    expect(find.text('Marcar como nuevo'), findsOneWidget);
+    expect(find.text('Seleccionar producto'), findsNothing);
+    expect(find.text('Es este'), findsNothing);
+    expect(find.text('Preparar nuevo'), findsNothing);
+    expect(tester.takeException(), isNull);
   });
 }
 
@@ -562,6 +845,9 @@ Future<void> _pump(
   required List<OcrProductReviewLine> lines,
   OcrProductReviewCallbacks callbacks = const OcrProductReviewCallbacks(),
   bool dark = false,
+  bool readOnly = false,
+  OcrPurchaseReviewStep step = OcrPurchaseReviewStep.identify,
+  OcrProductReviewActivity? activity,
 }) async {
   tester.view.physicalSize = size;
   tester.view.devicePixelRatio = 1;
@@ -576,6 +862,9 @@ Future<void> _pump(
       home: Scaffold(
         body: OcrProductReviewWorkspace(
           lines: lines,
+          readOnly: readOnly,
+          step: step,
+          activity: activity,
           callbacks: callbacks,
           primaryLabel: 'Crear productos',
           pricingPolicyLabel: 'Precio sugerido = costo × 2',
@@ -614,26 +903,63 @@ final _brands = <ProductBrand>[
   ProductBrand(id: 'b2', tenantId: 'tenant-test', name: 'Shimano'),
 ];
 
-List<OcrProductReviewLine> _threeLines() => <OcrProductReviewLine>[
-      _line(id: 'l1', status: OcrProductReviewStatus.ready),
-      _line(id: 'l2', status: OcrProductReviewStatus.searching),
-      _line(id: 'l3', status: OcrProductReviewStatus.linked),
-    ];
-
 OcrProductReviewLine _line({
   required String id,
   required OcrProductReviewStatus status,
+  OcrProductIdentityDecision identity = OcrProductIdentityDecision.undecided,
+  bool remembered = false,
+  bool isUploadingImage = false,
+  Uint8List? imageBytes,
   List<ProductDuplicateCandidate> candidates = const [],
   List<Category>? categories,
   Category? category,
   String? categoryValidationMessage,
   String? brandWarning,
   bool isReservingSku = false,
+  bool queued = false,
   bool skuIsReadOnly = false,
   String? skuErrorMessage,
+  int viableCandidateCount = 0,
+  int discardedCandidateCount = 0,
+  int categoryConflictCount = 0,
+  String? aiCompositeProposal,
+  bool canConfirmCompositeProposal = false,
+  OcrProductResolvedMode resolvedMode = OcrProductResolvedMode.catalogLink,
+  String? resolvedOutcomeSummary,
+  bool canChangeResolvedDecision = true,
+  bool ruleRejected = false,
+  String? ruleAttribution,
+  bool hasInventoryProduct = true,
+  OcrCandidateEvidence? bestEvidence,
+  String? sharedWithLineTitle,
+  String? categoryObjection,
+  bool appliedComposition = false,
+  List<OcrReviewComponent> resolutionComponents = const [],
+  String? errorMessage,
 }) {
   return OcrProductReviewLine(
     id: id,
+    isUploadingImage: isUploadingImage,
+    imageBytes: imageBytes,
+    identityDecision: identity,
+    inventoryProduct: hasInventoryProduct ? _candidates(1).first.product : null,
+    inventoryOrigin: 'Mejor coincidencia',
+    bestEvidence: bestEvidence,
+    sharedWithLineTitle: sharedWithLineTitle,
+    categoryObjection: categoryObjection,
+    appliedComposition: appliedComposition,
+    resolutionComponents: resolutionComponents,
+    errorMessage: errorMessage,
+    hasRememberedSuggestion: remembered,
+    ruleRejected: ruleRejected,
+    ruleAttribution: ruleAttribution,
+    purchaseQuantityController: TextEditingController(text: '5'),
+    purchaseUnitCostController: TextEditingController(text: '8048.4'),
+    purchaseTotalController: TextEditingController(text: '40242'),
+    purchaseUnitsController: TextEditingController(text: '1'),
+    newProductUnitsController: TextEditingController(text: '1'),
+    newProductInventoryQuantity: 5,
+    purchaseAmountsValid: true,
     sku: 'AE0${id.hashCode.abs() % 900 + 100}',
     originalTitle: 'WAKE-vástago ligero de aluminio 31,8mm',
     supplierCode: '1005007336672891',
@@ -648,6 +974,11 @@ OcrProductReviewLine _line({
     candidates: candidates.isEmpty && status == OcrProductReviewStatus.ready
         ? _candidates(1)
         : candidates,
+    viableCandidateCount: viableCandidateCount,
+    discardedCandidateCount: discardedCandidateCount,
+    categoryConflictCount: categoryConflictCount,
+    aiCompositeProposal: aiCompositeProposal,
+    canConfirmCompositeProposal: canConfirmCompositeProposal,
     categories: categories ?? _categories,
     brands: _brands,
     category: categoryValidationMessage != null
@@ -657,10 +988,14 @@ OcrProductReviewLine _line({
     categoryValidationMessage: categoryValidationMessage,
     brandWarning: brandWarning,
     isReservingSku: isReservingSku,
+    queued: queued,
     skuIsReadOnly: skuIsReadOnly,
     skuErrorMessage: skuErrorMessage,
     resolvedProductName: 'Tee Aluminio Wake MTB 31.8MM Rojo',
     resolvedProductSku: 'AE0137',
+    resolvedMode: resolvedMode,
+    resolvedOutcomeSummary: resolvedOutcomeSummary,
+    canChangeResolvedDecision: canChangeResolvedDecision,
   );
 }
 

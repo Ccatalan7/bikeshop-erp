@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
@@ -5,6 +6,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:vinabike_erp/modules/mail/models/mail_folder.dart';
 import 'package:vinabike_erp/modules/mail/providers/email_provider.dart';
 import 'package:vinabike_erp/modules/mail/providers/mail_account_manager.dart';
+import 'package:vinabike_erp/shared/services/mail_notification_gate.dart';
 
 /// El modelo de lectura unificado con carpetas tiene dos invariantes que no
 /// pueden depender de qué carpeta esté mirando el usuario:
@@ -32,15 +34,17 @@ void main() {
     MailFolder folder = MailFolder.inbox,
     bool isRead = false,
     String to = 'taller@vinabike.cl',
+    DateTime? receivedTime,
+    String providerId = 'scripted',
   }) {
     return Email(
       id: id,
-      providerId: 'scripted',
+      providerId: providerId,
       folderId: folder.name,
       subject: 'Asunto $id',
       fromAddress: 'Remitente <r@example.com>',
       toAddress: to,
-      receivedTime: DateTime(2026, 8, 5, 12),
+      receivedTime: receivedTime ?? DateTime(2026, 8, 5, 12),
       isRead: isRead,
       hasAttachment: false,
     );
@@ -161,9 +165,416 @@ void main() {
     expect(manager.selectedEmail, isNull);
     expect(manager.emails, isEmpty);
   });
+
+  test('abrir un correo revierte el leído local si el proveedor falla',
+      () async {
+    final unread = mail('in-1');
+    provider.script(MailFolder.inbox, [unread]);
+    await manager.refreshInbox();
+
+    final remoteMutation = Completer<bool>();
+    provider.markReadCompleters.add(remoteMutation);
+    provider.providerError = 'El proveedor rechazó la actualización.';
+
+    final selection = manager.selectEmail(unread);
+
+    expect(
+      manager.emails.single.isRead,
+      isTrue,
+      reason: 'la proyección optimista mantiene la interfaz inmediata',
+    );
+    expect(provider.markReadCalls, [(id: 'in-1', read: true)]);
+
+    remoteMutation.complete(false);
+    await selection;
+    await pumpEventQueue();
+
+    expect(manager.emails.single.isRead, isFalse);
+    expect(manager.unreadCount, 1);
+    expect(manager.error, contains('Se restauró el estado confirmado'));
+  });
+
+  test('serializa leído y no leído para no invertir el estado remoto',
+      () async {
+    final unread = mail('in-1');
+    provider.script(MailFolder.inbox, [unread]);
+    await manager.refreshInbox();
+
+    final markRead = Completer<bool>();
+    final markUnread = Completer<bool>();
+    provider.markReadCompleters.addAll([markRead, markUnread]);
+
+    final first = manager.markAsRead(unread);
+    final second = manager.markAsRead(unread, read: false);
+
+    expect(manager.emails.single.isRead, isFalse);
+    expect(
+      provider.markReadCalls,
+      [(id: 'in-1', read: true)],
+      reason: 'la segunda mutación espera la confirmación de la primera',
+    );
+
+    markRead.complete(true);
+    expect(await first, isTrue);
+    await pumpEventQueue();
+    expect(
+      provider.markReadCalls,
+      [(id: 'in-1', read: true), (id: 'in-1', read: false)],
+    );
+
+    markUnread.complete(true);
+    expect(await second, isTrue);
+    await pumpEventQueue();
+
+    expect(manager.emails.single.isRead, isFalse);
+    expect(manager.unreadCount, 1);
+  });
+
+  test('un refresco vacío autoritativo elimina correos movidos en otro equipo',
+      () async {
+    provider.script(MailFolder.inbox, [mail('in-1')]);
+    await manager.refreshInbox();
+    expect(manager.emails, hasLength(1));
+
+    provider.script(MailFolder.inbox, const []);
+    await manager.refreshInbox();
+
+    expect(manager.emails, isEmpty);
+    expect(manager.unreadCount, 0);
+  });
+
+  test('el refresh de fondo reconcilia leído en todas las páginas cargadas',
+      () async {
+    final firstPage = List.generate(
+      MailAccountManager.inboxPageSize,
+      (index) => mail('in-$index'),
+    );
+    final secondPage = List.generate(
+      25,
+      (index) => mail('in-${MailAccountManager.inboxPageSize + index}'),
+    );
+    provider.script(MailFolder.inbox, firstPage, hasMore: true);
+    await manager.refreshInbox();
+    provider.script(MailFolder.inbox, secondPage);
+    await manager.loadMore();
+    expect(manager.emails, hasLength(75));
+    expect(manager.unreadCount, 75);
+
+    provider.script(
+      MailFolder.inbox,
+      firstPage.map((email) => email.copyWith(isRead: true)).toList(),
+      hasMore: true,
+    );
+    provider.script(
+      MailFolder.inbox,
+      secondPage.map((email) => email.copyWith(isRead: true)).toList(),
+    );
+
+    await manager.refreshInbox(background: true);
+
+    expect(
+      provider.listedStarts.sublist(provider.listedStarts.length - 2),
+      [0, MailAccountManager.inboxPageSize],
+    );
+    expect(manager.emails, hasLength(75));
+    expect(manager.unreadCount, 0);
+  });
+
+  test('correo nuevo no desplaza fuera de la reconciliación al caché antiguo',
+      () async {
+    final baselineTime = DateTime(2026, 8, 5, 12);
+    final known = List.generate(
+      75,
+      (index) => mail(
+        'known-$index',
+        receivedTime: baselineTime.subtract(Duration(minutes: index)),
+      ),
+    );
+    provider.script(
+      MailFolder.inbox,
+      known.take(MailAccountManager.inboxPageSize).toList(),
+      hasMore: true,
+    );
+    await manager.refreshInbox();
+    provider.script(MailFolder.inbox, known.skip(50).toList());
+    await manager.loadMore();
+
+    final newRows = List.generate(
+      30,
+      (index) => mail(
+        'new-$index',
+        isRead: true,
+        receivedTime: baselineTime.add(Duration(minutes: index + 1)),
+      ),
+    );
+    provider.script(
+      MailFolder.inbox,
+      [
+        ...newRows,
+        ...known.take(20).map((email) => email.copyWith(isRead: true)),
+      ],
+      hasMore: true,
+    );
+    provider.script(
+      MailFolder.inbox,
+      known
+          .skip(20)
+          .take(50)
+          .map((email) => email.copyWith(isRead: true))
+          .toList(),
+      hasMore: true,
+    );
+    provider.script(
+      MailFolder.inbox,
+      [
+        ...known.skip(70).map((email) => email.copyWith(isRead: true)),
+        ...List.generate(
+          45,
+          (index) => mail(
+            'older-$index',
+            isRead: true,
+            receivedTime: baselineTime.subtract(Duration(days: index + 1)),
+          ),
+        ),
+      ],
+    );
+
+    await manager.refreshInbox(background: true);
+
+    expect(
+      provider.listedStarts.sublist(provider.listedStarts.length - 3),
+      [0, 50, 100],
+      reason: 'el conteo cargado no basta cuando llegaron correos nuevos',
+    );
+    expect(
+      manager.emails
+          .where((email) => email.id.startsWith('known-'))
+          .every((email) => email.isRead),
+      isTrue,
+    );
+  });
+
+  test('ampliar la ventana paginada no notifica correos antiguos', () async {
+    MailNotificationGate.shared.activateScope(
+      userId: 'user-test',
+      tenantId: 'tenant-test',
+    );
+    addTearDown(MailNotificationGate.shared.clearScope);
+    final notifications = <Email>[];
+    final subscription = manager.newEmailStream.listen(notifications.add);
+    addTearDown(subscription.cancel);
+
+    final baselineTime = DateTime(2026, 8, 5, 12);
+    final firstPage = List.generate(
+      MailAccountManager.inboxPageSize,
+      (index) => mail('in-$index', receivedTime: baselineTime),
+    );
+    final secondPage = List.generate(
+      25,
+      (index) => mail(
+        'in-${MailAccountManager.inboxPageSize + index}',
+        receivedTime: baselineTime.subtract(const Duration(minutes: 1)),
+      ),
+    );
+    provider.script(MailFolder.inbox, firstPage, hasMore: true);
+    await manager.refreshInbox();
+    provider.script(MailFolder.inbox, secondPage);
+    await manager.loadMore();
+
+    final trulyNew = mail(
+      'new',
+      receivedTime: baselineTime.add(const Duration(minutes: 1)),
+    );
+    provider.script(
+      MailFolder.inbox,
+      [trulyNew, ...firstPage.take(49)],
+      hasMore: true,
+    );
+    provider.script(
+      MailFolder.inbox,
+      [
+        firstPage.last,
+        ...secondPage,
+        ...List.generate(
+          4,
+          (index) => mail(
+            'old-extra-$index',
+            receivedTime: baselineTime.subtract(const Duration(days: 1)),
+          ),
+        ),
+      ],
+    );
+
+    await manager.refreshInbox(background: true);
+    await pumpEventQueue();
+
+    expect(notifications.map((email) => email.id), ['new']);
+    expect(manager.emails.map((email) => email.id), contains('old-extra-0'));
+  });
+
+  test('un fallo DNS de lectura se reintenta y publica sólo al recuperarse',
+      () async {
+    manager.debugTransientReadRetryWaitOverride = (_) async {};
+    provider.getMessageErrors.add(
+      Exception('SocketException: Failed host lookup'),
+    );
+    provider.script(MailFolder.inbox, [mail('in-1')]);
+
+    await manager.refreshInbox();
+
+    expect(provider.listedStarts, [0, 0]);
+    expect(manager.emails.map((email) => email.id), ['in-1']);
+    expect(manager.error, isNull);
+    expect(manager.lastFetch, isNotNull);
+  });
+
+  test('un fallo DNS persistente conserva caché y no finge frescura', () async {
+    manager.debugTransientReadRetryWaitOverride = (_) async {};
+    provider.getMessageErrors.addAll([
+      Exception('SocketException: Failed host lookup: internal.example'),
+      Exception('SocketException: Failed host lookup: internal.example'),
+      Exception('SocketException: Failed host lookup: internal.example'),
+    ]);
+
+    await manager.refreshInbox();
+
+    expect(provider.listedStarts, [0, 0, 0]);
+    expect(manager.lastFetch, isNull);
+    expect(manager.error, contains('Red/API'));
+    expect(manager.error, isNot(contains('internal.example')));
+  });
+
+  test('un 429 de cualquier proveedor conserva caché y corta el polling',
+      () async {
+    provider.script(MailFolder.inbox, [mail('in-1')]);
+    await manager.refreshInbox();
+    final confirmedFetch = manager.lastFetch;
+    final listedBeforeLimit = provider.listedStarts.length;
+
+    provider.getMessageErrors.add(
+      EmailProviderRateLimitException(
+        providerId: provider.providerId,
+        retryAt: DateTime.now().toUtc().add(const Duration(minutes: 10)),
+      ),
+    );
+    await manager.refreshInbox(background: true);
+
+    expect(provider.listedStarts.length, listedBeforeLimit + 1);
+    expect(manager.emails.map((email) => email.id), ['in-1']);
+    expect(manager.lastFetch, confirmedFetch,
+        reason: 'un resultado diferido no puede fingir frescura');
+    expect(manager.error, isNull,
+        reason: 'el caché conocido sigue siendo una vista utilizable');
+
+    await manager.refreshInbox(background: true);
+
+    expect(provider.listedStarts.length, listedBeforeLimit + 1,
+        reason: 'el cooldown local evita volver a tocar el proveedor');
+    expect(manager.emails.map((email) => email.id), ['in-1']);
+  });
+
+  test('un 429 sin caché falla cerrado aunque el cooldown evite otro request',
+      () async {
+    provider.getMessageErrors.add(
+      EmailProviderRateLimitException(
+        providerId: provider.providerId,
+        retryAt: DateTime.now().toUtc().add(const Duration(minutes: 10)),
+      ),
+    );
+
+    await manager.refreshInbox();
+    expect(manager.emails, isEmpty);
+    expect(manager.error, contains(provider.displayName));
+    expect(provider.listedStarts, [0]);
+
+    await manager.refreshInbox(background: true);
+    expect(provider.listedStarts, [0]);
+    expect(manager.error, contains(provider.displayName));
+  });
+
+  test('un proveedor diferido no acelera las lecturas del proveedor sano',
+      () async {
+    final healthy = _ScriptedProvider(
+      providerId: 'healthy',
+      displayName: 'Healthy',
+    );
+    manager.debugAttachProvider(healthy);
+    provider.script(MailFolder.inbox, [mail('limited-1')]);
+    healthy.script(
+      MailFolder.inbox,
+      [mail('healthy-1', providerId: 'healthy')],
+    );
+    await manager.refreshInbox();
+
+    provider.getMessageErrors.add(
+      EmailProviderRateLimitException(
+        providerId: provider.providerId,
+        retryAt: DateTime.now().toUtc().add(const Duration(minutes: 10)),
+      ),
+    );
+    healthy.script(
+      MailFolder.inbox,
+      [mail('healthy-1', providerId: 'healthy', isRead: true)],
+    );
+    await manager.refreshInbox();
+    final limitedCalls = provider.listedStarts.length;
+    final healthyCalls = healthy.listedStarts.length;
+
+    await manager.refreshInbox(background: true);
+
+    expect(provider.listedStarts.length, limitedCalls,
+        reason: 'el proveedor limitado conserva su cooldown propio');
+    expect(healthy.listedStarts.length, healthyCalls,
+        reason: 'el proveedor sano conserva su propia frescura de 30 s');
+    expect(
+      manager.emails
+          .singleWhere((email) => email.providerId == 'healthy')
+          .isRead,
+      isTrue,
+    );
+  });
+
+  test('responder usa la operación nativa y conserva la identidad del hilo',
+      () async {
+    final original = mail('in-1').copyWith(
+      threadId: 'thread-1',
+      rfcMessageId: '<message-1@example.com>',
+      references: '<parent@example.com>',
+    );
+
+    final success = await manager.replyToEmail(
+      originalEmail: original,
+      content: '<p>Respuesta</p>',
+      to: 'sender@example.com',
+      subject: 'Re: Asunto in-1',
+      fromAddress: 'scripted@example.com',
+      cc: 'team@example.com',
+      replyAll: true,
+    );
+
+    expect(success, isTrue);
+    expect(provider.replyCalls, [
+      {
+        'emailId': 'in-1',
+        'threadId': 'thread-1',
+        'rfcMessageId': '<message-1@example.com>',
+        'references': '<parent@example.com>',
+        'to': 'sender@example.com',
+        'subject': 'Re: Asunto in-1',
+        'fromAddress': 'scripted@example.com',
+        'cc': 'team@example.com',
+        'replyAll': true,
+      }
+    ]);
+  });
 }
 
 class _ScriptedProvider extends EmailProvider {
+  _ScriptedProvider({
+    this.providerId = 'scripted',
+    this.displayName = 'Scripted',
+  });
+
   /// Cola de páginas por carpeta: cada fetch consume una y publica el
   /// `hasMore` que rige DESPUÉS de esa página, como un servidor real.
   final Map<MailFolder, List<({List<Email> emails, bool hasMoreAfter})>>
@@ -175,6 +586,11 @@ class _ScriptedProvider extends EmailProvider {
   final List<String> spamIds = [];
   final List<String> notSpamIds = [];
   final List<String> trashedIds = [];
+  final List<Completer<bool>> markReadCompleters = [];
+  final List<({String id, bool read})> markReadCalls = [];
+  final List<Map<String, Object?>> replyCalls = [];
+  final List<Object> getMessageErrors = [];
+  String? providerError;
 
   void script(MailFolder folder, List<Email> emails, {bool hasMore = false}) {
     _pageQueues
@@ -183,16 +599,16 @@ class _ScriptedProvider extends EmailProvider {
   }
 
   @override
-  String get providerId => 'scripted';
+  final String providerId;
 
   @override
-  String get displayName => 'Scripted';
+  final String displayName;
 
   @override
   String get iconAsset => '';
 
   @override
-  String? get accountEmail => 'scripted@example.com';
+  String? get accountEmail => '$providerId@example.com';
 
   @override
   bool get isAuthenticated => true;
@@ -201,7 +617,7 @@ class _ScriptedProvider extends EmailProvider {
   bool get isLoading => false;
 
   @override
-  String? get error => null;
+  String? get error => providerError;
 
   @override
   List<Email> get emails => const [];
@@ -249,6 +665,12 @@ class _ScriptedProvider extends EmailProvider {
   }) async {
     listedFolders.add(folder);
     listedStarts.add(start);
+    if (getMessageErrors.isNotEmpty) {
+      final error = getMessageErrors.removeAt(0);
+      providerError = error.toString();
+      throw error;
+    }
+    providerError = null;
     final queue = _pageQueues[folder];
     if (queue == null || queue.isEmpty) return const [];
     final page = queue.removeAt(0);
@@ -282,9 +704,29 @@ class _ScriptedProvider extends EmailProvider {
   Future<bool> replyToEmail({
     required String emailId,
     required String content,
+    required String to,
+    required String subject,
+    String? fromAddress,
+    String? cc,
+    String? bcc,
+    String? threadId,
+    String? rfcMessageId,
+    String? references,
     bool replyAll = false,
-  }) async =>
-      true;
+  }) async {
+    replyCalls.add({
+      'emailId': emailId,
+      'threadId': threadId,
+      'rfcMessageId': rfcMessageId,
+      'references': references,
+      'to': to,
+      'subject': subject,
+      'fromAddress': fromAddress,
+      'cc': cc,
+      'replyAll': replyAll,
+    });
+    return true;
+  }
 
   @override
   Future<bool> moveToTrash(String emailId) async {
@@ -311,7 +753,11 @@ class _ScriptedProvider extends EmailProvider {
   }
 
   @override
-  Future<bool> markAsRead(String emailId, {bool read = true}) async => true;
+  Future<bool> markAsRead(String emailId, {bool read = true}) async {
+    markReadCalls.add((id: emailId, read: read));
+    if (markReadCompleters.isEmpty) return true;
+    return markReadCompleters.removeAt(0).future;
+  }
 
   @override
   void clearError() {}

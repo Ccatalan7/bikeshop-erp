@@ -1,0 +1,672 @@
+{
+ "schema_version": 1,
+ "title": "Revisión independiente de las correcciones de root al paquete de ruedas, dirección y suspensión",
+ "author": "Claude (Opus 5); revisor independiente de representación",
+ "prepared_on": "2026-09-07",
+ "status": "revisión; no se editó implementación, catálogo, pruebas, producción ni runtime",
+ "reviewed_artifacts_sha256": {
+  "all-family-wss-integrated-2026-09-07.json": "6ed9cdf73ae5d9fc0aa2284bb4691f4f1eca958c2762c5ea1e7076c5f9358b18",
+  "wss-root-decisions-2026-09-07.json": "9afde6ed983b76e0eea953461d71a10c5a8125e2f5b4a5bcc7957b0d3c297799",
+  "wss-representation-cases-2026-09-07.json": "322a9279a71b8eb51f19456ae5041b153707af9d0991741be61a0dc70f8560ee",
+  "scripts/inventory/normalize_wss_review.py": "f30311cd48dd522c4b757db4466550b9cc246c691587df917c33a357af4c240d",
+  "wheels-steering-suspension-implementation-packet-2026-09-07.json (mi paquete, congelado)": "c03ebe91fa7e56d32ffb44a0a6ba3b00a4ff917b296068773e2a95027444b3bd",
+  "wheels-steering-suspension-packet-semantic-review-2026-09-07.json (mi revisión previa)": "d45728eefb34ce50598e1d89d272bcf9bd92ff3c0283e91573404cf290e14171"
+ },
+ "headline": "Los nueve puntos que root pidió verificar están correctos en la base final, incluido el que yo tenía factualmente al revés. Quedan siete hallazgos: dos contradicciones físicas todavía escribibles, una tercera en una fila, una divergencia entre clave y rótulo que contradice una decisión del mismo día, y tres asuntos de fidelidad o alcance que no son imposibilidades.",
+ "my_own_error_corrected": "Corrección de un error mío, con fuente. En el paquete congelado propuse el token «MAX / sin canal de llenado». Enduro describe lo contrario: el MAX consigue el complemento completo de bolas por una ranura mecanizada en las pistas y por quitar la jaula. El token era falso al revés, y además excluyente frente a contacto angular cuando el propio fabricante vende 7902 2RS MAX y 3901 LLU MAX como angular contact. La corrección de root a texto literal más un eje aparte de retención es la respuesta correcta.",
+ "sources": {
+  "S-ENDURO-MAX": {
+   "title": "Enduro Bearings — páginas de producto de suspensión y «Enduro Innovations»",
+   "url": "https://cycling.endurobearings.com/products/7902-2rs-max",
+   "grade": "oem_page",
+   "read": "búsqueda y lectura de fichas OEM 2026-09-07",
+   "states": [
+    "Los MAX consiguen el complemento completo de bolas por una ranura mecanizada en las pistas y por eliminar la jaula; el fabricante lo describe como 35–40 % más capacidad de carga.",
+    "MAX y contacto angular NO son excluyentes: el 7902 2RS MAX se rotula «Angular-Contact, MAX-Design, Radial»; el 7900 1ZS MAX igual; el 3901 LLU MAX es «MAX-Design, Double-Row, Angular-Contact».",
+    "Hay versiones MAX selladas y engrasables, y variantes de doble hilera."
+   ]
+  },
+  "S-PARK-HEADSET": {
+   "title": "Park Tool — Headset Standards",
+   "url": "https://www.parktool.com/en-us/blog/repair-help/headset-standards",
+   "grade": "reference_general",
+   "read": "lectura web 2026-09-07",
+   "states": [
+    "Un cartucho marcado «36-45»: el primer número es el contacto interior con la pista o cono de centrado y el segundo el contacto con el cuadro.",
+    "Enumera bolas sueltas, bolas en canastillo y cartucho como tres cosas distintas; no atribuye ese par a las dos primeras."
+   ]
+  },
+  "S-CONTI": {
+   "title": "Continental — Hookless vs. Hooked Rims",
+   "url": "https://www.continental-tires.com/us/en/tire-knowledge/hookless-vs-hooked-rims/",
+   "grade": "oem_page (citada en la revisión W del 2026-09-06; no releída aquí)",
+   "states": [
+    "Publica un límite superior de ancho interior y una presión máxima por variante y perfil: 700×28c hookless 23 mm y 5,0 bar. La cifra es un techo, y la presión viene en bar."
+   ]
+  },
+  "S-FOX40": {
+   "title": "FOX 2013 — Installing the 40",
+   "url": "https://tech.ridefox.com/fox_tech_center/owners_manuals/013/Content/Forks/40/40withDMS_Installation.html",
+   "grade": "oem_manual (citado en la revisión W; no releído aquí)",
+   "states": [
+    "Columna 40 mm/26\": diámetro de pico ≤694 mm y diámetro de borde ≤670 mm del neumático inflado; el borde se mide por dentro del pico.",
+    "La comprobación de stack total 105–166,8 mm es de la corona direct mount de doble corona."
+   ]
+  },
+  "S-SHELDON": {
+   "title": "Sheldon Brown — glosario de dirección y de rodamientos",
+   "url": "https://www.sheldonbrown.com/gloss_he-i.html",
+   "grade": "reference_general",
+   "read": "referencia general",
+   "states": [
+    "Distingue el rodamiento de cartucho de las bolas y pistas de una dirección convencional; el ángulo de las pistas es una propiedad del asiento, no del envase de bolas."
+   ]
+  },
+  "S-BASE": {
+   "title": "Base final local (6ed9cdf73ae5d9fc…)",
+   "url": null,
+   "grade": "structural",
+   "read": "lectura 2026-09-07",
+   "states": [
+    "Estado real de campos, dominios, condiciones y condiciones por fila tras las correcciones de root."
+   ]
+  }
+ },
+ "verified_points": [
+  {
+   "point": "El máximo de ancho interior de Continental no es un mínimo",
+   "state": "La fila conserva dos columnas rotuladas «Ancho interior mínimo» y «Ancho interior máximo», con par ordenado entre ellas, así que el techo de 23 mm se escribe en la columna correcta y una inversión se marca.",
+   "path": "definitions.tire_rim_configurations.validation_rules.rows_schema",
+   "verdict": "correcto, con un residual en R6"
+  },
+  {
+   "point": "Una variante de neumático por ficha",
+   "state": "La columna de variante desapareció y la identidad quedó en perfil del talón y método de montaje, dos vocabularios cerrados y requeridos.",
+   "path": "definitions.tire_rim_configurations…unique_by = [[\"rim_bead_profile\",\"mounting_method\"]]",
+   "verdict": "correcto"
+  },
+  {
+   "point": "Una presión con su unidad",
+   "state": "La fila tiene presión y unidad separadas, y la condición por fila sólo permite y exige la presión cuando la unidad está declarada en bar o psi.",
+   "path": "templates.tire.form_contract.row_conditions.fields.tire_rim_configurations",
+   "verdict": "correcto en la fila; ver R3 para el titular"
+  },
+  {
+   "point": "Un Enduro MAX puede ser de contacto angular y tener canal de llenado",
+   "state": "El diseño interno pasó de lista cerrada a texto literal del fabricante, así que «Angular-Contact, MAX-Design» se escribe entero; la retención de elementos quedó como eje aparte con «Complemento completo / sin jaula».",
+   "path": "definitions.bearing_internal_construction (text) + definitions.bearing_element_retention",
+   "verdict": "correcto; mi opción original era además falsa al revés (ver nota)"
+  },
+  {
+   "point": "Los biseles de asiento de un cartucho no son el ángulo interno entre bolas y pistas",
+   "state": "Los dos campos se rotularon como ángulo del bisel de apoyo y se condicionaron a construcción de cartucho y a la geometría de apoyo declarada; en la dirección, la condición por fila los permite sólo con cartucho y con el bisel correspondiente, y verifiqué que el exterior se condiciona al bisel exterior y no al interior.",
+   "path": "templates.bearing.form_contract.allowed_when + templates.headset.form_contract.row_conditions",
+   "verdict": "correcto en la condición; ver R1 por la clave"
+  },
+  {
+   "point": "Construcción de cartucho no implica sellado",
+   "state": "El vocabulario incorporó cartucho abierto, blindado y sellado sin confirmar, conservando los identificadores previos.",
+   "path": "definitions.bearing_construction.allowed_values",
+   "verdict": "correcto; ver R2 por una combinación que quedó abierta"
+  },
+  {
+   "point": "Extremos del amortiguador por cuerpo y vástago",
+   "state": "El extremo pasó a «Cuerpo» y «Vástago», que es lo que identifican las fichas OEM, con identidad por extremo; el selector sin extremo quedó legacy y el vocabulario de fijación sumó ojal con rodamiento y yoke.",
+   "path": "definitions.shock_end_configurations…end_position",
+   "verdict": "correcto"
+  },
+  {
+   "point": "Alojamiento del cuadro frente a cazoleta EC/ZS",
+   "state": "El asiento del cuadro dejó de nombrar cazoletas: su vocabulario es «Alojamiento para cazoleta prensada» y «Asiento mecanizado para cartucho». El código EC/ZS se quedó en las filas de la dirección, que es el producto que lo tiene.",
+   "path": "definitions.headset_port_configurations…seat_type frente a definitions.headset_bearing_configurations…seat_type",
+   "verdict": "correcto, y resuelve W05 mejor que mi propuesta"
+  },
+  {
+   "point": "La altura entre coronas depende de la doble corona",
+   "state": "Se agregó la construcción de coronas y los dos límites se condicionaron a «Doble corona», no al tipo de resorte como yo había propuesto.",
+   "path": "templates.fork.form_contract.allowed_when.crown_stack_min_mm / max_mm",
+   "verdict": "correcto; mi condición por aire o muelle era arbitraria"
+  }
+ ],
+ "findings": [
+  {
+   "id": "R1",
+   "severity": "P1",
+   "title": "La clave dice ángulo de contacto y el rótulo dice bisel de apoyo; el ángulo de contacto interno se queda sin dueño numérico",
+   "evidence": {
+    "keys": [
+     "bearing_inner_contact_angle_deg",
+     "bearing_outer_contact_angle_deg"
+    ],
+    "labels": [
+     "Ángulo del bisel de apoyo interior",
+     "Ángulo del bisel de apoyo exterior"
+    ],
+    "origin": "new",
+    "used_by": [
+     "bearing"
+    ],
+    "path": "definitions.bearing_inner_contact_angle_deg.label"
+   },
+   "why": "El significado nuevo es el correcto: Park Tool describe el par marcado como el contacto con la pista o cono y con el cuadro, es decir superficies de apoyo. Pero root rechazó mi renombre de spoke_thread_diameter_mm con el argumento de que el rótulo original sí describía rosca, y aquí aplicó el movimiento contrario sobre una clave que sigue diciendo contact_angle. Queda la misma divergencia clave/rótulo que ese rechazo evitaba. Además, el ángulo de contacto interno de un cartucho de contacto angular es un dato real del fabricante —Enduro rotula 7902 y 3901 como angular contact— y tras el cambio no tiene ningún campo numérico: sólo cabe enterrado en el texto literal del diseño interno.",
+   "proposed_action": "Las dos definiciones son origin new, sólo las usa bearing y no tienen hechos: renombrar la clave a bearing_inner_seat_bevel_deg y bearing_outer_seat_bevel_deg (alta nueva más retiro de la anterior, porque el compilador no renombra) deja clave y rótulo de acuerdo. Y decidir si el ángulo de contacto interno merece su propio campo numérico o se acepta como texto, dejándolo escrito.",
+   "is_physical_impossibility": false,
+   "source_ids": [
+    "S-PARK-HEADSET",
+    "S-ENDURO-MAX",
+    "S-BASE"
+   ],
+   "positive_case": "Un cartucho de dirección con biseles 36 y 45 se escribe en los dos campos y la condición lo permite.",
+   "negative_case": "Un 7902 2RS MAX de contacto angular no tiene dónde poner su ángulo de contacto como número; hoy se pierde o se escribe en prosa."
+  },
+  {
+   "id": "R2",
+   "severity": "P1",
+   "title": "Un cartucho abierto puede declarar sellado",
+   "evidence": {
+    "key": "bearing_seal_kind",
+    "path": "templates.bearing.form_contract.allowed_when.bearing_seal_kind",
+    "current": {
+     "kind": "when",
+     "rows": [
+      [
+       {
+        "field": "bearing_construction",
+        "operator": "in",
+        "value_type": "token",
+        "value": [
+         "Cartucho sellado",
+         "Cartucho abierto",
+         "Cartucho blindado",
+         "Cartucho (sellado sin confirmar)"
+        ]
+       }
+      ]
+     ]
+    },
+    "construction_options": [
+     "Cartucho sellado",
+     "Bolas sueltas (bolsa)",
+     "Canastillo con bolas",
+     "Desconocido / sin confirmar",
+     "Cartucho abierto",
+     "Cartucho blindado",
+     "Cartucho (sellado sin confirmar)"
+    ]
+   },
+   "why": "La designación de sellado quedó permitida para los cuatro tokens de cartucho, incluido «Cartucho abierto». Un rodamiento abierto no tiene designación de sello ni de blindaje: la combinación es una contradicción que hoy se guarda sin ruido, y es la simétrica del acierto de separar cartucho de sellado.",
+   "proposed_action": "Condicionar bearing_seal_kind a bearing_construction en {Cartucho sellado, Cartucho blindado, Cartucho (sellado sin confirmar)}, dejando fuera el abierto. Un solo replace_field_contract sobre el bucket allowed_when.",
+   "is_physical_impossibility": true,
+   "source_ids": [
+    "S-ENDURO-MAX",
+    "S-BASE"
+   ],
+   "positive_case": "Un 7902 2RS declara construcción sellada y designación 2RS.",
+   "negative_case": "Un cartucho declarado abierto con designación LLU se sigue guardando; con la condición deja de ser escribible."
+  },
+  {
+   "id": "R3",
+   "severity": "P2",
+   "title": "La presión de portada del neumático sigue amarrada a psi mientras la fila ya lleva su unidad",
+   "evidence": {
+    "key": "tire_max_pressure_psi",
+    "unit": "psi",
+    "origin": "new",
+    "path": "definitions.tire_max_pressure_psi",
+    "row_solution": "definitions.tire_rim_configurations…max_pressure + pressure_unit"
+   },
+   "why": "La regla de una presión con su unidad se aplicó dentro de la fila y no al titular. Continental publica 5,0 bar; escribir ese dato en el campo de portada obliga a convertirlo a 72,5 psi, un número que ninguna fuente enuncia y que queda indistinguible de un dato declarado.",
+   "proposed_action": "Reflejar en el titular lo que ya se hizo en la fila: un valor y su unidad, o dejar escrito que el campo es psi por convención y que una conversión se marca como derivada. La definición es origin new y no tiene hechos.",
+   "is_physical_impossibility": false,
+   "source_ids": [
+    "S-CONTI",
+    "S-BASE"
+   ],
+   "positive_case": "Una ficha que publica 102 psi escribe 102 sin ambigüedad.",
+   "negative_case": "Una que publica 5,0 bar guarda 72,5 psi como si el fabricante lo hubiera dicho."
+  },
+  {
+   "id": "R4",
+   "severity": "P2",
+   "title": "El diámetro de borde inflado puede superar al de pico",
+   "evidence": {
+    "field": "fork_tire_clearance_configurations",
+    "columns": [
+     "max_inflated_diameter_mm",
+     "max_inflated_shoulder_diameter_mm"
+    ],
+    "ordered_pairs": null,
+    "path": "definitions.fork_tire_clearance_configurations.validation_rules.rows_schema.ordered_pairs"
+   },
+   "why": "El manual FOX publica pico 694 mm y borde 670 mm: el borde se mide por dentro del pico, así que un borde mayor que el pico es imposible en un neumático inflado. La fila no tiene ningún par ordenado, de modo que la inversión se guarda.",
+   "proposed_action": "Agregar ordered_pairs [[\"max_inflated_shoulder_diameter_mm\",\"max_inflated_diameter_mm\"]] al esquema de esa fila con replace_unpublished_rows_schema; las dos columnas son decimales de la misma unidad.",
+   "is_physical_impossibility": true,
+   "source_ids": [
+    "S-FOX40",
+    "S-BASE"
+   ],
+   "positive_case": "Pico 694 y borde 670 pasan.",
+   "negative_case": "Pico 670 y borde 694 se guardan hoy y con el par se marcan los dos extremos."
+  },
+  {
+   "id": "R5",
+   "severity": "P2",
+   "title": "La carrera del amortiguador puede superar su entrecentros",
+   "evidence": {
+    "template": "rear_shock",
+    "keys": [
+     "stroke_mm",
+     "eye_to_eye_mm"
+    ],
+    "units": [
+     "mm",
+     "mm"
+    ],
+    "current_pairs": null,
+    "path": "templates.rear_shock.form_contract.scalar_ordered_pairs"
+   },
+   "why": "Un amortiguador con carrera mayor o igual a su entrecentros no tiene longitud al final del recorrido: es imposible, no improbable. La plantilla no declara ningún par ordenado y el evaluador desplegado admite pares de la misma unidad, que aquí es milímetros en los dos.",
+   "proposed_action": "Agregar scalar_ordered_pairs [[\"stroke_mm\",\"eye_to_eye_mm\"]] con replace_template_coherence. Conviene dejar escrito que el par admite la igualdad, así que atrapa la inversión grosera y no el margen real de compresión.",
+   "is_physical_impossibility": true,
+   "source_ids": [
+    "S-BASE"
+   ],
+   "positive_case": "205 de entrecentros con 65 de carrera pasa.",
+   "negative_case": "65 de entrecentros con 205 de carrera se guarda hoy; con el par se marca en los dos campos."
+  },
+  {
+   "id": "R6",
+   "severity": "P3",
+   "title": "Nada distingue el techo hookless de un piso, aunque las columnas ya estén bien rotuladas",
+   "evidence": {
+    "field": "tire_rim_configurations",
+    "columns": [
+     "rim_internal_width_min_mm",
+     "rim_internal_width_max_mm"
+    ],
+    "both_optional": true,
+    "path": "definitions.tire_rim_configurations.validation_rules.rows_schema"
+   },
+   "why": "Los rótulos y el par ordenado ya impiden invertir el rango, y con eso el riesgo que root nombra se cubre en lo esencial. Lo que queda es una fila hookless con sólo el mínimo escrito, que se lee como «desde 23 mm» cuando la fuente dice «hasta 23 mm».",
+   "proposed_action": "Una condición por fila que exija el ancho máximo cuando el perfil es hookless dejaría esa fila pendiente en vez de aparentemente completa.",
+   "is_physical_impossibility": false,
+   "source_ids": [
+    "S-CONTI",
+    "S-BASE"
+   ],
+   "positive_case": "Fila hookless con máximo 23 y presión 5,0 bar.",
+   "negative_case": "Fila hookless con sólo mínimo 23: hoy pasa como completa. Advertencia explícita: esta regla no representa una imposibilidad física, sólo marca un dato faltante; el operador puede seguir escribiendo un techo equivocado y nada lo detectará."
+  },
+  {
+   "id": "R7",
+   "severity": "P3",
+   "title": "Doble hilera y versión engrasable no tienen eje propio",
+   "evidence": {
+    "evidence": "Enduro rotula 3901 LLU MAX como doble hilera y ofrece versiones engrasables; ningún campo de bearing distingue una hilera de dos.",
+    "path": "templates.bearing.fields"
+   },
+   "why": "No es una contradicción: el texto literal del diseño interno puede contenerlo. Es un dato estructural real que queda fuera de cualquier filtro.",
+   "proposed_action": "Decidir si merece un eje propio o se acepta dentro del literal. Sin urgencia y sin bloquear nada.",
+   "is_physical_impossibility": false,
+   "source_ids": [
+    "S-ENDURO-MAX"
+   ],
+   "positive_case": "El literal «MAX-Design, Double-Row, Angular-Contact» conserva el dato.",
+   "negative_case": "No se puede buscar por doble hilera; ninguna ficha queda mal por eso."
+  }
+ ],
+ "limits": [
+  "El ensayo SQL de 105 plantillas, 1205 usos y 167 casos con reversión prueba que la representación se guarda y se lee; no prueba que un dato sea cierto ni que una pieza calce.",
+  "Ninguna de estas correcciones aprueba un montaje: neumático con llanta, horquilla con cuadro, amortiguador con cuadro y dirección con tubo siguen necesitando una relación con fuente.",
+  "R1, R3, R6 y R7 no representan imposibilidades físicas. R1 y R3 son fidelidad a la fuente y coherencia entre clave y rótulo; R6 es una marca de dato faltante; R7 es alcance de búsqueda. Sólo R2, R4 y R5 impiden escribir algo que no puede existir.",
+  "No certifico ninguna familia como completa ni autorizo sembrar este catálogo ampliado. El estado productivo verificado llega a la migración 2300 y este catálogo no está sembrado.",
+  "Un tubo de dirección roscado antiguo sigue sin un campo propio en el cuadro más allá del texto del SHIS y del asiento «Otro»; no lo propongo en esta ronda porque no aparece en los casos revisados."
+ ],
+ "cases": [
+  {
+   "id": "RC1",
+   "kind": "positivo",
+   "template": "bearing",
+   "about": "R2",
+   "values": {
+    "bearing_construction": "Cartucho sellado",
+    "bearing_size_code": "7902 2RS MAX",
+    "bearing_internal_construction": "Angular-Contact, MAX-Design, Radial",
+    "bearing_seal_kind": "2RS",
+    "bearing_element_retention": "Complemento completo / sin jaula",
+    "bearing_inner_diameter_mm": "15",
+    "bearing_outer_diameter_mm": "28",
+    "bearing_width_mm": "7"
+   },
+   "expected": [],
+   "note": "MAX y contacto angular juntos en el literal, con la retención como eje aparte. Es el caso que el token cerrado impedía."
+  },
+  {
+   "id": "RC2",
+   "kind": "negativo",
+   "template": "bearing",
+   "about": "R2",
+   "values": {
+    "bearing_construction": "Cartucho abierto",
+    "bearing_seal_kind": "LLU"
+   },
+   "expected_today": "se guarda sin observación",
+   "expected_after": [
+    {
+     "code": "field_constraint",
+     "field": "bearing_seal_kind",
+     "blocking": true
+    }
+   ],
+   "note": "Un cartucho abierto con designación de sello."
+  },
+  {
+   "id": "RC3",
+   "kind": "positivo",
+   "template": "bearing",
+   "about": "R1",
+   "values": {
+    "bearing_construction": "Cartucho sellado",
+    "bearing_seat_geometry": "Biseles interior y exterior",
+    "bearing_inner_contact_angle_deg": "36",
+    "bearing_outer_contact_angle_deg": "45",
+    "bearing_application": "Dirección"
+   },
+   "expected": [],
+   "note": "Los dos biseles del par marcado 36-45, ahora con el significado que Park describe."
+  },
+  {
+   "id": "RC4",
+   "kind": "desconocido",
+   "template": "bearing",
+   "about": "R1",
+   "values": {
+    "bearing_construction": "Cartucho sellado",
+    "bearing_size_code": "7902 2RS MAX",
+    "bearing_internal_construction": "Angular-Contact, MAX-Design"
+   },
+   "expected": [],
+   "note": "Contacto angular declarado y su ángulo interno sin campo numérico: hoy queda fuera del dato estructurado."
+  },
+  {
+   "id": "RC5",
+   "kind": "negativo",
+   "template": "fork",
+   "about": "R4",
+   "values": {
+    "fork_kind": "Suspensión (aire)",
+    "fork_crown_layout": "Doble corona",
+    "fork_tire_clearance_configurations": {
+     "schema_version": 1,
+     "rows": [
+      {
+       "id": "a",
+       "values": {
+        "bead_seat_diameter_mm": 559,
+        "max_tire_width_mm": "71",
+        "max_inflated_diameter_mm": "670",
+        "max_inflated_shoulder_diameter_mm": "694"
+       },
+       "sources": []
+      }
+     ]
+    }
+   },
+   "expected_today": "se guarda sin observación",
+   "expected_after": [
+    {
+     "code": "row_shape",
+     "field": "fork_tire_clearance_configurations",
+     "blocking": true
+    }
+   ],
+   "note": "Borde mayor que pico: imposible en un neumático inflado."
+  },
+  {
+   "id": "RC6",
+   "kind": "positivo",
+   "template": "fork",
+   "about": "verificación",
+   "values": {
+    "fork_kind": "Suspensión (aire)",
+    "fork_crown_layout": "Doble corona",
+    "crown_stack_min_mm": "105",
+    "crown_stack_max_mm": "166.8",
+    "axle_to_crown_mm": "580"
+   },
+   "expected": [],
+   "note": "La altura entre coronas queda atada a la doble corona, no al tipo de resorte."
+  },
+  {
+   "id": "RC7",
+   "kind": "negativo",
+   "template": "fork",
+   "about": "verificación",
+   "values": {
+    "fork_kind": "Suspensión (aire)",
+    "fork_crown_layout": "Una corona",
+    "crown_stack_min_mm": "105"
+   },
+   "expected": [
+    {
+     "code": "field_constraint",
+     "field": "crown_stack_min_mm",
+     "blocking": true
+    }
+   ],
+   "note": "Una horquilla de una corona no tiene altura entre coronas. La corrección de root ya lo impide."
+  },
+  {
+   "id": "RC8",
+   "kind": "negativo",
+   "template": "rear_shock",
+   "about": "R5",
+   "values": {
+    "eye_to_eye_mm": "65",
+    "stroke_mm": "205"
+   },
+   "expected_today": "se guarda sin observación",
+   "expected_after": [
+    {
+     "code": "range_order",
+     "field": "stroke_mm",
+     "blocking": true
+    },
+    {
+     "code": "range_order",
+     "field": "eye_to_eye_mm",
+     "blocking": true
+    }
+   ],
+   "note": "Carrera mayor que entrecentros."
+  },
+  {
+   "id": "RC9",
+   "kind": "positivo",
+   "template": "rear_shock",
+   "about": "verificación",
+   "values": {
+    "eye_to_eye_mm": "205",
+    "stroke_mm": "65",
+    "shock_end_configurations": {
+     "schema_version": 1,
+     "rows": [
+      {
+       "id": "a",
+       "values": {
+        "end_position": "Cuerpo",
+        "mount_kind": "Trunnion"
+       },
+       "sources": []
+      },
+      {
+       "id": "b",
+       "values": {
+        "end_position": "Vástago",
+        "mount_kind": "Ojal con rodamiento",
+        "hardware_width_mm": "30",
+        "bolt_diameter_mm": "8"
+       },
+       "sources": []
+      }
+     ]
+    }
+   },
+   "expected": [],
+   "note": "Cuerpo y vástago, que es como el fabricante identifica los extremos; la posición en el cuadro deja de decidirlo."
+  },
+  {
+   "id": "RC10",
+   "kind": "positivo",
+   "template": "tire",
+   "about": "verificación",
+   "values": {
+    "tire_etrto": "28-622",
+    "tire_width_mm": "28",
+    "tire_max_pressure_psi": "102",
+    "tire_rim_configurations": {
+     "schema_version": 1,
+     "rows": [
+      {
+       "id": "a",
+       "values": {
+        "rim_bead_profile": "Sin gancho (hookless)",
+        "mounting_method": "Tubeless",
+        "rim_internal_width_max_mm": "23",
+        "max_pressure": "5.0",
+        "pressure_unit": "bar"
+       },
+       "sources": []
+      },
+      {
+       "id": "b",
+       "values": {
+        "rim_bead_profile": "Con gancho (hooked)",
+        "mounting_method": "Con cámara",
+        "rim_internal_width_min_mm": "19",
+        "rim_internal_width_max_mm": "25",
+        "max_pressure": "102",
+        "pressure_unit": "psi"
+       },
+       "sources": []
+      }
+     ]
+    }
+   },
+   "expected": [],
+   "note": "Un solo SKU con dos configuraciones, cada presión con su unidad y el techo hookless en la columna de máximo."
+  },
+  {
+   "id": "RC11",
+   "kind": "desconocido",
+   "template": "tire",
+   "about": "R6",
+   "values": {
+    "tire_rim_configurations": {
+     "schema_version": 1,
+     "rows": [
+      {
+       "id": "a",
+       "values": {
+        "rim_bead_profile": "Sin gancho (hookless)",
+        "mounting_method": "Tubeless",
+        "rim_internal_width_min_mm": "23"
+       },
+       "sources": []
+      }
+     ]
+    }
+   },
+   "expected": [],
+   "note": "El techo escrito como piso: pasa hoy y seguiría pasando salvo que se exija el máximo en hookless, que es una marca de completitud y no una imposibilidad."
+  },
+  {
+   "id": "RC12",
+   "kind": "positivo",
+   "template": "frame",
+   "about": "verificación",
+   "values": {
+    "headset_upper_shis": "ZS44/28.6",
+    "headset_lower_shis": "EC44/30",
+    "headset_port_configurations": {
+     "schema_version": 1,
+     "rows": [
+      {
+       "id": "u",
+       "values": {
+        "position": "Superior",
+        "seat_type": "Alojamiento para cazoleta prensada",
+        "housing_diameter_mm": "44"
+       },
+       "sources": []
+      },
+      {
+       "id": "l",
+       "values": {
+        "position": "Inferior",
+        "seat_type": "Alojamiento para cazoleta prensada",
+        "housing_diameter_mm": "44"
+       },
+       "sources": []
+      }
+     ]
+    }
+   },
+   "expected": [],
+   "note": "El cuadro declara su alojamiento sin comprometerse con EC o ZS; la alternativa EC44/30 frente a ZS44/30 deja de estar bloqueada por el SHIS registrado."
+  },
+  {
+   "id": "RC13",
+   "kind": "positivo",
+   "template": "headset",
+   "about": "verificación",
+   "values": {
+    "headset_part_scope": "Completa",
+    "headset_bearing_configurations": {
+     "schema_version": 1,
+     "rows": [
+      {
+       "id": "u",
+       "values": {
+        "position": "Superior",
+        "construction": "Cartucho",
+        "seat_geometry": "Biseles interior y exterior",
+        "inner_contact_angle_deg": "36",
+        "outer_contact_angle_deg": "45",
+        "seat_type": "ZS (semi-integrado)"
+       },
+       "sources": []
+      },
+      {
+       "id": "l",
+       "values": {
+        "position": "Inferior",
+        "construction": "Bolas sueltas"
+       },
+       "sources": []
+      }
+     ]
+    }
+   },
+   "expected": [],
+   "note": "Cartucho arriba con sus dos biseles y bolas sueltas abajo sin ángulos: la condición por fila lo permite y no exige lo que no existe. Verifiqué que el ángulo exterior se condiciona al bisel exterior y el interior al interior."
+  }
+ ],
+ "not_certified": [
+  "Ninguna familia queda certificada como completa.",
+  "No se autoriza llenado, asignación ni siembra de este catálogo ampliado.",
+  "El ensayo SQL prueba representación, no verdad del dato ni ajuste mecánico."
+ ],
+ "stats": {
+  "verified_points": 9,
+  "findings": 7,
+  "physical_impossibilities": 3,
+  "form_only": 4,
+  "cases": 13,
+  "cases_by_kind": {
+   "positivo": 7,
+   "negativo": 4,
+   "desconocido": 2
+  }
+ }
+}

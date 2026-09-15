@@ -185,6 +185,17 @@ scheme, host, and effective port. An HTTP page never receives or fills it; a
 warning after DOM injection is already too late. Domain suggestions and portal
 navigation need metadata only and therefore never trigger a secret read.
 
+The purchasing assistant is another consumer of that same boundary, not a
+second credential system. A proven authenticated supplier response may keep
+its existing browser session alive with a low-frequency GET scoped to the
+current ERP user. If the cookie has already expired, the provider probe may
+declare one HTTPS login URL; the headless runner inspects its live form before
+requesting any bytes and retries the original catalog question at most once.
+An origin mismatch, HTTP form action, CAPTCHA, OTP, extra required field,
+authority transition, ambiguous credential binding, or stale live URL fails
+closed. Login pages, credentials, cookies, and authenticated body text never
+become purchasing evidence.
+
 The cutover is deliberately staged and may not be collapsed into one migration:
 
 1. release a transition client in which every supplier read and mutation uses
@@ -204,6 +215,43 @@ The cutover is deliberately staged and may not be collapsed into one migration:
 
 The copy-first interval is compatibility debt, not the final design. It must
 not become the permanent fallback after the Vault-aware client is released.
+
+### 5.1 Legacy login transport: the destination is what is legacy, not the page
+
+A portal whose login form posts over HTTP can still initiate its own session,
+but only through an explicit declaration in
+`supplier_portal_probes.session_login_legacy`. That declaration is
+**`page_urls` (a closed set of exact source URLs) plus one exact `action_url`**,
+and `supplier_credentials` keeps holding only identity and secret under its
+HTTPS `origin_url`.
+
+**Measured on the real portal, 2026-08-30.** `portal.rburgos.cl` links its
+login from the home page in *both* schemes — `http://portal.rburgos.cl/login/`
+and `https://portal.rburgos.cl/login/`. Both answer 200, neither redirects to
+the other, and **both serve the same form**, whose action is always
+`http://www.rburgos.cl/sitio/aplicaciones/valida_ingreso.asp`. An earlier
+declaration named only the HTTP page, so the exception was unreachable on the
+normal path: entering through the HTTPS link produced a page that was not the
+declared one, and the client failed closed — correctly. The declaration
+described the portal wrongly.
+
+Three rules follow, and each one closed a hole found in review:
+
+- **The page is matched by full URL, never by origin or host.** If the origin
+  were enough, any other page of the same portal could have posted the
+  credential to the legacy destination.
+- **With a declaration, the declared destination is the only acceptable one** —
+  a different `https://` action on the declared page is refused too. Choosing
+  the rule from the *page* scheme (`securePage ? secureAction : declaredAction`)
+  is what left the real case out.
+- **Each variant that is actually used is declared literally.** Deriving the
+  second one by rewriting the first one's scheme is describing the portal by
+  hearsay.
+
+Guards: `test/unit/supplier_legacy_login_policy_test.dart`,
+`test/unit/browser_credential_autofill_test.dart`, and the read-back
+`supabase/manual_checks/verify_legacy_login_pages_are_exact.sql`, which executes
+`supplier_legacy_login_declaration_ok` itself rather than a hand-written copy.
 
 ## 6. UI contract
 

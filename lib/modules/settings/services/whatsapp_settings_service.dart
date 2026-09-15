@@ -45,39 +45,37 @@ class WhatsAppChannelStatus {
   }
 }
 
-class WhatsAppBillingWindowEstimate {
+class WhatsAppBillableMessageEstimate {
   final String phoneNumber;
   final String? contactName;
   final String category;
   final String templateName;
-  final DateTime openedAt;
-  final DateTime expiresAt;
+  final String deliveryStrategy;
+  final DateTime deliveredAt;
   final double estimatedCostUsd;
   final String sourceMessageId;
 
-  const WhatsAppBillingWindowEstimate({
+  const WhatsAppBillableMessageEstimate({
     required this.phoneNumber,
     required this.contactName,
     required this.category,
     required this.templateName,
-    required this.openedAt,
-    required this.expiresAt,
+    required this.deliveryStrategy,
+    required this.deliveredAt,
     required this.estimatedCostUsd,
     required this.sourceMessageId,
   });
-
-  bool get isActive => DateTime.now().toUtc().isBefore(expiresAt.toUtc());
 }
 
 class WhatsAppSettingsPreferences {
   final String firstContactTemplateName;
   final String firstContactTemplateLanguage;
-  final double utilityConversationUsd;
+  final double messageRateUsd;
 
   const WhatsAppSettingsPreferences({
     required this.firstContactTemplateName,
     required this.firstContactTemplateLanguage,
-    required this.utilityConversationUsd,
+    required this.messageRateUsd,
   });
 
   factory WhatsAppSettingsPreferences.defaults() {
@@ -85,23 +83,21 @@ class WhatsAppSettingsPreferences {
       firstContactTemplateName: WhatsAppService.firstContactTemplateName,
       firstContactTemplateLanguage:
           WhatsAppService.firstContactTemplateLanguage,
-      utilityConversationUsd:
-          WhatsAppSettingsService.defaultUtilityConversationUsd,
+      messageRateUsd: WhatsAppSettingsService.defaultMessageRateUsd,
     );
   }
 
   WhatsAppSettingsPreferences copyWith({
     String? firstContactTemplateName,
     String? firstContactTemplateLanguage,
-    double? utilityConversationUsd,
+    double? messageRateUsd,
   }) {
     return WhatsAppSettingsPreferences(
       firstContactTemplateName:
           firstContactTemplateName ?? this.firstContactTemplateName,
       firstContactTemplateLanguage:
           firstContactTemplateLanguage ?? this.firstContactTemplateLanguage,
-      utilityConversationUsd:
-          utilityConversationUsd ?? this.utilityConversationUsd,
+      messageRateUsd: messageRateUsd ?? this.messageRateUsd,
     );
   }
 }
@@ -121,10 +117,10 @@ class WhatsAppSettingsSnapshot {
   final int readMessages30d;
   final int failedMessages30d;
   final int activeCustomerServiceWindows;
-  final int openBillableWindows;
-  final int billableWindowsToday;
+  final int directSendAttempts30d;
+  final int billableMessagesToday;
   final Map<String, int> templateMessagesByName;
-  final List<WhatsAppBillingWindowEstimate> billableWindows30d;
+  final List<WhatsAppBillableMessageEstimate> billableMessages30d;
   final double estimatedCost30dUsd;
 
   const WhatsAppSettingsSnapshot({
@@ -142,10 +138,10 @@ class WhatsAppSettingsSnapshot {
     required this.readMessages30d,
     required this.failedMessages30d,
     required this.activeCustomerServiceWindows,
-    required this.openBillableWindows,
-    required this.billableWindowsToday,
+    required this.directSendAttempts30d,
+    required this.billableMessagesToday,
     required this.templateMessagesByName,
-    required this.billableWindows30d,
+    required this.billableMessages30d,
     required this.estimatedCost30dUsd,
   });
 
@@ -163,7 +159,10 @@ class WhatsAppSettingsPanelData {
 }
 
 class WhatsAppSettingsService {
-  static const double defaultUtilityConversationUsd = 0.04;
+  static const double defaultMessageRateUsd = 0.04;
+  // Keep the existing setting key so deployed tenants retain their configured
+  // reference value. Since July 2025 Meta bills per delivered message, not per
+  // 24-hour conversation window.
   static const String utilityConversationUsdKey =
       'whatsapp_utility_conversation_usd';
 
@@ -192,7 +191,7 @@ class WhatsAppSettingsService {
       _upsertCompanySetting(
         tenantId: tenantId,
         key: utilityConversationUsdKey,
-        value: preferences.utilityConversationUsd.toStringAsFixed(4),
+        value: preferences.messageRateUsd.toStringAsFixed(4),
       ),
       _upsertCompanySetting(
         tenantId: tenantId,
@@ -247,7 +246,7 @@ class WhatsAppSettingsService {
         if (key == utilityConversationUsdKey) {
           final parsed = double.tryParse(value.replaceAll(',', '.'));
           if (parsed != null && parsed >= 0) {
-            preferences = preferences.copyWith(utilityConversationUsd: parsed);
+            preferences = preferences.copyWith(messageRateUsd: parsed);
           }
         } else if (key == WhatsAppService.firstContactTemplateNameSettingKey) {
           preferences = preferences.copyWith(firstContactTemplateName: value);
@@ -372,8 +371,8 @@ class WhatsAppSettingsService {
       return outboundType == 'template';
     }).toList();
 
-    final billableWindows =
-        _buildBillableWindows(templateMessages, preferences);
+    final billableMessages =
+        _buildBillableMessages(outboundMessages, preferences);
 
     final templateMessagesByName = <String, int>{};
     for (final message in templateMessages) {
@@ -427,16 +426,21 @@ class WhatsAppSettingsService {
       readMessages30d: readMessages30d,
       failedMessages30d: failedMessages30d,
       activeCustomerServiceWindows: activeCustomerServiceWindows,
-      openBillableWindows:
-          billableWindows.where((window) => window.isActive).length,
-      billableWindowsToday: billableWindows
-          .where((window) => !window.openedAt.isBefore(startOfToday))
+      directSendAttempts30d: outboundMessages
+          .where(
+            (message) =>
+                message.metadata['delivery_strategy_requested'] ==
+                'direct_send_utility',
+          )
+          .length,
+      billableMessagesToday: billableMessages
+          .where((message) => !message.deliveredAt.isBefore(startOfToday))
           .length,
       templateMessagesByName: templateMessagesByName,
-      billableWindows30d: billableWindows,
-      estimatedCost30dUsd: billableWindows.fold<double>(
+      billableMessages30d: billableMessages,
+      estimatedCost30dUsd: billableMessages.fold<double>(
         0,
-        (total, window) => total + window.estimatedCostUsd,
+        (total, message) => total + message.estimatedCostUsd,
       ),
     );
   }
@@ -482,56 +486,39 @@ class WhatsAppSettingsService {
     return tenantId;
   }
 
-  List<WhatsAppBillingWindowEstimate> _buildBillableWindows(
-    List<_OutboundWhatsAppMessage> templateMessages,
+  List<WhatsAppBillableMessageEstimate> _buildBillableMessages(
+    List<_OutboundWhatsAppMessage> outboundMessages,
     WhatsAppSettingsPreferences preferences,
   ) {
-    final sortedMessages = [...templateMessages]
-      ..sort((a, b) => a.createdAt.compareTo(b.createdAt));
+    final billableMessages = <WhatsAppBillableMessageEstimate>[];
 
-    final lastWindowByKey = <String, WhatsAppBillingWindowEstimate>{};
-    final windows = <WhatsAppBillingWindowEstimate>[];
-
-    for (final message in sortedMessages) {
-      if (message.externalStatus == 'failed') {
-        continue;
-      }
+    for (final message in outboundMessages) {
+      final providerPricing = parseWhatsAppProviderPricing(message.metadata);
+      if (providerPricing == null || !providerPricing.isBillable) continue;
 
       final phoneNumber = _extractPhoneNumber(message.metadata);
       if (phoneNumber == null || phoneNumber.isEmpty) {
         continue;
       }
 
-      final templateName = _extractTemplateName(message.metadata) ?? 'template';
-      final category = _inferTemplateCategory(message.metadata, templateName);
-      final unitCost = _estimatedUnitCostForCategory(category, preferences);
-      if (unitCost <= 0) {
-        continue;
-      }
-
-      final key = '$phoneNumber::$category';
-      final previousWindow = lastWindowByKey[key];
-      if (previousWindow != null &&
-          !message.createdAt.isAfter(previousWindow.expiresAt)) {
-        continue;
-      }
-
-      final window = WhatsAppBillingWindowEstimate(
+      final templateName = _extractTemplateName(message.metadata) ??
+          (message.metadata['delivery_strategy'] == 'direct_send_utility'
+              ? 'Direct Send'
+              : 'Mensaje WhatsApp');
+      billableMessages.add(WhatsAppBillableMessageEstimate(
         phoneNumber: phoneNumber,
         contactName: _extractContactName(message.metadata),
-        category: category,
+        category: providerPricing.category,
         templateName: templateName,
-        openedAt: message.createdAt,
-        expiresAt: message.createdAt.add(const Duration(hours: 24)),
-        estimatedCostUsd: unitCost,
+        deliveryStrategy:
+            message.metadata['delivery_strategy']?.toString() ?? 'unknown',
+        deliveredAt: providerPricing.statusAt ?? message.createdAt,
+        estimatedCostUsd: preferences.messageRateUsd,
         sourceMessageId: message.id,
-      );
-
-      lastWindowByKey[key] = window;
-      windows.add(window);
+      ));
     }
 
-    return windows.reversed.toList();
+    return billableMessages;
   }
 
   _OutboundWhatsAppMessage _toOutboundMessage(Map<String, dynamic> row) {
@@ -638,50 +625,69 @@ class WhatsAppSettingsService {
 
     return null;
   }
+}
 
-  String _inferTemplateCategory(
-    Map<String, dynamic> metadata,
-    String templateName,
-  ) {
-    final explicitCategory = metadata['template_category']?.toString().trim();
-    if (explicitCategory != null && explicitCategory.isNotEmpty) {
-      return explicitCategory;
-    }
+class WhatsAppProviderPricing {
+  final bool isBillable;
+  final String category;
+  final String type;
+  final String pricingModel;
+  final DateTime? statusAt;
 
-    final conversationCategory =
-        metadata['conversation_category']?.toString().trim();
-    if (conversationCategory != null && conversationCategory.isNotEmpty) {
-      return conversationCategory;
-    }
+  const WhatsAppProviderPricing({
+    required this.isBillable,
+    required this.category,
+    required this.type,
+    required this.pricingModel,
+    required this.statusAt,
+  });
+}
 
-    final templatePurpose = metadata['template_purpose']?.toString();
-    if (templatePurpose == 'first_contact' ||
-        templateName == WhatsAppService.firstContactTemplateName) {
-      return 'utility';
-    }
+/// Reads Meta's delivered-message pricing receipt. Messages without provider
+/// pricing evidence are deliberately not guessed into the cost estimate.
+WhatsAppProviderPricing? parseWhatsAppProviderPricing(
+  Map<String, dynamic> metadata,
+) {
+  final rawStatus = metadata['whatsapp_status_payload'];
+  if (rawStatus is! Map) return null;
+  final status = Map<String, dynamic>.from(rawStatus);
+  final rawPricing = status['pricing'];
+  if (rawPricing is! Map) return null;
+  final pricing = Map<String, dynamic>.from(rawPricing);
 
-    final normalizedName = templateName.toLowerCase();
-    if (normalizedName.contains('auth')) {
-      return 'authentication';
-    }
-    if (normalizedName.contains('promo') || normalizedName.contains('market')) {
-      return 'marketing';
-    }
-    return 'utility';
+  final type = pricing['type']?.toString().trim().toLowerCase() ?? '';
+  final legacyBillable = pricing['billable'];
+  final isBillable = type == 'regular' || legacyBillable == true;
+  final isExplicitlyFree = type.startsWith('free_') || legacyBillable == false;
+  if (!isBillable && !isExplicitlyFree) return null;
+
+  return WhatsAppProviderPricing(
+    isBillable: isBillable,
+    category: pricing['category']?.toString().trim().toLowerCase() ?? 'unknown',
+    type: type.isEmpty ? (isBillable ? 'regular' : 'free') : type,
+    pricingModel:
+        pricing['pricing_model']?.toString().trim().toUpperCase() ?? 'UNKNOWN',
+    statusAt: _parseWhatsAppStatusTimestamp(status['timestamp']),
+  );
+}
+
+DateTime? _parseWhatsAppStatusTimestamp(dynamic raw) {
+  if (raw is num) {
+    return DateTime.fromMillisecondsSinceEpoch(
+      raw.toInt() * 1000,
+      isUtc: true,
+    );
   }
-
-  double _estimatedUnitCostForCategory(
-    String category,
-    WhatsAppSettingsPreferences preferences,
-  ) {
-    switch (category) {
-      case 'utility':
-      case 'authentication':
-      case 'marketing':
-      default:
-        return preferences.utilityConversationUsd;
-    }
+  final value = raw?.toString().trim();
+  if (value == null || value.isEmpty) return null;
+  final epochSeconds = int.tryParse(value);
+  if (epochSeconds != null) {
+    return DateTime.fromMillisecondsSinceEpoch(
+      epochSeconds * 1000,
+      isUtc: true,
+    );
   }
+  return DateTime.tryParse(value)?.toUtc();
 }
 
 class _OutboundWhatsAppMessage {

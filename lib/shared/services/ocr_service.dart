@@ -33,7 +33,7 @@ class OCRService {
 
   /// Process an image file and extract text
   /// Returns RecognizedText with blocks, lines, and elements
-  /// 
+  ///
   /// Example usage:
   /// ```dart
   /// final result = await OCRService().processImage(File('invoice.jpg'));
@@ -50,7 +50,7 @@ class OCRService {
     try {
       final inputImage = InputImage.fromFilePath(imagePath);
       final recognizedText = await _textRecognizer.processImage(inputImage);
-      
+
       print('📄 OCR extracted ${recognizedText.blocks.length} text blocks');
       return recognizedText;
     } catch (e) {
@@ -102,7 +102,7 @@ class OCRService {
   Future<List<String>> extractLines(String imagePath) async {
     final result = await processImage(imagePath);
     final lines = <String>[];
-    
+
     for (var block in result.blocks) {
       for (var line in block.lines) {
         if (line.text.trim().isNotEmpty) {
@@ -110,7 +110,7 @@ class OCRService {
         }
       }
     }
-    
+
     return lines;
   }
 

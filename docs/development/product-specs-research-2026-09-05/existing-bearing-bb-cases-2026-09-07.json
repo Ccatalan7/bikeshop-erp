@@ -1,0 +1,2506 @@
+{
+  "schema_version": 1,
+  "title": "All-family physical-port cardinality",
+  "catalogue_sha256": "62bd5a7e860000bbc3e36ce2b2a10e9640052b8e501ffca8b6690640a29bc2b6",
+  "independent_review_hashes": [
+    "4cbd9cd4e1ccb2f41ab3249cbaed83fe419689aa6ba1dbb24a5b9dd856bd66d1",
+    "a1c6bfc5fae5c11b3b7f804b240ea36b2a36db2f6e4ba2ff868c061802856820"
+  ],
+  "mechanical_coverage_complete": false,
+  "automatic_fill_authorized": false,
+  "cases": [
+    {
+      "id": "wss_bearing_same_envelope_different_construction",
+      "template": "bearing",
+      "kind": "valid",
+      "values": {
+        "bearing_size_code": "6902 2RS MAX",
+        "bearing_inner_diameter_mm": "15",
+        "bearing_outer_diameter_mm": "28",
+        "bearing_width_mm": "7",
+        "bearing_application": "Otro",
+        "spec_evidence_source": "Enduro Help Center",
+        "bearing_element_retention": "Complemento completo / sin jaula",
+        "bearing_supply_form": "Cartucho",
+        "bearing_seal_type": "Sellado de contacto",
+        "bearing_race_type": "Desconocido / sin confirmar",
+        "bearing_seal_designation": "2RS (goma, doble)"
+      },
+      "source_urls": [
+        "https://cycling.endurobearings.com/en-ca/apps/help-center"
+      ],
+      "expected_blocking": [],
+      "note": "Diseño MAX conserva su literal; Enduro declara complemento completo y canal de llenado. La envolvente no aprueba el uso.",
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false,
+      "successor_translation": "Separa suministro/sellado y normaliza la descripción de pistas. Conserva los biseles del propio rodamiento, su par, pendientes y límites originales; no los transforma en ángulo de rodadura. Radial sólo informa clase de carga: conserva la preimagen y deja construcción sin confirmar, sin inferir ranura profunda.",
+      "predecessor_values": {
+        "bearing_size_code": "6902 2RS MAX",
+        "bearing_inner_diameter_mm": "15",
+        "bearing_outer_diameter_mm": "28",
+        "bearing_width_mm": "7",
+        "bearing_application": "Otro",
+        "spec_evidence_source": "Enduro Help Center",
+        "bearing_element_retention": "Complemento completo / sin jaula",
+        "bearing_supply_form": "Cartucho",
+        "bearing_seal_type": "Sellado de contacto",
+        "bearing_race_type": "Radial",
+        "bearing_seal_designation": "2RS (goma, doble)"
+      },
+      "expected_sql_blocking": []
+    },
+    {
+      "id": "wss_bearing_headset_without_angles",
+      "template": "bearing",
+      "kind": "unknown",
+      "values": {
+        "bearing_application": "Dirección",
+        "bearing_size_code": "MH-P08",
+        "spec_evidence_source": "Catálogo del fabricante",
+        "bearing_seat_geometry": "Biseles interior y exterior",
+        "bearing_supply_form": "Cartucho",
+        "bearing_seal_type": "Sellado de contacto"
+      },
+      "source_urls": [
+        "https://www.canecreek.com/products/40"
+      ],
+      "expected_blocking": [],
+      "note": "Con destino «Dirección» el par pasa a exigible y su ausencia queda pendiente, no aprobada. Antes de este parche no se pedía.",
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false,
+      "expected_issue_subset": [
+        {
+          "code": "required_missing",
+          "field": "bearing_inner_contact_angle_deg",
+          "blocking": false
+        },
+        {
+          "code": "required_missing",
+          "field": "bearing_outer_contact_angle_deg",
+          "blocking": false
+        }
+      ],
+      "successor_translation": "Separa suministro/sellado y normaliza la descripción de pistas. Conserva los biseles del propio rodamiento, su par, pendientes y límites originales; no los transforma en ángulo de rodadura.",
+      "expected_sql_blocking": []
+    },
+    {
+      "id": "wss_SF1",
+      "template": "bearing",
+      "kind": "válido",
+      "values": {
+        "bearing_application": "Dirección",
+        "bearing_inner_contact_angle_deg": "36",
+        "bearing_outer_contact_angle_deg": "45",
+        "bearing_seat_geometry": "Biseles interior y exterior",
+        "bearing_supply_form": "Cartucho",
+        "bearing_seal_type": "Sellado de contacto",
+        "bearing_race_type": "Contacto angular"
+      },
+      "source_urls": [],
+      "expected_blocking": [],
+      "note": "Cartucho de contacto angular con el par marcado: el único caso donde el par se exige.",
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false,
+      "successor_translation": "Separa suministro/sellado y normaliza la descripción de pistas. Conserva los biseles del propio rodamiento, su par, pendientes y límites originales; no los transforma en ángulo de rodadura.",
+      "expected_sql_blocking": []
+    },
+    {
+      "id": "wss_SF2",
+      "template": "bearing",
+      "kind": "desconocido",
+      "values": {
+        "bearing_application": "Dirección",
+        "bearing_seat_geometry": "Biseles interior y exterior",
+        "bearing_supply_form": "Cartucho",
+        "bearing_seal_type": "Sellado de contacto",
+        "bearing_race_type": "Contacto angular"
+      },
+      "source_urls": [],
+      "expected_blocking": [],
+      "note": "Contacto angular sin par publicado: pendiente, no aprobado.",
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false,
+      "expected_issue_subset": [
+        {
+          "code": "required_missing",
+          "field": "bearing_inner_contact_angle_deg",
+          "blocking": false
+        },
+        {
+          "code": "required_missing",
+          "field": "bearing_outer_contact_angle_deg",
+          "blocking": false
+        }
+      ],
+      "successor_translation": "Separa suministro/sellado y normaliza la descripción de pistas. Conserva los biseles del propio rodamiento, su par, pendientes y límites originales; no los transforma en ángulo de rodadura.",
+      "expected_sql_blocking": []
+    },
+    {
+      "id": "wss_SF3",
+      "template": "bearing",
+      "kind": "válido",
+      "values": {
+        "bearing_application": "Dirección",
+        "ball_diameter_in": "5/32",
+        "ball_count_per_pack": "100",
+        "bearing_supply_form": "Bolas sueltas"
+      },
+      "source_urls": [],
+      "expected_blocking": [],
+      "note": "Una bolsa de bolas para dirección no debe pedir ni admitir ángulos. Con el parche del paquete quedaba con dos pendientes imposibles de resolver; con la base actual además puede escribirlos.",
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false,
+      "forbidden_issue_fields": [
+        "bearing_inner_contact_angle_deg",
+        "bearing_outer_contact_angle_deg"
+      ],
+      "successor_translation": "Separa suministro/sellado y normaliza la descripción de pistas. Conserva los biseles del propio rodamiento, su par, pendientes y límites originales; no los transforma en ángulo de rodadura.",
+      "expected_sql_blocking": []
+    },
+    {
+      "id": "wss_SF4",
+      "template": "bearing",
+      "kind": "válido",
+      "values": {
+        "bearing_application": "Dirección",
+        "bearing_supply_form": "Canastillo con bolas"
+      },
+      "source_urls": [],
+      "expected_blocking": [],
+      "note": "Mismo caso con canastillo: Park Tool lo enumera aparte del cartucho.",
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false,
+      "forbidden_issue_fields": [
+        "bearing_inner_contact_angle_deg",
+        "bearing_outer_contact_angle_deg"
+      ],
+      "successor_translation": "Separa suministro/sellado y normaliza la descripción de pistas. Conserva los biseles del propio rodamiento, su par, pendientes y límites originales; no los transforma en ángulo de rodadura.",
+      "expected_sql_blocking": []
+    },
+    {
+      "id": "wss_root_rolling_angle_does_not_imply_mount_bevels",
+      "template": "bearing",
+      "values": {
+        "bearing_seat_geometry": "Sin biseles de apoyo",
+        "bearing_element_retention": "Complemento completo / sin jaula",
+        "bearing_size_code": "7001 1ZS MAX",
+        "bearing_supply_form": "Cartucho",
+        "bearing_seal_type": "Blindado",
+        "bearing_race_type": "Contacto angular"
+      },
+      "kind": "root_boundary",
+      "source_urls": [],
+      "expected_blocking": [],
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false,
+      "forbidden_issue_fields": [
+        "bearing_inner_contact_angle_deg",
+        "bearing_outer_contact_angle_deg"
+      ],
+      "successor_translation": "Separa suministro/sellado y normaliza la descripción de pistas. Conserva los biseles del propio rodamiento, su par, pendientes y límites originales; no los transforma en ángulo de rodadura.",
+      "expected_sql_blocking": []
+    },
+    {
+      "id": "wss_root_loose_ball_cannot_receive_a_bevel_angle",
+      "template": "bearing",
+      "values": {
+        "bearing_application": "Dirección",
+        "bearing_inner_contact_angle_deg": "36",
+        "bearing_supply_form": "Bolas sueltas"
+      },
+      "kind": "root_boundary",
+      "source_urls": [],
+      "expected_blocking": [
+        {
+          "code": "field_applicability",
+          "field": "bearing_inner_contact_angle_deg"
+        }
+      ],
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false,
+      "successor_translation": "Separa suministro/sellado y normaliza la descripción de pistas. Conserva los biseles del propio rodamiento, su par, pendientes y límites originales; no los transforma en ángulo de rodadura.",
+      "expected_sql_blocking": [
+        {
+          "code": "field_applicability",
+          "field": "bearing_inner_contact_angle_deg"
+        }
+      ]
+    },
+    {
+      "id": "wss_root_bevel_angle_outside_geometric_domain",
+      "template": "bearing",
+      "values": {
+        "bearing_seat_geometry": "Biseles interior y exterior",
+        "bearing_inner_contact_angle_deg": "360",
+        "bearing_outer_contact_angle_deg": "45",
+        "bearing_supply_form": "Cartucho",
+        "bearing_seal_type": "Sellado de contacto"
+      },
+      "kind": "root_boundary",
+      "source_urls": [],
+      "expected_blocking": [
+        {
+          "code": "range",
+          "field": "bearing_inner_contact_angle_deg"
+        }
+      ],
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false,
+      "expected_sql_blocking": [
+        {
+          "code": "field_constraint",
+          "field": "bearing_inner_contact_angle_deg"
+        }
+      ],
+      "successor_translation": "Separa suministro/sellado y normaliza la descripción de pistas. Conserva los biseles del propio rodamiento, su par, pendientes y límites originales; no los transforma en ángulo de rodadura."
+    },
+    {
+      "id": "wss_root_open_cartridge_dimensions_are_applicable",
+      "template": "bottom_bracket_bearing",
+      "values": {
+        "bearing_size_code": "6902",
+        "bearing_inner_diameter_mm": "15",
+        "bearing_outer_diameter_mm": "28",
+        "bb_bearing_width_mm": "7",
+        "bearing_supply_form": "Cartucho",
+        "bearing_seal_type": "Abierto"
+      },
+      "kind": "root_boundary",
+      "source_urls": [],
+      "expected_blocking": [],
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false,
+      "successor_translation": "«Cartucho abierto» decía a la vez cómo se suministra y cómo se sella; pasa a forma de suministro más estado de sellado.",
+      "expected_sql_blocking": []
+    },
+    {
+      "id": "wrfp_open_cartridge_rejects_seal_designation",
+      "template": "bearing",
+      "kind": "contradictorio",
+      "decision": "R2",
+      "values": {
+        "bearing_supply_form": "Cartucho",
+        "bearing_seal_type": "Abierto",
+        "bearing_seal_designation": "2RS (goma, doble)"
+      },
+      "source_urls": [
+        "https://cycling.endurobearings.com/pages/bearing-basics-1"
+      ],
+      "source_ids": [
+        "S-ENDURO-BASICS"
+      ],
+      "expected_blocking": [
+        {
+          "code": "field_applicability",
+          "field": "bearing_seal_designation"
+        }
+      ],
+      "note": "Un cartucho abierto no tiene sello que designar.",
+      "observed_in_local_trial": [
+        {
+          "code": "required_missing",
+          "field": "bearing_size_code",
+          "row": null,
+          "column": null,
+          "blocking": false
+        },
+        {
+          "code": "field_applicability",
+          "field": "bearing_seal_kind",
+          "row": null,
+          "column": null,
+          "blocking": true
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "successor_translation": "Separa suministro/sellado y normaliza la descripción de pistas. Conserva los biseles del propio rodamiento, su par, pendientes y límites originales; no los transforma en ángulo de rodadura.",
+      "expected_sql_blocking": [
+        {
+          "code": "field_applicability",
+          "field": "bearing_seal_designation"
+        }
+      ]
+    },
+    {
+      "id": "wrfp_open_cartridge_keeps_its_oem_code",
+      "template": "bearing",
+      "kind": "válido",
+      "decision": "R2",
+      "values": {
+        "bearing_size_code": "6902",
+        "bearing_inner_diameter_mm": "15",
+        "bearing_outer_diameter_mm": "28",
+        "bearing_width_mm": "7",
+        "bearing_supply_form": "Cartucho",
+        "bearing_seal_type": "Abierto"
+      },
+      "source_urls": [],
+      "source_ids": [],
+      "expected_blocking": [],
+      "forbidden_issue_fields": [
+        "bearing_size_code"
+      ],
+      "note": "Retirar el sello no toca la designación del fabricante.",
+      "observed_in_local_trial": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "successor_translation": "Separa suministro/sellado y normaliza la descripción de pistas. Conserva los biseles del propio rodamiento, su par, pendientes y límites originales; no los transforma en ángulo de rodadura.",
+      "expected_sql_blocking": []
+    },
+    {
+      "id": "wrfp_sealed_cartridge_still_takes_llu",
+      "template": "bearing",
+      "kind": "válido",
+      "decision": "R2",
+      "values": {
+        "bearing_size_code": "3802 LLU MAX",
+        "spec_evidence_source": "Enduro Bearings, 3802 LLU MAX",
+        "bearing_supply_form": "Cartucho",
+        "bearing_seal_type": "Sellado de contacto",
+        "bearing_seal_designation": "LLU (doble labio, contacto medio)"
+      },
+      "source_urls": [
+        "https://cycling.endurobearings.com/products/3802-llu-max",
+        "https://cycling.endurobearings.com/pages/bearing-basics-1"
+      ],
+      "source_ids": [
+        "S-ENDURO-3802",
+        "S-ENDURO-BASICS"
+      ],
+      "expected_blocking": [],
+      "note": "La compuerta no se pasa de restrictiva: el sellado sigue admitiendo su designación.",
+      "observed_in_local_trial": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "successor_translation": "Separa suministro/sellado y normaliza la descripción de pistas. Conserva los biseles del propio rodamiento, su par, pendientes y límites originales; no los transforma en ángulo de rodadura.",
+      "expected_sql_blocking": []
+    },
+    {
+      "id": "wrfp_3802_double_row_without_declared_angle",
+      "template": "bearing",
+      "kind": "desconocido",
+      "decision": "R1",
+      "values": {
+        "bearing_size_code": "3802 LLU MAX",
+        "bearing_row_count": "2",
+        "bearing_element_retention": "Complemento completo / sin jaula",
+        "bearing_inner_diameter_mm": "15",
+        "bearing_outer_diameter_mm": "24",
+        "bearing_width_mm": "7",
+        "spec_evidence_source": "Enduro Bearings, 3802 LLU MAX",
+        "bearing_supply_form": "Cartucho",
+        "bearing_seal_type": "Sellado de contacto",
+        "bearing_race_type": "Contacto angular",
+        "bearing_seal_designation": "LLU (doble labio, contacto medio)"
+      },
+      "source_urls": [
+        "https://cycling.endurobearings.com/products/3802-llu-max"
+      ],
+      "source_ids": [
+        "S-ENDURO-3802"
+      ],
+      "expected_blocking": [],
+      "forbidden_issue_fields": [
+        "bearing_race_contact_angle_deg"
+      ],
+      "note": "Doble hilera, contacto angular y MAX, sin ángulo publicado. El campo nuevo queda vacío y nunca se reclama.",
+      "observed_in_local_trial": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "successor_translation": "Separa suministro/sellado y normaliza la descripción de pistas. Conserva los biseles del propio rodamiento, su par, pendientes y límites originales; no los transforma en ángulo de rodadura.",
+      "expected_sql_blocking": []
+    },
+    {
+      "id": "wrfp_race_contact_angle_zero_is_in_domain",
+      "template": "bearing",
+      "kind": "válido",
+      "decision": "R1",
+      "values": {
+        "bearing_race_contact_angle_deg": "0",
+        "spec_evidence_source": "Ficha del fabricante",
+        "bearing_supply_form": "Cartucho",
+        "bearing_seal_type": "Sellado de contacto"
+      },
+      "source_urls": [],
+      "source_ids": [
+        "S-NSK-ANGLE"
+      ],
+      "expected_blocking": [],
+      "note": "NSK admite α = 0 para el contacto radial: el dominio parte en cero, no en «mayor que cero».",
+      "observed_in_local_trial": [
+        {
+          "code": "required_missing",
+          "field": "bearing_size_code",
+          "row": null,
+          "column": null,
+          "blocking": false
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "successor_translation": "Separa suministro/sellado y normaliza la descripción de pistas. Conserva los biseles del propio rodamiento, su par, pendientes y límites originales; no los transforma en ángulo de rodadura.",
+      "expected_sql_blocking": []
+    },
+    {
+      "id": "wrfp_race_contact_angle_outside_domain",
+      "template": "bearing",
+      "kind": "contradictorio",
+      "decision": "R1",
+      "values": {
+        "bearing_race_contact_angle_deg": "91",
+        "spec_evidence_source": "Ficha del fabricante",
+        "bearing_supply_form": "Cartucho",
+        "bearing_seal_type": "Sellado de contacto"
+      },
+      "source_urls": [],
+      "source_ids": [
+        "S-NSK-ANGLE"
+      ],
+      "expected_blocking": [
+        {
+          "code": "range",
+          "field": "bearing_race_contact_angle_deg"
+        }
+      ],
+      "note": "El dominio de α termina en 90°.",
+      "observed_in_local_trial": [
+        {
+          "code": "required_missing",
+          "field": "bearing_size_code",
+          "row": null,
+          "column": null,
+          "blocking": false
+        },
+        {
+          "code": "range",
+          "field": "bearing_race_contact_angle_deg",
+          "row": null,
+          "column": null,
+          "blocking": true
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "expected_sql_blocking": [
+        {
+          "code": "field_constraint",
+          "field": "bearing_race_contact_angle_deg"
+        }
+      ],
+      "successor_translation": "Separa suministro/sellado y normaliza la descripción de pistas. Conserva los biseles del propio rodamiento, su par, pendientes y límites originales; no los transforma en ángulo de rodadura."
+    },
+    {
+      "id": "wrfp_loose_balls_cannot_declare_rows_or_angle",
+      "template": "bearing",
+      "kind": "contradictorio",
+      "decision": "R1",
+      "values": {
+        "bearing_row_count": "1",
+        "bearing_race_contact_angle_deg": "15",
+        "spec_evidence_source": "Ficha del fabricante",
+        "bearing_supply_form": "Bolas sueltas"
+      },
+      "source_urls": [],
+      "source_ids": [],
+      "expected_blocking": [
+        {
+          "code": "field_applicability",
+          "field": "bearing_race_contact_angle_deg"
+        },
+        {
+          "code": "field_applicability",
+          "field": "bearing_row_count"
+        }
+      ],
+      "note": "Una bolsa de bolas no tiene hileras ni pistas propias.",
+      "observed_in_local_trial": [
+        {
+          "code": "required_missing",
+          "field": "ball_diameter_in",
+          "row": null,
+          "column": null,
+          "blocking": false
+        },
+        {
+          "code": "field_applicability",
+          "field": "bearing_race_contact_angle_deg",
+          "row": null,
+          "column": null,
+          "blocking": true
+        },
+        {
+          "code": "field_applicability",
+          "field": "bearing_row_count",
+          "row": null,
+          "column": null,
+          "blocking": true
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "successor_translation": "Separa suministro/sellado y normaliza la descripción de pistas. Conserva los biseles del propio rodamiento, su par, pendientes y límites originales; no los transforma en ángulo de rodadura.",
+      "expected_sql_blocking": [
+        {
+          "code": "field_applicability",
+          "field": "bearing_race_contact_angle_deg"
+        },
+        {
+          "code": "field_applicability",
+          "field": "bearing_row_count"
+        }
+      ]
+    },
+    {
+      "id": "wrfp_bb_assembly_angle_copied_is_undetectable",
+      "template": "bearing",
+      "kind": "contradictory_undetectable",
+      "decision": "R1",
+      "values": {
+        "bearing_race_contact_angle_deg": "15",
+        "spec_evidence_source": "Enduro Bearings, BKC-0752",
+        "bearing_supply_form": "Cartucho",
+        "bearing_seal_type": "Sellado de contacto",
+        "bearing_race_type": "Contacto angular"
+      },
+      "source_urls": [
+        "https://cycling.endurobearings.com/products/bkc-0752"
+      ],
+      "source_ids": [
+        "S-ENDURO-BKC0752"
+      ],
+      "expected_blocking": [],
+      "note": "Los 15° del BKC-0752 pertenecen a un pedalier completo con cazoletas, precarga y separadores. Copiados a un rodamiento suelto el motor no puede detectarlo: sólo la revisión de la fuente lo separa. Se registra como límite, no como regla.",
+      "observed_in_local_trial": [
+        {
+          "code": "required_missing",
+          "field": "bearing_size_code",
+          "row": null,
+          "column": null,
+          "blocking": false
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "successor_translation": "Separa suministro/sellado y normaliza la descripción de pistas. Conserva los biseles del propio rodamiento, su par, pendientes y límites originales; no los transforma en ángulo de rodadura.",
+      "expected_sql_blocking": []
+    },
+    {
+      "id": "wrfp_regreasable_is_unknown_by_default",
+      "template": "bearing",
+      "kind": "desconocido",
+      "decision": "R1",
+      "values": {
+        "spec_evidence_source": "Enduro Bearings, Bearing Basics 1",
+        "bearing_supply_form": "Cartucho",
+        "bearing_seal_type": "Sellado de contacto",
+        "bearing_seal_designation": "LLU (doble labio, contacto medio)"
+      },
+      "source_urls": [
+        "https://cycling.endurobearings.com/pages/bearing-basics-1"
+      ],
+      "source_ids": [
+        "S-ENDURO-BASICS"
+      ],
+      "expected_blocking": [],
+      "forbidden_issue_fields": [
+        "bearing_regreasable"
+      ],
+      "note": "La ausencia ya es desconocido; el campo nunca se reclama.",
+      "observed_in_local_trial": [
+        {
+          "code": "required_missing",
+          "field": "bearing_size_code",
+          "row": null,
+          "column": null,
+          "blocking": false
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "successor_translation": "Separa suministro/sellado y normaliza la descripción de pistas. Conserva los biseles del propio rodamiento, su par, pendientes y límites originales; no los transforma en ángulo de rodadura.",
+      "expected_sql_blocking": []
+    },
+    {
+      "id": "wrfp_sealed_does_not_decide_regreasing",
+      "template": "bearing",
+      "kind": "válido",
+      "decision": "R1",
+      "values": {
+        "bearing_regreasable": true,
+        "spec_evidence_source": "Enduro Bearings, Bearing Basics 1",
+        "bearing_supply_form": "Cartucho",
+        "bearing_seal_type": "Sellado de contacto",
+        "bearing_seal_designation": "LLU (doble labio, contacto medio)"
+      },
+      "source_urls": [
+        "https://cycling.endurobearings.com/pages/bearing-basics-1",
+        "https://cycling.endurobearings.com/products/3802-llu-max"
+      ],
+      "source_ids": [
+        "S-ENDURO-BASICS",
+        "S-SKF-CAPPED"
+      ],
+      "expected_blocking": [],
+      "note": "Sellado y reengrasable conviven; el sello no decide la declaración.",
+      "observed_in_local_trial": [
+        {
+          "code": "required_missing",
+          "field": "bearing_size_code",
+          "row": null,
+          "column": null,
+          "blocking": false
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "successor_translation": "Separa suministro/sellado y normaliza la descripción de pistas. Conserva los biseles del propio rodamiento, su par, pendientes y límites originales; no los transforma en ángulo de rodadura.",
+      "expected_sql_blocking": []
+    },
+    {
+      "id": "bbx_loose_balls_cannot_declare_a_seal",
+      "template": "bearing",
+      "values": {
+        "bearing_supply_form": "Bolas sueltas",
+        "bearing_seal_type": "Sellado de contacto"
+      },
+      "expected_blocking": [
+        {
+          "code": "field_applicability",
+          "field": "bearing_seal_type"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "expected_sql_blocking": [
+        {
+          "code": "field_applicability",
+          "field": "bearing_seal_type"
+        }
+      ]
+    },
+    {
+      "id": "bbx_open_cartridge_cannot_declare_a_seal_designation",
+      "template": "bearing",
+      "values": {
+        "bearing_supply_form": "Cartucho",
+        "bearing_seal_type": "Abierto",
+        "bearing_seal_designation": "2RS"
+      },
+      "expected_blocking": [
+        {
+          "code": "field_applicability",
+          "field": "bearing_seal_designation"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "expected_sql_blocking": [
+        {
+          "code": "field_applicability",
+          "field": "bearing_seal_designation"
+        }
+      ]
+    },
+    {
+      "id": "bbx_sealed_cartridge_keeps_its_designation",
+      "template": "bearing",
+      "values": {
+        "bearing_supply_form": "Cartucho",
+        "bearing_seal_type": "Sellado de contacto",
+        "bearing_seal_designation": "LLU",
+        "bearing_size_code": "3802 LLU MAX"
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "expected_sql_blocking": []
+    },
+    {
+      "id": "bbx_supply_form_does_not_decide_the_seal",
+      "template": "bearing",
+      "values": {
+        "bearing_supply_form": "Cartucho",
+        "bearing_seal_type": "Abierto",
+        "bearing_size_code": "6902"
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "expected_sql_blocking": []
+    },
+    {
+      "id": "bbx_loose_balls_cannot_declare_a_cartridge_code",
+      "template": "bearing",
+      "values": {
+        "bearing_supply_form": "Bolas sueltas",
+        "bearing_size_code": "6902"
+      },
+      "expected_blocking": [
+        {
+          "code": "field_applicability",
+          "field": "bearing_size_code"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "expected_sql_blocking": [
+        {
+          "code": "field_applicability",
+          "field": "bearing_size_code"
+        }
+      ]
+    },
+    {
+      "id": "bbx_cartridge_cannot_declare_a_ball_count",
+      "template": "bearing",
+      "values": {
+        "bearing_supply_form": "Cartucho",
+        "bearing_seal_type": "Sellado de contacto",
+        "ball_diameter_in": "5/32",
+        "ball_count_per_pack": "100"
+      },
+      "expected_blocking": [
+        {
+          "code": "field_applicability",
+          "field": "ball_diameter_in"
+        },
+        {
+          "code": "field_applicability",
+          "field": "ball_count_per_pack"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "expected_sql_blocking": [
+        {
+          "code": "field_applicability",
+          "field": "ball_count_per_pack"
+        },
+        {
+          "code": "field_applicability",
+          "field": "ball_diameter_in"
+        }
+      ]
+    },
+    {
+      "id": "bbx_retainer_keeps_its_ball_size",
+      "template": "bearing",
+      "values": {
+        "bearing_supply_form": "Canastillo con bolas",
+        "ball_diameter_in": "5/32"
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "expected_sql_blocking": []
+    },
+    {
+      "id": "bbx_cartridge_keeps_its_retention",
+      "template": "bearing",
+      "values": {
+        "bearing_supply_form": "Cartucho",
+        "bearing_seal_type": "Sellado de contacto",
+        "bearing_element_retention": "Complemento completo / sin jaula",
+        "bearing_row_count": "2"
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "expected_sql_blocking": []
+    },
+    {
+      "id": "bbx_radial_cartridge_cannot_declare_a_contact_angle",
+      "template": "bearing",
+      "values": {
+        "bearing_supply_form": "Cartucho",
+        "bearing_seal_type": "Sellado de contacto",
+        "bearing_race_type": "Desconocido / sin confirmar",
+        "bearing_race_contact_angle_deg": "15"
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "successor_translation": "Se rechaza la premisa: clasificación radial no prohíbe ángulo; incluir rodamiento no elimina el asiento de la cubeta. Radial sólo informa clase de carga: conserva la preimagen y deja construcción sin confirmar, sin inferir ranura profunda.",
+      "predecessor_values": {
+        "bearing_supply_form": "Cartucho",
+        "bearing_seal_type": "Sellado de contacto",
+        "bearing_race_type": "Radial",
+        "bearing_race_contact_angle_deg": "15"
+      },
+      "expected_sql_blocking": []
+    },
+    {
+      "id": "bbx_angular_cartridge_declares_one_angle",
+      "template": "bearing",
+      "values": {
+        "bearing_supply_form": "Cartucho",
+        "bearing_seal_type": "Sellado de contacto",
+        "bearing_race_type": "Contacto angular",
+        "bearing_race_contact_angle_deg": "36"
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "expected_sql_blocking": []
+    },
+    {
+      "id": "bbx_angular_cartridge_without_its_angle_is_complete",
+      "template": "bearing",
+      "values": {
+        "bearing_supply_form": "Cartucho",
+        "bearing_seal_type": "Sellado de contacto",
+        "bearing_race_type": "Contacto angular"
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "expected_sql_blocking": []
+    },
+    {
+      "id": "bbx_cartridge_without_its_race_geometry_is_pending",
+      "template": "bearing",
+      "values": {
+        "bearing_supply_form": "Cartucho",
+        "bearing_seal_type": "Sellado de contacto",
+        "bearing_size_code": "6902"
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "expected_issue_subset": [
+        {
+          "code": "required_missing",
+          "field": "bearing_race_type",
+          "blocking": false
+        }
+      ],
+      "expected_sql_issue_subset": [
+        {
+          "code": "required_missing",
+          "field": "bearing_race_type",
+          "blocking": false
+        }
+      ],
+      "expected_sql_blocking": []
+    },
+    {
+      "id": "bbx_cup_owns_the_seat_bevel",
+      "template": "bottom_bracket_cup",
+      "values": {
+        "bearing_included": false,
+        "bb_cup_seat_bevel": "Biseles interior y exterior"
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "expected_sql_blocking": []
+    },
+    {
+      "id": "bbx_cup_with_its_bearing_declares_no_seat",
+      "template": "bottom_bracket_cup",
+      "values": {
+        "bearing_included": true,
+        "bb_cup_seat_bevel": "Biseles interior y exterior"
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "successor_translation": "Se rechaza la premisa: clasificación radial no prohíbe ángulo; incluir rodamiento no elimina el asiento de la cubeta.",
+      "expected_sql_blocking": []
+    },
+    {
+      "id": "bbx_english_shell_has_two_hands",
+      "template": "bottom_bracket",
+      "values": {
+        "bb_shell_ports": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "port": "Lado motriz",
+                "mates_with": "Caja del cuadro",
+                "form": "Rosca medida",
+                "diameter": "1.37",
+                "diameter_unit": "in",
+                "pitch": "24",
+                "pitch_unit": "tpi",
+                "thread_hand": "Izquierda",
+                "source_scope": "Apartado sintético",
+                "source_url": "https://example.invalid/synthetic",
+                "side": "Lado motriz"
+              },
+              "sources": []
+            },
+            {
+              "id": "r2",
+              "values": {
+                "port": "Lado no motriz",
+                "mates_with": "Caja del cuadro",
+                "form": "Rosca medida",
+                "diameter": "1.37",
+                "diameter_unit": "in",
+                "pitch": "24",
+                "pitch_unit": "tpi",
+                "thread_hand": "Derecha",
+                "source_scope": "Apartado sintético",
+                "source_url": "https://example.invalid/synthetic",
+                "side": "Lado no motriz"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "expected_sql_blocking": []
+    },
+    {
+      "id": "bbx_same_port_twice_blocks",
+      "template": "bottom_bracket",
+      "values": {
+        "bb_shell_ports": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "port": "Lado motriz",
+                "mates_with": "Caja del cuadro",
+                "form": "Rosca medida",
+                "diameter": "1.37",
+                "diameter_unit": "in",
+                "pitch": "24",
+                "pitch_unit": "tpi",
+                "thread_hand": "Izquierda",
+                "source_scope": "Apartado sintético",
+                "source_url": "https://example.invalid/synthetic",
+                "side": "Lado motriz"
+              },
+              "sources": []
+            },
+            {
+              "id": "r2",
+              "values": {
+                "port": "Lado motriz",
+                "mates_with": "Caja del cuadro",
+                "form": "Rosca medida",
+                "diameter": "1.37",
+                "diameter_unit": "in",
+                "pitch": "24",
+                "pitch_unit": "tpi",
+                "thread_hand": "Derecha",
+                "source_scope": "Apartado sintético",
+                "source_url": "https://example.invalid/synthetic",
+                "side": "Lado motriz"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [
+        {
+          "code": "row_shape",
+          "field": "bb_shell_ports"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "expected_sql_blocking": [
+        {
+          "code": "row_shape",
+          "field": "bb_shell_ports"
+        }
+      ]
+    },
+    {
+      "id": "bbx_cups_thread_to_each_other_in_a_pressed_shell",
+      "template": "bottom_bracket",
+      "values": {
+        "bb_shell_ports": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "port": "Lado motriz",
+                "mates_with": "Caja del cuadro",
+                "form": "Asiento a presión",
+                "diameter": "41",
+                "diameter_unit": "mm",
+                "source_scope": "Apartado sintético",
+                "source_url": "https://example.invalid/synthetic",
+                "side": "Lado motriz"
+              },
+              "sources": []
+            },
+            {
+              "id": "r2",
+              "values": {
+                "port": "Lado no motriz",
+                "mates_with": "Caja del cuadro",
+                "form": "Asiento a presión",
+                "diameter": "41",
+                "diameter_unit": "mm",
+                "source_scope": "Apartado sintético",
+                "source_url": "https://example.invalid/synthetic",
+                "side": "Lado no motriz"
+              },
+              "sources": []
+            },
+            {
+              "id": "r3",
+              "values": {
+                "port": "Puerto único",
+                "mates_with": "La otra copa",
+                "form": "Rosca medida",
+                "diameter": "30",
+                "diameter_unit": "mm",
+                "pitch": "1",
+                "pitch_unit": "mm",
+                "thread_hand": "Derecha",
+                "source_scope": "Apartado sintético",
+                "source_url": "https://example.invalid/synthetic",
+                "side": "Puerto único"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "expected_sql_blocking": []
+    },
+    {
+      "id": "bbx_a_pressed_port_cannot_declare_a_pitch",
+      "template": "bottom_bracket",
+      "values": {
+        "bb_shell_ports": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "port": "Lado motriz",
+                "mates_with": "Caja del cuadro",
+                "form": "Asiento a presión",
+                "diameter": "41",
+                "diameter_unit": "mm",
+                "pitch": "24",
+                "pitch_unit": "tpi",
+                "source_scope": "Apartado sintético",
+                "source_url": "https://example.invalid/synthetic",
+                "side": "Lado motriz"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [
+        {
+          "code": "row_field_applicability",
+          "field": "bb_shell_ports"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "expected_sql_blocking": [
+        {
+          "code": "row_field_applicability",
+          "field": "bb_shell_ports"
+        },
+        {
+          "code": "row_field_applicability",
+          "field": "bb_shell_ports"
+        }
+      ]
+    },
+    {
+      "id": "bbx_a_pressed_port_cannot_declare_a_hand",
+      "template": "bottom_bracket",
+      "values": {
+        "bb_shell_ports": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "port": "Lado motriz",
+                "mates_with": "Caja del cuadro",
+                "form": "Asiento a presión",
+                "diameter": "41",
+                "diameter_unit": "mm",
+                "thread_hand": "Izquierda",
+                "source_scope": "Apartado sintético",
+                "source_url": "https://example.invalid/synthetic",
+                "side": "Lado motriz"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [
+        {
+          "code": "row_field_applicability",
+          "field": "bb_shell_ports"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "expected_sql_blocking": [
+        {
+          "code": "row_field_applicability",
+          "field": "bb_shell_ports"
+        }
+      ]
+    },
+    {
+      "id": "bbx_an_oem_designation_cannot_carry_a_diameter",
+      "template": "bottom_bracket",
+      "values": {
+        "bb_shell_ports": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "port": "Lado motriz",
+                "mates_with": "Caja del cuadro",
+                "form": "Designación OEM sin descomponer",
+                "diameter": "1.37",
+                "diameter_unit": "in",
+                "source_scope": "Apartado sintético",
+                "source_url": "https://example.invalid/synthetic",
+                "designation": "BB86",
+                "side": "Lado motriz"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [
+        {
+          "code": "row_field_applicability",
+          "field": "bb_shell_ports"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "expected_sql_blocking": [
+        {
+          "code": "row_field_applicability",
+          "field": "bb_shell_ports"
+        },
+        {
+          "code": "row_field_applicability",
+          "field": "bb_shell_ports"
+        }
+      ]
+    },
+    {
+      "id": "bbx_a_threaded_port_keeps_both_units",
+      "template": "bottom_bracket",
+      "values": {
+        "bb_shell_ports": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "port": "Lado motriz",
+                "mates_with": "Caja del cuadro",
+                "form": "Rosca medida",
+                "diameter": "36",
+                "diameter_unit": "mm",
+                "pitch": "24",
+                "pitch_unit": "tpi",
+                "thread_hand": "Izquierda",
+                "source_scope": "Apartado sintético",
+                "source_url": "https://example.invalid/synthetic",
+                "side": "Lado motriz"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "expected_sql_blocking": []
+    },
+    {
+      "id": "bbx_a_cup_carries_its_own_ports",
+      "template": "bottom_bracket_cup",
+      "values": {
+        "bb_shell_ports": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "port": "Puerto único",
+                "mates_with": "Caja del cuadro",
+                "form": "Rosca medida",
+                "diameter": "1.37",
+                "diameter_unit": "in",
+                "pitch": "24",
+                "pitch_unit": "tpi",
+                "thread_hand": "Izquierda",
+                "source_scope": "Apartado sintético",
+                "source_url": "https://example.invalid/synthetic",
+                "side": "Puerto único"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "expected_sql_blocking": []
+    },
+    {
+      "id": "bbx_accepted_spindle_needs_its_variant",
+      "template": "bottom_bracket",
+      "values": {
+        "bb_accepted_spindles": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "interface": "Cuadrado JIS",
+                "status": "Compatible declarado",
+                "source_scope": "Apartado sintético",
+                "source_url": "https://example.invalid/synthetic",
+                "target_kind": "Modelo y edición",
+                "configuration": "Configuración sintética"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "expected_issue_subset": [
+        {
+          "code": "row_required_missing",
+          "field": "bb_accepted_spindles",
+          "blocking": false
+        }
+      ],
+      "expected_sql_issue_subset": [
+        {
+          "code": "row_required_missing",
+          "field": "bb_accepted_spindles",
+          "blocking": false
+        }
+      ],
+      "successor_translation": "Las claves de modelo siguen pendientes, ahora exigidas condicionalmente por tipo de destinatario.",
+      "expected_sql_blocking": []
+    },
+    {
+      "id": "bbx_jis_and_iso_are_two_declarations",
+      "template": "bottom_bracket",
+      "values": {
+        "bb_accepted_spindles": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "interface": "Cuadrado JIS",
+                "oem_brand": "Marca sintética",
+                "oem_model": "Modelo sintético",
+                "oem_edition": "Edición sintética",
+                "status": "Compatible declarado",
+                "source_scope": "Apartado sintético",
+                "source_url": "https://example.invalid/synthetic",
+                "target_kind": "Modelo y edición",
+                "configuration": "Configuración sintética"
+              },
+              "sources": []
+            },
+            {
+              "id": "r2",
+              "values": {
+                "interface": "Cuadrado ISO",
+                "oem_brand": "Marca sintética",
+                "oem_model": "Modelo sintético",
+                "oem_edition": "Edición sintética",
+                "status": "Incompatible declarado",
+                "source_scope": "Apartado sintético",
+                "source_url": "https://example.invalid/synthetic",
+                "target_kind": "Modelo y edición",
+                "configuration": "Configuración sintética"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "successor_translation": "Dos interfaces explícitas pueden compartir una configuración y modelo; son declaraciones independientes, sin inventar dos montajes para sortear la identidad de fila.",
+      "expected_sql_blocking": []
+    },
+    {
+      "id": "bbx_same_variant_twice_blocks",
+      "template": "bottom_bracket",
+      "values": {
+        "bb_accepted_spindles": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "interface": "Cuadrado JIS",
+                "oem_brand": "Marca sintética",
+                "oem_model": "Modelo sintético",
+                "oem_edition": "Edición sintética",
+                "status": "Compatible declarado",
+                "source_scope": "Apartado sintético",
+                "source_url": "https://example.invalid/synthetic",
+                "target_kind": "Modelo y edición",
+                "configuration": "Configuración sintética"
+              },
+              "sources": []
+            },
+            {
+              "id": "r2",
+              "values": {
+                "interface": "Cuadrado JIS",
+                "oem_brand": "Marca sintética",
+                "oem_model": "Modelo sintético",
+                "oem_edition": "Edición sintética",
+                "status": "Incompatible declarado",
+                "source_scope": "Apartado sintético",
+                "source_url": "https://example.invalid/synthetic",
+                "target_kind": "Modelo y edición",
+                "configuration": "Configuración sintética"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [
+        {
+          "code": "row_shape",
+          "field": "bb_accepted_spindles"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "expected_sql_blocking": [
+        {
+          "code": "row_shape",
+          "field": "bb_accepted_spindles"
+        }
+      ]
+    },
+    {
+      "id": "bbx_a_compatible_verdict_may_publish_its_scope",
+      "template": "bottom_bracket",
+      "values": {
+        "bb_accepted_spindles": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "interface": "Cuadrado JIS",
+                "oem_brand": "Marca sintética",
+                "oem_model": "Modelo sintético",
+                "oem_edition": "Edición sintética",
+                "status": "Compatible declarado",
+                "source_scope": "Apartado sintético",
+                "source_url": "https://example.invalid/synthetic",
+                "conditions": "Alcance sintético",
+                "target_kind": "Modelo y edición",
+                "configuration": "Configuración sintética"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "expected_sql_blocking": []
+    },
+    {
+      "id": "bbx_a_conditioned_verdict_needs_its_scope",
+      "template": "bottom_bracket",
+      "values": {
+        "bb_accepted_spindles": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "interface": "Cuadrado JIS",
+                "oem_brand": "Marca sintética",
+                "oem_model": "Modelo sintético",
+                "oem_edition": "Edición sintética",
+                "status": "Condicionado",
+                "source_scope": "Apartado sintético",
+                "source_url": "https://example.invalid/synthetic",
+                "target_kind": "Modelo y edición",
+                "configuration": "Configuración sintética"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "expected_issue_subset": [
+        {
+          "code": "row_required_missing",
+          "field": "bb_accepted_spindles",
+          "blocking": false
+        }
+      ],
+      "expected_sql_issue_subset": [
+        {
+          "code": "row_required_missing",
+          "field": "bb_accepted_spindles",
+          "blocking": false
+        }
+      ],
+      "expected_sql_blocking": []
+    },
+    {
+      "id": "bbx_a_bb_without_a_spindle_cannot_measure_one",
+      "template": "bottom_bracket",
+      "values": {
+        "includes_spindle": false,
+        "spindle_length_mm": "113"
+      },
+      "expected_blocking": [
+        {
+          "code": "field_applicability",
+          "field": "spindle_length_mm"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "expected_sql_blocking": [
+        {
+          "code": "field_applicability",
+          "field": "spindle_length_mm"
+        }
+      ]
+    },
+    {
+      "id": "bbx_a_bb_without_a_spindle_still_accepts_them",
+      "template": "bottom_bracket",
+      "values": {
+        "includes_spindle": false,
+        "bb_accepted_spindles": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "interface": "Cuadrado JIS",
+                "oem_brand": "Marca sintética",
+                "oem_model": "Modelo sintético",
+                "oem_edition": "Edición sintética",
+                "status": "Compatible declarado",
+                "source_scope": "Apartado sintético",
+                "source_url": "https://example.invalid/synthetic",
+                "target_kind": "Modelo y edición",
+                "configuration": "Configuración sintética"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "expected_sql_blocking": []
+    },
+    {
+      "id": "bbx_a_bb_with_a_spindle_measures_it",
+      "template": "bottom_bracket",
+      "values": {
+        "includes_spindle": true,
+        "spindle_interface": "Cuadrado JIS",
+        "spindle_length_mm": "113",
+        "spindle_diameter_mm": "17"
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "expected_sql_blocking": []
+    },
+    {
+      "id": "bbx_cartridge_bb_cannot_count_balls",
+      "template": "bottom_bracket",
+      "values": {
+        "bb_supplied_bearing_members": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "member": "Miembro de la fixture",
+                "position": "Posición sintética",
+                "form": "Cartucho",
+                "source_scope": "Caso sintético",
+                "source_url": "https://example.invalid/root-bearing-boundary",
+                "ball_size": "1/4",
+                "ball_count": "11"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [
+        {
+          "code": "row_field_applicability",
+          "field": "bb_supplied_bearing_members"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "successor_translation": "La construcción y sus propiedades se conservan en el mismo miembro físico suministrado.",
+      "predecessor_values": {
+        "bb_bearing_arrangement": "Cartucho sellado",
+        "bb_ball_size_in": "1/4",
+        "bb_ball_count_per_side": "11"
+      },
+      "expected_sql_blocking": [
+        {
+          "code": "row_field_applicability",
+          "field": "bb_supplied_bearing_members"
+        },
+        {
+          "code": "row_field_applicability",
+          "field": "bb_supplied_bearing_members"
+        }
+      ]
+    },
+    {
+      "id": "bbx_cup_and_ball_bb_cannot_declare_a_cartridge_code",
+      "template": "bottom_bracket",
+      "values": {
+        "bb_supplied_bearing_members": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "member": "Miembro de la fixture",
+                "position": "Posición sintética",
+                "form": "Bolas sueltas",
+                "source_scope": "Caso sintético",
+                "source_url": "https://example.invalid/root-bearing-boundary",
+                "code": "6902"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [
+        {
+          "code": "row_field_applicability",
+          "field": "bb_supplied_bearing_members"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "successor_translation": "La construcción y sus propiedades se conservan en el mismo miembro físico suministrado.",
+      "predecessor_values": {
+        "bb_bearing_arrangement": "Cubetas y bolas",
+        "bearing_size_code": "6902"
+      },
+      "expected_sql_blocking": [
+        {
+          "code": "row_field_applicability",
+          "field": "bb_supplied_bearing_members"
+        }
+      ]
+    },
+    {
+      "id": "bbx_cup_and_ball_bb_counts_its_balls",
+      "template": "bottom_bracket",
+      "values": {
+        "bb_supplied_bearing_members": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "member": "Miembro de la fixture",
+                "position": "Posición sintética",
+                "form": "Bolas sueltas",
+                "source_scope": "Caso sintético",
+                "source_url": "https://example.invalid/root-bearing-boundary",
+                "ball_size": "1/4",
+                "ball_count": "11"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "successor_translation": "La construcción y sus propiedades se conservan en el mismo miembro físico suministrado.",
+      "predecessor_values": {
+        "bb_bearing_arrangement": "Cubetas y bolas",
+        "bb_ball_size_in": "1/4",
+        "bb_ball_count_per_side": "11"
+      },
+      "expected_sql_blocking": []
+    },
+    {
+      "id": "bbx_an_axle_declares_its_systems",
+      "template": "bottom_bracket_axle",
+      "values": {
+        "spindle_interface": "Cuadrado JIS",
+        "spindle_length_mm": "113",
+        "spindle_diameter_mm": "17",
+        "bb_declared_systems": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "system_brand": "Marca sintética",
+                "system_model": "Modelo sintético",
+                "system_edition": "Edición sintética",
+                "status": "Compatible declarado",
+                "source_scope": "Apartado sintético",
+                "source_url": "https://example.invalid/synthetic"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "expected_sql_blocking": []
+    },
+    {
+      "id": "bbx_same_system_twice_blocks",
+      "template": "bottom_bracket_axle",
+      "values": {
+        "bb_declared_systems": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "system_brand": "Marca sintética",
+                "system_model": "Modelo sintético",
+                "system_edition": "Edición sintética",
+                "status": "Compatible declarado",
+                "source_scope": "Apartado sintético",
+                "source_url": "https://example.invalid/synthetic"
+              },
+              "sources": []
+            },
+            {
+              "id": "r2",
+              "values": {
+                "system_brand": "Marca sintética",
+                "system_model": "Modelo sintético",
+                "system_edition": "Edición sintética",
+                "status": "Incompatible declarado",
+                "source_scope": "Apartado sintético",
+                "source_url": "https://example.invalid/synthetic"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [
+        {
+          "code": "row_shape",
+          "field": "bb_declared_systems"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "expected_sql_blocking": [
+        {
+          "code": "row_shape",
+          "field": "bb_declared_systems"
+        }
+      ]
+    },
+    {
+      "id": "bbx_a_declared_system_needs_its_edition",
+      "template": "bottom_bracket_axle",
+      "values": {
+        "bb_declared_systems": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "system_brand": "Marca sintética",
+                "system_model": "Modelo sintético",
+                "status": "Compatible declarado",
+                "source_scope": "Apartado sintético",
+                "source_url": "https://example.invalid/synthetic"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "expected_issue_subset": [
+        {
+          "code": "row_incomplete",
+          "field": "bb_declared_systems",
+          "blocking": false
+        }
+      ],
+      "expected_sql_issue_subset": [
+        {
+          "code": "row_incomplete",
+          "field": "bb_declared_systems",
+          "blocking": false
+        }
+      ],
+      "expected_sql_blocking": []
+    },
+    {
+      "id": "bbx_bb_bearing_declares_its_bore_once",
+      "template": "bottom_bracket_bearing",
+      "values": {
+        "bearing_supply_form": "Cartucho",
+        "bearing_size_code": "6902",
+        "bearing_inner_diameter_mm": "15",
+        "bearing_outer_diameter_mm": "28",
+        "bb_bearing_width_mm": "7"
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "expected_sql_blocking": []
+    },
+    {
+      "id": "bbx_bb_bearing_with_loose_balls_has_no_cartridge_code",
+      "template": "bottom_bracket_bearing",
+      "values": {
+        "bearing_supply_form": "Bolas sueltas",
+        "bearing_size_code": "6902"
+      },
+      "expected_blocking": [
+        {
+          "code": "field_applicability",
+          "field": "bearing_size_code"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "expected_sql_blocking": [
+        {
+          "code": "field_applicability",
+          "field": "bearing_size_code"
+        }
+      ]
+    },
+    {
+      "id": "bbx_bb_bearing_with_loose_balls_counts_them",
+      "template": "bottom_bracket_bearing",
+      "values": {
+        "bearing_supply_form": "Bolas sueltas",
+        "bb_ball_size_in": "1/4",
+        "bb_ball_count_per_side": "11"
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "expected_sql_blocking": []
+    },
+    {
+      "id": "bbr_empty_bearing_supply_stays_pending",
+      "template": "bearing",
+      "values": {},
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "expected_issue_subset": [
+        {
+          "code": "required_missing",
+          "field": "bearing_supply_form",
+          "blocking": false
+        }
+      ],
+      "expected_sql_issue_subset": [
+        {
+          "code": "required_missing",
+          "field": "bearing_supply_form",
+          "blocking": false
+        }
+      ],
+      "expected_sql_blocking": []
+    },
+    {
+      "id": "bbr_empty_bb_spindle_contents_stays_pending",
+      "template": "bottom_bracket",
+      "values": {},
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "expected_issue_subset": [
+        {
+          "code": "required_missing",
+          "field": "includes_spindle",
+          "blocking": false
+        }
+      ],
+      "expected_sql_issue_subset": [
+        {
+          "code": "required_missing",
+          "field": "includes_spindle",
+          "blocking": false
+        }
+      ],
+      "expected_sql_blocking": []
+    },
+    {
+      "id": "bbr_empty_cup_bearing_contents_stays_pending",
+      "template": "bottom_bracket_cup",
+      "values": {},
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "expected_issue_subset": [
+        {
+          "code": "required_missing",
+          "field": "bearing_included",
+          "blocking": false
+        }
+      ],
+      "expected_sql_issue_subset": [
+        {
+          "code": "required_missing",
+          "field": "bearing_included",
+          "blocking": false
+        }
+      ],
+      "expected_sql_blocking": []
+    },
+    {
+      "id": "bbr_chamfers_do_not_supply_a_rolling_angle",
+      "template": "bearing",
+      "values": {
+        "bearing_supply_form": "Cartucho",
+        "bearing_seal_type": "Sellado de contacto",
+        "bearing_seat_geometry": "Biseles interior y exterior",
+        "bearing_inner_contact_angle_deg": "36",
+        "bearing_outer_contact_angle_deg": "45"
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "expected_sql_blocking": [],
+      "forbidden_issue_fields": [
+        "bearing_race_contact_angle_deg"
+      ]
+    },
+    {
+      "id": "bbr_radial_zero_contact_angle_remains_valid",
+      "template": "bearing",
+      "values": {
+        "bearing_supply_form": "Cartucho",
+        "bearing_seal_type": "Sellado de contacto",
+        "bearing_race_type": "Desconocido / sin confirmar",
+        "bearing_race_contact_angle_deg": "0"
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "predecessor_values": {
+        "bearing_supply_form": "Cartucho",
+        "bearing_seal_type": "Sellado de contacto",
+        "bearing_race_type": "Radial",
+        "bearing_race_contact_angle_deg": "0"
+      },
+      "successor_translation": " Radial sólo informa clase de carga: conserva la preimagen y deja construcción sin confirmar, sin inferir ranura profunda.",
+      "expected_sql_blocking": []
+    },
+    {
+      "id": "bbr_shell_width_interval_is_one_claim",
+      "template": "bottom_bracket",
+      "values": {
+        "bb_installation_claims": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "configuration": "Configuración sintética",
+                "shell_designation": "Caja sintética",
+                "status": "Compatible declarado",
+                "source_scope": "Caso sintético",
+                "source_url": "https://example.invalid/root-bearing-boundary",
+                "width_kind": "Intervalo publicado",
+                "width_min_mm": "86",
+                "width_max_mm": "92"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "expected_sql_blocking": []
+    },
+    {
+      "id": "bbr_exact_width_cannot_also_have_range",
+      "template": "bottom_bracket",
+      "values": {
+        "bb_installation_claims": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "configuration": "Configuración sintética",
+                "shell_designation": "Caja sintética",
+                "status": "Compatible declarado",
+                "source_scope": "Caso sintético",
+                "source_url": "https://example.invalid/root-bearing-boundary",
+                "width_kind": "Valor exacto",
+                "width_mm": "68",
+                "width_min_mm": "68"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [
+        {
+          "code": "row_field_applicability",
+          "field": "bb_installation_claims"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "expected_sql_blocking": [
+        {
+          "code": "row_field_applicability",
+          "field": "bb_installation_claims"
+        }
+      ]
+    },
+    {
+      "id": "bbr_reversed_width_interval_blocks",
+      "template": "bottom_bracket",
+      "values": {
+        "bb_installation_claims": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "configuration": "Configuración sintética",
+                "shell_designation": "Caja sintética",
+                "status": "Compatible declarado",
+                "source_scope": "Caso sintético",
+                "source_url": "https://example.invalid/root-bearing-boundary",
+                "width_kind": "Intervalo publicado",
+                "width_min_mm": "92",
+                "width_max_mm": "86"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [
+        {
+          "code": "row_shape",
+          "field": "bb_installation_claims"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "expected_sql_blocking": [
+        {
+          "code": "row_shape",
+          "field": "bb_installation_claims"
+        }
+      ]
+    },
+    {
+      "id": "bbr_two_bearings_have_distinct_bores",
+      "template": "bottom_bracket",
+      "values": {
+        "bb_supplied_bearing_members": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "member": "Motriz",
+                "position": "Motriz",
+                "form": "Cartucho",
+                "code": "A",
+                "bore_mm": "24",
+                "source_scope": "Caso sintético",
+                "source_url": "https://example.invalid/root-bearing-boundary"
+              },
+              "sources": []
+            },
+            {
+              "id": "r2",
+              "values": {
+                "member": "No motriz",
+                "position": "No motriz",
+                "form": "Cartucho",
+                "code": "B",
+                "bore_mm": "22",
+                "source_scope": "Caso sintético",
+                "source_url": "https://example.invalid/root-bearing-boundary"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "expected_sql_blocking": []
+    },
+    {
+      "id": "bbr_cartridge_member_cannot_receive_loose_ball_fields",
+      "template": "bottom_bracket",
+      "values": {
+        "bb_supplied_bearing_members": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "member": "Uno",
+                "position": "Una",
+                "form": "Cartucho",
+                "code": "A",
+                "ball_count": "11",
+                "source_scope": "Caso sintético",
+                "source_url": "https://example.invalid/root-bearing-boundary"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [
+        {
+          "code": "row_field_applicability",
+          "field": "bb_supplied_bearing_members"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "expected_sql_blocking": [
+        {
+          "code": "row_field_applicability",
+          "field": "bb_supplied_bearing_members"
+        }
+      ]
+    },
+    {
+      "id": "bbr_same_physical_port_cannot_change_with_source",
+      "template": "bottom_bracket",
+      "values": {
+        "bb_shell_ports": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "port": "Uno",
+                "side": "Lado motriz",
+                "mates_with": "Caja del cuadro",
+                "form": "Designación OEM sin descomponer",
+                "designation": "A",
+                "source_scope": "Caso sintético",
+                "source_url": "https://example.invalid/root-bearing-boundary"
+              },
+              "sources": []
+            },
+            {
+              "id": "r2",
+              "values": {
+                "port": "Uno",
+                "side": "Lado motriz",
+                "mates_with": "Caja del cuadro",
+                "form": "Designación OEM sin descomponer",
+                "designation": "B",
+                "source_scope": "Otro apartado",
+                "source_url": "https://example.invalid/root-bearing-boundary"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [
+        {
+          "code": "row_shape",
+          "field": "bb_shell_ports"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "expected_sql_blocking": [
+        {
+          "code": "row_shape",
+          "field": "bb_shell_ports"
+        }
+      ]
+    },
+    {
+      "id": "bbr_interval_without_upper_bound_stays_pending",
+      "template": "bottom_bracket",
+      "values": {
+        "bb_installation_claims": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "configuration": "Configuración sintética",
+                "shell_designation": "Caja sintética",
+                "status": "Compatible declarado",
+                "source_scope": "Caso sintético",
+                "source_url": "https://example.invalid/root-bearing-boundary",
+                "width_kind": "Intervalo publicado",
+                "width_min_mm": "86"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "expected_issue_subset": [
+        {
+          "code": "row_required_missing",
+          "field": "bb_installation_claims",
+          "blocking": false
+        }
+      ],
+      "expected_sql_issue_subset": [
+        {
+          "code": "row_required_missing",
+          "field": "bb_installation_claims",
+          "blocking": false
+        }
+      ],
+      "expected_sql_blocking": []
+    },
+    {
+      "id": "bbr_cup_with_bearing_preserves_its_own_angles",
+      "template": "bottom_bracket_cup",
+      "values": {
+        "bearing_included": true,
+        "bb_cup_seat_bevel": "Biseles interior y exterior",
+        "bb_cup_inner_seat_angle_deg": "36",
+        "bb_cup_outer_seat_angle_deg": "45"
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "expected_sql_blocking": []
+    },
+    {
+      "id": "bbr_absent_spindle_cannot_have_a_measurement_datum",
+      "template": "bottom_bracket",
+      "values": {
+        "includes_spindle": false,
+        "spindle_diameter_datum": "Extremo"
+      },
+      "expected_blocking": [
+        {
+          "code": "field_applicability",
+          "field": "spindle_diameter_datum"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "expected_sql_blocking": [
+        {
+          "code": "field_applicability",
+          "field": "spindle_diameter_datum"
+        }
+      ]
+    },
+    {
+      "id": "bbr_standard_claim_does_not_invent_an_oem_model",
+      "template": "bottom_bracket",
+      "values": {
+        "bb_accepted_spindles": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "target_kind": "Estándar declarado",
+                "standard": "Diámetro sintético 24 mm",
+                "configuration": "Configuración sintética",
+                "status": "Compatible declarado",
+                "source_scope": "Caso sintético",
+                "source_url": "https://example.invalid/root-bearing-boundary"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "expected_sql_blocking": []
+    },
+    {
+      "id": "bbr_model_claim_without_interface_stays_pending",
+      "template": "bottom_bracket",
+      "values": {
+        "bb_accepted_spindles": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "target_kind": "Modelo y edición",
+                "oem_brand": "Sintético",
+                "oem_model": "Uno",
+                "oem_edition": "Edición sintética",
+                "configuration": "Única",
+                "status": "Compatible declarado",
+                "source_scope": "Caso sintético",
+                "source_url": "https://example.invalid/root-bearing-boundary"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "expected_issue_subset": [
+        {
+          "code": "row_required_missing",
+          "field": "bb_accepted_spindles",
+          "blocking": false
+        }
+      ],
+      "expected_sql_issue_subset": [
+        {
+          "code": "row_required_missing",
+          "field": "bb_accepted_spindles",
+          "blocking": false
+        }
+      ],
+      "expected_sql_blocking": []
+    },
+    {
+      "id": "bbr_radial_is_not_an_internal_construction_token",
+      "template": "bearing",
+      "values": {
+        "bearing_supply_form": "Cartucho",
+        "bearing_seal_type": "Sellado de contacto",
+        "bearing_race_type": "Radial"
+      },
+      "expected_blocking": [
+        {
+          "code": "option",
+          "field": "bearing_race_type"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "expected_sql_blocking": [
+        {
+          "code": "field_constraint",
+          "field": "bearing_race_type"
+        }
+      ]
+    }
+  ],
+  "root_nd_case_overrides": [
+    {
+      "id": "helmet_smith_mainline_certifications_by_row",
+      "reason": "Integral pertenece al eje de construcción, no al uso."
+    },
+    {
+      "id": "helmet_inventory_best_enduro_certificado_sin_norma",
+      "reason": "Se conserva Enduro sin inferir cobertura desde el título."
+    },
+    {
+      "id": "RCF25",
+      "reason": "Una variante distinta del soporte no es montaje de este SKU; se rechaza el token retirado."
+    }
+  ],
+  "root_row_value_case_overrides": [
+    "RCF08",
+    "CPC_GAP_INCLUDED_CLAMP_FALSE"
+  ],
+  "deferred_pressure_fixture_ids": [],
+  "superseded_pressure_fixtures": [
+    "wrfp_hookless_row_maximum_is_not_the_headline",
+    "wrfp_schwalbe_general_maximum_in_bar",
+    "wrfp_unit_without_value_is_pending",
+    "wrfp_value_without_unit_stays_pending"
+  ],
+  "required_server_migration": "20260907025000"
+}

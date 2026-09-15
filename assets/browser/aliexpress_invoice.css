@@ -263,6 +263,30 @@ th {
   display: inline-block;
 }
 
+/* La factura se mide sola antes de imprimirse: si sobra por poco, la casilla
+   de la foto baja un escalón y el documento cabe en una página. Sin esto una
+   factura de 7 líneas medía 1119 px contra los 1056 px de una carta y los
+   totales —que no se parten— caían solos en una segunda página casi vacía
+   (medido el 2026-09-04). Un documento que ya cabe no se toca, y si encoger no
+   ahorra páginas tampoco. */
+.paper.compact-1 .item-image,
+.paper.compact-1 .item-image-empty {
+  width: 72px;
+  height: 72px;
+}
+
+.paper.compact-2 .item-image,
+.paper.compact-2 .item-image-empty {
+  width: 64px;
+  height: 64px;
+}
+
+.paper.compact-3 .item-image,
+.paper.compact-3 .item-image-empty {
+  width: 56px;
+  height: 56px;
+}
+
 .article-copy {
   position: relative;
   min-width: 0;

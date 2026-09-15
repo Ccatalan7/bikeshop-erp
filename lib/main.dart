@@ -1363,6 +1363,8 @@ class _WorkspaceDeepLinkBridgeState extends State<_WorkspaceDeepLinkBridge>
     final id = record['id']?.toString() ?? '';
     if (type == 'online_order_created') {
       notificationService.recordOnlineOrderAlert(id, notification: record);
+    } else if (type == 'online_order_cancelled') {
+      notificationService.removeOnlineOrderAlert(id);
     }
     if (!allowPresentation || record['read_at'] != null) return;
     if (!ErpNotificationGate.shared.claimPresentation('erp:$id')) return;
@@ -1386,11 +1388,12 @@ class _WorkspaceDeepLinkBridgeState extends State<_WorkspaceDeepLinkBridge>
       route: resolveErpNotificationRoute(record),
       category:
           isMail ? NotificationCategory.email : NotificationCategory.general,
-      suppressRoutePrefix: type == 'online_order_created'
-          ? '/website/orders'
-          : isMail
-              ? '/mail'
-              : null,
+      suppressRoutePrefix:
+          type == 'online_order_created' || type == 'online_order_cancelled'
+              ? '/website/orders'
+              : isMail
+                  ? '/mail'
+                  : null,
       showSystemNotification: !_isWorkspaceForeground && !kIsWeb,
       notificationId: 'erp:$id'.hashCode,
     );
@@ -1408,12 +1411,21 @@ class _WorkspaceDeepLinkBridgeState extends State<_WorkspaceDeepLinkBridge>
     switch (type) {
       case 'mechanic_job_created':
         return Icons.build_outlined;
+      case 'mechanic_job_archived':
+        return Icons.remove_circle_outline;
       case 'sales_payment_received':
         return Icons.payments_outlined;
+      case 'sales_payment_voided':
+        return Icons.money_off_outlined;
       case 'expense_recorded':
         return Icons.receipt_long_outlined;
+      case 'expense_voided':
+      case 'expense_deleted':
+        return Icons.money_off_outlined;
       case 'online_order_created':
         return Icons.shopping_cart_checkout_outlined;
+      case 'online_order_cancelled':
+        return Icons.remove_shopping_cart_outlined;
       case 'whatsapp_catalog_approved':
         return Icons.verified_outlined;
       case 'mail':
@@ -2002,6 +2014,7 @@ class _WorkspaceRouterViewState extends State<_WorkspaceRouterView>
         debugPrint(
             '🔔 [WorkspaceRouterView] Notification tap → navigating to: $route');
         try {
+          if (_openChatNotificationInToolbar(route)) return;
           _router.go(route);
         } catch (e) {
           debugPrint(
@@ -2009,6 +2022,43 @@ class _WorkspaceRouterViewState extends State<_WorkspaceRouterView>
         }
       }
     });
+  }
+
+  /// Una notificación de mensaje abre la bandeja del rail derecho, no el módulo
+  /// `/chat`.
+  ///
+  /// El módulo es la bandeja completa y sirve para trabajar; para «vengo de una
+  /// notificación y quiero contestar esto» es un rodeo, y en teléfono además
+  /// pelea con la barra de estado del sistema. El panel del rail se monta igual
+  /// en escritorio y en compacto —ahí a pantalla completa, con su flecha de
+  /// volver—, así que el mismo desvío sirve para los dos.
+  ///
+  /// Devuelve `true` cuando se hizo cargo; si no, el enrutado normal sigue.
+  bool _openChatNotificationInToolbar(String route) {
+    final uri = Uri.tryParse(route);
+    if (uri == null || uri.path != '/chat') return false;
+
+    final toolbar = Provider.of<RightToolbarService>(context, listen: false);
+    final conversationId = uri.queryParameters['conversation'];
+    if (conversationId == null || conversationId.isEmpty) {
+      // Sin hilo, la notificación sólo dice «tienes mensajes».
+      toolbar.openTool(ToolbarTool.messages);
+      return true;
+    }
+
+    // Proveedores y clientes son dos bandejas: se abre la que le corresponde.
+    // Si el hilo aún no está cargado se cae a Clientes, que es la general, y la
+    // bandeja lo resuelve cuando llegan las conversaciones.
+    final chat = Provider.of<ChatProvider>(context, listen: false);
+    final index = chat.conversations.indexWhere((c) => c.id == conversationId);
+    final isSupplier =
+        index != -1 && chat.conversations[index].isSupplierConversation;
+
+    toolbar.openConversation(
+      tool: isSupplier ? ToolbarTool.supplierMessages : ToolbarTool.messages,
+      conversationId: conversationId,
+    );
+    return true;
   }
 
   @override

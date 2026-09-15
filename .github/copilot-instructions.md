@@ -51,6 +51,15 @@ código o en git, o una conclusión que todavía no se verificó.
 | Cargas asíncronas, caché, realtime y carreras de read models | `docs/architecture/async-data-loading-contract.md` |
 | Colaboración entre agentes | `docs/development/CODEX_CLAUDE_COLLABORATION.md` |
 | Identidad de producto, duplicados, matching de catálogo | `docs/architecture/product-identity-matching-contract.md` |
+| Mecánica de bicicleta, evidencia y límites por modelo | `docs/architecture/bicycle-compatibility-knowledge.md` |
+| Arquitectura de fichas, prerrequisitos y cobertura de familias | `docs/architecture/product-technical-specifications-contract.md` y `docs/architecture/product-spec-family-matrix.md` |
+
+**2026-09-06, alcance de fichas:** una categoría comercial puede mezclar clases
+de objeto. Auditar tanto productos con ficha como productos sin ella; un conteo
+de plantillas, reglas que pasan o coincidencias nominales no demuestra cobertura
+mecánica. La asignación por producto y todos sus consumidores deben resolver la
+misma identidad. La petición vigente exige saneamiento global antes del llenado;
+el checkpoint está en `docs/development/product-specs-research-2026-09-05/global-audit-and-sanitation-2026-09-06.md`.
 
 ### Lenguaje visual no significa layout impuesto (corrección 2026-08-09)
 
@@ -64,6 +73,30 @@ sólo cuando el dueño lo pide explícitamente; nunca es un gate para empezar ni
 una orden de conservar su layout. Este límite evita repetir el fallo de OCR:
 una superficie visualmente moderna sustituyó un batch comprensible por un
 panel/accordion que ocultaba la visión conjunta y empeoraba la tarea.
+
+### «Composición» son dos cosas y sólo una es nuestra (precisión 2026-08-17)
+
+La corrección anterior dice que la guía no decide «la composición de un
+módulo». Esa palabra tapa dos cosas distintas, y por ese hueco se perdió un
+módulo entero:
+
+- **Composición de producto — nuestra.** Qué bloques existen, en qué orden, qué
+  decide cada paso, qué palabras y qué CTAs. Un texto o un control propuesto por
+  un frame se descarta si no sirve al objetivo, y se dice por qué.
+- **Composición visual — de Design, y no se negocia.** Que un bloque sea un
+  **panel** (superficie + borde + radio + padding) y no cuatro elementos sueltos
+  sobre el fondo; el ancho de columna y si va centrada; la escala tipográfica; el
+  espaciado entre bloques. Aunque el contenido de adentro sea otro, aunque el
+  botón diga otra cosa y aunque el bloque no exista en ningún frame, se ve con
+  esa gramática.
+
+**El costo real.** En el Asistente de compras se aseguraron las palabras
+literales del frame («Analizar», «Ejemplos», «⌘/Ctrl + Enter») y las tablas de
+medidas del `spec.json` —lo que se puede grepear y exhibir como prueba— y se
+descartó la composición visual: sin panel contenedor, columna pegada a la
+izquierda en vez de 780 centrada, y tipografía en 15-16 px donde el diseño dice
+12,5 / 11 / 10. Se declaró implementado y se discutió con el dueño sobre esa
+base. Él miró la pantalla, no se parecía, y el módulo se rehace completo.
 
 Si el aprendizaje no calza en ninguno, va acá — y si acá crece demasiado, se
 extrae a un documento propio **con su puntero desde acá**.
@@ -88,6 +121,498 @@ system clipboard read-back. Intercept `SystemChannels.platform` with
 `TestDefaultBinaryMessengerBinding`, capture the `Clipboard.setData` method
 call and assert its payload instead. This verifies the actual app boundary
 without depending on host clipboard state or adding an unbounded pump/wait.
+
+### Business-day tests assert calendar boundaries (2026-09-07)
+
+A live-clock attendance test assumed every business day lasts 24 elapsed hours
+and failed the release gate at a daylight-saving transition. Assert the start
+and end of the selected civil date in the business timezone. Keep fixed-date
+transition cases beside the window model; do not replace calendar boundaries
+with a fixed duration or weaken the production date range to satisfy a test.
+
+### HTTP mock responses: declare UTF-8 before testing byte limits
+
+**2026-08-11 — one focused AI transport run exposed this trap.**
+`package:http` encodes `MockClient` string responses as Latin-1 when the mock
+omits a JSON/UTF-8 content type. A payload containing emoji can therefore fail
+inside the mock before the application reads a single response byte, turning a
+real `response_too_large` regression into an unrelated transport error. Tests
+for raw UTF-8 limits must use `Response.bytes` or set
+`content-type: application/json; charset=utf-8`; then assert the application
+boundary rather than the mock encoder.
+
+### Una fixture copiada del validador no prueba nada (2026-08-24)
+
+**Costo real: una prueba verde todo el día mientras la herramienta que
+supuestamente guardaba fallaba el 100 % de las veces en producción.**
+
+La fila de la fixture de `rank_purchase_suppliers` se había escrito copiando la
+lista de campos del propio validador del ejecutor. Por construcción coincidían —
+y era exactamente esa coincidencia lo que había que poner en duda: un validador
+y su fuente son dos artefactos que se despliegan por separado (la RPC en una
+migración, la lista en el Edge Function), así que el único riesgo real es que se
+separen. Una fixture derivada de uno de los dos lados vuelve ese riesgo
+indetectable. Es probar una traducción con el diccionario que se usó para
+escribirla.
+
+Dos consecuencias que valen para cualquier prueba de contrato, no sólo aquí:
+
+- **La fixture se escribe como espejo de lo que publica la fuente**, leído de
+  la fuente en producción, no de la estructura que el código espera.
+- **Una prueba nueva se prueba.** Se rompe el código a propósito, se la ve
+  roja, se restaura y se la ve verde. Cuesta dos comandos y es lo que separa
+  una guardia de un adorno. Sin ese paso no se puede afirmar que algo «queda
+  cubierto».
+
+### La guardia afirma la proyección, no lo que entró (2026-08-25)
+
+**Costo real: una fuga a otro módulo, viva en producción, con una prueba verde
+escrita para taparla y cuyo propio comentario describía el defecto.**
+
+En el Asistente de compras el runtime reescribía el argumento
+`presentation` antes de ejecutar la herramienta, y la prueba afirmaba
+exactamente eso: que el ejecutor había recibido `answer`. Pero la tarjeta que
+llega al cliente se construía en otra línea, desde `call.arguments` —la llamada
+cruda del modelo, que no se reasigna nunca—, así que seguía viajando con
+`autoOpen: true` y un destino de módulo entero. El turno se partía en dos
+mitades que se contradecían y la prueba miraba la mitad inocente.
+
+La regla, que vale para cualquier contrato cliente-servidor:
+
+- **Se afirma lo que sale hacia afuera** —la respuesta proyectada, la fila
+  persistida, el archivo escrito—, no el argumento que se le pasó a una capa
+  interna. Entre esos dos puntos cabe justo el defecto.
+- **Cuando una reparación existe, hay que buscar la segunda lectura del dato
+  reparado.** Un `let reparado = arreglar(crudo)` deja al crudo vivo y en
+  alcance; el compilador no avisa de quién lo sigue leyendo.
+- Y si el parámetro que decide el comportamiento tiene default, un sitio nuevo
+  hereda el caso equivocado en silencio: **sin default**, y el build obliga a
+  declararlo. Acá eso convirtió diez sitios de proyección en diez errores de
+  compilación, que es exactamente lo que se quería.
+
+### Una herramienta se elige por su descripción, no por su nombre (2026-08-23)
+
+`analyze_cash_and_receivables` se describía como «analiza el saldo contable de
+cuentas configuradas y facturas por cobrar en un horizonte cerrado». Es exacto y
+no se parece a nada que el operador pregunte, así que ante «¿a quién le cobro
+primero?» el modelo usaba `search_sales_invoices` —que sin término devuelve las
+más recientes, **cobradas o no**— y la respuesta mezclaba cuentas vencidas con
+facturas de saldo cero.
+
+Arreglo: la descripción abre con las preguntas reales que contesta («cuánto me
+deben», «a quién le cobro primero», «qué está vencido») y dice explícitamente
+que no hace falta combinarla con la búsqueda genérica. Verificado en la app: la
+llamada quedó en una sola herramienta y desaparecieron los saldos cero.
+
+Al agregar o corregir una herramienta, la primera línea de su descripción son
+**las palabras del operador**, no la definición técnica de lo que hace.
+
+### Confirmar disponibilidad en el portal del proveedor (2026-08-23)
+
+El historial dice A QUIÉN le compramos algo; no dice si HOY lo tiene. Esa
+segunda respuesta ahora existe y **convive** con la primera, sin reemplazarla.
+
+**Cómo está armado, y por qué así:**
+
+- **La sonda de cada portal es DATO, no código** (`supplier_portal_probes`):
+  cómo se busca, cómo se ve una sesión caída, cómo se lee precio y stock.
+  El precedente de la casa es `aliexpress_invoice_content.js`, 5.863 líneas para
+  UN proveedor; por ahí un cambio de HTML del proveedor es un despliegue.
+- **Corre sin ventana y sin operador**, en un `HeadlessInAppWebView` que comparte
+  cookies con la pestaña visible —en macOS el almacén es del proceso y la app no
+  usa incógnito—. Medido: 12 productos de RBX en 31 segundos.
+- **La sesión se conserva y se recupera por el mismo límite de credenciales.**
+  Una consulta autenticada activa un GET liviano cada ocho minutos mientras la
+  app y el mismo usuario sigan activos, evitando el timeout por inactividad de
+  portales legacy. Si la cookie ya venció, el runner puede repetir una sola vez
+  la pregunta después de cargar la ruta de login configurada como dato y pasar
+  el preflight compartido: origen HTTPS exacto, una forma ordinaria, acción
+  HTTPS y sin CAPTCHA/OTP/campos pendientes. Recién entonces pide el secreto al
+  Vault. Un formulario inseguro o ambiguo no recibe bytes; queda
+  `session_expired` y pide intervención visible.
+- **Los cuatro estados no se mezclan nunca:** `available` · `out_of_stock` (un
+  cero LEÍDO) · `not_found` (el portal no lo mostró) · `session_expired`. La
+  base rechaza precio o cantidad en los tres últimos: un cero que nadie
+  demostró no entra.
+
+**Tres defectos que sólo aparecieron corriéndolo, y cómo se encontraron:**
+
+1. **El portal de RBX es un frameset de siete marcos.** La sonda leía sólo el
+   documento de arriba y devolvía un informe vacío con la página llena.
+2. **`textContent` incluye el código de los `<script>`.** RBX imprime el precio
+   con un script en la propia celda, así que la página se leía
+   `... CHINA $document.write(formatear_numero("2240",0));2.240` y las doce
+   consultas salieron «ilegible». **Se vio en la evidencia guardada, no en la
+   pantalla** — por eso cada chequeo guarda un trozo del texto que leyó.
+3. **El precio es la ÚLTIMA coincidencia.** Una ficha con descuento muestra
+   «Antes $8.850» y «$6.195»; tomar la primera informa 43% de más.
+
+Regla para agregar un proveedor: **reconocer primero, configurar después.** El
+modo `discover` de la sonda corre dentro de la sesión y reporta qué buscadores
+hay y qué se parece a un precio; con eso se escribe la fila. Configurar no es
+autorizar: la sonda nace apagada.
+
+### Buscar una necesidad técnica, no un SKU inventado (2026-08-28)
+
+La consulta por SKU y la consulta por necesidad son dos rutas. La segunda no
+vuelve a interpretar lenguaje natural dentro del portal: recibe el
+`category_id` y los predicados tipados de la revisión, resuelve el
+`SpecTemplate` autoritativo y conserva sus claves, tipos, unidades y valores.
+
+- `supplier_portal_probes.need_search_adapter` es el único dueño de la
+  taxonomía y anatomía del proveedor: término amplio, selects, aliases de
+  columnas, vocabulario y capturas compuestas. El runner no compara hostname y
+  el matcher no contiene una rama para «motor», «cámara» ni otra familia.
+- El matcher compartido usa el extractor de identidad canónico y luego evalúa
+  los operadores tipados. Primero elimina una contradicción; sólo llama
+  `exact` cuando demuestra todos los campos pedidos; lo no publicado queda
+  `possible` y jamás se rellena por IA o parecido.
+- Un portal habilitado para código no queda habilitado automáticamente para
+  necesidades. El adaptador puede declarar una ruta rica para una familia
+  observada o, si el portal realmente publica un buscador por palabra para todo
+  el catálogo, `generic_family_search`. Esa capacidad genérica exige categoría,
+  familia técnica y una familia reconocida por la taxonomía canónica; pregunta
+  primero por `familia + predicado de identidad compacto` y amplía a la familia
+  sola únicamente si la primera consulta no entrega un candidato no
+  contradictorio. Nunca usa nombre de producto ni SKU.
+- Agregar otra ruta rica o proveedor requiere reconocimiento y configuración,
+  no otro despliegue de Dart. Sin ruta de familia ni búsqueda genérica
+  certificada, o ante configuración rota/de versión desconocida, falla cerrada.
+  La UI ofrece la acción sólo si puede construir un plan completo con la ficha
+  real.
+- RBX expresa un resultado vacío mediante el `alert()` «No hay ningún producto
+  que mostrar…». Dentro del workspace del origen RBX sólo esa frase exacta se
+  confirma automáticamente y la búsqueda queda como `no_matches`; ningún otro
+  diálogo JavaScript se silencia.
+
+### «No encontrado» nunca significa «no lo vende» (2026-08-23)
+
+Reconociendo el portal de MKR concluí que un código del catálogo del taller
+«ya no existe en su portal». **Corrección del dueño:** «no necesariamente, a
+veces es sólo que el producto está sin stock y por eso al buscarlo no se
+encuentra». Verificado en el portal, con su sesión:
+
+    ?q=N1010            → Sin resultados
+    ?q=N1010&stock=1    → Cod: N1010 · Stock: 0 · No Disponible
+
+El producto existe. Yo había agregado `&stock=1` a la sonda **por esa misma
+razón** y aun así saqué la conclusión de la consulta sin él.
+
+**La regla:** un listado que no muestra algo prueba que no lo mostró, y nada
+más. Puede faltar por estar agotado, por un filtro por omisión, por un código
+que cambió o por un buscador que no calza exacto. Son causas distintas, con
+acciones distintas, y **sólo una** justifica dejar de pedirle ese producto a ese
+proveedor.
+
+Donde el portal permite incluir lo agotado, la sonda **debe** usarlo: es lo
+único que separa «lo vende y está en cero» de «no lo mostró». Donde no lo
+permite —RBX no publica cantidad—, el «no encontrado» es ambiguo y se informa
+como ambiguo.
+
+Es la misma familia que la quinta compuerta y que la sesión caída: **el estado
+que parece un cero casi nunca es un cero.**
+
+### La ficha está vacía: el nombre es la única evidencia que hay (2026-08-23)
+
+Dato medido sobre producción, y explica media docena de síntomas:
+
+| Cámaras activas | Con «29» en el nombre | **Con ficha poblada** |
+|---|---|---|
+| 128 | 25 | **4** |
+
+Exigir `product_spec_values` para reconocer una medida deja fuera al **97%** del
+catálogo real. El evaluador ya sabía leer la medida del nombre —devuelve
+`identity_fallback`—, pero la escalera de estados dejaba que un criterio
+`unresolved` ganara sobre uno ya establecido:
+
+    CAMARA 29 X 1.75/2.35 V/AMERICANA → wheel_size identity_fallback
+                                         valve_type unresolved      → unverified
+    CAMARA 26 X 2.30/2.50             → ambos unresolved            → unverified
+
+Las dos salían idénticas. La cámara que **dice 29 en su propio nombre** se
+presentaba igual que una de 26, y el paso ofrecía 124 alternativas
+indistinguibles donde el operador quería ver 25.
+
+**Lo que sí se estableció gana sobre lo que no se sabe.** La escalera quedó:
+`conflict` → `strong` (todo por ficha) → `weak` (algo establecido, nada
+contradice) → `unverified` (nada establecido). `weak` ya se rotula «coincide por
+el nombre, no por la ficha», que es exactamente lo que pasó, así que ninguna app
+instalada ve un estado nuevo.
+
+Es el mismo defecto que ya se corrigió en el ranking de proveedores: **un
+criterio desconocido borraba la evidencia del que sí calzó.** Cuando aparezca
+por tercera vez, buscarlo con ese nombre.
+
+### La bodega tiene que contestar una descripción (2026-08-23)
+
+El módulo promete «revisa primero la bodega y, si falta, encuentra dónde
+comprarlo». Medido con «Cámaras 29 Schrader»: el paso **Stock interno** quedaba
+**completamente vacío** teniendo el taller SIETE unidades de «CAMARA 29 X
+1.75/2.35 V/AMERICANA 48mm» —americana es Schrader—, más una KENDA y una MAXXIS
+de 29. El operador habría salido a comprar lo que ya tenía.
+
+`get_supply_need_inventory_snapshot_v1` exige `product_id` confirmado y sin él
+responde `identity_unresolved` con cero componentes. Y la necesidad se guarda
+sin `category_id` porque el modelo nunca resuelve una referencia de categoría,
+así que todo lo que cuelga de la categoría queda sin conjunto.
+
+**La identidad exacta es un requisito para RESERVAR, no para MIRAR.**
+`supply_need_stock_candidates_v1` resuelve la descripción con el mismo
+resolvedor del ranking, sobre el catálogo completo, y muestra lo que hay con su
+stock. Confirmar el producto sigue siendo del operador, y es lo que habilita
+reservar y comparar por identidad exacta — sólo que ahora lo decide **con la
+bodega a la vista**.
+
+Regla general: cuando un paso exige un dato que el operador todavía no tiene,
+pregúntate si lo exige para **escribir** o sólo para **leer**. Si es para leer,
+no lo exijas.
+
+### Una lista cuesta lecturas por línea, y hay DOS topes (2026-08-23)
+
+Escribir «necesito pastillas de freno shimano, sellante tubeless y cámaras 29»
+en el compositor del Asistente de compras gastaba las ocho llamadas del tope
+—una búsqueda y una inspección por línea, más un reintento— y la corrida moría
+antes de armar el borrador. El operador leía «no pude cerrar el análisis con
+evidencia suficiente» y **perdía la lista entera**, sin que fallara una sola
+herramienta: las ocho corrieron bien.
+
+El tope de 8 está calibrado para UNA necesidad, y el Asistente de compras es
+justo la superficie donde el taller escribe varias de una vez. Ahora vale 18 en
+esa superficie: dos lecturas por cada una de las ocho líneas que el borrador
+admite, más el borrador.
+
+**El tope vive en DOS lugares y los dos tienen que decir lo mismo:** el guard de
+`assistant_begin_run_v1` y la constante `MAX_TOOL_CALLS` del gateway. Subir sólo
+el de la base no cambió nada —la corrida siguió muriendo, ahora a los 28 s— y
+costó una ronda entera de diagnóstico creer que el arreglo no había servido.
+
+### Una línea que no bloquea no puede traer preguntas (2026-08-23)
+
+Con el presupuesto ya suficiente, `prepare_supply_request` se rechazó TRES veces
+seguidas con `invalid_tool_arguments` y la lista se perdió igual. Ninguna de las
+tres necesidades tenía nada malo: el contrato exige `clarificationPrompts: []`
+cuando `clarificationRequired` es false, y el modelo deja las preguntas puestas
+de todas formas.
+
+Sobra: se vacía. Perder la petición por un campo que el propio contrato declaró
+irrelevante es el mismo defecto de siempre — se repara la forma, no se rechaza
+al operador.
+
+### La QUINTA compuerta: el tope del recibo (2026-08-23)
+
+Las cuatro compuertas conocidas hablan de la **forma** de la llamada. Hay una
+quinta que habla del **tamaño del resultado**, se evalúa después de que la
+herramienta ya corrió bien, y su desacuerdo no se parece a un límite: se parece
+a que el asistente se cayó.
+
+`assistant_tool_receipt_contract_internal_v1` anuncia `max_result_count` por
+herramienta, y `assistant_record_tool_receipt_v1` rechaza con 22023 cualquier
+recibo que lo pase. Medido: el contrato decía 4, el esquema de la herramienta
+permite pedir 5, la llamada pidió 5 y la corrida entera murió con
+`assistant_unavailable_record_tool_receipt_v2_rpc_invalid_response` **sin
+registrar un solo recibo** — así que en la traza no había ninguna herramienta a
+la cual culpar, y la pantalla sólo decía «no pude procesar esa solicitud».
+
+**Al registrar una herramienta, el `max_result_count` del contrato de recibos y
+el máximo de `limit` de su esquema tienen que ser el mismo número.**
+
+### Tres preguntas iguales son una sola pregunta (2026-08-23)
+
+Ante «necesito rayos 27.5, cámaras 29 y cadenas de 11v, ¿a quién le pido todo
+eso?» el modelo llama la herramienta de una frase **una vez por línea**, aun
+teniendo anunciada y descrita la de canasta. Medido dos veces en producción:
+
+- la primera agotó el presupuesto del turno a los 38,7 s y la respuesta se
+  perdió entera;
+- la segunda alcanzó a contestar y concluyó «no hay un único proveedor que
+  concentre los tres» **cuando sí lo había** —RBX cubre las tres—, porque tres
+  respuestas por separado no contienen esa decisión: nadie las cruza.
+
+La corrección no fue insistirle al modelo. Fue **fusionar las N llamadas en una
+sola en el runtime**, y calcular la cobertura y el reparto donde están los
+datos. Resultado: 3 llamadas → 1, 15,9 s → 10,4 s, y la respuesta correcta.
+
+Es la misma disciplina que ya gobierna los argumentos —se repara la forma, no se
+le pide al modelo que acierte—, aplicada a la ELECCIÓN de herramienta. Sólo se
+fusiona lo idéntico en intención: misma herramienta, mismo turno, sin filtros
+propios. Si cada llamada traía su marca o su categoría, querían cosas distintas
+y se dejan como están.
+
+### La respuesta baja un escalón; no se cae de golpe (2026-08-23)
+
+Segunda ronda del Asistente de compras. Con la rigidez ya quitada, seguía
+devolviendo cero ante frases normales del taller. Medido sobre producción:
+
+| Frase del operador | Antes | Causa real |
+|---|---|---|
+| «aros 26» | 0 proveedores | el catálogo los llama **Llantas** |
+| «llanta 26» | 0 proveedores | la rama SÍ resuelve, pero las llantas no traen `wheel_size` poblado |
+| «platos» | 0 · «plato» sí | el **plural** decidía |
+| «bielas» sí · «biela» | 0 | el **singular** decidía |
+| «platos y bielas» | 0 | son dos cosas y ningún producto se llama las dos |
+
+Ninguno es falta de datos. Todos son **nuestro vocabulario impuesto al
+operador**: cómo bautizamos las categorías, qué campos poblamos, en qué número
+quedó escrito un producto. Nada de eso lo puede saber quien pregunta.
+
+La regla que quedó: **se sueltan filtros de a uno, del más frágil al más firme,
+y la respuesta declara lo que soltó.**
+
+1. todo tal cual;
+2. sin el texto libre que no calzó (`droppedWords`);
+3. sin la medida técnica sin cobertura (`droppedFilters`);
+4. con UNA palabra suya, no todas.
+
+La **rama nunca se suelta**: es lo que separa «te muestro Ruedas» de «te muestro
+todo lo que compramos». Y ningún escalón corre si nada se resolvió, así que «qué
+me falta comprar» sigue devolviendo cero — que ahí sí es la respuesta correcta.
+
+Dos precisiones que costaron una medición cada una:
+
+- **Palabra completa, no subcadena.** Por trozo, «race» de «ARDENT RACE»
+  enganchaba dentro de «RaceLub» y el análisis devolvía un lubricante como si
+  fuera un neumático.
+- **Un resultado ensanchado se rotula distinto.** La tarjeta dice «le compramos
+  **algo así**», no «esto», y nombra lo que soltó. Un resultado exacto por
+  dentro y presentado como literal es la forma más silenciosa de mentir.
+
+### El Asistente de compras: la rigidez era el defecto (2026-08-23)
+
+Fallaba en el 38% de las corridas (15 de 39 medidas) y el dueño lo describió
+como «puras trabas». No era el modelo: `prepare_supply_request` —la herramienta
+con la que termina TODO el flujo— exigía **once campos por línea** para expresar
+dos, qué y cuántos. Los otros nueve son formalidades con neutro evidente.
+
+Y encima cinco compuertas discrepaban entre sí. Encontradas midiendo:
+
+1. La traducción del runtime **descartaba `commercialTarget`** y el ejecutor lo
+   exigía entre sus claves exactas: la herramienta no podía pasar nunca.
+2. Al arreglar (1), el validador del RESULTADO tampoco lo conocía y rechazaba
+   el borrador ya construido.
+3. `gama` acepta exactamente `alta|media|economica`: «gama media» —con la
+   palabra, que es como se habla— mataba la petición completa.
+4. Un tope de costo en `0` —que un modelo escribe queriendo decir «sin tope»—
+   la mataba también.
+5. Un filtro técnico sin categoría resuelta la mataba, y ése es el caso típico
+   del taller: «neumáticos 29 de gama media», donde el 29 ya va en la
+   descripción.
+
+**Corrección del dueño que gobierna el diseño:** mencionó «con buen margen» como
+un ejemplo al pasar y quedó convertido en requisito obligatorio. La gama, el
+margen y el objetivo comercial **se consideran, no se exigen**. Una línea con
+una gama que no se entiende pierde la gama, no la necesidad; una pregunta que no
+se puede mostrar se degrada a advertencia, no tumba la petición. Lo único que
+sigue siendo rechazo es la contradicción: una duda bloqueante junto a un
+producto exacto ya elegido.
+
+Medido después: 3 de 3 borradores sin un solo rechazo, con las frases reales del
+taller («necesito rayos 27.5», «faltan neumáticos 29 de gama media y alta»).
+
+### Los argumentos pasan por TRES compuertas, y tienen que decir lo mismo (2026-08-23)
+
+Una llamada del modelo se valida en **cuatro** lugares independientes:
+
+1. el **esquema JSON** del registro (`tool_registry.ts`), que es lo único que el
+   modelo puede leer;
+2. el **ejecutor** (`validateRpcParameters` en `tool_executor.ts`);
+3. el **guard de la RPC** en PostgreSQL, que lanza SQLSTATE 22023;
+4. la **revalidación posterior** (`validateInventorySearch`,
+   `validateInventoryOrder`, `inventoryOperationalPredicateMatches`), que
+   comprueba el RESULTADO contra los argumentos y descarta la respuesta entera
+   si no reconoce un campo.
+
+**Corrección del 2026-08-23, el mismo día:** este apartado decía «tres» y por eso
+al agregar `sold_recently` actualicé el esquema, el ejecutor y la base, y dejé
+la cuarta afuera. La base respondía 10 filas correctas y el ejecutor las tiraba
+con `tool_source_unavailable`. El modelo pidió exactamente lo que correspondía y
+falló igual — que es la forma más cara de romper esto, porque parece que el
+modelo no entiende cuando el defecto es nuestro. Un campo nuevo se busca con
+`grep` por su nombre en TODO `tool_executor.ts`, no sólo donde uno se acuerda.
+
+Cuando una compuerta es más estricta que la anterior, el modelo hace todo bien y
+la llamada muere igual — y el recibo dice `tool_arguments_invalid`, que manda a
+revisar justo lo que no estaba mal. Encontrados en un día:
+
+- `sort` permitía `relevance` + `asc` en el esquema y el ejecutor lo rechazaba.
+  Si una combinación no significa nada, se **normaliza**, no se castiga.
+- `search_sales_invoices` declaraba `query` nullable con la descripción «usa
+  null para pedir el listado sin filtrar», y su RPC exigía largo ≥ 1. Sus tres
+  hermanas ya estaban corregidas; ésta quedó atrás.
+
+Al tocar cualquiera de las tres, se revisan las otras dos. Y el read-back de una
+migración que cambia un guard tiene que ejercitar **la forma que el esquema
+promete**, no sólo la que ya funcionaba.
+
+**Trampa de nombres:** el outcome `idempotency_conflict` de
+`SupabaseUserDataError` NO es un choque de idempotencia — es el SQLSTATE 22023,
+o sea la RPC rechazando argumentos. Perseguir el nombre en vez del código costó
+una ronda entera.
+
+### Una clave nueva en una tarjeta rompe las apps ya instaladas (2026-08-23)
+
+El decodificador del cliente exige **claves exactas** en `listRef`, `entityRef`,
+`approvalRef` y en la tarjeta misma. Agregar un campo al contrato de tarjetas y
+desplegarlo hace que toda app ya instalada —macOS y Android publicados el
+2026-08-22— **rechace la tarjeta entera**, no que ignore el campo.
+
+Antes de agregar un campo, pregunta si el cliente lo necesita. Si sólo lo usa el
+servidor —por ejemplo para redactar la frase final, que se arma antes de
+proyectar— vive en el modelo interno y se **quita al proyectar**, en
+`cardsForClient`. Ese embudo es único, así que un solo lugar lo garantiza para
+todas las superficies.
+
+Cuando el cliente sí lo necesite, el campo viaja sólo después de que haya una
+versión publicada capaz de leerlo, y el servidor sigue soportando la forma
+anterior mientras queden apps viejas en uso.
+
+### Repara la forma, rechaza el vocabulario (2026-08-22)
+
+**Medido en producción:** el 50% de las llamadas del modelo a `search_inventory`
+se rechazaba por argumentos inválidos. Cada rechazo gasta una de las cinco
+rondas del turno, así que el asistente moría en `agent_budget_exhausted` y el
+operador leía «No pude procesar esa solicitud ahora. Intenta de nuevo en unos
+segundos» — para una pregunta perfectamente respondible.
+
+La causa no era el modelo: el esquema exige **nueve** campos obligatorios para
+buscar un producto —el repo obliga a que toda propiedad sea `required`—, entre
+ellos dos arreglos casi siempre vacíos y un objeto `sort` con dos subcampos.
+
+El arreglo NO es aflojar el esquema. Es completar y reparar la **entrada** antes
+de validar (`withMechanicalDefaults` en `tool_registry.ts`), con una línea
+divisoria que conviene respetar:
+
+- **Errores de forma se reparan**, porque tienen una sola lectura posible:
+  `sort: "relevance"` → `{field, direction}`; `limit: "10"` → `10`;
+  `{value: x}` → `{values: [x]}`; `values: "29"` → `["29"]`; `values: []` →
+  se descarta el predicado; `query: ""` → `null`. Ninguna puede esconder un
+  defecto: el valor resultante es el único que la frase admitía.
+- **Errores de vocabulario se rechazan**: `availability: "stock"`,
+  `operator: "like"`, `selectionMode: "all"`. Ahí adivinar sería inventar una
+  intención que nadie expresó, y el esquema ya le dice al modelo los valores.
+
+Y una combinación que el esquema ofrece no puede rechazarse más abajo: `sort`
+permitía `relevance` + `asc` y el ejecutor lo botaba. Si no significa nada, se
+normaliza; no se castiga.
+
+Resultado medido tras el cambio: **0 rechazos** en 6 llamadas de 4 preguntas.
+
+Cuando un rechazo sea legítimo, que **diga qué campo** (`schemaMismatch`
+devuelve la ruta exacta). El código del recibo se mantiene estable
+—`invalid_tool_arguments`— porque es lo que permite agruparlos; el detalle viaja
+en el mensaje que recibe el modelo, que es quien tiene que corregirlo.
+
+### Model-visible AI tools must close the durable receipt contract
+
+**2026-08-16 — one real provider run was lost to this split contract.** Adding
+an AI tool to the Edge registry and executor is not sufficient. In the same
+change, add its exact risk, policy and result limit to
+`assistant_runtime.assistant_tool_receipt_contract_internal_v1`, exercise the
+receipt registration path, and read the installed contract back before calling
+the tool available. Otherwise the model can select a valid advertised tool and
+the gateway will reject its durable receipt after execution. Any server-owned
+`entityId` emitted with that receipt must be the canonical navigable RFC 4122
+UUID for the entity kind. Opaque hashes or transient candidate keys stay in
+opaque references and must not be projected as entity identity.
 
 # Agent Autonomy And End-To-End Ownership (CRITICAL)
 
@@ -119,8 +644,10 @@ steps, or deployment chores left for the user.
 ### Mandatory Workspace And Branch Continuity
 
 - Work directly in `/Users/Claudio/Dev/bikeshop-erp` on the established
-  `smartpegas1.0` branch. The user runs and debugs that checkout and is not
-  expected to understand or reconcile alternate Git environments.
+  canonical branch: `main` once the cutover in
+  `docs/runbooks/MAIN_BRANCH_CUTOVER.md` has landed, `smartpegas1.0` until
+  then. The user runs and debugs that checkout and is not expected to
+  understand or reconcile alternate Git environments.
 - Do not create Git worktrees, temporary clones, alternate implementation
   branches, or switch the active branch unless the user has first received a
   plain-language explanation and explicitly authorized that exact action.
@@ -130,7 +657,7 @@ steps, or deployment chores left for the user.
 - Never leave the user instructions to run `fetch`, `pull`, `stash`, `reset`,
   resolve conflicts, or synchronize a debug checkout. The agent owns that
   workflow end to end and must confirm that VS Code, the filesystem, `HEAD`,
-  and `origin/smartpegas1.0` all refer to the consolidated version before
+  and the canonical `origin/<branch>` all refer to the consolidated version before
   claiming that a UI fix is visible.
 - Before starting or restarting any debug server/session, verify the absolute
   checkout path, branch name, clean/intentional working-tree state, and exact
@@ -355,13 +882,15 @@ The durable rules are:
 - Guarded repository wrappers are the canonical SQL and pgTAP path. Supabase
   CLI use is control-plane/metadata-only and goes through
   `scripts/supabase_cli.sh` on Bash/macOS/Linux.
-- Reuse the prepared local database for focused pgTAP. A production-derived
-  validation session uses `scripts/db/production_validation.sh` to reuse one
-  provenance-recorded dump while the live migration head/fingerprint is
-  unchanged; never redump merely to rerun tests.
-- Every schema change has a unique idempotent forward migration and the same
-  final objects/logic mirrored in idempotent
-  `supabase/sql/core_schema.sql`.
+- Reuse the prepared local database for focused pgTAP. Do not use
+  `production_validation.sh` or any schema-only production clone as a
+  compatibility/completion gate: it omits seeded rows, materialized state,
+  effective history and provider-managed behavior. Pair local logic tests with
+  guarded direct live read-only inspection, then authorized deploy and exact
+  live read-back when the task includes production completion.
+- Every schema change has one unique idempotent standalone forward migration;
+  its remote history row is the stamp. `core_schema.sql` is optional historical
+  context only.
 - Agents perform routine preflight, tests, guarded queries, authorized
   deployment, registration, read-back, and health checks themselves. Hand off
   only for the human-only blockers listed in the policy.
@@ -405,6 +934,10 @@ workflow UI changes.
 ## Workshop Lifecycle Guardrail
 
 - For mechanic jobs, `delivered_at` is a timestamp for the current delivered lifecycle state, not an independent archive flag. Jobs should be treated as delivered only when the current legacy/custom status resolves to `ENTREGADO`; moving a job back to `FINALIZADO`/`Terminado` or any non-delivered state must clear `delivered_at` so `Trabajos: Activos` only hides currently delivered and paid jobs.
+- Any selector labelled as active workshop work must reuse the canonical
+  `isMechanicJobOperationallyActive` policy used by `Trabajos: Activos`; a
+  `deleted_at is null` query is only an archive filter and must never be
+  presented as active-work eligibility.
 
 ## Workshop Job Mode Guardrail
 
@@ -445,11 +978,15 @@ workflow UI changes.
   mode updates followed by a separate best-effort invoice call. The historical
   `create_invoice_from_mechanic_job` RPC is only a guarded compatibility alias;
   never expose or call its private `_internal` builder directly.
-- Converting `Servicio · Presupuesto` reuses its persisted bicycle/ficha and
-  never asks the worker to choose another object. Converting standalone
-  `Cotización` keeps the explicit bicycle/component intake picker. Both paths
-  must atomically create exactly one invoice and leave one tenant-scoped strong
-  relationship. Its canonical source of truth is
+- Converting `Servicio · Presupuesto` reuses its complete persisted bicycle/ficha
+  graph, preserves every line's existing `job_bike_id`, and keeps intentional
+  `NULL` attribution as valid General job-wide scope; it never asks the worker
+  to choose another object or performs a conversion-time graph upsert. Only a
+  standalone `Cotización` keeps the explicit bicycle/component intake picker
+  and may assign its previously unscoped lines inside the audited conversion
+  RPC. Never bulk-backfill NULL attribution without row-specific human evidence.
+  Both paths must atomically create exactly one invoice and leave one
+  tenant-scoped strong relationship. Its canonical source of truth is
   `mechanic_jobs.invoice_id -> sales_invoices.id`; invoice-to-job navigation is
   the reverse lookup over that same foreign key. Do not add a second writable
   inverse pointer unless every legacy client, backup/restore path, hard-delete
@@ -467,6 +1004,12 @@ workflow UI changes.
   database clock and appends an immutable exact-key receipt. An ordinary job
   save omits those columns entirely so `UPDATE OF` triggers cannot run by
   accident.
+- **Corrected 2026-08-24:** an acknowledged status command returns enough
+  authority to replace that exact tenant/job row. Merge its snapshot
+  surgically, retain derived projections only from the same job/tenant, and
+  reconcile lifecycle metrics with a guarded single-job read; do not follow a
+  successful State-chip change with a full Jobs `_loadData`. A rejected or
+  unresolved outcome still invalidates and takes the full-load fallback.
 - Public-store customer code is read-only for workshop status. Do not restore
   the removed direct approve/reject writers. A future customer approval flow
   requires its own ownership-validating server command and audit receipt; it
@@ -612,10 +1155,41 @@ Required pattern for native WebViews inside the zoomed app:
 - Any feature that maps user selection rectangles, screenshots, overlays, or hit-test bounds over a native WebView must keep coordinates in one space. When building a global viewport rect, transform both corners with `localToGlobal`; do not combine a transformed origin with raw `box.size`, because that mixes scaled and unscaled coordinates at 80% zoom.
 - Verify native WebView interactions at both `100%` and the default `80%` app zoom before calling the fix complete.
 
+### El navegador integrado no puede hacer passkeys (2026-09-03)
+
+WKWebView expone `PublicKeyCredential` y `navigator.credentials`, así que un
+sitio cree que hay passkeys y manda el desafío (Google: «Use your passkey to
+confirm it's really you»); dentro de una app el diálogo de Touch ID nunca
+aparece y la página queda cargando. `browserPasskeyUnavailableUserScript()`
+(`lib/shared/utils/browser_passkey_policy.dart`) borra esa superficie en
+`AT_DOCUMENT_START`, en todos los frames, y va en la lista de scripts
+iniciales de pestañas y popups; los sitios ofrecen contraseña. La lista es un
+campo `final` del State: un hot reload no la cambia, hace falta hot restart.
+Costó una sesión de login del dueño atascada.
+
 Current reference implementations:
 
 - Browser workspaces: `lib/shared/widgets/webview_module_page.dart`
 - Mail reader WebView: `lib/modules/mail/widgets/email_detail_view_unified.dart`
+
+### macOS HTML-to-PDF needs an attached, ready WebKit document
+
+**2026-08-17 — the fixed-delay renderer failed only on another Mac.** The
+macOS implementation behind `Printing.convertHtml` 5.14.2 loaded HTML in a
+detached, zero-sized `WKWebView`, slept one second and called `createPDF`.
+WebKit sometimes returned `WKErrorUnknown` even though the same app and HTML
+worked on the development Mac. Machine-local success is not evidence for this
+class of renderer.
+
+App-owned macOS HTML-to-PDF rendering must use a non-zero `WKWebView` attached
+to an ordered off-screen `NSWindow`, wait for `WKNavigationDelegate.didFinish`,
+then poll the document's explicit readiness contract: `readyState`, fonts,
+images, required root content and the renderer-owned ready flag. Only then call
+`createPDF`; validate the `%PDF-` header and at least one `PDFDocument` page,
+bound the whole operation with a timeout, and always tear down the window and
+WebView. A regression must execute the native renderer with delayed JavaScript
+content; a Dart mock or source-string assertion alone cannot prove the WebKit
+lifecycle.
 
 Email body `http` / `https` links should open in the ERP browser workspace (`/tools/web?url=...`) instead of the OS browser. Keep users inside the app unless the URL scheme is not a web page (`mailto:`, `tel:`, etc.) or the embedded site refuses to load and the browser workspace itself offers an external-open fallback.
 
@@ -695,6 +1269,14 @@ These are safe to remove when disk space is low because they are regenerated fro
 - Flutter ephemeral folders such as `macos/Flutter/ephemeral/`, `ios/Flutter/ephemeral/`, and their `mobile_scanner_app/` equivalents
 - local dependency installs such as root `node_modules/`, `cloudflare-worker/node_modules/`, `ios/Pods/`, `macos/Pods/`, and mobile scanner Pods when the relevant lockfiles are present
 
+Check for a live canonical Flutter session before removing root `build/` or
+`.dart_tool/`: `pgrep -fl "flutter run|vinabike_erp.app"`. The running app
+binary lives under `build/macos/Build/Products/Debug/`, and the incremental
+compiler holds `.dart_tool/package_config.json` and its dill cache, so deleting
+either kills a session another agent or the owner may be mid-round on. Report
+the live session and skip those two targets instead — they are only safe on an
+idle checkout.
+
 Do **not** use broad recursive cleanup such as deleting every folder named `build` anywhere under the repo. Some vendored or tracked dependency trees may legitimately contain a directory named `build`. Prefer explicit known generated paths, and check `git status --short` after cleanup. If tracked files were removed by mistake, restore only those files.
 
 ### Safe Machine-Level Cleanup Targets
@@ -708,6 +1290,33 @@ On macOS, it is generally safe to clear these when space is tight, with the trad
 - editor workspace caches such as VS Code/Cursor/Antigravity `workspaceStorage`, `CachedData`, `Cache`, `Code Cache`, old logs, and crash reports
 - downloaded installers in `~/Downloads` such as old `.dmg`, `.pkg`, `.zip`, and app installer files
 - unused Docker images through normal prune commands
+- agent probe artifacts in `/private/tmp`, especially `vinabike-*` PDFs, build
+  folders and `*-readback.*` temp dirs left by print/PDF/release probes
+
+#### Probes write to `/private/tmp` and nobody deletes them (2026-08-20)
+
+A single print probe left `/private/tmp/vinabike-print-operation-probe.pdf` at
+**33 GB** and took the machine to 867 MB free — WhatsApp and the browser would
+not start. The file was not produced by any versioned script: it came from an
+ad-hoc probe command in an agent session on 2026-08-17.
+
+The cause is structural, not a one-off: PDF/print probes render into
+`/private/tmp` with no size cap, a bad layout loop can grow the output without
+bound, and macOS only prunes `/private/tmp` on reboot for files older than three
+days — on a machine that is rarely rebooted, nothing ever reclaims them.
+
+Therefore:
+
+- A probe that renders a document writes to the session scratchpad, not to a
+  bare `/private/tmp/<name>.pdf`, and the session deletes it in the same round.
+- Check the output size before opening or keeping it. A page-count probe that
+  produces gigabytes is a runaway render, not a result — the finding is the bug,
+  and the file is deleted rather than inspected.
+- When disk pressure is reported, measure `/private/tmp` before any cache:
+  `du -sh -- /private/tmp/* | sort -hr | head`. It is not covered by
+  `flutter clean`, by editor cache clearing, or by any repo-level target, so it
+  is invisible to every other cleanup path in this document.
+
 
 On Windows, the equivalent cleanup targets are usually:
 
@@ -828,7 +1437,8 @@ Primary files:
   `Publish ERP Update (macOS + Android)` VS Code task.
   `Cmd+Shift+B` resolves that combined task as the macOS-only default. When an
   agent branch is not Production-authorized, preparation may switch to
-  `smartpegas1.0` only if both names identify the exact live canonical commit;
+  the canonical branch (`main`) only if both names identify the exact live
+  canonical commit;
   any other history remains a fail-closed review boundary.
 - `scripts/releases/qualify_erp_update.mjs` waits for the push-triggered
   exact-SHA ERP Integrity Gate, dispatches that gate once when path filters did
@@ -852,6 +1462,16 @@ mandatory local npm/Flutter/analyzer/test/web-build preflight into this task.
 GitHub Actions owns the complete integrity gate and clean native build; the
 developer helper owns dispatch, observation, and exact publication evidence.
 
+2026-09-04 correction: the AliExpress files in `assets/browser/` are packaged
+mirrors, not independent sources. The originals are `content.js`, `invoice.js`,
+and `invoice.css` under `tools/chrome-extensions/aliexpress-invoice-generator/`;
+keep each matching `aliexpress_invoice*` asset byte-identical. Editing only the
+packaged invoice passed the renderer/browser focused tests but cost a full CI
+round when the mirror guard failed. For changes to either copy, include
+`fvm flutter test --no-pub test/unit/aliexpress_asset_mirror_test.dart` in the
+focused checks before preparation. Do not remove the guard or package `tools/`
+directly: the separate asset location preserves macOS DevFS hot reload.
+
 The paired ERP update tasks are deliberately one user action with two separate
 platform publishers:
 
@@ -862,8 +1482,8 @@ Each preparation dependency checks its desktop Production branch boundary,
 safely fast-forwards a behind branch only when Git can preserve all local work,
 and normalizes the pinned Flutter dependencies before staging. Diverged history
 or overlapping local changes must stop before publication. Preparation creates
-at most one new commit, asks the locally authenticated Codex CLI at most once
-for one shared candidate, pushes that commit once, and writes a private
+at most one new commit, resolves the shared release-note base, pushes that
+commit once, and writes a private
 schema-v2 exact-SHA state file under the current Git directory. Only after
 preparation succeeds, a single qualifier waits a bounded time for the
 push-triggered exact-SHA `ERP Integrity Gate`. If path filters did not create
@@ -874,7 +1494,8 @@ does VS Code launch the selected desktop GitHub Actions publisher and the
 protected Android GitHub Actions publisher in parallel, each in its own
 dedicated terminal pane. Both children must revalidate the state age,
 repository, clean worktree, branch, local `HEAD`, live remote branch,
-release-note base, candidate checksum, and qualification binding. Each
+release-note base, and qualification binding. The legacy candidate fields stay
+empty for schema compatibility and are not consumed by the standard workflows. Each
 platform workflow then queries GitHub Actions independently and accepts that
 proof only when the canonical integrity workflow completed successfully for
 the exact repository, branch, commit, and attempt.
@@ -887,7 +1508,15 @@ non-ancestral, or ambiguous Android evidence fails closed before publication.
 On a same-commit retry, Android evidence must match the exact prepared
 `from_commit`; a well-formed manifest from another range is not idempotent
 success. A schema-v3 state is the qualified form of the same schema-v2 handoff,
-so exact-SHA/base Codex-candidate reuse must accept both forms.
+so exact-SHA/base validation must accept both forms.
+
+2026-09-04 correction: an older Android manifest may still carry the legacy
+plain-text `release_notes` value. Never index `.release_notes.from_commit`
+before checking that `release_notes` is an object: `jq` otherwise aborts before
+the workflow can print the actual compatibility failure. A legacy same-commit
+manifest cannot satisfy the current structured evidence contract and must be
+replaced by a higher forward build with structured notes; do not rewrite its
+immutable versioned manifest in place.
 
 2026-07-31 correction: a paired release must not call the complete integrity
 workflow once per platform in addition to the push gate. The only valid order
@@ -899,6 +1528,13 @@ run once, but must not dispatch an unbounded replacement. Standalone macOS or
 Windows workflow dispatches carry no qualification proof and therefore retain
 their own complete integrity fallback.
 
+2026-09-04 clarification: `qualify_erp_update.mjs --dispatch-only` can bind the
+prepared SHA to the one live integrity run and let both platform builds start
+while it runs. This does not qualify a failed or unfinished source for
+publication: each platform waits for that exact run and attempt and refuses
+publication unless it succeeds. Use this supported path to overlap compilation;
+never dispatch a second integrity gate per platform or bypass its final result.
+
 2026-07-31 correction: qualification mode deliberately leaves the workflow's
 internal integrity fallback job skipped. A protected desktop publish job after
 the build must therefore use `always() && !cancelled()`, require
@@ -907,12 +1543,12 @@ request. Without that transitive-skip guard, GitHub can report the workflow as
 successful after packaging while silently skipping the Production publication
 job. Keep this contract frozen for both macOS and Windows.
 
-2026-08-01 correction: the paired macOS preparation runs on Apple's Bash 3.2.
-With `set -u`, expanding an empty optional-argument array aborts after the
-release commit but before push and exact-SHA state creation, leaving Qualify to
-reject the older handoff. Build command argv in an array that already contains
-mandatory arguments (or branch the optional call); regression coverage must
-retain the no-`--notes-candidate` path.
+2026-08-24 correction: release preparation no longer invokes local Codex or
+accepts `--notes-candidate`. That path depended on an interactive account and
+repeatedly produced no `Novedades` when its quota or session failed. The
+preparers now bind only the exact range; protected CI generates notes with
+Gemini Flash. This also removes the optional-array failure that affected
+Apple's Bash 3.2. Do not restore a workstation model as the default producer.
 
 Do not collapse the platform security boundaries merely because their tasks run
 together. `MACOS_UPDATE_SIGNING_KEY`, the Android JKS/passwords, and
@@ -952,51 +1588,23 @@ deterministic `es-CL` fallback first, summarize the complete previous-platform-
 release-to-current-SHA range, and validate every AI item against an inventory
 that it independently reconstructs from the committed range.
 
-The macOS+Android and Windows+Android preparation helpers may prepare an
-optional local Codex candidate after creating the exact release commit and
-before pushing it. That one candidate is offered to both selected platform
-jobs; never invoke Codex independently in each child. This path is eligible only
-after the release range passes the local redacted gitleaks precheck and
-`codex login status` confirms ChatGPT authentication; it must not consume
-`OPENAI_API_KEY` or another billed API credential. Invoke Codex once, with a
-bounded timeout, an ephemeral session, a read-only sandbox, ignored user
-configuration, no model-tool network or web access, a strict output schema, and
-no approval bypass. It may inspect only the exact committed previous-desktop-
-release-to-current-SHA range, never uncommitted or untracked work, process
-credentials, environment values, customer fixtures, generated or binary
-artifacts, or unrelated home-directory data. Repository text is untrusted input
-and must not override these instructions.
+The standard macOS, Windows, and Android workflows use Gemini as their only
+automated AI release-note provider. Preparation never calls Codex and protected
+CI never receives `OPENAI_API_KEY`. `GEMINI_RELEASE_NOTES_MODEL` is durably set
+in the `Production` environment; the checked-in default is
+`gemini-3.1-flash-lite`, followed only by the fixed Flash/Flash-Lite discovery
+allowlist when Google reports that model unavailable.
 
-This local Codex path is a separate, explicitly authorized OpenAI
-source-inspection boundary: relevant committed source and diffs from the exact
-range may reach the ChatGPT-authenticated Codex service so it can identify
-concrete user-visible changes. It is not covered by the narrower sanitized-
-metadata allowance below. The only local result that may cross into
-`workflow_dispatch` is a compact, size-bounded candidate envelope containing
-plain customer-facing text, canonical module identity, exact range identity,
-and opaque evidence IDs. Never transport the prompt, source, paths, diffs,
-transcript, raw CLI output, error log, credentials, or environment data.
-
-Protected CI must treat that envelope as untrusted. It independently resolves
-the previous release, reconstructs the evidence catalog, verifies the exact
-range, schema, sizes, plain-text/privacy rules, module ownership, and every
-evidence ID, and maps opaque IDs back to changed paths only after validation.
-An absent, timed-out, quota-limited, malformed, vague, mismatched, or otherwise
-invalid local candidate is discarded without blocking publication.
-
-For Gemini and the compatibility OpenAI API path inside protected CI, only fixed
-canonical ERP module/topic labels, statuses, numeric change counts, and opaque
-evidence IDs may be sent to the provider. Commit subjects, commit SHAs,
+Only fixed canonical ERP module/topic labels, statuses, numeric change counts,
+and opaque evidence IDs may be sent to the provider. Commit subjects, commit SHAs,
 raw/current/previous paths, source, diffs, credentials, generated bundles,
 binary contents, customer data, and other personal or confidential information
 must stay inside the protected job.
 
-`GEMINI_RELEASE_API_KEY` and the compatibility `OPENAI_API_KEY` are optional
-`Production` environment secrets and must never enter Flutter builds, artifacts,
-manifests, logs, pull-request jobs, or artifact-only release jobs. Prefer Gemini
-when there is no accepted local Codex candidate and its key exists; do not send
-the same release metadata to the compatibility OpenAI API after a Gemini
-failure. Missing credentials, timeouts, quota exhaustion, API errors, invalid
+`GEMINI_RELEASE_API_KEY` is a `Production` environment secret and must never
+enter Flutter builds, artifacts, manifests, logs, pull-request jobs, or
+artifact-only release jobs. Missing credentials, timeouts, quota exhaustion,
+API errors, invalid
 JSON, unsupported evidence, vague or oversized text must retain the
 deterministic fallback and must not block signing or publication. Logs may
 identify only the selected source and a fixed sanitized failure category; they
@@ -1033,6 +1641,21 @@ release-ready: the paired qualifier correctly treats that exact-SHA failure as
 terminal until a new repair commit exists.
 
 ### Windows Current Architecture
+
+2026-08-31 correction: source parity and release parity are separate gates.
+A Windows installation stayed on July's build after a newer macOS/Android
+publication because Windows had not been published. Bind the Windows manifest
+to the requested live branch head before handing over its command. The Windows
+build also needs the explicit production AI gateway/public-key defines; source
+inclusion does not override a disabled compile-time runtime. Both Windows
+release readers paginate with a ten-page/100-entry bound, since other platform
+releases can displace Windows beyond the first page. Use the immutable
+installer attached to the verified release when handing over a specific build;
+do not assume the older bootstrap on another branch contains the same fixes.
+For PowerShell REST pages, assign the response first and normalize the variable,
+not the invocation. Invoke-RestMethod emits its JSON array as one pipeline
+object; wrapping that call directly changes a real 100-entry page into an outer
+array of length one. Discovery fixtures must preserve that transport boundary.
 
 Primary files:
 
@@ -1110,7 +1733,7 @@ The task runs `scripts/publish_windows_update.ps1`. Its current behavior is inte
 Important consequences:
 
 - Anything visible in Source Control will be included. Clean or intentionally keep unrelated changes before running the task.
-- The `Production` environment uses explicit custom branch policies for `main` and `smartpegas1.0`; do not switch it back to protected-branches-only while Windows updates are intentionally published from `smartpegas1.0`.
+- The `Production` environment uses explicit custom branch policies for `main` and `smartpegas1.0`; keep both until `smartpegas1.0` is retired at the end of the observation period in `docs/runbooks/MAIN_BRANCH_CUTOVER.md`, then remove `smartpegas1.0` from that policy. Windows updates are published from the canonical branch (`main` after the cutover).
 - Pushes and default manual dispatches run the full integrity/build/package
   pipeline but remain artifact-only. They use read-only repository permission
   and never expose an update to installed coworker apps.
@@ -1403,6 +2026,32 @@ Do not leave bike creation as a single static technical block if the selected bi
 
 ## Product Compatibility Must Reuse Bike Keys
 
+**Semantic correction, 2026-09-05:** read
+`docs/architecture/product-technical-specifications-contract.md`, its family
+matrix and its Sheldon Brown/Park Tool knowledge references before changing
+product ficha semantics. The target and delivered coverage are distinguished in
+`docs/development/product-specs-research-2026-09-05/implementation-result.md`.
+The April ecosystem-first model below is not a universal mechanical hierarchy:
+KMC can declare compatibility across brands, and widths/speed counts cannot
+certify a drivetrain by themselves. Scope relationships to model, system,
+generation and mounting conditions; preserve unknowns and manual conflicts.
+Use one versioned evaluator at the server boundary and in all consumers.
+The live audit confirms `spec_facts` and normalized value links as the fact
+backbone; references below to `product_spec_values` describe its legacy mirror,
+not permission to introduce another independent source of technical truth.
+
+**Implemented baseline, 2026-09-06:** `spec_templates.form_contract` and
+`constraint_rules` govern the shared editor and server validator. Historical
+`option_rules` are advisory until independently reviewed. Missing prerequisites
+are incomplete knowledge, not a retroactive contradiction: they gate new input
+and produce nonblocking issues without hiding an existing published ficha.
+Explicit type/vocabulary/reference conflicts block. Product identity and facts
+save atomically through `save_product_with_specs_v1`; unchanged observations
+retain their source/readings. Workshop contexts consume normalized facts and
+scoped reference claims. `unmapped` is not a false incompatibility badge; matching
+chain speed counts alone cannot certify a complete installation. Exact reference
+coverage starts with three KMC editions, not every model in the 36 families.
+
 The product spec engine must reuse the same canonical compatibility vocabulary as the bike profile.
 
 Do **not** create one set of compatibility keys for bikes and a different set for products.
@@ -1431,15 +2080,16 @@ Phase-one behavior should:
 - prefer ranked suggestions over heavy validation when the dataset is still immature
 - when detailed product specs are missing, the compatibility layer may still use `category_tech_mappings.technical_family` for obvious family-level mismatches such as `rotor` on a rim-brake bike
 - after that coarse gate, detailed `product_spec_values` should remain the stronger source for within-family refinement such as rotor size, thickness, material, or floating status
+- AI inventory discovery must consume the same structured product backbone. Category, identity text and technical facts are separate planner inputs: PostgreSQL resolves the category through active `product_categories` plus `category_tech_mappings`, and enforces explicit measurements/standards as bounded `spec_definitions.key` filters together with availability. A matching populated `product_spec_values` row is authoritative; a populated conflict rejects the product. Only an unpopulated field may use an explicit value in the product's curated identity fields as a labelled sparse-catalog fallback; it must never be presented as a filled ficha. Barcode/SKU substrings, description text and compatibility prose are never technical proof.
 - ficha controls for finite workshop vocabularies must use standardized selectors or bounded numeric ranges, not arbitrary free text when the bike world already uses known counts, diameters, widths, tooth ranges, and driver families
-- when one product-spec field is downstream of stronger upstream selections such as chain width, drivetrain speeds, declared profile, brand family, or freehub family, the ficha UI must filter, lock, or suppress incompatible options instead of leaving contradictory combinations available to save
+- when a product-spec field depends on confirmed intrinsic facts or a documented interface/model relationship, the ficha UI must constrain it with the rule's reason. Width bands, commercial brand and unscoped ecosystem labels are not sufficient premises. A changed prerequisite preserves manual values as visible draft conflicts instead of silently deleting them.
 - `products.brand` is commercial brand data, not technical compatibility truth by itself; if ecosystem-family matching matters, the ficha must expose a first-class visible compatibility-family field instead of hiding that logic in helper text or generic brand inference
-- for drivetrain products specifically, do not keep treating one overloaded broad field as if it solved the whole hierarchy. The correct target split is: mandatory drivetrain mode branch, mandatory singular primary ecosystem anchor for modern derailleur products, optional explicit compatible-ecosystems claims, then downstream `drivetrain_platform`, `shift_actuation_family`, and `chain_profile_family` refinements
+- for drivetrain products, separate mode, exact platform/profile/control interfaces and scoped compatibility relationships. Do not require a singular primary ecosystem for every derailleur product: third-party products can support several systems. Broad ecosystem fields are legacy summaries to migrate; they must not generate the Cartesian product of speeds, systems and profiles. Follow the 2026-09-05 target contract.
 - commercial metadata is not allowed to drive runtime ficha truth: `products.brand`, `products.category_name`, product name, and description text must not autofill, hint, or silently constrain drivetrain tech-spec answers during normal product editing
 - compatibility scoring is not allowed to auto-expand those broad ecosystem fields into exact HG+/Linkglide/Eagle/T-Type platform truth. Broad ecosystem claims may gate obvious mismatch or keep the result in caution territory, but exact platform matching must still come from `drivetrain_platform`, `chain_profile_family`, or other true downstream structured fields
 - the same guard applies to dirty legacy values stored in the wrong field: if `drivetrain_platform` contains only a broad brand/ecosystem claim such as `Shimano`, `SRAM`, `Ecosistema Shimano`, or `Compatible SRAM`, the app must refuse to reinterpret that as exact HG/SIS, Eagle, or other downstream platform truth at runtime
 - the same guard applies to `shift_actuation_family`: this field is a refinement-level indexing / cable-pull signal, not the primary ecosystem anchor. Broad values such as `Shimano` or `SRAM` stranded there must not be promoted into ecosystem truth unless the value actually carries actuation semantics like SIS, Dynasys, Linkglide/CUES, Exact Actuation, X-Actuation, AXS, or equivalent real refinement detail
-- drivetrain compatibility scoring must also stay conservative for derailleurs, shifters, and drivetrain kits after a nominal match. Rear derailleurs are not fully compatible from speed alone; actuation family, max-cog support, cage / total-capacity expectations, and mounting still matter. Front derailleurs are not fully compatible from `2x` / `3x` count alone; mount style, pull direction, big-ring size/cage curvature, and road-vs-MTB front indexing still matter. Shifters should only move to full-compatible when the relevant side and exact indexing/actuation seam are actually resolved in structured data. Drivetrain kits should not move to full-compatible from front-side crankset/pedalier facts alone when the rear-side content of the kit is still unresolved; otherwise keep the result in caution territory.
+- drivetrain compatibility scoring must also stay conservative for derailleurs, shifters, and drivetrain kits after a nominal match. Rear derailleurs are not fully compatible from speed alone; actuation family, max-cog support, cage / total-capacity expectations, and mounting still matter. Front derailleurs are not fully compatible from `2x` / `3x` count alone; mount style, pull direction, big-ring size/cage curvature, and road-vs-MTB front indexing still matter. Shifters should only move to full-compatible when the relevant side and exact indexing/actuation seam are actually resolved in structured data. **2026-09-14:** drivetrain kits must not dispatch through crankset matching or assume front/rear contents. Only the actual member profiles and their assembly relationships may supply fitment premises; until that evaluation exists, use kit-specific caution without inherited crank dimensions or configuration claims.
 - cassette / freewheel scoring must also stay conservative after a nominal speed and freehub match. Threaded freewheel vs cassette body remains a hard split, but even when speed and driver family line up the scorer should usually remain in caution territory until the structured range/body-generation/spacer seam is actually resolved, because real hub-body exceptions still exist.
 - cassette / freewheel ficha UI must follow the same rule upstream: `freehub_type` cannot remain implicit, freewheel templates must keep that field as an explicit ficha confirmation instead of auto-deriving it from category/template semantics, and rear-cog templates should expose range fields like `largest_cog_teeth` so the app does not keep speaking as if speed were the only meaningful seam.
 - rear-cog templates (`cassette`, `freewheel`, `fixed_cog`) must not surface `drivetrain_primary_ecosystem`, `drivetrain_declared_compatible_ecosystems`, or `drivetrain_platform` in the runtime ficha flow; those broad semantics are not the real rear-cog seams compared with mount/body family, speeds, and range
@@ -1611,7 +2261,7 @@ For a fresh chat, the current code-side state is:
 - chain-related drivetrain ficha in `lib/modules/inventory/pages/product_form_page.dart` is now inference-aware: `lib/modules/inventory/services/spec_engine_service.dart` passes through `spec_template_fields.helper_text`, and shared helpers in `lib/modules/bikeshop/config/drivetrain_canonical_data.dart` can auto-fill missing `chain_speeds`, suggest `chain_profile_family`, and infer `drivetrain_platform` for `chain` / `chain_link` templates only from structured width-family, speed, platform, profile, and indexing signals. Manual edits still win, stale auto-derived values are cleared when the template/category changes, and commercial brand/category/name metadata is no longer allowed into that runtime inference path.
 - the same chain ficha layer now also needs `chain_outer_width_mm` as the precision seam below `chain_width_family`: internal width alone is too coarse for modern derailleur chains, so inference and compatibility must use standardized outer-width values before collapsing a narrow chain into a broad `9-11v` claim.
 - do not add live Dart-side parsing of product name or description to auto-fill drivetrain ficha truth. If packaging text later needs to backfill chain/drivetrain specs, do it as an explicit DB fulfillment or migration workflow, not as runtime UI logic.
-- production drivetrain ficha now uses the explicit ecosystem split through `drivetrain_primary_ecosystem` and `drivetrain_declared_compatible_ecosystems`, and the product form treats commercial brand only as a suggestion source for the explicit split fields. The legacy `drivetrain_compatibility_family` field was removed from the active production schema on 2026-04-27 after a zero-usage audit; runtime code may still tolerate it as historical migration input, but it is no longer an active ficha field.
+- historical 2026-04-27 drivetrain ficha used the explicit ecosystem split through `drivetrain_primary_ecosystem` and `drivetrain_declared_compatible_ecosystems`. Any historical brand-based suggestion is not technical evidence and is not authorized as the target behavior. The 2026-09-05 contract replaces the universal singular-ecosystem hierarchy with scoped relationships. The legacy `drivetrain_compatibility_family` field was removed from the active production schema on 2026-04-27 after a zero-usage audit; runtime code may still tolerate it as historical migration input, but it is no longer an active ficha field.
 - live verification on 2026-04-27 confirmed two things at once: the safe structured-only backfill inserted `0` product rows in production, and the live catalog still declares speed first, width sometimes, and platform/compatibility claims only occasionally in product names. The next schema/UI step is therefore to populate and consume the explicit ecosystem split more reliably from real packaging evidence, instead of reviving or densifying the legacy interim field.
 - that 2026-04-27 verification is **not** a green light for broad compatibility population yet. Population remains intentionally blocked while shifter and bottom-bracket/crankset seams stay incomplete.
 - current shifter compatibility is still intentionally conservative: exact right/rear matches can rank `compatible`, but left/front and pair/universal cases must remain in `caution` until the front pull/indexing seam is modeled and tested better.
@@ -1657,8 +2307,8 @@ Supabase policy and commands are intentionally centralized:
 - `docs/runbooks/STAGING_SUPABASE.md` is authoritative for environment use,
   production validation, write safety, and valid human handoffs.
 - `docs/development/SUPABASE_WORKFLOW.md` is authoritative for current
-  preflight, credentials, guarded queries, tests, production-derived clone
-  reuse, deployment, and verification commands.
+  preflight, credentials, guarded queries, local tests, deployment, and live
+  verification commands.
 - `docs/runbooks/DATABASE_BACKUP_AND_RESTORE.md` governs backup/recovery.
 - `docs/development/SECURITY_REMEDIATION_2026-07-12.md` governs legacy-key
   migration and rotation.
@@ -1694,10 +2344,9 @@ policy status or authorize agents to use it.
   deployment, migration registration, read-back, and health checks themselves.
   Do not ask the user to run a query or paste a migration that the repository
   can execute.
-- Schema-only production dumps are reusable validation-session inputs. Do not
-  redump merely because pgTAP is rerun; use
-  `scripts/db/production_validation.sh` and follow the runbook's provenance and
-  refresh rules.
+- Schema-only production dumps are deprecated as validation inputs. Read the
+  real target through guarded read-only queries; never convert a clone result
+  into a production-readiness claim.
 - Historical migrations are not replayable from an empty database, so
   `[db.migrations].enabled = false` is intentional. Use a unique idempotent
   forward migration, the guarded deployment path, exact read-back, and explicit
@@ -1941,7 +2590,7 @@ end;
 1. Add `v_tenant_id uuid;` to function variables
 2. Get tenant_id from parameter: `v_tenant_id := p_record.tenant_id;`
 3. Add `tenant_id` column to ALL INSERT statements
-4. Deploy updated `core_schema.sql`
+4. Deploy one reviewed standalone migration and verify/stamp its exact version
 
 ## 2. Check RLS Policies
 Symptoms: "new row violates row-level security policy" or empty results
@@ -2101,18 +2750,22 @@ The artifact and execution contract lives in
 `docs/development/SUPABASE_WORKFLOW.md`; production safety and validation live
 in `docs/runbooks/STAGING_SUPABASE.md`.
 
-- `supabase/sql/core_schema.sql` is the mandatory idempotent bootstrap mirror,
-  not the live deployment mechanism and not proof of production state.
-- Every live schema change needs a unique, idempotent forward migration under
-  `supabase/migrations/` and the same final objects/logic mirrored in
-  `core_schema.sql`.
-- Every migration is an active deployment candidate and carries an explicit
-  `NOT DEPLOYED` or verified production deployment status. Keep experiments and
-  superseded SQL out of `supabase/migrations/`.
-- Deploy only the smallest reviewed migration through the guarded repository
-  wrapper. Never deploy the entire canonical snapshot to production.
-- Mark a migration deployed and register its exact version only after live
-  read-back and business-invariant verification succeed.
+- **2026-08-17 authority correction:** `supabase/sql/core_schema.sql` is an
+  incomplete historical and best-effort local reference. It is not canonical,
+  not reproducible, not proof of presence/absence, and never a hosted input.
+  This rule supersedes every older instruction in this file that calls it a
+  source of truth, mandatory mirror, or first/only schema file.
+- Every live schema change is owned by one unique, idempotent standalone forward
+  migration under `supabase/migrations/`. Mirroring it in `core_schema.sql` is
+  optional historical curation and never a deployment gate.
+- Keep experiments and superseded SQL out of `supabase/migrations/`. Never edit
+  an applied migration.
+- Deploy only through `scripts/db/deploy_migration.sh` with executable read-back
+  assertions. The command applies the smallest migration, verifies it, registers
+  the exact version and reads the remote stamp back.
+- Only `supabase_migrations.schema_migrations` in production answers whether a
+  migration is `APPLIED`; use `scripts/db/migration_status.sh`. File comments,
+  Git state, successful SQL exit and local receipts are not deployment status.
 - Migration version prefixes are unique. Search before choosing a timestamp;
   never repair ambiguous history by guessing.
 
@@ -2169,11 +2822,15 @@ alter table my_table add column if not exists new_column text;
 **⚠️ AVOID DUPLICATES!**
 
 **BEFORE creating ANY database object, you MUST:**
-1. 🔍 **READ `core_schema.sql` first** - check the ENTIRE file if needed
-2. 🔍 **SEARCH for existing similar functions/triggers/tables** using grep or semantic search
-3. ❌ **NEVER assume a function/trigger doesn't exist** - ALWAYS verify first
+1. 🔍 **INSPECT THE LIVE CATALOG READ-ONLY FIRST** when production behavior is
+   relevant, then search current standalone migrations and application callers.
+2. 🔍 Use `core_schema.sql` only as secondary historical search context; absence
+   there proves nothing.
+3. ❌ **NEVER assume a function/trigger doesn't exist** - verify the target
+   catalog before creating or replacing it.
 4. 🔄 **UPDATE existing functions** rather than creating new ones with different names
-5. 📝 **BE EXPLICIT:** Always tell user "I modified `core_schema.sql` at line X" or "I updated function Y in `core_schema.sql`"
+5. 📝 **BE EXPLICIT:** Name the standalone migration and the live definition or
+   catalog evidence it changes.
 6. ⚠️ **Example of what NOT to do:**
    - ❌ Creating `handle_purchase_invoice_change()` when `handle_sales_invoice_change()` pattern already exists
    - ❌ Creating `create_purchase_journal_entry()` when similar function already exists
@@ -2184,7 +2841,8 @@ alter table my_table add column if not exists new_column text;
    - ✅ Check how it works and what pattern it uses
    - ✅ Create `handle_purchase_invoice_change()` following the SAME pattern
    - ✅ Reuse existing helper functions like `ensure_account()`, `consume_inventory()`, etc.
-   - ✅ Tell user: "I added `handle_purchase_invoice_change()` to `core_schema.sql` at line 4850, following the same pattern as `handle_sales_invoice_change()`"
+   - ✅ Tell user which versioned migration changes
+     `handle_purchase_invoice_change()` and how the live read-back proves it.
 
 **Common mistakes to AVOID:**
 - ❌ Creating duplicate functions with slightly different names
@@ -2197,19 +2855,18 @@ alter table my_table add column if not exists new_column text;
 - ❌ **Adding "nice to have" columns instead of only "must have"**
 
 **Before making any database changes:**
-1. 🔍 **ALWAYS check `core_schema.sql` first**
-2. 🔍 **SEARCH for existing functions/triggers with similar names or purposes**
-3. 📖 Read the relevant section (tables, functions, triggers)
+1. 🔍 **ALWAYS inspect the target catalog and migration history read-only first**
+2. 🔍 **SEARCH callers and standalone migrations for similar objects/purposes**
+3. 📖 Use `core_schema.sql` only as non-authoritative historical context
 4. 🤔 **Ask: "Does something similar already exist?"**
 5. 🤔 **Ask: "Can this be calculated instead of stored?"**
 6. 🤔 **Ask: "Is this column STRICTLY NECESSARY?"**
-7. ✏️ Make changes directly in `core_schema.sql`
+7. ✏️ Author one unique idempotent migration in `supabase/migrations/`
 8. ✏️ **Add ALTER TABLE if modifying existing table structure**
-9. 💾 Save, deploy the smallest reviewed SQL change with the repository
-   database tooling, and run a live verification query
-10. 📝 **BE EXPLICIT:** Tell user which file and line number you modified
+9. 💾 Deploy with `scripts/db/deploy_migration.sh` and executable live read-back
+10. 📝 **BE EXPLICIT:** Report the migration version and remote `APPLIED` stamp
 
-**This is the ONLY database schema file to edit. The 3-file split is for deployment only.**
+**The standalone migration is the only deployable schema artifact.**
 
 ---
 
@@ -2531,8 +3188,11 @@ This protocol is the preferred way to get back to a trusted app baseline while p
 
 **For ANY database-related task:**
 
-1. ✅ **READ** `supabase/sql/core_schema.sql` first - ENTIRE file if needed
-2. ✅ **SEARCH** for existing tables/functions/triggers with similar names or purposes
+1. ✅ **READ THE LIVE TARGET CATALOG AND MIGRATION HISTORY** through the guarded
+   read-only path when current hosted behavior matters
+2. ✅ **SEARCH** standalone migrations, callers and tests for existing
+   tables/functions/triggers with similar names or purposes; use
+   `core_schema.sql` only as incomplete historical context
 3. ✅ **ASK YOURSELF: "Can I solve this WITHOUT adding new columns?"**
    - Can I use existing columns?
    - Can I calculate this in Dart instead of storing it?
@@ -2542,16 +3202,16 @@ This protocol is the preferred way to get back to a trusted app baseline while p
 6. ✅ **UPDATE** existing code or add new code following EXISTING patterns
 7. ✅ **NEVER** create duplicate functions/triggers with different names
 8. ✅ **NEVER** create columns that are "nice to have" - only STRICTLY NECESSARY ones
-9. ✅ **VERIFY** column names match what's in `core_schema.sql`
+9. ✅ **VERIFY** column names against the guarded live catalog
 10. ✅ **IF YOU ADD A COLUMN:** Also add `ALTER TABLE ... ADD COLUMN IF NOT EXISTS` statement
 11. ✅ **IF MODIFYING INVENTORY:** Update BOTH `inventory_qty` AND `stock_quantity` columns (see inventory columns section above)
-12. ✅ **INFORM** user: "I modified `core_schema.sql` at line X" or "I added function Y to `core_schema.sql`"
+12. ✅ **INFORM** the user which standalone migration version owns the change
 13. ✅ **DEPLOY IT:** If the requested change requires SQL to become live and
     the repository has the target credentials, execute the smallest reviewed
     migration/query yourself. Do not hand routine deployment back to the user.
-14. ✅ **VERIFY IT:** Query the live target after deployment and record the
-    migration status/result. Provide a snippet only as review evidence or when
-    execution is genuinely blocked.
+14. ✅ **VERIFY AND STAMP IT:** use `scripts/db/deploy_migration.sh` so executable
+    live read-back completes before the exact production version is registered.
+    Confirm it with `scripts/db/migration_status.sh`.
 
 ## Supabase Command Ownership
 
@@ -2577,7 +3237,7 @@ policy.
   - suspicious row
   - related product / invoice / payment
   - timestamps (`transaction_date`, `created_at`, `updated_at`)
-  - trigger/function path in `core_schema.sql`
+  - live trigger/function definition plus its owning standalone migration
 5. ✅ Only after the inspection proves the root cause should you prepare:
   - the code/schema fix
   - audit SQL for historical damage
@@ -2617,6 +3277,11 @@ policy.
 - ✅ A purchase invoice with `received_date` keeps status `received` through partial/full payment and undo. Payment recalculation must not reverse/reapply received inventory.
 - ✅ Multi-bike jobs currently have one shared invoice/payment balance. `job_bike_id` attributes invoice lines and per-bike totals; it does not allocate payments to individual bicycles.
 - ✅ Workshop ERP ownership is explicit: `mechanic_jobs` is operational/reservation state; the linked `sales_invoices` document exclusively owns on-hand stock, revenue, COGS, receivable, and payment posting.
+- ✅ An unmet workshop part is a versioned `supply_needs` record with exact job/bike provenance. Never infer this behavior from a mutable status name, store the unmet need as a billable `mechanic_job_items` row, or hide product identity in an expense note.
+- ✅ Common available-to-promise comes from `inventory_available_quantity_v1`, which protects both online reservations and active workshop commitments. A workshop commitment changes ATP only; the linked sales invoice remains the sole physical stock and accounting consumer.
+- ✅ Intelligent purchasing is stock-first. External comparison requires an actual shortage or an explicit recorded rejection of assignable internal stock; historical supplier purchases never prove current availability.
+- ✅ Local/emergency merchandise is still a canonical purchase document, never a generic expense. Its document behavior comes from `purchase_source_document_kinds`, a seeded line preserves immutable tenant-scoped `purchase_invoice_lines.source_need_id`, and locality requires an explicit effective supplier tag rather than inference from legacy type, name, or receipt kind. Confirmation, payment, receiving, stock, accounting, and need-state transitions remain separate owners.
+- ✅ Measurements and compatibility filters for purchasing come from canonical `product_spec_values`. A product name may not satisfy a range or inequality; zero structured coverage must remain an explicit data gap instead of a guessed match.
 - ✅ Never call or re-expose the legacy job stock/journal writer functions to clients or service APIs. New job-owned movement/journal attempts must surface through the workshop ownership control and must be eliminated before enforce mode is activated.
 - ✅ Existing workshop invoice variances are `legacy_unresolved`; shadow controls and new migrations must never backfill, recalculate, or "repair" them implicitly.
 - ✅ Public checkout must use `create_public_online_order()` with a stable `checkout_idempotency_key`; never restore the client direct-insert fallback.
@@ -2624,7 +3289,7 @@ policy.
 
 ### Testing mindset after inspection
 - ✅ First prove the bug with real rows.
-- ✅ Then verify the trigger/function path in `core_schema.sql`.
+- ✅ Then verify the live trigger/function definition and owning migration.
 - ✅ Then test the exact workflow transition that caused the issue.
 - ✅ Prefer minimal reproduction steps over broad regression testing at first.
 - ✅ For status-driven inventory logic, test transitions explicitly instead of only testing create/update generically.
@@ -2645,18 +3310,25 @@ policy.
 - ✅ Only create if it's ABSOLUTELY ESSENTIAL for the feature to work
 
 **⚠️ CRITICAL: Before creating ANY function/trigger:**
-- 🔍 Search `core_schema.sql` for: `CREATE OR REPLACE FUNCTION public.[function_name]`
+- 🔍 Search the live catalog for the exact signature, then the migration chain
+  and callers; `core_schema.sql` is only optional historical context
 - 🔍 Search for similar patterns (e.g., if creating purchase trigger, look for sales trigger)
 - 🔍 Check what helper functions exist (ensure_account, consume_inventory, etc.)
 - ❌ NEVER create `create_purchase_invoice_journal_entry` if `create_sales_invoice_journal_entry` already exists - study the existing one first!
-- 📝 **BE EXPLICIT:** Tell user "I added `create_purchase_invoice_journal_entry()` to `core_schema.sql` at line 4680"
+- 📝 **BE EXPLICIT:** Name the owning migration version and verified live
+  function signature
 
 **For ANY Flutter code changes:**
 
 1. ✅ Check if database schema needs updating first
-2. ✅ **READ `core_schema.sql`** to verify table/column names
+2. ✅ Verify table/column names against generated types and the guarded live
+   catalog; do not trust `core_schema.sql` or a schema-only clone
 3. ✅ Adapt Flutter code to match database schema (not vice versa)
-4. ✅ Use correct column names from `core_schema.sql`
+4. ✅ Use column names proved by the live catalog/current generated contract
+   - A client parser for a view must use the exact live projection key. Its
+     regression fixture must copy that key (or be generated from the same
+     contract); a client-only alias is not compatibility, because it can keep a
+     broken production parser green.
 5. ✅ **CHECK EXISTING CODE** for tenant_id handling patterns
 6. ✅ **VERIFY** all queries include `.eq('tenant_id', tenantId)` or use services that filter
 7. ✅ **VERIFY** all inserts include `'tenant_id': tenantId` in data maps
@@ -2671,7 +3343,7 @@ policy.
 
 **For ANY new feature:**
 
-1. ✅ **Database schema first (in `core_schema.sql`)**
+1. ✅ **Database schema first (in one standalone forward migration)**
    - ⚠️ **MUST have `tenant_id` column** (except auth/system tables)
    - ⚠️ **MUST have index on `tenant_id`**
    - ⚠️ **MUST have RLS policies filtering by `tenant_id`**
@@ -2681,7 +3353,7 @@ policy.
    - Check what tables/functions/triggers already exist
    - Follow existing patterns and naming conventions
    - Reuse existing helper functions
-2. ✅ Backend triggers/functions (in `core_schema.sql`)
+2. ✅ Backend triggers/functions (in that standalone migration)
    - ⚠️ **MUST filter by `tenant_id` in WHERE clauses**
    - Search for similar triggers/functions first
    - Use same pattern as existing code
@@ -2694,8 +3366,8 @@ policy.
 
 **REMEMBER:**
 - 🚫 No undocumented/ad hoc SQL-only fixes. Versioned idempotent migration files
-  are required for deployable database changes and must remain mirrored in
-  `core_schema.sql`.
+  are required for deployable database changes. `core_schema.sql` mirroring is
+  optional historical curation and never proof or a deploy gate.
 - 🚫 No duplicate functions/triggers (search first!)
 - 🚫 No markdown guides for simple tasks
 - 🚫 No assumptions about schema - always check first
@@ -2732,11 +3404,11 @@ The executable deployment sequence is centralized in
 `docs/development/SUPABASE_WORKFLOW.md`; its authorization and validation gates
 are in `docs/runbooks/STAGING_SUPABASE.md`.
 
-The invariant is one smallest unique/idempotent migration, the same final
-objects/logic mirrored in `supabase/sql/core_schema.sql`, guarded agent-owned
-execution when authorized, and exact live read-back before marking or
-registering the migration as deployed. A copy/paste snippet is review evidence,
-not a deployment path.
+The invariant is one smallest unique/idempotent standalone migration, guarded
+agent-owned execution when authorized, executable live read-back, and the exact
+remote migration-history stamp. `core_schema.sql` is optional historical
+context and never participates in deployment. A copy/paste snippet is review
+evidence, not a deployment path.
 
 ---
 
@@ -3495,6 +4167,24 @@ We key analytics off these columns. When building features:
 3. **Log Destructive Actions**: Deleting invoices, voiding payments, or changing critical configs must be logged to `activity_logs`.
 4. **Explicit Overrides**: If a regular user needs to perform a Manager action, implement an "Admin Override" flow (ask for admin PIN/Credentials).
 
+Creation attribution shown in an operational notification must come from a
+server-owned actor column on the source record. Persist its tenant-safe display
+name in the notification's durable `data` payload at insert time; timeline rows
+must not issue per-record identity reads. Legacy rows without authoritative
+actor evidence remain unknown and must never be named by inference.
+
+Daily Briefing counters are active-source projections, not raw notification
+row counts. Each job, received payment, recorded expense, online order, and
+stored file contributes at most once by stable source identity and only while
+its canonical source remains active. Archive, reversal, deletion, or
+cancellation must convert the existing durable `erp_notifications` identity to
+its inactive lifecycle type in place, preserving `id`, `created_at`, `read_at`,
+and audit payload. The inactive row stays truthful timeline history but never
+contributes to the active count or financial total; a reversible restore moves
+that same identity back. Keep a shared client-side identity/inactive guard for
+mixed-version realtime windows, and backfill stale active types from source
+truth rather than hiding duplicates in the widget.
+
 ---
 
 # 🧱 Modular Architecture
@@ -3570,7 +4260,9 @@ Operational helper:
 - Use `inspect` before changing profile data, and only update public business facts that are already verified from `website_settings`, Google Business data, or explicit user instruction.
 - Profile text fields and website can be updated with Graph API. Avatar/profile image updates use the same helper's `upload_profile_picture` multipart action, which performs Meta's resumable upload flow to get a `profile_picture_handle` before updating the WhatsApp Business Profile. Catalog/commerce setup may still need WhatsApp Manager/Commerce Manager configuration; do not claim catalog setup is done after updating profile fields only.
 
-Approved templates observed on 2026-06-10 include `seguimiento_presupuesto_bicicleta`, `bicicleta_lista_retiro`, `actualizacion_servicio_bicicleta`, and `seguimiento_servicio_bicicleta` in `es_CL`. Keep first-contact/outside-24h messaging template-aware; production Cloud API removes sandbox allowlist restrictions but does not remove WhatsApp's 24-hour service-window and approved-template rules.
+Approved customer templates observed on 2026-06-10 include `seguimiento_presupuesto_bicicleta`, `bicicleta_lista_retiro`, `actualizacion_servicio_bicicleta`, and `seguimiento_servicio_bicicleta` in `es_CL`. The operational supplier family submitted to WABA `912031294920516` on 2026-08-14 is `proveedor_presentacion_nuevo_numero_v1`, `proveedor_saludo_v1`, `proveedor_retomar_contacto_v1`, `proveedor_consulta_novedades_v1`, and `proveedor_pedido_pendiente_v3`, all in `es_CL`. The first four are Marketing; the final pending-order template was submitted as Utility with automatic category changes disabled. They were still `PENDING` on the immediate Graph read-back. `proveedor_compra_pendiente_v1` and `proveedor_pedido_pendiente_v2` are superseded provider artifacts and must never be exposed by an ERP picker; their Graph deletion currently requires WABA owner/shared-business permission that the server token does not hold. **Corrección 2026-08-27:** fuera de la ventana de 24 h, una plantilla `APPROVED` sigue siendo obligatoria para Marketing, pero ya no para los casos Utility registrados que salen por Direct Send. El servidor reconstruye esos cuerpos desde el catálogo cerrado, intenta `category=utility` y conserva la plantilla clásica como respaldo automático; jamás acepta que el cliente marque texto libre como Utility. Ver `docs/architecture/whatsapp-direct-send.md`.
+
+`supabase/functions/whatsapp-template-manager/index.ts` owns the exact server-side definitions and can list or submit them without exposing `WHATSAPP_ACCESS_TOKEN` to Flutter. New definitions default to `allow_category_change=false`; a category mismatch must be explicit rejection, never a silent Marketing conversion. Authenticated tenant users may list live review state for the composer, while deployment/deletion actions remain owner/admin/manager-only and Graph may impose stricter WABA asset permissions. The supplier picker is the shared `ChatWindow` picker used by every supplier-messaging host. It must scope to the supplier family. Marketing options confirm live Meta state on every opening and immediately before sending, and only `APPROVED` may send; registered Utility options remain reviewable and enabled because Direct Send owns their generated template, with the classic template only as fallback. It resolves `{{1}}` from `suppliers.sales_rep_name` and then `contact_person` without falling back to the company name, and resolves `{{2}}` only for the introduction from the signed-in employee identity. Every customer and supplier template greets with the recipient's given name rather than their surname; the shared formatter preserves compound given names such as `José Luis` and `Juan Pablo`, while the full canonical name remains the independent WhatsApp binding and inbox identity. `whatsapp-send` enforces the same rule on the body parameter and durable caption before Graph submission, so a stale client cannot reintroduce the surname. Keep the binding independent from body parameters so a familiar greeting cannot rename the thread.
 
 Inventory products now have a live WhatsApp catalog sync in the product form's `Tienda Online` tab. The fields live on `products`: `is_whatsapp_catalog`, `whatsapp_catalog_title`, `whatsapp_catalog_description`, and `whatsapp_catalog_price`. Empty WhatsApp title/description/price values intentionally fall back to website/product data. Saving a product that is enabled for WhatsApp calls the authenticated `whatsapp-catalog-sync` Edge Function, which securely uses the server-side Meta token to create/update the product in the connected catalog. Saving after switching the toggle off removes the matching Meta product. The form must not claim a fully successful save when Meta rejects the sync: keep the form open and report that the ERP product was saved but WhatsApp sync failed. Never expose the Meta token to Flutter.
 
@@ -6081,6 +6773,17 @@ The Payroll system automates:
 2. Expense creation for each employee payment
 3. Journal entry generation for proper accounting
 
+**Regla del dueño (2026-09-10): cada hora se paga a la tarifa; no existen
+horas extra.** «Horas trabajadas, horas pagadas; ellos eligen qué horas
+quieren trabajar.» El trigger de Asistencias del 2025-12 asumía un tramo extra
+al 1,5× sobre una jornada de 9 h y, además, lo contaba dos veces: `worked_hours`
+ya traía el turno completo y el exceso iba aparte a `overtime_hours`. Vicente
+Díaz, 2026-09-04, 9,63 h → «34,9 h × $3.500» junto a un total de $123.358. Desde
+`20260910133000_flat_hourly_pay_no_overtime` `overtime_hours` es siempre 0 en
+Asistencias; las columnas y la rama × 1,5 de los comandos de borrador siguen
+existiendo pero no reciben horas. No reintroducir un tramo extra sin que el
+dueño lo pida.
+
 ## Canonical Payroll Lifecycle
 
 - `draft`: a weekly calculation prepared from Attendance; it has not recognized
@@ -6601,3 +7304,232 @@ JSON-LD, snapshots/sitemap, external catalog publishers, and Firebase deploy.
   their overlay before navigation.
 - Verify Back/forward history, exact-origin return, reduced motion, semantics,
   and absence of route/layout exceptions.
+
+## El pedido al proveedor es el MISMO documento de compra
+
+**Corrección del 2026-08-23, sobre una decisión mía del mismo día.** Primero
+razoné que un pedido no es una factura —`purchase_invoices` guarda lo que el
+proveedor nos emitió, y su flujo contable asume una deuda— y lo guardé en
+`purchase_orders`, con sus propias funciones, su propia lista y su propio ciclo.
+El dueño lo llamó por su nombre: «creaste un servicio de facturas paralelo».
+Tenía razón, y la razón es de negocio, no de esquema.
+
+El pedido y la factura son **el mismo documento en dos momentos**. Nace como
+`purchase_invoices` en `draft`, con un número provisorio `PED-…`; cuando llega
+la factura del proveedor, a esa misma fila se le pone el folio real y se marca
+recibida. Sin conversión, sin retipear líneas, sin una segunda lista que
+mantener y sin dos lugares donde buscar un documento del mismo proveedor.
+
+Lo que hacía falta comprobar antes era una sola cosa, y sale de la base:
+**un borrador no toca la contabilidad.** Los asientos los crean los
+disparadores al pasar a `received`; el borrador que ya existía en producción
+tiene cero asientos. Con eso, guardar el pedido ahí no tiene ningún costo
+contable.
+
+El estado hace el resto del trabajo: `draft` es lo que se está armando, `sent`
+es lo que ya salió al proveedor, y sólo pasa a `sent` cuando el transporte
+confirmó la salida —al revés, un envío fallido deja un documento marcado como
+enviado que el proveedor nunca vio—.
+
+**La regla general:** antes de crear una tabla, una lista o un servicio nuevo
+para algo que se parece a lo que ya existe, la pregunta no es «¿son
+conceptualmente distintos?» sino **«¿el operador los va a buscar en el mismo
+lugar?»**. Si la respuesta es sí, es el mismo módulo aunque el modelo de
+dominio diga que son dos cosas.
+
+### Trampas que costaron una ronda cada una (2026-08-23)
+
+Salieron mientras el pedido todavía vivía en `purchase_orders`. Dos de ellas
+importan igual, porque son de la base y no de aquella decisión:
+
+- **`trg_purchase_item` sumaba al inventario al insertar la línea.** Guardar un
+  pedido daba por recibida la mercadería e insertaba movimientos de bodega. No
+  llegó a ocurrir sólo porque el tenant no tiene bodega configurada y moría
+  antes. Se corrigió: ahora exige `status = 'received'`. **Antes de escribir en
+  una tabla que nadie usaba, lee sus disparadores.**
+- **`purchase_orders.created_by` apunta a `users_profiles`, que está vacía.** La
+  app mantiene `user_profiles` (singular) — son tablas distintas.
+- **Un `catch` que dice «no se pudo guardar» esconde la causa.** Las dos
+  anteriores salieron recién al publicar el mensaje del servidor en la pantalla.
+  El motivo se publica: al operador no le sirve un mensaje que no dice qué pasó,
+  y a quien lo arregla tampoco.
+
+## La vista previa de un documento no se rasteriza en cada tecla
+
+Un documento que se arma en vivo se dibuja con widgets, no rasterizando el PDF:
+rasterizar tarda cientos de milisegundos y la hoja parpadea, así que el operador
+ve un archivo recargándose en vez de un documento armándose.
+
+El riesgo de dibujarlo dos veces es que diverjan. Se resuelve con **un solo
+modelo ya formateado** —`PurchaseOrderDocument`— del que salen tanto la vista
+previa como el PDF: quien dibuja elige tipografía y color, los números ya están
+decididos. Ahí no hay widgets ni `pw.` de ninguna clase.
+
+## Una vista previa de mensaje que miente es peor que no tenerla
+
+WhatsApp sólo permite texto libre dentro de las 24 h siguientes al último
+mensaje del contacto. **Corrección 2026-08-27:** fuera de esa ventana, un caso
+Utility registrado puede salir por Direct Send; Marketing todavía requiere
+plantilla aprobada. Un borrador libre jamás se reclasifica como Utility: se
+conserva hasta que el contacto responda. La ventana se dice **junto a la
+burbuja**, antes de enviar, y el recibo durable registra si salió Direct Send,
+respaldo clásico o servicio dentro de ventana.
+
+Y el campo de texto dentro de una burbuja necesita `filled: false` explícito:
+el tema de la app rellena sus campos y ese relleno claro tapa el mensaje.
+
+## El flete no es parte del precio del proveedor
+
+Todo el módulo publicaba el costo **con flete prorrateado** y no había forma de
+ver lo otro. Pero lo que se negocia con un proveedor es la mercadería: el flete
+lo pagamos aparte, y meterlo en la cifra que se compara —y peor, en la que se le
+propone en un pedido— es pedirle que cobre por algo que él no despacha.
+
+Ahora `purchase_line_landed_cost_observations_v1` publica los dos por todas las
+puertas: `averageBaseUnitCostNet` en el motor de concentración,
+`lastBaseUnitCostNet` en la ficha del proveedor y `baseUnitCostNet` en la
+evidencia. **Sin flete es el estado normal.** El aterrizado sigue a un toque,
+porque para decidir a quién comprarle el costo puesto en bodega sí manda.
+
+Dos reglas que se descubrieron implementándolo:
+
+- **El eje es uno solo para todo el bloque** —tabla, ficha y lo que se propone
+  al agregar una línea al pedido—. Dos ejes distintos en la misma pantalla
+  hacen que un precio parezca mejor que otro por estar medido distinto.
+- **La salvedad al pie sigue al eje.** Publicar «costos con flete prorrateado»
+  mientras se muestra el neto describe otra tabla.
+
+Y sobre `create or replace` en funciones vivas: **los defaults de los
+parámetros se conservan exactamente como están**. Cambiarlos hace que Postgres
+se niegue —«cannot remove parameter defaults from existing function»— y
+obligaría a un `drop` que rompe a todo el que la llama. Se leen con
+`pg_get_function_arguments` antes de escribir el reemplazo. Agregar un
+parámetro nuevo, en cambio, **sobrecarga** en vez de reemplazar y deja las
+llamadas ambiguas: ahí sí va un `drop function` explícito de la firma vieja.
+
+## No le prohíbas al modelo usar lo que nunca le mostraste (2026-08-23)
+
+El asistente contestaba «cámaras 26 con válvula VA de 48mm» abriendo una lista
+**vacía**, teniendo 126 cámaras con ficha cargada. Tres defectos encadenados, y
+ninguno era del modelo:
+
+1. **La instrucción se contradecía.** El esquema de `search_inventory` decía
+   «predicados sobre claves que anunció `inspect_inventory_schema`; no inventes
+   claves» y, en la misma frase, «los valores van **como los dijo el
+   operador**». O sea: no uses claves que no te mostramos —y nunca se le
+   mostraba ninguna—, y encima pasa las palabras sin traducir. El modelo
+   obedeció y mandó `technicalPredicates: []`.
+2. **La compuerta era de un solo lado.** Sólo se disparaba cuando el modelo
+   mandaba predicados sin haber inspeccionado. No estructurar nada pasaba libre,
+   así que el camino premiado era justo el que no usa la ficha.
+3. **La tarjeta tiraba los resultados.** `cards.ts` mandaba `entityIds: null`
+   cuando `hasMore`, «para que una página truncada no afirme ids exactas». Sin
+   ids, el cliente caía a buscar la frase como texto contra el nombre del
+   producto: **mientras más acertaba la búsqueda, más vacía salía la lista.**
+
+Lo que hay que entender del diseño: `inspect_inventory_schema` **ya anuncia todo
+lo necesario** —`valve_type · single_select · allowedValues [Presta…, Schrader…]
+· populatedCount 126`—. Con eso al frente, traducir «VA» a Schrader es trivial
+para el modelo, que es el mejor traductor de la pila. El emparejamiento de
+texto en la base es el **respaldo** para cuando el modelo no estructura, no el
+mecanismo principal; mejorarlo con sinónimos es tratar el síntoma.
+
+Las tres reglas que quedan:
+
+- **Si una herramienta exige vocabulario, el vocabulario tiene que llegar al
+  modelo** —por una llamada obligada o inlineado—. Prohibir sin mostrar produce
+  un modelo que correctamente no hace nada.
+- **La compuerta va en los dos sentidos**, y sólo sobre lo que el operador va a
+  mirar: una búsqueda con `presentation: "answer"` es un paso interno —así el
+  armado de canastas resuelve cada línea— y exigirle inspección deja la canasta
+  sin resolver. Se gatilla en `open_list`, con un número que sea token propio
+  («26», «48mm»), no con «trae dígitos»: `RD-M6100` y un SKU también los traen y
+  para ésos buscar por nombre es lo correcto.
+- **Un resultado truncado entrega las filas que pudo mostrar.** `hasMore` dice
+  que no son todas; mandar `null` para no mentir producía una lista vacía, que
+  miente peor. Ese invariante vivía en **cuatro** lugares —`cards.ts` al
+  construir, `validateListRef` al leer, el parser de Dart y dos pruebas—: se
+  corrige en los cuatro o no se corrigió.
+
+### Procesar números y medidas (2026-08-24)
+
+Casi todo lo que el taller pide es una medida, así que esto no es un extra.
+Después de lo anterior, «48mm» seguía sin resolverse **en ninguna redacción**.
+Tres causas, en capas distintas:
+
+1. **`is_filterable = false`.** `valve_length_mm` tenía la bandera apagada y la
+   inferencia sólo considera campos filtrables: el campo nunca fue candidato,
+   con 94 hechos cargados esperando. Había tres medidas más en la misma
+   situación. **Una medida que no se puede filtrar es una medida invisible** —
+   revisar la bandera antes de culpar al lenguaje.
+2. **El tokenizador no despega la unidad.** El separador corta por caracteres no
+   alfanuméricos, así que «48mm» quedaba de una pieza y jamás igualaba al rótulo
+   «48». Y nadie escribe «48 mm» con espacio: el catálogo mismo dice «48MM».
+   Ahora un número pegado a un sufijo de **letras** entrega también el número
+   suelto, con la misma `ordinality` para no romper la adyacencia. «26x1.95»
+   queda fuera a propósito: es un calce de neumático, y partirlo inventaría un
+   valor que nadie pidió.
+3. **El rango lo traduce el modelo, no el servidor.** «Cámara para un neumático
+   2.1» es `tube_width_min_in ≤ 2.1` y `tube_width_max_in ≥ 2.1`. Un número
+   suelto es ambiguo entre varios campos numéricos y el servidor no debe
+   adivinar; el modelo sí puede, porque `inspect_inventory_schema` le anuncia
+   cada campo con su tipo, su unidad, sus operadores (`lte`, `gte`, `between`) y
+   cuántos productos lo tienen cargado. Verificado en la app: la tarjeta sale
+   con los chips `26" · ≤ 2.1 · ≥ 2.1` y la respuesta agrupa por tipo de válvula
+   con stock, precio y largo.
+
+**El reparto que queda claro:** el emparejamiento del servidor resuelve
+vocabulario cerrado —medida de rueda, tipo de válvula, largo— y es el respaldo.
+El modelo resuelve lo que exige criterio: rangos, contención, comparaciones. Se
+le dan las dos cosas y cada uno hace lo suyo.
+
+## Los dos asistentes son el mismo motor con dos trajes (2026-08-24)
+
+Lo único que separa al **Asistente de compras** del **Asistente IA** es
+`purchasingDraftMode` —`request.viewContext.kind === "intelligent_purchasing"`—
+y eso cambia tres cosas: la lista de herramientas permitidas
+(`PURCHASING_DRAFT_TOOL_NAMES`), la instrucción del sistema (`supplyWorkflowRule`)
+y el presupuesto de llamadas (18 vs 8).
+
+**Todo lo demás es compartido**: el gateway, `search_inventory`,
+`inspect_inventory_schema`, `cards.ts` y las descripciones de
+`tool_registry.ts`. Un párrafo agregado a la descripción de una herramienta
+cambia la conducta de los DOS carriles.
+
+Pasó: el módulo de compras dejó de crear la necesidad y se puso a contestar como
+el general con una tarjeta de Inventario. Dos sesiones habíamos agregado, el
+mismo día, un párrafo cada una a `technicalPredicates`. Ninguna tocó el carril de
+compras y las dos lo cambiaron.
+
+- **Al tocar `tool_registry.ts` o `cards.ts`, se prueban los dos carriles.** Se
+  distinguen en `assistant_runs.tool_call_budget`: **18 = compras, 8 = general**.
+- **Todo arreglo de un carril va guardado por `purchasingDraftMode`.**
+
+### Una instrucción sin guardia no se cumple
+
+`supplyWorkflowRule` decía «termina **siempre** con una única llamada
+`prepare_supply_request`» y nada lo forzaba hasta agotar las cinco rondas.
+
+Pero **`requiredToolName` es una exigencia dura**: `assertRequiredProviderToolTurn`
+tira 502 si el modelo no obedece y el operador pierde el turno entero. El empujón
+va como **mensaje** en la conversación, una sola vez, y si tampoco así la llama se
+entrega el texto que haya — una respuesta imperfecta es mejor que un error.
+
+Dos trampas de esa vía: **un mensaje de asistente con texto vacío llega al
+proveedor como `parts: []` y lo rechaza** (guardar con `turn.text.trim()`), y en
+Gemini el `role: "system"` a mitad de conversación se mapea a `user`, así que no
+aporta autoridad.
+
+### Los pasos aguas abajo tienen que usar los predicados, no la frase
+
+El asistente traduce «camaras 27.5 con válvula de auto» a predicados tipados y
+los guarda en `supply_need_interpretation_revisions.constraints`. El paso de
+bodega los ignoraba y volvía a resolver `original_description` como texto: **33
+alternativas donde la ficha dice 12**, con una cámara de **carretilla** entre las
+opciones de una bicicleta.
+
+Y ahí una regla que se cruza con la de fichas vacías: la elegibilidad incluye lo
+que **no contradice** los criterios —correcto cuando nadie tiene ficha—, así que
+**una medida fuera del vocabulario no se deja vacía: va como `Otra`**. Un aro 8
+no es 27.5, y decirlo es lo que lo saca de la comparación. Dejarlo vacío es
+confundir «no lo sé» con «no aplica».

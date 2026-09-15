@@ -1,6 +1,13 @@
-import type { AgentAuthority } from "./contracts.ts";
+import {
+  type AgentAuthority,
+  agentCapabilities,
+  type AgentCapability,
+  type JsonObject,
+} from "./contracts.ts";
+import type { AgentRpcClient } from "./supabase_user_data.ts";
 
-const canonicalStoredRoles = new Set([
+const canonicalRoles = new Set([
+  "owner",
   "admin",
   "manager",
   "cashier",
@@ -8,34 +15,8 @@ const canonicalStoredRoles = new Set([
   "mechanic",
 ]);
 
-export interface AuthenticatedAgentUser {
-  id: string;
-  email?: string | null;
-  appMetadata?: Readonly<Record<string, unknown>>;
-}
-
-export interface AgentMembershipRecord {
-  tenantId: string;
-  role: unknown;
-  permissions: unknown;
-  profileActive: boolean;
-  tenantActive: boolean;
-  tenantOwnerEmail?: string | null;
-}
-
 export interface AgentAuthorityDataSource {
-  authenticate(accessToken: string, signal?: AbortSignal): Promise<AuthenticatedAgentUser | null>;
-  activeMemberships(
-    userId: string,
-    signal?: AbortSignal,
-  ): Promise<readonly AgentMembershipRecord[]>;
-}
-
-export interface SupabaseAuthorityConfig {
-  supabaseUrl: string;
-  anonKey: string;
-  serviceRoleKey: string;
-  fetchImpl?: typeof fetch;
+  resolve(signal?: AbortSignal): Promise<AgentAuthority>;
 }
 
 export class AuthorityError extends Error {
@@ -59,152 +40,81 @@ export async function resolveAgentAuthority(
   if (!match || match[1].length > 8_192) {
     throw new AuthorityError(401, "invalid_session", "Authentication required");
   }
-
-  let user: AuthenticatedAgentUser | null;
   try {
-    user = await source.authenticate(match[1], signal);
-  } catch (_) {
+    const authority = await source.resolve(signal);
+    validateAuthority(authority);
+    return authority;
+  } catch (error) {
+    if (error instanceof AuthorityError) throw error;
     throw new AuthorityError(
       503,
       "authorization_unavailable",
       "Unable to verify account access",
     );
   }
-  if (!user || !validUuid(user.id)) {
-    throw new AuthorityError(401, "invalid_session", "Authentication required");
-  }
-
-  let memberships: readonly AgentMembershipRecord[];
-  try {
-    memberships = await source.activeMemberships(user.id, signal);
-  } catch (_) {
-    throw new AuthorityError(
-      503,
-      "authorization_unavailable",
-      "Unable to verify account access",
-    );
-  }
-
-  const active = memberships.filter((membership) =>
-    membership.profileActive && membership.tenantActive
-  );
-  if (active.length !== 1) {
-    throw new AuthorityError(
-      403,
-      "tenant_context_invalid",
-      "A single active tenant is required",
-    );
-  }
-
-  const membership = active[0];
-  if (!validUuid(membership.tenantId) || !canonicalStoredRoles.has(membership.role as string)) {
-    throw new AuthorityError(403, "tenant_context_invalid", "Account access is invalid");
-  }
-
-  const role = isPrincipalOwner(user, membership) ? "owner" : membership.role as string;
-  return {
-    userId: user.id,
-    tenantId: membership.tenantId,
-    role,
-    permissions: normalizeStoredPermissions(membership.permissions),
-  };
 }
 
 export function createSupabaseAuthorityDataSource(
-  config: SupabaseAuthorityConfig,
+  client: AgentRpcClient,
 ): AgentAuthorityDataSource {
-  const baseUrl = requireHttpsOrLocalUrl(config.supabaseUrl);
-  const fetchImpl = config.fetchImpl ?? fetch;
-  const anonKey = requireSecret(config.anonKey, "Supabase anon key");
-  const serviceRoleKey = requireSecret(config.serviceRoleKey, "Supabase service role key");
-
   return {
-    async authenticate(accessToken, signal) {
-      const response = await fetchImpl(new URL("/auth/v1/user", baseUrl), {
-        method: "GET",
-        headers: {
-          apikey: anonKey,
-          Authorization: `Bearer ${accessToken}`,
-        },
-        signal,
-      });
-      if (response.status === 401 || response.status === 403) return null;
-      if (!response.ok) throw new Error("auth lookup failed");
-      const body = await safeJson(response);
-      const id = recordString(body, "id");
-      if (!id) return null;
-      const record = body as Record<string, unknown>;
-      const appMetadata = record.app_metadata && typeof record.app_metadata === "object" &&
-          !Array.isArray(record.app_metadata)
-        ? record.app_metadata as Record<string, unknown>
-        : {};
+    async resolve(signal = new AbortController().signal) {
+      const value = await client.rpc("assistant_get_authority_v1", {}, signal);
+      if (!isRecord(value)) return invalidAuthority();
+      const userId = recordString(value, "actorUserId");
+      const tenantId = recordString(value, "authorityTenantId");
+      const role = recordString(value, "role");
+      const authorityFingerprint = recordString(value, "authorityFingerprint");
+      const capabilities = normalizeCapabilities(value.capabilities);
+      if (!userId || !tenantId || !role || !authorityFingerprint || !capabilities) {
+        return invalidAuthority();
+      }
       return {
-        id,
-        email: typeof record.email === "string" ? record.email : null,
-        appMetadata,
+        userId,
+        tenantId,
+        role,
+        permissions: normalizeStoredPermissions(value.permissions),
+        capabilities,
+        authorityFingerprint,
       };
     },
-
-    async activeMemberships(userId, signal) {
-      const url = new URL("/rest/v1/user_profiles", baseUrl);
-      url.searchParams.set(
-        "select",
-        "tenant_id,role,permissions,is_active,tenants!inner(id,is_active,owner_email)",
-      );
-      url.searchParams.set("user_id", `eq.${userId}`);
-      url.searchParams.set("is_active", "eq.true");
-      url.searchParams.set("tenants.is_active", "eq.true");
-      url.searchParams.set("limit", "2");
-      const response = await fetchImpl(url, {
-        method: "GET",
-        headers: {
-          apikey: serviceRoleKey,
-          Authorization: `Bearer ${serviceRoleKey}`,
-          Accept: "application/json",
-        },
-        signal,
-      });
-      if (!response.ok) throw new Error("membership lookup failed");
-      const body = await safeJson(response);
-      if (!Array.isArray(body)) throw new Error("invalid membership response");
-      return body.map(parseMembershipRecord);
-    },
   };
 }
 
-function parseMembershipRecord(value: unknown): AgentMembershipRecord {
-  if (!value || typeof value !== "object" || Array.isArray(value)) {
-    return invalidMembership();
+function validateAuthority(authority: AgentAuthority): void {
+  if (
+    !validUuid(authority.userId) || !validUuid(authority.tenantId) ||
+    !canonicalRoles.has(authority.role) ||
+    !/^[A-Za-z0-9._:-]{32,256}$/.test(authority.authorityFingerprint) ||
+    !Array.isArray(authority.capabilities) ||
+    authority.capabilities.some((capability) =>
+      !(agentCapabilities as readonly string[]).includes(capability)
+    ) || new Set(authority.capabilities).size !== authority.capabilities.length
+  ) {
+    throw new AuthorityError(403, "tenant_context_invalid", "Account access is invalid");
   }
-  const record = value as Record<string, unknown>;
-  const tenantValue = Array.isArray(record.tenants) ? record.tenants[0] : record.tenants;
-  const tenant = tenantValue && typeof tenantValue === "object" && !Array.isArray(tenantValue)
-    ? tenantValue as Record<string, unknown>
-    : {};
-  return {
-    tenantId: typeof record.tenant_id === "string" ? record.tenant_id : "",
-    role: record.role,
-    permissions: record.permissions,
-    profileActive: record.is_active === true,
-    tenantActive: tenant.is_active === true && tenant.id === record.tenant_id,
-    tenantOwnerEmail: typeof tenant.owner_email === "string" ? tenant.owner_email : null,
-  };
+  if (!isRecord(authority.permissions)) {
+    throw new AuthorityError(403, "tenant_context_invalid", "Account access is invalid");
+  }
 }
 
-function invalidMembership(): AgentMembershipRecord {
-  return {
-    tenantId: "",
-    role: null,
-    permissions: null,
-    profileActive: false,
-    tenantActive: false,
-    tenantOwnerEmail: null,
-  };
+function normalizeCapabilities(value: unknown): readonly AgentCapability[] | null {
+  if (
+    !Array.isArray(value) || value.length > agentCapabilities.length ||
+    value.some((item) =>
+      typeof item !== "string" || !(agentCapabilities as readonly string[]).includes(item)
+    ) || new Set(value).size !== value.length
+  ) return null;
+  return Object.freeze([...value]) as readonly AgentCapability[];
+}
+
+function invalidAuthority(): never {
+  throw new AuthorityError(403, "tenant_context_invalid", "Account access is invalid");
 }
 
 function normalizeStoredPermissions(value: unknown): Readonly<Record<string, boolean>> {
-  if (!value || typeof value !== "object" || Array.isArray(value)) return Object.freeze({});
-  const entries = Object.entries(value as Record<string, unknown>)
+  if (!isRecord(value)) return Object.freeze({});
+  const entries = Object.entries(value)
     .filter((entry): entry is [string, boolean] =>
       /^[a-z][a-z0-9_.]{0,63}$/.test(entry[0]) && typeof entry[1] === "boolean"
     );
@@ -216,47 +126,11 @@ function validUuid(value: string): boolean {
     .test(value);
 }
 
-function isPrincipalOwner(
-  user: AuthenticatedAgentUser,
-  membership: AgentMembershipRecord,
-): boolean {
-  const authEmail = normalizeEmail(user.email);
-  const ownerEmail = normalizeEmail(membership.tenantOwnerEmail);
-  const metadata = user.appMetadata ?? {};
-  return Boolean(authEmail && ownerEmail && authEmail === ownerEmail) ||
-    (metadata.account_type === "erp_owner" && metadata.tenant_id === membership.tenantId);
+function isRecord(value: unknown): value is JsonObject {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
 
-function normalizeEmail(value: unknown): string | null {
-  if (typeof value !== "string") return null;
-  const normalized = value.trim().toLowerCase();
-  return /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(normalized) ? normalized : null;
-}
-
-function requireHttpsOrLocalUrl(value: string): URL {
-  const url = new URL(value);
-  const local = ["localhost", "127.0.0.1", "::1"].includes(url.hostname);
-  if (url.protocol !== "https:" && !(local && url.protocol === "http:")) {
-    throw new Error("Supabase URL must use HTTPS");
-  }
-  return url;
-}
-
-function requireSecret(value: string, label: string): string {
-  if (!value.trim()) throw new Error(`${label} is not configured`);
-  return value;
-}
-
-async function safeJson(response: Response): Promise<unknown> {
-  try {
-    return await response.json();
-  } catch (_) {
-    throw new Error("invalid upstream response");
-  }
-}
-
-function recordString(value: unknown, key: string): string | null {
-  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
-  const field = (value as Record<string, unknown>)[key];
+function recordString(value: Readonly<Record<string, unknown>>, key: string): string | null {
+  const field = value[key];
   return typeof field === "string" && field ? field : null;
 }

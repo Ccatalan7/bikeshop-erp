@@ -108,7 +108,7 @@ class _ExpenseFormPageState extends State<ExpenseFormPage> {
           .toList()
         ..sort((a, b) => a.code.compareTo(b.code));
 
-      _paymentMethods = _paymentMethodService.paymentMethods;
+      _paymentMethods = _paymentMethodService.outgoingPaymentMethods;
 
       if (expense != null) {
         _existingExpense = expense;

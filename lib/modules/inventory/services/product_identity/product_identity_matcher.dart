@@ -1,6 +1,8 @@
 import 'dart:math' as math;
+import 'dart:typed_data';
 
 import 'bike_part_taxonomy.dart';
+import 'canonical_product_identity_resolver.dart';
 import 'product_identity_profile.dart';
 
 /// Result of one gate. A gate either eliminates a candidate or it does not;
@@ -26,8 +28,8 @@ class IdentityGate {
 }
 
 enum IdentityMatchVerdict {
-  /// The same catalog object, established without judgement: identical SKU,
-  /// the same supplier listing variant, or byte-identical imagery.
+  /// The same catalog object, established without judgement: an authoritative
+  /// catalog SKU or an immutable, confirmed supplier-variant alias.
   exact,
 
   /// Decisive corroboration — an exact manufacturer model code, or family plus
@@ -55,9 +57,9 @@ class DeterministicIdentityEvidence {
   final bool sameImageIdentity;
   final bool confirmedAlias;
 
-  bool get isExact => sameCatalogSku || sameImageIdentity || confirmedAlias;
+  bool get isExact => sameCatalogSku || confirmedAlias;
 
-  bool get isAny => isExact || sameSupplierListing;
+  bool get isAny => isExact || sameSupplierListing || sameImageIdentity;
 
   static const none = DeterministicIdentityEvidence();
 }
@@ -67,6 +69,8 @@ class ProductIdentityMatch {
   const ProductIdentityMatch({
     required this.verdict,
     required this.score,
+    required this.lineScore,
+    required this.variantAgreement,
     required this.gates,
     required this.reasons,
     required this.objections,
@@ -79,6 +83,15 @@ class ProductIdentityMatch {
   /// Ordering strength inside a verdict. Deliberately never rendered as a
   /// percentage: the guide forbids a number that pretends to be a measurement.
   final double score;
+
+  /// Ranking strength from product-line identity only.
+  ///
+  /// The selected variant is intentionally absent. [score] may be the next
+  /// representable value only when [variantAgreement] breaks an exact tie.
+  final double lineScore;
+
+  /// Both rows explicitly state the same selected colour/variant.
+  final bool variantAgreement;
 
   final List<IdentityGate> gates;
 
@@ -94,6 +107,19 @@ class ProductIdentityMatch {
   final Set<String> matchedModelCodes;
 
   bool get isRejected => verdict == IdentityMatchVerdict.rejected;
+
+  /// Lexicographic order used by callers that can compare the components
+  /// directly: verdict, line evidence, then selected-variant agreement.
+  int compareRankTo(ProductIdentityMatch other) {
+    final byVerdict = verdict.index.compareTo(other.verdict.index);
+    if (byVerdict != 0) return byVerdict;
+    final byLine = other.lineScore.compareTo(lineScore);
+    if (byLine != 0) return byLine;
+    if (variantAgreement != other.variantAgreement) {
+      return variantAgreement ? -1 : 1;
+    }
+    return 0;
+  }
 }
 
 /// Compares two [ProductIdentityProfile]s.
@@ -124,9 +150,36 @@ class ProductIdentityMatcher {
     PartSpecKind.lengthMm,
   };
 
+  /// Families for which a stated body material identifies a genuinely
+  /// different sellable object. Assemblies and multi-material products stay
+  /// outside this gate because `aluminio` may describe only one subcomponent.
+  static const Set<String> _materialScopedFamilies = <String>{
+    'bottle_cage',
+    'phone_mount',
+    'pedal',
+    'stem',
+    'stem_spacer',
+    'handlebar',
+    'seatpost',
+    'seatpost_shim',
+    'crank_arm',
+    'chainring',
+    'chainring_guard',
+    'chain_guide',
+    'hub',
+    'rim',
+    'axle',
+    'axle_adapter',
+    'rack',
+    'fender',
+    'kickstand',
+  };
+
   ProductIdentityMatch evaluate({
     required ProductIdentityProfile probe,
     required ProductIdentityProfile candidate,
+    CanonicalProductIdentity? probeIdentity,
+    CanonicalProductIdentity? candidateIdentity,
     DeterministicIdentityEvidence deterministic =
         DeterministicIdentityEvidence.none,
   }) {
@@ -139,10 +192,11 @@ class ProductIdentityMatcher {
       if (deterministic.confirmedAlias) {
         reasons.add('Ya lo vinculaste antes a esta publicación');
       }
-      if (deterministic.sameImageIdentity) reasons.add('Misma imagen');
       return ProductIdentityMatch(
         verdict: IdentityMatchVerdict.exact,
         score: 1,
+        lineScore: 1,
+        variantAgreement: false,
         gates: const <IdentityGate>[],
         reasons: List<String>.unmodifiable(reasons),
         objections: const <String>[],
@@ -155,18 +209,31 @@ class ProductIdentityMatcher {
     // either side is fitment, not identity: two rotors that both say
     // `compatible M610 M6000` are not the same rotor, and letting that pair
     // count as a shared model outranked the `RT56` the invoice named.
-    final sharedModels = probe.modelCodes.intersection(candidate.modelCodes);
+    final effectiveProbeModels = <String>{
+      ...probe.modelCodes,
+      ...probe.selectedOptionModelCodes,
+    };
+    final effectiveProbePrimaryModels = <String>{
+      ...probe.primaryModelCodes,
+      ...probe.selectedOptionModelCodes,
+    };
+    final sharedModels =
+        effectiveProbeModels.intersection(candidate.modelCodes);
     final hasModelMatch = sharedModels.isNotEmpty;
 
     // Only a code printed in the product's own name (or declared in its model
     // field) may make a candidate *strong*.
     final sharedPrimaryModels =
-        probe.primaryModelCodes.intersection(candidate.primaryModelCodes);
+        effectiveProbePrimaryModels.intersection(candidate.primaryModelCodes);
     final hasPrimaryModelMatch = sharedPrimaryModels.isNotEmpty;
 
     // ── Gate 1: what kind of object is it ───────────────────────────────
-    final probeFamily = probe.effectiveFamilyId;
-    final candidateFamily = candidate.effectiveFamilyId;
+    final probeFamily = probeIdentity == null
+        ? probe.effectiveFamilyId
+        : probeIdentity.resolvedFamilyId;
+    final candidateFamily = candidateIdentity == null
+        ? candidate.effectiveFamilyId
+        : candidateIdentity.resolvedFamilyId;
     if (probeFamily != null && candidateFamily != null) {
       if (probeFamily != candidateFamily) {
         final detail = '${BikePartTaxonomy.labelOf(probeFamily)} ≠ '
@@ -198,10 +265,16 @@ class ProductIdentityMatcher {
 
     // ── Gate 2: measurements that decide whether it physically fits ─────
     for (final kind in exclusivePartSpecs) {
-      final probeValue = probe.specs[kind];
-      final candidateValue = candidate.specs[kind];
+      final probeValue = _effectiveSpec(probe, kind);
+      final candidateValue = _effectiveSpec(candidate, kind);
       if (probeValue == null || candidateValue == null) continue;
-      if (probeValue == candidateValue) {
+      if (_exclusiveSpecCompatible(
+        kind,
+        probeValue,
+        candidateValue,
+        probeFamily,
+        candidateFamily,
+      )) {
         gates.add(IdentityGate(
           id: 'spec:${kind.name}',
           label: partSpecLabel(kind),
@@ -222,8 +295,53 @@ class ProductIdentityMatcher {
         outcome: IdentityGateOutcome.failed,
         detail: detail,
       ));
-      objections.add('${_capitalize(partSpecLabel(kind))}: $detail');
-      return _rejected(gates, objections);
+      objections.add(
+        kind == PartSpecKind.colorVariant
+            ? 'Otro color: $candidateValue en vez de $probeValue'
+            : '${_capitalize(partSpecLabel(kind))}: $detail',
+      );
+      return _rejected(
+        gates,
+        objections,
+        variantMismatch: kind == PartSpecKind.colorVariant,
+      );
+    }
+
+    // ── Gate 2b: explicitly stated construction material ───────────────
+    if (probeFamily != null &&
+        probeFamily == candidateFamily &&
+        _materialScopedFamilies.contains(probeFamily)) {
+      final probeMaterial =
+          _effectiveSpec(probe, PartSpecKind.constructionMaterial);
+      final candidateMaterial =
+          _effectiveSpec(candidate, PartSpecKind.constructionMaterial);
+      if (probeMaterial != null && candidateMaterial != null) {
+        if (probeMaterial != candidateMaterial) {
+          final detail =
+              '${partSpecValueLabel(PartSpecKind.constructionMaterial, probeMaterial)} ≠ '
+              '${partSpecValueLabel(PartSpecKind.constructionMaterial, candidateMaterial)}';
+          gates.add(IdentityGate(
+            id: 'spec:${PartSpecKind.constructionMaterial.name}',
+            label: partSpecLabel(PartSpecKind.constructionMaterial),
+            outcome: IdentityGateOutcome.failed,
+            detail: detail,
+          ));
+          objections.add('Material: $detail');
+          return _rejected(gates, objections);
+        }
+        gates.add(IdentityGate(
+          id: 'spec:${PartSpecKind.constructionMaterial.name}',
+          label: partSpecLabel(PartSpecKind.constructionMaterial),
+          outcome: IdentityGateOutcome.passed,
+          detail: partSpecValueLabel(
+            PartSpecKind.constructionMaterial,
+            probeMaterial,
+          ),
+        ));
+        reasons.add(
+          'Material ${partSpecValueLabel(PartSpecKind.constructionMaterial, probeMaterial)}',
+        );
+      }
     }
 
     // ── Gate 3: who made it ─────────────────────────────────────────────
@@ -300,6 +418,13 @@ class ProductIdentityMatcher {
       );
     }
 
+    if (deterministic.sameSupplierListing) {
+      reasons.add('Misma publicación del proveedor');
+    }
+    if (deterministic.sameImageIdentity) {
+      reasons.add('Misma foto de la publicación; no confirma la variante');
+    }
+
     // A difference the operator must see even though it does not disqualify
     // the product on its own: an IXF crankset with a 34T ring really is the
     // catalog's answer to an IXF 36T line, but only the worker can decide
@@ -346,7 +471,7 @@ class ProductIdentityMatcher {
     // `SM-RT10`, `RT26` and `D442SB` are real, comparable products, but
     // calling any of them a probable duplicate of `RT56` / `D042SB` is what
     // produced six equally "strong" hubs for one purchased hub.
-    final probeAssertsModel = probe.primaryModelCodes.isNotEmpty;
+    final probeAssertsModel = effectiveProbePrimaryModels.isNotEmpty;
     final modelIsContradicted = probeAssertsModel && !hasPrimaryModelMatch;
     if (modelIsContradicted && candidate.modelCodes.isNotEmpty) {
       objections.add(
@@ -359,13 +484,13 @@ class ProductIdentityMatcher {
     // `Puños ODI de Gel Ergonómico` for a line whose variant says `Black`: the
     // one that states the right colour and the one that states none scored the
     // same, and the tie was broken by catalog order. Silence is not agreement.
-    final variantAgrees = !variantMismatch &&
-        probe.specs[PartSpecKind.colorVariant] != null &&
-        probe.specs[PartSpecKind.colorVariant] ==
-            candidate.specs[PartSpecKind.colorVariant];
+    final probeColor = _effectiveSpec(probe, PartSpecKind.colorVariant);
+    final candidateColor = _effectiveSpec(candidate, PartSpecKind.colorVariant);
+    final variantAgrees =
+        !variantMismatch && probeColor != null && probeColor == candidateColor;
     if (variantAgrees) {
       reasons.add(
-        'Color ${probe.specs[PartSpecKind.colorVariant]}',
+        'Color $probeColor',
       );
     }
 
@@ -374,19 +499,34 @@ class ProductIdentityMatcher {
     score += brandAgrees ? 0.20 : 0.0;
     score += specAgreement * 0.22;
     score += descriptorOverlap * 0.16;
-    score += categoryAgreement * 0.08;
-    if (variantAgrees) score += 0.10;
-    if (variantMismatch) score -= 0.10;
+    // Category already selected the normal candidate scope. It describes
+    // where the shop files this family; counting it again as identity evidence
+    // would reward placement twice and penalize an uncategorized gold row.
+    if (deterministic.sameSupplierListing) score += 0.04;
+    if (deterministic.sameImageIdentity) score += 0.04;
     if (hasStatedDifference) score -= 0.08;
     if (!hasPrimaryModelMatch) {
-      score = math.min(score, _modelMatchFloor - 0.05);
+      // Keep every non-model candidate below the model floor without
+      // flattening distinct line evidence into the same value. The old hard
+      // clamp made `same photo + same material` tie with a colour-only row,
+      // after which the variant tie-break could promote the weaker identity.
+      const oldCeiling = _modelMatchFloor - 0.05;
+      const preservedCeiling = _modelMatchFloor - 0.01;
+      if (score > oldCeiling) {
+        score = oldCeiling +
+            (score - oldCeiling) *
+                ((preservedCeiling - oldCeiling) / (1 - oldCeiling));
+      }
     }
     score = score.clamp(0, 1).toDouble();
 
     IdentityMatchVerdict verdict;
     if (hasPrimaryModelMatch && familyAgrees) {
       verdict = IdentityMatchVerdict.strong;
-      score = math.max(score, _modelMatchFloor);
+      // A shared model establishes a strong candidate, but several sold
+      // variants can share it. Preserve secondary evidence as a deterministic
+      // tie-breaker instead of flattening every model match to exactly 0.95.
+      score = _modelMatchFloor + (1 - _modelMatchFloor) * score;
     } else if (familyAgrees &&
         brandAgrees &&
         specAgreement >= 0.75 &&
@@ -419,9 +559,17 @@ class ProductIdentityMatcher {
       return _rejected(gates, objections);
     }
 
+    final lineScore = score;
+    // Encode the lexicographic tie-break for existing score-only callers with
+    // one ULP. It beats an exactly equal line score and cannot leapfrog any
+    // strictly stronger representable line score.
+    score = variantAgrees ? _nextUp(lineScore) : lineScore;
+
     return ProductIdentityMatch(
       verdict: verdict,
       score: score,
+      lineScore: lineScore,
+      variantAgreement: variantAgrees,
       gates: List<IdentityGate>.unmodifiable(gates),
       reasons: List<String>.unmodifiable(reasons),
       objections: List<String>.unmodifiable(objections),
@@ -432,15 +580,18 @@ class ProductIdentityMatcher {
 
   ProductIdentityMatch _rejected(
     List<IdentityGate> gates,
-    List<String> objections,
-  ) {
+    List<String> objections, {
+    bool variantMismatch = false,
+  }) {
     return ProductIdentityMatch(
       verdict: IdentityMatchVerdict.rejected,
       score: 0,
+      lineScore: 0,
+      variantAgreement: false,
       gates: List<IdentityGate>.unmodifiable(gates),
       reasons: const <String>[],
       objections: List<String>.unmodifiable(objections),
-      variantMismatch: false,
+      variantMismatch: variantMismatch,
       matchedModelCodes: const <String>{},
     );
   }
@@ -449,8 +600,8 @@ class ProductIdentityMatcher {
     ProductIdentityProfile probe,
     ProductIdentityProfile candidate,
   ) {
-    final probeColor = probe.specs[PartSpecKind.colorVariant];
-    final candidateColor = candidate.specs[PartSpecKind.colorVariant];
+    final probeColor = _effectiveSpec(probe, PartSpecKind.colorVariant);
+    final candidateColor = _effectiveSpec(candidate, PartSpecKind.colorVariant);
     return probeColor != null &&
         candidateColor != null &&
         probeColor != candidateColor;
@@ -470,18 +621,81 @@ class ProductIdentityMatcher {
     var shared = 0;
     var comparable = 0;
     var stated = 0;
-    for (final entry in probe.specs.entries) {
+    // Product-line evidence and purchased-option evidence have different
+    // jobs.  A selected colour/side/material may reject another sold variant
+    // or break an otherwise exact tie, but it must not inflate the score that
+    // asks whether these are the same catalog line.  Reading the merged
+    // `specs` view here made one option token count twice: once as line
+    // evidence and again as the variant tie-break.
+    for (final entry in probe.lineSpecs.entries) {
       if (entry.key == PartSpecKind.colorVariant) continue;
+      final other = candidate.lineSpecs[entry.key];
+      if (entry.key == PartSpecKind.constructionMaterial) {
+        final family = probe.effectiveFamilyId;
+        if (family == null ||
+            family != candidate.effectiveFamilyId ||
+            !_materialScopedFamilies.contains(family) ||
+            other == null) {
+          // Material is evidence only as an explicit two-sided statement in a
+          // family where it describes the sold object's body.
+          continue;
+        }
+      }
       stated++;
-      final other = candidate.specs[entry.key];
       if (other == null) continue;
       comparable++;
-      if (other == entry.value) shared++;
+      if (_exclusiveSpecCompatible(
+        entry.key,
+        entry.value,
+        other,
+        probe.effectiveFamilyId,
+        candidate.effectiveFamilyId,
+      )) {
+        shared++;
+      }
     }
     if (comparable == 0 || stated == 0) return 0;
     final agreement = shared / comparable;
     final coverage = comparable / stated;
     return agreement * coverage;
+  }
+
+  String? _effectiveSpec(ProductIdentityProfile profile, PartSpecKind kind) {
+    return profile.variantSpecs[kind] ?? profile.lineSpecs[kind];
+  }
+
+  /// Next IEEE-754 value for a finite non-negative score.
+  static double _nextUp(double value) {
+    if (value.isNaN || value >= 1) return value;
+    if (value == 0) return double.minPositive;
+    final data = ByteData(8)..setFloat64(0, value, Endian.host);
+    final bits = data.getUint64(0, Endian.host) + 1;
+    data.setUint64(0, bits, Endian.host);
+    return data.getFloat64(0, Endian.host);
+  }
+
+  bool _exclusiveSpecCompatible(
+    PartSpecKind kind,
+    String left,
+    String right,
+    String? leftFamily,
+    String? rightFamily,
+  ) {
+    if (left == right) return true;
+    if (kind != PartSpecKind.valveType ||
+        leftFamily != 'valve_adapter' ||
+        rightFamily != 'valve_adapter') {
+      return false;
+    }
+
+    // A title that says only the target side (`to Schrader`) has not stated
+    // the other side of the adapter. It is compatible with the complete pair
+    // `Presta ↔ Schrader`; treating the incomplete half as a contradiction is
+    // how the scooter adapter beat the real AE0001 row.
+    final leftStandards = left.split('_').toSet();
+    final rightStandards = right.split('_').toSet();
+    return leftStandards.containsAll(rightStandards) ||
+        rightStandards.containsAll(leftStandards);
   }
 
   /// Symmetric word agreement.
@@ -560,23 +774,38 @@ class IdentityShortlistPolicy {
 
   List<T> apply<T>(
     List<T> candidates,
-    ProductIdentityMatch Function(T) matchOf,
-  ) {
-    final accepted =
-        candidates.where((candidate) => !matchOf(candidate).isRejected).toList()
-          ..sort((left, right) {
-            final leftMatch = matchOf(left);
-            final rightMatch = matchOf(right);
-            final byVerdict =
-                leftMatch.verdict.index.compareTo(rightMatch.verdict.index);
-            if (byVerdict != 0) return byVerdict;
-            return rightMatch.score.compareTo(leftMatch.score);
-          });
+    ProductIdentityMatch Function(T) matchOf, {
+    String Function(T)? stableKeyOf,
+  }) {
+    // `List.sort` is not stable. Keep the source position as the final fallback
+    // so generic callers cannot reshuffle exact ties by accident; catalog
+    // callers additionally provide a SKU/product key and therefore get a
+    // deterministic total order independent of retrieval order.
+    final accepted = candidates
+        .asMap()
+        .entries
+        .where(
+          (entry) => !matchOf(entry.value).isRejected,
+        )
+        .toList()
+      ..sort((left, right) {
+        final ranked = compareCandidates(
+          left.value,
+          right.value,
+          matchOf,
+          stableKeyOf: stableKeyOf,
+        );
+        return ranked != 0 ? ranked : left.key.compareTo(right.key);
+      });
     if (accepted.isEmpty) return const [];
 
-    final best = matchOf(accepted.first);
+    final ordered = accepted.map((entry) => entry.value).toList(
+          growable: false,
+        );
+
+    final best = matchOf(ordered.first);
     if (best.verdict == IdentityMatchVerdict.exact) {
-      return accepted
+      return ordered
           .where((candidate) =>
               matchOf(candidate).verdict == IdentityMatchVerdict.exact)
           .take(limit)
@@ -595,9 +824,9 @@ class IdentityShortlistPolicy {
               gate.outcome == IdentityGateOutcome.passed,
         );
 
-    final bestSharesFamily = sharesFamily(accepted.first);
+    final bestSharesFamily = sharesFamily(ordered.first);
     final floor = math.max(absoluteFloor, best.score - relativeBand);
-    return accepted
+    return ordered
         .where((candidate) =>
             matchOf(candidate).score >= floor ||
             (sharesFamily(candidate) && !bestSharesFamily) ||
@@ -605,5 +834,22 @@ class IdentityShortlistPolicy {
                 matchOf(candidate).score >= best.score - relativeBand))
         .take(limit)
         .toList(growable: false);
+  }
+
+  /// Canonical order shared by shortlist construction and its service caller.
+  ///
+  /// [ProductIdentityMatch.compareRankTo] owns evidence ordering. A caller may
+  /// append a stable domain key (catalog SKU, then product id/name) without
+  /// reimplementing that ranking and drifting from the shortlist.
+  static int compareCandidates<T>(
+    T left,
+    T right,
+    ProductIdentityMatch Function(T) matchOf, {
+    String Function(T)? stableKeyOf,
+  }) {
+    final byEvidence = matchOf(left).compareRankTo(matchOf(right));
+    if (byEvidence != 0) return byEvidence;
+    if (stableKeyOf == null) return 0;
+    return stableKeyOf(left).compareTo(stableKeyOf(right));
   }
 }

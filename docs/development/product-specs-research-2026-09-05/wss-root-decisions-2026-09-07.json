@@ -1,0 +1,644 @@
+{
+  "schema_version": 1,
+  "approval_scope": "field_representation",
+  "base_sha256": "c12204e42f86423fc3bf3eba345a9f07568b4849d9c8d9b8ace4d44430ddcf9a",
+  "proposal_file": "wss-normalized-patches-2026-09-07.json",
+  "proposal_sha256": "f825e68f72fd84e31506f2eb1cbc97dbcf11d0f5079ec9e9e086be768e1cb8aa",
+  "source_hashes": {
+    "wheels-steering-suspension-implementation-packet-2026-09-07.json": "c03ebe91fa7e56d32ffb44a0a6ba3b00a4ff917b296068773e2a95027444b3bd",
+    "wheels-steering-suspension-packet-semantic-review-2026-09-07.json": "d45728eefb34ce50598e1d89d272bcf9bd92ff3c0283e91573404cf290e14171",
+    "all-family-row-conditions-integrated-2026-09-07.json": "c12204e42f86423fc3bf3eba345a9f07568b4849d9c8d9b8ace4d44430ddcf9a"
+  },
+  "patch_adjudications": [
+    {
+      "patch_id": "WSS-W01-rim-rim_bead_profile",
+      "decision": "aceptar",
+      "reason": "Representación con alcance de un producto; no aprueba montaje ni publica datos."
+    },
+    {
+      "patch_id": "WSS-W01-wheel-rim_bead_profile",
+      "decision": "aceptar",
+      "reason": "Representación con alcance de un producto; no aprueba montaje ni publica datos."
+    },
+    {
+      "patch_id": "WSS-W01-tire-configurations",
+      "decision": "corregir",
+      "reason": "Un SKU por ficha; una presión y su unidad, sin dos máximos paralelos contradictorios. Límites específicos de otro producto requieren relación con ese producto.",
+      "after_override": {
+        "field_entry": {
+          "key": "tire_rim_configurations",
+          "section_key": "measurement",
+          "sort_order": 210,
+          "is_required": false,
+          "visibility_rules": [],
+          "option_rules": [],
+          "constraint_rules": []
+        },
+        "definition_used_by_append": "tire",
+        "roles": "measurement",
+        "semantic_roles": "compatibility",
+        "allowed_when": {
+          "kind": "always"
+        },
+        "required_when": {
+          "kind": "never"
+        },
+        "evidence_requirements": "oem_spec",
+        "prerequisites": [
+          "spec_evidence_source"
+        ]
+      }
+    },
+    {
+      "patch_id": "WSS-W01-tire-max_pressure-label",
+      "decision": "aceptar",
+      "reason": "Representación con alcance de un producto; no aprueba montaje ni publica datos."
+    },
+    {
+      "patch_id": "WSS-W02-shock-ends",
+      "decision": "corregir",
+      "reason": "FOX y RockShox identifican body/shaft eyelet. Superior/inferior depende de cómo se instala en el cuadro.",
+      "after_override": {
+        "field_entry": {
+          "key": "shock_end_configurations",
+          "section_key": "measurement",
+          "sort_order": 210,
+          "is_required": false,
+          "visibility_rules": [],
+          "option_rules": [],
+          "constraint_rules": []
+        },
+        "definition_used_by_append": "rear_shock",
+        "roles": "measurement",
+        "semantic_roles": "compatibility",
+        "allowed_when": {
+          "kind": "always"
+        },
+        "required_when": {
+          "kind": "never"
+        },
+        "evidence_requirements": "oem_spec",
+        "prerequisites": [
+          "spec_evidence_source"
+        ]
+      }
+    },
+    {
+      "patch_id": "WSS-W02-hardware-label",
+      "decision": "aceptar",
+      "reason": "Representación con alcance de un producto; no aprueba montaje ni publica datos."
+    },
+    {
+      "patch_id": "WSS-W03-size_code-label",
+      "decision": "aceptar",
+      "reason": "Representación con alcance de un producto; no aprueba montaje ni publica datos."
+    },
+    {
+      "patch_id": "WSS-W03-dimensional_code",
+      "decision": "aceptar",
+      "reason": "Representación con alcance de un producto; no aprueba montaje ni publica datos."
+    },
+    {
+      "patch_id": "WSS-W03-internal_construction",
+      "decision": "corregir",
+      "reason": "Enduro 7001 1ZS MAX es MAX y contacto angular; MAX sí tiene canal de llenado. No son alternativas exclusivas.",
+      "after_override": {
+        "field_entry": {
+          "key": "bearing_internal_construction",
+          "section_key": "measurement",
+          "sort_order": 220,
+          "is_required": false,
+          "visibility_rules": [],
+          "option_rules": [],
+          "constraint_rules": []
+        },
+        "definition_used_by_append": "bearing",
+        "roles": "measurement",
+        "semantic_roles": "compatibility",
+        "allowed_when": {
+          "kind": "when",
+          "rows": [
+            [
+              {
+                "field": "bearing_construction",
+                "operator": "in",
+                "value_type": "token",
+                "value": [
+                  "Cartucho sellado",
+                  "Cartucho abierto",
+                  "Cartucho blindado",
+                  "Cartucho (sellado sin confirmar)"
+                ]
+              }
+            ]
+          ]
+        },
+        "required_when": {
+          "kind": "never"
+        },
+        "evidence_requirements": "oem_spec"
+      }
+    },
+    {
+      "patch_id": "WSS-W03-seal_kind",
+      "decision": "corregir",
+      "reason": "Conservar LLU, LLB y designaciones por cara sin colapsarlas en un token común.",
+      "after_override": {
+        "field_entry": {
+          "key": "bearing_seal_kind",
+          "section_key": "measurement",
+          "sort_order": 230,
+          "is_required": false,
+          "visibility_rules": [],
+          "option_rules": [],
+          "constraint_rules": []
+        },
+        "definition_used_by_append": "bearing",
+        "roles": "measurement",
+        "semantic_roles": "compatibility",
+        "allowed_when": {
+          "kind": "when",
+          "rows": [
+            [
+              {
+                "field": "bearing_construction",
+                "operator": "in",
+                "value_type": "token",
+                "value": [
+                  "Cartucho sellado",
+                  "Cartucho abierto",
+                  "Cartucho blindado",
+                  "Cartucho (sellado sin confirmar)"
+                ]
+              }
+            ]
+          ]
+        },
+        "required_when": {
+          "kind": "never"
+        },
+        "evidence_requirements": "oem_spec"
+      }
+    },
+    {
+      "patch_id": "WSS-W03-application-label",
+      "decision": "aceptar",
+      "reason": "Representación con alcance de un producto; no aprueba montaje ni publica datos."
+    },
+    {
+      "patch_id": "WSS-W04-headset-bearings",
+      "decision": "corregir",
+      "reason": "Bolas y canastillos no reciben ángulos de cartucho; rosca de espiga es independiente de IS/ZS/EC.",
+      "after_override": {
+        "field_entry": {
+          "key": "headset_bearing_configurations",
+          "section_key": "measurement",
+          "sort_order": 210,
+          "is_required": false,
+          "visibility_rules": [],
+          "option_rules": [],
+          "constraint_rules": []
+        },
+        "definition_used_by_append": "headset",
+        "roles": "measurement",
+        "semantic_roles": "compatibility",
+        "allowed_when": {
+          "kind": "always"
+        },
+        "required_when": {
+          "kind": "never"
+        },
+        "evidence_requirements": "oem_spec",
+        "prerequisites": [
+          "spec_evidence_source"
+        ]
+      }
+    },
+    {
+      "patch_id": "WSS-W04-bearing-require-bearing_inner_contact_angle_deg",
+      "decision": "corregir",
+      "reason": "El par de biseles depende de la geometría de apoyo explícita y construcción de cartucho, no del destino ni del contacto entre bolas y pistas.",
+      "after_override": {
+        "allowed_when": {
+          "kind": "when",
+          "rows": [
+            [
+              {
+                "field": "bearing_construction",
+                "operator": "in",
+                "value_type": "token",
+                "value": [
+                  "Cartucho sellado",
+                  "Cartucho abierto",
+                  "Cartucho blindado",
+                  "Cartucho (sellado sin confirmar)"
+                ]
+              },
+              {
+                "field": "bearing_seat_geometry",
+                "operator": "in",
+                "value_type": "token",
+                "value": [
+                  "Biseles interior y exterior",
+                  "Sólo bisel interior"
+                ]
+              }
+            ]
+          ]
+        },
+        "required_when": {
+          "kind": "when",
+          "rows": [
+            [
+              {
+                "field": "bearing_construction",
+                "operator": "in",
+                "value_type": "token",
+                "value": [
+                  "Cartucho sellado",
+                  "Cartucho abierto",
+                  "Cartucho blindado",
+                  "Cartucho (sellado sin confirmar)"
+                ]
+              },
+              {
+                "field": "bearing_seat_geometry",
+                "operator": "in",
+                "value_type": "token",
+                "value": [
+                  "Biseles interior y exterior",
+                  "Sólo bisel interior"
+                ]
+              }
+            ]
+          ]
+        }
+      }
+    },
+    {
+      "patch_id": "WSS-W04-bearing-require-bearing_outer_contact_angle_deg",
+      "decision": "corregir",
+      "reason": "El par de biseles depende de la geometría de apoyo explícita y construcción de cartucho, no del destino ni del contacto entre bolas y pistas.",
+      "after_override": {
+        "allowed_when": {
+          "kind": "when",
+          "rows": [
+            [
+              {
+                "field": "bearing_construction",
+                "operator": "in",
+                "value_type": "token",
+                "value": [
+                  "Cartucho sellado",
+                  "Cartucho abierto",
+                  "Cartucho blindado",
+                  "Cartucho (sellado sin confirmar)"
+                ]
+              },
+              {
+                "field": "bearing_seat_geometry",
+                "operator": "in",
+                "value_type": "token",
+                "value": [
+                  "Biseles interior y exterior",
+                  "Sólo bisel exterior"
+                ]
+              }
+            ]
+          ]
+        },
+        "required_when": {
+          "kind": "when",
+          "rows": [
+            [
+              {
+                "field": "bearing_construction",
+                "operator": "in",
+                "value_type": "token",
+                "value": [
+                  "Cartucho sellado",
+                  "Cartucho abierto",
+                  "Cartucho blindado",
+                  "Cartucho (sellado sin confirmar)"
+                ]
+              },
+              {
+                "field": "bearing_seat_geometry",
+                "operator": "in",
+                "value_type": "token",
+                "value": [
+                  "Biseles interior y exterior",
+                  "Sólo bisel exterior"
+                ]
+              }
+            ]
+          ]
+        }
+      }
+    },
+    {
+      "patch_id": "WSS-W05-frame-ports",
+      "decision": "corregir",
+      "reason": "Separa geometría del alojamiento de la cazoleta seleccionada y de la rosca de la espiga.",
+      "after_override": {
+        "field_entry": {
+          "key": "headset_port_configurations",
+          "section_key": "measurement",
+          "sort_order": 210,
+          "is_required": false,
+          "visibility_rules": [],
+          "option_rules": [],
+          "constraint_rules": []
+        },
+        "definition_used_by_append": "frame",
+        "roles": "measurement",
+        "semantic_roles": "compatibility",
+        "allowed_when": {
+          "kind": "always"
+        },
+        "required_when": {
+          "kind": "never"
+        },
+        "evidence_requirements": "oem_spec"
+      }
+    },
+    {
+      "patch_id": "WSS-W05-frame-upper_shis-optional",
+      "decision": "aceptar",
+      "reason": "Representación con alcance de un producto; no aprueba montaje ni publica datos."
+    },
+    {
+      "patch_id": "WSS-W05-frame-lower_shis-optional",
+      "decision": "aceptar",
+      "reason": "Representación con alcance de un producto; no aprueba montaje ni publica datos."
+    },
+    {
+      "patch_id": "WSS-W05-label-headset_upper_shis",
+      "decision": "aceptar",
+      "reason": "Representación con alcance de un producto; no aprueba montaje ni publica datos.",
+      "before_extensions": {
+        "labels": {
+          "present": false,
+          "value": null
+        }
+      }
+    },
+    {
+      "patch_id": "WSS-W05-label-headset_lower_shis",
+      "decision": "aceptar",
+      "reason": "Representación con alcance de un producto; no aprueba montaje ni publica datos.",
+      "before_extensions": {
+        "labels": {
+          "present": false,
+          "value": null
+        }
+      }
+    },
+    {
+      "patch_id": "WSS-W07-fork-clearance",
+      "decision": "corregir",
+      "reason": "El máximo no identifica la envolvente general; una sola envolvente por BSD del mismo SKU. Configuraciones adicionales exigen alcance declarado.",
+      "after_override": {
+        "field_entry": {
+          "key": "fork_tire_clearance_configurations",
+          "section_key": "measurement",
+          "sort_order": 210,
+          "is_required": false,
+          "visibility_rules": [],
+          "option_rules": [],
+          "constraint_rules": []
+        },
+        "definition_used_by_append": "fork",
+        "roles": "measurement",
+        "semantic_roles": "compatibility",
+        "allowed_when": {
+          "kind": "always"
+        },
+        "required_when": {
+          "kind": "never"
+        },
+        "evidence_requirements": "oem_spec",
+        "prerequisites": [
+          "spec_evidence_source"
+        ]
+      }
+    },
+    {
+      "patch_id": "WSS-W07-fork-axle_to_crown",
+      "decision": "aceptar",
+      "reason": "Representación con alcance de un producto; no aprueba montaje ni publica datos."
+    },
+    {
+      "patch_id": "WSS-W07-fork-crown_stack_min_mm",
+      "decision": "corregir",
+      "reason": "Altura entre coronas depende de la doble corona y del modelo concreto, no del resorte aire/muelle.",
+      "after_override": {
+        "field_entry": {
+          "key": "crown_stack_min_mm",
+          "section_key": "measurement",
+          "sort_order": 230,
+          "is_required": false,
+          "visibility_rules": [],
+          "option_rules": [],
+          "constraint_rules": []
+        },
+        "definition_used_by_append": "fork",
+        "roles": "measurement",
+        "semantic_roles": "compatibility",
+        "allowed_when": {
+          "kind": "when",
+          "rows": [
+            [
+              {
+                "field": "fork_crown_layout",
+                "operator": "eq",
+                "value_type": "token",
+                "value": "Doble corona"
+              }
+            ]
+          ]
+        },
+        "required_when": {
+          "kind": "never"
+        },
+        "evidence_requirements": "oem_spec"
+      }
+    },
+    {
+      "patch_id": "WSS-W07-fork-crown_stack_max_mm",
+      "decision": "corregir",
+      "reason": "Altura entre coronas depende de la doble corona y del modelo concreto, no del resorte aire/muelle.",
+      "after_override": {
+        "field_entry": {
+          "key": "crown_stack_max_mm",
+          "section_key": "measurement",
+          "sort_order": 240,
+          "is_required": false,
+          "visibility_rules": [],
+          "option_rules": [],
+          "constraint_rules": []
+        },
+        "definition_used_by_append": "fork",
+        "roles": "measurement",
+        "semantic_roles": "compatibility",
+        "allowed_when": {
+          "kind": "when",
+          "rows": [
+            [
+              {
+                "field": "fork_crown_layout",
+                "operator": "eq",
+                "value_type": "token",
+                "value": "Doble corona"
+              }
+            ]
+          ]
+        },
+        "required_when": {
+          "kind": "never"
+        },
+        "evidence_requirements": "oem_spec"
+      }
+    },
+    {
+      "patch_id": "WSS-W07-fork-stack-pair",
+      "decision": "aceptar",
+      "reason": "Representación con alcance de un producto; no aprueba montaje ni publica datos."
+    },
+    {
+      "patch_id": "WSS-W07-fork-max_tire_width-label",
+      "decision": "aceptar",
+      "reason": "Representación con alcance de un producto; no aprueba montaje ni publica datos.",
+      "before_extensions": {
+        "labels": {
+          "present": false,
+          "value": null
+        }
+      }
+    },
+    {
+      "patch_id": "WSS-W08-frame-dropout",
+      "decision": "aceptar",
+      "reason": "Representación con alcance de un producto; no aprueba montaje ni publica datos."
+    },
+    {
+      "patch_id": "WSS-W10-spoke-thread-label",
+      "decision": "rechazar",
+      "reason": "El rótulo original sí describe rosca. Sapim FG2.3 no es diámetro de alambre de 2.0 mm."
+    },
+    {
+      "patch_id": "WSS-W10-spoke-thread_standard",
+      "decision": "aceptar",
+      "reason": "Representación con alcance de un producto; no aprueba montaje ni publica datos."
+    },
+    {
+      "patch_id": "WSS-W10-nipple-thread_standard",
+      "decision": "aceptar",
+      "reason": "Representación con alcance de un producto; no aprueba montaje ni publica datos."
+    },
+    {
+      "patch_id": "WSS-W10-nipple-thread-label",
+      "decision": "aceptar",
+      "reason": "Representación con alcance de un producto; no aprueba montaje ni publica datos."
+    },
+    {
+      "patch_id": "ROOT-WSS-cartridge-constructions",
+      "decision": "aceptar",
+      "reason": "Un cartucho no necesariamente está sellado; se conserva el token previo y sus IDs."
+    },
+    {
+      "patch_id": "ROOT-WSS-cartridge-domain-bearing-bearing_size_code",
+      "decision": "aceptar",
+      "reason": "Diámetros y referencia pertenecen también al cartucho abierto/blindado, sin alterar bolas sueltas."
+    },
+    {
+      "patch_id": "ROOT-WSS-cartridge-domain-bearing-bearing_inner_diameter_mm",
+      "decision": "aceptar",
+      "reason": "Diámetros y referencia pertenecen también al cartucho abierto/blindado, sin alterar bolas sueltas."
+    },
+    {
+      "patch_id": "ROOT-WSS-cartridge-domain-bearing-bearing_outer_diameter_mm",
+      "decision": "aceptar",
+      "reason": "Diámetros y referencia pertenecen también al cartucho abierto/blindado, sin alterar bolas sueltas."
+    },
+    {
+      "patch_id": "ROOT-WSS-cartridge-domain-bearing-bearing_width_mm",
+      "decision": "aceptar",
+      "reason": "Diámetros y referencia pertenecen también al cartucho abierto/blindado, sin alterar bolas sueltas."
+    },
+    {
+      "patch_id": "ROOT-WSS-cartridge-domain-bottom_bracket_bearing-bearing_inner_diameter_mm",
+      "decision": "aceptar",
+      "reason": "Diámetros y referencia pertenecen también al cartucho abierto/blindado, sin alterar bolas sueltas."
+    },
+    {
+      "patch_id": "ROOT-WSS-cartridge-domain-bottom_bracket_bearing-bearing_outer_diameter_mm",
+      "decision": "aceptar",
+      "reason": "Diámetros y referencia pertenecen también al cartucho abierto/blindado, sin alterar bolas sueltas."
+    },
+    {
+      "patch_id": "ROOT-WSS-cartridge-domain-bottom_bracket_bearing-bb_bearing_width_mm",
+      "decision": "aceptar",
+      "reason": "Diámetros y referencia pertenecen también al cartucho abierto/blindado, sin alterar bolas sueltas."
+    },
+    {
+      "patch_id": "ROOT-WSS-cartridge-domain-bottom_bracket_bearing-bearing_size_code",
+      "decision": "aceptar",
+      "reason": "Diámetros y referencia pertenecen también al cartucho abierto/blindado, sin alterar bolas sueltas."
+    },
+    {
+      "patch_id": "ROOT-WSS-bearing-bearing_seat_geometry",
+      "decision": "aceptar",
+      "reason": "Eje separado que evita deducir una interfaz desde otra propiedad."
+    },
+    {
+      "patch_id": "ROOT-WSS-bearing-bearing_element_retention",
+      "decision": "aceptar",
+      "reason": "Eje separado que evita deducir una interfaz desde otra propiedad."
+    },
+    {
+      "patch_id": "ROOT-WSS-bevel-label-inner",
+      "decision": "aceptar",
+      "reason": "El bisel de montaje descrito por Park no es el ángulo interno de contacto entre bola y pista."
+    },
+    {
+      "patch_id": "ROOT-WSS-bevel-domain-inner",
+      "decision": "aceptar",
+      "reason": "Ángulo de una superficie de apoyo: dominio geométrico, no lista de estándares homologados."
+    },
+    {
+      "patch_id": "ROOT-WSS-bevel-label-outer",
+      "decision": "aceptar",
+      "reason": "El bisel de montaje descrito por Park no es el ángulo interno de contacto entre bola y pista."
+    },
+    {
+      "patch_id": "ROOT-WSS-bevel-domain-outer",
+      "decision": "aceptar",
+      "reason": "Ángulo de una superficie de apoyo: dominio geométrico, no lista de estándares homologados."
+    },
+    {
+      "patch_id": "ROOT-WSS-retire-shock-mount-scalar",
+      "decision": "aceptar",
+      "reason": "El montaje por extremo sustituye al selector sin extremo; el hecho legacy se conserva sin gobernar el editor."
+    },
+    {
+      "patch_id": "ROOT-WSS-fork-fork_crown_layout",
+      "decision": "aceptar",
+      "reason": "Eje separado que evita deducir una interfaz desde otra propiedad."
+    },
+    {
+      "patch_id": "ROOT-WSS-conditions-tire",
+      "decision": "aceptar",
+      "reason": "Los requisitos consumen sólo celdas de la misma configuración; falta de dato permanece pendiente."
+    },
+    {
+      "patch_id": "ROOT-WSS-conditions-headset",
+      "decision": "aceptar",
+      "reason": "Los requisitos consumen sólo celdas de la misma configuración; falta de dato permanece pendiente."
+    }
+  ],
+  "mechanical_coverage_complete": false,
+  "automatic_fill_authorized": false,
+  "product_writes": 0,
+  "cases_sha256": "322a9279a71b8eb51f19456ae5041b153707af9d0991741be61a0dc70f8560ee"
+}

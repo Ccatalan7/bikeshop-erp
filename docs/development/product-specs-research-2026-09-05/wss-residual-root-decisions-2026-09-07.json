@@ -1,0 +1,118 @@
+{
+  "approval_scope": "field_representation",
+  "base_sha256": "20a9c1eabdf84dd5e3e9cb5a4a922a695c6e91deff53bebdb2e0c584b5e8edee",
+  "proposal_sha256": "239ab6607e25f4211f88d5c4998cec25af52d07278d75d983c98f0cfa8b05087",
+  "source_cases_sha256": "f87a94087f0a325d637f58833d61c5568e95cc52bb5e27fd126a1306aa5eb1ae",
+  "patch_adjudications": [
+    {
+      "patch_id": "WRFP-R2-bearing_seal_kind-open-cartridge",
+      "decision": "aceptar",
+      "reason": "Prerrequisito por construcción/configuración y magnitud OEM explícita; no acredita un montaje ni rellena productos."
+    },
+    {
+      "patch_id": "WRFP-R1-inner-bevel-helper",
+      "decision": "aceptar",
+      "reason": "Prerrequisito por construcción/configuración y magnitud OEM explícita; no acredita un montaje ni rellena productos.",
+      "before_extensions": {
+        "helpers": {
+          "present": false,
+          "value": null
+        }
+      }
+    },
+    {
+      "patch_id": "WRFP-R1-outer-bevel-helper",
+      "decision": "aceptar",
+      "reason": "Prerrequisito por construcción/configuración y magnitud OEM explícita; no acredita un montaje ni rellena productos.",
+      "before_extensions": {
+        "helpers": {
+          "present": false,
+          "value": null
+        }
+      }
+    },
+    {
+      "patch_id": "WRFP-R1-race-contact-angle",
+      "decision": "corregir",
+      "reason": "El ángulo caracteriza el contacto del rodamiento; el SKU del conjunto no identifica automáticamente un producto suelto.",
+      "after_override": {
+        "field_entry": {
+          "key": "bearing_race_contact_angle_deg",
+          "section_key": "measurement",
+          "sort_order": 260,
+          "is_required": false,
+          "visibility_rules": [],
+          "option_rules": [],
+          "constraint_rules": []
+        },
+        "definition_used_by_append": "bearing",
+        "roles": "measurement",
+        "semantic_roles": "measurement",
+        "allowed_when": {
+          "kind": "when",
+          "rows": [
+            [
+              {
+                "field": "bearing_construction",
+                "operator": "in",
+                "value_type": "token",
+                "value": [
+                  "Cartucho sellado",
+                  "Cartucho abierto",
+                  "Cartucho blindado",
+                  "Cartucho (sellado sin confirmar)"
+                ]
+              }
+            ]
+          ]
+        },
+        "required_when": {
+          "kind": "never"
+        },
+        "prerequisites": [
+          "spec_evidence_source"
+        ],
+        "evidence_requirements": "oem_spec",
+        "helpers": "Magnitud del ángulo interno α respecto del plano perpendicular al eje (0–90°). Sólo si el fabricante declara un único valor nominal común. No se deduce de MAX, la aplicación Dirección ni de los biseles. Un pedalier puede declarar el ángulo de sus rodamientos internos sin identificar un SKU suelto: no se copia a este producto sin confirmar esa identidad."
+      }
+    },
+    {
+      "patch_id": "WRFP-R1-row-count",
+      "decision": "aceptar",
+      "reason": "Prerrequisito por construcción/configuración y magnitud OEM explícita; no acredita un montaje ni rellena productos."
+    },
+    {
+      "patch_id": "WRFP-R1-regreasable",
+      "decision": "aceptar",
+      "reason": "Prerrequisito por construcción/configuración y magnitud OEM explícita; no acredita un montaje ni rellena productos."
+    },
+    {
+      "patch_id": "WRFP-R3-retire-max-pressure-psi",
+      "decision": "aceptar",
+      "reason": "Prerrequisito por construcción/configuración y magnitud OEM explícita; no acredita un montaje ni rellena productos."
+    },
+    {
+      "patch_id": "WRFP-R3-max-pressure-unit",
+      "decision": "rechazar",
+      "reason": "El único par escalar pierde una de las dos cifras OEM impresas. Se prepara representación repetible por unidad, fuente y alcance; no se convierte ni inventa una cifra."
+    },
+    {
+      "patch_id": "WRFP-R3-max-pressure-value",
+      "decision": "rechazar",
+      "reason": "El único par escalar pierde una de las dos cifras OEM impresas. Se prepara representación repetible por unidad, fuente y alcance; no se convierte ni inventa una cifra."
+    },
+    {
+      "patch_id": "WRFP-R6-hookless-pending-completeness",
+      "decision": "aceptar",
+      "reason": "Prerrequisito por construcción/configuración y magnitud OEM explícita; no acredita un montaje ni rellena productos."
+    }
+  ],
+  "deferred_fixture_ids": [
+    "wrfp_hookless_row_maximum_is_not_the_headline",
+    "wrfp_schwalbe_general_maximum_in_bar",
+    "wrfp_unit_without_value_is_pending",
+    "wrfp_value_without_unit_stays_pending"
+  ],
+  "mechanical_coverage_complete": false,
+  "automatic_fill_authorized": false
+}

@@ -170,10 +170,11 @@ class _POSCartPageState extends State<POSCartPage> {
                         // Payment Method Selector
                         Consumer<PaymentMethodService>(
                           builder: (context, paymentMethodService, _) {
-                            final methods = paymentMethodService.paymentMethods
+                            final methods = paymentMethodService
+                                .incomingPaymentMethods
                                 .where((m) => m.isActive)
                                 .toList();
-                            
+
                             return Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
@@ -222,7 +223,7 @@ class _POSCartPageState extends State<POSCartPage> {
                             );
                           },
                         ),
-                        
+
                         // Subtotal
                         Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -324,6 +325,9 @@ class _POSCartPageState extends State<POSCartPage> {
       case 'cash':
         return Icons.attach_money;
       case 'card':
+      case 'card_debit':
+      case 'card_credit':
+      case 'card_prepaid':
         return Icons.credit_card;
       case 'transfer':
         return Icons.account_balance;

@@ -1,0 +1,1483 @@
+{
+  "schema_version": 1,
+  "title": "All-family physical-port cardinality",
+  "catalogue_sha256": "ae236f569f5dee24a23f5bce6adbd546de56f3ef29bcc2d25cd20271d9c1d4b0",
+  "independent_review_hashes": [
+    "4cbd9cd4e1ccb2f41ab3249cbaed83fe419689aa6ba1dbb24a5b9dd856bd66d1",
+    "a1c6bfc5fae5c11b3b7f804b240ea36b2a36db2f6e4ba2ff868c061802856820"
+  ],
+  "mechanical_coverage_complete": false,
+  "automatic_fill_authorized": false,
+  "cases": [
+    {
+      "id": "wss_shock_trunnion_top_eyelet_bottom",
+      "template": "rear_shock",
+      "kind": "valid",
+      "values": {
+        "eye_to_eye_mm": "205",
+        "stroke_mm": "65",
+        "shock_mount_kind": "Trunnion",
+        "mounting_hardware_included": true,
+        "spec_evidence_source": "RockShox Rear Suspension Fitment",
+        "shock_end_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "e1",
+              "values": {
+                "end_position": "Cuerpo",
+                "mount_kind": "Trunnion",
+                "size_row_id": "r1"
+              },
+              "sources": []
+            },
+            {
+              "id": "e2",
+              "values": {
+                "end_position": "Vástago",
+                "mount_kind": "Ojal estándar",
+                "size_row_id": "r1"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "source_urls": [
+        "https://www.sram.com/en/service/articles/RockShox-fitment-article"
+      ],
+      "expected_blocking": [],
+      "note": "Fixture de representación por extremo físico; no atribuye combinación ni medidas de hardware a un SKU OEM.",
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false
+    },
+    {
+      "id": "wss_shock_two_rows_same_end",
+      "template": "rear_shock",
+      "kind": "contradictory",
+      "values": {
+        "shock_end_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "a",
+              "values": {
+                "end_position": "Cuerpo",
+                "mount_kind": "Trunnion",
+                "size_row_id": "r1"
+              },
+              "sources": []
+            },
+            {
+              "id": "b",
+              "values": {
+                "end_position": "Cuerpo",
+                "mount_kind": "Ojal estándar",
+                "size_row_id": "r1"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "source_urls": [],
+      "expected_blocking": [
+        {
+          "code": "row_shape",
+          "field": "shock_end_configurations"
+        }
+      ],
+      "note": "Fixture de representación por extremo físico; no atribuye combinación ni medidas de hardware a un SKU OEM.",
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false,
+      "expected_sql_blocking": [
+        {
+          "code": "row_shape",
+          "field": "shock_end_configurations"
+        }
+      ]
+    },
+    {
+      "id": "wss_fork_fox40_envelope",
+      "template": "fork",
+      "kind": "valid",
+      "values": {
+        "fork_kind": "Suspensión (aire)",
+        "bead_seat_diameter_mm": "559",
+        "max_tire_width_mm": "71",
+        "travel_mm": "203",
+        "axle_to_crown_mm": "580",
+        "crown_stack_min_mm": "105",
+        "crown_stack_max_mm": "166.8",
+        "spec_evidence_source": "FOX 2013, Installing the 40",
+        "fork_tire_clearance_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "c",
+              "values": {
+                "bead_seat_diameter_mm": "559",
+                "max_tire_width_mm": "71",
+                "max_inflated_diameter_mm": "694",
+                "max_inflated_shoulder_diameter_mm": "670",
+                "measurement_method": "Diámetro de pico y de borde, neumático inflado"
+              },
+              "sources": [
+                "https://tech.ridefox.com/fox_tech_center/owners_manuals/013/Content/Forks/40/40withDMS_Installation.html"
+              ]
+            }
+          ]
+        },
+        "fork_crown_layout": "Doble corona"
+      },
+      "source_urls": [
+        "https://tech.ridefox.com/fox_tech_center/owners_manuals/013/Content/Forks/40/40withDMS_Installation.html"
+      ],
+      "expected_blocking": [],
+      "note": "El caso construido de 70 mm de ancho y 695 mm de pico queda fuera aunque pase el ancho. Límites de esta generación, no de la familia.",
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false
+    },
+    {
+      "id": "wss_fork_stack_inverted",
+      "template": "fork",
+      "kind": "contradictory",
+      "values": {
+        "fork_kind": "Suspensión (aire)",
+        "crown_stack_min_mm": "166.8",
+        "crown_stack_max_mm": "105",
+        "fork_crown_layout": "Doble corona"
+      },
+      "source_urls": [
+        "https://tech.ridefox.com/fox_tech_center/owners_manuals/013/Content/Forks/40/40withDMS_Installation.html"
+      ],
+      "expected_blocking": [
+        {
+          "code": "range_order",
+          "field": "crown_stack_max_mm"
+        },
+        {
+          "code": "range_order",
+          "field": "crown_stack_min_mm"
+        }
+      ],
+      "note": "El par escalar del contrato 0200 marca los dos extremos.",
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false
+    },
+    {
+      "id": "wss_SF7",
+      "template": "fork",
+      "kind": "contradictorio",
+      "values": {
+        "fork_kind": "Suspensión (aire)",
+        "fork_tire_clearance_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "a",
+              "values": {
+                "bead_seat_diameter_mm": "559",
+                "max_tire_width_mm": "71"
+              },
+              "sources": []
+            },
+            {
+              "id": "b",
+              "values": {
+                "bead_seat_diameter_mm": "559",
+                "max_tire_width_mm": "64"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "source_urls": [],
+      "expected_blocking": [
+        {
+          "code": "row_shape",
+          "field": "fork_tire_clearance_configurations"
+        }
+      ],
+      "note": "Dos envolventes para el mismo rodado. Con el unique_by del paquete ambas pasaban.",
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false,
+      "expected_sql_blocking": [
+        {
+          "code": "field_constraint",
+          "field": "fork_tire_clearance_configurations"
+        }
+      ]
+    },
+    {
+      "id": "wss_SF8",
+      "template": "fork",
+      "kind": "synthetic_representation",
+      "values": {
+        "fork_kind": "Suspensión (aire)",
+        "fork_tire_clearance_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "a",
+              "values": {
+                "bead_seat_diameter_mm": "584",
+                "max_tire_width_mm": "64"
+              },
+              "sources": []
+            },
+            {
+              "id": "b",
+              "values": {
+                "bead_seat_diameter_mm": "622",
+                "max_tire_width_mm": "61"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "source_urls": [],
+      "expected_blocking": [],
+      "note": "Fixture sintética: dos BSD para una misma horquilla si OEM los declara; no identifica ni aprueba una horquilla real.",
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false
+    },
+    {
+      "id": "wss_root_single_crown_cannot_receive_double_crown_stack",
+      "template": "fork",
+      "values": {
+        "fork_crown_layout": "Una corona",
+        "crown_stack_min_mm": "105"
+      },
+      "kind": "root_boundary",
+      "source_urls": [],
+      "expected_blocking": [
+        {
+          "code": "field_applicability",
+          "field": "crown_stack_min_mm"
+        }
+      ],
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false
+    },
+    {
+      "id": "sh_fox_imperial_sizing",
+      "template": "rear_shock",
+      "values": {
+        "shock_size_declarations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "length": "7.875",
+                "length_unit": "in",
+                "length_datum": "Distancia entre centros de ojales",
+                "stroke": "2",
+                "stroke_unit": "in",
+                "configuration": "FOX FLOAT DPS PERFORMANCE 972-01-490",
+                "source_url": "https://ridefox.com/products/fox-float-dps-performance"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [
+        "https://ridefox.com/products/fox-float-dps-performance"
+      ]
+    },
+    {
+      "id": "sh_metric_sizing",
+      "template": "rear_shock",
+      "values": {
+        "shock_size_declarations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "length": "210",
+                "length_unit": "mm",
+                "stroke": "55",
+                "stroke_unit": "mm",
+                "length_datum": "Centros de montaje",
+                "configuration": "Amortiguador sintético métrico"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "sh_shock_size_without_unit",
+      "template": "rear_shock",
+      "values": {
+        "shock_size_declarations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "stroke": "55",
+                "configuration": "Amortiguador sintético"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "expected_issue_subset": [
+        {
+          "code": "row_incomplete",
+          "field": "shock_size_declarations",
+          "blocking": false
+        }
+      ],
+      "expected_sql_issue_subset": [
+        {
+          "code": "row_incomplete",
+          "field": "shock_size_declarations",
+          "blocking": false
+        }
+      ]
+    },
+    {
+      "id": "sh_shock_size_absent",
+      "template": "rear_shock",
+      "values": {
+        "spring_kind": "Aire"
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "expected_issue_subset": [
+        {
+          "code": "required_missing",
+          "field": "shock_size_declarations",
+          "blocking": false
+        }
+      ],
+      "expected_sql_issue_subset": [
+        {
+          "code": "required_missing",
+          "field": "shock_size_declarations",
+          "blocking": false
+        }
+      ]
+    },
+    {
+      "id": "sh_expander_bore_range",
+      "template": "headset_small_part",
+      "values": {
+        "headset_part_interfaces": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "scope": "Cuerpo expansor",
+                "fit_kind": "Interior de espiga",
+                "diameter_form": "Intervalo",
+                "diameter_min_mm": "23.5",
+                "diameter_max_mm": "24.5",
+                "insertion_depth_mm": "28",
+                "conditions": "CPLUG-STEM5MM-BLK: rango declarado para espiga metálica",
+                "source_url": "https://www.wolftoothcomponents.com/products/compression-plug"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "headset_part_kind": "Expansor"
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [
+        "https://www.wolftoothcomponents.com/products/compression-plug"
+      ]
+    },
+    {
+      "id": "sh_headset_two_scopes",
+      "template": "headset_small_part",
+      "values": {
+        "headset_part_interfaces": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "scope": "Cuerpo expansor",
+                "fit_kind": "Interior de espiga",
+                "diameter_form": "Intervalo",
+                "diameter_min_mm": "23.5",
+                "diameter_max_mm": "24.5",
+                "insertion_depth_mm": "28",
+                "conditions": "CPLUG-STEM5MM-BLK: rango declarado para espiga metálica",
+                "source_url": "https://www.wolftoothcomponents.com/products/compression-plug"
+              },
+              "sources": []
+            },
+            {
+              "id": "r2",
+              "values": {
+                "scope": "Araña",
+                "fit_kind": "Interior de espiga",
+                "diameter_form": "Designación literal",
+                "designation": "Interfaz de araña sintética; sin calce certificado"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "headset_part_kind": "Otro"
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "sh_headset_bore_reversed",
+      "template": "headset_small_part",
+      "values": {
+        "headset_part_interfaces": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "scope": "Cuerpo expansor",
+                "fit_kind": "Interior de espiga",
+                "diameter_form": "Intervalo",
+                "diameter_min_mm": "24.5",
+                "diameter_max_mm": "23.5",
+                "insertion_depth_mm": "28",
+                "conditions": "CPLUG-STEM5MM-BLK: rango declarado para espiga metálica",
+                "source_url": "https://www.wolftoothcomponents.com/products/compression-plug"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [
+        {
+          "code": "row_shape",
+          "field": "headset_part_interfaces"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "sh_headset_nominal_rejects_range_cell",
+      "template": "headset_small_part",
+      "values": {
+        "headset_part_interfaces": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "scope": "Tapa",
+                "fit_kind": "Exterior de espiga",
+                "diameter_form": "Valor nominal",
+                "diameter_min_mm": "23.5"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [
+        {
+          "code": "row_field_applicability",
+          "field": "headset_part_interfaces"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "sh_headset_fit_absent",
+      "template": "headset_small_part",
+      "values": {
+        "headset_part_kind": "Araña (star nut)"
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "expected_issue_subset": [
+        {
+          "code": "required_missing",
+          "field": "headset_part_interfaces",
+          "blocking": false
+        }
+      ],
+      "expected_sql_issue_subset": [
+        {
+          "code": "required_missing",
+          "field": "headset_part_interfaces",
+          "blocking": false
+        }
+      ]
+    },
+    {
+      "id": "sh_headset_two_fasteners",
+      "template": "headset_small_part",
+      "values": {
+        "headset_part_interfaces": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "scope": "Cuerpo expansor",
+                "fit_kind": "Interior de espiga",
+                "diameter_form": "Intervalo",
+                "diameter_min_mm": "23.5",
+                "diameter_max_mm": "24.5",
+                "insertion_depth_mm": "28",
+                "conditions": "CPLUG-STEM5MM-BLK: rango declarado para espiga metálica",
+                "source_url": "https://www.wolftoothcomponents.com/products/compression-plug"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "headset_torque_specifications": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "fastener": "Tornillo de la tapa",
+                "quantity_kind": "Rango de apriete",
+                "minimum": "2",
+                "maximum": "3",
+                "unit": "Nm",
+                "conditions": "CPLUG-STEM5MM-BLK: grasa ligera sólo en roscas",
+                "source_url": "https://www.wolftoothcomponents.com/products/compression-plug"
+              },
+              "sources": []
+            },
+            {
+              "id": "r2",
+              "values": {
+                "fastener": "Tornillo de expansión",
+                "quantity_kind": "Rango de apriete",
+                "minimum": "5",
+                "maximum": "7",
+                "unit": "Nm",
+                "conditions": "CPLUG-STEM5MM-BLK",
+                "source_url": "https://www.wolftoothcomponents.com/products/compression-plug"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [
+        "https://www.wolftoothcomponents.com/products/compression-plug"
+      ]
+    },
+    {
+      "id": "sh_headset_nominal_is_not_range",
+      "template": "headset_small_part",
+      "values": {
+        "headset_part_interfaces": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "scope": "Cuerpo expansor",
+                "fit_kind": "Interior de espiga",
+                "diameter_form": "Intervalo",
+                "diameter_min_mm": "23.5",
+                "diameter_max_mm": "24.5",
+                "insertion_depth_mm": "28",
+                "conditions": "CPLUG-STEM5MM-BLK: rango declarado para espiga metálica",
+                "source_url": "https://www.wolftoothcomponents.com/products/compression-plug"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "headset_torque_specifications": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "fastener": "Tornillo de expansión",
+                "quantity_kind": "Par nominal",
+                "value": "5",
+                "minimum": "4",
+                "unit": "Nm"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [
+        {
+          "code": "row_field_applicability",
+          "field": "headset_torque_specifications"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "sh_headset_torque_reversed",
+      "template": "headset_small_part",
+      "values": {
+        "headset_part_interfaces": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "scope": "Cuerpo expansor",
+                "fit_kind": "Interior de espiga",
+                "diameter_form": "Intervalo",
+                "diameter_min_mm": "23.5",
+                "diameter_max_mm": "24.5",
+                "insertion_depth_mm": "28",
+                "conditions": "CPLUG-STEM5MM-BLK: rango declarado para espiga metálica",
+                "source_url": "https://www.wolftoothcomponents.com/products/compression-plug"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "headset_torque_specifications": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "fastener": "Tornillo de expansión",
+                "quantity_kind": "Rango de apriete",
+                "minimum": "7",
+                "maximum": "5",
+                "unit": "Nm"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [
+        {
+          "code": "row_shape",
+          "field": "headset_torque_specifications"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "sh_fork_envelope",
+      "template": "fork",
+      "values": {
+        "fork_tire_clearance_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "bead_seat_diameter_mm": "622",
+                "max_tire_width_mm": "61",
+                "measurement_method": "Declaración sintética"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "sh_fork_two_wheel_sizes",
+      "template": "fork",
+      "values": {
+        "fork_tire_clearance_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "bead_seat_diameter_mm": "622",
+                "max_tire_width_mm": "61",
+                "measurement_method": "Declaración sintética"
+              },
+              "sources": []
+            },
+            {
+              "id": "r2",
+              "values": {
+                "bead_seat_diameter_mm": "584",
+                "max_tire_width_mm": "76",
+                "measurement_method": "Declaración sintética"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "sh_fork_duplicate_bead_seat",
+      "template": "fork",
+      "values": {
+        "fork_tire_clearance_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "bead_seat_diameter_mm": "622",
+                "max_tire_width_mm": "61",
+                "measurement_method": "Declaración sintética"
+              },
+              "sources": []
+            },
+            {
+              "id": "r2",
+              "values": {
+                "bead_seat_diameter_mm": "622",
+                "max_tire_width_mm": "55",
+                "measurement_method": "Declaración sintética"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [
+        {
+          "code": "row_shape",
+          "field": "fork_tire_clearance_configurations"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "expected_sql_blocking": [
+        {
+          "code": "field_constraint",
+          "field": "fork_tire_clearance_configurations"
+        }
+      ]
+    },
+    {
+      "id": "sh_fork_envelope_absent",
+      "template": "fork",
+      "values": {
+        "fork_kind": "Rígida"
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "expected_issue_subset": [
+        {
+          "code": "required_missing",
+          "field": "fork_tire_clearance_configurations",
+          "blocking": false
+        }
+      ],
+      "expected_sql_issue_subset": [
+        {
+          "code": "required_missing",
+          "field": "fork_tire_clearance_configurations",
+          "blocking": false
+        }
+      ]
+    },
+    {
+      "id": "sh_root_shock_pair_cannot_omit_stroke",
+      "template": "rear_shock",
+      "values": {
+        "shock_size_declarations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "configuration": "Configuración sintética",
+                "length": "210",
+                "length_unit": "mm",
+                "length_datum": "Centros de montaje",
+                "stroke_unit": "mm"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "expected_issue_subset": [
+        {
+          "code": "row_incomplete",
+          "field": "shock_size_declarations",
+          "blocking": false
+        }
+      ],
+      "expected_sql_issue_subset": [
+        {
+          "code": "row_incomplete",
+          "field": "shock_size_declarations",
+          "blocking": false
+        }
+      ]
+    },
+    {
+      "id": "sh_root_two_sizes_keep_their_ends",
+      "template": "rear_shock",
+      "values": {
+        "shock_size_declarations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "configuration": "Configuración sintética",
+                "length": "210",
+                "length_unit": "mm",
+                "length_datum": "Centros de montaje",
+                "stroke": "55",
+                "stroke_unit": "mm"
+              },
+              "sources": []
+            },
+            {
+              "id": "r2",
+              "values": {
+                "configuration": "Segunda configuración",
+                "length": "230",
+                "length_unit": "mm",
+                "length_datum": "Centros de montaje",
+                "stroke": "65",
+                "stroke_unit": "mm"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "shock_end_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "size_row_id": "r1",
+                "end_position": "Cuerpo",
+                "mount_kind": "Trunnion"
+              },
+              "sources": []
+            },
+            {
+              "id": "r2",
+              "values": {
+                "size_row_id": "r2",
+                "end_position": "Cuerpo",
+                "mount_kind": "Ojal estándar"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "sh_root_shock_end_orphan",
+      "template": "rear_shock",
+      "values": {
+        "shock_size_declarations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "configuration": "Configuración sintética",
+                "length": "210",
+                "length_unit": "mm",
+                "length_datum": "Centros de montaje",
+                "stroke": "55",
+                "stroke_unit": "mm"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "shock_end_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "size_row_id": "missing",
+                "end_position": "Cuerpo",
+                "mount_kind": "Trunnion"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [
+        {
+          "code": "row_reference_unresolved",
+          "field": "shock_end_configurations"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "sh_root_fork_decimal_pitch",
+      "template": "fork",
+      "values": {
+        "wheel_part_interfaces": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "scope": "Retención sintética",
+                "interface_kind": "Rosca",
+                "diameter_unit": "mm",
+                "diameter_mm": "12",
+                "pitch_unit": "mm",
+                "pitch_mm": "1.25"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "sh_root_spacer_varied_kit",
+      "template": "spacer",
+      "values": {
+        "spacer_components": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "component": "Separador 3 mm",
+                "quantity": "1",
+                "system": "Dirección",
+                "thickness_mm": "3",
+                "geometry_kind": "Anillo circular",
+                "interface_designation": "Espiga superior 1 1/8 in",
+                "conditions": "Wolf Tooth SPACER-BLK-KIT1",
+                "source_url": "https://www.wolftoothcomponents.com/collections/misc-components/products/wolf-tooth-headset-spacers"
+              },
+              "sources": []
+            },
+            {
+              "id": "r2",
+              "values": {
+                "component": "Separador 5 mm",
+                "quantity": "1",
+                "system": "Dirección",
+                "thickness_mm": "5",
+                "geometry_kind": "Anillo circular",
+                "interface_designation": "Espiga superior 1 1/8 in",
+                "conditions": "Wolf Tooth SPACER-BLK-KIT1",
+                "source_url": "https://www.wolftoothcomponents.com/collections/misc-components/products/wolf-tooth-headset-spacers"
+              },
+              "sources": []
+            },
+            {
+              "id": "r3",
+              "values": {
+                "component": "Separador 10 mm",
+                "quantity": "1",
+                "system": "Dirección",
+                "thickness_mm": "10",
+                "geometry_kind": "Anillo circular",
+                "interface_designation": "Espiga superior 1 1/8 in",
+                "conditions": "Wolf Tooth SPACER-BLK-KIT1",
+                "source_url": "https://www.wolftoothcomponents.com/collections/misc-components/products/wolf-tooth-headset-spacers"
+              },
+              "sources": []
+            },
+            {
+              "id": "r4",
+              "values": {
+                "component": "Separador 15 mm",
+                "quantity": "1",
+                "system": "Dirección",
+                "thickness_mm": "15",
+                "geometry_kind": "Anillo circular",
+                "interface_designation": "Espiga superior 1 1/8 in",
+                "conditions": "Wolf Tooth SPACER-BLK-KIT1",
+                "source_url": "https://www.wolftoothcomponents.com/collections/misc-components/products/wolf-tooth-headset-spacers"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [
+        "https://www.wolftoothcomponents.com/collections/misc-components/products/wolf-tooth-headset-spacers"
+      ]
+    },
+    {
+      "id": "sh_root_spacer_quantity_integer",
+      "template": "spacer",
+      "values": {
+        "spacer_components": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "component": "Separador 3 mm",
+                "quantity": "1.5",
+                "system": "Dirección",
+                "thickness_mm": "3",
+                "geometry_kind": "Anillo circular",
+                "interface_designation": "Espiga superior 1 1/8 in",
+                "conditions": "Wolf Tooth SPACER-BLK-KIT1",
+                "source_url": "https://www.wolftoothcomponents.com/collections/misc-components/products/wolf-tooth-headset-spacers"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [
+        {
+          "code": "row_shape",
+          "field": "spacer_components"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "sh_root_spacer_diameter_order",
+      "template": "spacer",
+      "values": {
+        "spacer_components": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "component": "Anillo sintético",
+                "quantity": "1",
+                "system": "Otro",
+                "thickness_mm": "2",
+                "geometry_kind": "Anillo circular",
+                "inner_diameter_mm": "35",
+                "outer_diameter_mm": "30"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [
+        {
+          "code": "row_shape",
+          "field": "spacer_components"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "sh_root_spacer_literal_is_not_measured_bore",
+      "template": "spacer",
+      "values": {
+        "spacer_components": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "component": "Separador 3 mm",
+                "quantity": "1",
+                "system": "Dirección",
+                "thickness_mm": "3",
+                "geometry_kind": "Designación sin descomponer",
+                "interface_designation": "Espiga superior 1 1/8 in",
+                "conditions": "Wolf Tooth SPACER-BLK-KIT1",
+                "source_url": "https://www.wolftoothcomponents.com/collections/misc-components/products/wolf-tooth-headset-spacers",
+                "inner_diameter_mm": "28.6"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [
+        {
+          "code": "row_field_applicability",
+          "field": "spacer_components"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "sh_root_spacer_target_and_measurement_coexist",
+      "template": "spacer",
+      "values": {
+        "spacer_components": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "component": "Separador sintético",
+                "quantity": "1",
+                "system": "Dirección",
+                "thickness_mm": "3",
+                "geometry_kind": "Anillo circular",
+                "interface_designation": "Espiga superior 1 1/8 in",
+                "conditions": "Medición sintética; no se deduce del nominal ni prueba calce",
+                "inner_diameter_mm": "28.7"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "sh_root_headset_exact_diameter",
+      "template": "headset_small_part",
+      "values": {
+        "headset_part_interfaces": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "scope": "Interfaz sintética",
+                "fit_kind": "Interior de espiga",
+                "diameter_form": "Valor nominal",
+                "diameter_mm": "23.5"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "sh_root_headset_literal_size",
+      "template": "headset_small_part",
+      "values": {
+        "headset_part_interfaces": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "scope": "Tapa",
+                "fit_kind": "Exterior de espiga",
+                "diameter_form": "Designación literal",
+                "designation": "1 1/8 in"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "sh_root_star_carbon_rejected",
+      "template": "headset_small_part",
+      "values": {
+        "headset_component_fitments": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "component": "Araña de precarga",
+                "component_kind": "Araña",
+                "target_steerer_material": "Carbono",
+                "status": "Compatible declarado",
+                "anchor_contact": "Carbono directo",
+                "source_url": "https://www.wolftoothcomponents.com/products/compression-plug"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [
+        {
+          "code": "row_value_conflict",
+          "field": "headset_component_fitments"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [
+        "https://www.parktool.com/en-us/blog/repair-help/star-fangled-nut-and-expansion-plug-installation",
+        "https://www.wolftoothcomponents.com/products/compression-plug"
+      ]
+    },
+    {
+      "id": "sh_root_star_carbon_exclusion",
+      "template": "headset_small_part",
+      "values": {
+        "headset_component_fitments": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "component": "Araña de precarga",
+                "component_kind": "Araña",
+                "target_steerer_material": "Carbono",
+                "status": "Incompatible declarado",
+                "anchor_contact": "Carbono directo",
+                "source_url": "https://www.wolftoothcomponents.com/products/compression-plug"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [
+        "https://www.parktool.com/en-us/blog/repair-help/star-fangled-nut-and-expansion-plug-installation",
+        "https://www.wolftoothcomponents.com/products/compression-plug"
+      ]
+    },
+    {
+      "id": "sh_root_cap_does_not_inherit_star_rule",
+      "template": "headset_small_part",
+      "values": {
+        "headset_component_fitments": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "component": "Tapa sintética",
+                "component_kind": "Tapa o perno",
+                "target_steerer_material": "Carbono",
+                "status": "Compatible declarado"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "sh_root_cervelo_bonded_insert",
+      "template": "headset_small_part",
+      "values": {
+        "headset_component_fitments": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "component": "Araña preinstalada en inserto suministrado",
+                "component_kind": "Araña",
+                "target_steerer_material": "Carbono",
+                "anchor_contact": "Inserto de aleación OEM",
+                "insert_model": "Inserto de 75 mm suministrado; Fork Owners Manual v3",
+                "target_model": "Horquilla Cervélo cubierta por ese manual",
+                "status": "Condicional",
+                "conditions": "Inserto adherido y curado según procedimiento OEM",
+                "source_url": "https://cervelo.cdn.prismic.io/cervelo/ffe12d7a-81fc-499c-981e-65904298ad93_fork_owners_manualv3.pdf"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [
+        "https://cervelo.cdn.prismic.io/cervelo/ffe12d7a-81fc-499c-981e-65904298ad93_fork_owners_manualv3.pdf"
+      ]
+    },
+    {
+      "id": "sh_root_carbon_contact_unknown",
+      "template": "headset_small_part",
+      "values": {
+        "headset_component_fitments": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "component": "Araña de precarga",
+                "component_kind": "Araña",
+                "target_steerer_material": "Carbono",
+                "status": "Condicional",
+                "conditions": "Anclaje por confirmar"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "expected_issue_subset": [
+        {
+          "code": "row_required_missing",
+          "field": "headset_component_fitments",
+          "blocking": false
+        }
+      ],
+      "expected_sql_issue_subset": [
+        {
+          "code": "row_required_missing",
+          "field": "headset_component_fitments",
+          "blocking": false
+        }
+      ]
+    }
+  ],
+  "root_nd_case_overrides": [
+    {
+      "id": "helmet_smith_mainline_certifications_by_row",
+      "reason": "Integral pertenece al eje de construcción, no al uso."
+    },
+    {
+      "id": "helmet_inventory_best_enduro_certificado_sin_norma",
+      "reason": "Se conserva Enduro sin inferir cobertura desde el título."
+    },
+    {
+      "id": "RCF25",
+      "reason": "Una variante distinta del soporte no es montaje de este SKU; se rechaza el token retirado."
+    }
+  ],
+  "root_row_value_case_overrides": [
+    "RCF08",
+    "CPC_GAP_INCLUDED_CLAMP_FALSE"
+  ],
+  "deferred_pressure_fixture_ids": [],
+  "superseded_pressure_fixtures": [
+    "wrfp_hookless_row_maximum_is_not_the_headline",
+    "wrfp_schwalbe_general_maximum_in_bar",
+    "wrfp_unit_without_value_is_pending",
+    "wrfp_value_without_unit_stays_pending"
+  ],
+  "required_server_migration": "20260907025000"
+}

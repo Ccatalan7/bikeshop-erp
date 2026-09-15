@@ -1,0 +1,432 @@
+[
+  {
+    "id": "tpdu_six_bar_and_85_psi_same_variant",
+    "before": {
+      "id": "tpdu_six_bar_and_85_psi_same_variant",
+      "template": "tire",
+      "kind": "válido",
+      "values": {
+        "tire_etrto": "37-622",
+        "tire_width_mm": "37",
+        "bead_seat_diameter_mm": "622",
+        "spec_evidence_source": "Schwalbe, Marathon Plus 37-622 (11100769)",
+        "tire_general_max_pressures": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "de_bar",
+              "values": {
+                "pressure_unit": "bar",
+                "declared_scope": "Sin condición de llanta en el documento",
+                "source_document": "Schwalbe, ficha de producto 11100769 (Marathon Plus 37-622), edición 2014, schwalbe.com, leída 2026-09-07",
+                "max_pressure_value": "6",
+                "source_url": "https://www.schwalbe.com/en/Marathon-Plus-11100769"
+              },
+              "sources": [
+                "https://www.schwalbe.com/en/Marathon-Plus-11100769"
+              ]
+            },
+            {
+              "id": "de_psi",
+              "values": {
+                "pressure_unit": "psi",
+                "declared_scope": "Sin condición de llanta en el documento",
+                "source_document": "Schwalbe, ficha de producto 11100769 (Marathon Plus 37-622), edición 2014, schwalbe.com, leída 2026-09-07",
+                "max_pressure_value": "85",
+                "source_url": "https://www.schwalbe.com/en/Marathon-Plus-11100769"
+              },
+              "sources": [
+                "https://www.schwalbe.com/en/Marathon-Plus-11100769"
+              ]
+            }
+          ]
+        }
+      },
+      "source_urls": [
+        "https://www.schwalbe.com/en/Marathon-Plus-11100769"
+      ],
+      "expected_blocking": [],
+      "note": "Las dos cifras impresas del mismo documento, cada una con su unidad. Ninguna se deriva de la otra: 6 bar convertidos dan 87 psi y el fabricante imprime 85.",
+      "observed_in_local_trial": [
+        {
+          "code": "required_missing",
+          "field": "tire_bead_type",
+          "row": null,
+          "column": null,
+          "blocking": false
+        }
+      ]
+    },
+    "after": {
+      "id": "tpdu_six_bar_and_85_psi_same_variant",
+      "template": "tire",
+      "kind": "válido",
+      "values": {
+        "tire_etrto": "37-622",
+        "tire_width_mm": "37",
+        "bead_seat_diameter_mm": "622",
+        "spec_evidence_source": "Schwalbe, Marathon Plus 37-622 (11100769)",
+        "tire_general_max_pressures": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "de_bar",
+              "values": {
+                "pressure_unit": "bar",
+                "declared_scope": "Sin condición de llanta en el documento",
+                "source_document": "Schwalbe, ficha de producto 11100769 (Marathon Plus 37-622), schwalbe.com, leída 2026-09-07",
+                "max_pressure_value": "6",
+                "source_url": "https://www.schwalbe.com/en/Marathon-Plus-11100769"
+              },
+              "sources": [
+                "https://www.schwalbe.com/en/Marathon-Plus-11100769"
+              ]
+            },
+            {
+              "id": "de_psi",
+              "values": {
+                "pressure_unit": "psi",
+                "declared_scope": "Sin condición de llanta en el documento",
+                "source_document": "Schwalbe, ficha de producto 11100769 (Marathon Plus 37-622), schwalbe.com, leída 2026-09-07",
+                "max_pressure_value": "85",
+                "source_url": "https://www.schwalbe.com/en/Marathon-Plus-11100769"
+              },
+              "sources": [
+                "https://www.schwalbe.com/en/Marathon-Plus-11100769"
+              ]
+            }
+          ]
+        }
+      },
+      "source_urls": [
+        "https://www.schwalbe.com/en/Marathon-Plus-11100769"
+      ],
+      "expected_blocking": [],
+      "note": "Las dos cifras impresas del mismo documento, cada una con su unidad. Ninguna se deriva de la otra: 6 bar convertidos dan 87 psi y el fabricante imprime 85.",
+      "observed_in_local_trial": [
+        {
+          "code": "required_missing",
+          "field": "tire_bead_type",
+          "row": null,
+          "column": null,
+          "blocking": false
+        }
+      ]
+    },
+    "reason": "Root verified both pages; 2014 is not established as document edition."
+  },
+  {
+    "id": "tpdu_two_documents_same_figures_do_not_merge",
+    "before": {
+      "id": "tpdu_two_documents_same_figures_do_not_merge",
+      "template": "tire",
+      "kind": "válido",
+      "values": {
+        "tire_etrto": "37-622",
+        "tire_width_mm": "37",
+        "bead_seat_diameter_mm": "622",
+        "spec_evidence_source": "Schwalbe, Marathon Plus 37-622 (11100769)",
+        "tire_general_max_pressures": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "de_bar",
+              "values": {
+                "pressure_unit": "bar",
+                "declared_scope": "Sin condición de llanta en el documento",
+                "source_document": "Schwalbe, ficha de producto 11100769 (Marathon Plus 37-622), edición 2014, schwalbe.com, leída 2026-09-07",
+                "max_pressure_value": "6",
+                "source_url": "https://www.schwalbe.com/en/Marathon-Plus-11100769"
+              },
+              "sources": [
+                "https://www.schwalbe.com/en/Marathon-Plus-11100769"
+              ]
+            },
+            {
+              "id": "de_psi",
+              "values": {
+                "pressure_unit": "psi",
+                "declared_scope": "Sin condición de llanta en el documento",
+                "source_document": "Schwalbe, ficha de producto 11100769 (Marathon Plus 37-622), edición 2014, schwalbe.com, leída 2026-09-07",
+                "max_pressure_value": "85",
+                "source_url": "https://www.schwalbe.com/en/Marathon-Plus-11100769"
+              },
+              "sources": [
+                "https://www.schwalbe.com/en/Marathon-Plus-11100769"
+              ]
+            },
+            {
+              "id": "us_bar",
+              "values": {
+                "pressure_unit": "bar",
+                "declared_scope": "Sin condición de llanta en el documento",
+                "source_document": "Schwalbe, ficha de producto 11100769 (Marathon Plus 37-622), edición 2014, schwalbetires.com, leída 2026-09-07",
+                "max_pressure_value": "6",
+                "source_url": "https://www.schwalbetires.com/Marathon-Plus-11100769"
+              },
+              "sources": [
+                "https://www.schwalbetires.com/Marathon-Plus-11100769"
+              ]
+            },
+            {
+              "id": "us_psi",
+              "values": {
+                "pressure_unit": "psi",
+                "declared_scope": "Sin condición de llanta en el documento",
+                "source_document": "Schwalbe, ficha de producto 11100769 (Marathon Plus 37-622), edición 2014, schwalbetires.com, leída 2026-09-07",
+                "max_pressure_value": "85",
+                "source_url": "https://www.schwalbetires.com/Marathon-Plus-11100769"
+              },
+              "sources": [
+                "https://www.schwalbetires.com/Marathon-Plus-11100769"
+              ]
+            }
+          ]
+        }
+      },
+      "source_urls": [
+        "https://www.schwalbe.com/en/Marathon-Plus-11100769",
+        "https://www.schwalbetires.com/Marathon-Plus-11100769"
+      ],
+      "expected_blocking": [],
+      "expected_row_count": 4,
+      "note": "Dos documentos reales de la misma variante con las mismas cifras. Leí los dos hoy. Con un unique_by sobre valor y unidad estas cuatro filas colapsarían a dos y la procedencia del segundo documento desaparecería. Por eso el esquema no lleva unique_by.",
+      "observed_in_local_trial": [
+        {
+          "code": "required_missing",
+          "field": "tire_bead_type",
+          "row": null,
+          "column": null,
+          "blocking": false
+        }
+      ]
+    },
+    "after": {
+      "id": "tpdu_two_documents_same_figures_do_not_merge",
+      "template": "tire",
+      "kind": "válido",
+      "values": {
+        "tire_etrto": "37-622",
+        "tire_width_mm": "37",
+        "bead_seat_diameter_mm": "622",
+        "spec_evidence_source": "Schwalbe, Marathon Plus 37-622 (11100769)",
+        "tire_general_max_pressures": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "de_bar",
+              "values": {
+                "pressure_unit": "bar",
+                "declared_scope": "Sin condición de llanta en el documento",
+                "source_document": "Schwalbe, ficha de producto 11100769 (Marathon Plus 37-622), schwalbe.com, leída 2026-09-07",
+                "max_pressure_value": "6",
+                "source_url": "https://www.schwalbe.com/en/Marathon-Plus-11100769"
+              },
+              "sources": [
+                "https://www.schwalbe.com/en/Marathon-Plus-11100769"
+              ]
+            },
+            {
+              "id": "de_psi",
+              "values": {
+                "pressure_unit": "psi",
+                "declared_scope": "Sin condición de llanta en el documento",
+                "source_document": "Schwalbe, ficha de producto 11100769 (Marathon Plus 37-622), schwalbe.com, leída 2026-09-07",
+                "max_pressure_value": "85",
+                "source_url": "https://www.schwalbe.com/en/Marathon-Plus-11100769"
+              },
+              "sources": [
+                "https://www.schwalbe.com/en/Marathon-Plus-11100769"
+              ]
+            },
+            {
+              "id": "us_bar",
+              "values": {
+                "pressure_unit": "bar",
+                "declared_scope": "Sin condición de llanta en el documento",
+                "source_document": "Schwalbe, ficha de producto 11100769 (Marathon Plus 37-622), schwalbetires.com, leída 2026-09-07",
+                "max_pressure_value": "6",
+                "source_url": "https://www.schwalbetires.com/Marathon-Plus-11100769"
+              },
+              "sources": [
+                "https://www.schwalbetires.com/Marathon-Plus-11100769"
+              ]
+            },
+            {
+              "id": "us_psi",
+              "values": {
+                "pressure_unit": "psi",
+                "declared_scope": "Sin condición de llanta en el documento",
+                "source_document": "Schwalbe, ficha de producto 11100769 (Marathon Plus 37-622), schwalbetires.com, leída 2026-09-07",
+                "max_pressure_value": "85",
+                "source_url": "https://www.schwalbetires.com/Marathon-Plus-11100769"
+              },
+              "sources": [
+                "https://www.schwalbetires.com/Marathon-Plus-11100769"
+              ]
+            }
+          ]
+        }
+      },
+      "source_urls": [
+        "https://www.schwalbe.com/en/Marathon-Plus-11100769",
+        "https://www.schwalbetires.com/Marathon-Plus-11100769"
+      ],
+      "expected_blocking": [],
+      "expected_row_count": 4,
+      "note": "Dos documentos reales de la misma variante con las mismas cifras. Leí los dos hoy. Con un unique_by sobre valor y unidad estas cuatro filas colapsarían a dos y la procedencia del segundo documento desaparecería. Por eso el esquema no lleva unique_by.",
+      "observed_in_local_trial": [
+        {
+          "code": "required_missing",
+          "field": "tire_bead_type",
+          "row": null,
+          "column": null,
+          "blocking": false
+        }
+      ]
+    },
+    "reason": "Root verified both pages; 2014 is not established as document edition."
+  },
+  {
+    "id": "tpdu_unit_without_value_is_pending",
+    "before": {
+      "id": "tpdu_unit_without_value_is_pending",
+      "template": "tire",
+      "kind": "desconocido",
+      "values": {
+        "bead_seat_diameter_mm": "622",
+        "tire_general_max_pressures": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "pressure_unit": "bar",
+                "declared_scope": "Sin condición de llanta en el documento",
+                "source_document": "Schwalbe, ficha de producto 11100769 (Marathon Plus 37-622), edición 2014, schwalbe.com, leída 2026-09-07",
+                "source_url": "https://www.schwalbe.com/en/Marathon-Plus-11100769"
+              },
+              "sources": [
+                "https://www.schwalbe.com/en/Marathon-Plus-11100769"
+              ]
+            }
+          ]
+        }
+      },
+      "source_urls": [
+        "https://www.schwalbe.com/en/Marathon-Plus-11100769"
+      ],
+      "expected_blocking": [],
+      "expected_row_condition_issues": [
+        {
+          "code": "row_required_missing",
+          "field": "tire_general_max_pressures",
+          "row_id": "r1",
+          "column": "max_pressure_value",
+          "blocking": false
+        }
+      ],
+      "note": "Elegida la unidad, el valor es exigible y su falta queda pendiente.",
+      "observed_in_local_trial": [
+        {
+          "code": "required_missing",
+          "field": "tire_width_mm",
+          "row": null,
+          "column": null,
+          "blocking": false
+        },
+        {
+          "code": "required_missing",
+          "field": "tire_bead_type",
+          "row": null,
+          "column": null,
+          "blocking": false
+        },
+        {
+          "code": "prerequisite",
+          "field": "tire_general_max_pressures",
+          "row": null,
+          "column": null,
+          "blocking": false
+        },
+        {
+          "code": "row_required_missing",
+          "field": "tire_general_max_pressures",
+          "row": "r1",
+          "column": "max_pressure_value",
+          "blocking": false
+        }
+      ]
+    },
+    "after": {
+      "id": "tpdu_unit_without_value_is_pending",
+      "template": "tire",
+      "kind": "desconocido",
+      "values": {
+        "bead_seat_diameter_mm": "622",
+        "tire_general_max_pressures": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "pressure_unit": "bar",
+                "declared_scope": "Sin condición de llanta en el documento",
+                "source_document": "Schwalbe, ficha de producto 11100769 (Marathon Plus 37-622), schwalbe.com, leída 2026-09-07",
+                "source_url": "https://www.schwalbe.com/en/Marathon-Plus-11100769"
+              },
+              "sources": [
+                "https://www.schwalbe.com/en/Marathon-Plus-11100769"
+              ]
+            }
+          ]
+        }
+      },
+      "source_urls": [
+        "https://www.schwalbe.com/en/Marathon-Plus-11100769"
+      ],
+      "expected_blocking": [],
+      "expected_row_condition_issues": [
+        {
+          "code": "row_required_missing",
+          "field": "tire_general_max_pressures",
+          "row_id": "r1",
+          "column": "max_pressure_value",
+          "blocking": false
+        }
+      ],
+      "note": "Elegida la unidad, el valor es exigible y su falta queda pendiente.",
+      "observed_in_local_trial": [
+        {
+          "code": "required_missing",
+          "field": "tire_width_mm",
+          "row": null,
+          "column": null,
+          "blocking": false
+        },
+        {
+          "code": "required_missing",
+          "field": "tire_bead_type",
+          "row": null,
+          "column": null,
+          "blocking": false
+        },
+        {
+          "code": "prerequisite",
+          "field": "tire_general_max_pressures",
+          "row": null,
+          "column": null,
+          "blocking": false
+        },
+        {
+          "code": "row_required_missing",
+          "field": "tire_general_max_pressures",
+          "row": "r1",
+          "column": "max_pressure_value",
+          "blocking": false
+        }
+      ]
+    },
+    "reason": "Root verified both pages; 2014 is not established as document edition."
+  }
+]

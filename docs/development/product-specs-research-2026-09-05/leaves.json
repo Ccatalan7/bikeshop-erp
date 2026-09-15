@@ -1,0 +1,562 @@
+[
+  {
+    "path": "Accesorios / Adaptadores",
+    "templates": null,
+    "active_product_rows": 2
+  },
+  {
+    "path": "Accesorios / Asientos / Adaptadores de tija",
+    "templates": null,
+    "active_product_rows": 2
+  },
+  {
+    "path": "Accesorios / Asientos / Asiento",
+    "templates": null,
+    "active_product_rows": 18
+  },
+  {
+    "path": "Accesorios / Asientos / Collerín",
+    "templates": null,
+    "active_product_rows": 11
+  },
+  {
+    "path": "Accesorios / Asientos / Cubre Asientos",
+    "templates": null,
+    "active_product_rows": 4
+  },
+  {
+    "path": "Accesorios / Asientos / Tija",
+    "templates": null,
+    "active_product_rows": 13
+  },
+  {
+    "path": "Accesorios / Audífonos",
+    "templates": null,
+    "active_product_rows": 1
+  },
+  {
+    "path": "Accesorios / Bombines",
+    "templates": null,
+    "active_product_rows": 14
+  },
+  {
+    "path": "Accesorios / Botella de Agua",
+    "templates": null,
+    "active_product_rows": 4
+  },
+  {
+    "path": "Accesorios / Campanillas",
+    "templates": null,
+    "active_product_rows": 6
+  },
+  {
+    "path": "Accesorios / Canastos",
+    "templates": null,
+    "active_product_rows": 4
+  },
+  {
+    "path": "Accesorios / Candados",
+    "templates": null,
+    "active_product_rows": 31
+  },
+  {
+    "path": "Accesorios / Cascos",
+    "templates": null,
+    "active_product_rows": 13
+  },
+  {
+    "path": "Accesorios / Ciclocomputadores",
+    "templates": null,
+    "active_product_rows": 1
+  },
+  {
+    "path": "Accesorios / Cinta Manillar",
+    "templates": null,
+    "active_product_rows": 7
+  },
+  {
+    "path": "Accesorios / Cuerdas",
+    "templates": null,
+    "active_product_rows": 1
+  },
+  {
+    "path": "Accesorios / Fundas",
+    "templates": null,
+    "active_product_rows": 1
+  },
+  {
+    "path": "Accesorios / Guantes",
+    "templates": null,
+    "active_product_rows": 34
+  },
+  {
+    "path": "Accesorios / Indumentaria / Jerseys",
+    "templates": null,
+    "active_product_rows": 1
+  },
+  {
+    "path": "Accesorios / Lentes",
+    "templates": null,
+    "active_product_rows": 3
+  },
+  {
+    "path": "Accesorios / Luces",
+    "templates": null,
+    "active_product_rows": 16
+  },
+  {
+    "path": "Accesorios / Mochilas",
+    "templates": null,
+    "active_product_rows": 3
+  },
+  {
+    "path": "Accesorios / Pedales",
+    "templates": null,
+    "active_product_rows": 30
+  },
+  {
+    "path": "Accesorios / Poleras",
+    "templates": null,
+    "active_product_rows": 1
+  },
+  {
+    "path": "Accesorios / Porta Caramagiola",
+    "templates": null,
+    "active_product_rows": 7
+  },
+  {
+    "path": "Accesorios / Protectores",
+    "templates": null,
+    "active_product_rows": 7
+  },
+  {
+    "path": "Accesorios / Puños",
+    "templates": null,
+    "active_product_rows": 23
+  },
+  {
+    "path": "Accesorios / Seguridad / Reflectantes",
+    "templates": null,
+    "active_product_rows": 1
+  },
+  {
+    "path": "Accesorios / Soporte Celular",
+    "templates": null,
+    "active_product_rows": 8
+  },
+  {
+    "path": "Accesorios / Souvenirs",
+    "templates": null,
+    "active_product_rows": 2
+  },
+  {
+    "path": "Accesorios / Tapabarros",
+    "templates": null,
+    "active_product_rows": 4
+  },
+  {
+    "path": "BMX / Pedalines",
+    "templates": null,
+    "active_product_rows": 1
+  },
+  {
+    "path": "Componentes / Cambios / Desviadores / Desviador Trasero",
+    "templates": "rear_derailleur",
+    "active_product_rows": 34
+  },
+  {
+    "path": "Componentes / Cambios / Desviadores / Desviadores delanteros",
+    "templates": "front_derailleur",
+    "active_product_rows": 15
+  },
+  {
+    "path": "Componentes / Cambios / Postiza",
+    "templates": "derailleur_hanger",
+    "active_product_rows": 23
+  },
+  {
+    "path": "Componentes / Cambios / Regulador tensión",
+    "templates": null,
+    "active_product_rows": 0
+  },
+  {
+    "path": "Componentes / Cambios / Roldanas",
+    "templates": "derailleur_pulley",
+    "active_product_rows": 7
+  },
+  {
+    "path": "Componentes / Cambios / Shifters",
+    "templates": "shifter",
+    "active_product_rows": 32
+  },
+  {
+    "path": "Componentes / Dirección / Araña",
+    "templates": null,
+    "active_product_rows": 3
+  },
+  {
+    "path": "Componentes / Dirección / Espaciadores",
+    "templates": null,
+    "active_product_rows": 8
+  },
+  {
+    "path": "Componentes / Dirección / Horquillas",
+    "templates": null,
+    "active_product_rows": 11
+  },
+  {
+    "path": "Componentes / Dirección / Juego de dirección",
+    "templates": "headset",
+    "active_product_rows": 15
+  },
+  {
+    "path": "Componentes / Dirección / Manubrios",
+    "templates": null,
+    "active_product_rows": 11
+  },
+  {
+    "path": "Componentes / Dirección / Rodamientos",
+    "templates": "bearing",
+    "active_product_rows": 6
+  },
+  {
+    "path": "Componentes / Dirección / Tee",
+    "templates": null,
+    "active_product_rows": 17
+  },
+  {
+    "path": "Componentes / Frenos / Adaptadores",
+    "templates": null,
+    "active_product_rows": 4
+  },
+  {
+    "path": "Componentes / Frenos / Calipers",
+    "templates": "brake_caliper",
+    "active_product_rows": 11
+  },
+  {
+    "path": "Componentes / Frenos / Frenos Hidráulicos / Cable Freno Hidráulico",
+    "templates": null,
+    "active_product_rows": 2
+  },
+  {
+    "path": "Componentes / Frenos / Frenos Hidráulicos / Fittings Hidráulicos",
+    "templates": null,
+    "active_product_rows": 8
+  },
+  {
+    "path": "Componentes / Frenos / Frenos Hidráulicos / Frenos hidráulicos completos",
+    "templates": "hydraulic_disc_brake",
+    "active_product_rows": 3
+  },
+  {
+    "path": "Componentes / Frenos / Manillas",
+    "templates": "brake_lever",
+    "active_product_rows": 15
+  },
+  {
+    "path": "Componentes / Frenos / Pastillas",
+    "templates": "brake_pad",
+    "active_product_rows": 49
+  },
+  {
+    "path": "Componentes / Frenos / Regulador tensión frenos",
+    "templates": null,
+    "active_product_rows": 1
+  },
+  {
+    "path": "Componentes / Frenos / Rotor BMX",
+    "templates": "rotor",
+    "active_product_rows": 1
+  },
+  {
+    "path": "Componentes / Frenos / Rotores",
+    "templates": "rotor",
+    "active_product_rows": 17
+  },
+  {
+    "path": "Componentes / Frenos / V-Brake / Gomas V-Brake",
+    "templates": null,
+    "active_product_rows": 2
+  },
+  {
+    "path": "Componentes / Frenos / V-Brake / Herraduras",
+    "templates": "rim_brake",
+    "active_product_rows": 24
+  },
+  {
+    "path": "Componentes / Frenos / V-Brake / Noodles",
+    "templates": null,
+    "active_product_rows": 3
+  },
+  {
+    "path": "Componentes / Fundas y piolas / Cambios",
+    "templates": null,
+    "active_product_rows": 2
+  },
+  {
+    "path": "Componentes / Fundas y piolas / Frenos",
+    "templates": null,
+    "active_product_rows": 2
+  },
+  {
+    "path": "Componentes / Fundas y piolas / Terminales y topes",
+    "templates": null,
+    "active_product_rows": 11
+  },
+  {
+    "path": "Componentes / Groupset",
+    "templates": null,
+    "active_product_rows": 4
+  },
+  {
+    "path": "Componentes / Pernos/Tornillos/Otros",
+    "templates": null,
+    "active_product_rows": 20
+  },
+  {
+    "path": "Componentes / Rueda Estabilizadora",
+    "templates": null,
+    "active_product_rows": 2
+  },
+  {
+    "path": "Componentes / Ruedas / Agujas",
+    "templates": null,
+    "active_product_rows": 8
+  },
+  {
+    "path": "Componentes / Ruedas / Cámaras",
+    "templates": "tube",
+    "active_product_rows": 128
+  },
+  {
+    "path": "Componentes / Ruedas / Cámaras Anti-Pinchazo",
+    "templates": "tube",
+    "active_product_rows": 4
+  },
+  {
+    "path": "Componentes / Ruedas / Cubre Cámara",
+    "templates": "rim_strip",
+    "active_product_rows": 2
+  },
+  {
+    "path": "Componentes / Ruedas / Llantas",
+    "templates": "rim",
+    "active_product_rows": 41
+  },
+  {
+    "path": "Componentes / Ruedas / Mazas / Ejes / Conos",
+    "templates": null,
+    "active_product_rows": 6
+  },
+  {
+    "path": "Componentes / Ruedas / Mazas / Ejes / Contratuerca",
+    "templates": null,
+    "active_product_rows": 1
+  },
+  {
+    "path": "Componentes / Ruedas / Mazas / Maza",
+    "templates": "hub",
+    "active_product_rows": 40
+  },
+  {
+    "path": "Componentes / Ruedas / Neumáticos",
+    "templates": "tire",
+    "active_product_rows": 113
+  },
+  {
+    "path": "Componentes / Ruedas / Niples",
+    "templates": null,
+    "active_product_rows": 2
+  },
+  {
+    "path": "Componentes / Ruedas / Rayos",
+    "templates": "spoke",
+    "active_product_rows": 48
+  },
+  {
+    "path": "Componentes / Ruedas / Rodamientos",
+    "templates": "bearing",
+    "active_product_rows": 3
+  },
+  {
+    "path": "Componentes / Ruedas / Tubeless / Líquido Tubeless",
+    "templates": "tubeless_consumable",
+    "active_product_rows": 3
+  },
+  {
+    "path": "Componentes / Ruedas / Tubeless / O'rings",
+    "templates": null,
+    "active_product_rows": 1
+  },
+  {
+    "path": "Componentes / Ruedas / Tubeless / Tripas Tubeless",
+    "templates": null,
+    "active_product_rows": 1
+  },
+  {
+    "path": "Componentes / Ruedas / Tubeless / Válvula Tubeless",
+    "templates": "tubeless_valve",
+    "active_product_rows": 8
+  },
+  {
+    "path": "Componentes / Shock",
+    "templates": null,
+    "active_product_rows": 1
+  },
+  {
+    "path": "Componentes / Transmisión / Cadenas / Guias de cadena",
+    "templates": "chain_guide",
+    "active_product_rows": 3
+  },
+  {
+    "path": "Componentes / Transmisión / Kits",
+    "templates": "drivetrain_kit",
+    "active_product_rows": 1
+  },
+  {
+    "path": "Componentes / Transmisión / Missinglink",
+    "templates": "chain_link",
+    "active_product_rows": 9
+  },
+  {
+    "path": "Componentes / Transmisión / Motores / Cubetas",
+    "templates": "bottom_bracket_cup",
+    "active_product_rows": 8
+  },
+  {
+    "path": "Componentes / Transmisión / Motores / Ejes de motor",
+    "templates": "bottom_bracket_axle",
+    "active_product_rows": 3
+  },
+  {
+    "path": "Componentes / Transmisión / Motores / Motor",
+    "templates": "bottom_bracket",
+    "active_product_rows": 34
+  },
+  {
+    "path": "Componentes / Transmisión / Motores / Rodamientos Motor",
+    "templates": "bottom_bracket_bearing",
+    "active_product_rows": 3
+  },
+  {
+    "path": "Componentes / Transmisión / Piñones / Cassette",
+    "templates": "cassette",
+    "active_product_rows": 29
+  },
+  {
+    "path": "Componentes / Transmisión / Piñones / Espaciadores de Cassette",
+    "templates": "cassette_spacer",
+    "active_product_rows": 3
+  },
+  {
+    "path": "Componentes / Transmisión / Piñones / Fixie",
+    "templates": "fixed_cog",
+    "active_product_rows": 0
+  },
+  {
+    "path": "Componentes / Transmisión / Piñones / Freewheel",
+    "templates": "freewheel",
+    "active_product_rows": 0
+  },
+  {
+    "path": "Componentes / Transmisión / Volantes / Biela Americana",
+    "templates": "crankset",
+    "active_product_rows": 2
+  },
+  {
+    "path": "Componentes / Transmisión / Volantes / Biela Izquierda",
+    "templates": "crank_arm",
+    "active_product_rows": 7
+  },
+  {
+    "path": "Componentes / Transmisión / Volantes / Catalina",
+    "templates": "chainring",
+    "active_product_rows": 2
+  },
+  {
+    "path": "Componentes / Transmisión / Volantes / Coronas",
+    "templates": "chainring",
+    "active_product_rows": 14
+  },
+  {
+    "path": "Componentes / Transmisión / Volantes / Volante",
+    "templates": "crankset",
+    "active_product_rows": 20
+  },
+  {
+    "path": "Herramientas / Botellas aplicadoras",
+    "templates": null,
+    "active_product_rows": 1
+  },
+  {
+    "path": "Herramientas / Corta Cadena",
+    "templates": null,
+    "active_product_rows": 4
+  },
+  {
+    "path": "Mantenimiento / Abrillantadores/Renovadores",
+    "templates": null,
+    "active_product_rows": 1
+  },
+  {
+    "path": "Mantenimiento / Desengrasantes",
+    "templates": null,
+    "active_product_rows": 3
+  },
+  {
+    "path": "Mantenimiento / Grasa",
+    "templates": null,
+    "active_product_rows": 2
+  },
+  {
+    "path": "Mantenimiento / Líquido Frenos",
+    "templates": null,
+    "active_product_rows": 1
+  },
+  {
+    "path": "Mantenimiento / Lubricantes",
+    "templates": null,
+    "active_product_rows": 16
+  },
+  {
+    "path": "Mantenimiento / Parches",
+    "templates": null,
+    "active_product_rows": 6
+  },
+  {
+    "path": "Mantenimiento / Pegamento parches",
+    "templates": null,
+    "active_product_rows": 2
+  },
+  {
+    "path": "Mantenimiento / Silicona",
+    "templates": null,
+    "active_product_rows": 1
+  },
+  {
+    "path": "Otros",
+    "templates": null,
+    "active_product_rows": 1
+  },
+  {
+    "path": "Servicio",
+    "templates": null,
+    "active_product_rows": 3
+  },
+  {
+    "path": "Viñabike / Adaptadores",
+    "templates": null,
+    "active_product_rows": 2
+  },
+  {
+    "path": "Viñabike / Grasa/Aceites/Soluciones/Limpiadores",
+    "templates": null,
+    "active_product_rows": 7
+  },
+  {
+    "path": "Viñabike / Herramientas",
+    "templates": null,
+    "active_product_rows": 18
+  }
+]

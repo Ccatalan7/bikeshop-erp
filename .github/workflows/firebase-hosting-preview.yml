@@ -1,0 +1,191 @@
+# Publishes the ERP web build of every pull request on a temporary Firebase
+# Hosting preview channel, so a change can be tried from any device (an iPad,
+# a phone, another computer) before it reaches main.
+#
+# Same build recipe as firebase-hosting-merge.yml. The differences are the
+# channel (a temporary one that expires after 7 days instead of `live`), the
+# release.json target, and that nothing here touches production hosting.
+# The link is posted as a pull-request comment by the deploy action and
+# written to the run summary. Every push to the PR replaces the preview.
+#
+# One-time setup: the GitHub environment `Preview` must expose the secret
+# FIREBASE_SERVICE_ACCOUNT_PROJECT_VINABIKE (the same service account the
+# merge workflow uses). A manual run (workflow_dispatch) verifies the setup
+# without opening a pull request. See docs/development/WEB_PREVIEW.md.
+name: ERP web preview
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+    paths:
+      - "lib/**"
+      - "web/**"
+      - "assets/**"
+      - "packages/**"
+      - "pubspec.yaml"
+      - "pubspec.lock"
+      - "analysis_options.yaml"
+      - "firebase.json"
+      - ".firebaserc"
+      - "package.json"
+      - "package-lock.json"
+      - ".github/workflows/firebase-hosting-preview.yml"
+  workflow_dispatch:
+    inputs:
+      reason:
+        description: Why this manual preview is being published
+        required: false
+        type: string
+        default: manual verification of the preview pipeline
+
+permissions:
+  contents: read
+  checks: write
+  pull-requests: write
+
+concurrency:
+  group: erp-preview-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build_and_preview:
+    name: Build the ERP web release and publish a preview link
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    environment: Preview
+    # A pull request from a fork receives no secrets and cannot publish.
+    if: >-
+      ${{ github.event_name == 'workflow_dispatch'
+          || github.event.pull_request.head.repo.full_name == github.repository }}
+    steps:
+      - name: Check the Preview environment credential
+        id: creds
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_PROJECT_VINABIKE }}
+        run: |
+          if [ -n "$FIREBASE_SERVICE_ACCOUNT" ]; then
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+            {
+              echo "## ERP web preview"
+              echo
+              echo "Skipped: the GitHub environment \`Preview\` has no"
+              echo "\`FIREBASE_SERVICE_ACCOUNT_PROJECT_VINABIKE\` secret yet."
+              echo "See docs/development/WEB_PREVIEW.md (one-time setup)."
+            } >> "$GITHUB_STEP_SUMMARY"
+            echo "::notice::Preview skipped: FIREBASE_SERVICE_ACCOUNT_PROJECT_VINABIKE is not available in the Preview environment."
+          fi
+
+      - uses: actions/checkout@v7
+        if: steps.creds.outputs.enabled == 'true'
+
+      - name: Set up Node for the spreadsheet engine
+        if: steps.creds.outputs.enabled == 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24.18.0"
+          cache: npm
+
+      - name: Build packaged spreadsheet engine
+        if: steps.creds.outputs.enabled == 'true'
+        run: |
+          npm ci
+          npm run build:spreadsheet-engine
+
+      - name: Set up Flutter
+        if: steps.creds.outputs.enabled == 'true'
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: "3.38.5"
+          channel: "stable"
+          cache: true
+
+      - name: Cache resolved Dart packages
+        if: steps.creds.outputs.enabled == 'true'
+        uses: actions/cache@v4
+        with:
+          path: ~/.pub-cache
+          key: pub-${{ runner.os }}-${{ hashFiles('pubspec.lock') }}
+          restore-keys: pub-${{ runner.os }}-
+
+      - name: Install dependencies
+        if: steps.creds.outputs.enabled == 'true'
+        run: flutter pub get
+
+      - name: Build web release
+        if: steps.creds.outputs.enabled == 'true'
+        env:
+          PR_NUMBER: ${{ github.event.pull_request.number || '' }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          flutter build web --release --no-wasm-dry-run \
+            --dart-define=VINABIKE_BUILD_TAG=${{ github.sha }} \
+            -t lib/main.dart -o build/web_erp
+          jq -n \
+            --arg commit "${{ github.sha }}" \
+            --arg head "$HEAD_SHA" \
+            --arg pr "$PR_NUMBER" \
+            --arg run "${{ github.run_id }}" \
+            --arg built_at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            '{commit: $commit, head: $head, pull_request: $pr, run: $run, built_at: $built_at, target: "erp-preview"}' \
+            > build/web_erp/release.json
+
+      - name: Publish the preview channel
+        if: steps.creds.outputs.enabled == 'true'
+        id: preview
+        uses: FirebaseExtended/action-hosting-deploy@v0
+        with:
+          repoToken: ${{ secrets.GITHUB_TOKEN }}
+          firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_PROJECT_VINABIKE }}
+          projectId: project-vinabike
+          target: erp
+          expires: 7d
+          # On a pull request the action derives the channel from the PR
+          # number and branch; a manual run needs an explicit one.
+          channelId: ${{ github.event_name == 'workflow_dispatch' && format('manual-{0}', github.run_id) || '' }}
+
+      - name: Verify the preview serves exactly this commit
+        if: steps.creds.outputs.enabled == 'true'
+        env:
+          PREVIEW_URL: ${{ steps.preview.outputs.details_url }}
+        run: |
+          test -n "$PREVIEW_URL"
+          # A channel that already existed keeps serving its previous version
+          # for a short while after `hosting:channel:deploy` returns (seen on
+          # the second push of PR #29: the deploy succeeded and the very next
+          # read still carried the earlier commit). `curl --retry` only covers
+          # transport errors, so the content itself is polled for up to two
+          # minutes with a fresh cache-buster on every attempt.
+          expected='${{ github.sha }}'
+          served=''
+          for attempt in $(seq 1 20); do
+            served="$(curl --fail --silent --show-error \
+              -H 'Cache-Control: no-cache' \
+              "$PREVIEW_URL/release.json?commit=${expected}&attempt=${attempt}" \
+              | jq -r 'select(.target == "erp-preview") | .commit' || true)"
+            if [ "$served" = "$expected" ]; then
+              echo "Preview serves ${expected} after ${attempt} attempt(s)."
+              exit 0
+            fi
+            echo "Attempt ${attempt}: preview still serves '${served:-<none>}'; waiting."
+            sleep 6
+          done
+          echo "::error::Preview never served ${expected}; last seen '${served:-<none>}'."
+          exit 1
+
+      - name: Write the link to the run summary
+        if: steps.creds.outputs.enabled == 'true'
+        env:
+          PREVIEW_URL: ${{ steps.preview.outputs.details_url }}
+          EXPIRES: ${{ steps.preview.outputs.expire_time }}
+        run: |
+          {
+            echo "## ERP web preview"
+            echo
+            echo "Open it on any device: $PREVIEW_URL"
+            echo
+            echo "- Commit: \`${{ github.sha }}\`"
+            echo "- Expires: ${EXPIRES:-in 7 days}"
+            echo "- It talks to the production Supabase project: every action is real."
+          } >> "$GITHUB_STEP_SUMMARY"

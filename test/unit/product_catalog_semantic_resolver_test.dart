@@ -298,6 +298,58 @@ void main() {
       expect(result.requiresReview, isFalse);
     });
 
+    test('ENLEE explícito vence al origen CHINA de la opción', () {
+      final resolver = _resolver(
+        additionalBrands: [
+          _brand('brand-enlee', 'ENLEE'),
+          _brand('brand-china', 'China'),
+        ],
+      );
+
+      final result = resolver.resolve(
+        const ProductCatalogSemanticInput(
+          rowId: 'enlee-cr2',
+          rawTitle: 'ENLEE Pedal CNC aleación de aluminio (CR-2 black, CHINA)',
+          brandHint: 'China',
+        ),
+      );
+
+      expect(result.brand?.id, 'brand-enlee');
+      expect(result.brand?.name, 'ENLEE');
+      expect(
+        result.evidence.any(
+          (item) =>
+              item.kind ==
+                  ProductCatalogSemanticEvidenceKind.rejectedBrandHint &&
+              item.detail.contains('China') &&
+              item.detail.contains('ENLEE'),
+        ),
+        isTrue,
+      );
+    });
+
+    test('CHINA nunca se acepta como fabricante explícito', () {
+      final result = _resolver(
+        additionalBrands: [_brand('brand-china', 'China')],
+      ).resolve(
+        const ProductCatalogSemanticInput(
+          rowId: 'origin-only',
+          rawTitle: 'Pedal CNC (black, CHINA)',
+          brandHint: 'China',
+        ),
+      );
+
+      expect(result.brand, isNull);
+      expect(
+        result.evidence.any(
+          (item) =>
+              item.kind == ProductCatalogSemanticEvidenceKind.explicitBrand &&
+              item.detail.toLowerCase() == 'china',
+        ),
+        isFalse,
+      );
+    });
+
     test('maps the productive IXF platos y bielas title to crankset', () {
       final resolver = _resolver(
         additionalBrands: [_brand('brand-ixf', 'IXF')],

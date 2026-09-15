@@ -863,7 +863,7 @@ if ($null -ne $preparedUpdate) {
 $notesTitleIdentity = if (
     [string]::IsNullOrWhiteSpace($releaseNotesCandidateSha256)
 ) {
-    'fallback'
+    'gemini'
 } else {
     $releaseNotesCandidateSha256
 }

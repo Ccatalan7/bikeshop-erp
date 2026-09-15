@@ -1,0 +1,4241 @@
+{
+  "schema_version": 1,
+  "scope": "new_global_metadata_only",
+  "audited_tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+  "catalog_sha256": "a5e3add682ae2ee881daaa158b55478d3762341de2f7fb35ddf05525a928897a",
+  "cases_sha256": "44afed36113d8e87c755fdf438be1b96119f6a5d25e3f7fbd523466fce608135",
+  "preimage_sha256": "1732859b6960a51dee0ee5b7de7eec5c91aad57dc10f83515f63d491b7aefceb",
+  "families": [
+    "brake_mount_adapter",
+    "rotor_mount_adapter",
+    "brake_small_part",
+    "hub_brake"
+  ],
+  "reused_definitions": [
+    {
+      "id": "369c2b61-dd89-5153-8fdb-7ecf123529fd",
+      "key": "compatible_brake_models",
+      "unit": null,
+      "label": "Modelos de freno documentados",
+      "options": [],
+      "data_type": "json",
+      "tenant_id": null,
+      "created_at": "2026-09-08T02:08:22.750833+00:00",
+      "group_name": null,
+      "sort_order": 0,
+      "updated_at": "2026-09-08T02:08:22.750833+00:00",
+      "description": null,
+      "is_filterable": false,
+      "allowed_values": [],
+      "validation_rules": {
+        "rows_schema": {
+          "columns": [
+            {
+              "key": "brand",
+              "type": "text",
+              "label": "Marca",
+              "required": true
+            },
+            {
+              "key": "model",
+              "type": "text",
+              "label": "Modelo",
+              "required": true
+            },
+            {
+              "key": "source_url",
+              "type": "url",
+              "label": "Fuente",
+              "required": true
+            },
+            {
+              "key": "generation",
+              "type": "text",
+              "label": "Generación o edición",
+              "required": false
+            },
+            {
+              "key": "conditions",
+              "type": "text",
+              "label": "Condiciones de la declaración",
+              "required": false
+            },
+            {
+              "key": "position",
+              "type": "token",
+              "label": "Posición de la contraparte",
+              "required": false,
+              "allowed_values": [
+                "Delantero",
+                "Trasero"
+              ]
+            },
+            {
+              "key": "variant",
+              "type": "text",
+              "label": "Variante exacta de la contraparte",
+              "required": false
+            }
+          ],
+          "version": 1
+        }
+      },
+      "is_customer_visible": false,
+      "is_mechanic_visible": true,
+      "is_required_by_default": false,
+      "is_compatibility_relevant": false
+    },
+    {
+      "id": "4f055961-6c16-430b-a4e2-e6b09dc1cccc",
+      "key": "spec_evidence_source",
+      "unit": null,
+      "label": "Fuente de la declaración",
+      "options": [],
+      "data_type": "text",
+      "tenant_id": null,
+      "created_at": "2026-09-06T06:58:57.745728+00:00",
+      "group_name": null,
+      "sort_order": 900,
+      "updated_at": "2026-09-06T06:58:57.745728+00:00",
+      "description": "URL del fabricante, manual o identificación del envase que respalda la declaración.",
+      "is_filterable": false,
+      "allowed_values": [],
+      "validation_rules": {},
+      "is_customer_visible": false,
+      "is_mechanic_visible": true,
+      "is_required_by_default": false,
+      "is_compatibility_relevant": false
+    },
+    {
+      "id": "7da3359a-e29f-57d8-901f-355753d1c6b3",
+      "key": "material",
+      "unit": null,
+      "label": "Material",
+      "options": [
+        {
+          "id": "0f7a88b0-4cf7-5429-9678-30180a13c41e",
+          "code": "catalog_903afabafdfb27787b1e00c966021b0c",
+          "label": "Policarbonato / plástico",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-09-07T22:33:40.381707+00:00",
+          "sort_order": 10,
+          "updated_at": "2026-09-07T22:33:40.381707+00:00",
+          "spec_definition_id": "7da3359a-e29f-57d8-901f-355753d1c6b3"
+        },
+        {
+          "id": "11fbf5fa-89db-5f5d-bf42-d4b4f27ce3b4",
+          "code": "catalog_70cc49d9167b975547d0730eee2beddf",
+          "label": "Titanio",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-09-07T22:33:40.381707+00:00",
+          "sort_order": 11,
+          "updated_at": "2026-09-07T22:33:40.381707+00:00",
+          "spec_definition_id": "7da3359a-e29f-57d8-901f-355753d1c6b3"
+        },
+        {
+          "id": "18676042-bb7f-53a8-825f-6e1779939de0",
+          "code": "catalog_e266cfd65ad46a67fc54b0efd38e40dd",
+          "label": "Polar",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-09-07T22:33:40.381707+00:00",
+          "sort_order": 26,
+          "updated_at": "2026-09-07T22:33:40.381707+00:00",
+          "spec_definition_id": "7da3359a-e29f-57d8-901f-355753d1c6b3"
+        },
+        {
+          "id": "1b12240f-919b-5ff0-ba34-35e949e21483",
+          "code": "catalog_8265ca77f1ed28b82afd09bc72da0884",
+          "label": "Acero",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-09-07T22:33:40.381707+00:00",
+          "sort_order": 0,
+          "updated_at": "2026-09-07T22:33:40.381707+00:00",
+          "spec_definition_id": "7da3359a-e29f-57d8-901f-355753d1c6b3"
+        },
+        {
+          "id": "2a4d8d37-e119-5797-b9be-b168b918353f",
+          "code": "catalog_83c79025b595f0896b60de03d1fc64f2",
+          "label": "Neopreno",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-09-07T22:33:40.381707+00:00",
+          "sort_order": 24,
+          "updated_at": "2026-09-07T22:33:40.381707+00:00",
+          "spec_definition_id": "7da3359a-e29f-57d8-901f-355753d1c6b3"
+        },
+        {
+          "id": "32b400b8-9ed3-5b8e-834a-0252f819e27d",
+          "code": "catalog_5756f15654fa53239591def5b5a0f2bc",
+          "label": "Poliéster",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-09-07T22:33:40.381707+00:00",
+          "sort_order": 25,
+          "updated_at": "2026-09-07T22:33:40.381707+00:00",
+          "spec_definition_id": "7da3359a-e29f-57d8-901f-355753d1c6b3"
+        },
+        {
+          "id": "4ffab964-2ebc-5021-90c0-be85480b68ec",
+          "code": "catalog_f1bf3336d6fd120b3eee3952c39c0677",
+          "label": "Carbono",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-09-07T22:33:40.381707+00:00",
+          "sort_order": 8,
+          "updated_at": "2026-09-07T22:33:40.381707+00:00",
+          "spec_definition_id": "7da3359a-e29f-57d8-901f-355753d1c6b3"
+        },
+        {
+          "id": "5941e1d7-4af1-53fc-891d-07d61d639e01",
+          "code": "catalog_666b8b46df3bf02a807530692d01ecf4",
+          "label": "PE / plástico",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-09-07T22:33:40.381707+00:00",
+          "sort_order": 20,
+          "updated_at": "2026-09-07T22:33:40.381707+00:00",
+          "spec_definition_id": "7da3359a-e29f-57d8-901f-355753d1c6b3"
+        },
+        {
+          "id": "6df2768e-61d3-5383-ad5a-001a88f6879f",
+          "code": "catalog_eda88ba0a167a288dce3e99be54bfa69",
+          "label": "Gel / PU",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-09-07T22:33:40.381707+00:00",
+          "sort_order": 6,
+          "updated_at": "2026-09-07T22:33:40.381707+00:00",
+          "spec_definition_id": "7da3359a-e29f-57d8-901f-355753d1c6b3"
+        },
+        {
+          "id": "72005f61-79a3-54cb-882d-0f3c92ab0efc",
+          "code": "catalog_d09dfb57de9bcb275cdbffe1d9f7d4ed",
+          "label": "Latón",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-09-07T22:33:40.381707+00:00",
+          "sort_order": 12,
+          "updated_at": "2026-09-07T22:33:40.381707+00:00",
+          "spec_definition_id": "7da3359a-e29f-57d8-901f-355753d1c6b3"
+        },
+        {
+          "id": "76ab4355-d966-5e41-b886-d2b357a66e64",
+          "code": "catalog_3add2a4e04f3365b9551044bf9e00baf",
+          "label": "Plástico",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-09-07T22:33:40.381707+00:00",
+          "sort_order": 2,
+          "updated_at": "2026-09-07T22:33:40.381707+00:00",
+          "spec_definition_id": "7da3359a-e29f-57d8-901f-355753d1c6b3"
+        },
+        {
+          "id": "78c8ca78-87a0-5370-9fe0-bfd99b9bb1db",
+          "code": "catalog_978d237a8b99eff81cf349e2409e9ee3",
+          "label": "Plástico / nylon",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-09-07T22:33:40.381707+00:00",
+          "sort_order": 18,
+          "updated_at": "2026-09-07T22:33:40.381707+00:00",
+          "spec_definition_id": "7da3359a-e29f-57d8-901f-355753d1c6b3"
+        },
+        {
+          "id": "7d421327-d744-5f53-9e0f-3a86cb84ae4e",
+          "code": "catalog_c2295235a535ea3e85b7a0e5ab85afb0",
+          "label": "Otro",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-09-07T22:33:40.381707+00:00",
+          "sort_order": 3,
+          "updated_at": "2026-09-07T22:33:40.381707+00:00",
+          "spec_definition_id": "7da3359a-e29f-57d8-901f-355753d1c6b3"
+        },
+        {
+          "id": "81b9ec48-84af-50c5-9331-0c084bf8b952",
+          "code": "catalog_83967661f51953134a64311d65e5541a",
+          "label": "Goma",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-09-07T22:33:40.381707+00:00",
+          "sort_order": 19,
+          "updated_at": "2026-09-07T22:33:40.381707+00:00",
+          "spec_definition_id": "7da3359a-e29f-57d8-901f-355753d1c6b3"
+        },
+        {
+          "id": "8cb43060-b124-5141-aecb-d7ca8c301784",
+          "code": "catalog_d4ab62ce43f88267676dc8fd37c1af6f",
+          "label": "Acero inoxidable",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-09-07T22:33:40.381707+00:00",
+          "sort_order": 16,
+          "updated_at": "2026-09-07T22:33:40.381707+00:00",
+          "spec_definition_id": "7da3359a-e29f-57d8-901f-355753d1c6b3"
+        },
+        {
+          "id": "9aabd194-418e-57b7-9162-b1fa27275915",
+          "code": "catalog_c93a50726342225b7b323e2de4064ebc",
+          "label": "Magnesio / mixta",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-09-07T22:33:40.381707+00:00",
+          "sort_order": 9,
+          "updated_at": "2026-09-07T22:33:40.381707+00:00",
+          "spec_definition_id": "7da3359a-e29f-57d8-901f-355753d1c6b3"
+        },
+        {
+          "id": "a03a449f-2130-5fd7-9b8a-76698d86cb8b",
+          "code": "catalog_959ebb89f0689b5549189de2bcd866c6",
+          "label": "Tritan",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-09-07T22:33:40.381707+00:00",
+          "sort_order": 21,
+          "updated_at": "2026-09-07T22:33:40.381707+00:00",
+          "spec_definition_id": "7da3359a-e29f-57d8-901f-355753d1c6b3"
+        },
+        {
+          "id": "a6404bd8-4942-56d4-b8b0-40404909ed8d",
+          "code": "catalog_e8abd84a32604632f01c81dac8526457",
+          "label": "Poliéster / PET",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-09-07T22:33:40.381707+00:00",
+          "sort_order": 13,
+          "updated_at": "2026-09-07T22:33:40.381707+00:00",
+          "spec_definition_id": "7da3359a-e29f-57d8-901f-355753d1c6b3"
+        },
+        {
+          "id": "aed6613f-f75c-591e-ac95-01d904df245e",
+          "code": "catalog_f0fa8cf43bf1f7c3f4a4b7385d51ce0b",
+          "label": "Algodón",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-09-07T22:33:40.381707+00:00",
+          "sort_order": 27,
+          "updated_at": "2026-09-07T22:33:40.381707+00:00",
+          "spec_definition_id": "7da3359a-e29f-57d8-901f-355753d1c6b3"
+        },
+        {
+          "id": "b6430da5-0bbc-5fb6-8309-830153bfde99",
+          "code": "catalog_d65a2876c47595510cc52a5bd5d589f6",
+          "label": "Mezcla",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-09-07T22:33:40.381707+00:00",
+          "sort_order": 28,
+          "updated_at": "2026-09-07T22:33:40.381707+00:00",
+          "spec_definition_id": "7da3359a-e29f-57d8-901f-355753d1c6b3"
+        },
+        {
+          "id": "bb2e4d96-1e8d-50c2-822b-d2e286f1654c",
+          "code": "catalog_78b342449927661ac3b622233fc2869b",
+          "label": "Acero galvanizado",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-09-07T22:33:40.381707+00:00",
+          "sort_order": 15,
+          "updated_at": "2026-09-07T22:33:40.381707+00:00",
+          "spec_definition_id": "7da3359a-e29f-57d8-901f-355753d1c6b3"
+        },
+        {
+          "id": "c5dfe1a4-1133-5f84-af73-82564d0b5766",
+          "code": "catalog_4ba389f6e8a3692d46102e09d396ddc2",
+          "label": "EVA",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-09-07T22:33:40.381707+00:00",
+          "sort_order": 4,
+          "updated_at": "2026-09-07T22:33:40.381707+00:00",
+          "spec_definition_id": "7da3359a-e29f-57d8-901f-355753d1c6b3"
+        },
+        {
+          "id": "c5fda83c-954f-52a2-a67d-1c6a8ca0808a",
+          "code": "catalog_98b40d133309aed77e37fb1843cdbc27",
+          "label": "PVC / vinilo",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-09-07T22:33:40.381707+00:00",
+          "sort_order": 23,
+          "updated_at": "2026-09-07T22:33:40.381707+00:00",
+          "spec_definition_id": "7da3359a-e29f-57d8-901f-355753d1c6b3"
+        },
+        {
+          "id": "d1ada999-7a10-5de2-837d-d1b4a2f72af6",
+          "code": "catalog_708f9ce7c90b4bd833fed140664df384",
+          "label": "Mimbre",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-09-07T22:33:40.381707+00:00",
+          "sort_order": 22,
+          "updated_at": "2026-09-07T22:33:40.381707+00:00",
+          "spec_definition_id": "7da3359a-e29f-57d8-901f-355753d1c6b3"
+        },
+        {
+          "id": "d3e3d8c7-43eb-5d4e-ac76-fa34e0a57b40",
+          "code": "catalog_6691e26bfeea24b353c9357ca4275ab6",
+          "label": "Aluminio",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-09-07T22:33:40.381707+00:00",
+          "sort_order": 1,
+          "updated_at": "2026-09-07T22:33:40.381707+00:00",
+          "spec_definition_id": "7da3359a-e29f-57d8-901f-355753d1c6b3"
+        },
+        {
+          "id": "dc1c2129-e647-50bc-816f-a315d2621247",
+          "code": "catalog_1ba6129627b0af4dc9d3e3cf9b84e6ea",
+          "label": "Recubierto (teflón / polímero)",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-09-07T22:33:40.381707+00:00",
+          "sort_order": 17,
+          "updated_at": "2026-09-07T22:33:40.381707+00:00",
+          "spec_definition_id": "7da3359a-e29f-57d8-901f-355753d1c6b3"
+        },
+        {
+          "id": "dc2b5e86-8a3f-5283-9b72-338e2c362cbd",
+          "code": "catalog_025d10f299c1af11ed2b61ff7dd07ee8",
+          "label": "Corcho",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-09-07T22:33:40.381707+00:00",
+          "sort_order": 5,
+          "updated_at": "2026-09-07T22:33:40.381707+00:00",
+          "spec_definition_id": "7da3359a-e29f-57d8-901f-355753d1c6b3"
+        },
+        {
+          "id": "f8fd17f7-50df-5e55-9904-bb7d6a3e11e0",
+          "code": "catalog_457724ad08d0131d0c80c98ad534533e",
+          "label": "Silicona",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-09-07T22:33:40.381707+00:00",
+          "sort_order": 7,
+          "updated_at": "2026-09-07T22:33:40.381707+00:00",
+          "spec_definition_id": "7da3359a-e29f-57d8-901f-355753d1c6b3"
+        },
+        {
+          "id": "f94df7ee-e1e0-5d45-8a4c-385ff5bb6671",
+          "code": "catalog_1ab67d54125e7b2bd931c766113c49df",
+          "label": "Nylon",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-09-07T22:33:40.381707+00:00",
+          "sort_order": 14,
+          "updated_at": "2026-09-07T22:33:40.381707+00:00",
+          "spec_definition_id": "7da3359a-e29f-57d8-901f-355753d1c6b3"
+        }
+      ],
+      "data_type": "single_select",
+      "tenant_id": null,
+      "created_at": "2026-09-07T22:33:40.381707+00:00",
+      "group_name": null,
+      "sort_order": 0,
+      "updated_at": "2026-09-07T22:33:40.381707+00:00",
+      "description": null,
+      "is_filterable": false,
+      "allowed_values": [
+        "Acero",
+        "Aluminio",
+        "Plástico",
+        "Otro",
+        "EVA",
+        "Corcho",
+        "Gel / PU",
+        "Silicona",
+        "Carbono",
+        "Magnesio / mixta",
+        "Policarbonato / plástico",
+        "Titanio",
+        "Latón",
+        "Poliéster / PET",
+        "Nylon",
+        "Acero galvanizado",
+        "Acero inoxidable",
+        "Recubierto (teflón / polímero)",
+        "Plástico / nylon",
+        "Goma",
+        "PE / plástico",
+        "Tritan",
+        "Mimbre",
+        "PVC / vinilo",
+        "Neopreno",
+        "Poliéster",
+        "Polar",
+        "Algodón",
+        "Mezcla"
+      ],
+      "validation_rules": {},
+      "is_customer_visible": false,
+      "is_mechanic_visible": true,
+      "is_required_by_default": false,
+      "is_compatibility_relevant": false
+    },
+    {
+      "id": "920bb7cf-9240-5ba9-8ec9-744c335ec01b",
+      "key": "thread",
+      "unit": null,
+      "label": "Designación nominal de la rosca (según etiqueta)",
+      "options": [
+        {
+          "id": "083c9577-e7a9-53bf-bc8c-6a5ad3857633",
+          "code": "catalog_b32843f22ae0b752c2b7f782c9bdc997",
+          "label": "9 mm",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-09-07T23:23:18.284731+00:00",
+          "sort_order": 21,
+          "updated_at": "2026-09-07T23:23:18.284731+00:00",
+          "spec_definition_id": "920bb7cf-9240-5ba9-8ec9-744c335ec01b"
+        },
+        {
+          "id": "1180b108-4805-5be0-bb13-aa9d72c4b9b7",
+          "code": "catalog_5d9642022ecdd2f8382586602986dcd9",
+          "label": "M15",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-09-07T23:23:18.284731+00:00",
+          "sort_order": 13,
+          "updated_at": "2026-09-07T23:23:18.284731+00:00",
+          "spec_definition_id": "920bb7cf-9240-5ba9-8ec9-744c335ec01b"
+        },
+        {
+          "id": "1aa2888e-2f76-57ea-b609-823985027629",
+          "code": "catalog_d87d684a63ec1a3c79ad97a3c69a3dfb",
+          "label": "5/16\"",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-09-07T23:23:18.284731+00:00",
+          "sort_order": 18,
+          "updated_at": "2026-09-07T23:23:18.284731+00:00",
+          "spec_definition_id": "920bb7cf-9240-5ba9-8ec9-744c335ec01b"
+        },
+        {
+          "id": "31a5ba26-aab9-5101-a9af-5d7746bc10c4",
+          "code": "catalog_e9b2ff641da23037adec56684fb7552b",
+          "label": "M12",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-09-07T23:23:18.284731+00:00",
+          "sort_order": 5,
+          "updated_at": "2026-09-07T23:23:18.284731+00:00",
+          "spec_definition_id": "920bb7cf-9240-5ba9-8ec9-744c335ec01b"
+        },
+        {
+          "id": "37141163-e5b9-58f9-8098-d726fddcc79f",
+          "code": "catalog_de6e897b1c6ced32e6762f3ceaebffd6",
+          "label": "Desconocido / sin confirmar",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-09-07T23:23:18.284731+00:00",
+          "sort_order": 9,
+          "updated_at": "2026-09-07T23:23:18.284731+00:00",
+          "spec_definition_id": "920bb7cf-9240-5ba9-8ec9-744c335ec01b"
+        },
+        {
+          "id": "3bedd965-e2a7-57ef-a4a2-489bfb463eb8",
+          "code": "catalog_c415ea602c82b1e1b579f2e282377994",
+          "label": "M10",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-09-07T23:23:18.284731+00:00",
+          "sort_order": 4,
+          "updated_at": "2026-09-07T23:23:18.284731+00:00",
+          "spec_definition_id": "920bb7cf-9240-5ba9-8ec9-744c335ec01b"
+        },
+        {
+          "id": "463987ad-020a-5013-ac81-08d6ff398f21",
+          "code": "catalog_31a0b85dab4ffccf5c18d93ac2d5945a",
+          "label": "M9",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-09-07T23:23:18.284731+00:00",
+          "sort_order": 12,
+          "updated_at": "2026-09-07T23:23:18.284731+00:00",
+          "spec_definition_id": "920bb7cf-9240-5ba9-8ec9-744c335ec01b"
+        },
+        {
+          "id": "47a8facd-4ff7-58a1-99ce-b7dbfa73e2c5",
+          "code": "catalog_f07d64e873a4e0a6a0a970dbb158788d",
+          "label": "M22",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-09-07T23:23:18.284731+00:00",
+          "sort_order": 17,
+          "updated_at": "2026-09-07T23:23:18.284731+00:00",
+          "spec_definition_id": "920bb7cf-9240-5ba9-8ec9-744c335ec01b"
+        },
+        {
+          "id": "49c54db5-09db-5f69-97fc-f35d45d0dc9f",
+          "code": "catalog_74b463f02d110a4068fb6941803e3e4a",
+          "label": "36 mm",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-09-07T23:23:18.284731+00:00",
+          "sort_order": 23,
+          "updated_at": "2026-09-07T23:23:18.284731+00:00",
+          "spec_definition_id": "920bb7cf-9240-5ba9-8ec9-744c335ec01b"
+        },
+        {
+          "id": "6fce41d2-2223-5594-9b2d-bf3b51680a31",
+          "code": "catalog_ecd6b331a243b9b0e8f354bda6e84690",
+          "label": "10 mm",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-09-07T23:23:18.284731+00:00",
+          "sort_order": 22,
+          "updated_at": "2026-09-07T23:23:18.284731+00:00",
+          "spec_definition_id": "920bb7cf-9240-5ba9-8ec9-744c335ec01b"
+        },
+        {
+          "id": "7cbc380c-c232-5dd3-91fe-82e83217144c",
+          "code": "catalog_68cb9f4e18c8a567bfeb04d5fc3f57aa",
+          "label": "M8",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-09-07T23:23:18.284731+00:00",
+          "sort_order": 3,
+          "updated_at": "2026-09-07T23:23:18.284731+00:00",
+          "spec_definition_id": "920bb7cf-9240-5ba9-8ec9-744c335ec01b"
+        },
+        {
+          "id": "7ddc4e0e-5bb4-5fc0-9003-48f22ccb84c5",
+          "code": "catalog_cfc4058beaf69e8781f1d33dee1b5ef2",
+          "label": "M7",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-09-07T23:23:18.284731+00:00",
+          "sort_order": 11,
+          "updated_at": "2026-09-07T23:23:18.284731+00:00",
+          "spec_definition_id": "920bb7cf-9240-5ba9-8ec9-744c335ec01b"
+        },
+        {
+          "id": "8d8dfde1-50fe-5656-b56e-8e5745b0fea6",
+          "code": "catalog_66b543df60a981ccfcd2d3114605a39a",
+          "label": "M4",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-09-07T23:23:18.284731+00:00",
+          "sort_order": 0,
+          "updated_at": "2026-09-07T23:23:18.284731+00:00",
+          "spec_definition_id": "920bb7cf-9240-5ba9-8ec9-744c335ec01b"
+        },
+        {
+          "id": "9cf0698b-1a34-5725-91dc-9c74f2808054",
+          "code": "catalog_39c33d2d42b0cb57db30411b166ce3df",
+          "label": "M18",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-09-07T23:23:18.284731+00:00",
+          "sort_order": 14,
+          "updated_at": "2026-09-07T23:23:18.284731+00:00",
+          "spec_definition_id": "920bb7cf-9240-5ba9-8ec9-744c335ec01b"
+        },
+        {
+          "id": "a0cadb43-af42-52d2-8932-d10fcf13e717",
+          "code": "catalog_4ea25ca9e7779ca3853c8902f0c4541f",
+          "label": "9/16\"",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-09-07T23:23:18.284731+00:00",
+          "sort_order": 20,
+          "updated_at": "2026-09-07T23:23:18.284731+00:00",
+          "spec_definition_id": "920bb7cf-9240-5ba9-8ec9-744c335ec01b"
+        },
+        {
+          "id": "a18d7c27-0cfd-5bf3-8e2c-d44b12883e9e",
+          "code": "catalog_7fcf2493a1dc564d5fde9375979d82c4",
+          "label": "3/8\"",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-09-07T23:23:18.284731+00:00",
+          "sort_order": 7,
+          "updated_at": "2026-09-07T23:23:18.284731+00:00",
+          "spec_definition_id": "920bb7cf-9240-5ba9-8ec9-744c335ec01b"
+        },
+        {
+          "id": "aa3c174e-4daa-5a75-9772-0cad56237312",
+          "code": "catalog_e653259c786a626611864bc5ade16f4a",
+          "label": "1/2\"",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-09-07T23:23:18.284731+00:00",
+          "sort_order": 19,
+          "updated_at": "2026-09-07T23:23:18.284731+00:00",
+          "spec_definition_id": "920bb7cf-9240-5ba9-8ec9-744c335ec01b"
+        },
+        {
+          "id": "ac8d2da0-b30f-59e6-8b3f-4e697aa50611",
+          "code": "catalog_3f44a84e6e34fdb5a2f89c68d8c36175",
+          "label": "M5",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-09-07T23:23:18.284731+00:00",
+          "sort_order": 1,
+          "updated_at": "2026-09-07T23:23:18.284731+00:00",
+          "spec_definition_id": "920bb7cf-9240-5ba9-8ec9-744c335ec01b"
+        },
+        {
+          "id": "af5edcd6-6fce-52b0-9d0a-c16dac8d1f70",
+          "code": "catalog_f1c6eb6f4e48eb34ab40b2987d4976a8",
+          "label": "M3",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-09-07T23:23:18.284731+00:00",
+          "sort_order": 10,
+          "updated_at": "2026-09-07T23:23:18.284731+00:00",
+          "spec_definition_id": "920bb7cf-9240-5ba9-8ec9-744c335ec01b"
+        },
+        {
+          "id": "b6ff5303-c24e-5aef-8ce6-3c7bab609a4a",
+          "code": "catalog_c7ad88feac64b5b6cca8f234b392862c",
+          "label": "M19",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-09-07T23:23:18.284731+00:00",
+          "sort_order": 15,
+          "updated_at": "2026-09-07T23:23:18.284731+00:00",
+          "spec_definition_id": "920bb7cf-9240-5ba9-8ec9-744c335ec01b"
+        },
+        {
+          "id": "d0697951-ccf9-5c21-9ee3-2ced101a0157",
+          "code": "catalog_5ce2c8f3128f285f06d30b60a7641e97",
+          "label": "M14",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-09-07T23:23:18.284731+00:00",
+          "sort_order": 6,
+          "updated_at": "2026-09-07T23:23:18.284731+00:00",
+          "spec_definition_id": "920bb7cf-9240-5ba9-8ec9-744c335ec01b"
+        },
+        {
+          "id": "d4657329-2ccf-58de-91d7-393803a6677c",
+          "code": "catalog_a70c8fdd4d0b26b13353ccc82293251a",
+          "label": "2.2 mm",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-09-07T23:23:18.284731+00:00",
+          "sort_order": 24,
+          "updated_at": "2026-09-07T23:23:18.284731+00:00",
+          "spec_definition_id": "920bb7cf-9240-5ba9-8ec9-744c335ec01b"
+        },
+        {
+          "id": "d59f678a-28ce-51a4-8eab-2e427bf07912",
+          "code": "catalog_fc1df6307a9c4971569997963dcc8b08",
+          "label": "M6",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-09-07T23:23:18.284731+00:00",
+          "sort_order": 2,
+          "updated_at": "2026-09-07T23:23:18.284731+00:00",
+          "spec_definition_id": "920bb7cf-9240-5ba9-8ec9-744c335ec01b"
+        },
+        {
+          "id": "dac3d2d2-74bb-5d95-8f32-57e1e5342bf5",
+          "code": "catalog_2116f1c2188e41f62a04f683afa7ac60",
+          "label": "Otra",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-09-07T23:23:18.284731+00:00",
+          "sort_order": 8,
+          "updated_at": "2026-09-07T23:23:18.284731+00:00",
+          "spec_definition_id": "920bb7cf-9240-5ba9-8ec9-744c335ec01b"
+        },
+        {
+          "id": "e184058c-15b1-5224-b7b9-807cd78aa62c",
+          "code": "catalog_483e3992681e676e99f8b29bf279e20b",
+          "label": "M20",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-09-07T23:23:18.284731+00:00",
+          "sort_order": 16,
+          "updated_at": "2026-09-07T23:23:18.284731+00:00",
+          "spec_definition_id": "920bb7cf-9240-5ba9-8ec9-744c335ec01b"
+        }
+      ],
+      "data_type": "single_select",
+      "tenant_id": null,
+      "created_at": "2026-09-07T23:23:18.284731+00:00",
+      "group_name": null,
+      "sort_order": 0,
+      "updated_at": "2026-09-07T23:23:18.284731+00:00",
+      "description": null,
+      "is_filterable": false,
+      "allowed_values": [
+        "M4",
+        "M5",
+        "M6",
+        "M8",
+        "M10",
+        "M12",
+        "M14",
+        "3/8\"",
+        "Otra",
+        "Desconocido / sin confirmar",
+        "M3",
+        "M7",
+        "M9",
+        "M15",
+        "M18",
+        "M19",
+        "M20",
+        "M22",
+        "5/16\"",
+        "1/2\"",
+        "9/16\"",
+        "9 mm",
+        "10 mm",
+        "36 mm",
+        "2.2 mm"
+      ],
+      "validation_rules": {},
+      "is_customer_visible": false,
+      "is_mechanic_visible": true,
+      "is_required_by_default": false,
+      "is_compatibility_relevant": false
+    },
+    {
+      "id": "92497d9e-8383-5db9-9306-937adec10fb3",
+      "key": "bolts_included",
+      "unit": null,
+      "label": "Incluye pernos",
+      "options": [],
+      "data_type": "boolean",
+      "tenant_id": null,
+      "created_at": "2026-09-07T22:33:40.381707+00:00",
+      "group_name": null,
+      "sort_order": 0,
+      "updated_at": "2026-09-07T22:33:40.381707+00:00",
+      "description": null,
+      "is_filterable": false,
+      "allowed_values": [],
+      "validation_rules": {},
+      "is_customer_visible": false,
+      "is_mechanic_visible": true,
+      "is_required_by_default": false,
+      "is_compatibility_relevant": false
+    },
+    {
+      "id": "c8398080-0892-5433-951f-15eaac0feef9",
+      "key": "pack_quantity",
+      "unit": "unidades",
+      "label": "Unidades por envase",
+      "options": [],
+      "data_type": "number",
+      "tenant_id": null,
+      "created_at": "2026-09-07T23:23:18.284731+00:00",
+      "group_name": null,
+      "sort_order": 0,
+      "updated_at": "2026-09-07T23:23:18.284731+00:00",
+      "description": null,
+      "is_filterable": false,
+      "allowed_values": [],
+      "validation_rules": {
+        "integer": true,
+        "positive": true
+      },
+      "is_customer_visible": false,
+      "is_mechanic_visible": true,
+      "is_required_by_default": false,
+      "is_compatibility_relevant": false
+    }
+  ],
+  "records": {
+    "spec_definitions": [
+      {
+        "id": "e5d9dd59-b757-5c0d-9daa-4717a400c0de",
+        "key": "axle_fit",
+        "label": "Interfaz del eje",
+        "data_type": "text",
+        "unit": null,
+        "allowed_values": [],
+        "validation_rules": {},
+        "tenant_id": null,
+        "is_customer_visible": false,
+        "is_compatibility_relevant": false,
+        "description": null,
+        "is_filterable": false,
+        "is_required_by_default": false,
+        "is_mechanic_visible": true,
+        "group_name": null,
+        "sort_order": 0
+      },
+      {
+        "id": "4eb570b4-b098-59be-96f2-9c1e0bcd7b65",
+        "key": "brake_actuation",
+        "label": "Accionamiento del freno",
+        "data_type": "single_select",
+        "unit": null,
+        "allowed_values": [
+          "Mecánico (cable)",
+          "Hidráulico",
+          "Híbrido (cable a hidráulico)",
+          "Desconocido / sin confirmar",
+          "Contrapedal",
+          "Otro"
+        ],
+        "validation_rules": {},
+        "tenant_id": null,
+        "is_customer_visible": false,
+        "is_compatibility_relevant": false,
+        "description": null,
+        "is_filterable": false,
+        "is_required_by_default": false,
+        "is_mechanic_visible": true,
+        "group_name": null,
+        "sort_order": 0
+      },
+      {
+        "id": "f1c31f79-2ade-5d6f-86e3-bc56fb61d9f7",
+        "key": "brake_adapter_fitments",
+        "label": "Aplicaciones documentadas del adaptador de cáliper",
+        "data_type": "json",
+        "unit": null,
+        "allowed_values": [],
+        "validation_rules": {
+          "rows_schema": {
+            "version": 1,
+            "columns": [
+              {
+                "key": "position",
+                "label": "Posición",
+                "type": "token",
+                "required": true,
+                "allowed_values": [
+                  "Delantero",
+                  "Trasero"
+                ]
+              },
+              {
+                "key": "frame_mount",
+                "label": "Anclaje de cuadro / horquilla",
+                "type": "token",
+                "required": true,
+                "allowed_values": [
+                  "International Standard",
+                  "Post Mount",
+                  "Flat Mount"
+                ]
+              },
+              {
+                "key": "frame_base_rotor_mm",
+                "label": "Diámetro nativo del anclaje",
+                "type": "decimal",
+                "required": false,
+                "unit": "mm",
+                "validation": {
+                  "positive": true
+                }
+              },
+              {
+                "key": "caliper_mount",
+                "label": "Anclaje de cáliper",
+                "type": "token",
+                "required": true,
+                "allowed_values": [
+                  "International Standard",
+                  "Post Mount",
+                  "Flat Mount"
+                ]
+              },
+              {
+                "key": "caliper_brand",
+                "label": "Marca del cáliper",
+                "type": "text",
+                "required": false
+              },
+              {
+                "key": "caliper_model",
+                "label": "Modelo del cáliper",
+                "type": "text",
+                "required": false
+              },
+              {
+                "key": "generation",
+                "label": "Generación / edición del modelo",
+                "type": "text",
+                "required": false
+              },
+              {
+                "key": "rotor_diameter_mm",
+                "label": "Diámetro resultante",
+                "type": "decimal",
+                "required": true,
+                "unit": "mm",
+                "validation": {
+                  "positive": true
+                }
+              },
+              {
+                "key": "adapter_model",
+                "label": "Código completo del adaptador",
+                "type": "text",
+                "required": true
+              },
+              {
+                "key": "conditions",
+                "label": "Condiciones OEM",
+                "type": "text",
+                "required": false
+              },
+              {
+                "key": "source_url",
+                "label": "Fuente OEM de esta fila",
+                "type": "url",
+                "required": true
+              },
+              {
+                "key": "status",
+                "label": "Estado declarado",
+                "type": "token",
+                "required": true,
+                "allowed_values": [
+                  "Compatible declarado",
+                  "Excluido declarado",
+                  "Condicional"
+                ]
+              },
+              {
+                "key": "frame_base_form",
+                "label": "Forma de la base publicada",
+                "type": "token",
+                "required": true,
+                "allowed_values": [
+                  "Declarado",
+                  "No publicado",
+                  "Designación OEM"
+                ]
+              },
+              {
+                "key": "frame_base_designation",
+                "label": "Base publicada sin descomponer",
+                "type": "text"
+              },
+              {
+                "key": "edition",
+                "label": "Edición o año de la fuente",
+                "type": "text"
+              },
+              {
+                "key": "configuration",
+                "label": "Identidad de la configuración completa",
+                "type": "text",
+                "required": true
+              },
+              {
+                "key": "source_scope",
+                "label": "Apartado y alcance de fuente",
+                "type": "text",
+                "required": true
+              }
+            ],
+            "unique_by": [
+              [
+                "adapter_model",
+                "configuration",
+                "source_scope"
+              ]
+            ]
+          }
+        },
+        "tenant_id": null,
+        "is_customer_visible": false,
+        "is_compatibility_relevant": false,
+        "description": null,
+        "is_filterable": false,
+        "is_required_by_default": false,
+        "is_mechanic_visible": true,
+        "group_name": null,
+        "sort_order": 0
+      },
+      {
+        "id": "dd51448d-a29b-5182-b7d4-4be5b5a9df2c",
+        "key": "brake_adapter_included_hardware",
+        "label": "Herrajes incluidos declarados",
+        "data_type": "json",
+        "unit": null,
+        "allowed_values": [],
+        "validation_rules": {
+          "rows_schema": {
+            "version": 1,
+            "columns": [
+              {
+                "key": "piece",
+                "label": "Pieza incluida",
+                "type": "text",
+                "required": true
+              },
+              {
+                "key": "piece_kind",
+                "label": "Tipo de pieza",
+                "type": "token",
+                "required": true,
+                "allowed_values": [
+                  "Perno",
+                  "Espaciador",
+                  "Arandela",
+                  "Otra"
+                ]
+              },
+              {
+                "key": "quantity",
+                "label": "Cantidad",
+                "type": "integer",
+                "validation": {
+                  "positive": true
+                }
+              },
+              {
+                "key": "configuration_row_id",
+                "label": "Configuración a la que pertenece",
+                "type": "text"
+              },
+              {
+                "key": "length_form",
+                "label": "Forma del largo publicado",
+                "type": "token",
+                "required": true,
+                "allowed_values": [
+                  "Declarado",
+                  "No publicado",
+                  "Designación OEM"
+                ]
+              },
+              {
+                "key": "length_mm",
+                "label": "Largo publicado",
+                "type": "decimal",
+                "unit": "mm",
+                "validation": {
+                  "positive": true
+                }
+              },
+              {
+                "key": "length_datum",
+                "label": "Desde qué punto se mide ese largo",
+                "type": "text"
+              },
+              {
+                "key": "length_designation",
+                "label": "Largo publicado sin descomponer",
+                "type": "text"
+              },
+              {
+                "key": "thread_form",
+                "label": "Forma de la rosca publicada",
+                "type": "token",
+                "allowed_values": [
+                  "Roscada",
+                  "Sin rosca",
+                  "Designación OEM"
+                ]
+              },
+              {
+                "key": "thread_diameter_unit",
+                "label": "Unidad del diámetro",
+                "type": "token",
+                "allowed_values": [
+                  "mm",
+                  "in"
+                ]
+              },
+              {
+                "key": "thread_diameter_mm",
+                "label": "Diámetro",
+                "type": "decimal",
+                "unit": "mm",
+                "validation": {
+                  "positive": true
+                }
+              },
+              {
+                "key": "thread_diameter_in",
+                "label": "Diámetro nominal en pulgadas",
+                "type": "decimal",
+                "unit": "in",
+                "validation": {
+                  "positive": true
+                }
+              },
+              {
+                "key": "thread_pitch_unit",
+                "label": "Forma del paso",
+                "type": "token",
+                "allowed_values": [
+                  "mm",
+                  "tpi"
+                ]
+              },
+              {
+                "key": "thread_pitch_mm",
+                "label": "Paso",
+                "type": "decimal",
+                "unit": "mm",
+                "validation": {
+                  "positive": true
+                }
+              },
+              {
+                "key": "thread_pitch_tpi",
+                "label": "Hilos por pulgada",
+                "type": "decimal",
+                "unit": "tpi",
+                "validation": {
+                  "positive": true
+                }
+              },
+              {
+                "key": "thread_designation",
+                "label": "Designación publicada sin descomponer",
+                "type": "text"
+              },
+              {
+                "key": "conditions",
+                "label": "Condiciones publicadas",
+                "type": "text"
+              },
+              {
+                "key": "source_url",
+                "label": "Fuente",
+                "type": "url"
+              }
+            ]
+          }
+        },
+        "tenant_id": null,
+        "is_customer_visible": false,
+        "is_compatibility_relevant": false,
+        "description": null,
+        "is_filterable": false,
+        "is_required_by_default": false,
+        "is_mechanic_visible": true,
+        "group_name": null,
+        "sort_order": 0
+      },
+      {
+        "id": "693b3557-d05c-5e65-ade4-def5dbe7b1df",
+        "key": "brake_part_kind",
+        "label": "Tipo de pieza de freno",
+        "data_type": "single_select",
+        "unit": null,
+        "allowed_values": [
+          "Pasador / pin de pastilla",
+          "Resorte de retorno (freno de llanta)",
+          "Perno / tornillo de freno",
+          "Clip / retención sin rosca",
+          "Otro"
+        ],
+        "validation_rules": {},
+        "tenant_id": null,
+        "is_customer_visible": false,
+        "is_compatibility_relevant": false,
+        "description": null,
+        "is_filterable": false,
+        "is_required_by_default": false,
+        "is_mechanic_visible": true,
+        "group_name": null,
+        "sort_order": 0
+      },
+      {
+        "id": "be857d20-d615-5b62-a09a-e55710bc1b5b",
+        "key": "brake_small_part_components",
+        "label": "Piezas declaradas del repuesto",
+        "data_type": "json",
+        "unit": null,
+        "allowed_values": [],
+        "validation_rules": {
+          "rows_schema": {
+            "version": 1,
+            "columns": [
+              {
+                "key": "piece",
+                "label": "Pieza declarada",
+                "type": "text",
+                "required": true
+              },
+              {
+                "key": "piece_kind",
+                "label": "Tipo de pieza",
+                "type": "token",
+                "required": true,
+                "allowed_values": [
+                  "Pasador de pastilla",
+                  "Clip de retención",
+                  "Resorte",
+                  "Perno / tornillo",
+                  "Arandela",
+                  "Otra"
+                ]
+              },
+              {
+                "key": "quantity",
+                "label": "Cantidad",
+                "type": "integer",
+                "validation": {
+                  "positive": true
+                }
+              },
+              {
+                "key": "thread_form",
+                "label": "Forma de la rosca publicada",
+                "type": "token",
+                "allowed_values": [
+                  "Roscada",
+                  "Sin rosca",
+                  "Designación OEM"
+                ]
+              },
+              {
+                "key": "thread_diameter_unit",
+                "label": "Unidad del diámetro",
+                "type": "token",
+                "allowed_values": [
+                  "mm",
+                  "in"
+                ]
+              },
+              {
+                "key": "thread_diameter_mm",
+                "label": "Diámetro",
+                "type": "decimal",
+                "unit": "mm",
+                "validation": {
+                  "positive": true
+                }
+              },
+              {
+                "key": "thread_diameter_in",
+                "label": "Diámetro nominal en pulgadas",
+                "type": "decimal",
+                "unit": "in",
+                "validation": {
+                  "positive": true
+                }
+              },
+              {
+                "key": "thread_pitch_unit",
+                "label": "Forma del paso",
+                "type": "token",
+                "allowed_values": [
+                  "mm",
+                  "tpi"
+                ]
+              },
+              {
+                "key": "thread_pitch_mm",
+                "label": "Paso",
+                "type": "decimal",
+                "unit": "mm",
+                "validation": {
+                  "positive": true
+                }
+              },
+              {
+                "key": "thread_pitch_tpi",
+                "label": "Hilos por pulgada",
+                "type": "decimal",
+                "unit": "tpi",
+                "validation": {
+                  "positive": true
+                }
+              },
+              {
+                "key": "thread_designation",
+                "label": "Designación publicada sin descomponer",
+                "type": "text"
+              },
+              {
+                "key": "conditions",
+                "label": "Modelo, generación y condiciones",
+                "type": "text"
+              },
+              {
+                "key": "source_url",
+                "label": "Fuente",
+                "type": "url"
+              },
+              {
+                "key": "oem_code",
+                "label": "Código del fabricante de esta pieza",
+                "type": "text"
+              },
+              {
+                "key": "material",
+                "label": "Material de esta pieza",
+                "type": "text"
+              },
+              {
+                "key": "target_brand",
+                "label": "Fabricante del freno objetivo",
+                "type": "text"
+              },
+              {
+                "key": "target_model",
+                "label": "Modelo o referencia del freno objetivo",
+                "type": "text",
+                "required": true
+              },
+              {
+                "key": "target_edition",
+                "label": "Versión del freno objetivo",
+                "type": "text"
+              },
+              {
+                "key": "configuration",
+                "label": "Montaje de esta pieza",
+                "type": "text",
+                "required": true
+              }
+            ]
+          }
+        },
+        "tenant_id": null,
+        "is_customer_visible": false,
+        "is_compatibility_relevant": false,
+        "description": null,
+        "is_filterable": false,
+        "is_required_by_default": false,
+        "is_mechanic_visible": true,
+        "group_name": null,
+        "sort_order": 0
+      },
+      {
+        "id": "56e404d7-fc74-5109-9aa1-2d3a164f1bff",
+        "key": "caliper_mount",
+        "label": "Fijación del cáliper",
+        "data_type": "single_select",
+        "unit": null,
+        "allowed_values": [
+          "International Standard",
+          "Post Mount",
+          "Flat Mount",
+          "Desconocido / sin confirmar"
+        ],
+        "validation_rules": {},
+        "tenant_id": null,
+        "is_customer_visible": false,
+        "is_compatibility_relevant": false,
+        "description": null,
+        "is_filterable": false,
+        "is_required_by_default": false,
+        "is_mechanic_visible": true,
+        "group_name": null,
+        "sort_order": 0
+      },
+      {
+        "id": "580faac7-a400-56e8-b2c6-935342ba9c8f",
+        "key": "drum_diameter_mm",
+        "label": "Diámetro del tambor",
+        "data_type": "number",
+        "unit": "mm",
+        "allowed_values": [],
+        "validation_rules": {
+          "positive": true
+        },
+        "tenant_id": null,
+        "is_customer_visible": false,
+        "is_compatibility_relevant": false,
+        "description": null,
+        "is_filterable": false,
+        "is_required_by_default": false,
+        "is_mechanic_visible": true,
+        "group_name": null,
+        "sort_order": 0
+      },
+      {
+        "id": "cd405871-04ec-5928-821a-4f5b8c8eb46c",
+        "key": "frame_mount",
+        "label": "Fijación del cuadro u horquilla",
+        "data_type": "single_select",
+        "unit": null,
+        "allowed_values": [
+          "International Standard",
+          "Post Mount",
+          "Flat Mount",
+          "Desconocido / sin confirmar"
+        ],
+        "validation_rules": {},
+        "tenant_id": null,
+        "is_customer_visible": false,
+        "is_compatibility_relevant": false,
+        "description": null,
+        "is_filterable": false,
+        "is_required_by_default": false,
+        "is_mechanic_visible": true,
+        "group_name": null,
+        "sort_order": 0
+      },
+      {
+        "id": "0799a89c-211f-5028-b7b6-8fe1937a16a1",
+        "key": "hub_brake_attachment_interfaces",
+        "label": "Interfaces de montaje del freno de maza",
+        "data_type": "json",
+        "unit": null,
+        "allowed_values": [],
+        "validation_rules": {
+          "rows_schema": {
+            "version": 1,
+            "columns": [
+              {
+                "key": "configuration_row_id",
+                "label": "Configuración del freno",
+                "type": "text",
+                "required": true
+              },
+              {
+                "key": "interface",
+                "label": "Zona o extremo de la interfaz",
+                "type": "text",
+                "required": true
+              },
+              {
+                "key": "interface_kind",
+                "label": "Tipo de interfaz",
+                "type": "token",
+                "required": true,
+                "allowed_values": [
+                  "Rosca de eje",
+                  "Eje pasante",
+                  "Asiento liso",
+                  "Separación OLD",
+                  "Fijación de reacción",
+                  "Designación OEM"
+                ]
+              },
+              {
+                "key": "diameter",
+                "label": "Diámetro nominal",
+                "type": "decimal",
+                "validation": {
+                  "positive": true
+                }
+              },
+              {
+                "key": "diameter_unit",
+                "label": "Unidad del diámetro",
+                "type": "token",
+                "allowed_values": [
+                  "mm",
+                  "in"
+                ]
+              },
+              {
+                "key": "pitch",
+                "label": "Paso o hilos por pulgada",
+                "type": "decimal",
+                "validation": {
+                  "positive": true
+                }
+              },
+              {
+                "key": "pitch_unit",
+                "label": "Unidad del paso",
+                "type": "token",
+                "allowed_values": [
+                  "mm",
+                  "tpi"
+                ]
+              },
+              {
+                "key": "old_mm",
+                "label": "Separación OLD",
+                "type": "decimal",
+                "unit": "mm",
+                "validation": {
+                  "positive": true
+                }
+              },
+              {
+                "key": "designation",
+                "label": "Designación OEM de la interfaz",
+                "type": "text"
+              },
+              {
+                "key": "conditions",
+                "label": "Método de medición y condiciones",
+                "type": "text"
+              },
+              {
+                "key": "source_url",
+                "label": "Fuente",
+                "type": "url"
+              }
+            ],
+            "unique_by": [
+              [
+                "configuration_row_id",
+                "interface"
+              ]
+            ]
+          }
+        },
+        "tenant_id": null,
+        "is_customer_visible": false,
+        "is_compatibility_relevant": false,
+        "description": null,
+        "is_filterable": false,
+        "is_required_by_default": false,
+        "is_mechanic_visible": true,
+        "group_name": null,
+        "sort_order": 0
+      },
+      {
+        "id": "ed1ff2e9-31c1-5831-acff-906fbb3e1b37",
+        "key": "hub_brake_configurations",
+        "label": "Configuraciones declaradas del freno de maza",
+        "data_type": "json",
+        "unit": null,
+        "allowed_values": [],
+        "validation_rules": {
+          "rows_schema": {
+            "version": 1,
+            "columns": [
+              {
+                "key": "configuration",
+                "label": "Configuración declarada",
+                "type": "text",
+                "required": true
+              },
+              {
+                "key": "mechanism",
+                "label": "Mecanismo",
+                "type": "token",
+                "required": true,
+                "allowed_values": [
+                  "Banda",
+                  "Tambor",
+                  "Rodillo (roller)",
+                  "Contrapedal",
+                  "Otro"
+                ]
+              },
+              {
+                "key": "product_scope",
+                "label": "Qué es el producto",
+                "type": "token",
+                "required": true,
+                "allowed_values": [
+                  "Freno integrado en la maza",
+                  "Maza con freno y cambio interno",
+                  "Pieza de freno para montar en una maza",
+                  "Otro"
+                ]
+              },
+              {
+                "key": "position",
+                "label": "Rueda declarada",
+                "type": "token",
+                "required": true,
+                "allowed_values": [
+                  "Delantera",
+                  "Trasera",
+                  "No declarada"
+                ]
+              },
+              {
+                "key": "actuation",
+                "label": "Accionamiento real",
+                "type": "token",
+                "required": true,
+                "allowed_values": [
+                  "Cable",
+                  "Varilla",
+                  "Contrapedal (retropedaleo)",
+                  "Hidráulico",
+                  "Otro"
+                ]
+              },
+              {
+                "key": "reaction_arm_required",
+                "label": "Requiere brazo de reacción",
+                "type": "token",
+                "allowed_values": [
+                  "Sí",
+                  "No",
+                  "No declarado"
+                ]
+              },
+              {
+                "key": "reaction_arm_fixing",
+                "label": "Dónde se fija el brazo de reacción",
+                "type": "text"
+              },
+              {
+                "key": "drum_form",
+                "label": "Forma del diámetro publicado",
+                "type": "token",
+                "required": true,
+                "allowed_values": [
+                  "Declarado",
+                  "No publicado",
+                  "Designación OEM"
+                ]
+              },
+              {
+                "key": "drum_diameter_mm",
+                "label": "Diámetro del tambor",
+                "type": "decimal",
+                "unit": "mm",
+                "validation": {
+                  "positive": true
+                }
+              },
+              {
+                "key": "drum_designation",
+                "label": "Diámetro publicado sin descomponer",
+                "type": "text"
+              },
+              {
+                "key": "conditions",
+                "label": "Modelo, edición y condiciones",
+                "type": "text"
+              },
+              {
+                "key": "source_url",
+                "label": "Fuente",
+                "type": "url"
+              },
+              {
+                "key": "brake_brand",
+                "label": "Fabricante del freno",
+                "type": "text"
+              },
+              {
+                "key": "brake_model",
+                "label": "Modelo de freno o maza",
+                "type": "text",
+                "required": true
+              },
+              {
+                "key": "edition",
+                "label": "Edición o versión",
+                "type": "text"
+              }
+            ],
+            "unique_by": [
+              [
+                "brake_model",
+                "edition",
+                "configuration"
+              ]
+            ]
+          }
+        },
+        "tenant_id": null,
+        "is_customer_visible": false,
+        "is_compatibility_relevant": false,
+        "description": null,
+        "is_filterable": false,
+        "is_required_by_default": false,
+        "is_mechanic_visible": true,
+        "group_name": null,
+        "sort_order": 0
+      },
+      {
+        "id": "74524a1d-7ea6-5419-b1f9-6a37d400c9d9",
+        "key": "hub_brake_kind",
+        "label": "Tipo de freno de maza",
+        "data_type": "single_select",
+        "unit": null,
+        "allowed_values": [
+          "Banda",
+          "Tambor",
+          "Rodillo (roller)",
+          "Contrapedal",
+          "Desconocido / sin confirmar"
+        ],
+        "validation_rules": {},
+        "tenant_id": null,
+        "is_customer_visible": false,
+        "is_compatibility_relevant": false,
+        "description": null,
+        "is_filterable": false,
+        "is_required_by_default": false,
+        "is_mechanic_visible": true,
+        "group_name": null,
+        "sort_order": 0
+      },
+      {
+        "id": "93fa76e3-68f2-53da-8326-5fcc8f91b808",
+        "key": "hub_interface",
+        "label": "Interfaz de la maza",
+        "data_type": "single_select",
+        "unit": null,
+        "allowed_values": [
+          "Rueda libre roscada 1.37\" x 24 tpi",
+          "Centerlock → 6 pernos",
+          "Otro"
+        ],
+        "validation_rules": {},
+        "tenant_id": null,
+        "is_customer_visible": false,
+        "is_compatibility_relevant": false,
+        "description": null,
+        "is_filterable": false,
+        "is_required_by_default": false,
+        "is_mechanic_visible": true,
+        "group_name": null,
+        "sort_order": 0
+      },
+      {
+        "id": "43917e38-1157-5b7e-94a3-5042a2f37eca",
+        "key": "position",
+        "label": "Posición",
+        "data_type": "single_select",
+        "unit": null,
+        "allowed_values": [
+          "Delantero",
+          "Trasero",
+          "Universal"
+        ],
+        "validation_rules": {},
+        "tenant_id": null,
+        "is_customer_visible": false,
+        "is_compatibility_relevant": false,
+        "description": null,
+        "is_filterable": false,
+        "is_required_by_default": false,
+        "is_mechanic_visible": true,
+        "group_name": null,
+        "sort_order": 0
+      },
+      {
+        "id": "ae3e3b3c-c70f-5dc1-87b1-d78385f7116a",
+        "key": "reaction_arm_mount",
+        "label": "Fijación del brazo de reacción",
+        "data_type": "text",
+        "unit": null,
+        "allowed_values": [],
+        "validation_rules": {},
+        "tenant_id": null,
+        "is_customer_visible": false,
+        "is_compatibility_relevant": false,
+        "description": null,
+        "is_filterable": false,
+        "is_required_by_default": false,
+        "is_mechanic_visible": true,
+        "group_name": null,
+        "sort_order": 0
+      },
+      {
+        "id": "5583e7d8-ac8e-57d9-8c79-304f134f12b0",
+        "key": "rotor_adapter_fitments",
+        "label": "Extremos documentados del adaptador de rotor",
+        "data_type": "json",
+        "unit": null,
+        "allowed_values": [],
+        "validation_rules": {
+          "rows_schema": {
+            "version": 1,
+            "columns": [
+              {
+                "key": "hub_mount",
+                "label": "Interfaz de maza",
+                "type": "token",
+                "required": true,
+                "allowed_values": [
+                  "Centerlock",
+                  "6 pernos",
+                  "Rosca especificada",
+                  "Otra"
+                ]
+              },
+              {
+                "key": "hub_thread_spec",
+                "label": "Rosca de fijación del adaptador a la maza",
+                "type": "text",
+                "required": false
+              },
+              {
+                "key": "hub_model",
+                "label": "Restricción de modelo de maza",
+                "type": "text",
+                "required": false
+              },
+              {
+                "key": "rotor_mount",
+                "label": "Interfaz de rotor",
+                "type": "token",
+                "required": true,
+                "allowed_values": [
+                  "Centerlock",
+                  "6 pernos",
+                  "Otra"
+                ]
+              },
+              {
+                "key": "rotor_model",
+                "label": "Restricción de modelo de rotor",
+                "type": "text",
+                "required": false
+              },
+              {
+                "key": "rotor_max_mm",
+                "label": "Máximo documentado del adaptador",
+                "type": "decimal",
+                "required": false,
+                "unit": "mm",
+                "validation": {
+                  "positive": true
+                }
+              },
+              {
+                "key": "conditions",
+                "label": "Condiciones OEM",
+                "type": "text",
+                "required": false
+              },
+              {
+                "key": "source_url",
+                "label": "Fuente OEM de esta fila",
+                "type": "url",
+                "required": true
+              },
+              {
+                "key": "status",
+                "label": "Estado declarado",
+                "type": "token",
+                "required": true,
+                "allowed_values": [
+                  "Compatible declarado",
+                  "Excluido declarado",
+                  "Condicional"
+                ]
+              },
+              {
+                "key": "edition",
+                "label": "Edición o año de la fuente",
+                "type": "text"
+              },
+              {
+                "key": "configuration",
+                "label": "Identidad de la configuración completa",
+                "type": "text",
+                "required": true
+              },
+              {
+                "key": "source_scope",
+                "label": "Apartado y alcance de fuente",
+                "type": "text",
+                "required": true
+              },
+              {
+                "key": "adapter_model",
+                "label": "Código completo del adaptador",
+                "type": "text",
+                "required": true
+              },
+              {
+                "key": "adapter_function",
+                "label": "Qué modifica el adaptador",
+                "type": "token",
+                "required": true,
+                "allowed_values": [
+                  "Tipo de fijación",
+                  "Posición del rotor",
+                  "Otra función documentada"
+                ]
+              },
+              {
+                "key": "rotor_offset_mm",
+                "label": "Desplazamiento axial publicado",
+                "type": "decimal",
+                "unit": "mm"
+              },
+              {
+                "key": "rotor_offset_datum",
+                "label": "Referencia y dirección del desplazamiento",
+                "type": "text"
+              },
+              {
+                "key": "lockring_thread_spec",
+                "label": "Rosca del anillo propio del adaptador",
+                "type": "text"
+              }
+            ],
+            "unique_by": [
+              [
+                "adapter_model",
+                "configuration",
+                "source_scope"
+              ]
+            ]
+          }
+        },
+        "tenant_id": null,
+        "is_customer_visible": false,
+        "is_compatibility_relevant": false,
+        "description": null,
+        "is_filterable": false,
+        "is_required_by_default": false,
+        "is_mechanic_visible": true,
+        "group_name": null,
+        "sort_order": 0
+      },
+      {
+        "id": "24ae2adf-90a0-5602-8890-36b0aa7d6d90",
+        "key": "rotor_from_mm",
+        "label": "Diámetro de rotor de origen",
+        "data_type": "number",
+        "unit": "mm",
+        "allowed_values": [],
+        "validation_rules": {
+          "positive": true
+        },
+        "tenant_id": null,
+        "is_customer_visible": false,
+        "is_compatibility_relevant": false,
+        "description": null,
+        "is_filterable": false,
+        "is_required_by_default": false,
+        "is_mechanic_visible": true,
+        "group_name": null,
+        "sort_order": 0
+      },
+      {
+        "id": "5d174f68-1407-5d99-a1c1-69caf4ef8fd4",
+        "key": "rotor_mount_out",
+        "label": "Interfaz de montaje del rotor",
+        "data_type": "single_select",
+        "unit": null,
+        "allowed_values": [
+          "6 pernos",
+          "Centerlock",
+          "Desconocido / sin confirmar"
+        ],
+        "validation_rules": {},
+        "tenant_id": null,
+        "is_customer_visible": false,
+        "is_compatibility_relevant": false,
+        "description": null,
+        "is_filterable": false,
+        "is_required_by_default": false,
+        "is_mechanic_visible": true,
+        "group_name": null,
+        "sort_order": 0
+      },
+      {
+        "id": "dc0a9fbc-7412-5e6c-a902-8da19c34a608",
+        "key": "rotor_to_mm",
+        "label": "Diámetro de rotor de destino",
+        "data_type": "number",
+        "unit": "mm",
+        "allowed_values": [],
+        "validation_rules": {
+          "positive": true
+        },
+        "tenant_id": null,
+        "is_customer_visible": false,
+        "is_compatibility_relevant": false,
+        "description": null,
+        "is_filterable": false,
+        "is_required_by_default": false,
+        "is_mechanic_visible": true,
+        "group_name": null,
+        "sort_order": 0
+      }
+    ],
+    "spec_definition_values": [
+      {
+        "id": "0ec7fc3a-6f83-58f5-ba5d-76fb76956bb6",
+        "tenant_id": null,
+        "spec_definition_id": "4eb570b4-b098-59be-96f2-9c1e0bcd7b65",
+        "code": "catalog_58d6e79ea1b86fd54b776473bafa4682",
+        "label": "Mecánico (cable)",
+        "sort_order": 0,
+        "is_active": true
+      },
+      {
+        "id": "9e3a0f4c-145a-56ff-b460-50fd77151648",
+        "tenant_id": null,
+        "spec_definition_id": "4eb570b4-b098-59be-96f2-9c1e0bcd7b65",
+        "code": "catalog_58a6c1638bf20651ee6442e480fc3a2c",
+        "label": "Hidráulico",
+        "sort_order": 1,
+        "is_active": true
+      },
+      {
+        "id": "bfef897c-a0ec-5051-8d68-5350a737eb24",
+        "tenant_id": null,
+        "spec_definition_id": "4eb570b4-b098-59be-96f2-9c1e0bcd7b65",
+        "code": "catalog_ace1b00a5ecbb981b8bdacbf4dd97c07",
+        "label": "Híbrido (cable a hidráulico)",
+        "sort_order": 2,
+        "is_active": true
+      },
+      {
+        "id": "769fda80-5854-549d-8b95-886ca2d49c40",
+        "tenant_id": null,
+        "spec_definition_id": "4eb570b4-b098-59be-96f2-9c1e0bcd7b65",
+        "code": "catalog_de6e897b1c6ced32e6762f3ceaebffd6",
+        "label": "Desconocido / sin confirmar",
+        "sort_order": 3,
+        "is_active": true
+      },
+      {
+        "id": "4227c9f3-dfec-5000-96ec-687809bd2543",
+        "tenant_id": null,
+        "spec_definition_id": "4eb570b4-b098-59be-96f2-9c1e0bcd7b65",
+        "code": "catalog_e984e15c8cb42550f8561e627baad4b7",
+        "label": "Contrapedal",
+        "sort_order": 4,
+        "is_active": true
+      },
+      {
+        "id": "d1ba8cfa-6a17-5651-8c59-b12eacc0901b",
+        "tenant_id": null,
+        "spec_definition_id": "4eb570b4-b098-59be-96f2-9c1e0bcd7b65",
+        "code": "catalog_c2295235a535ea3e85b7a0e5ab85afb0",
+        "label": "Otro",
+        "sort_order": 5,
+        "is_active": true
+      },
+      {
+        "id": "11ec8ac0-bbf0-569a-9359-156ba4b32200",
+        "tenant_id": null,
+        "spec_definition_id": "693b3557-d05c-5e65-ade4-def5dbe7b1df",
+        "code": "catalog_0a3a0a8d4e968bfe86a68cf498be7fab",
+        "label": "Pasador / pin de pastilla",
+        "sort_order": 0,
+        "is_active": true
+      },
+      {
+        "id": "4c7da4f6-e193-57a5-8099-f45f481beeb4",
+        "tenant_id": null,
+        "spec_definition_id": "693b3557-d05c-5e65-ade4-def5dbe7b1df",
+        "code": "catalog_4a2b64ce3f19f992d2c91ec8c6dac3df",
+        "label": "Resorte de retorno (freno de llanta)",
+        "sort_order": 1,
+        "is_active": true
+      },
+      {
+        "id": "3208c216-51ce-5f81-a43d-4580badff793",
+        "tenant_id": null,
+        "spec_definition_id": "693b3557-d05c-5e65-ade4-def5dbe7b1df",
+        "code": "catalog_1c23b7c10bcf95f75205f6dcf842da61",
+        "label": "Perno / tornillo de freno",
+        "sort_order": 2,
+        "is_active": true
+      },
+      {
+        "id": "efdfe193-6040-5647-b9fc-c71fe98a06a9",
+        "tenant_id": null,
+        "spec_definition_id": "693b3557-d05c-5e65-ade4-def5dbe7b1df",
+        "code": "catalog_af835a3ae433a963069e3a7ce07d8bc7",
+        "label": "Clip / retención sin rosca",
+        "sort_order": 3,
+        "is_active": true
+      },
+      {
+        "id": "fa1688fe-a59c-568e-8de7-cb20a88acbcf",
+        "tenant_id": null,
+        "spec_definition_id": "693b3557-d05c-5e65-ade4-def5dbe7b1df",
+        "code": "catalog_c2295235a535ea3e85b7a0e5ab85afb0",
+        "label": "Otro",
+        "sort_order": 4,
+        "is_active": true
+      },
+      {
+        "id": "745e9239-10d2-500f-a3e8-d54e55fb50fb",
+        "tenant_id": null,
+        "spec_definition_id": "56e404d7-fc74-5109-9aa1-2d3a164f1bff",
+        "code": "catalog_40e8181e7b525876b5613416e29ee69a",
+        "label": "International Standard",
+        "sort_order": 0,
+        "is_active": true
+      },
+      {
+        "id": "fc3e7cbb-43d0-56b7-8a37-ad21daea6069",
+        "tenant_id": null,
+        "spec_definition_id": "56e404d7-fc74-5109-9aa1-2d3a164f1bff",
+        "code": "catalog_ae5384c6d9ca9155f85dfa4a074d2b7e",
+        "label": "Post Mount",
+        "sort_order": 1,
+        "is_active": true
+      },
+      {
+        "id": "4e4eb03f-eee3-5352-9637-c3c60ca2f5c9",
+        "tenant_id": null,
+        "spec_definition_id": "56e404d7-fc74-5109-9aa1-2d3a164f1bff",
+        "code": "catalog_9f59560c8fbce2c8a11323777a4d0702",
+        "label": "Flat Mount",
+        "sort_order": 2,
+        "is_active": true
+      },
+      {
+        "id": "1eb0593a-6934-52a9-8536-37b63bdfa06c",
+        "tenant_id": null,
+        "spec_definition_id": "56e404d7-fc74-5109-9aa1-2d3a164f1bff",
+        "code": "catalog_de6e897b1c6ced32e6762f3ceaebffd6",
+        "label": "Desconocido / sin confirmar",
+        "sort_order": 3,
+        "is_active": true
+      },
+      {
+        "id": "61ed6a81-08ad-51ed-a5d1-f407869b5282",
+        "tenant_id": null,
+        "spec_definition_id": "cd405871-04ec-5928-821a-4f5b8c8eb46c",
+        "code": "catalog_40e8181e7b525876b5613416e29ee69a",
+        "label": "International Standard",
+        "sort_order": 0,
+        "is_active": true
+      },
+      {
+        "id": "327ca08c-22ed-5a4d-8cb4-66641db25344",
+        "tenant_id": null,
+        "spec_definition_id": "cd405871-04ec-5928-821a-4f5b8c8eb46c",
+        "code": "catalog_ae5384c6d9ca9155f85dfa4a074d2b7e",
+        "label": "Post Mount",
+        "sort_order": 1,
+        "is_active": true
+      },
+      {
+        "id": "2f6670ea-97d4-57b0-9111-9c24cdac1e20",
+        "tenant_id": null,
+        "spec_definition_id": "cd405871-04ec-5928-821a-4f5b8c8eb46c",
+        "code": "catalog_9f59560c8fbce2c8a11323777a4d0702",
+        "label": "Flat Mount",
+        "sort_order": 2,
+        "is_active": true
+      },
+      {
+        "id": "3e16e694-5ebc-53ad-8902-316107098622",
+        "tenant_id": null,
+        "spec_definition_id": "cd405871-04ec-5928-821a-4f5b8c8eb46c",
+        "code": "catalog_de6e897b1c6ced32e6762f3ceaebffd6",
+        "label": "Desconocido / sin confirmar",
+        "sort_order": 3,
+        "is_active": true
+      },
+      {
+        "id": "ab79f602-b626-5353-b40f-6a5e949abc0f",
+        "tenant_id": null,
+        "spec_definition_id": "74524a1d-7ea6-5419-b1f9-6a37d400c9d9",
+        "code": "catalog_d69846a789abd2a94f1f3db6611322ad",
+        "label": "Banda",
+        "sort_order": 0,
+        "is_active": true
+      },
+      {
+        "id": "0fd714ea-f86c-58e0-98d3-efb0d1638656",
+        "tenant_id": null,
+        "spec_definition_id": "74524a1d-7ea6-5419-b1f9-6a37d400c9d9",
+        "code": "catalog_2ee917bc4ff575cccc89081b8c627f67",
+        "label": "Tambor",
+        "sort_order": 1,
+        "is_active": true
+      },
+      {
+        "id": "42a3e67c-d09c-5b6f-be46-b00613d5bb70",
+        "tenant_id": null,
+        "spec_definition_id": "74524a1d-7ea6-5419-b1f9-6a37d400c9d9",
+        "code": "catalog_ff8681fff877a1836d34469a481114e7",
+        "label": "Rodillo (roller)",
+        "sort_order": 2,
+        "is_active": true
+      },
+      {
+        "id": "4918ffb7-a253-5d7d-b922-9de68d13441c",
+        "tenant_id": null,
+        "spec_definition_id": "74524a1d-7ea6-5419-b1f9-6a37d400c9d9",
+        "code": "catalog_e984e15c8cb42550f8561e627baad4b7",
+        "label": "Contrapedal",
+        "sort_order": 3,
+        "is_active": true
+      },
+      {
+        "id": "e2b9be22-677c-5100-88d9-0e7ba4f1fb81",
+        "tenant_id": null,
+        "spec_definition_id": "74524a1d-7ea6-5419-b1f9-6a37d400c9d9",
+        "code": "catalog_de6e897b1c6ced32e6762f3ceaebffd6",
+        "label": "Desconocido / sin confirmar",
+        "sort_order": 4,
+        "is_active": true
+      },
+      {
+        "id": "03570841-c733-5f3b-94c6-93a3c4a8e66e",
+        "tenant_id": null,
+        "spec_definition_id": "93fa76e3-68f2-53da-8326-5fcc8f91b808",
+        "code": "catalog_a5dd7e1d2aa4655697268b664b25dc0f",
+        "label": "Rueda libre roscada 1.37\" x 24 tpi",
+        "sort_order": 0,
+        "is_active": true
+      },
+      {
+        "id": "c4911b99-1ce0-5da6-80e7-b4318efa88a1",
+        "tenant_id": null,
+        "spec_definition_id": "93fa76e3-68f2-53da-8326-5fcc8f91b808",
+        "code": "catalog_aa968c3de96cfad6bf1803c1787830d6",
+        "label": "Centerlock → 6 pernos",
+        "sort_order": 1,
+        "is_active": true
+      },
+      {
+        "id": "a5d96a33-783f-5442-a033-29d25c5e79f5",
+        "tenant_id": null,
+        "spec_definition_id": "93fa76e3-68f2-53da-8326-5fcc8f91b808",
+        "code": "catalog_c2295235a535ea3e85b7a0e5ab85afb0",
+        "label": "Otro",
+        "sort_order": 2,
+        "is_active": true
+      },
+      {
+        "id": "01b695bb-3616-5d2d-a521-437d8f99040d",
+        "tenant_id": null,
+        "spec_definition_id": "43917e38-1157-5b7e-94a3-5042a2f37eca",
+        "code": "catalog_ee033e655d6c700e0b36ac908ef4f5a4",
+        "label": "Delantero",
+        "sort_order": 0,
+        "is_active": true
+      },
+      {
+        "id": "f14ee5c0-3616-580c-8d7a-1f9f8ccf111c",
+        "tenant_id": null,
+        "spec_definition_id": "43917e38-1157-5b7e-94a3-5042a2f37eca",
+        "code": "catalog_94394a70652d9515bb482e24bf64d6f3",
+        "label": "Trasero",
+        "sort_order": 1,
+        "is_active": true
+      },
+      {
+        "id": "2316c35f-1e02-5b6b-8756-acdbd8a84f71",
+        "tenant_id": null,
+        "spec_definition_id": "43917e38-1157-5b7e-94a3-5042a2f37eca",
+        "code": "catalog_7641e5f4e7e8517bd0477fd81e3de1b8",
+        "label": "Universal",
+        "sort_order": 2,
+        "is_active": true
+      },
+      {
+        "id": "b6e160e8-ccaa-591f-a8c8-8c75a2fa3288",
+        "tenant_id": null,
+        "spec_definition_id": "5d174f68-1407-5d99-a1c1-69caf4ef8fd4",
+        "code": "catalog_c34ff9eaf4e8f7dea344376e10c34979",
+        "label": "6 pernos",
+        "sort_order": 0,
+        "is_active": true
+      },
+      {
+        "id": "78361b48-8e5c-5074-8d14-97b8125e9456",
+        "tenant_id": null,
+        "spec_definition_id": "5d174f68-1407-5d99-a1c1-69caf4ef8fd4",
+        "code": "catalog_93651d73685fd676d2e870f2ad4bc3de",
+        "label": "Centerlock",
+        "sort_order": 1,
+        "is_active": true
+      },
+      {
+        "id": "b80eb3dd-0e0d-57f7-bfc8-d1c232b77d92",
+        "tenant_id": null,
+        "spec_definition_id": "5d174f68-1407-5d99-a1c1-69caf4ef8fd4",
+        "code": "catalog_de6e897b1c6ced32e6762f3ceaebffd6",
+        "label": "Desconocido / sin confirmar",
+        "sort_order": 2,
+        "is_active": true
+      }
+    ],
+    "spec_templates": [
+      {
+        "id": "1d463b75-b6b5-587b-819d-bc01c098f89f",
+        "key": "brake_mount_adapter",
+        "name": "Adaptador de cáliper",
+        "technical_family": "brake_mount_adapter",
+        "form_contract": {
+          "rules_version": 2,
+          "roles": {
+            "caliper_mount": "legacy",
+            "frame_mount": "legacy",
+            "position": "legacy",
+            "rotor_from_mm": "legacy",
+            "rotor_to_mm": "legacy",
+            "bolts_included": "legacy",
+            "spec_evidence_source": "declaration",
+            "brake_adapter_fitments": "primary",
+            "brake_adapter_included_hardware": "declaration"
+          },
+          "semantic_roles": {
+            "caliper_mount": "legacy",
+            "frame_mount": "legacy",
+            "position": "legacy",
+            "rotor_from_mm": "legacy",
+            "rotor_to_mm": "legacy",
+            "bolts_included": "contents",
+            "spec_evidence_source": "evidence",
+            "brake_adapter_fitments": "intrinsic",
+            "brake_adapter_included_hardware": "compatibility"
+          },
+          "labels": {},
+          "allowed_when": {
+            "caliper_mount": {
+              "kind": "never"
+            },
+            "frame_mount": {
+              "kind": "never"
+            },
+            "position": {
+              "kind": "never"
+            },
+            "rotor_from_mm": {
+              "kind": "never"
+            },
+            "rotor_to_mm": {
+              "kind": "never"
+            },
+            "bolts_included": {
+              "kind": "never"
+            },
+            "spec_evidence_source": {
+              "kind": "always"
+            },
+            "brake_adapter_fitments": {
+              "kind": "always"
+            },
+            "brake_adapter_included_hardware": {
+              "kind": "always"
+            }
+          },
+          "required_when": {
+            "caliper_mount": {
+              "kind": "never"
+            },
+            "frame_mount": {
+              "kind": "never"
+            },
+            "position": {
+              "kind": "never"
+            },
+            "rotor_from_mm": {
+              "kind": "never"
+            },
+            "rotor_to_mm": {
+              "kind": "never"
+            },
+            "bolts_included": {
+              "kind": "never"
+            },
+            "spec_evidence_source": {
+              "kind": "never"
+            },
+            "brake_adapter_fitments": {
+              "kind": "always"
+            },
+            "brake_adapter_included_hardware": {
+              "kind": "never"
+            }
+          },
+          "allowed_options": {},
+          "prerequisites": {},
+          "helpers": {
+            "caliper_mount": "Resumen retirado: las aplicaciones alternativas pertenecen a filas completas por posición y montaje base.",
+            "frame_mount": "Resumen retirado: las aplicaciones alternativas pertenecen a filas completas por posición y montaje base.",
+            "position": "Resumen retirado: las aplicaciones alternativas pertenecen a filas completas por posición y montaje base.",
+            "rotor_from_mm": "Resumen retirado: las aplicaciones alternativas pertenecen a filas completas por posición y montaje base.",
+            "rotor_to_mm": "Resumen retirado: las aplicaciones alternativas pertenecen a filas completas por posición y montaje base.",
+            "brake_adapter_fitments": "Una fila por configuración completa: posición, base del cuadro u horquilla, montaje del cáliper y rotor objetivo juntos. Una exclusión publicada se registra como tal; la ausencia de fila no es un permiso. Una base no publicada queda pendiente y no se completa por costumbre.",
+            "brake_adapter_included_hardware": "Piezas incluidas, cantidad y largo suministrado. Conservar su referencia de medición; si no está publicada queda pendiente. El enlace indica la configuración de uso y no aumenta las piezas que trae la bolsa."
+          },
+          "evidence_requirements": {
+            "caliper_mount": "package_or_label",
+            "frame_mount": "package_or_label",
+            "position": "package_or_label",
+            "rotor_from_mm": "package_or_label",
+            "rotor_to_mm": "package_or_label",
+            "bolts_included": "package_or_label",
+            "spec_evidence_source": "oem_or_package",
+            "brake_adapter_fitments": "oem_spec",
+            "brake_adapter_included_hardware": "oem_or_package"
+          },
+          "row_conditions": {
+            "version": 1,
+            "fields": {
+              "brake_adapter_fitments": {
+                "allowed_when": {
+                  "frame_base_rotor_mm": {
+                    "kind": "when",
+                    "rows": [
+                      [
+                        {
+                          "field": "frame_base_form",
+                          "operator": "eq",
+                          "value_type": "token",
+                          "value": "Declarado"
+                        }
+                      ]
+                    ]
+                  },
+                  "frame_base_designation": {
+                    "kind": "when",
+                    "rows": [
+                      [
+                        {
+                          "field": "frame_base_form",
+                          "operator": "eq",
+                          "value_type": "token",
+                          "value": "Designación OEM"
+                        }
+                      ]
+                    ]
+                  }
+                },
+                "required_when": {
+                  "frame_base_rotor_mm": {
+                    "kind": "when",
+                    "rows": [
+                      [
+                        {
+                          "field": "frame_base_form",
+                          "operator": "eq",
+                          "value_type": "token",
+                          "value": "Declarado"
+                        }
+                      ]
+                    ]
+                  },
+                  "frame_base_designation": {
+                    "kind": "when",
+                    "rows": [
+                      [
+                        {
+                          "field": "frame_base_form",
+                          "operator": "eq",
+                          "value_type": "token",
+                          "value": "Designación OEM"
+                        }
+                      ]
+                    ]
+                  },
+                  "conditions": {
+                    "kind": "when",
+                    "rows": [
+                      [
+                        {
+                          "field": "status",
+                          "operator": "eq",
+                          "value_type": "token",
+                          "value": "Condicional"
+                        }
+                      ]
+                    ]
+                  }
+                }
+              },
+              "brake_adapter_included_hardware": {
+                "allowed_when": {
+                  "thread_diameter_unit": {
+                    "kind": "when",
+                    "rows": [
+                      [
+                        {
+                          "field": "thread_form",
+                          "operator": "eq",
+                          "value_type": "token",
+                          "value": "Roscada"
+                        }
+                      ]
+                    ]
+                  },
+                  "thread_pitch_unit": {
+                    "kind": "when",
+                    "rows": [
+                      [
+                        {
+                          "field": "thread_form",
+                          "operator": "eq",
+                          "value_type": "token",
+                          "value": "Roscada"
+                        }
+                      ]
+                    ]
+                  },
+                  "thread_diameter_mm": {
+                    "kind": "when",
+                    "rows": [
+                      [
+                        {
+                          "field": "thread_diameter_unit",
+                          "operator": "eq",
+                          "value_type": "token",
+                          "value": "mm"
+                        },
+                        {
+                          "field": "thread_form",
+                          "operator": "eq",
+                          "value_type": "token",
+                          "value": "Roscada"
+                        }
+                      ]
+                    ]
+                  },
+                  "thread_diameter_in": {
+                    "kind": "when",
+                    "rows": [
+                      [
+                        {
+                          "field": "thread_diameter_unit",
+                          "operator": "eq",
+                          "value_type": "token",
+                          "value": "in"
+                        },
+                        {
+                          "field": "thread_form",
+                          "operator": "eq",
+                          "value_type": "token",
+                          "value": "Roscada"
+                        }
+                      ]
+                    ]
+                  },
+                  "thread_pitch_mm": {
+                    "kind": "when",
+                    "rows": [
+                      [
+                        {
+                          "field": "thread_pitch_unit",
+                          "operator": "eq",
+                          "value_type": "token",
+                          "value": "mm"
+                        },
+                        {
+                          "field": "thread_form",
+                          "operator": "eq",
+                          "value_type": "token",
+                          "value": "Roscada"
+                        }
+                      ]
+                    ]
+                  },
+                  "thread_pitch_tpi": {
+                    "kind": "when",
+                    "rows": [
+                      [
+                        {
+                          "field": "thread_pitch_unit",
+                          "operator": "eq",
+                          "value_type": "token",
+                          "value": "tpi"
+                        },
+                        {
+                          "field": "thread_form",
+                          "operator": "eq",
+                          "value_type": "token",
+                          "value": "Roscada"
+                        }
+                      ]
+                    ]
+                  },
+                  "thread_designation": {
+                    "kind": "when",
+                    "rows": [
+                      [
+                        {
+                          "field": "thread_form",
+                          "operator": "eq",
+                          "value_type": "token",
+                          "value": "Designación OEM"
+                        }
+                      ]
+                    ]
+                  },
+                  "length_mm": {
+                    "kind": "when",
+                    "rows": [
+                      [
+                        {
+                          "field": "length_form",
+                          "operator": "eq",
+                          "value_type": "token",
+                          "value": "Declarado"
+                        }
+                      ]
+                    ]
+                  },
+                  "length_datum": {
+                    "kind": "when",
+                    "rows": [
+                      [
+                        {
+                          "field": "length_form",
+                          "operator": "eq",
+                          "value_type": "token",
+                          "value": "Declarado"
+                        }
+                      ]
+                    ]
+                  },
+                  "length_designation": {
+                    "kind": "when",
+                    "rows": [
+                      [
+                        {
+                          "field": "length_form",
+                          "operator": "eq",
+                          "value_type": "token",
+                          "value": "Designación OEM"
+                        }
+                      ]
+                    ]
+                  }
+                },
+                "required_when": {
+                  "thread_diameter_unit": {
+                    "kind": "when",
+                    "rows": [
+                      [
+                        {
+                          "field": "thread_form",
+                          "operator": "eq",
+                          "value_type": "token",
+                          "value": "Roscada"
+                        }
+                      ]
+                    ]
+                  },
+                  "thread_pitch_unit": {
+                    "kind": "when",
+                    "rows": [
+                      [
+                        {
+                          "field": "thread_form",
+                          "operator": "eq",
+                          "value_type": "token",
+                          "value": "Roscada"
+                        }
+                      ]
+                    ]
+                  },
+                  "thread_diameter_mm": {
+                    "kind": "when",
+                    "rows": [
+                      [
+                        {
+                          "field": "thread_diameter_unit",
+                          "operator": "eq",
+                          "value_type": "token",
+                          "value": "mm"
+                        },
+                        {
+                          "field": "thread_form",
+                          "operator": "eq",
+                          "value_type": "token",
+                          "value": "Roscada"
+                        }
+                      ]
+                    ]
+                  },
+                  "thread_diameter_in": {
+                    "kind": "when",
+                    "rows": [
+                      [
+                        {
+                          "field": "thread_diameter_unit",
+                          "operator": "eq",
+                          "value_type": "token",
+                          "value": "in"
+                        },
+                        {
+                          "field": "thread_form",
+                          "operator": "eq",
+                          "value_type": "token",
+                          "value": "Roscada"
+                        }
+                      ]
+                    ]
+                  },
+                  "thread_pitch_mm": {
+                    "kind": "when",
+                    "rows": [
+                      [
+                        {
+                          "field": "thread_pitch_unit",
+                          "operator": "eq",
+                          "value_type": "token",
+                          "value": "mm"
+                        },
+                        {
+                          "field": "thread_form",
+                          "operator": "eq",
+                          "value_type": "token",
+                          "value": "Roscada"
+                        }
+                      ]
+                    ]
+                  },
+                  "thread_pitch_tpi": {
+                    "kind": "when",
+                    "rows": [
+                      [
+                        {
+                          "field": "thread_pitch_unit",
+                          "operator": "eq",
+                          "value_type": "token",
+                          "value": "tpi"
+                        },
+                        {
+                          "field": "thread_form",
+                          "operator": "eq",
+                          "value_type": "token",
+                          "value": "Roscada"
+                        }
+                      ]
+                    ]
+                  },
+                  "thread_designation": {
+                    "kind": "when",
+                    "rows": [
+                      [
+                        {
+                          "field": "thread_form",
+                          "operator": "eq",
+                          "value_type": "token",
+                          "value": "Designación OEM"
+                        }
+                      ]
+                    ]
+                  },
+                  "length_mm": {
+                    "kind": "when",
+                    "rows": [
+                      [
+                        {
+                          "field": "length_form",
+                          "operator": "eq",
+                          "value_type": "token",
+                          "value": "Declarado"
+                        }
+                      ]
+                    ]
+                  },
+                  "length_datum": {
+                    "kind": "when",
+                    "rows": [
+                      [
+                        {
+                          "field": "length_form",
+                          "operator": "eq",
+                          "value_type": "token",
+                          "value": "Declarado"
+                        }
+                      ]
+                    ]
+                  },
+                  "length_designation": {
+                    "kind": "when",
+                    "rows": [
+                      [
+                        {
+                          "field": "length_form",
+                          "operator": "eq",
+                          "value_type": "token",
+                          "value": "Designación OEM"
+                        }
+                      ]
+                    ]
+                  }
+                }
+              }
+            }
+          },
+          "row_coherence": {
+            "version": 1,
+            "links": [
+              {
+                "id": "hardware_configuration",
+                "field": "brake_adapter_included_hardware",
+                "column": "configuration_row_id",
+                "target_field": "brake_adapter_fitments",
+                "label_columns": [
+                  "adapter_model",
+                  "position"
+                ]
+              }
+            ]
+          }
+        },
+        "tenant_id": null,
+        "is_active": true,
+        "description": null,
+        "default_tags": []
+      },
+      {
+        "id": "e44ede42-7446-5743-a6d6-f446d43bf306",
+        "key": "rotor_mount_adapter",
+        "name": "Adaptador de disco a maza",
+        "technical_family": "rotor_mount_adapter",
+        "form_contract": {
+          "rules_version": 2,
+          "roles": {
+            "hub_interface": "legacy",
+            "rotor_mount_out": "legacy",
+            "spec_evidence_source": "declaration",
+            "rotor_adapter_fitments": "primary"
+          },
+          "semantic_roles": {
+            "hub_interface": "legacy",
+            "rotor_mount_out": "legacy",
+            "spec_evidence_source": "evidence",
+            "rotor_adapter_fitments": "intrinsic"
+          },
+          "labels": {},
+          "allowed_when": {
+            "hub_interface": {
+              "kind": "never"
+            },
+            "rotor_mount_out": {
+              "kind": "never"
+            },
+            "spec_evidence_source": {
+              "kind": "always"
+            },
+            "rotor_adapter_fitments": {
+              "kind": "always"
+            }
+          },
+          "required_when": {
+            "hub_interface": {
+              "kind": "never"
+            },
+            "rotor_mount_out": {
+              "kind": "never"
+            },
+            "spec_evidence_source": {
+              "kind": "never"
+            },
+            "rotor_adapter_fitments": {
+              "kind": "always"
+            }
+          },
+          "allowed_options": {},
+          "prerequisites": {},
+          "helpers": {
+            "hub_interface": "Resumen retirado: identificar por separado la interfaz de maza y la de rotor en cada ruta documentada.",
+            "rotor_mount_out": "Resumen retirado: identificar por separado la interfaz de maza y la de rotor en cada ruta documentada.",
+            "rotor_adapter_fitments": "Maza de entrada y rotor de salida tienen dirección. Ambas pueden conservar seis pernos cuando la función es desplazar el rotor. La rosca de fijación a la maza y la del anillo propio son independientes. La configuración completa incluye posición, versiones y restricciones del fabricante; no equivale a aprobación por coincidencia de anclaje."
+          },
+          "evidence_requirements": {
+            "hub_interface": "package_or_label",
+            "rotor_mount_out": "package_or_label",
+            "spec_evidence_source": "oem_or_package",
+            "rotor_adapter_fitments": "oem_spec"
+          },
+          "row_conditions": {
+            "version": 1,
+            "fields": {
+              "rotor_adapter_fitments": {
+                "required_when": {
+                  "hub_thread_spec": {
+                    "kind": "when",
+                    "rows": [
+                      [
+                        {
+                          "field": "hub_mount",
+                          "operator": "eq",
+                          "value_type": "token",
+                          "value": "Rosca especificada"
+                        }
+                      ]
+                    ]
+                  },
+                  "conditions": {
+                    "kind": "when",
+                    "rows": [
+                      [
+                        {
+                          "field": "status",
+                          "operator": "eq",
+                          "value_type": "token",
+                          "value": "Condicional"
+                        }
+                      ]
+                    ]
+                  },
+                  "rotor_offset_datum": {
+                    "kind": "when",
+                    "rows": [
+                      [
+                        {
+                          "field": "adapter_function",
+                          "operator": "eq",
+                          "value_type": "token",
+                          "value": "Posición del rotor"
+                        }
+                      ]
+                    ]
+                  }
+                },
+                "allowed_when": {
+                  "hub_thread_spec": {
+                    "kind": "when",
+                    "rows": [
+                      [
+                        {
+                          "field": "hub_mount",
+                          "operator": "eq",
+                          "value_type": "token",
+                          "value": "Rosca especificada"
+                        }
+                      ]
+                    ]
+                  },
+                  "rotor_offset_mm": {
+                    "kind": "when",
+                    "rows": [
+                      [
+                        {
+                          "field": "adapter_function",
+                          "operator": "eq",
+                          "value_type": "token",
+                          "value": "Posición del rotor"
+                        }
+                      ]
+                    ]
+                  },
+                  "rotor_offset_datum": {
+                    "kind": "when",
+                    "rows": [
+                      [
+                        {
+                          "field": "adapter_function",
+                          "operator": "eq",
+                          "value_type": "token",
+                          "value": "Posición del rotor"
+                        }
+                      ]
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        },
+        "tenant_id": null,
+        "is_active": true,
+        "description": null,
+        "default_tags": []
+      },
+      {
+        "id": "bdae0fde-f2e2-56c9-8c17-593926d0e292",
+        "key": "brake_small_part",
+        "name": "Pieza de freno",
+        "technical_family": "brake_small_part",
+        "form_contract": {
+          "rules_version": 2,
+          "roles": {
+            "brake_part_kind": "legacy",
+            "compatible_brake_models": "legacy",
+            "thread": "legacy",
+            "material": "legacy",
+            "pack_quantity": "contents",
+            "spec_evidence_source": "declaration",
+            "brake_small_part_components": "primary"
+          },
+          "semantic_roles": {
+            "brake_part_kind": "intrinsic",
+            "compatible_brake_models": "compatibility",
+            "thread": "compatibility",
+            "material": "intrinsic",
+            "pack_quantity": "contents",
+            "spec_evidence_source": "evidence",
+            "brake_small_part_components": "intrinsic"
+          },
+          "labels": {},
+          "allowed_when": {
+            "brake_part_kind": {
+              "kind": "never"
+            },
+            "compatible_brake_models": {
+              "kind": "never"
+            },
+            "thread": {
+              "kind": "never"
+            },
+            "material": {
+              "kind": "never"
+            },
+            "pack_quantity": {
+              "kind": "always"
+            },
+            "spec_evidence_source": {
+              "kind": "always"
+            },
+            "brake_small_part_components": {
+              "kind": "always"
+            }
+          },
+          "required_when": {
+            "brake_part_kind": {
+              "kind": "never"
+            },
+            "compatible_brake_models": {
+              "kind": "never"
+            },
+            "thread": {
+              "kind": "never"
+            },
+            "material": {
+              "kind": "never"
+            },
+            "pack_quantity": {
+              "kind": "never"
+            },
+            "spec_evidence_source": {
+              "kind": "never"
+            },
+            "brake_small_part_components": {
+              "kind": "always"
+            }
+          },
+          "allowed_options": {},
+          "prerequisites": {},
+          "helpers": {
+            "compatible_brake_models": "Una ausencia en esta lista deja el uso no confirmado. No existe cierre global por tener URL o lista exhaustiva.",
+            "brake_small_part_components": "Una fila por pieza, con su propia forma. Un resorte y un clip no tienen rosca y no se les pregunta por ella; un pasador puede llevarla o retenerse con un clip. Que una pieza del juego sea un tornillo no convierte al resto en tornillos."
+          },
+          "evidence_requirements": {
+            "brake_part_kind": "package_or_label",
+            "compatible_brake_models": "oem_spec",
+            "thread": "package_or_label",
+            "material": "package_or_label",
+            "pack_quantity": "package_or_label",
+            "spec_evidence_source": "oem_or_package",
+            "brake_small_part_components": "oem_or_package"
+          },
+          "row_conditions": {
+            "version": 1,
+            "fields": {
+              "brake_small_part_components": {
+                "allowed_when": {
+                  "thread_diameter_unit": {
+                    "kind": "when",
+                    "rows": [
+                      [
+                        {
+                          "field": "thread_form",
+                          "operator": "eq",
+                          "value_type": "token",
+                          "value": "Roscada"
+                        }
+                      ]
+                    ]
+                  },
+                  "thread_pitch_unit": {
+                    "kind": "when",
+                    "rows": [
+                      [
+                        {
+                          "field": "thread_form",
+                          "operator": "eq",
+                          "value_type": "token",
+                          "value": "Roscada"
+                        }
+                      ]
+                    ]
+                  },
+                  "thread_diameter_mm": {
+                    "kind": "when",
+                    "rows": [
+                      [
+                        {
+                          "field": "thread_diameter_unit",
+                          "operator": "eq",
+                          "value_type": "token",
+                          "value": "mm"
+                        },
+                        {
+                          "field": "thread_form",
+                          "operator": "eq",
+                          "value_type": "token",
+                          "value": "Roscada"
+                        }
+                      ]
+                    ]
+                  },
+                  "thread_diameter_in": {
+                    "kind": "when",
+                    "rows": [
+                      [
+                        {
+                          "field": "thread_diameter_unit",
+                          "operator": "eq",
+                          "value_type": "token",
+                          "value": "in"
+                        },
+                        {
+                          "field": "thread_form",
+                          "operator": "eq",
+                          "value_type": "token",
+                          "value": "Roscada"
+                        }
+                      ]
+                    ]
+                  },
+                  "thread_pitch_mm": {
+                    "kind": "when",
+                    "rows": [
+                      [
+                        {
+                          "field": "thread_pitch_unit",
+                          "operator": "eq",
+                          "value_type": "token",
+                          "value": "mm"
+                        },
+                        {
+                          "field": "thread_form",
+                          "operator": "eq",
+                          "value_type": "token",
+                          "value": "Roscada"
+                        }
+                      ]
+                    ]
+                  },
+                  "thread_pitch_tpi": {
+                    "kind": "when",
+                    "rows": [
+                      [
+                        {
+                          "field": "thread_pitch_unit",
+                          "operator": "eq",
+                          "value_type": "token",
+                          "value": "tpi"
+                        },
+                        {
+                          "field": "thread_form",
+                          "operator": "eq",
+                          "value_type": "token",
+                          "value": "Roscada"
+                        }
+                      ]
+                    ]
+                  },
+                  "thread_designation": {
+                    "kind": "when",
+                    "rows": [
+                      [
+                        {
+                          "field": "thread_form",
+                          "operator": "eq",
+                          "value_type": "token",
+                          "value": "Designación OEM"
+                        }
+                      ]
+                    ]
+                  }
+                },
+                "required_when": {
+                  "thread_diameter_unit": {
+                    "kind": "when",
+                    "rows": [
+                      [
+                        {
+                          "field": "thread_form",
+                          "operator": "eq",
+                          "value_type": "token",
+                          "value": "Roscada"
+                        }
+                      ]
+                    ]
+                  },
+                  "thread_pitch_unit": {
+                    "kind": "when",
+                    "rows": [
+                      [
+                        {
+                          "field": "thread_form",
+                          "operator": "eq",
+                          "value_type": "token",
+                          "value": "Roscada"
+                        }
+                      ]
+                    ]
+                  },
+                  "thread_diameter_mm": {
+                    "kind": "when",
+                    "rows": [
+                      [
+                        {
+                          "field": "thread_diameter_unit",
+                          "operator": "eq",
+                          "value_type": "token",
+                          "value": "mm"
+                        },
+                        {
+                          "field": "thread_form",
+                          "operator": "eq",
+                          "value_type": "token",
+                          "value": "Roscada"
+                        }
+                      ]
+                    ]
+                  },
+                  "thread_diameter_in": {
+                    "kind": "when",
+                    "rows": [
+                      [
+                        {
+                          "field": "thread_diameter_unit",
+                          "operator": "eq",
+                          "value_type": "token",
+                          "value": "in"
+                        },
+                        {
+                          "field": "thread_form",
+                          "operator": "eq",
+                          "value_type": "token",
+                          "value": "Roscada"
+                        }
+                      ]
+                    ]
+                  },
+                  "thread_pitch_mm": {
+                    "kind": "when",
+                    "rows": [
+                      [
+                        {
+                          "field": "thread_pitch_unit",
+                          "operator": "eq",
+                          "value_type": "token",
+                          "value": "mm"
+                        },
+                        {
+                          "field": "thread_form",
+                          "operator": "eq",
+                          "value_type": "token",
+                          "value": "Roscada"
+                        }
+                      ]
+                    ]
+                  },
+                  "thread_pitch_tpi": {
+                    "kind": "when",
+                    "rows": [
+                      [
+                        {
+                          "field": "thread_pitch_unit",
+                          "operator": "eq",
+                          "value_type": "token",
+                          "value": "tpi"
+                        },
+                        {
+                          "field": "thread_form",
+                          "operator": "eq",
+                          "value_type": "token",
+                          "value": "Roscada"
+                        }
+                      ]
+                    ]
+                  },
+                  "thread_designation": {
+                    "kind": "when",
+                    "rows": [
+                      [
+                        {
+                          "field": "thread_form",
+                          "operator": "eq",
+                          "value_type": "token",
+                          "value": "Designación OEM"
+                        }
+                      ]
+                    ]
+                  }
+                },
+                "value_when": {
+                  "thread_form": [
+                    {
+                      "when": {
+                        "kind": "when",
+                        "rows": [
+                          [
+                            {
+                              "field": "piece_kind",
+                              "operator": "in",
+                              "value_type": "token",
+                              "value": [
+                                "Resorte",
+                                "Clip de retención"
+                              ]
+                            }
+                          ]
+                        ]
+                      },
+                      "expected": {
+                        "value_type": "token",
+                        "value": "Sin rosca"
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "tenant_id": null,
+        "is_active": true,
+        "description": null,
+        "default_tags": []
+      },
+      {
+        "id": "0ab39e1e-88fb-5d00-8bec-7cc68002ac74",
+        "key": "hub_brake",
+        "name": "Freno de maza",
+        "technical_family": "hub_brake",
+        "form_contract": {
+          "rules_version": 2,
+          "roles": {
+            "hub_brake_kind": "legacy",
+            "drum_diameter_mm": "legacy",
+            "axle_fit": "legacy",
+            "reaction_arm_mount": "legacy",
+            "brake_actuation": "legacy",
+            "spec_evidence_source": "declaration",
+            "hub_brake_configurations": "primary",
+            "hub_brake_attachment_interfaces": "declaration"
+          },
+          "semantic_roles": {
+            "hub_brake_kind": "intrinsic",
+            "drum_diameter_mm": "compatibility",
+            "axle_fit": "compatibility",
+            "reaction_arm_mount": "compatibility",
+            "brake_actuation": "intrinsic",
+            "spec_evidence_source": "evidence",
+            "hub_brake_configurations": "intrinsic",
+            "hub_brake_attachment_interfaces": "compatibility"
+          },
+          "labels": {},
+          "allowed_when": {
+            "hub_brake_kind": {
+              "kind": "never"
+            },
+            "drum_diameter_mm": {
+              "kind": "never"
+            },
+            "axle_fit": {
+              "kind": "never"
+            },
+            "reaction_arm_mount": {
+              "kind": "never"
+            },
+            "brake_actuation": {
+              "kind": "never"
+            },
+            "spec_evidence_source": {
+              "kind": "always"
+            },
+            "hub_brake_configurations": {
+              "kind": "always"
+            },
+            "hub_brake_attachment_interfaces": {
+              "kind": "always"
+            }
+          },
+          "required_when": {
+            "hub_brake_kind": {
+              "kind": "never"
+            },
+            "drum_diameter_mm": {
+              "kind": "never"
+            },
+            "axle_fit": {
+              "kind": "never"
+            },
+            "reaction_arm_mount": {
+              "kind": "never"
+            },
+            "brake_actuation": {
+              "kind": "never"
+            },
+            "spec_evidence_source": {
+              "kind": "never"
+            },
+            "hub_brake_configurations": {
+              "kind": "always"
+            },
+            "hub_brake_attachment_interfaces": {
+              "kind": "never"
+            }
+          },
+          "allowed_options": {},
+          "prerequisites": {},
+          "helpers": {
+            "brake_actuation": "Accionamiento del freno de esta rueda. No deducir el sistema de la otra rueda ni bloquear una maneta sólo porque existe contrapedal detrás.",
+            "hub_brake_configurations": "El mecanismo, el conjunto en que llega y cómo se acciona son tres cosas distintas. Un contrapedal es una maza trasera accionada al pedalear hacia atrás y su brazo de reacción se sujeta a la vaina. Nada de eso dice qué freno lleva la rueda delantera, y esta ficha no lo deduce.",
+            "hub_brake_attachment_interfaces": "El diámetro del eje, su rosca, la separación OLD y el anclaje de reacción son interfaces distintas de una configuración. Ninguna medida se interpreta automáticamente como modelo compatible."
+          },
+          "evidence_requirements": {
+            "hub_brake_kind": "package_or_label",
+            "drum_diameter_mm": "package_or_label",
+            "axle_fit": "package_or_label",
+            "reaction_arm_mount": "package_or_label",
+            "brake_actuation": "package_or_label",
+            "spec_evidence_source": "oem_or_package",
+            "hub_brake_configurations": "oem_or_package",
+            "hub_brake_attachment_interfaces": "oem_or_package"
+          },
+          "row_conditions": {
+            "version": 1,
+            "fields": {
+              "hub_brake_configurations": {
+                "allowed_when": {
+                  "drum_diameter_mm": {
+                    "kind": "when",
+                    "rows": [
+                      [
+                        {
+                          "field": "drum_form",
+                          "operator": "eq",
+                          "value_type": "token",
+                          "value": "Declarado"
+                        }
+                      ]
+                    ]
+                  },
+                  "drum_designation": {
+                    "kind": "when",
+                    "rows": [
+                      [
+                        {
+                          "field": "drum_form",
+                          "operator": "eq",
+                          "value_type": "token",
+                          "value": "Designación OEM"
+                        }
+                      ]
+                    ]
+                  },
+                  "reaction_arm_fixing": {
+                    "kind": "when",
+                    "rows": [
+                      [
+                        {
+                          "field": "reaction_arm_required",
+                          "operator": "eq",
+                          "value_type": "token",
+                          "value": "Sí"
+                        }
+                      ]
+                    ]
+                  }
+                },
+                "required_when": {
+                  "drum_diameter_mm": {
+                    "kind": "when",
+                    "rows": [
+                      [
+                        {
+                          "field": "drum_form",
+                          "operator": "eq",
+                          "value_type": "token",
+                          "value": "Declarado"
+                        }
+                      ]
+                    ]
+                  },
+                  "drum_designation": {
+                    "kind": "when",
+                    "rows": [
+                      [
+                        {
+                          "field": "drum_form",
+                          "operator": "eq",
+                          "value_type": "token",
+                          "value": "Designación OEM"
+                        }
+                      ]
+                    ]
+                  },
+                  "reaction_arm_fixing": {
+                    "kind": "when",
+                    "rows": [
+                      [
+                        {
+                          "field": "reaction_arm_required",
+                          "operator": "eq",
+                          "value_type": "token",
+                          "value": "Sí"
+                        }
+                      ]
+                    ]
+                  }
+                },
+                "value_when": {
+                  "actuation": [
+                    {
+                      "when": {
+                        "kind": "when",
+                        "rows": [
+                          [
+                            {
+                              "field": "mechanism",
+                              "operator": "eq",
+                              "value_type": "token",
+                              "value": "Contrapedal"
+                            }
+                          ]
+                        ]
+                      },
+                      "expected": {
+                        "value_type": "token",
+                        "value": "Contrapedal (retropedaleo)"
+                      }
+                    }
+                  ],
+                  "position": [
+                    {
+                      "when": {
+                        "kind": "when",
+                        "rows": [
+                          [
+                            {
+                              "field": "mechanism",
+                              "operator": "eq",
+                              "value_type": "token",
+                              "value": "Contrapedal"
+                            }
+                          ]
+                        ]
+                      },
+                      "expected": {
+                        "value_type": "token",
+                        "value": "Trasera"
+                      }
+                    }
+                  ],
+                  "reaction_arm_required": [
+                    {
+                      "when": {
+                        "kind": "when",
+                        "rows": [
+                          [
+                            {
+                              "field": "mechanism",
+                              "operator": "eq",
+                              "value_type": "token",
+                              "value": "Contrapedal"
+                            }
+                          ]
+                        ]
+                      },
+                      "expected": {
+                        "value_type": "token",
+                        "value": "Sí"
+                      }
+                    }
+                  ]
+                }
+              },
+              "hub_brake_attachment_interfaces": {
+                "allowed_when": {
+                  "diameter": {
+                    "kind": "when",
+                    "rows": [
+                      [
+                        {
+                          "field": "interface_kind",
+                          "operator": "in",
+                          "value_type": "token",
+                          "value": [
+                            "Rosca de eje",
+                            "Eje pasante",
+                            "Asiento liso"
+                          ]
+                        }
+                      ]
+                    ]
+                  },
+                  "diameter_unit": {
+                    "kind": "when",
+                    "rows": [
+                      [
+                        {
+                          "field": "interface_kind",
+                          "operator": "in",
+                          "value_type": "token",
+                          "value": [
+                            "Rosca de eje",
+                            "Eje pasante",
+                            "Asiento liso"
+                          ]
+                        }
+                      ]
+                    ]
+                  },
+                  "pitch": {
+                    "kind": "when",
+                    "rows": [
+                      [
+                        {
+                          "field": "interface_kind",
+                          "operator": "eq",
+                          "value_type": "token",
+                          "value": "Rosca de eje"
+                        }
+                      ]
+                    ]
+                  },
+                  "pitch_unit": {
+                    "kind": "when",
+                    "rows": [
+                      [
+                        {
+                          "field": "interface_kind",
+                          "operator": "eq",
+                          "value_type": "token",
+                          "value": "Rosca de eje"
+                        }
+                      ]
+                    ]
+                  },
+                  "old_mm": {
+                    "kind": "when",
+                    "rows": [
+                      [
+                        {
+                          "field": "interface_kind",
+                          "operator": "eq",
+                          "value_type": "token",
+                          "value": "Separación OLD"
+                        }
+                      ]
+                    ]
+                  },
+                  "designation": {
+                    "kind": "when",
+                    "rows": [
+                      [
+                        {
+                          "field": "interface_kind",
+                          "operator": "in",
+                          "value_type": "token",
+                          "value": [
+                            "Fijación de reacción",
+                            "Designación OEM"
+                          ]
+                        }
+                      ]
+                    ]
+                  }
+                },
+                "required_when": {
+                  "diameter": {
+                    "kind": "when",
+                    "rows": [
+                      [
+                        {
+                          "field": "interface_kind",
+                          "operator": "in",
+                          "value_type": "token",
+                          "value": [
+                            "Rosca de eje",
+                            "Eje pasante",
+                            "Asiento liso"
+                          ]
+                        }
+                      ]
+                    ]
+                  },
+                  "diameter_unit": {
+                    "kind": "when",
+                    "rows": [
+                      [
+                        {
+                          "field": "interface_kind",
+                          "operator": "in",
+                          "value_type": "token",
+                          "value": [
+                            "Rosca de eje",
+                            "Eje pasante",
+                            "Asiento liso"
+                          ]
+                        }
+                      ]
+                    ]
+                  },
+                  "pitch": {
+                    "kind": "when",
+                    "rows": [
+                      [
+                        {
+                          "field": "interface_kind",
+                          "operator": "eq",
+                          "value_type": "token",
+                          "value": "Rosca de eje"
+                        }
+                      ]
+                    ]
+                  },
+                  "pitch_unit": {
+                    "kind": "when",
+                    "rows": [
+                      [
+                        {
+                          "field": "interface_kind",
+                          "operator": "eq",
+                          "value_type": "token",
+                          "value": "Rosca de eje"
+                        }
+                      ]
+                    ]
+                  },
+                  "old_mm": {
+                    "kind": "when",
+                    "rows": [
+                      [
+                        {
+                          "field": "interface_kind",
+                          "operator": "eq",
+                          "value_type": "token",
+                          "value": "Separación OLD"
+                        }
+                      ]
+                    ]
+                  },
+                  "designation": {
+                    "kind": "when",
+                    "rows": [
+                      [
+                        {
+                          "field": "interface_kind",
+                          "operator": "in",
+                          "value_type": "token",
+                          "value": [
+                            "Fijación de reacción",
+                            "Designación OEM"
+                          ]
+                        }
+                      ]
+                    ]
+                  }
+                }
+              }
+            }
+          },
+          "row_coherence": {
+            "version": 1,
+            "links": [
+              {
+                "id": "hub_brake_attachment_configuration",
+                "field": "hub_brake_attachment_interfaces",
+                "column": "configuration_row_id",
+                "target_field": "hub_brake_configurations",
+                "label_columns": [
+                  "brake_model",
+                  "configuration"
+                ]
+              }
+            ]
+          }
+        },
+        "tenant_id": null,
+        "is_active": true,
+        "description": null,
+        "default_tags": []
+      }
+    ],
+    "spec_template_fields": [
+      {
+        "section_key": "legacy",
+        "sort_order": 40,
+        "is_required": false,
+        "visibility_rules": [],
+        "option_rules": [],
+        "constraint_rules": [],
+        "id": "b3043381-a240-5186-b3b3-38863d2e683a",
+        "tenant_id": null,
+        "template_id": "1d463b75-b6b5-587b-819d-bc01c098f89f",
+        "spec_definition_id": "56e404d7-fc74-5109-9aa1-2d3a164f1bff",
+        "default_value_json": null,
+        "helper_text": null
+      },
+      {
+        "section_key": "legacy",
+        "sort_order": 50,
+        "is_required": false,
+        "visibility_rules": [],
+        "option_rules": [],
+        "constraint_rules": [],
+        "id": "d475d4f2-faf1-5e90-8b68-476b1e869c0a",
+        "tenant_id": null,
+        "template_id": "1d463b75-b6b5-587b-819d-bc01c098f89f",
+        "spec_definition_id": "cd405871-04ec-5928-821a-4f5b8c8eb46c",
+        "default_value_json": null,
+        "helper_text": null
+      },
+      {
+        "section_key": "legacy",
+        "sort_order": 60,
+        "is_required": false,
+        "visibility_rules": [],
+        "option_rules": [],
+        "constraint_rules": [],
+        "id": "cc90b1c6-b426-5b04-9cfe-b1b5f207c850",
+        "tenant_id": null,
+        "template_id": "1d463b75-b6b5-587b-819d-bc01c098f89f",
+        "spec_definition_id": "43917e38-1157-5b7e-94a3-5042a2f37eca",
+        "default_value_json": null,
+        "helper_text": null
+      },
+      {
+        "section_key": "legacy",
+        "sort_order": 70,
+        "is_required": false,
+        "visibility_rules": [],
+        "option_rules": [],
+        "constraint_rules": [],
+        "id": "eefdfae2-93a1-5e26-b33f-38bd0f65b295",
+        "tenant_id": null,
+        "template_id": "1d463b75-b6b5-587b-819d-bc01c098f89f",
+        "spec_definition_id": "24ae2adf-90a0-5602-8890-36b0aa7d6d90",
+        "default_value_json": null,
+        "helper_text": null
+      },
+      {
+        "section_key": "legacy",
+        "sort_order": 80,
+        "is_required": false,
+        "visibility_rules": [],
+        "option_rules": [],
+        "constraint_rules": [],
+        "id": "14dc88b5-b724-5ea1-852e-8200cdffa24c",
+        "tenant_id": null,
+        "template_id": "1d463b75-b6b5-587b-819d-bc01c098f89f",
+        "spec_definition_id": "dc0a9fbc-7412-5e6c-a902-8da19c34a608",
+        "default_value_json": null,
+        "helper_text": null
+      },
+      {
+        "section_key": "legacy",
+        "sort_order": 90,
+        "is_required": false,
+        "visibility_rules": [],
+        "option_rules": [],
+        "constraint_rules": [],
+        "id": "aacb19dd-72c2-5012-91d7-b9c6688376ef",
+        "tenant_id": null,
+        "template_id": "1d463b75-b6b5-587b-819d-bc01c098f89f",
+        "spec_definition_id": "92497d9e-8383-5db9-9306-937adec10fb3",
+        "default_value_json": null,
+        "helper_text": null
+      },
+      {
+        "section_key": "declaration",
+        "sort_order": 30,
+        "is_required": false,
+        "visibility_rules": [],
+        "option_rules": [],
+        "constraint_rules": [],
+        "id": "9ace7095-0b12-50c1-b4b9-b2da89dfb466",
+        "tenant_id": null,
+        "template_id": "1d463b75-b6b5-587b-819d-bc01c098f89f",
+        "spec_definition_id": "4f055961-6c16-430b-a4e2-e6b09dc1cccc",
+        "default_value_json": null,
+        "helper_text": null
+      },
+      {
+        "section_key": "primary",
+        "sort_order": 10,
+        "is_required": false,
+        "visibility_rules": [],
+        "option_rules": [],
+        "constraint_rules": [],
+        "id": "54d3e9ff-621f-517f-96ac-dc257ce81f72",
+        "tenant_id": null,
+        "template_id": "1d463b75-b6b5-587b-819d-bc01c098f89f",
+        "spec_definition_id": "f1c31f79-2ade-5d6f-86e3-bc56fb61d9f7",
+        "default_value_json": null,
+        "helper_text": null
+      },
+      {
+        "section_key": "declaration",
+        "sort_order": 20,
+        "is_required": false,
+        "visibility_rules": [],
+        "option_rules": [],
+        "constraint_rules": [],
+        "id": "8a99124c-589b-576e-81e5-d17006fe9d23",
+        "tenant_id": null,
+        "template_id": "1d463b75-b6b5-587b-819d-bc01c098f89f",
+        "spec_definition_id": "dd51448d-a29b-5182-b7d4-4be5b5a9df2c",
+        "default_value_json": null,
+        "helper_text": null
+      },
+      {
+        "section_key": "legacy",
+        "sort_order": 30,
+        "is_required": false,
+        "visibility_rules": [],
+        "option_rules": [],
+        "constraint_rules": [],
+        "id": "eea5fd06-c3fd-5e90-b0cd-ccc87b9acd0a",
+        "tenant_id": null,
+        "template_id": "e44ede42-7446-5743-a6d6-f446d43bf306",
+        "spec_definition_id": "93fa76e3-68f2-53da-8326-5fcc8f91b808",
+        "default_value_json": null,
+        "helper_text": null
+      },
+      {
+        "section_key": "legacy",
+        "sort_order": 40,
+        "is_required": false,
+        "visibility_rules": [],
+        "option_rules": [],
+        "constraint_rules": [],
+        "id": "8921c1f3-44b2-5bcb-9128-3346ab00e0b4",
+        "tenant_id": null,
+        "template_id": "e44ede42-7446-5743-a6d6-f446d43bf306",
+        "spec_definition_id": "5d174f68-1407-5d99-a1c1-69caf4ef8fd4",
+        "default_value_json": null,
+        "helper_text": null
+      },
+      {
+        "section_key": "declaration",
+        "sort_order": 20,
+        "is_required": false,
+        "visibility_rules": [],
+        "option_rules": [],
+        "constraint_rules": [],
+        "id": "0070d3bd-2632-599c-9515-9019b899d8ca",
+        "tenant_id": null,
+        "template_id": "e44ede42-7446-5743-a6d6-f446d43bf306",
+        "spec_definition_id": "4f055961-6c16-430b-a4e2-e6b09dc1cccc",
+        "default_value_json": null,
+        "helper_text": null
+      },
+      {
+        "section_key": "primary",
+        "sort_order": 10,
+        "is_required": false,
+        "visibility_rules": [],
+        "option_rules": [],
+        "constraint_rules": [],
+        "id": "b3bf95f4-5e72-5340-9906-63bf82f90de2",
+        "tenant_id": null,
+        "template_id": "e44ede42-7446-5743-a6d6-f446d43bf306",
+        "spec_definition_id": "5583e7d8-ac8e-57d9-8c79-304f134f12b0",
+        "default_value_json": null,
+        "helper_text": null
+      },
+      {
+        "section_key": "legacy",
+        "sort_order": 40,
+        "is_required": false,
+        "visibility_rules": [],
+        "option_rules": [],
+        "constraint_rules": [],
+        "id": "96cc824c-741d-5648-a840-a4314d991e2b",
+        "tenant_id": null,
+        "template_id": "bdae0fde-f2e2-56c9-8c17-593926d0e292",
+        "spec_definition_id": "693b3557-d05c-5e65-ade4-def5dbe7b1df",
+        "default_value_json": null,
+        "helper_text": null
+      },
+      {
+        "section_key": "legacy",
+        "sort_order": 50,
+        "is_required": false,
+        "visibility_rules": [],
+        "option_rules": [],
+        "constraint_rules": [],
+        "id": "7410618a-2b8a-5dd8-a849-c17c26671b7c",
+        "tenant_id": null,
+        "template_id": "bdae0fde-f2e2-56c9-8c17-593926d0e292",
+        "spec_definition_id": "369c2b61-dd89-5153-8fdb-7ecf123529fd",
+        "default_value_json": null,
+        "helper_text": null
+      },
+      {
+        "section_key": "legacy",
+        "sort_order": 60,
+        "is_required": false,
+        "visibility_rules": [],
+        "option_rules": [],
+        "constraint_rules": [],
+        "id": "5f1f4a78-face-5bc7-a39c-f1bfa77a011e",
+        "tenant_id": null,
+        "template_id": "bdae0fde-f2e2-56c9-8c17-593926d0e292",
+        "spec_definition_id": "920bb7cf-9240-5ba9-8ec9-744c335ec01b",
+        "default_value_json": null,
+        "helper_text": null
+      },
+      {
+        "section_key": "legacy",
+        "sort_order": 70,
+        "is_required": false,
+        "visibility_rules": [],
+        "option_rules": [],
+        "constraint_rules": [],
+        "id": "4b962dbc-fb0a-5bab-82dc-2ef1264fdc08",
+        "tenant_id": null,
+        "template_id": "bdae0fde-f2e2-56c9-8c17-593926d0e292",
+        "spec_definition_id": "7da3359a-e29f-57d8-901f-355753d1c6b3",
+        "default_value_json": null,
+        "helper_text": null
+      },
+      {
+        "section_key": "contents",
+        "sort_order": 20,
+        "is_required": false,
+        "visibility_rules": [],
+        "option_rules": [],
+        "constraint_rules": [],
+        "id": "4405ab67-eaf9-5b8e-b648-6ac349158866",
+        "tenant_id": null,
+        "template_id": "bdae0fde-f2e2-56c9-8c17-593926d0e292",
+        "spec_definition_id": "c8398080-0892-5433-951f-15eaac0feef9",
+        "default_value_json": null,
+        "helper_text": null
+      },
+      {
+        "section_key": "declaration",
+        "sort_order": 30,
+        "is_required": false,
+        "visibility_rules": [],
+        "option_rules": [],
+        "constraint_rules": [],
+        "id": "7d513647-59c9-5098-b8af-2eae14c86c84",
+        "tenant_id": null,
+        "template_id": "bdae0fde-f2e2-56c9-8c17-593926d0e292",
+        "spec_definition_id": "4f055961-6c16-430b-a4e2-e6b09dc1cccc",
+        "default_value_json": null,
+        "helper_text": null
+      },
+      {
+        "section_key": "primary",
+        "sort_order": 10,
+        "is_required": false,
+        "visibility_rules": [],
+        "option_rules": [],
+        "constraint_rules": [],
+        "id": "d0f23e11-e3b7-53d1-8c30-a5a4a82fe802",
+        "tenant_id": null,
+        "template_id": "bdae0fde-f2e2-56c9-8c17-593926d0e292",
+        "spec_definition_id": "be857d20-d615-5b62-a09a-e55710bc1b5b",
+        "default_value_json": null,
+        "helper_text": null
+      },
+      {
+        "section_key": "legacy",
+        "sort_order": 40,
+        "is_required": false,
+        "visibility_rules": [],
+        "option_rules": [],
+        "constraint_rules": [],
+        "id": "a85be8a6-6e52-5612-8458-61e59fe2ffc6",
+        "tenant_id": null,
+        "template_id": "0ab39e1e-88fb-5d00-8bec-7cc68002ac74",
+        "spec_definition_id": "74524a1d-7ea6-5419-b1f9-6a37d400c9d9",
+        "default_value_json": null,
+        "helper_text": null
+      },
+      {
+        "section_key": "legacy",
+        "sort_order": 50,
+        "is_required": false,
+        "visibility_rules": [],
+        "option_rules": [],
+        "constraint_rules": [],
+        "id": "e3ca8900-f54e-5236-a88d-78076ea33f21",
+        "tenant_id": null,
+        "template_id": "0ab39e1e-88fb-5d00-8bec-7cc68002ac74",
+        "spec_definition_id": "580faac7-a400-56e8-b2c6-935342ba9c8f",
+        "default_value_json": null,
+        "helper_text": null
+      },
+      {
+        "section_key": "legacy",
+        "sort_order": 60,
+        "is_required": false,
+        "visibility_rules": [],
+        "option_rules": [],
+        "constraint_rules": [],
+        "id": "35235d97-d961-5087-94b1-40bbb2a740c4",
+        "tenant_id": null,
+        "template_id": "0ab39e1e-88fb-5d00-8bec-7cc68002ac74",
+        "spec_definition_id": "e5d9dd59-b757-5c0d-9daa-4717a400c0de",
+        "default_value_json": null,
+        "helper_text": null
+      },
+      {
+        "section_key": "legacy",
+        "sort_order": 70,
+        "is_required": false,
+        "visibility_rules": [],
+        "option_rules": [],
+        "constraint_rules": [],
+        "id": "3063332f-0c11-5b9a-9bf3-ac7569d00ec6",
+        "tenant_id": null,
+        "template_id": "0ab39e1e-88fb-5d00-8bec-7cc68002ac74",
+        "spec_definition_id": "ae3e3b3c-c70f-5dc1-87b1-d78385f7116a",
+        "default_value_json": null,
+        "helper_text": null
+      },
+      {
+        "section_key": "legacy",
+        "sort_order": 80,
+        "is_required": false,
+        "visibility_rules": [],
+        "option_rules": [],
+        "constraint_rules": [],
+        "id": "7a45b7cd-c3fa-5374-af69-38e2f3939c50",
+        "tenant_id": null,
+        "template_id": "0ab39e1e-88fb-5d00-8bec-7cc68002ac74",
+        "spec_definition_id": "4eb570b4-b098-59be-96f2-9c1e0bcd7b65",
+        "default_value_json": null,
+        "helper_text": null
+      },
+      {
+        "section_key": "declaration",
+        "sort_order": 30,
+        "is_required": false,
+        "visibility_rules": [],
+        "option_rules": [],
+        "constraint_rules": [],
+        "id": "c10b71e4-70b8-5e2a-aeaa-805ffb967cec",
+        "tenant_id": null,
+        "template_id": "0ab39e1e-88fb-5d00-8bec-7cc68002ac74",
+        "spec_definition_id": "4f055961-6c16-430b-a4e2-e6b09dc1cccc",
+        "default_value_json": null,
+        "helper_text": null
+      },
+      {
+        "section_key": "primary",
+        "sort_order": 10,
+        "is_required": false,
+        "visibility_rules": [],
+        "option_rules": [],
+        "constraint_rules": [],
+        "id": "ab48343d-bcdc-5efe-a65d-588a64bb82e2",
+        "tenant_id": null,
+        "template_id": "0ab39e1e-88fb-5d00-8bec-7cc68002ac74",
+        "spec_definition_id": "ed1ff2e9-31c1-5831-acff-906fbb3e1b37",
+        "default_value_json": null,
+        "helper_text": null
+      },
+      {
+        "section_key": "declaration",
+        "sort_order": 20,
+        "is_required": false,
+        "visibility_rules": [],
+        "option_rules": [],
+        "constraint_rules": [],
+        "id": "6b41a2e2-57ca-5310-9fad-91a2efa99c67",
+        "tenant_id": null,
+        "template_id": "0ab39e1e-88fb-5d00-8bec-7cc68002ac74",
+        "spec_definition_id": "0799a89c-211f-5028-b7b6-8fe1937a16a1",
+        "default_value_json": null,
+        "helper_text": null
+      }
+    ]
+  },
+  "product_writes": false,
+  "fill_allowed": false,
+  "mechanical_approval": false,
+  "adjudication": {
+    "BA-root": "configuration_identity_thread_owners_scoped_parts_and_hub_interfaces",
+    "BA-source": "Sheldon_coaster_Park_mounts_Shimano_MDBR001_05_Wolf_Boostinator",
+    "BA-scope": "no_assignment_or_fill_no_dimension_implies_compatibility"
+  }
+}

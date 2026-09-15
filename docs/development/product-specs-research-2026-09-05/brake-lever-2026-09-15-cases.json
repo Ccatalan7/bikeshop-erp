@@ -1,0 +1,1288 @@
+{
+  "schema_version": 1,
+  "catalogue_sha256": "c2df108e88ee457e0e2aeae0230c21fee7c21a93ed77dbf846c274c65719f480",
+  "cases": [
+    {
+      "id": "lever_unanswered_identity_pending",
+      "template": "brake_lever",
+      "values": {},
+      "kind": "synthetic_boundary",
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "expected_blocking": [],
+      "expected_sql_blocking": [],
+      "expected_issue_subset": [
+        {
+          "code": "required_missing",
+          "field": "brake_actuation",
+          "blocking": false
+        },
+        {
+          "code": "required_missing",
+          "field": "lever_side",
+          "blocking": false
+        },
+        {
+          "code": "required_missing",
+          "field": "lever_mount_method",
+          "blocking": false
+        }
+      ],
+      "forbidden_issue_fields": [],
+      "expected_sql_issue_subset": [
+        {
+          "code": "required_missing",
+          "field": "brake_actuation",
+          "blocking": false
+        },
+        {
+          "code": "required_missing",
+          "field": "lever_side",
+          "blocking": false
+        },
+        {
+          "code": "required_missing",
+          "field": "lever_mount_method",
+          "blocking": false
+        }
+      ]
+    },
+    {
+      "id": "lever_mechanical_without_pull",
+      "template": "brake_lever",
+      "values": {
+        "brake_actuation": "Mecánico (cable)",
+        "lever_side": "Izquierda",
+        "lever_mount_method": "Abrazadera externa",
+        "handlebar_clamp_mm": "22.2",
+        "lever_cable_interface": "Cabeza de cable anclada"
+      },
+      "kind": "synthetic_boundary",
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "expected_blocking": [],
+      "expected_sql_blocking": [],
+      "expected_issue_subset": [
+        {
+          "code": "required_missing",
+          "field": "lever_cable_pull",
+          "blocking": false
+        }
+      ],
+      "forbidden_issue_fields": [],
+      "expected_sql_issue_subset": [
+        {
+          "code": "required_missing",
+          "field": "lever_cable_pull",
+          "blocking": false
+        }
+      ]
+    },
+    {
+      "id": "lever_flat_bar_short_pull_is_valid",
+      "template": "brake_lever",
+      "values": {
+        "brake_actuation": "Mecánico (cable)",
+        "lever_side": "Izquierda",
+        "lever_mount_method": "Abrazadera externa",
+        "handlebar_clamp_mm": "22.2",
+        "lever_cable_interface": "Cabeza de cable anclada",
+        "lever_cable_pull": "Tiro corto (ruta / cantilever / caliper)"
+      },
+      "kind": "synthetic_boundary",
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "expected_blocking": [],
+      "expected_sql_blocking": [],
+      "expected_issue_subset": [],
+      "forbidden_issue_fields": [],
+      "expected_sql_issue_subset": []
+    },
+    {
+      "id": "lever_drop_bar_long_pull_is_valid",
+      "template": "brake_lever",
+      "values": {
+        "brake_actuation": "Mecánico (cable)",
+        "lever_side": "Izquierda",
+        "lever_mount_method": "Abrazadera externa",
+        "handlebar_clamp_mm": "23.8",
+        "lever_cable_interface": "Cabeza de cable anclada",
+        "lever_cable_pull": "Tiro largo (V-brake / disco mecánico tiro largo)"
+      },
+      "kind": "synthetic_boundary",
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "expected_blocking": [],
+      "expected_sql_blocking": [],
+      "expected_issue_subset": [],
+      "forbidden_issue_fields": [],
+      "expected_sql_issue_subset": []
+    },
+    {
+      "id": "lever_inline_clamp_is_not_limited_to_drop_diameter",
+      "template": "brake_lever",
+      "values": {
+        "brake_actuation": "Mecánico (cable)",
+        "lever_side": "Izquierda",
+        "lever_mount_method": "Abrazadera externa",
+        "handlebar_clamp_mm": "31.8",
+        "lever_cable_interface": "Cable pasante en línea",
+        "lever_cable_pull": "Tiro corto (ruta / cantilever / caliper)"
+      },
+      "kind": "synthetic_boundary",
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "expected_blocking": [],
+      "expected_sql_blocking": [],
+      "expected_issue_subset": [],
+      "forbidden_issue_fields": [],
+      "expected_sql_issue_subset": []
+    },
+    {
+      "id": "lever_inline_cable_has_no_anchored_head",
+      "template": "brake_lever",
+      "values": {
+        "brake_actuation": "Mecánico (cable)",
+        "lever_side": "Izquierda",
+        "lever_mount_method": "Abrazadera externa",
+        "handlebar_clamp_mm": "22.2",
+        "lever_cable_interface": "Cable pasante en línea",
+        "lever_cable_pull": "Tiro corto (ruta / cantilever / caliper)",
+        "lever_cable_head_profiles": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "sources": [],
+              "values": {
+                "profile": "Barril",
+                "oem_spec": "Synthetic barrel interface",
+                "source_url": "https://example.invalid/lever"
+              }
+            }
+          ]
+        }
+      },
+      "kind": "synthetic_boundary",
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "expected_blocking": [
+        {
+          "code": "field_applicability",
+          "field": "lever_cable_head_profiles"
+        }
+      ],
+      "expected_sql_blocking": [
+        {
+          "code": "field_applicability",
+          "field": "lever_cable_head_profiles"
+        }
+      ],
+      "expected_issue_subset": [],
+      "forbidden_issue_fields": [],
+      "expected_sql_issue_subset": []
+    },
+    {
+      "id": "lever_dual_use_has_documented_head",
+      "template": "brake_lever",
+      "values": {
+        "brake_actuation": "Mecánico (cable)",
+        "lever_side": "Izquierda",
+        "lever_mount_method": "Abrazadera externa",
+        "handlebar_clamp_mm": "22.2",
+        "lever_cable_interface": "Ambos usos documentados por el OEM",
+        "lever_cable_pull": "Tiro corto (ruta / cantilever / caliper)",
+        "lever_cable_head_profiles": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "sources": [],
+              "values": {
+                "profile": "Barril",
+                "oem_spec": "Synthetic barrel interface",
+                "source_url": "https://example.invalid/lever"
+              }
+            }
+          ]
+        }
+      },
+      "kind": "synthetic_boundary",
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "expected_blocking": [],
+      "expected_sql_blocking": [],
+      "expected_issue_subset": [],
+      "forbidden_issue_fields": [],
+      "expected_sql_issue_subset": []
+    },
+    {
+      "id": "lever_universal_uncut_cable_is_not_a_socket",
+      "template": "brake_lever",
+      "values": {
+        "brake_actuation": "Mecánico (cable)",
+        "lever_side": "Izquierda",
+        "lever_mount_method": "Abrazadera externa",
+        "handlebar_clamp_mm": "22.2",
+        "lever_cable_interface": "Cabeza de cable anclada",
+        "lever_cable_pull": "Tiro corto (ruta / cantilever / caliper)",
+        "lever_cable_head_profiles": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "sources": [],
+              "values": {
+                "profile": "Doble cabeza (universal)",
+                "oem_spec": "Synthetic barrel interface",
+                "source_url": "https://example.invalid/lever"
+              }
+            }
+          ]
+        }
+      },
+      "kind": "synthetic_boundary",
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "expected_blocking": [
+        {
+          "code": "row_shape",
+          "field": "lever_cable_head_profiles"
+        }
+      ],
+      "expected_sql_blocking": [
+        {
+          "code": "field_constraint",
+          "field": "lever_cable_head_profiles"
+        }
+      ],
+      "expected_issue_subset": [],
+      "forbidden_issue_fields": [],
+      "expected_sql_issue_subset": []
+    },
+    {
+      "id": "lever_duplicate_head_interface_rejected",
+      "template": "brake_lever",
+      "values": {
+        "brake_actuation": "Mecánico (cable)",
+        "lever_side": "Izquierda",
+        "lever_mount_method": "Abrazadera externa",
+        "handlebar_clamp_mm": "22.2",
+        "lever_cable_interface": "Cabeza de cable anclada",
+        "lever_cable_pull": "Tiro corto (ruta / cantilever / caliper)",
+        "lever_cable_head_profiles": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "sources": [],
+              "values": {
+                "profile": "Barril",
+                "oem_spec": "Synthetic barrel interface",
+                "source_url": "https://example.invalid/lever"
+              }
+            },
+            {
+              "id": "r2",
+              "sources": [],
+              "values": {
+                "profile": "Barril",
+                "oem_spec": "Synthetic barrel interface",
+                "source_url": "https://example.invalid/lever"
+              }
+            }
+          ]
+        }
+      },
+      "kind": "synthetic_boundary",
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "expected_blocking": [
+        {
+          "code": "row_shape",
+          "field": "lever_cable_head_profiles"
+        }
+      ],
+      "expected_sql_blocking": [
+        {
+          "code": "field_constraint",
+          "field": "lever_cable_head_profiles"
+        }
+      ],
+      "expected_issue_subset": [],
+      "forbidden_issue_fields": [],
+      "expected_sql_issue_subset": []
+    },
+    {
+      "id": "lever_bar_end_uses_bore_range",
+      "template": "brake_lever",
+      "values": {
+        "brake_actuation": "Mecánico (cable)",
+        "lever_side": "Izquierda",
+        "lever_mount_method": "Expansor interno",
+        "lever_cable_interface": "Cabeza de cable anclada",
+        "lever_cable_pull": "Tiro corto (ruta / cantilever / caliper)",
+        "lever_bar_bore_min_mm": "19",
+        "lever_bar_bore_max_mm": "22"
+      },
+      "kind": "synthetic_boundary",
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "expected_blocking": [],
+      "expected_sql_blocking": [],
+      "expected_issue_subset": [],
+      "forbidden_issue_fields": [],
+      "expected_sql_issue_subset": []
+    },
+    {
+      "id": "lever_bar_end_cannot_claim_external_clamp",
+      "template": "brake_lever",
+      "values": {
+        "brake_actuation": "Mecánico (cable)",
+        "lever_side": "Izquierda",
+        "lever_mount_method": "Expansor interno",
+        "lever_cable_interface": "Cabeza de cable anclada",
+        "lever_cable_pull": "Tiro corto (ruta / cantilever / caliper)",
+        "lever_bar_bore_min_mm": "19",
+        "lever_bar_bore_max_mm": "22",
+        "handlebar_clamp_mm": "22.2"
+      },
+      "kind": "synthetic_boundary",
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "expected_blocking": [
+        {
+          "code": "field_applicability",
+          "field": "handlebar_clamp_mm"
+        }
+      ],
+      "expected_sql_blocking": [
+        {
+          "code": "field_applicability",
+          "field": "handlebar_clamp_mm"
+        }
+      ],
+      "expected_issue_subset": [],
+      "forbidden_issue_fields": [],
+      "expected_sql_issue_subset": []
+    },
+    {
+      "id": "lever_clamp_cannot_claim_bore",
+      "template": "brake_lever",
+      "values": {
+        "brake_actuation": "Mecánico (cable)",
+        "lever_side": "Izquierda",
+        "lever_mount_method": "Abrazadera externa",
+        "handlebar_clamp_mm": "22.2",
+        "lever_cable_interface": "Cabeza de cable anclada",
+        "lever_cable_pull": "Tiro corto (ruta / cantilever / caliper)",
+        "lever_bar_bore_min_mm": "19"
+      },
+      "kind": "synthetic_boundary",
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "expected_blocking": [
+        {
+          "code": "field_applicability",
+          "field": "lever_bar_bore_min_mm"
+        }
+      ],
+      "expected_sql_blocking": [
+        {
+          "code": "field_applicability",
+          "field": "lever_bar_bore_min_mm"
+        }
+      ],
+      "expected_issue_subset": [],
+      "forbidden_issue_fields": [],
+      "expected_sql_issue_subset": []
+    },
+    {
+      "id": "lever_bore_max_pending",
+      "template": "brake_lever",
+      "values": {
+        "brake_actuation": "Mecánico (cable)",
+        "lever_side": "Izquierda",
+        "lever_mount_method": "Expansor interno",
+        "lever_cable_interface": "Cabeza de cable anclada",
+        "lever_cable_pull": "Tiro corto (ruta / cantilever / caliper)",
+        "lever_bar_bore_min_mm": "19"
+      },
+      "kind": "synthetic_boundary",
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "expected_blocking": [],
+      "expected_sql_blocking": [],
+      "expected_issue_subset": [
+        {
+          "code": "required_missing",
+          "field": "lever_bar_bore_max_mm",
+          "blocking": false
+        }
+      ],
+      "forbidden_issue_fields": [],
+      "expected_sql_issue_subset": [
+        {
+          "code": "required_missing",
+          "field": "lever_bar_bore_max_mm",
+          "blocking": false
+        }
+      ]
+    },
+    {
+      "id": "lever_bore_range_cannot_be_reversed",
+      "template": "brake_lever",
+      "values": {
+        "brake_actuation": "Mecánico (cable)",
+        "lever_side": "Izquierda",
+        "lever_mount_method": "Expansor interno",
+        "lever_cable_interface": "Cabeza de cable anclada",
+        "lever_cable_pull": "Tiro corto (ruta / cantilever / caliper)",
+        "lever_bar_bore_min_mm": "22",
+        "lever_bar_bore_max_mm": "19"
+      },
+      "kind": "synthetic_boundary",
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "expected_blocking": [
+        {
+          "code": "range_order",
+          "field": "lever_bar_bore_min_mm"
+        },
+        {
+          "code": "range_order",
+          "field": "lever_bar_bore_max_mm"
+        }
+      ],
+      "expected_sql_blocking": [
+        {
+          "code": "range_order",
+          "field": "lever_bar_bore_max_mm"
+        },
+        {
+          "code": "range_order",
+          "field": "lever_bar_bore_min_mm"
+        }
+      ],
+      "expected_issue_subset": [],
+      "forbidden_issue_fields": [],
+      "expected_sql_issue_subset": []
+    },
+    {
+      "id": "lever_adjustable_requires_positions",
+      "template": "brake_lever",
+      "values": {
+        "brake_actuation": "Mecánico (cable)",
+        "lever_side": "Izquierda",
+        "lever_mount_method": "Abrazadera externa",
+        "handlebar_clamp_mm": "22.2",
+        "lever_cable_interface": "Cabeza de cable anclada",
+        "lever_cable_pull": "Ajustable"
+      },
+      "kind": "synthetic_boundary",
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "expected_blocking": [],
+      "expected_sql_blocking": [],
+      "expected_issue_subset": [
+        {
+          "code": "required_missing",
+          "field": "lever_cable_pull_positions",
+          "blocking": false
+        }
+      ],
+      "forbidden_issue_fields": [],
+      "expected_sql_issue_subset": [
+        {
+          "code": "required_missing",
+          "field": "lever_cable_pull_positions",
+          "blocking": false
+        }
+      ]
+    },
+    {
+      "id": "lever_adjustable_position_names_actual_pull",
+      "template": "brake_lever",
+      "values": {
+        "brake_actuation": "Mecánico (cable)",
+        "lever_side": "Izquierda",
+        "lever_mount_method": "Abrazadera externa",
+        "handlebar_clamp_mm": "22.2",
+        "lever_cable_interface": "Cabeza de cable anclada",
+        "lever_cable_pull": "Ajustable",
+        "lever_cable_pull_positions": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "sources": [],
+              "values": {
+                "position_id": "inner pivot",
+                "pull": "Tiro corto (ruta / cantilever / caliper)",
+                "source_url": "https://example.invalid/lever"
+              }
+            }
+          ]
+        }
+      },
+      "kind": "synthetic_boundary",
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "expected_blocking": [],
+      "expected_sql_blocking": [],
+      "expected_issue_subset": [],
+      "forbidden_issue_fields": [],
+      "expected_sql_issue_subset": []
+    },
+    {
+      "id": "lever_fixed_pull_does_not_claim_adjustable_positions",
+      "template": "brake_lever",
+      "values": {
+        "brake_actuation": "Mecánico (cable)",
+        "lever_side": "Izquierda",
+        "lever_mount_method": "Abrazadera externa",
+        "handlebar_clamp_mm": "22.2",
+        "lever_cable_interface": "Cabeza de cable anclada",
+        "lever_cable_pull": "Tiro corto (ruta / cantilever / caliper)",
+        "lever_cable_pull_positions": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "sources": [],
+              "values": {
+                "position_id": "inner pivot",
+                "pull": "Tiro corto (ruta / cantilever / caliper)",
+                "source_url": "https://example.invalid/lever"
+              }
+            }
+          ]
+        }
+      },
+      "kind": "synthetic_boundary",
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "expected_blocking": [
+        {
+          "code": "field_applicability",
+          "field": "lever_cable_pull_positions"
+        }
+      ],
+      "expected_sql_blocking": [
+        {
+          "code": "field_applicability",
+          "field": "lever_cable_pull_positions"
+        }
+      ],
+      "expected_issue_subset": [],
+      "forbidden_issue_fields": [],
+      "expected_sql_issue_subset": []
+    },
+    {
+      "id": "lever_hydraulic_pull_is_foreign",
+      "template": "brake_lever",
+      "values": {
+        "brake_actuation": "Hidráulico",
+        "lever_side": "Izquierda",
+        "lever_mount_method": "Abrazadera externa",
+        "handlebar_clamp_mm": "22.2",
+        "lever_hydraulic_role": "Principal",
+        "lever_cable_pull": "Tiro largo (V-brake / disco mecánico tiro largo)"
+      },
+      "kind": "synthetic_boundary",
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "expected_blocking": [
+        {
+          "code": "field_applicability",
+          "field": "lever_cable_pull"
+        }
+      ],
+      "expected_sql_blocking": [
+        {
+          "code": "field_applicability",
+          "field": "lever_cable_pull"
+        }
+      ],
+      "expected_issue_subset": [],
+      "forbidden_issue_fields": [],
+      "expected_sql_issue_subset": []
+    },
+    {
+      "id": "lever_hydraulic_role_pending",
+      "template": "brake_lever",
+      "values": {
+        "brake_actuation": "Hidráulico",
+        "lever_side": "Izquierda",
+        "lever_mount_method": "Abrazadera externa",
+        "handlebar_clamp_mm": "22.2"
+      },
+      "kind": "synthetic_boundary",
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "expected_blocking": [],
+      "expected_sql_blocking": [],
+      "expected_issue_subset": [
+        {
+          "code": "required_missing",
+          "field": "lever_hydraulic_role",
+          "blocking": false
+        }
+      ],
+      "forbidden_issue_fields": [],
+      "expected_sql_issue_subset": [
+        {
+          "code": "required_missing",
+          "field": "lever_hydraulic_role",
+          "blocking": false
+        }
+      ]
+    },
+    {
+      "id": "lever_hydraulic_fluid_approval_pending",
+      "template": "brake_lever",
+      "values": {
+        "brake_actuation": "Hidráulico",
+        "lever_side": "Izquierda",
+        "lever_mount_method": "Abrazadera externa",
+        "handlebar_clamp_mm": "22.2",
+        "lever_hydraulic_role": "Principal"
+      },
+      "kind": "synthetic_boundary",
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "expected_blocking": [],
+      "expected_sql_blocking": [],
+      "expected_issue_subset": [
+        {
+          "code": "required_missing",
+          "field": "brake_model_fluid_approvals",
+          "blocking": false
+        }
+      ],
+      "forbidden_issue_fields": [],
+      "expected_sql_issue_subset": [
+        {
+          "code": "required_missing",
+          "field": "brake_model_fluid_approvals",
+          "blocking": false
+        }
+      ]
+    },
+    {
+      "id": "lever_principal_port_Salida",
+      "template": "brake_lever",
+      "values": {
+        "brake_actuation": "Hidráulico",
+        "lever_side": "Izquierda",
+        "lever_mount_method": "Abrazadera externa",
+        "handlebar_clamp_mm": "22.2",
+        "lever_hydraulic_role": "Principal",
+        "brake_piece_hydraulic_ports": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "sources": [],
+              "values": {
+                "port_id": "p1",
+                "end_role": "Salida",
+                "source_scope": "Synthetic port",
+                "source_url": "https://example.invalid/lever"
+              }
+            }
+          ]
+        }
+      },
+      "kind": "synthetic_boundary",
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "expected_blocking": [],
+      "expected_sql_blocking": [],
+      "expected_issue_subset": [],
+      "forbidden_issue_fields": [],
+      "expected_sql_issue_subset": []
+    },
+    {
+      "id": "lever_principal_port_Entrada",
+      "template": "brake_lever",
+      "values": {
+        "brake_actuation": "Hidráulico",
+        "lever_side": "Izquierda",
+        "lever_mount_method": "Abrazadera externa",
+        "handlebar_clamp_mm": "22.2",
+        "lever_hydraulic_role": "Principal",
+        "brake_piece_hydraulic_ports": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "sources": [],
+              "values": {
+                "port_id": "p1",
+                "end_role": "Entrada",
+                "source_scope": "Synthetic port",
+                "source_url": "https://example.invalid/lever"
+              }
+            }
+          ]
+        }
+      },
+      "kind": "synthetic_boundary",
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "expected_blocking": [
+        {
+          "code": "row_option",
+          "field": "brake_piece_hydraulic_ports"
+        }
+      ],
+      "expected_sql_blocking": [
+        {
+          "code": "row_option",
+          "field": "brake_piece_hydraulic_ports"
+        }
+      ],
+      "expected_issue_subset": [],
+      "forbidden_issue_fields": [],
+      "expected_sql_issue_subset": []
+    },
+    {
+      "id": "lever_principal_port_Purgador",
+      "template": "brake_lever",
+      "values": {
+        "brake_actuation": "Hidráulico",
+        "lever_side": "Izquierda",
+        "lever_mount_method": "Abrazadera externa",
+        "handlebar_clamp_mm": "22.2",
+        "lever_hydraulic_role": "Principal",
+        "brake_piece_hydraulic_ports": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "sources": [],
+              "values": {
+                "port_id": "p1",
+                "end_role": "Purgador",
+                "source_scope": "Synthetic port",
+                "source_url": "https://example.invalid/lever"
+              }
+            }
+          ]
+        }
+      },
+      "kind": "synthetic_boundary",
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "expected_blocking": [
+        {
+          "code": "row_option",
+          "field": "brake_piece_hydraulic_ports"
+        }
+      ],
+      "expected_sql_blocking": [
+        {
+          "code": "row_option",
+          "field": "brake_piece_hydraulic_ports"
+        }
+      ],
+      "expected_issue_subset": [],
+      "forbidden_issue_fields": [],
+      "expected_sql_issue_subset": []
+    },
+    {
+      "id": "lever_hydraulic_inline_has_upstream_port",
+      "template": "brake_lever",
+      "values": {
+        "brake_actuation": "Hidráulico",
+        "lever_side": "Izquierda",
+        "lever_mount_method": "Abrazadera externa",
+        "handlebar_clamp_mm": "22.2",
+        "lever_hydraulic_role": "Auxiliar en línea",
+        "lever_inline_hydraulic_ports": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "sources": [],
+              "values": {
+                "port_id": "p1",
+                "connection_side": "Hacia el mando principal",
+                "source_url": "https://example.invalid/lever"
+              }
+            }
+          ]
+        }
+      },
+      "kind": "synthetic_boundary",
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "expected_blocking": [],
+      "expected_sql_blocking": [],
+      "expected_issue_subset": [],
+      "forbidden_issue_fields": [],
+      "expected_sql_issue_subset": []
+    },
+    {
+      "id": "lever_principal_cannot_claim_inline_ports",
+      "template": "brake_lever",
+      "values": {
+        "brake_actuation": "Hidráulico",
+        "lever_side": "Izquierda",
+        "lever_mount_method": "Abrazadera externa",
+        "handlebar_clamp_mm": "22.2",
+        "lever_hydraulic_role": "Principal",
+        "lever_inline_hydraulic_ports": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "sources": [],
+              "values": {
+                "port_id": "p1",
+                "connection_side": "Hacia el mando principal",
+                "source_url": "https://example.invalid/lever"
+              }
+            }
+          ]
+        }
+      },
+      "kind": "synthetic_boundary",
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "expected_blocking": [
+        {
+          "code": "field_applicability",
+          "field": "lever_inline_hydraulic_ports"
+        }
+      ],
+      "expected_sql_blocking": [
+        {
+          "code": "field_applicability",
+          "field": "lever_inline_hydraulic_ports"
+        }
+      ],
+      "expected_issue_subset": [],
+      "forbidden_issue_fields": [],
+      "expected_sql_issue_subset": []
+    },
+    {
+      "id": "lever_inline_cannot_claim_principal_ports",
+      "template": "brake_lever",
+      "values": {
+        "brake_actuation": "Hidráulico",
+        "lever_side": "Izquierda",
+        "lever_mount_method": "Abrazadera externa",
+        "handlebar_clamp_mm": "22.2",
+        "lever_hydraulic_role": "Auxiliar en línea",
+        "brake_piece_hydraulic_ports": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "sources": [],
+              "values": {
+                "port_id": "p1",
+                "end_role": "Salida",
+                "source_scope": "fixture",
+                "source_url": "https://example.invalid/lever"
+              }
+            }
+          ]
+        }
+      },
+      "kind": "synthetic_boundary",
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "expected_blocking": [
+        {
+          "code": "field_applicability",
+          "field": "brake_piece_hydraulic_ports"
+        }
+      ],
+      "expected_sql_blocking": [
+        {
+          "code": "field_applicability",
+          "field": "brake_piece_hydraulic_ports"
+        }
+      ],
+      "expected_issue_subset": [],
+      "forbidden_issue_fields": [],
+      "expected_sql_issue_subset": []
+    },
+    {
+      "id": "lever_bleed_port_Maneta",
+      "template": "brake_lever",
+      "values": {
+        "brake_actuation": "Hidráulico",
+        "lever_side": "Izquierda",
+        "lever_mount_method": "Abrazadera externa",
+        "handlebar_clamp_mm": "22.2",
+        "lever_hydraulic_role": "Principal",
+        "brake_bleed_ports": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "sources": [],
+              "values": {
+                "port_id": "bleed1",
+                "component_role": "Maneta",
+                "source_url": "https://example.invalid/lever"
+              }
+            }
+          ]
+        }
+      },
+      "kind": "synthetic_boundary",
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "expected_blocking": [],
+      "expected_sql_blocking": [],
+      "expected_issue_subset": [],
+      "forbidden_issue_fields": [],
+      "expected_sql_issue_subset": []
+    },
+    {
+      "id": "lever_bleed_port_Cáliper",
+      "template": "brake_lever",
+      "values": {
+        "brake_actuation": "Hidráulico",
+        "lever_side": "Izquierda",
+        "lever_mount_method": "Abrazadera externa",
+        "handlebar_clamp_mm": "22.2",
+        "lever_hydraulic_role": "Principal",
+        "brake_bleed_ports": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "sources": [],
+              "values": {
+                "port_id": "bleed1",
+                "component_role": "Cáliper",
+                "source_url": "https://example.invalid/lever"
+              }
+            }
+          ]
+        }
+      },
+      "kind": "synthetic_boundary",
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "expected_blocking": [
+        {
+          "code": "row_option",
+          "field": "brake_bleed_ports"
+        }
+      ],
+      "expected_sql_blocking": [
+        {
+          "code": "row_option",
+          "field": "brake_bleed_ports"
+        }
+      ],
+      "expected_issue_subset": [],
+      "forbidden_issue_fields": [],
+      "expected_sql_issue_subset": []
+    },
+    {
+      "id": "lever_bleed_port_Convertidor",
+      "template": "brake_lever",
+      "values": {
+        "brake_actuation": "Hidráulico",
+        "lever_side": "Izquierda",
+        "lever_mount_method": "Abrazadera externa",
+        "handlebar_clamp_mm": "22.2",
+        "lever_hydraulic_role": "Principal",
+        "brake_bleed_ports": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "sources": [],
+              "values": {
+                "port_id": "bleed1",
+                "component_role": "Convertidor",
+                "source_url": "https://example.invalid/lever"
+              }
+            }
+          ]
+        }
+      },
+      "kind": "synthetic_boundary",
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "expected_blocking": [
+        {
+          "code": "row_option",
+          "field": "brake_bleed_ports"
+        }
+      ],
+      "expected_sql_blocking": [
+        {
+          "code": "row_option",
+          "field": "brake_bleed_ports"
+        }
+      ],
+      "expected_issue_subset": [],
+      "forbidden_issue_fields": [],
+      "expected_sql_issue_subset": []
+    },
+    {
+      "id": "lever_mechanical_has_no_bleed_port",
+      "template": "brake_lever",
+      "values": {
+        "brake_actuation": "Mecánico (cable)",
+        "lever_side": "Izquierda",
+        "lever_mount_method": "Abrazadera externa",
+        "handlebar_clamp_mm": "22.2",
+        "lever_cable_interface": "Cabeza de cable anclada",
+        "lever_cable_pull": "Tiro corto (ruta / cantilever / caliper)",
+        "brake_bleed_ports": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "sources": [],
+              "values": {
+                "port_id": "bleed1",
+                "component_role": "Maneta",
+                "source_url": "https://example.invalid/lever"
+              }
+            }
+          ]
+        }
+      },
+      "kind": "synthetic_boundary",
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "expected_blocking": [
+        {
+          "code": "field_applicability",
+          "field": "brake_bleed_ports"
+        }
+      ],
+      "expected_sql_blocking": [
+        {
+          "code": "field_applicability",
+          "field": "brake_bleed_ports"
+        }
+      ],
+      "expected_issue_subset": [],
+      "forbidden_issue_fields": [],
+      "expected_sql_issue_subset": []
+    },
+    {
+      "id": "lever_actuation_Híbrido (cable a hidráulico)",
+      "template": "brake_lever",
+      "values": {
+        "brake_actuation": "Híbrido (cable a hidráulico)"
+      },
+      "kind": "synthetic_boundary",
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "expected_blocking": [
+        {
+          "code": "constraint",
+          "field": "brake_actuation"
+        }
+      ],
+      "expected_sql_blocking": [
+        {
+          "code": "field_constraint",
+          "field": "brake_actuation"
+        }
+      ],
+      "expected_issue_subset": [],
+      "forbidden_issue_fields": [],
+      "expected_sql_issue_subset": []
+    },
+    {
+      "id": "lever_actuation_Contrapedal",
+      "template": "brake_lever",
+      "values": {
+        "brake_actuation": "Contrapedal"
+      },
+      "kind": "synthetic_boundary",
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "expected_blocking": [
+        {
+          "code": "constraint",
+          "field": "brake_actuation"
+        }
+      ],
+      "expected_sql_blocking": [
+        {
+          "code": "field_constraint",
+          "field": "brake_actuation"
+        }
+      ],
+      "expected_issue_subset": [],
+      "forbidden_issue_fields": [],
+      "expected_sql_issue_subset": []
+    },
+    {
+      "id": "lever_side_does_not_imply_wheel_Izquierda",
+      "template": "brake_lever",
+      "values": {
+        "brake_actuation": "Mecánico (cable)",
+        "lever_side": "Izquierda",
+        "lever_mount_method": "Abrazadera externa",
+        "handlebar_clamp_mm": "22.2",
+        "lever_cable_interface": "Cabeza de cable anclada",
+        "lever_cable_pull": "Tiro corto (ruta / cantilever / caliper)",
+        "brake_position": "Delantero"
+      },
+      "kind": "synthetic_boundary",
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "expected_blocking": [],
+      "expected_sql_blocking": [],
+      "expected_issue_subset": [],
+      "forbidden_issue_fields": [],
+      "expected_sql_issue_subset": []
+    },
+    {
+      "id": "lever_side_does_not_imply_wheel_Derecha",
+      "template": "brake_lever",
+      "values": {
+        "brake_actuation": "Mecánico (cable)",
+        "lever_side": "Derecha",
+        "lever_mount_method": "Abrazadera externa",
+        "handlebar_clamp_mm": "22.2",
+        "lever_cable_interface": "Cabeza de cable anclada",
+        "lever_cable_pull": "Tiro corto (ruta / cantilever / caliper)",
+        "brake_position": "Delantero"
+      },
+      "kind": "synthetic_boundary",
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "expected_blocking": [],
+      "expected_sql_blocking": [],
+      "expected_issue_subset": [],
+      "forbidden_issue_fields": [],
+      "expected_sql_issue_subset": []
+    },
+    {
+      "id": "lever_side_does_not_imply_wheel_Ambidiestra",
+      "template": "brake_lever",
+      "values": {
+        "brake_actuation": "Mecánico (cable)",
+        "lever_side": "Ambidiestra",
+        "lever_mount_method": "Abrazadera externa",
+        "handlebar_clamp_mm": "22.2",
+        "lever_cable_interface": "Cabeza de cable anclada",
+        "lever_cable_pull": "Tiro corto (ruta / cantilever / caliper)",
+        "brake_position": "Delantero"
+      },
+      "kind": "synthetic_boundary",
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "expected_blocking": [],
+      "expected_sql_blocking": [],
+      "expected_issue_subset": [],
+      "forbidden_issue_fields": [],
+      "expected_sql_issue_subset": []
+    },
+    {
+      "id": "lever_other_control_interface_requires_code",
+      "template": "brake_lever",
+      "values": {
+        "brake_actuation": "Mecánico (cable)",
+        "lever_side": "Izquierda",
+        "lever_mount_method": "Abrazadera externa",
+        "handlebar_clamp_mm": "22.2",
+        "lever_cable_interface": "Cabeza de cable anclada",
+        "lever_cable_pull": "Tiro corto (ruta / cantilever / caliper)",
+        "shifter_mount_interface": "Otro sistema OEM"
+      },
+      "kind": "synthetic_boundary",
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "expected_blocking": [],
+      "expected_sql_blocking": [],
+      "expected_issue_subset": [
+        {
+          "code": "required_missing",
+          "field": "lever_control_mount_oem_code",
+          "blocking": false
+        }
+      ],
+      "forbidden_issue_fields": [],
+      "expected_sql_issue_subset": [
+        {
+          "code": "required_missing",
+          "field": "lever_control_mount_oem_code",
+          "blocking": false
+        }
+      ]
+    },
+    {
+      "id": "lever_no_mount_cannot_claim_other_interface",
+      "template": "brake_lever",
+      "values": {
+        "brake_actuation": "Mecánico (cable)",
+        "lever_side": "Izquierda",
+        "lever_mount_method": "Abrazadera externa",
+        "handlebar_clamp_mm": "22.2",
+        "lever_cable_interface": "Cabeza de cable anclada",
+        "lever_cable_pull": "Tiro corto (ruta / cantilever / caliper)",
+        "shifter_mount_interface": "Sin anclaje para mando separado",
+        "lever_control_mount_oem_code": "something"
+      },
+      "kind": "synthetic_boundary",
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "expected_blocking": [
+        {
+          "code": "field_applicability",
+          "field": "lever_control_mount_oem_code"
+        }
+      ],
+      "expected_sql_blocking": [
+        {
+          "code": "field_applicability",
+          "field": "lever_control_mount_oem_code"
+        }
+      ],
+      "expected_issue_subset": [],
+      "forbidden_issue_fields": [],
+      "expected_sql_issue_subset": []
+    },
+    {
+      "id": "lever_legacy_not_promoted",
+      "template": "brake_lever",
+      "values": {
+        "brake_system": "Shimano",
+        "caliper_hydraulic": true
+      },
+      "kind": "synthetic_boundary",
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "expected_blocking": [],
+      "expected_sql_blocking": [],
+      "expected_issue_subset": [
+        {
+          "code": "required_missing",
+          "field": "brake_actuation",
+          "blocking": false
+        }
+      ],
+      "forbidden_issue_fields": [
+        "brake_system",
+        "caliper_hydraulic"
+      ],
+      "expected_sql_issue_subset": [
+        {
+          "code": "required_missing",
+          "field": "brake_actuation",
+          "blocking": false
+        }
+      ]
+    }
+  ],
+  "pending_cases": []
+}

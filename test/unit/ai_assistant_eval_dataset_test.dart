@@ -4,27 +4,32 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  const plannedTools = <String>{
+  const runtimeTools = <String>{
     'get_business_snapshot',
     'list_attention_items',
     'search_workshop_jobs',
+    'get_workshop_job_context',
+    'inspect_diagnosis_schema',
     'search_tasks',
+    'inspect_inventory_schema',
     'search_inventory',
+    'rank_purchase_candidates',
+    'build_purchase_scenarios',
+    'prepare_supply_request',
+    'report_capability_gap',
     'find_inventory_risks',
     'search_customers',
     'search_suppliers',
     'search_sales_invoices',
     'search_purchase_invoices',
     'analyze_cash_and_receivables',
+    'analyze_sales_period',
     'list_recent_expenses',
     'search_conversations',
     'research_public_web',
-    'draft_customer_followup',
-    'draft_quote',
-    'prepare_purchase_order',
     'prepare_task',
-    'create_task',
-    'update_job_status',
+    'prepare_diagnosis_update',
+    'prepare_workshop_item',
   };
   const outcomes = <String>{
     'answer',
@@ -38,6 +43,7 @@ void main() {
   };
   const mutations = <String>{'none', 'draft', 'reversible', 'sensitive'};
   const navigation = <String>{'none', 'cardOnly'};
+  const dispatches = <String>{'model', 'approvalEndpoint'};
 
   test('agent evaluation dataset is fixed, closed and representative', () {
     final file = File('test/fixtures/ai_assistant_agent_eval_cases.json');
@@ -45,7 +51,7 @@ void main() {
     expect(decoded, isA<List<Object?>>());
     final cases = (decoded as List<Object?>).cast<Map<String, Object?>>();
 
-    expect(cases, hasLength(50));
+    expect(cases, hasLength(73));
     expect(cases.map((item) => item['id']).toSet(), hasLength(cases.length));
 
     final categories = <String>{};
@@ -83,17 +89,28 @@ void main() {
 
       final contract = expected! as Map<String, Object?>;
       final tools = (contract['tools']! as List<Object?>).cast<String>();
+      final dispatch = contract['dispatch'] ?? 'model';
       expect(
-        tools.where((tool) => !plannedTools.contains(tool)),
+        tools.where((tool) => !runtimeTools.contains(tool)),
         isEmpty,
-        reason: '$id references an undeclared tool',
+        reason: '$id references a tool absent from the runtime registry',
       );
       expect(outcomes, contains(contract['outcome']), reason: '$id outcome');
-      expect(
-        contract['modelAllowed'],
-        isA<bool>(),
-        reason: '$id model policy',
-      );
+      expect(dispatches, contains(dispatch), reason: '$id dispatch');
+      if (dispatch == 'model') {
+        expect(
+          contract['modelAllowed'],
+          isTrue,
+          reason:
+              '$id must stay model-first; deterministic intent handlers are not production dispatch',
+        );
+      } else {
+        expect(id, 'reliability-004', reason: '$id direct dispatch is closed');
+        expect(contract['modelAllowed'], isFalse,
+            reason: '$id post-click action must bypass the model');
+        expect(tools, isEmpty,
+            reason: '$id direct approval replay cannot invoke provider tools');
+      }
       expect(
         mutations,
         contains(contract['mutation']),
@@ -119,6 +136,7 @@ void main() {
         'workshop',
         'tasks',
         'inventory',
+        'capability',
         'crm',
         'purchases',
         'sales',
@@ -141,5 +159,196 @@ void main() {
       ),
       hasLength(greaterThanOrEqualTo(6)),
     );
+  });
+
+  test('inventory evals cover the basic typed query algebra', () {
+    final decoded = jsonDecode(
+      File('test/fixtures/ai_assistant_agent_eval_cases.json')
+          .readAsStringSync(),
+    ) as List<Object?>;
+    final cases = <String, Map<String, Object?>>{
+      for (final value in decoded)
+        (value as Map<String, Object?>)['id']! as String: value,
+    };
+    expect(cases['inventory-009']!['scenario'], 'typed_operational_threshold');
+    expect(cases['inventory-010']!['scenario'], 'typed_operational_range');
+    expect(cases['inventory-011']!['scenario'], 'typed_sort_top_n');
+    expect(cases['inventory-012']!['scenario'], 'verified_full_set_metrics');
+    expect(
+      (cases['inventory-013']!['expected']! as Map<String, Object?>)['tools'],
+      <String>['report_capability_gap'],
+      reason: 'unsupported grouped aggregation must be declared, not simulated',
+    );
+  });
+
+  test(
+      'purchasing capture evals vary products without skipping workflow stages',
+      () {
+    final decoded = jsonDecode(
+      File('test/fixtures/ai_assistant_agent_eval_cases.json')
+          .readAsStringSync(),
+    ) as List<Object?>;
+    final cases = <String, Map<String, Object?>>{
+      for (final value in decoded)
+        (value as Map<String, Object?>)['id']! as String: value,
+    };
+
+    for (final id in <String>[
+      'purchases-009',
+      'purchases-010',
+      'purchases-011'
+    ]) {
+      final expected = cases[id]!['expected']! as Map<String, Object?>;
+      final tools = (expected['tools']! as List<Object?>).cast<String>();
+      expect(tools, contains('prepare_supply_request'), reason: id);
+      expect(tools, isNot(contains('rank_purchase_candidates')), reason: id);
+      expect(tools, isNot(contains('build_purchase_scenarios')), reason: id);
+    }
+    expect(
+      cases['purchases-009']!['prompt'],
+      contains('BSA'),
+      reason: 'the eval must not collapse back to the tire example',
+    );
+    expect(cases['purchases-010']!['prompt'], contains('Presta de 60 mm'));
+    expect(cases['purchases-011']!['prompt'], contains('Shimano B05S'));
+  });
+
+  test('general named-source web research stays model-first', () {
+    final decoded = jsonDecode(
+      File('test/fixtures/ai_assistant_agent_eval_cases.json')
+          .readAsStringSync(),
+    ) as List<Object?>;
+    final reddit = decoded.cast<Map<String, Object?>>().singleWhere(
+          (item) => item['id'] == 'browser-007',
+        );
+    expect(
+      reddit['prompt'],
+      'segun reddit, cual es la mejor forma de evitar pinchazos de rueda?',
+    );
+    final expected = reddit['expected']! as Map<String, Object?>;
+    expect(expected['tools'], <String>['research_public_web']);
+    expect(expected['citations'], isTrue);
+    expect(expected['modelAllowed'], isTrue);
+    expect(expected.containsKey('dispatch'), isFalse,
+        reason: 'natural forum research cannot introduce phrase dispatch');
+  });
+
+  test('task commit stays outside the model tool surface', () {
+    final decoded = jsonDecode(
+      File('test/fixtures/ai_assistant_agent_eval_cases.json')
+          .readAsStringSync(),
+    ) as List<Object?>;
+    final cases = <String, Map<String, Object?>>{
+      for (final value in decoded)
+        (value as Map<String, Object?>)['id']! as String: value,
+    };
+    final task = cases['tasks-004']!['expected']! as Map<String, Object?>;
+    expect(task['tools'], <String>['prepare_task']);
+    expect(task['outcome'], 'approvalRequired');
+    expect(task['mutation'], 'draft');
+    expect(task['navigation'], 'cardOnly');
+
+    final retry =
+        cases['reliability-004']!['expected']! as Map<String, Object?>;
+    expect(retry['dispatch'], 'approvalEndpoint');
+    expect(retry['modelAllowed'], isFalse);
+    expect(retry['tools'], isEmpty);
+    expect(retry['outcome'], 'answer');
+    expect(retry['mutation'], 'reversible');
+    expect(retry['navigation'], 'cardOnly');
+
+    for (final value in decoded) {
+      final expected =
+          (value as Map<String, Object?>)['expected']! as Map<String, Object?>;
+      expect(expected['tools'], isNot(contains('create_task')),
+          reason: '${value['id']} must not expose create_task to the model');
+    }
+  });
+
+  test('action evals resolve entities and schemas before preparing writes', () {
+    final decoded = jsonDecode(
+      File('test/fixtures/ai_assistant_agent_eval_cases.json')
+          .readAsStringSync(),
+    ) as List<Object?>;
+    final cases = <String, Map<String, Object?>>{
+      for (final value in decoded)
+        (value as Map<String, Object?>)['id']! as String: value,
+    };
+
+    final diagnosis =
+        cases['workshop-006']!['expected']! as Map<String, Object?>;
+    expect(diagnosis['tools'], <String>[
+      'search_workshop_jobs',
+      'get_workshop_job_context',
+      'inspect_diagnosis_schema',
+      'prepare_diagnosis_update',
+    ]);
+    expect(diagnosis['outcome'], 'approvalRequired');
+    expect(diagnosis['mutation'], 'draft');
+
+    final workshopItem =
+        cases['workshop-007']!['expected']! as Map<String, Object?>;
+    expect(workshopItem['tools'], <String>[
+      'search_workshop_jobs',
+      'get_workshop_job_context',
+      'search_inventory',
+      'prepare_workshop_item',
+    ]);
+    expect(workshopItem['outcome'], 'approvalRequired');
+    expect(workshopItem['mutation'], 'draft');
+
+    final salesPeriod =
+        cases['sales-003']!['expected']! as Map<String, Object?>;
+    expect(salesPeriod['tools'], <String>['analyze_sales_period']);
+    expect(salesPeriod['mutation'], 'none');
+  });
+
+  test('purchase evals preserve stock-first, basket and ambiguity boundaries',
+      () {
+    final decoded = jsonDecode(
+      File('test/fixtures/ai_assistant_agent_eval_cases.json')
+          .readAsStringSync(),
+    ) as List<Object?>;
+    final cases = <String, Map<String, Object?>>{
+      for (final value in decoded)
+        (value as Map<String, Object?>)['id']! as String: value,
+    };
+
+    final available =
+        cases['purchases-004']!['expected']! as Map<String, Object?>;
+    expect(
+      available['tools'],
+      <String>[
+        'inspect_inventory_schema',
+        'search_inventory',
+        'prepare_supply_request',
+      ],
+      reason: 'available internal stock must stop before supplier ranking',
+    );
+    final shortage =
+        cases['purchases-005']!['expected']! as Map<String, Object?>;
+    expect(
+      shortage['tools'],
+      <String>['search_inventory', 'rank_purchase_candidates'],
+    );
+    final basket = cases['purchases-006']!['expected']! as Map<String, Object?>;
+    expect(basket['tools'], <String>['build_purchase_scenarios']);
+    final ambiguous =
+        cases['purchases-007']!['expected']! as Map<String, Object?>;
+    expect(ambiguous['tools'], <String>['prepare_supply_request']);
+    expect(ambiguous['navigation'], 'cardOnly');
+    expect(ambiguous['preserveLiteral'], isTrue);
+    expect(
+      ambiguous['clarificationBoundary'],
+      'product_measure_or_fitment',
+      reason:
+          'an ambiguous measure must be disambiguated before downstream fitment details',
+    );
+    final multi = cases['purchases-008']!['expected']! as Map<String, Object?>;
+    expect(
+      multi['tools'],
+      <String>['search_inventory', 'prepare_supply_request'],
+    );
+    expect(multi['mutation'], 'none');
   });
 }

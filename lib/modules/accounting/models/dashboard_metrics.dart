@@ -90,7 +90,7 @@ class PeriodDetailItem {
   final double amount;
   final DateTime transactionDate;
   final String
-      sourceType; // 'sales_payment', 'purchase_payment', 'expense', 'journal_entry'
+      sourceType; // Payment, advance, expense fallback, invoice, or journal owner.
 
   PeriodDetailItem({
     required this.id,

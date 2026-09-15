@@ -1,0 +1,10 @@
+{
+  "pagination": {"total_items": "30", "pages_count": 2},
+  "products": [
+    {"id_product": "6875", "name": "CAMARA ARO 700X25/35C F/V 60MM PANARACER", "reference": "PANARACER-70025/35", "price": "$7.900", "price_amount": 7900, "category_name": "Ciclismo"},
+    {"id_product": "5639", "name": "CUBRE LLANTA ARO 700\"X20MM JOGON-PAK JN-700C", "reference": "JN-700C", "price": "$2.900", "price_amount": 2900, "category_name": "Ciclismo"},
+    {"id_product": "1494", "name": "CAMARA ARO 700x35/38C A/V 48MM", "reference": "CM-000251", "price": "$4.900", "price_amount": 4900, "category_name": "Ciclismo"},
+    {"id_product": "3191", "name": "CAMARA ARO 700X35/38C F/V 60MM", "reference": "CM-0001864", "price": "$4.900", "price_amount": 4900, "category_name": "Ciclismo"},
+    {"id_product": "6989", "name": "CAMARA ARO 700X28/32C F/V 60MM", "reference": "257225", "price": "$4.900", "price_amount": 4900, "category_name": "Ciclismo"}
+  ]
+}

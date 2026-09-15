@@ -1,0 +1,1261 @@
+{
+  "schema_version": 1,
+  "title": "All-family physical-port cardinality",
+  "catalogue_sha256": "1f38ce44b48c9d58154a5342ddc014642af15f3401718e467643b6bb0608b501",
+  "independent_review_hashes": [
+    "4cbd9cd4e1ccb2f41ab3249cbaed83fe419689aa6ba1dbb24a5b9dd856bd66d1",
+    "a1c6bfc5fae5c11b3b7f804b240ea36b2a36db2f6e4ba2ff868c061802856820"
+  ],
+  "mechanical_coverage_complete": false,
+  "automatic_fill_authorized": false,
+  "cases": [
+    {
+      "id": "wss_spoke_nipple_pair_naming",
+      "template": "spoke_nipple",
+      "kind": "valid",
+      "values": {
+        "nipple_thread": "14G",
+        "nipple_thread_standard": "FG 2.3",
+        "nipple_length_mm": "12"
+      },
+      "source_urls": [
+        "https://www.sapim.be/sites/default/files/Sapim%20brochure%202018%20def%20A5%202018-Taiwanese%20LR.pdf"
+      ],
+      "expected_blocking": [],
+      "note": "El niple declara la misma convención: un radio FG 2.3 y este niple dejan de parecer incompatibles.",
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false
+    },
+    {
+      "id": "ws_metric_interface",
+      "template": "hub_axle",
+      "values": {
+        "wheel_part_interfaces": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "scope": "Rosca del cono",
+                "interface_kind": "Rosca",
+                "diameter_unit": "mm",
+                "pitch_unit": "mm",
+                "diameter_mm": "10",
+                "pitch_mm": "1"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "axle_hollow": false
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "ws_metric_pitch_missing",
+      "template": "hub_axle",
+      "values": {
+        "wheel_part_interfaces": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "scope": "Rosca del cono",
+                "interface_kind": "Rosca",
+                "diameter_unit": "mm",
+                "pitch_unit": "mm",
+                "diameter_mm": "10"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "expected_issue_subset": [
+        {
+          "code": "row_required_missing",
+          "field": "wheel_part_interfaces",
+          "blocking": false
+        }
+      ],
+      "expected_sql_issue_subset": [
+        {
+          "code": "row_required_missing",
+          "field": "wheel_part_interfaces",
+          "blocking": false
+        }
+      ]
+    },
+    {
+      "id": "ws_mixed_thread_systems",
+      "template": "hub_axle",
+      "values": {
+        "wheel_part_interfaces": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "scope": "Rosca del cono",
+                "interface_kind": "Rosca",
+                "diameter_unit": "mm",
+                "pitch_unit": "mm",
+                "diameter_mm": "10",
+                "pitch_mm": "1",
+                "pitch_tpi": "26"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [
+        {
+          "code": "row_field_applicability",
+          "field": "wheel_part_interfaces"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "ws_m14_pitch_not_invented",
+      "template": "hub_axle",
+      "values": {
+        "wheel_part_interfaces": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "scope": "Declaración parcial",
+                "interface_kind": "Designación OEM",
+                "designation": "M14"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "ws_plain_hub_adapter",
+      "template": "hub_small_part",
+      "values": {
+        "hub_part_kind": "Adaptador de eje",
+        "wheel_part_interfaces": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "scope": "Entrada",
+                "interface_kind": "Asiento sin rosca",
+                "diameter_unit": "mm",
+                "diameter_mm": "15"
+              },
+              "sources": []
+            },
+            {
+              "id": "r2",
+              "values": {
+                "scope": "Salida",
+                "interface_kind": "Asiento sin rosca",
+                "diameter_unit": "mm",
+                "diameter_mm": "12"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "ws_plain_seat_is_not_thread",
+      "template": "hub_small_part",
+      "values": {
+        "wheel_part_interfaces": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "scope": "Entrada",
+                "interface_kind": "Asiento sin rosca",
+                "diameter_unit": "mm",
+                "diameter_mm": "15",
+                "pitch_mm": "1"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [
+        {
+          "code": "row_field_applicability",
+          "field": "wheel_part_interfaces"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "ws_oem_125_pitch",
+      "template": "wheel_retention",
+      "values": {
+        "wheel_part_interfaces": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "scope": "TRA225 rosca",
+                "interface_kind": "Rosca",
+                "diameter_unit": "mm",
+                "pitch_unit": "mm",
+                "diameter_mm": "12",
+                "pitch_mm": "1.25"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [
+        "https://robertaxleproject.com/what-axle-do-i-need/"
+      ]
+    },
+    {
+      "id": "ws_nipple_tool_axis",
+      "template": "spoke_nipple",
+      "values": {
+        "nipple_tool_interfaces": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "location": "Exterior",
+                "shape": "Cuadrada",
+                "dimension_mm": "3.23",
+                "measurement_basis": "Entre caras"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [
+        "https://www.parktool.com/en-us/blog/repair-help/spoke-wrench-tool-selection"
+      ]
+    },
+    {
+      "id": "ws_nipple_square_not_splined",
+      "template": "spoke_nipple",
+      "values": {
+        "nipple_tool_interfaces": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "location": "Exterior",
+                "shape": "Cuadrada",
+                "spline_count": "6"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [
+        {
+          "code": "row_field_applicability",
+          "field": "nipple_tool_interfaces"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "ws_nipple_datum_missing",
+      "template": "spoke_nipple",
+      "values": {
+        "nipple_tool_interfaces": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "location": "Exterior",
+                "shape": "Cuadrada",
+                "dimension_mm": "3.23"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "expected_issue_subset": [
+        {
+          "code": "row_required_missing",
+          "field": "nipple_tool_interfaces",
+          "blocking": false
+        }
+      ],
+      "expected_sql_issue_subset": [
+        {
+          "code": "row_required_missing",
+          "field": "nipple_tool_interfaces",
+          "blocking": false
+        }
+      ]
+    },
+    {
+      "id": "ws_liner_nominal_without_bsd_inference",
+      "template": "tire_liner",
+      "values": {
+        "tire_liner_fitments": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "configuration": "Ejemplo sintético",
+                "size_basis": "Designación nominal",
+                "nominal_size": "700C",
+                "width_kind": "Rango de anchos",
+                "width_min": "28",
+                "width_max": "32",
+                "width_unit": "mm"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "ws_liner_width_unit_missing",
+      "template": "tire_liner",
+      "values": {
+        "tire_liner_fitments": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "configuration": "Ejemplo",
+                "size_basis": "BSD declarado",
+                "bsd_mm": "622",
+                "width_kind": "Rango de anchos",
+                "width_min": "28",
+                "width_max": "32"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "expected_issue_subset": [
+        {
+          "code": "row_required_missing",
+          "field": "tire_liner_fitments",
+          "blocking": false
+        }
+      ],
+      "expected_sql_issue_subset": [
+        {
+          "code": "row_required_missing",
+          "field": "tire_liner_fitments",
+          "blocking": false
+        }
+      ]
+    },
+    {
+      "id": "ws_liner_reversed_width",
+      "template": "tire_liner",
+      "values": {
+        "tire_liner_fitments": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "configuration": "Ejemplo",
+                "size_basis": "Designación nominal",
+                "nominal_size": "700C",
+                "width_kind": "Rango de anchos",
+                "width_min": "32",
+                "width_max": "28",
+                "width_unit": "mm"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [
+        {
+          "code": "row_shape",
+          "field": "tire_liner_fitments"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "ws_liner_different_scope_rows",
+      "template": "tire_liner",
+      "values": {
+        "tire_liner_fitments": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "configuration": "A",
+                "size_basis": "BSD declarado",
+                "bsd_mm": "559",
+                "width_kind": "Rango de anchos",
+                "width_min": "1.5",
+                "width_max": "2.0",
+                "width_unit": "in"
+              },
+              "sources": []
+            },
+            {
+              "id": "r2",
+              "values": {
+                "configuration": "B",
+                "size_basis": "BSD declarado",
+                "bsd_mm": "622",
+                "width_kind": "Rango de anchos",
+                "width_min": "28",
+                "width_max": "32",
+                "width_unit": "mm"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "ws_vp1_material_scopes",
+      "template": "tube_repair",
+      "values": {
+        "repair_target_declarations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "repair_component": "Park Tool VP-1C, ficha leída 2026-09-07",
+                "target": "Cámara",
+                "target_material": "Butilo",
+                "status": "Compatible declarado",
+                "target_model": "Superficie de destino publicada para VP-1C",
+                "source_url": "https://www.parktool.com/en-us/product/vulcanizing-patch-kit-vp-1"
+              },
+              "sources": []
+            },
+            {
+              "id": "r2",
+              "values": {
+                "repair_component": "Park Tool VP-1C, ficha leída 2026-09-07",
+                "target": "Cámara",
+                "target_material": "Látex",
+                "status": "Compatible declarado",
+                "target_model": "Superficie de destino publicada para VP-1C",
+                "source_url": "https://www.parktool.com/en-us/product/vulcanizing-patch-kit-vp-1"
+              },
+              "sources": []
+            },
+            {
+              "id": "r3",
+              "values": {
+                "repair_component": "Park Tool VP-1C, ficha leída 2026-09-07",
+                "target": "Cámara",
+                "target_material": "TPU",
+                "status": "Incompatible declarado",
+                "target_model": "Superficie de destino publicada para VP-1C",
+                "source_url": "https://www.parktool.com/en-us/product/vulcanizing-patch-kit-vp-1"
+              },
+              "sources": []
+            },
+            {
+              "id": "r4",
+              "values": {
+                "repair_component": "Park Tool VP-1C, ficha leída 2026-09-07",
+                "target": "Cuerpo de neumático",
+                "target_material": "Otro",
+                "status": "Incompatible declarado",
+                "target_model": "Superficie de destino publicada para VP-1C",
+                "source_url": "https://www.parktool.com/en-us/product/vulcanizing-patch-kit-vp-1"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [
+        "https://www.parktool.com/en-us/product/vulcanizing-patch-kit-vp-1"
+      ]
+    },
+    {
+      "id": "ws_repair_condition_missing",
+      "template": "tube_repair",
+      "values": {
+        "repair_target_declarations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "repair_component": "Ejemplo",
+                "target": "Cámara",
+                "target_material": "Otro",
+                "status": "Condicionado"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "expected_issue_subset": [
+        {
+          "code": "row_required_missing",
+          "field": "repair_target_declarations",
+          "blocking": false
+        }
+      ],
+      "expected_sql_issue_subset": [
+        {
+          "code": "row_required_missing",
+          "field": "repair_target_declarations",
+          "blocking": false
+        }
+      ]
+    },
+    {
+      "id": "ws_repair_material_unknown",
+      "template": "tube_repair",
+      "values": {
+        "repair_target_declarations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "repair_component": "Ejemplo",
+                "target": "Cámara",
+                "status": "Compatible declarado"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "expected_issue_subset": [
+        {
+          "code": "row_required_missing",
+          "field": "repair_target_declarations",
+          "blocking": false
+        }
+      ],
+      "expected_sql_issue_subset": [
+        {
+          "code": "row_required_missing",
+          "field": "repair_target_declarations",
+          "blocking": false
+        }
+      ]
+    },
+    {
+      "id": "ws_plug_tool_unknown",
+      "template": "tubeless_repair",
+      "values": {
+        "tubeless_repair_plug_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "plug_model": "Ejemplo",
+                "size_designation": "Fina"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "expected_issue_subset": [
+        {
+          "code": "row_incomplete",
+          "field": "tubeless_repair_plug_configurations",
+          "blocking": false
+        }
+      ],
+      "expected_sql_issue_subset": [
+        {
+          "code": "row_incomplete",
+          "field": "tubeless_repair_plug_configurations",
+          "blocking": false
+        }
+      ]
+    },
+    {
+      "id": "ws_tape_dimensions",
+      "template": "tubeless_tape",
+      "values": {
+        "tape_width_mm": "25",
+        "roll_length_m": "9"
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "ws_valve_unknown_is_missing",
+      "template": "valve_small_part",
+      "values": {
+        "valve_part_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "component": "Tapa ejemplo",
+                "kind": "Tapa"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "expected_issue_subset": [
+        {
+          "code": "row_incomplete",
+          "field": "valve_part_configurations",
+          "blocking": false
+        }
+      ],
+      "expected_sql_issue_subset": [
+        {
+          "code": "row_incomplete",
+          "field": "valve_part_configurations",
+          "blocking": false
+        }
+      ]
+    },
+    {
+      "id": "ws_valve_direction_scoped",
+      "template": "valve_small_part",
+      "values": {
+        "valve_part_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "component": "Adaptador ejemplo",
+                "kind": "Adaptador",
+                "input_valve": "Presta",
+                "output_connection": "Schrader"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "ws_valve_cap_cannot_have_extension",
+      "template": "valve_small_part",
+      "values": {
+        "valve_part_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "component": "Tapa ejemplo",
+                "kind": "Tapa",
+                "input_valve": "Presta",
+                "extension_length_mm": "40"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [
+        {
+          "code": "row_field_applicability",
+          "field": "valve_part_configurations"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "ws_valve_relocated_core",
+      "template": "valve_small_part",
+      "values": {
+        "valve_part_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "component": "Topeak TFV-05",
+                "kind": "Alargador",
+                "input_valve": "Presta",
+                "extension_kind": "Reubica el obús",
+                "requires_removable_core": true,
+                "extension_length_mm": "28"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [
+        "https://www.topeak.com/us/en/product/1440-VALVE-EXTENDER-28MM"
+      ]
+    },
+    {
+      "id": "ws_valve_relocation_cannot_deny_removal",
+      "template": "valve_small_part",
+      "values": {
+        "valve_part_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "component": "Alargador sintético",
+                "kind": "Alargador",
+                "input_valve": "Presta",
+                "extension_kind": "Reubica el obús",
+                "requires_removable_core": false
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [
+        {
+          "code": "row_value_conflict",
+          "field": "valve_part_configurations"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "ws_valve_other_extension_no_inference",
+      "template": "valve_small_part",
+      "values": {
+        "valve_part_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "component": "Alargador sintético",
+                "kind": "Alargador",
+                "input_valve": "Presta",
+                "extension_kind": "Sobre válvula con obús",
+                "requires_removable_core": false
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "ws_imperial_thread",
+      "template": "hub_axle",
+      "values": {
+        "wheel_part_interfaces": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "scope": "Rosca ejemplo",
+                "interface_kind": "Rosca",
+                "diameter_unit": "in",
+                "pitch_unit": "tpi",
+                "diameter_in": "3/8",
+                "pitch_tpi": "26"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "ws_imperial_thread_not_metric_pitch",
+      "template": "hub_axle",
+      "values": {
+        "wheel_part_interfaces": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "scope": "Rosca ejemplo",
+                "interface_kind": "Rosca",
+                "diameter_unit": "in",
+                "pitch_unit": "tpi",
+                "diameter_in": "3/8",
+                "pitch_tpi": "26",
+                "pitch_mm": "1"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [
+        {
+          "code": "row_field_applicability",
+          "field": "wheel_part_interfaces"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "ws_axle_unscoped_length",
+      "template": "hub_axle",
+      "values": {
+        "axle_length_mm": "140"
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "expected_issue_subset": [
+        {
+          "code": "prerequisite",
+          "field": "axle_length_mm",
+          "blocking": false
+        }
+      ],
+      "expected_sql_issue_subset": [
+        {
+          "code": "prerequisite_missing",
+          "field": "axle_length_mm",
+          "blocking": false
+        }
+      ]
+    },
+    {
+      "id": "ws_metric_diameter_tpi_axle",
+      "template": "hub_axle",
+      "values": {
+        "wheel_part_interfaces": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "scope": "Eje italiano, ejemplo de Park Tool",
+                "interface_kind": "Rosca",
+                "diameter_unit": "mm",
+                "diameter_mm": "10",
+                "pitch_unit": "tpi",
+                "pitch_tpi": "26"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [
+        "https://www.parktool.com/en-us/blog/repair-help/basic-thread-concepts"
+      ]
+    },
+    {
+      "id": "ws_thread_pitch_unit_unknown",
+      "template": "hub_axle",
+      "values": {
+        "wheel_part_interfaces": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "scope": "Rosca ejemplo",
+                "interface_kind": "Rosca",
+                "diameter_unit": "mm",
+                "diameter_mm": "10",
+                "pitch_tpi": "26"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "expected_issue_subset": [
+        {
+          "code": "row_prerequisite",
+          "field": "wheel_part_interfaces",
+          "blocking": false
+        }
+      ],
+      "expected_sql_issue_subset": [
+        {
+          "code": "row_prerequisite",
+          "field": "wheel_part_interfaces",
+          "blocking": false
+        }
+      ]
+    },
+    {
+      "id": "ws_retention_linked_configuration",
+      "template": "wheel_retention",
+      "values": {
+        "wheel_part_interfaces": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "scope": "Rosca A",
+                "interface_kind": "Rosca",
+                "diameter_unit": "mm",
+                "pitch_unit": "mm",
+                "diameter_mm": "12",
+                "pitch_mm": "1.75"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "wheel_retention_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "component": "Eje ejemplo",
+                "configuration": "A",
+                "position": "Trasera",
+                "kind": "Eje pasante",
+                "length_kind": "Longitud exacta",
+                "effective_length_mm": "174",
+                "length_datum": "Bajo cabeza a extremo",
+                "thread_interface_id": "r1"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "ws_retention_dangling_thread",
+      "template": "wheel_retention",
+      "values": {
+        "wheel_part_interfaces": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "scope": "Rosca A",
+                "interface_kind": "Rosca",
+                "diameter_unit": "mm",
+                "pitch_unit": "mm",
+                "diameter_mm": "12",
+                "pitch_mm": "1.75"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "wheel_retention_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "component": "Eje ejemplo",
+                "configuration": "A",
+                "position": "Trasera",
+                "kind": "Eje pasante",
+                "length_kind": "Longitud exacta",
+                "effective_length_mm": "174",
+                "length_datum": "Bajo cabeza a extremo",
+                "thread_interface_id": "missing"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [
+        {
+          "code": "row_reference_unresolved",
+          "field": "wheel_retention_configurations"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "ws_retention_range_reversed",
+      "template": "wheel_retention",
+      "values": {
+        "wheel_part_interfaces": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "scope": "Rosca A",
+                "interface_kind": "Rosca",
+                "diameter_unit": "mm",
+                "pitch_unit": "mm",
+                "diameter_mm": "12",
+                "pitch_mm": "1.75"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "wheel_retention_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "component": "Eje ejemplo",
+                "configuration": "A",
+                "position": "Trasera",
+                "kind": "Eje pasante",
+                "length_kind": "Rango declarado",
+                "length_datum": "Bajo cabeza a extremo",
+                "thread_interface_id": "r1",
+                "length_min_mm": "172",
+                "length_max_mm": "160"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [
+        {
+          "code": "row_shape",
+          "field": "wheel_retention_configurations"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "ws_qr_pair_independent_lengths",
+      "template": "wheel_retention",
+      "values": {
+        "wheel_retention_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "component": "Aguja A",
+                "configuration": "A",
+                "position": "Delantera",
+                "kind": "Aguja cierre rápido",
+                "length_kind": "Longitud exacta",
+                "effective_length_mm": "100",
+                "length_datum": "Declaración sintética"
+              },
+              "sources": []
+            },
+            {
+              "id": "r2",
+              "values": {
+                "component": "Aguja B",
+                "configuration": "A",
+                "position": "Trasera",
+                "kind": "Aguja cierre rápido",
+                "length_kind": "Longitud exacta",
+                "effective_length_mm": "135",
+                "length_datum": "Declaración sintética"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    }
+  ],
+  "root_nd_case_overrides": [
+    {
+      "id": "helmet_smith_mainline_certifications_by_row",
+      "reason": "Integral pertenece al eje de construcción, no al uso."
+    },
+    {
+      "id": "helmet_inventory_best_enduro_certificado_sin_norma",
+      "reason": "Se conserva Enduro sin inferir cobertura desde el título."
+    },
+    {
+      "id": "RCF25",
+      "reason": "Una variante distinta del soporte no es montaje de este SKU; se rechaza el token retirado."
+    }
+  ],
+  "root_row_value_case_overrides": [
+    "RCF08",
+    "CPC_GAP_INCLUDED_CLAMP_FALSE"
+  ],
+  "deferred_pressure_fixture_ids": [],
+  "superseded_pressure_fixtures": [
+    "wrfp_hookless_row_maximum_is_not_the_headline",
+    "wrfp_schwalbe_general_maximum_in_bar",
+    "wrfp_unit_without_value_is_pending",
+    "wrfp_value_without_unit_stays_pending"
+  ],
+  "required_server_migration": "20260907025000"
+}

@@ -1,0 +1,357 @@
+{
+  "format_version": 1,
+  "scope": "all_products_and_all_templates",
+  "snapshot_at": "2026-09-14T22:45:57.045606+00:00",
+  "summary": {
+    "all_products_audited": 1673,
+    "physical_products": 1614,
+    "services": 59,
+    "physical_with_template": 868,
+    "physical_without_template": 746,
+    "physical_with_facts": 461,
+    "physical_with_template_without_facts": 408,
+    "physical_without_category": 197,
+    "products_with_facts_outside_template": 2,
+    "products_with_legacy_specifications": 0,
+    "products_with_server_issues": 47,
+    "products_with_blocking_server_issues": 0,
+    "stale_server_evaluations": 0,
+    "active_templates": 105,
+    "active_template_families": 104,
+    "semantically_complete_families": null,
+    "semantic_completion_measurement": "not_assessed_by_structural_audit",
+    "bulk_fill_enabled": false
+  },
+  "snapshot_sha256": "a2ed68fcc5729bb74094807f270817d8d94a16940dcebd503bf0182244b46cbf",
+  "server_evaluation_sha256": "505e889be1a6c7264651262844a4bcfa87328e140b57fe5d134b38315bd76bbc",
+  "audit_kind": "structural_coverage_only",
+  "semantic_completion": null,
+  "source": {
+    "snapshot": "single MVCC statement",
+    "server_evaluation": "56 bounded read-only batches, exact product revision/updated_at/template/version check, zero stale evaluations"
+  },
+  "scope_limit": "Does not adjudicate product identity, compatibility, assignment correctness, or research completeness.",
+  "task_product_fills": 0,
+  "unmapped_categories": [
+    {
+      "path": null,
+      "products": 197
+    },
+    {
+      "path": "Accesorios / Guantes",
+      "products": 34
+    },
+    {
+      "path": "Accesorios / Candados",
+      "products": 31
+    },
+    {
+      "path": "Accesorios / Pedales",
+      "products": 30
+    },
+    {
+      "path": "Componentes / Ruedas / Mazas / Ejes",
+      "products": 23
+    },
+    {
+      "path": "Accesorios / Puños",
+      "products": 23
+    },
+    {
+      "path": "Componentes / Fundas y piolas",
+      "products": 21
+    },
+    {
+      "path": "Componentes / Pernos/Tornillos/Otros",
+      "products": 20
+    },
+    {
+      "path": "Accesorios / Asientos / Asiento",
+      "products": 18
+    },
+    {
+      "path": "Viñabike / Herramientas",
+      "products": 18
+    },
+    {
+      "path": "Componentes / Dirección / Tee",
+      "products": 17
+    },
+    {
+      "path": "Accesorios / Luces",
+      "products": 16
+    },
+    {
+      "path": "Mantenimiento / Lubricantes",
+      "products": 16
+    },
+    {
+      "path": "Accesorios / Bombines",
+      "products": 14
+    },
+    {
+      "path": "Accesorios / Asientos / Tija",
+      "products": 13
+    },
+    {
+      "path": "Accesorios / Cascos",
+      "products": 13
+    },
+    {
+      "path": "Componentes / Fundas y piolas / Terminales y topes",
+      "products": 12
+    },
+    {
+      "path": "Componentes / Dirección / Manubrios",
+      "products": 11
+    },
+    {
+      "path": "Componentes / Dirección / Horquillas",
+      "products": 11
+    },
+    {
+      "path": "Accesorios / Asientos / Collerín",
+      "products": 11
+    },
+    {
+      "path": "Componentes / Ruedas / Tubeless",
+      "products": 10
+    },
+    {
+      "path": "Accesorios",
+      "products": 9
+    },
+    {
+      "path": "Componentes / Ruedas / Agujas",
+      "products": 8
+    },
+    {
+      "path": "Componentes / Frenos / Frenos Hidráulicos / Fittings Hidráulicos",
+      "products": 8
+    },
+    {
+      "path": "Componentes / Dirección / Espaciadores",
+      "products": 8
+    },
+    {
+      "path": "Accesorios / Soporte Celular",
+      "products": 8
+    },
+    {
+      "path": "Accesorios / Porta Caramagiola",
+      "products": 7
+    },
+    {
+      "path": "Accesorios / Cinta Manillar",
+      "products": 7
+    },
+    {
+      "path": "Viñabike / Grasa/Aceites/Soluciones/Limpiadores",
+      "products": 7
+    },
+    {
+      "path": "Accesorios / Protectores",
+      "products": 7
+    },
+    {
+      "path": "Componentes / Ruedas / Mazas / Ejes / Conos",
+      "products": 6
+    },
+    {
+      "path": "Accesorios / Campanillas",
+      "products": 6
+    },
+    {
+      "path": "Mantenimiento / Parches",
+      "products": 6
+    },
+    {
+      "path": "Herramientas / Corta Cadena",
+      "products": 4
+    },
+    {
+      "path": "Componentes / Groupset",
+      "products": 4
+    },
+    {
+      "path": "Accesorios / Asientos / Cubre Asientos",
+      "products": 4
+    },
+    {
+      "path": "Componentes / Frenos / Adaptadores",
+      "products": 4
+    },
+    {
+      "path": "Accesorios / Tapabarros",
+      "products": 4
+    },
+    {
+      "path": "Accesorios / Canastos",
+      "products": 4
+    },
+    {
+      "path": "Accesorios / Botella de Agua",
+      "products": 4
+    },
+    {
+      "path": "Componentes / Frenos / V-Brake / Noodles",
+      "products": 4
+    },
+    {
+      "path": "Servicio",
+      "products": 3
+    },
+    {
+      "path": "Componentes / Frenos / Frenos Hidráulicos",
+      "products": 3
+    },
+    {
+      "path": "Mantenimiento / Desengrasantes",
+      "products": 3
+    },
+    {
+      "path": "Herramientas",
+      "products": 3
+    },
+    {
+      "path": "Componentes / Transmisión / Motores",
+      "products": 3
+    },
+    {
+      "path": "Accesorios / Lentes",
+      "products": 3
+    },
+    {
+      "path": "Accesorios / Mochilas",
+      "products": 3
+    },
+    {
+      "path": "Componentes / Dirección / Araña",
+      "products": 3
+    },
+    {
+      "path": "Componentes / Frenos / V-Brake / Gomas V-Brake",
+      "products": 2
+    },
+    {
+      "path": "Accesorios / Asientos / Adaptadores de tija",
+      "products": 2
+    },
+    {
+      "path": "Componentes / Ruedas / Niples",
+      "products": 2
+    },
+    {
+      "path": "Viñabike / Adaptadores",
+      "products": 2
+    },
+    {
+      "path": "Mantenimiento / Pegamento parches",
+      "products": 2
+    },
+    {
+      "path": "Accesorios / Asientos",
+      "products": 2
+    },
+    {
+      "path": "Componentes / Rueda Estabilizadora",
+      "products": 2
+    },
+    {
+      "path": "Componentes / Fundas y piolas / Frenos",
+      "products": 2
+    },
+    {
+      "path": "Mantenimiento / Grasa",
+      "products": 2
+    },
+    {
+      "path": "Componentes / Frenos / Frenos Hidráulicos / Cable Freno Hidráulico",
+      "products": 2
+    },
+    {
+      "path": "Accesorios / Souvenirs",
+      "products": 2
+    },
+    {
+      "path": "Componentes / Fundas y piolas / Cambios",
+      "products": 2
+    },
+    {
+      "path": "Accesorios / Adaptadores",
+      "products": 2
+    },
+    {
+      "path": "Accesorios / Poleras",
+      "products": 1
+    },
+    {
+      "path": "Mantenimiento / Abrillantadores/Renovadores",
+      "products": 1
+    },
+    {
+      "path": "Accesorios / Ciclocomputadores",
+      "products": 1
+    },
+    {
+      "path": "Otros",
+      "products": 1
+    },
+    {
+      "path": "Mantenimiento / Líquido Frenos",
+      "products": 1
+    },
+    {
+      "path": "Componentes / Ruedas / Tubeless / Tripas Tubeless",
+      "products": 1
+    },
+    {
+      "path": "Herramientas / Botellas aplicadoras",
+      "products": 1
+    },
+    {
+      "path": "Componentes / Ruedas / Mazas / Ejes / Contratuerca",
+      "products": 1
+    },
+    {
+      "path": "Accesorios / Audífonos",
+      "products": 1
+    },
+    {
+      "path": "Componentes / Ruedas / Tubeless / O'rings",
+      "products": 1
+    },
+    {
+      "path": "Accesorios / Seguridad / Reflectantes",
+      "products": 1
+    },
+    {
+      "path": "Componentes / Frenos / Regulador tensión frenos",
+      "products": 1
+    },
+    {
+      "path": "Accesorios / Indumentaria / Jerseys",
+      "products": 1
+    },
+    {
+      "path": "Accesorios / Fundas",
+      "products": 1
+    },
+    {
+      "path": "Mantenimiento / Silicona",
+      "products": 1
+    },
+    {
+      "path": "Accesorios / Cuerdas",
+      "products": 1
+    },
+    {
+      "path": "BMX / Pedalines",
+      "products": 1
+    },
+    {
+      "path": "Componentes / Shock",
+      "products": 1
+    }
+  ]
+}

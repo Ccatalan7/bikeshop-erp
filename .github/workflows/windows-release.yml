@@ -3,7 +3,7 @@ name: Build Windows Desktop Release
 run-name: >-
   Windows ${{ inputs.publish_release == true && 'publish' || 'artifact gate' }}
   · ${{ github.sha }}
-  · notes ${{ inputs.release_notes_candidate_sha256 || 'fallback' }}
+  · notes ${{ inputs.release_notes_candidate_sha256 || 'gemini' }}
   · from ${{ inputs.release_notes_from_commit || 'auto' }}
   · integrity ${{ inputs.integrity_run_id || 'self' }}
 
@@ -41,12 +41,12 @@ on:
         type: string
         default: ""
       release_notes_candidate_b64:
-        description: Optional bounded local Codex release-note candidate
+        description: Legacy compatibility field; standard releases leave it empty
         required: false
         type: string
         default: ""
       release_notes_candidate_sha256:
-        description: SHA-256 binding for the optional Codex candidate
+        description: Legacy compatibility field; standard releases leave it empty
         required: false
         type: string
         default: ""
@@ -160,6 +160,10 @@ jobs:
       - name: Show Flutter toolchain
         run: flutter doctor -v
 
+      - name: Test installer discovery on Windows PowerShell
+        shell: powershell
+        run: ./scripts/tests/windows_installer_release_discovery_test.ps1
+
       - name: Clean generated Flutter build state
         run: flutter clean
 
@@ -240,7 +244,21 @@ jobs:
           "app_version=$appVersion" >> $env:GITHUB_OUTPUT
 
       - name: Build Windows release
-        run: flutter build windows --release --dart-define=VINABIKE_BUILD_TAG=${{ steps.meta.outputs.release_tag }}
+        env:
+          RELEASE_TAG: ${{ steps.meta.outputs.release_tag }}
+          SUPABASE_PUBLISHABLE_KEY: ${{ secrets.SUPABASE_PUBLISHABLE_KEY }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          if ($env:SUPABASE_PUBLISHABLE_KEY -notlike 'sb_publishable_*') {
+            throw 'Missing or invalid SUPABASE_PUBLISHABLE_KEY.'
+          }
+          flutter build windows --release `
+            --dart-define=VINABIKE_BUILD_TAG="$env:RELEASE_TAG" `
+            --dart-define=AI_AGENT_GATEWAY_ENABLED=true `
+            --dart-define=SUPABASE_PUBLISHABLE_KEY="$env:SUPABASE_PUBLISHABLE_KEY"
+          if ($LASTEXITCODE -ne 0) {
+            throw 'Windows release compilation failed.'
+          }
 
       # The ERP initializes its production Supabase fallback during startup.
       # A CI process-launch smoke would therefore contact production, so this
@@ -352,10 +370,6 @@ jobs:
           GEMINI_RELEASE_API_KEY: ${{ secrets.GEMINI_RELEASE_API_KEY }}
           GEMINI_RELEASE_NOTES_MODEL: ${{ vars.GEMINI_RELEASE_NOTES_MODEL || 'gemini-3.1-flash-lite' }}
           RELEASE_NOTES_FROM_COMMIT: ${{ inputs.release_notes_from_commit }}
-          CODEX_RELEASE_NOTES_CANDIDATE_B64: ${{ inputs.release_notes_candidate_b64 }}
-          CODEX_RELEASE_NOTES_CANDIDATE_SHA256: ${{ inputs.release_notes_candidate_sha256 }}
-          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-          OPENAI_RELEASE_NOTES_MODEL: ${{ vars.OPENAI_RELEASE_NOTES_MODEL }}
         run: |
           set -euo pipefail
 
@@ -373,36 +387,6 @@ jobs:
               echo 'The shared release-note base does not match the authoritative Windows range.' >&2
               exit 1
             fi
-          fi
-
-          candidate_transport_valid=true
-          if [[ -z "$CODEX_RELEASE_NOTES_CANDIDATE_B64" ]]; then
-            [[ -z "$CODEX_RELEASE_NOTES_CANDIDATE_SHA256" ]] ||
-              candidate_transport_valid=false
-          elif [[
-            ${#CODEX_RELEASE_NOTES_CANDIDATE_B64} -gt 16384 ||
-            ! "$CODEX_RELEASE_NOTES_CANDIDATE_B64" =~ ^[A-Za-z0-9+/]*={0,2}$ ||
-            ! "$CODEX_RELEASE_NOTES_CANDIDATE_SHA256" =~ ^[0-9a-f]{64}$
-          ]]; then
-            candidate_transport_valid=false
-          else
-            candidate_file="$RUNNER_TEMP/codex-release-notes-candidate.json"
-            if ! printf '%s' "$CODEX_RELEASE_NOTES_CANDIDATE_B64" |
-              base64 --decode > "$candidate_file"; then
-              candidate_transport_valid=false
-            elif [[
-              ! -s "$candidate_file" ||
-              "$(wc -c < "$candidate_file")" -gt 12288 ||
-              "$(sha256sum "$candidate_file" | awk '{print $1}')" != \
-                "$CODEX_RELEASE_NOTES_CANDIDATE_SHA256"
-            ]]; then
-              candidate_transport_valid=false
-            fi
-          fi
-          if [[ "$candidate_transport_valid" != true ]]; then
-            CODEX_RELEASE_NOTES_CANDIDATE_B64=''
-            rm -f "$RUNNER_TEMP/codex-release-notes-candidate.json"
-            echo 'Local release-note candidate discarded: transport_validation.'
           fi
 
           node scripts/releases/generate_release_notes.mjs \
@@ -464,8 +448,8 @@ jobs:
 
           Install or update from PowerShell:
 
-              Invoke-WebRequest https://raw.githubusercontent.com/Ccatalan7/bikeshop-erp/main/scripts/install_vinabike_erp.ps1 -OutFile \$env:TEMP\install_vinabike_erp.ps1
-              powershell -ExecutionPolicy Bypass -File \$env:TEMP\install_vinabike_erp.ps1 -Launch
+              Invoke-WebRequest -UseBasicParsing https://github.com/$GH_REPO/releases/download/$RELEASE_TAG/install_vinabike_erp.ps1 -OutFile "\$env:TEMP\install_vinabike_erp.ps1"
+              powershell.exe -NoProfile -ExecutionPolicy Bypass -File "\$env:TEMP\install_vinabike_erp.ps1" -Launch
 
           The installer downloads $ZIP_NAME and verifies its SHA256 checksum before replacing the local app folder.
           Source commit: $GITHUB_SHA

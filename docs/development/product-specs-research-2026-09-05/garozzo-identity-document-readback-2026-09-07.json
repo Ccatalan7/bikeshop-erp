@@ -1,0 +1,107 @@
+{
+  "schema_version": 1,
+  "reviewed_at": "2026-09-07T15:55:24.938829+00:00",
+  "reviewer": "Codex",
+  "status": "pending_identity_with_additional_documentary_readback",
+  "source_receipts": {
+    ".tmp/db/spec-garozzo-purchase-sources.json": "227266d676c8fe9719d69eeadf6bb5bdd6e7b1d7cf07402652cf16b0b7503a14",
+    ".tmp/db/spec-garozzo-app-files.json": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570"
+  },
+  "app_files_query_scope": "tenant + exact invoice/product context/source ids and Garozzo/GZ0009/GZ0010 filenames; no matches; not an assertion that no documents exist anywhere",
+  "public_searches": [
+    {
+      "query": "Garozzo \"LIQUIDO TUBULAR\"",
+      "outcome": "No exact product source found; directory and generic product/category results were not used as technical evidence."
+    },
+    {
+      "query": "Garozzo \"pastilla redonda\"",
+      "outcome": "No exact product source found; directory and generic product/category results were not used as technical evidence."
+    },
+    {
+      "query": "\"Garozzo\" bicicletas Chile",
+      "outcome": "No exact product source found; directory and generic product/category results were not used as technical evidence."
+    },
+    {
+      "query": "\"Garozo\" \"pastilla\" bicicleta",
+      "outcome": "No exact product source found; directory and generic product/category results were not used as technical evidence."
+    },
+    {
+      "query": "\"Garozzo\" \"sellante\"",
+      "outcome": "No exact product source found; directory and generic product/category results were not used as technical evidence."
+    }
+  ],
+  "products": [
+    {
+      "id": "6ed9f4df-69bf-4c57-a52c-871bac3750c3",
+      "sku": "GZ0009",
+      "decision": "identity_research_pending",
+      "sources_read": [
+        {
+          "invoice_id": "540a9d49-f291-4e7d-b4fb-956410739640",
+          "invoice_number": "534",
+          "supplier_name": "Garozzo",
+          "product_name": "LIQUIDO TUBULAR GZ0009",
+          "description": null,
+          "purchase_treatment": "workshop_consumable",
+          "source_document_kind": "tax_invoice",
+          "received_tax_document_id": null,
+          "supplier_invoice_number": null
+        },
+        {
+          "invoice_id": "6b1950de-c2c0-492b-bc18-22515691b52c",
+          "invoice_number": "538",
+          "supplier_name": "Garozzo",
+          "product_name": "LIQUIDO TUBULAR GZ0009",
+          "description": null,
+          "purchase_treatment": "workshop_consumable",
+          "source_document_kind": "tax_invoice",
+          "received_tax_document_id": null,
+          "supplier_invoice_number": null
+        }
+      ],
+      "linked_original_files_found": 0,
+      "source_model_or_label_found": false,
+      "supplier_does_not_establish_manufacturer": true,
+      "next_investigation": {
+        "owner": "Codex/Claude",
+        "action": "Localizar el documento o imagen original en archivos o comunicaciones existentes del proveedor, enlazándolo a esta compra; no inferir modelo desde otros productos del proveedor.",
+        "external_message_authorized": false,
+        "requires_routine_owner_entry": false
+      },
+      "assignments_applied": false,
+      "facts_written": false,
+      "mechanical_approval": false
+    },
+    {
+      "id": "d62dd5f5-6b6f-4e7d-aa54-479e378c2745",
+      "sku": "GZ0010",
+      "decision": "identity_research_pending",
+      "sources_read": [
+        {
+          "invoice_id": "3e73a96a-27b6-4764-a3ad-ad3d20355d66",
+          "invoice_number": "539",
+          "supplier_name": "Garozzo",
+          "product_name": "PASTILLA REDONDA GAROZO A PRESION",
+          "description": null,
+          "purchase_treatment": "workshop_consumable",
+          "source_document_kind": "tax_invoice",
+          "received_tax_document_id": null,
+          "supplier_invoice_number": null
+        }
+      ],
+      "linked_original_files_found": 0,
+      "source_model_or_label_found": false,
+      "supplier_does_not_establish_manufacturer": true,
+      "next_investigation": {
+        "owner": "Codex/Claude",
+        "action": "Localizar el documento o imagen original en archivos o comunicaciones existentes del proveedor, enlazándolo a esta compra; no inferir modelo desde otros productos del proveedor.",
+        "external_message_authorized": false,
+        "requires_routine_owner_entry": false
+      },
+      "assignments_applied": false,
+      "facts_written": false,
+      "mechanical_approval": false
+    }
+  ],
+  "production_writes": 0
+}

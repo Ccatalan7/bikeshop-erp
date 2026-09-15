@@ -54,6 +54,71 @@ DesignSync list_files   → what exists, and the highest handoff-t<N>/
 DesignSync get_file     → the authoritative source, with literal values
 ```
 
+### Cómo se abre el proyecto — el id va explícito (corrección 2026-08-18)
+
+**`projectId = a0fa3196-6315-4b96-bde7-7cc801e7a74e`**, proyecto
+`ERP Bikeshop UI Mockups`. Se pasa a `list_files` y `get_file` **siempre**.
+
+**`DesignSync list_projects` devuelve `[]` y eso es correcto.** Ese método lista
+únicamente proyectos de tipo **design-system**, filtrados a los escribibles. El
+proyecto de este ERP es `PROJECT_TYPE_PROJECT`, y ese tipo es **inmutable desde
+su creación**: no hay ajuste, permiso ni login que lo haga aparecer en esa
+lista. Nunca.
+
+**Un `[]` no es falta de autorización.** Comprobación de un segundo:
+
+```
+DesignSync get_project  projectId=a0fa3196-6315-4b96-bde7-7cc801e7a74e
+→ {"name":"ERP Bikeshop UI Mockups","type":"PROJECT_TYPE_PROJECT","canEdit":true}
+```
+
+**El costo real de no tener esto escrito.** El 2026-08-18 una sesión declaró
+«falta autorización de Design» como su único bloqueo, dejó una condición del
+corte sin verificar y se la devolvió al dueño como algo que sólo él podía
+resolver. Una segunda sesión repitió la conclusión sin probar la herramienta. No
+había nada que aprobar: el acceso estaba completo, con `canEdit: true`, y con
+los 600+ archivos del proyecto disponibles. Lo que faltaba era esta línea.
+
+**Regla operativa: antes de reportar un bloqueo de Design, corre `get_project`
+sobre el id.** Si devuelve `canEdit: true`, el bloqueo no existe.
+
+Rutas que se usan casi siempre —el listado completo sale de `list_files`—:
+
+| Ruta | Para qué |
+|---|---|
+| `GUÍA GENERAL Viñabike - Componentes.dc.html` | componentes compartidos, ids `S-05`/`O-02`/`I-01`, escala tipográfica |
+| `Arquitectura de Paletas - Viñabike.dc.html` | roles semánticos y modo oscuro |
+| `<módulo>.dc.html` | la **composición** del módulo, que el `spec.json` no trae |
+| `handoff-t<N>/spec.json` | tablas de medidas del turno |
+| `handoff-t<N>/frames/…` | los frames, con `-dark`, `-phone`, `-tablet` |
+
+### Sesión no interactiva: `DesignSync` pide `/design-login` y no lo puede correr (2026-09-02)
+
+Distinto del `[]` de `list_projects`. En una sesión headless (la app de
+escritorio en modo Code, SDK, `-p`) **todo** método de `DesignSync` —incluido
+`get_project`— devuelve «needs design-system authorization, and /design-login
+cannot run in this non-interactive session». Eso sí es un bloqueo del API, y
+sólo lo levanta el dueño corriendo `/design-login` una vez desde un `claude`
+interactivo en esta máquina; las sesiones headless reutilizan esa autorización.
+
+**No es un bloqueo de la tarea.** Cada `get_file` anterior sobre la guía quedó
+guardado íntegro (los 262 144 bytes del cap) en los resultados de herramienta
+de esa sesión, y se recupera sin red:
+
+```bash
+# El JSON guardado tiene {"method":"get_file","path":…,"content":…}
+f=$(find ~/.claude/projects/-Users-Claudio-Dev-bikeshop-erp -path "*tool-results*" \
+      -type f -size +200k | xargs grep -l "E-01 Status badge" | head -1)
+python3 -c "import json,sys; print(json.load(open(sys.argv[1]))['content'])" "$f" \
+  > "$SCRATCH/guia.html"
+```
+
+Sobre ese archivo aplican las mismas recetas de grep de abajo. El 2026-09-02 el
+panel de detalle de Productos se hizo entero con esa copia (A-02, T-05, F-02,
+F-04, E-01, O-04) mientras el API estaba cerrado; ni un valor salió de una
+captura. Lo que **no** trae la copia es lo que tampoco trae el API: lo que
+cae después del cap de 256 KiB.
+
 ### Reading a large page without burning context
 
 A `get_file` result above roughly 50 KB is written to a file on disk and only a
@@ -99,6 +164,50 @@ wc -c <archivo-extraído>   # 262144 ⇒ vino truncado
 El payload crudo capea en **262 144**. Si el conteo da 262 145 es porque el
 comando de extracción del ejemplo (`python3 -c "…print(…)"`) agrega un `\n`
 final; el byte extra es del `print`, no del archivo.
+
+### Corrección 2026-08-17 — un handoff de PNG no trae composición legible
+
+`handoff-t23/` entregó **28 PNG** y un `spec.json`. Ese spec es normativo para
+las **medidas** —geometría por frame, roles semánticos, escala tipográfica— pero
+**no describe la composición**: no dice que el bloque de captura sea un panel, ni
+que la columna vaya centrada. De un PNG no se lee ningún valor, y de una tabla de
+medidas no se deduce un layout.
+
+La composición sí es legible, y está en la página fuente que el propio spec
+nombra en `source.page`. Para t23 es
+`Compras · Asistente inteligente navegable.dc.html` — 207 KB, bajo el cap — y
+trae el bloque escrito literal:
+
+```text
+columna   max-width:780px; margin:0 auto; gap:11px   (contenedor padding:14px)
+panel     background:var(--surface); border:1px solid var(--border);
+          border-radius:10px; padding:12px 13px
+campo     min-height:60px; padding:10px 11px; border-radius:8px;
+          border:1px solid var(--borderStrong); font:400 12.5px/1.55
+acciones  margin-top:9px; flex; gap:12px; «Ejemplos» = texto 600 11px act;
+          spacer flex:1; atajo 400 10px mono inkFaint
+```
+
+Dos niveles de borde —`border` en el panel, `borderStrong` en el campo de
+adentro— son parte del lenguaje, no un detalle.
+
+**Regla: si el handoff más alto son imágenes, la composición se lee de
+`source.page` antes de escribir una línea.** No se deduce del `spec.json`, no se
+mira en el PNG y no se estima.
+
+### Coincidir en los números no es fidelidad visual (2026-08-17)
+
+Un módulo puede tener todas las constantes del spec correctas y no parecerse al
+diseño. Ya pasó: `PurchaseSurfaceGeometry` reproduce medida por medida las
+tablas del t23 —imágenes 38/46/64/76, split pane 420/330/600, columna 780,
+badge 20, subrayado 2— y la pantalla resultante no tiene panel contenedor, no
+centra la columna y usa el tipo ~25% más grande que el diseño.
+
+**Una constante que coincide no es evidencia.** La evidencia de fidelidad visual
+es el **frame real de la app al lado del frame de Design**, en la misma celda de
+tema y host. Declarar una superficie implementada sin ese par de imágenes es
+declarar otra cosa, y fue exactamente lo que costó el rediseño del Asistente de
+compras.
 
 ### When the window is still allowed
 
@@ -264,3 +373,55 @@ deliberate deviation in the handoff.
 See [`CODEX_CLAUDE_COLLABORATION.md`](CODEX_CLAUDE_COLLABORATION.md) for the
 review gate and [`../architecture/appearance-palette-contract.md`](../architecture/appearance-palette-contract.md)
 for how palettes/brightness resolve.
+
+## `fontFamily: '<nombre>'` sobre un rol ya resuelto vuelve a colarse (2026-08-18)
+
+**Nueve sitios vivos en un módulo que ya documentaba la trampa como corregida.**
+
+El proyecto registra en `pubspec.yaml` **sólo Oswald y Barlow**. Los roles
+tipográficos del handoff resuelven su familia con las APIs específicas de
+`google_fonts` (`GoogleFonts.ibmPlexMono()`, `GoogleFonts.poppins()`), y eso es
+justamente lo que los hace independientes del recorrido previo del operador.
+
+Escribir después `.copyWith(fontFamily: 'IBM Plex Mono')` sobre uno de esos
+roles **deshace ese arreglo**: reemplaza la familia ya resuelta por un nombre
+que sólo existe si alguna otra pantalla cargó esa familia antes en la misma
+sesión. Se ve bien casi siempre —porque el propio módulo la carga— y por eso
+sobrevive a las revisiones.
+
+Dos formas y su corrección:
+
+- **El rol ya trae esa familia** (`metricSmall`, `metricMedium`, `panelTitle`,
+  `moduleTitle`): el `fontFamily` es redundante y dañino. Se borra.
+- **Se quiere otra familia a propósito** —un `meta` que debe ser mono porque
+  lleva una cantidad o una edad de evidencia—: no se pide por nombre, se
+  **agrega el rol**. Para eso existe `PurchaseType.metaNumeric`: las métricas
+  exactas de `meta` con `typography.families.numeric`, que el spec reserva para
+  «números comparables, códigos, metadatos de conteo». Agregar un rol con las
+  medidas de otro **no** es inventar un valor; pedir una familia por nombre sí
+  es romper el contrato.
+
+Cómo se detecta en un comando, y conviene correrlo al cerrar cualquier ronda
+tipográfica:
+
+```bash
+grep -rn "fontFamily: '" lib/modules/<módulo>/ | grep -v visual_language
+```
+
+
+## Una acción que falta no se ve mirando la pantalla (2026-08-18)
+
+`frames[clarification].blocks.acciones` declaraba `secondary: "Responder
+después"` desde el primer handoff. No se implementó nunca, y **ninguna ronda de
+barrido visual lo notó**: el bloque de la pregunta se veía completo —cabecera,
+pregunta, opciones, botón y su motivo—, así que nada saltaba a la vista.
+
+Lo que se veía en su lugar era un primario **apagado** con un texto explicando
+por qué. Desde la pregunta, la única lectura posible era «esto no avanza», y el
+dueño lo reportó con esas palabras. La salida existía a treinta líneas de scroll,
+fuera de pantalla en teléfono.
+
+**Regla:** al comparar una superficie contra su frame, recorre `blocks` y
+`acciones` del `spec.json` **entrada por entrada**, y marca las que no
+encuentres. Un bloque presente con una acción de menos se ve bien y se comporta
+mal, y eso no lo detecta ningún ojo mirando la captura.

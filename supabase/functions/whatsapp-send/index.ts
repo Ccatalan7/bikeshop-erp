@@ -10,9 +10,19 @@ import {
 } from "../_shared/messaging_attachments.ts";
 import { buildJobActionToken } from "../_shared/whatsapp_action_tokens.ts";
 import {
+  buildDirectSendUtilityPayload,
+  directSendUtilityStrategy,
+  resolveDirectSendUtility,
+} from "../_shared/whatsapp_direct_send.ts";
+import {
+  type DirectSendPolicyBlock,
+  directSendPolicyBlockFromEvents,
+} from "../_shared/whatsapp_direct_send_integrity.ts";
+import {
   durableWhatsAppSendReceipt,
   whatsappProviderFailureHttpStatus,
 } from "../_shared/whatsapp_send_receipts.ts";
+import { normalizeWhatsAppTemplateGreeting } from "../_shared/whatsapp_template_greeting.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -23,7 +33,7 @@ const SUPABASE_URL = Deno.env.get("SUPABASE_URL") ?? "";
 const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY") ?? "";
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
 const WHATSAPP_ACCESS_TOKEN = Deno.env.get("WHATSAPP_ACCESS_TOKEN") ?? "";
-const WHATSAPP_API_VERSION = Deno.env.get("WHATSAPP_API_VERSION") ?? "v23.0";
+const WHATSAPP_API_VERSION = Deno.env.get("WHATSAPP_API_VERSION") ?? "v26.0";
 const CACHE_TTL_MS = 5 * 60 * 1000;
 
 type JsonRecord = Record<string, unknown>;
@@ -31,6 +41,22 @@ type JsonRecord = Record<string, unknown>;
 // not bundled in this directory.
 // deno-lint-ignore no-explicit-any
 type SupabaseClientLike = ReturnType<typeof createClient<any>>;
+
+/** Only an authenticated outbox worker supplies this; never populated from JSON. */
+export interface TrustedWhatsAppOutbox {
+  adminClient: SupabaseClientLike;
+  userId: string;
+  tenantId: string;
+  messageId: string;
+  beforeProviderSend: () => Promise<boolean>;
+  persist: (patch: {
+    externalMessageId?: string;
+    externalStatus: "accepted" | "failed" | null;
+    metadata: JsonRecord;
+    content: string;
+    type: string;
+  }) => Promise<void>;
+}
 
 class WhatsAppPersistenceError extends Error {
   constructor(
@@ -68,7 +94,7 @@ interface SendRequest {
   contextType?: string;
   contextId?: string;
   jobId?: string;
-  type: "text" | "image" | "document" | "template" | "interactive";
+  type: "text" | "image" | "document" | "audio" | "template" | "interactive" | "reaction";
   text?: string;
   caption?: string;
   attachmentId?: string;
@@ -80,8 +106,16 @@ interface SendRequest {
   templateName?: string;
   templateLanguage?: string;
   templateComponents?: unknown[];
+  deliveryStrategy?: "direct_send_utility";
   interactive?: JsonRecord;
   replyToMessageId?: string;
+  // Reacción: el wamid del mensaje anotado y el emoji. Un emoji vacío la
+  // retira, que es como WhatsApp expresa «me arrepentí».
+  reactionToExternalMessageId?: string;
+  reactionEmoji?: string;
+  // Fila local del mensaje anotado, para colgar la reacción sin re-resolver.
+  reactionToMessageId?: string;
+  reactionConversationId?: string;
   metadata?: JsonRecord;
   actionType?: string;
   actionTargetId?: string;
@@ -115,6 +149,29 @@ function setCached<T>(cache: Map<string, CacheEntry<T>>, key: string, value: T) 
     value,
     expiresAt: Date.now() + CACHE_TTL_MS,
   });
+}
+
+function decodeJwtSubject(authHeader: string): string | null {
+  try {
+    const token = authHeader.replace(/^Bearer\s+/i, "").trim();
+    const payload = token.split(".")[1];
+    if (!payload) return null;
+    const normalized = payload.replace(/-/g, "+").replace(/_/g, "/");
+    const padded = normalized + "=".repeat((4 - (normalized.length % 4)) % 4);
+    const claims = JSON.parse(atob(padded)) as { sub?: unknown };
+    return typeof claims.sub === "string" && claims.sub.length > 0 ? claims.sub : null;
+  } catch (_) {
+    return null;
+  }
+}
+
+function deferAfterResponse(work: Promise<unknown>) {
+  const guarded = work.catch((error) => {
+    console.error("❌ [WHATSAPP-SEND] Deferred housekeeping failed", error);
+  });
+  const runtime = (globalThis as { EdgeRuntime?: { waitUntil?: (p: Promise<unknown>) => void } })
+    .EdgeRuntime;
+  runtime?.waitUntil?.(guarded);
 }
 
 async function cleanupStaleMessagingAttachments(
@@ -208,6 +265,26 @@ async function resolveActiveChannel(
   return resolvedChannel;
 }
 
+async function resolveDirectSendPolicyBlock(params: {
+  adminClient: SupabaseClientLike;
+  channelId: string;
+  templateName?: string;
+}): Promise<DirectSendPolicyBlock | null> {
+  const { data, error } = await params.adminClient
+    .from("whatsapp_webhook_events")
+    .select("payload, created_at")
+    .eq("channel_id", params.channelId)
+    .eq("event_type", "unknown")
+    .order("created_at", { ascending: false })
+    .limit(100);
+  if (error) {
+    console.error("❌ [WHATSAPP-SEND] Direct Send integrity lookup failed", error);
+    return { reason: "integrity_lookup_failed", detail: error.message };
+  }
+
+  return directSendPolicyBlockFromEvents(data ?? [], params.templateName);
+}
+
 function normalizePhoneNumber(phone: string) {
   return phone.replace(/[^\d]/g, "");
 }
@@ -224,7 +301,11 @@ function stringValue(value: unknown) {
 function resolveMediaFilename(request: SendRequest) {
   return request.documentFilename ??
     stringValue(request.metadata?.filename) ??
-    (request.type === "image" ? "imagen.png" : "documento");
+    (request.type === "image"
+      ? "imagen.png"
+      : request.type === "audio"
+      ? "nota-de-voz.m4a"
+      : "documento");
 }
 
 interface StoredMessagingAttachment {
@@ -253,8 +334,13 @@ async function prepareMessagingAttachment(params: {
   request: SendRequest;
   tenantId: string;
   userId: string;
+  queuedMessageId?: string;
 }) {
-  if (params.request.type !== "image" && params.request.type !== "document") {
+  if (
+    params.request.type !== "image" &&
+    params.request.type !== "document" &&
+    params.request.type !== "audio"
+  ) {
     return { attachment: undefined as PreparedMessagingAttachment | undefined };
   }
 
@@ -280,7 +366,8 @@ async function prepareMessagingAttachment(params: {
   const record = data as StoredMessagingAttachment;
   if (
     record.storage_bucket !== PRIVATE_MESSAGING_BUCKET ||
-    record.status !== "reserved" ||
+    !(record.status === "reserved" ||
+      (record.status === "attached" && record.message_id === params.queuedMessageId)) ||
     record.created_by !== params.userId ||
     (params.request.conversationId &&
       record.conversation_id !== params.request.conversationId) ||
@@ -307,9 +394,19 @@ async function prepareMessagingAttachment(params: {
     return { error: jsonResponse({ error: "Attachment contract is invalid" }, 415) };
   }
 
-  const expectedType = params.request.type === "image" ? "image/" : undefined;
+  const expectedType = params.request.type === "image"
+    ? "image/"
+    : params.request.type === "audio"
+    ? "audio/"
+    : undefined;
   if (expectedType && !contract.contentType.startsWith(expectedType)) {
-    return { error: jsonResponse({ error: "Attachment is not an image" }, 415) };
+    return {
+      error: jsonResponse({
+        error: params.request.type === "audio"
+          ? "Attachment is not audio"
+          : "Attachment is not an image",
+      }, 415),
+    };
   }
   if (params.request.type === "document" && contract.contentType.startsWith("image/")) {
     return { error: jsonResponse({ error: "Document attachment cannot be an image" }, 415) };
@@ -344,7 +441,7 @@ async function uploadMediaToWhatsApp(
   phoneNumberId: string,
   attachment?: PreparedMessagingAttachment,
 ) {
-  if (request.type !== "image" && request.type !== "document") {
+  if (request.type !== "image" && request.type !== "document" && request.type !== "audio") {
     return { metadata: {} as JsonRecord };
   }
 
@@ -372,6 +469,7 @@ async function uploadMediaToWhatsApp(
         Authorization: `Bearer ${WHATSAPP_ACCESS_TOKEN}`,
       },
       body: formData,
+      signal: AbortSignal.timeout(30_000),
     },
   );
 
@@ -503,6 +601,16 @@ function buildGraphPayload(
     type: request.type,
   };
 
+  // Una reacción no acepta `context`: apunta a su objetivo por message_id
+  // dentro del propio bloque `reaction`.
+  if (request.type === "reaction") {
+    payload.reaction = {
+      message_id: request.reactionToExternalMessageId,
+      emoji: request.reactionEmoji ?? "",
+    };
+    return payload;
+  }
+
   if (request.replyToMessageId) {
     payload.context = { message_id: request.replyToMessageId };
   }
@@ -529,6 +637,13 @@ function buildGraphPayload(
     const image: JsonRecord = { id: mediaId };
     if (request.caption) image.caption = request.caption;
     payload.image = image;
+    return payload;
+  }
+
+  if (request.type === "audio") {
+    // WhatsApp audio takes no caption; the recording is the message.
+    if (!mediaId) throw new Error("validated_media_id_required");
+    payload.audio = { id: mediaId };
     return payload;
   }
 
@@ -562,6 +677,10 @@ function getMessageContent(request: SendRequest) {
     return request.caption ?? request.documentFilename ?? "Imagen enviada";
   }
 
+  if (request.type === "audio") {
+    return "Nota de voz";
+  }
+
   if (request.type === "template") {
     return request.caption ?? `Template enviado: ${request.templateName ?? "sin nombre"}`;
   }
@@ -586,7 +705,7 @@ async function replayStoredWhatsAppStatus(
   }
 }
 
-serve(async (req) => {
+export async function handleWhatsAppSend(req: Request, outbox?: TrustedWhatsAppOutbox) {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
   }
@@ -595,14 +714,15 @@ serve(async (req) => {
     return jsonResponse({ error: "Method not allowed" }, 405);
   }
 
-  if (!SUPABASE_URL || !SUPABASE_ANON_KEY || !SUPABASE_SERVICE_ROLE_KEY || !WHATSAPP_ACCESS_TOKEN) {
+  if (!SUPABASE_URL || !WHATSAPP_ACCESS_TOKEN ||
+    (!outbox && (!SUPABASE_ANON_KEY || !SUPABASE_SERVICE_ROLE_KEY))) {
     return jsonResponse({
       error: "Missing required environment variables",
     }, 500);
   }
 
   const authHeader = req.headers.get("Authorization");
-  if (!authHeader) {
+  if (!outbox && !authHeader) {
     return jsonResponse({ error: "Missing Authorization header" }, 401);
   }
 
@@ -618,14 +738,31 @@ serve(async (req) => {
     return jsonResponse({ error: "phoneNumber and type are required" }, 400);
   }
 
+  requestBody = normalizeWhatsAppTemplateGreeting(
+    requestBody as unknown as JsonRecord,
+  ) as unknown as SendRequest;
+  const directSendResolution = resolveDirectSendUtility(requestBody);
+  let directSendPolicyBlock: DirectSendPolicyBlock | null = null;
+  if (directSendResolution.enabled && directSendResolution.body) {
+    // The durable ERP copy must be the exact server-owned body sent to Meta,
+    // never a caller-supplied caption that merely looks like it.
+    requestBody.caption = directSendResolution.body;
+  }
+
   const startedAt = Date.now();
   const clientMessageId = requestBody.metadata?.client_message_id ?? null;
+  // Every phase is also returned to the caller: the app prints the
+  // breakdown in its own log, which is the only place it can be read
+  // without the dashboard.
+  const timings: Array<{ phase: string; elapsed_ms: number }> = [];
   const logTiming = (phase: string, details: JsonRecord = {}) => {
+    const elapsed = Date.now() - startedAt;
+    timings.push({ phase, elapsed_ms: elapsed });
     console.log(
       "⏱️ [WHATSAPP-SEND] timing",
       JSON.stringify({
         phase,
-        elapsed_ms: Date.now() - startedAt,
+        elapsed_ms: elapsed,
         type: requestBody.type,
         conversation_id: requestBody.conversationId ?? null,
         client_message_id: clientMessageId,
@@ -648,6 +785,10 @@ serve(async (req) => {
     return jsonResponse({ error: "attachmentId is required for image messages" }, 400);
   }
 
+  if (requestBody.type === "audio" && !requestBody.attachmentId) {
+    return jsonResponse({ error: "attachmentId is required for audio messages" }, 400);
+  }
+
   if (
     requestBody.type === "interactive" &&
     requestBody.documentUrl &&
@@ -660,14 +801,35 @@ serve(async (req) => {
     return jsonResponse({ error: "templateName is required for template messages" }, 400);
   }
 
-  const adminClient = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
-  const callerClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-    global: { headers: { Authorization: authHeader } },
+  if (
+    requestBody.type === "reaction" &&
+    (!requestBody.reactionToExternalMessageId ||
+      !requestBody.reactionToMessageId ||
+      !requestBody.reactionConversationId)
+  ) {
+    return jsonResponse({
+      error:
+        "reactionToExternalMessageId, reactionToMessageId and reactionConversationId are required for reactions",
+    }, 400);
+  }
+
+  const adminClient = outbox?.adminClient ?? createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+  const callerClient = outbox?.adminClient ?? createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+    global: { headers: { Authorization: authHeader! } },
   });
 
   // Do not trust a locally decoded JWT subject. Ask Supabase Auth to verify the
   // bearer token and return the authoritative user before service-role access.
-  const { data: authData, error: authError } = await callerClient.auth.getUser();
+  // The tenant lookup for the subject the token *claims* starts now and
+  // overlaps the auth round trip. Its result is used only if Auth confirms
+  // that same user; nothing from it reaches the caller otherwise.
+  const claimedUserId = outbox ? null : decodeJwtSubject(authHeader!);
+  const speculativeTenant: Promise<string | null> = claimedUserId
+    ? resolveTenantIdForUser(adminClient, claimedUserId).catch(() => null)
+    : Promise.resolve(null);
+  const { data: authData, error: authError } = outbox
+    ? { data: { user: { id: outbox.userId } }, error: null }
+    : await callerClient.auth.getUser();
   const userId = authData.user?.id;
   if (authError || !userId) {
     console.error("❌ [WHATSAPP-SEND] Auth verification failed", authError);
@@ -676,21 +838,51 @@ serve(async (req) => {
 
   logTiming("auth_resolved");
 
-  const tenantId = await resolveTenantIdForUser(adminClient, userId);
+  const tenantId = outbox?.tenantId ?? (claimedUserId === userId
+    ? (await speculativeTenant) ?? await resolveTenantIdForUser(adminClient, userId)
+    : await resolveTenantIdForUser(adminClient, userId));
   if (!tenantId) {
     return jsonResponse({ error: "Unable to resolve tenant" }, 400);
   }
 
   logTiming("tenant_resolved");
-  await cleanupStaleMessagingAttachments(adminClient, tenantId);
+  // Housekeeping of yesterday's abandoned reservations has nothing to do
+  // with this message: it ran serially on every send (a lookup plus up to 25
+  // updates and object removals) before the send was even authorised. It now
+  // runs after the response; the isolate keeps it alive through waitUntil
+  // when the runtime offers it, and it is idempotent if it is cut short.
+  deferAfterResponse(cleanupStaleMessagingAttachments(adminClient, tenantId));
 
-  let visibleConversation: JsonRecord | null = null;
-  if (requestBody.conversationId) {
-    const { data, error } = await callerClient
+  // The conversation, the channel and the attachment depend only on the
+  // tenant: one round trip instead of three in a row.
+  const conversationPromise = requestBody.conversationId
+    ? callerClient
       .from("conversations")
       .select("id, tenant_id, context_type, context_id")
       .eq("id", requestBody.conversationId)
-      .maybeSingle();
+      .maybeSingle()
+    : Promise.resolve({ data: null, error: null });
+  const channelPromise = resolveActiveChannel(
+    adminClient,
+    tenantId,
+    requestBody.phoneNumberId,
+  );
+  const preparedPromise = prepareMessagingAttachment({
+    adminClient,
+    request: requestBody,
+    tenantId,
+    userId,
+    queuedMessageId: outbox?.messageId,
+  });
+  const [conversationLookup, channel, prepared] = await Promise.all([
+    conversationPromise,
+    channelPromise,
+    preparedPromise,
+  ]);
+
+  let visibleConversation: JsonRecord | null = null;
+  if (requestBody.conversationId) {
+    const { data, error } = conversationLookup;
     if (error) {
       console.error("❌ [WHATSAPP-SEND] Conversation authorization failed", error);
       return jsonResponse({ error: "Unable to authorize conversation" }, 500);
@@ -702,28 +894,25 @@ serve(async (req) => {
   } else if (
     requestBody.type === "image" ||
     requestBody.type === "document" ||
+    requestBody.type === "audio" ||
     requestBody.type === "interactive" ||
     requestBody.markQuoteSent
   ) {
     return jsonResponse({ error: "conversationId is required for this message" }, 400);
   }
 
-  const prepared = await prepareMessagingAttachment({
-    adminClient,
-    request: requestBody,
-    tenantId,
-    userId,
-  });
   if (prepared.error) return prepared.error;
-
-  const channel = await resolveActiveChannel(
-    adminClient,
-    tenantId,
-    requestBody.phoneNumberId,
-  );
 
   if (!channel) {
     return jsonResponse({ error: "No active WhatsApp channel found for tenant" }, 400);
+  }
+
+  if (directSendResolution.enabled) {
+    directSendPolicyBlock = await resolveDirectSendPolicyBlock({
+      adminClient,
+      channelId: channel.id,
+      templateName: directSendResolution.templateName,
+    });
   }
 
   logTiming("channel_resolved", {
@@ -735,32 +924,52 @@ serve(async (req) => {
   const bindingContextType = requestBody.conversationId ? null : requestBody.contextType ?? null;
   const bindingContextId = requestBody.conversationId ? null : requestBody.contextId ?? null;
 
-  // Kick off binding lookup in parallel with media upload + Graph send. The
-  // binding row is only needed to know which conversation to insert the
-  // persisted message into, which we do AFTER Graph success — so we don't
-  // need to block the actual send on it.
-  const bindingPromise = adminClient.rpc(
-    "ensure_whatsapp_conversation_binding",
-    {
-      p_tenant_id: tenantId,
-      p_channel_id: channel.id,
-      p_wa_id: normalizedPhone,
-      p_phone_number: normalizedPhone,
-      p_contact_name: requestBody.contactName ?? null,
-      p_customer_id: requestBody.customerId ?? null,
-      p_context_type: bindingContextType,
-      p_context_id: bindingContextId,
-      p_conversation_id: requestBody.conversationId ?? null,
-    },
-  );
-
-  const { data: bindingResult, error: bindingError } = await bindingPromise;
-  if (bindingError || !bindingResult) {
-    console.error("❌ [WHATSAPP-SEND] Failed to ensure conversation binding", bindingError);
-    return jsonResponse({ error: "Unable to bind WhatsApp conversation" }, 500);
+  // Started now, awaited as late as possible. In outbox mode the binding's
+  // identity was proven by the acceptance transaction and is re-checked by
+  // the send fence, so its upkeep (contact name, customer context,
+  // participants: 150-350 ms in production) runs alongside the media upload
+  // and the Meta call instead of ahead of them. The synchronous path still
+  // waits here, because there the binding is what decides the conversation.
+  const bindingPromise: Promise<{ data: unknown; error: unknown }> = (async () =>
+    await adminClient.rpc(
+      "ensure_whatsapp_conversation_binding",
+      {
+        p_tenant_id: tenantId,
+        p_channel_id: channel.id,
+        p_wa_id: normalizedPhone,
+        p_phone_number: normalizedPhone,
+        p_contact_name: requestBody.contactName ?? null,
+        p_customer_id: requestBody.customerId ?? null,
+        p_context_type: bindingContextType,
+        p_context_id: bindingContextId,
+        p_conversation_id: requestBody.conversationId ?? null,
+      },
+    ))();
+  bindingPromise.catch(() => {});
+  let bindingResult: JsonRecord | null = null;
+  const resolveBinding = async (): Promise<JsonRecord | null> => {
+    if (bindingResult) return bindingResult;
+    const { data, error } = await bindingPromise;
+    if (error || !data) {
+      console.error("❌ [WHATSAPP-SEND] Failed to ensure conversation binding", error);
+      return null;
+    }
+    bindingResult = data as JsonRecord;
+    return bindingResult;
+  };
+  const requestedJobTarget = requestBody.actionKind === "job" || requestBody.markQuoteSent
+    ? stringValue(requestBody.actionTargetId) ?? stringValue(requestBody.jobId)
+    : null;
+  let boundConversationId = outbox ? String(requestBody.conversationId ?? "") : "";
+  let boundCustomerId: string | null = null;
+  if (!outbox || requestedJobTarget) {
+    const binding = await resolveBinding();
+    if (!binding) {
+      return jsonResponse({ error: "Unable to bind WhatsApp conversation" }, 500);
+    }
+    boundConversationId = String(binding.conversation_id ?? "");
+    boundCustomerId = stringValue(binding.customer_id) ?? null;
   }
-  const boundConversationId = String((bindingResult as JsonRecord).conversation_id ?? "");
-  const boundCustomerId = stringValue((bindingResult as JsonRecord).customer_id);
   if (
     !boundConversationId ||
     (visibleConversation && boundConversationId !== String(visibleConversation.id))
@@ -774,10 +983,29 @@ serve(async (req) => {
     return jsonResponse({ error: "Attachment does not belong to this conversation" }, 409);
   }
 
+  // The Graph context must identify a real message of this bound recipient.
+  // Validate before the provider side effect, including direct (non-outbox)
+  // requests; the database independently constructs the durable quote preview.
+  const replyExternalId = stringValue(requestBody.replyToMessageId)?.trim();
+  if (replyExternalId) {
+    const { data: replyTarget, error: replyError } = await adminClient
+      .from("messages")
+      .select("id")
+      .eq("tenant_id", tenantId)
+      .eq("conversation_id", boundConversationId)
+      .eq("external_provider", "whatsapp")
+      .eq("external_message_id", replyExternalId)
+      .maybeSingle();
+    if (replyError) {
+      return jsonResponse({ error: "Unable to validate reply target" }, 503);
+    }
+    if (!replyTarget) {
+      return jsonResponse({ error: "Reply target must belong to this conversation" }, 400);
+    }
+    requestBody.replyToMessageId = replyExternalId;
+  }
+
   let verifiedActionJobId: string | null = null;
-  const requestedJobTarget = requestBody.actionKind === "job" || requestBody.markQuoteSent
-    ? stringValue(requestBody.actionTargetId) ?? stringValue(requestBody.jobId)
-    : null;
   if (requestedJobTarget) {
     if (!visibleConversation || !boundCustomerId) {
       return jsonResponse({ error: "Job action requires a customer-bound conversation" }, 409);
@@ -862,9 +1090,21 @@ serve(async (req) => {
     ? "image"
     : requestBody.type === "document"
     ? "file"
+    : requestBody.type === "audio"
+    ? "file"
     : requestBody.actionType
     ? "action_request"
     : "text";
+
+  const directSendEnabled = directSendResolution.enabled && directSendPolicyBlock == null;
+  let deliveryStrategyUsed = directSendEnabled
+    ? directSendUtilityStrategy
+    : directSendResolution.requested && directSendPolicyBlock != null
+    ? "classic_template_policy_fallback"
+    : requestBody.type === "template"
+    ? "classic_template"
+    : "service";
+  let directSendRejection: unknown = null;
 
   const buildMessageMetadata = (extra: JsonRecord = {}) => ({
     ...Object.fromEntries(
@@ -885,15 +1125,36 @@ serve(async (req) => {
           "storagePath",
           "storage_path",
           "attachment_id",
+          "external_status",
+          "whatsapp_status",
+          "meta_status",
+          "external_message_id",
+          "server_message_id",
+          "outcome_unknown",
+          "retry_disabled",
+          "pending",
+          "reply_to",
+          "reply_to_external_message_id",
         ].includes(key)
       ),
     ),
     channel: "whatsapp",
     provider: "whatsapp",
+    ...(replyExternalId ? { reply_to_external_message_id: replyExternalId } : {}),
     phone_number_id: channel.phone_number_id,
     display_phone_number: channel.display_phone_number,
     external_wa_id: normalizedPhone,
     outbound_type: requestBody.type,
+    delivery_strategy_requested: directSendResolution.requested
+      ? directSendUtilityStrategy
+      : requestBody.type === "template"
+      ? "classic_template"
+      : "service",
+    delivery_strategy: deliveryStrategyUsed,
+    direct_send_eligible: directSendEnabled,
+    direct_send_resolution: directSendPolicyBlock?.reason ?? directSendResolution.reason,
+    direct_send_policy_detail: directSendPolicyBlock?.detail ?? null,
+    direct_send_rejection: directSendRejection,
     ...(prepared.attachment?.metadata ?? {}),
     ...(requestBody.documentFilename
       ? {
@@ -936,15 +1197,30 @@ serve(async (req) => {
     }
 
     const persistStartedAt = Date.now();
+    const binding = await resolveBinding();
+    if (!binding) {
+      throw new WhatsAppPersistenceError(
+        "Unable to bind WhatsApp conversation",
+        "binding",
+      );
+    }
     logTiming("persist_binding_ready", {
       persist_elapsed_ms: Date.now() - persistStartedAt,
-      conversation_id: (bindingResult as JsonRecord).conversation_id,
+      conversation_id: binding.conversation_id,
     });
 
-    const { data: insertedMessage, error: insertError } = await adminClient
+    if (outbox) {
+      await outbox.persist({
+        externalMessageId, externalStatus, metadata,
+        content: getMessageContent(requestBody), type: messageType,
+      });
+    }
+    const { data: insertedMessage, error: insertError } = outbox
+      ? { data: { id: outbox.messageId }, error: null }
+      : await adminClient
       .from("messages")
       .insert({
-        conversation_id: (bindingResult as JsonRecord).conversation_id,
+        conversation_id: binding.conversation_id,
         sender_id: userId,
         tenant_id: tenantId,
         content: getMessageContent(requestBody),
@@ -972,7 +1248,7 @@ serve(async (req) => {
       );
     }
 
-    if (prepared.attachment) {
+    if (prepared.attachment && !outbox) {
       const attachmentUpdate = externalStatus !== "failed"
         ? {
           status: "attached",
@@ -1019,20 +1295,24 @@ serve(async (req) => {
       }
     }
 
-    if (externalMessageId) {
-      logTiming("persist_message_inserted", {
-        persist_elapsed_ms: Date.now() - persistStartedAt,
-      });
-      await replayStoredWhatsAppStatus(adminClient, externalMessageId);
-      logTiming("persist_status_replayed", {
-        persist_elapsed_ms: Date.now() - persistStartedAt,
-      });
-    }
-
-    await adminClient
-      .from("whatsapp_conversation_bindings")
-      .update({ last_outbound_at: new Date().toISOString() })
-      .eq("id", (bindingResult as JsonRecord).binding_id);
+    logTiming("persist_message_inserted", {
+      persist_elapsed_ms: Date.now() - persistStartedAt,
+    });
+    // The message row is durable at this point; that is what the caller's
+    // first check mark means. A status that arrived before the row and the
+    // binding's last-outbound stamp are projections, so they complete after
+    // the response instead of holding it.
+    deferAfterResponse(
+      Promise.all([
+        externalMessageId
+          ? replayStoredWhatsAppStatus(adminClient, externalMessageId)
+          : Promise.resolve(),
+        adminClient
+          .from("whatsapp_conversation_bindings")
+          .update({ last_outbound_at: new Date().toISOString() })
+          .eq("id", binding.binding_id),
+      ]),
+    );
 
     if (
       externalStatus === "accepted" &&
@@ -1159,13 +1439,23 @@ serve(async (req) => {
   });
 
   let graphPayload: JsonRecord;
+  let classicTemplatePayload: JsonRecord | null = null;
   try {
-    graphPayload = buildGraphPayload(
+    const standardPayload = buildGraphPayload(
       requestBody,
       normalizedPhone,
       mediaUpload.mediaId,
       actionRevisionMs,
     );
+    if (directSendEnabled && directSendResolution.body) {
+      classicTemplatePayload = standardPayload;
+      graphPayload = buildDirectSendUtilityPayload({
+        to: normalizedPhone,
+        body: directSendResolution.body,
+      });
+    } else {
+      graphPayload = standardPayload;
+    }
   } catch (error) {
     return await persistFailureResponse({
       code: "invalid_graph_payload",
@@ -1182,7 +1472,14 @@ serve(async (req) => {
     });
   }
 
-  logTiming("graph_request_start");
+  // Fence immediately before the first message POST, not before media upload.
+  // If the lease expired, the old worker must not reach Meta.
+  if (outbox && !await outbox.beforeProviderSend()) {
+    return jsonResponse({ error: "Outbox send lease is no longer valid" }, 409);
+  }
+  logTiming("graph_request_start", {
+    delivery_strategy: deliveryStrategyUsed,
+  });
   let graphResponse: Response;
   try {
     graphResponse = await fetch(
@@ -1194,6 +1491,7 @@ serve(async (req) => {
           "Content-Type": "application/json",
         },
         body: JSON.stringify(graphPayload),
+        signal: AbortSignal.timeout(30_000),
       },
     );
   } catch (error) {
@@ -1211,7 +1509,54 @@ serve(async (req) => {
   }
 
   logTiming("graph_response_headers", { status: graphResponse.status });
-  const graphResult = await graphResponse.json().catch(() => ({}));
+  let graphResult = await graphResponse.json().catch(() => ({}));
+  if (!graphResponse.ok && classicTemplatePayload) {
+    directSendRejection = {
+      http_status: graphResponse.status,
+      response: graphResult,
+    };
+    deliveryStrategyUsed = "classic_template_fallback";
+    graphPayload = classicTemplatePayload;
+    logTiming("direct_send_rejected_fallback_start", {
+      status: graphResponse.status,
+    });
+    try {
+      graphResponse = await fetch(
+        `https://graph.facebook.com/${WHATSAPP_API_VERSION}/${channel.phone_number_id}/messages`,
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${WHATSAPP_ACCESS_TOKEN}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(graphPayload),
+          signal: AbortSignal.timeout(30_000),
+        },
+      );
+    } catch (error) {
+      logTiming("direct_send_fallback_outcome_unknown");
+      console.error(
+        "❌ [WHATSAPP-SEND] Classic template fallback outcome unknown",
+        error,
+      );
+      return await persistFailureResponse({
+        code: "whatsapp_graph_outcome_unknown",
+        message: "WhatsApp did not return a fallback delivery receipt",
+        details: { error: String(error) },
+        httpStatus: whatsappProviderFailureHttpStatus({ outcomeUnknown: true }),
+        externalStatus: null,
+        outcomeUnknown: true,
+        metadata: {
+          graph_payload: graphPayload,
+          direct_send_rejection: directSendRejection,
+        },
+      });
+    }
+    graphResult = await graphResponse.json().catch(() => ({}));
+    logTiming("direct_send_fallback_response", {
+      status: graphResponse.status,
+    });
+  }
   if (!graphResponse.ok) {
     logTiming("graph_request_failed", { status: graphResponse.status });
     console.error("❌ [WHATSAPP-SEND] Graph API error", graphResult);
@@ -1225,6 +1570,8 @@ serve(async (req) => {
       metadata: {
         graph_payload: graphPayload,
         graph_response: graphResult,
+        provider_http_status: graphResponse.status,
+        direct_send_rejection: directSendRejection,
       },
     });
   }
@@ -1254,6 +1601,55 @@ serve(async (req) => {
     external_message_id: externalMessageId,
   });
 
+  // Una reacción anota un mensaje que ya existe: no persiste uno nuevo. Sale
+  // antes de `persistOutboundMessage` por la misma razón que el webhook la
+  // saca del camino de ingreso — tratarla como mensaje es lo que ensuciaba el
+  // chat y levantaba no-leídos falsos.
+  if (requestBody.type === "reaction") {
+    const emoji = (requestBody.reactionEmoji ?? "").trim();
+    if (emoji === "") {
+      await adminClient
+        .from("message_reactions")
+        .delete()
+        .eq("message_id", requestBody.reactionToMessageId)
+        .eq("reactor_user_id", userId);
+    } else {
+      const { error: reactionError } = await adminClient
+        .from("message_reactions")
+        .upsert({
+          tenant_id: tenantId,
+          message_id: requestBody.reactionToMessageId,
+          conversation_id: requestBody.reactionConversationId,
+          reactor_user_id: userId,
+          emoji,
+          external_provider: "whatsapp",
+          external_message_id: externalMessageId,
+          updated_at: new Date().toISOString(),
+        }, { onConflict: "message_id, reactor_key" });
+      if (reactionError) {
+        console.error(
+          "❌ [WHATSAPP-SEND] Reaction accepted by provider but not stored",
+          reactionError,
+        );
+        return jsonResponse({
+          ok: false,
+          accepted: true,
+          error: "reaction_not_persisted",
+          details: reactionError.message,
+          external_message_id: externalMessageId,
+        }, 500);
+      }
+    }
+    logTiming("response_returning", { reaction: true });
+    return jsonResponse({
+      ok: true,
+      accepted: true,
+      reaction: true,
+      external_message_id: externalMessageId,
+      graph_result: graphResult,
+    });
+  }
+
   try {
     const persisted = await persistOutboundMessage({
       externalMessageId,
@@ -1277,7 +1673,9 @@ serve(async (req) => {
     });
     return jsonResponse({
       ...receipt,
+      delivery_strategy: deliveryStrategyUsed,
       graph_result: graphResult,
+      timings,
     });
   } catch (error) {
     console.error(
@@ -1300,4 +1698,8 @@ serve(async (req) => {
       retry_safe: false,
     }, 500);
   }
-});
+}
+
+// The worker imports the same validation/template/delivery implementation.
+// Importing it must not start the legacy HTTP server in the worker isolate.
+if (import.meta.main) serve((req) => handleWhatsAppSend(req));

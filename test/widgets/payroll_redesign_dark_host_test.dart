@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:vinabike_erp/modules/hr/models/payroll_voucher.dart';
+import 'package:vinabike_erp/modules/hr/payroll/payment_workspace/payroll_payment_workspace.dart';
 import 'package:vinabike_erp/modules/hr/payroll/payroll_redesign_page.dart';
 import 'package:vinabike_erp/shared/themes/app_theme.dart';
 import 'package:vinabike_erp/shared/themes/appearance_preset.dart';
@@ -189,6 +190,22 @@ void main() {
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
 
+    Future<void> closePaymentWorkspace() async {
+      await tester.tap(
+        find.descendant(
+          of: find.byType(PayrollPaymentWorkspace),
+          matching: find.byTooltip('Cerrar'),
+        ),
+      );
+      await tester.pumpAndSettle();
+      final discard = find.widgetWithText(FilledButton, 'Descartar cambios');
+      if (discard.evaluate().isNotEmpty) {
+        await tester.tap(discard);
+        await tester.pumpAndSettle();
+      }
+      expect(find.byType(PayrollPaymentWorkspace), findsNothing);
+    }
+
     for (final preset in AppearancePresets.all) {
       for (final brightness in Brightness.values) {
         final theme = AppTheme.resolve(preset: preset, brightness: brightness);
@@ -222,18 +239,14 @@ void main() {
             reason: '$cell fila pendiente visible');
         expect(find.textContaining('Pagar'), findsWidgets,
             reason: '$cell alguna acción Pagar visible');
-        // Overlays are part of the dark-completeness gate: exercise the
-        // real transfer composer, cash confirmation and payment evidence
-        // through their canonical entry points while the initial Semanas
-        // scope is active.
+        // Overlays are part of the dark-completeness gate: transfer and cash
+        // must open the exact same canonical payment workspace.
         await tester.tap(find.text('Pagar').first);
         await tester.pumpAndSettle();
-        expect(tester.takeException(), isNull, reason: '$cell composer');
-        assertNoDarkRegression('composer');
-        await tester.tap(
-          find.byKey(const ValueKey<String>('payroll-composer-close')),
-        );
-        await tester.pumpAndSettle();
+        expect(find.byType(PayrollPaymentWorkspace), findsOneWidget);
+        expect(tester.takeException(), isNull, reason: '$cell workspace');
+        assertNoDarkRegression('workspace');
+        await closePaymentWorkspace();
 
         // Efectivo y transferencia comparten el verbo `Pagar`: la fila de
         // efectivo se identifica por su persona.
@@ -243,12 +256,10 @@ void main() {
           ),
         );
         await tester.pumpAndSettle();
+        expect(find.byType(PayrollPaymentWorkspace), findsOneWidget);
         expect(tester.takeException(), isNull, reason: '$cell efectivo');
         assertNoDarkRegression('efectivo');
-        await tester.tap(
-          find.byKey(const ValueKey<String>('payroll-cash-close')),
-        );
-        await tester.pumpAndSettle();
+        await closePaymentWorkspace();
 
         await tester.tap(
           find.byKey(

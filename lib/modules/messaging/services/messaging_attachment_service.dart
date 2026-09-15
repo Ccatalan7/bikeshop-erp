@@ -565,16 +565,32 @@ class MessagingAttachmentService {
   Future<MessagingAttachmentPublishResult> publish({
     required ReservedMessagingAttachment reservation,
     String? caption,
+    String? threadRootMessageId,
+    String? replyToMessageId,
   }) async {
     final request = MessagingAttachmentPublishRequest(
       attachmentId: reservation.id,
       caption: caption,
     );
     final coordinator = MessagingAttachmentPublishCoordinator(
-      send: (params) => _client.rpc(
-        'publish_messaging_attachment',
-        params: params,
-      ),
+      send: (params) => replyToMessageId != null
+          ? _client.rpc('publish_messaging_attachment_reply_v1', params: {
+              ...params,
+              'p_reply_to_message_id': replyToMessageId,
+              'p_thread_root_message_id': threadRootMessageId,
+            })
+          : threadRootMessageId == null
+              ? _client.rpc(
+                  'publish_messaging_attachment',
+                  params: params,
+                )
+              : _client.rpc(
+                  'publish_messaging_attachment_in_thread_v1',
+                  params: {
+                    ...params,
+                    'p_thread_root_message_id': threadRootMessageId,
+                  },
+                ),
       readback: (attachmentId) => _client
           .from('messaging_attachments')
           .select('id, status, message_id, failure_code')
@@ -650,6 +666,19 @@ class MessagingAttachmentService {
       // A terminal registry row remains safe even if physical cleanup needs
       // the bounded server-side reclaim worker later.
     }
+  }
+
+  /// Path of the playback twin a voice note carries (a WAV the media
+  /// function stored next to the OGG/Opus original), or `null`.
+  static String? playbackStoragePath(Message message) =>
+      _nonEmpty(message.metadata['playback_storage_path']);
+
+  /// Fresh authorisation for one private object by path.
+  Future<String?> createSignedUrlForPath(String path) {
+    return _client.storage.from(bucketName).createSignedUrl(
+          path,
+          signedUrlLifetimeSeconds,
+        );
   }
 
   Future<String?> createRuntimeSignedUrl(Message message) async {

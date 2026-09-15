@@ -96,6 +96,36 @@ insert into public.mechanic_jobs(
     'pending', clock_timestamp() + interval '7 days', 'PRESUPUESTO'
   );
 
+-- Approval now requires a real proposal line. These zero-priced inspection
+-- rows keep this test focused on inactive bicycle resolution and side effects.
+insert into public.mechanic_job_items(
+  id, tenant_id, job_id, product_name, item_type, quantity, unit_price
+) values
+  (
+    '99616700-0000-4000-8000-000000000081',
+    '99616700-0000-4000-8000-000000000001',
+    '99616700-0000-4000-8000-000000000061',
+    'Inspection', 'service', 1, 0
+  ),
+  (
+    '99616700-0000-4000-8000-000000000082',
+    '99616700-0000-4000-8000-000000000001',
+    '99616700-0000-4000-8000-000000000062',
+    'Inspection', 'service', 1, 0
+  ),
+  (
+    '99616700-0000-4000-8000-000000000083',
+    '99616700-0000-4000-8000-000000000001',
+    '99616700-0000-4000-8000-000000000063',
+    'Inspection', 'service', 1, 0
+  ),
+  (
+    '99616700-0000-4000-8000-000000000084',
+    '99616700-0000-4000-8000-000000000001',
+    '99616700-0000-4000-8000-000000000064',
+    'Inspection', 'service', 1, 0
+  );
+
 insert into public.mechanic_job_bikes(
   id, tenant_id, job_id, bike_id, order_index
 ) values (
@@ -153,8 +183,8 @@ select throws_ok(
     null, null, '99616700-0000-4000-8000-000000000112'
   )$$,
   '23514',
-  'Selecciona una bicicleta activa del mismo cliente antes de convertir la cotización.',
-  'a persisted inactive primary bicycle cannot convert an approved quotation'
+  'El presupuesto de servicio no conserva ninguna bicicleta recibida; reábrelo y corrige la ficha antes de convertirlo.',
+  'a service-budget facade without its received-bike graph cannot convert from a header bicycle alone'
 );
 
 select throws_ok(

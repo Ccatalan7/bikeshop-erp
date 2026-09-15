@@ -70,9 +70,9 @@ class _SmartImportOptionsDialogState extends State<SmartImportOptionsDialog> {
                       setState(() => _selectedMode = value!);
                     },
                   )),
-              
+
               const Divider(height: 32),
-              
+
               // Match field selection
               const Text(
                 'Campo de Coincidencia',
@@ -100,10 +100,10 @@ class _SmartImportOptionsDialogState extends State<SmartImportOptionsDialog> {
                   setState(() => _matchField = value!);
                 },
               ),
-              
+
               if (widget.availableUpdateFields != null) ...[
                 const Divider(height: 32),
-                
+
                 // Fields to update
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -161,7 +161,7 @@ class _SmartImportOptionsDialogState extends State<SmartImportOptionsDialog> {
                   ),
                 ),
               ],
-              
+
               const SizedBox(height: 16),
               Container(
                 padding: const EdgeInsets.all(12),
@@ -247,9 +247,9 @@ class ImportConflictPreviewDialog extends StatelessWidget {
                 ],
               ),
             ),
-            
+
             const SizedBox(height: 16),
-            
+
             // Conflicts list
             if (result.conflicts.isNotEmpty) ...[
               const Text(

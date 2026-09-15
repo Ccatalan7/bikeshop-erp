@@ -1,0 +1,437 @@
+{
+  "schema_version": 1,
+  "approval_scope": "field_representation",
+  "base_sha256": "9f2d93b830a5118fbe2757e36d36756389b4b4630cf82d97ca99b7cc55d3feaa",
+  "proposal_sha256": "199366f6a937df6c3886583efbff97acfd47f22a30462b129999228c755c5a5d",
+  "patch_adjudications": [
+    {
+      "patch_id": "LPS-L-retire-power_source",
+      "decision": "aceptar",
+      "reason": "Root adopts the independently corrected representation: Retiro acotado a light aceptable sólo con sucesor representable, conservación legacy y consumidores adaptados; null no es lista de prerrequisitos válida. No migrar hechos automáticamente."
+    },
+    {
+      "patch_id": "LPS-L-retire-charge_connector",
+      "decision": "aceptar",
+      "reason": "Root adopts the independently corrected representation: Retiro acotado a light aceptable sólo con sucesor representable, conservación legacy y consumidores adaptados; null no es lista de prerrequisitos válida. No migrar hechos automáticamente."
+    },
+    {
+      "patch_id": "LPS-L-retire-battery_capacity_mah",
+      "decision": "aceptar",
+      "reason": "Root adopts the independently corrected representation: Retiro acotado a light aceptable sólo con sucesor representable, conservación legacy y consumidores adaptados; null no es lista de prerrequisitos válida. No migrar hechos automáticamente."
+    },
+    {
+      "patch_id": "LPS-L-retire-light_mount_kind",
+      "decision": "aceptar",
+      "reason": "Root adopts the independently corrected representation: Retiro acotado a light aceptable sólo con sucesor representable, conservación legacy y consumidores adaptados; null no es lista de prerrequisitos válida. No migrar hechos automáticamente."
+    },
+    {
+      "patch_id": "LPS-L-retire-mount_diameter_min_mm",
+      "decision": "aceptar",
+      "reason": "Root adopts the independently corrected representation: Retiro acotado a light aceptable sólo con sucesor representable, conservación legacy y consumidores adaptados; null no es lista de prerrequisitos válida. No migrar hechos automáticamente."
+    },
+    {
+      "patch_id": "LPS-L-retire-mount_diameter_max_mm",
+      "decision": "aceptar",
+      "reason": "Root adopts the independently corrected representation: Retiro acotado a light aceptable sólo con sucesor representable, conservación legacy y consumidores adaptados; null no es lista de prerrequisitos válida. No migrar hechos automáticamente."
+    },
+    {
+      "patch_id": "LPS-L-retire-ip_rating",
+      "decision": "aceptar",
+      "reason": "Root adopts the independently corrected representation: Retiro acotado a light aceptable sólo con sucesor representable, conservación legacy y consumidores adaptados; null no es lista de prerrequisitos válida. No migrar hechos automáticamente."
+    },
+    {
+      "patch_id": "LPS-L-declared-total-modes_count",
+      "decision": "aceptar",
+      "reason": "Root adopts the independently corrected representation: La separación entre declaración y detalle es correcta; alinear metadata y precisar alcance. count(filas)>declarado tampoco es automáticamente una contradicción si son condiciones/afirmaciones del mismo elemento."
+    },
+    {
+      "patch_id": "LPS-L-label-modes_count",
+      "decision": "aceptar",
+      "reason": "Root adopts the independently corrected representation: Rótulo correcto. Normalizar el parche global con template=null; el rótulo no valida evidencia ni cambia unidades."
+    },
+    {
+      "patch_id": "LPS-C-declared-total-ports_count",
+      "decision": "aceptar",
+      "reason": "Root adopts the independently corrected representation: La separación entre declaración y detalle es correcta; alinear metadata y precisar alcance. count(filas)>declarado tampoco es automáticamente una contradicción si son condiciones/afirmaciones del mismo elemento."
+    },
+    {
+      "patch_id": "LPS-C-label-ports_count",
+      "decision": "aceptar",
+      "reason": "Root adopts the independently corrected representation: Rótulo correcto. Normalizar el parche global con template=null; el rótulo no valida evidencia ni cambia unidades."
+    },
+    {
+      "patch_id": "LPS-E-storage-label-owner",
+      "decision": "aceptar",
+      "reason": "Root adopts the independently corrected representation: Conservar evidencia y literal es correcto. Corregir la explicación de unidades; el dato normalizado puede permanecer ausente sin convertir una unidad definida en ambigua."
+    },
+    {
+      "patch_id": "LPS-E-storage-label-text",
+      "decision": "aceptar",
+      "reason": "Root adopts the independently corrected representation: Rótulo correcto. Normalizar el parche global con template=null; el rótulo no valida evidencia ni cambia unidades."
+    },
+    {
+      "patch_id": "LPS-L-drop-mount-pair",
+      "decision": "aceptar",
+      "reason": "Root adopts the independently corrected representation: Necesario en el mismo conjunto de retiros; no dejar un par con extremos legacy. Normalizar a replace_template_coherence con preimagen present/value."
+    },
+    {
+      "patch_id": "LPS-L-members-required",
+      "decision": "aceptar",
+      "reason": "Root adopts the independently corrected representation: Recordatorio de completitud por miembro; required_missing no bloquea un borrador. Esta regla no impone exactamente una fila ni composición front/rear."
+    },
+    {
+      "patch_id": "LPS-L-modes-required",
+      "decision": "aceptar",
+      "reason": "Root adopts the independently corrected representation: El cambio puede servir como recordatorio no bloqueante; su justificación original es falsa: no se retiran lumens_claimed/modes_count. No convertirlo en requisito físico de modos discretos para toda luz."
+    },
+    {
+      "patch_id": "LPS-L-members-schema",
+      "decision": "aceptar",
+      "reason": "Root adopts the independently corrected representation: Conservar IP como texto y norma literal separada; no forzar IEC. El rótulo humano no identifica un miembro físico: row.id permite dos luces de igual nombre. Ampliar alimentación antes del retiro escalar."
+    },
+    {
+      "patch_id": "LPS-L-modes-schema",
+      "decision": "aceptar",
+      "reason": "Root adopts the independently corrected representation: Revisión OEM física identificada es distinta de edición documental/fecha de consulta. Retirar unique_by de nombres; preservar condiciones. Alternativas de fuente del mismo Group Ride permanecen fuera de los valores canónicos hasta adjudicar variante."
+    },
+    {
+      "patch_id": "LPS-L-link-labels",
+      "decision": "aceptar",
+      "reason": "Root adopts the independently corrected representation: Sólo presentación de row.id ya existente; la revisión se muestra únicamente si es revisión OEM identificada. Nunca poner retrievaldate en esa celda."
+    },
+    {
+      "patch_id": "LPS-L-kit-roles",
+      "decision": "aceptar",
+      "reason": "Root adopts the independently corrected representation: Vocabulario de contenido, no compatibilidad ni declaración de que todos los kits incluyen esos objetos. computer/light members no se duplican por nombre; sólo una identidad de miembro enlazada permite probar doble conteo."
+    },
+    {
+      "patch_id": "LPS-C-sensor-schema",
+      "decision": "aceptar",
+      "reason": "Root adopts the independently corrected representation: Añadir transporte desconocido es honesto; unique_by tipo/transporte no respeta perfiles/modelos. Scope es requerido como completitud; supported se interpreta únicamente en ese alcance. Añadir montaje del sensor como fitment, no contenido vendido."
+    },
+    {
+      "patch_id": "LPS-C-retire-sensor_mount",
+      "decision": "aceptar",
+      "reason": "Root adopts the independently corrected representation: Retirar resumen ambiguo sin transformar sensores compatibles en incluidos. computer_contents para envase; montaje de un sensor compatible en su fila con alcance/modelo, o legacy pendiente."
+    },
+    {
+      "patch_id": "LPS-E-protocol-scope",
+      "decision": "aceptar",
+      "reason": "Root adopts the independently corrected representation: La declaración global sigue siendo necesaria: la fuente Anker no distribuye sus tecnologías por puerto. Conservar el escalar como afirmación de alcance de dispositivo; no igualarlo a detalle portuario."
+    },
+    {
+      "patch_id": "LPS-E-link-labels",
+      "decision": "aceptar",
+      "reason": "Root adopts the independently corrected representation: Rótulo informativo; no infiere protocolos ni potencia. Referencia sigue siendo row.id y requiere normalización de op."
+    },
+    {
+      "patch_id": "LPS-E-port-profiles",
+      "decision": "aceptar",
+      "reason": "Root adopts the independently corrected representation: Fila por perfil/condición con identidad estable, protocolo literal opcional y magnitudes publicadas. Rango máximo no es exclusivo PPS; no deducir V/A/W ni capacidad agregada. Nuevos perfiles no cambian el esquema existente."
+    },
+    {
+      "patch_id": "LPS-E-port-profiles-link",
+      "decision": "aceptar",
+      "reason": "The added profile targets its physical port by stable row ID; no protocol, rating or assembly inference."
+    }
+  ],
+  "independent_review_file": "light-power-sensor-independent-adjudication-2026-09-07.json",
+  "independent_review_sha256": "04883ccc4b57283195beff02393bd072a71e87981009170683d2b0f7fd788a80",
+  "original_proposal_file": "light-power-sensor-sanitation-2026-09-07.json",
+  "original_proposal_sha256": "0f3685983e76efc3aa605ad63ecba70051e5c3b4ef8ccc0dd03047391b7cae47",
+  "automatic_fill_authorized": false,
+  "mechanical_coverage_complete": false,
+  "source_scope": "Root accepted representation and corrected evidence examples only; no attribution to any inventory product.",
+  "residual_gates": [
+    {
+      "id": "G-NORMALIZE",
+      "closed": false,
+      "requirement": "Root normaliza los 25 parches a protocolo real. Usar new_definitions separado; replace_unpublished_rows_schema con before completo; etiquetas globales template=null; add_field separado de replace_template_coherence; no aplicar este dictamen directamente."
+    },
+    {
+      "id": "G-LEGACY",
+      "closed": false,
+      "requirement": "Antes de cambios de metadata, root verifica hechos/referencias existentes y backup/versiones. Retiros preservan IDs/valores/procedencia. origin=new en JSON no demuestra ausencia de hechos en DB."
+    },
+    {
+      "id": "G-ROWS",
+      "closed": false,
+      "requirement": "Validar schemas finales y condiciones SQL/Dart sobre snapshot integrado. Cualquier evolución con hechos requiere migración explícita. Esta revisión no consulta DB ni valida despliegue."
+    },
+    {
+      "id": "G-REFERENCE",
+      "closed": false,
+      "requirement": "Conflictos/ediciones de fuente se conservan fuera de canonical values y se vinculan a identidad/variante exacta. Fecha de consulta jamás es member_revision. Modelo/generación desconocidos permanecen pendientes."
+    },
+    {
+      "id": "G-SCOPE",
+      "closed": false,
+      "requirement": "ID de fila garantiza identidad estructural, no suficiencia del alcance ni consistencia entre afirmaciones. Resolver duplicados reales, condiciones, completitud por entidad y exclusiones antes de canonicalizar o aprobar compatibilidad."
+    },
+    {
+      "id": "G-CONSUMERS",
+      "closed": false,
+      "requirement": "Filtros, búsqueda, facetas y comparador deben adoptar filas/alcances antes de retirar sus fuentes escalares. No extrapolar supported de tipo a modelo, ni declaración global de carga a cada puerto."
+    },
+    {
+      "id": "G-RUNTIME",
+      "closed": false,
+      "requirement": "Root verifica editor/UI y transporte final. Nuevo product_spec_row_conditions.dart local está en desarrollo; no se declara desplegado ni sustituye evidencia SQL. Los overrides aquí sólo dependen de rows_schema v1/0200."
+    },
+    {
+      "id": "G-FILL",
+      "closed": false,
+      "requirement": "No comenzar llenado desde fixtures. Resolver identidad de cada producto, fuente exacta, revisión y recibo de backup/aplicación. Este trabajo escribe cero productos."
+    }
+  ],
+  "case_replacements": {
+    "light_cateye_ampp800_viz300_kit": {
+      "before_sha256": "6949838f1e4ba0da86b7045084639e0fcbfb7de199fa812db9817b914bcf160d",
+      "after": {
+        "id": "light_cateye_ampp800_viz300_kit",
+        "template": "light",
+        "kind": "documentary_conflict_pending",
+        "source_ids": [
+          "S-CATEYE-WEB",
+          "S-CATEYE-MANUAL-LD810"
+        ],
+        "values": {
+          "light_position": "Juego delantera + trasera",
+          "light_member_configurations": {
+            "schema_version": 1,
+            "rows": [
+              {
+                "id": "m-front",
+                "values": {
+                  "member_id": "AMPP800 (HL-EL088RC)",
+                  "position": "Delantera",
+                  "battery_kind": "Li-ion integrada",
+                  "battery_capacity_mah": "2500",
+                  "charge_connector": "Micro-USB",
+                  "ip_rating": "IPX4"
+                },
+                "sources": [
+                  "https://www.cateye.com/intl/products/headlights/HL-EL088RC_TL-LD810/"
+                ]
+              },
+              {
+                "id": "m-rear",
+                "values": {
+                  "member_id": "ViZ300 (TL-LD810)",
+                  "position": "Trasera",
+                  "battery_kind": "Li-ion integrada",
+                  "battery_capacity_mah": "800",
+                  "battery_voltage_v": "3.7",
+                  "charge_connector": "Micro-USB",
+                  "mount_kind": "Abrazadera de tija",
+                  "mount_diameter_min_mm": "21.5",
+                  "mount_diameter_max_mm": "32",
+                  "mount_circumference_max_mm": "130",
+                  "ip_rating": "IPX4",
+                  "ip_standard": "JIS C0920 (manual TLLD810/820-201223 1)"
+                },
+                "sources": [
+                  "https://www.cateye.com/intl/products/headlights/HL-EL088RC_TL-LD810/",
+                  "https://www.cateye.com/intl/support/manual/data/doc/TL-LD810_820_HP_ENG_v1.pdf"
+                ]
+              }
+            ]
+          }
+        },
+        "expected_issues": [
+          {
+            "code": "required_missing",
+            "field": "light_mode_configurations",
+            "blocking": false
+          }
+        ],
+        "note": "Una batería documentada requiere el manual en sources de su fila. Edición del manual y fecha web no se convierten en revisión del miembro. Dos alternativas documentales no son dos modos simultáneos.",
+        "inventory_write": false,
+        "evidence_scope": "Reference/representation example only, never an inventory attribution",
+        "competing_source_observations": [
+          {
+            "mode": "Group Ride",
+            "lumens": "100",
+            "runtime_h": "8",
+            "source_url": "https://www.cateye.com/intl/products/headlights/HL-EL088RC_TL-LD810/",
+            "document_scope": "Anterior a Spec change; fecha de transición/serie física desconocidas"
+          },
+          {
+            "mode": "Group Ride",
+            "lumens": "15",
+            "runtime_h": "10",
+            "source_url": "https://www.cateye.com/intl/products/headlights/HL-EL088RC_TL-LD810/",
+            "document_scope": "Vigente tras Spec change; atribución de unidad física desconocida"
+          }
+        ],
+        "capture_decision": "No canonical Group Ride observation until physical variant is resolved; competing_source_observations is review metadata, not rows_schema DSL.",
+        "automatic_fill_authorized": false,
+        "facts_verified_for_product": false,
+        "expected_blocking": [],
+        "root_reconciliation": [
+          "Replaced only the research fixture with its corrected OEM/source scope; no product observation was changed."
+        ]
+      },
+      "reviewed_case_id": "light_kit_cateye_group_ride_two_revisions"
+    },
+    "consumer_electronics_anker_a2667_ports_and_budget": {
+      "before_sha256": "7670cacac445c0aca9d6ae2a016233bead90e529dd517958bf13d1f73d7e6fed",
+      "after": {
+        "id": "consumer_electronics_anker_a2667_ports_and_budget",
+        "template": "consumer_electronics",
+        "kind": "valid",
+        "source_ids": [
+          "S-ANKER-A2667"
+        ],
+        "values": {
+          "device_kind": "Cargador",
+          "rated_power_w": "65",
+          "ports_count": "3",
+          "spec_evidence_source": "Ficha de soporte Anker A2667, leída 2026-09-07",
+          "power_port_configurations": {
+            "schema_version": 1,
+            "rows": [
+              {
+                "id": "p-c1",
+                "values": {
+                  "port_id": "USB-C 1",
+                  "connector": "USB-C",
+                  "direction": "Salida",
+                  "max_power_w": "65"
+                },
+                "sources": [
+                  "https://service.anker.com/product-description/a085g000004x2BVAAY?recordId=a085g000004x2BVAAY"
+                ]
+              },
+              {
+                "id": "p-c2",
+                "values": {
+                  "port_id": "USB-C 2",
+                  "connector": "USB-C",
+                  "direction": "Salida",
+                  "max_power_w": "65"
+                },
+                "sources": [
+                  "https://service.anker.com/product-description/a085g000004x2BVAAY?recordId=a085g000004x2BVAAY"
+                ]
+              },
+              {
+                "id": "p-a",
+                "values": {
+                  "port_id": "USB-A",
+                  "connector": "USB-A",
+                  "direction": "Salida",
+                  "max_power_w": "22.5"
+                },
+                "sources": [
+                  "https://service.anker.com/product-description/a085g000004x2BVAAY?recordId=a085g000004x2BVAAY"
+                ]
+              }
+            ]
+          },
+          "power_budget_configurations": {
+            "schema_version": 1,
+            "rows": [
+              {
+                "id": "b1",
+                "values": {
+                  "configuration": "C1 + C2",
+                  "port_id": "p-c1",
+                  "power_w": "45"
+                },
+                "sources": [
+                  "https://service.anker.com/product-description/a085g000004x2BVAAY?recordId=a085g000004x2BVAAY"
+                ]
+              },
+              {
+                "id": "b2",
+                "values": {
+                  "configuration": "C1 + C2",
+                  "port_id": "p-c2",
+                  "power_w": "20"
+                },
+                "sources": [
+                  "https://service.anker.com/product-description/a085g000004x2BVAAY?recordId=a085g000004x2BVAAY"
+                ]
+              },
+              {
+                "id": "b3",
+                "values": {
+                  "configuration": "C2 + A",
+                  "port_id": "p-c2",
+                  "power_w": "12"
+                },
+                "sources": [
+                  "https://service.anker.com/product-description/a085g000004x2BVAAY?recordId=a085g000004x2BVAAY"
+                ]
+              },
+              {
+                "id": "b4",
+                "values": {
+                  "configuration": "C2 + A",
+                  "port_id": "p-a",
+                  "power_w": "12"
+                },
+                "sources": [
+                  "https://service.anker.com/product-description/a085g000004x2BVAAY?recordId=a085g000004x2BVAAY"
+                ]
+              }
+            ]
+          },
+          "charging_protocol_claim": "PPS; PIQ 3.0; PIQ 2.0 (declaración global de la ficha A2667)"
+        },
+        "expected_issues": [],
+        "note": "Tres puertos y repartos de la ficha exacta. Protocolos se conservan globales: la fuente no los asigna a C1/C2/A. 65 W se interpreta sólo como potencia nominal declarada, nunca suma o máximo agregado calculado. Perfil V/A de salida desconocido en la página leída; input de red no es output.",
+        "inventory_write": false,
+        "evidence_scope": "Reference/representation example only, never an inventory attribution",
+        "automatic_fill_authorized": false,
+        "facts_verified_for_product": false,
+        "expected_blocking": [],
+        "root_reconciliation": [
+          "Replaced only the research fixture with its corrected OEM/source scope; no product observation was changed."
+        ]
+      },
+      "reviewed_case_id": "charger_anker_a2667_ports_budget_profiles_unknown"
+    },
+    "light_inventory_ae_kit_pending": {
+      "before_sha256": "c7549cec95e1596dba0949bc8cbe8cf71a1c69ed6e1c3c60bdcd2d8fe81a50b4",
+      "after": {
+        "id": "light_inventory_ae_kit_pending",
+        "template": "light",
+        "kind": "unknown",
+        "source_ids": [
+          "S-INVENTARIO"
+        ],
+        "inventory_product": "Juego de luces delantera + trasera AE",
+        "values": {},
+        "expected_issues": [
+          {
+            "code": "required_missing",
+            "field": "light_position",
+            "blocking": false
+          },
+          {
+            "code": "required_missing",
+            "field": "light_member_configurations",
+            "blocking": false
+          },
+          {
+            "code": "required_missing",
+            "field": "light_mode_configurations",
+            "blocking": false
+          }
+        ],
+        "note": "El título guía investigación; ni light_position ni una cantidad se asignan desde este fixture al inventario.",
+        "inventory_write": false,
+        "evidence_scope": "Reference/representation example only, never an inventory attribution",
+        "automatic_fill_authorized": false,
+        "facts_verified_for_product": false,
+        "expected_blocking": [],
+        "root_reconciliation": [
+          "Replaced only the research fixture with its corrected OEM/source scope; no product observation was changed."
+        ]
+      },
+      "reviewed_case_id": "light_inventory_ae_kit_pending"
+    }
+  }
+}

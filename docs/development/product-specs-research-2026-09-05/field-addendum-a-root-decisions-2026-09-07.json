@@ -1,0 +1,2419 @@
+{
+  "schema_version": 1,
+  "approval_scope": "field_representation",
+  "reviewed_by": "Codex root",
+  "base_sha256": "7ebf2b5b5e69784e3d146b81ad2bec8b7581113565cef022e8da70ba4c7a66fa",
+  "proposal_sha256": "86c7f7d6b7360d01a771f1aaf63ddba0e63352999d65dc4ea78038da58d25440",
+  "independent_review_sha256": "4cbd9cd4e1ccb2f41ab3249cbaed83fe419689aa6ba1dbb24a5b9dd856bd66d1",
+  "independent_review_file": "field-addendum-independent-adjudication-2026-09-07.json",
+  "patch_adjudications": [
+    {
+      "patch_id": "AD-ND09-label-thread",
+      "patch_index": 0,
+      "template": null,
+      "key": "thread",
+      "path": "/definitions/thread/label",
+      "decision": "corregir",
+      "reason": "La etiqueta debe preservar que el token es una designación nominal declarada, no un diámetro medido ni rosca completa.",
+      "finding_ids": [
+        "FA01"
+      ],
+      "after_override": "Designación nominal de la rosca (según etiqueta)"
+    },
+    {
+      "patch_id": "AD-ND09-def-thread",
+      "patch_index": 1,
+      "template": null,
+      "key": "thread",
+      "path": "/definitions/thread/allowed_values",
+      "decision": "corregir",
+      "reason": "Agregar nominales métricos literales para las combinaciones mm/TPI, preservando opciones previas sin reinterpretarlas.",
+      "finding_ids": [
+        "FA01"
+      ],
+      "after_override": [
+        "M4",
+        "M5",
+        "M6",
+        "M8",
+        "M10",
+        "M12",
+        "M14",
+        "3/8\"",
+        "Otra",
+        "Desconocido / sin confirmar",
+        "M3",
+        "M7",
+        "M9",
+        "M15",
+        "M18",
+        "M19",
+        "M20",
+        "M22",
+        "5/16\"",
+        "1/2\"",
+        "9/16\"",
+        "9 mm",
+        "10 mm",
+        "36 mm",
+        "2.2 mm"
+      ]
+    },
+    {
+      "patch_id": "AD-ND09-def-head_drive",
+      "patch_index": 2,
+      "template": null,
+      "key": "head_drive",
+      "path": "/definitions/head_drive/allowed_values",
+      "decision": "aceptar",
+      "reason": "Representa una propiedad declarada sin deducir ajuste del uso; aplicar sólo junto a correcciones de rosca/kit.",
+      "finding_ids": []
+    },
+    {
+      "patch_id": "AD-ND09-fastener-thread",
+      "patch_index": 3,
+      "template": "fastener",
+      "key": "thread",
+      "path": "/templates/74/form_contract/{allowed_when,required_when}/thread",
+      "decision": "aceptar",
+      "reason": "Representa una propiedad declarada sin deducir ajuste del uso; aplicar sólo junto a correcciones de rosca/kit.",
+      "finding_ids": []
+    },
+    {
+      "patch_id": "AD-ND09-fastener-length_mm",
+      "patch_index": 4,
+      "template": "fastener",
+      "key": "length_mm",
+      "path": "/templates/74/form_contract/{allowed_when,prerequisites}/length_mm",
+      "decision": "aceptar",
+      "reason": "Representa una propiedad declarada sin deducir ajuste del uso; aplicar sólo junto a correcciones de rosca/kit.",
+      "finding_ids": []
+    },
+    {
+      "patch_id": "AD-ND09-fastener-thread_pitch_mm",
+      "patch_index": 5,
+      "template": "fastener",
+      "key": "thread_pitch_mm",
+      "path": "/templates/74/fields/- y /templates/74/form_contract/{roles,semantic_roles,allowed_when,required_when,evidence_requirements[,prerequisites,allowed_options]}/thread_pitch_mm",
+      "decision": "corregir",
+      "reason": "No condicionar mm de paso al prefijo M del diámetro.",
+      "finding_ids": [
+        "FA01"
+      ],
+      "after_override": {
+        "field_entry": {
+          "key": "thread_pitch_mm",
+          "section_key": "measurement",
+          "sort_order": 100,
+          "is_required": false,
+          "visibility_rules": [],
+          "option_rules": [],
+          "constraint_rules": []
+        },
+        "roles": "measurement",
+        "semantic_roles": "compatibility",
+        "allowed_when": {
+          "kind": "when",
+          "rows": [
+            [
+              {
+                "field": "fastener_kind",
+                "operator": "in",
+                "value_type": "token",
+                "value": [
+                  "Perno",
+                  "Tornillo",
+                  "Tuerca",
+                  "Otro"
+                ]
+              }
+            ]
+          ]
+        },
+        "required_when": {
+          "kind": "never"
+        },
+        "evidence_requirements": "package_or_label",
+        "definition_used_by_append": "fastener",
+        "prerequisites": [
+          "thread"
+        ]
+      }
+    },
+    {
+      "patch_id": "AD-ND09-fastener-thread_tpi",
+      "patch_index": 6,
+      "template": "fastener",
+      "key": "thread_tpi",
+      "path": "/templates/74/fields/- y /templates/74/form_contract/{roles,semantic_roles,allowed_when,required_when,evidence_requirements[,prerequisites,allowed_options]}/thread_tpi",
+      "decision": "corregir",
+      "reason": "No condicionar TPI a diámetro fraccional.",
+      "finding_ids": [
+        "FA01"
+      ],
+      "after_override": {
+        "field_entry": {
+          "key": "thread_tpi",
+          "section_key": "measurement",
+          "sort_order": 110,
+          "is_required": false,
+          "visibility_rules": [],
+          "option_rules": [],
+          "constraint_rules": []
+        },
+        "roles": "measurement",
+        "semantic_roles": "compatibility",
+        "allowed_when": {
+          "kind": "when",
+          "rows": [
+            [
+              {
+                "field": "fastener_kind",
+                "operator": "in",
+                "value_type": "token",
+                "value": [
+                  "Perno",
+                  "Tornillo",
+                  "Tuerca",
+                  "Otro"
+                ]
+              }
+            ]
+          ]
+        },
+        "required_when": {
+          "kind": "never"
+        },
+        "evidence_requirements": "package_or_label",
+        "definition_used_by_append": "fastener",
+        "prerequisites": [
+          "thread"
+        ]
+      }
+    },
+    {
+      "patch_id": "AD-ND09-fastener-thread_hand",
+      "patch_index": 7,
+      "template": "fastener",
+      "key": "thread_hand",
+      "path": "/templates/74/fields/- y /templates/74/form_contract/{roles,semantic_roles,allowed_when,required_when,evidence_requirements[,prerequisites,allowed_options]}/thread_hand",
+      "decision": "aceptar",
+      "reason": "Representa una propiedad declarada sin deducir ajuste del uso; aplicar sólo junto a correcciones de rosca/kit.",
+      "finding_ids": []
+    },
+    {
+      "patch_id": "AD-ND09-fastener-length_datum",
+      "patch_index": 8,
+      "template": "fastener",
+      "key": "length_datum",
+      "path": "/templates/74/fields/- y /templates/74/form_contract/{roles,semantic_roles,allowed_when,required_when,evidence_requirements[,prerequisites,allowed_options]}/length_datum",
+      "decision": "aceptar",
+      "reason": "Representa una propiedad declarada sin deducir ajuste del uso; aplicar sólo junto a correcciones de rosca/kit.",
+      "finding_ids": []
+    },
+    {
+      "patch_id": "AD-ND09-fastener-head_drive_size_mm",
+      "patch_index": 9,
+      "template": "fastener",
+      "key": "head_drive_size_mm",
+      "path": "/templates/74/fields/- y /templates/74/form_contract/{roles,semantic_roles,allowed_when,required_when,evidence_requirements[,prerequisites,allowed_options]}/head_drive_size_mm",
+      "decision": "aceptar",
+      "reason": "Representa una propiedad declarada sin deducir ajuste del uso; aplicar sólo junto a correcciones de rosca/kit.",
+      "finding_ids": []
+    },
+    {
+      "patch_id": "AD-ND09-fastener-torx_size",
+      "patch_index": 10,
+      "template": "fastener",
+      "key": "torx_size",
+      "path": "/templates/74/fields/- y /templates/74/form_contract/{roles,semantic_roles,allowed_when,required_when,evidence_requirements[,prerequisites,allowed_options]}/torx_size",
+      "decision": "corregir",
+      "reason": "Código Torx textual y un solo dueño al coexistir con tokens heredados.",
+      "finding_ids": [
+        "FA02"
+      ],
+      "after_override": {
+        "field_entry": {
+          "key": "torx_size",
+          "section_key": "measurement",
+          "sort_order": 150,
+          "is_required": false,
+          "visibility_rules": [],
+          "option_rules": [],
+          "constraint_rules": []
+        },
+        "roles": "declaration",
+        "semantic_roles": "intrinsic",
+        "allowed_when": {
+          "kind": "when",
+          "rows": [
+            [
+              {
+                "field": "head_drive",
+                "operator": "in",
+                "value_type": "token",
+                "value": [
+                  "Torx"
+                ]
+              }
+            ]
+          ]
+        },
+        "required_when": {
+          "kind": "never"
+        },
+        "evidence_requirements": "package_or_label",
+        "definition_used_by_append": "fastener"
+      }
+    },
+    {
+      "patch_id": "AD-ND09-fastener-strength_class_claim",
+      "patch_index": 11,
+      "template": "fastener",
+      "key": "strength_class_claim",
+      "path": "/templates/74/fields/- y /templates/74/form_contract/{roles,semantic_roles,allowed_when,required_when,evidence_requirements[,prerequisites,allowed_options]}/strength_class_claim",
+      "decision": "aceptar",
+      "reason": "Representa una propiedad declarada sin deducir ajuste del uso; aplicar sólo junto a correcciones de rosca/kit.",
+      "finding_ids": []
+    },
+    {
+      "patch_id": "AD-ND09-fastener-fastener_kit_members",
+      "patch_index": 12,
+      "template": "fastener",
+      "key": "fastener_kit_members",
+      "path": "/templates/74/fields/- y /templates/74/form_contract/{roles,semantic_roles,allowed_when,required_when,evidence_requirements[,prerequisites,allowed_options]}/fastener_kit_members",
+      "decision": "corregir",
+      "reason": "Corregir rosca de miembros no roscados y clave de unicidad insuficiente.",
+      "finding_ids": [
+        "FA03"
+      ],
+      "resolution": "definition_overrides[fastener_kit_members]"
+    },
+    {
+      "patch_id": "AD-ND09-seat_clamp-clamp_thread_pitch_mm",
+      "patch_index": 13,
+      "template": "seat_clamp",
+      "key": "clamp_thread_pitch_mm",
+      "path": "/templates/44/fields/- y /templates/44/form_contract/{roles,semantic_roles,allowed_when,required_when,evidence_requirements[,prerequisites,allowed_options]}/clamp_thread_pitch_mm",
+      "decision": "aceptar",
+      "reason": "Representa una propiedad declarada sin deducir ajuste del uso; aplicar sólo junto a correcciones de rosca/kit.",
+      "finding_ids": []
+    },
+    {
+      "patch_id": "AD-ND09-seat_clamp-clamp_bolt_length_mm",
+      "patch_index": 14,
+      "template": "seat_clamp",
+      "key": "clamp_bolt_length_mm",
+      "path": "/templates/44/fields/- y /templates/44/form_contract/{roles,semantic_roles,allowed_when,required_when,evidence_requirements[,prerequisites,allowed_options]}/clamp_bolt_length_mm",
+      "decision": "aceptar",
+      "reason": "Representa una propiedad declarada sin deducir ajuste del uso; aplicar sólo junto a correcciones de rosca/kit.",
+      "finding_ids": []
+    },
+    {
+      "patch_id": "AD-ND09-seat_clamp-length_datum",
+      "patch_index": 15,
+      "template": "seat_clamp",
+      "key": "length_datum",
+      "path": "/templates/44/fields/- y /templates/44/form_contract/{roles,semantic_roles,allowed_when,required_when,evidence_requirements[,prerequisites,allowed_options]}/length_datum",
+      "decision": "aceptar",
+      "reason": "Representa una propiedad declarada sin deducir ajuste del uso; aplicar sólo junto a correcciones de rosca/kit.",
+      "finding_ids": []
+    },
+    {
+      "patch_id": "AD-ND10-def-tool_kind",
+      "patch_index": 16,
+      "template": null,
+      "key": "tool_kind",
+      "path": "/definitions/tool_kind/allowed_values",
+      "decision": "aceptar",
+      "reason": "Separa declaración/resumen o vocabulario de la capacidad por operación; no convierte velocidades ni marca en compatibilidad.",
+      "finding_ids": []
+    },
+    {
+      "patch_id": "AD-ND10-workshop_tool-chain_tool_speeds",
+      "patch_index": 17,
+      "template": "workshop_tool",
+      "key": "chain_tool_speeds",
+      "path": "/templates/75/form_contract/{allowed_when,required_when,roles,semantic_roles}/chain_tool_speeds",
+      "decision": "aceptar",
+      "reason": "Separa declaración/resumen o vocabulario de la capacidad por operación; no convierte velocidades ni marca en compatibilidad.",
+      "finding_ids": []
+    },
+    {
+      "patch_id": "AD-ND10-workshop_tool-tool_interface",
+      "patch_index": 18,
+      "template": "workshop_tool",
+      "key": "tool_interface",
+      "path": "/templates/75/form_contract/{roles,semantic_roles}/tool_interface",
+      "decision": "aceptar",
+      "reason": "Separa declaración/resumen o vocabulario de la capacidad por operación; no convierte velocidades ni marca en compatibilidad.",
+      "finding_ids": []
+    },
+    {
+      "patch_id": "AD-ND10-workshop_tool-tool_capabilities",
+      "patch_index": 19,
+      "template": "workshop_tool",
+      "key": "tool_capabilities",
+      "path": "/templates/75/fields/- y /templates/75/form_contract/{roles,semantic_roles,allowed_when,required_when,evidence_requirements[,prerequisites,allowed_options]}/tool_capabilities",
+      "decision": "corregir",
+      "reason": "Corregir dimensión/operación, exclusión explícita y unicidad; FA05 limita fuentes.",
+      "finding_ids": [
+        "FA04"
+      ],
+      "resolution": "definition_overrides[tool_capabilities]"
+    },
+    {
+      "patch_id": "AD-ND10-workshop_tool-tool_bits_included",
+      "patch_index": 20,
+      "template": "workshop_tool",
+      "key": "tool_bits_included",
+      "path": "/templates/75/fields/- y /templates/75/form_contract/{roles,semantic_roles,allowed_when,required_when,evidence_requirements[,prerequisites,allowed_options]}/tool_bits_included",
+      "decision": "corregir",
+      "reason": "Contenido por miembro/tamaño; no medida obligatoria para toda pieza.",
+      "finding_ids": [
+        "FA06"
+      ],
+      "resolution": "definition_overrides[tool_bits_included]"
+    },
+    {
+      "patch_id": "AD-ND12-def-power_source",
+      "patch_index": 21,
+      "template": null,
+      "key": "power_source",
+      "path": "/definitions/power_source/allowed_values",
+      "decision": "aceptar",
+      "reason": "La guarda reduce la mezcla entre luz única y juego; no certifica modos ni reemplaza los vínculos pendientes.",
+      "finding_ids": []
+    },
+    {
+      "patch_id": "AD-ND12-light-lumens_claimed",
+      "patch_index": 22,
+      "template": "light",
+      "key": "lumens_claimed",
+      "path": "/templates/78/form_contract/{allowed_when}/lumens_claimed",
+      "decision": "aceptar",
+      "reason": "La guarda reduce la mezcla entre luz única y juego; no certifica modos ni reemplaza los vínculos pendientes.",
+      "finding_ids": []
+    },
+    {
+      "patch_id": "AD-ND12-light-battery_capacity_mah",
+      "patch_index": 23,
+      "template": "light",
+      "key": "battery_capacity_mah",
+      "path": "/templates/78/form_contract/{allowed_when}/battery_capacity_mah",
+      "decision": "aceptar",
+      "reason": "La guarda reduce la mezcla entre luz única y juego; no certifica modos ni reemplaza los vínculos pendientes.",
+      "finding_ids": []
+    },
+    {
+      "patch_id": "AD-ND12-light-charge_connector",
+      "patch_index": 24,
+      "template": "light",
+      "key": "charge_connector",
+      "path": "/templates/78/form_contract/{allowed_when}/charge_connector",
+      "decision": "corregir",
+      "reason": "La batería USB extraíble necesita la misma ruta de conector de carga.",
+      "finding_ids": [
+        "FA07"
+      ],
+      "after_override": {
+        "allowed_when": {
+          "kind": "when",
+          "rows": [
+            [
+              {
+                "field": "light_position",
+                "operator": "in",
+                "value_type": "token",
+                "value": [
+                  "Delantera",
+                  "Trasera",
+                  "Casco / otra"
+                ]
+              },
+              {
+                "field": "power_source",
+                "operator": "in",
+                "value_type": "token",
+                "value": [
+                  "Recargable USB",
+                  "Recargable USB (batería extraíble)"
+                ]
+              }
+            ]
+          ]
+        }
+      },
+      "before_extensions": {}
+    },
+    {
+      "patch_id": "AD-ND12-light-mount_diameter_min_mm",
+      "patch_index": 25,
+      "template": "light",
+      "key": "mount_diameter_min_mm",
+      "path": "/templates/78/form_contract/{allowed_when}/mount_diameter_min_mm",
+      "decision": "aceptar",
+      "reason": "La guarda reduce la mezcla entre luz única y juego; no certifica modos ni reemplaza los vínculos pendientes.",
+      "finding_ids": []
+    },
+    {
+      "patch_id": "AD-ND12-light-mount_diameter_max_mm",
+      "patch_index": 26,
+      "template": "light",
+      "key": "mount_diameter_max_mm",
+      "path": "/templates/78/form_contract/{allowed_when}/mount_diameter_max_mm",
+      "decision": "aceptar",
+      "reason": "La guarda reduce la mezcla entre luz única y juego; no certifica modos ni reemplaza los vínculos pendientes.",
+      "finding_ids": []
+    },
+    {
+      "patch_id": "AD-ND12-light-ip_rating",
+      "patch_index": 27,
+      "template": "light",
+      "key": "ip_rating",
+      "path": "/templates/78/form_contract/{allowed_when}/ip_rating",
+      "decision": "aceptar",
+      "reason": "La guarda reduce la mezcla entre luz única y juego; no certifica modos ni reemplaza los vínculos pendientes.",
+      "finding_ids": []
+    },
+    {
+      "patch_id": "AD-ND12-light-modes_count",
+      "patch_index": 28,
+      "template": "light",
+      "key": "modes_count",
+      "path": "/templates/78/form_contract/{allowed_when}/modes_count",
+      "decision": "aceptar",
+      "reason": "La guarda reduce la mezcla entre luz única y juego; no certifica modos ni reemplaza los vínculos pendientes.",
+      "finding_ids": []
+    },
+    {
+      "patch_id": "AD-ND12-light-runtime_claim_h",
+      "patch_index": 29,
+      "template": "light",
+      "key": "runtime_claim_h",
+      "path": "/templates/78/form_contract/{allowed_when,roles,semantic_roles}/runtime_claim_h",
+      "decision": "aceptar",
+      "reason": "La guarda reduce la mezcla entre luz única y juego; no certifica modos ni reemplaza los vínculos pendientes.",
+      "finding_ids": []
+    },
+    {
+      "patch_id": "AD-ND12-light-light_member_configurations",
+      "patch_index": 30,
+      "template": "light",
+      "key": "light_member_configurations",
+      "path": "/templates/78/fields/- y /templates/78/form_contract/{roles,semantic_roles,allowed_when,required_when,evidence_requirements[,prerequisites,allowed_options]}/light_member_configurations",
+      "decision": "corregir",
+      "reason": "Conservar revisión y forma/puerto por miembro; guard de referencias antes de tratar filas como completas.",
+      "finding_ids": [
+        "FA09"
+      ],
+      "resolution": "definition_overrides[light_member_configurations]"
+    },
+    {
+      "patch_id": "AD-ND12-light-light_mode_configurations",
+      "patch_index": 31,
+      "template": "light",
+      "key": "light_mode_configurations",
+      "path": "/templates/78/fields/- y /templates/78/form_contract/{roles,semantic_roles,allowed_when,required_when,evidence_requirements[,prerequisites,allowed_options]}/light_mode_configurations",
+      "decision": "corregir",
+      "reason": "Separar revisiones de modos y resolver member_id; no convertir cambio OEM en rango.",
+      "finding_ids": [
+        "FA08"
+      ],
+      "resolution": "definition_overrides[light_mode_configurations]"
+    },
+    {
+      "patch_id": "AD-ND13-accessory_mount-bike_attachment_kind",
+      "patch_index": 32,
+      "template": "accessory_mount",
+      "key": "bike_attachment_kind",
+      "path": "/templates/82/fields/- y /templates/82/form_contract/{roles,semantic_roles,allowed_when,required_when,evidence_requirements[,prerequisites,allowed_options]}/bike_attachment_kind",
+      "decision": "aceptar",
+      "reason": "Separa lado bicicleta y dispositivo; esta aceptación no cubre todos los soportes ni valida un ajuste.",
+      "finding_ids": []
+    },
+    {
+      "patch_id": "AD-ND13-accessory_mount-bar_fit_representation",
+      "patch_index": 33,
+      "template": "accessory_mount",
+      "key": "bar_fit_representation",
+      "path": "/templates/82/fields/- y /templates/82/form_contract/{roles,semantic_roles,allowed_when,required_when,evidence_requirements[,prerequisites,allowed_options]}/bar_fit_representation",
+      "decision": "corregir",
+      "reason": "El ajuste declarado también puede usar correa y debe identificar zona de montaje.",
+      "finding_ids": [
+        "FA11"
+      ],
+      "after_override": {
+        "field_entry": {
+          "key": "bar_fit_representation",
+          "section_key": "primary",
+          "sort_order": 110,
+          "is_required": false,
+          "visibility_rules": [],
+          "option_rules": [],
+          "constraint_rules": []
+        },
+        "roles": "primary",
+        "semantic_roles": "compatibility",
+        "allowed_when": {
+          "kind": "when",
+          "rows": [
+            [
+              {
+                "field": "accessory_mount_kind",
+                "operator": "eq",
+                "value_type": "token",
+                "value": "Soporte de teléfono"
+              },
+              {
+                "field": "bike_attachment_kind",
+                "operator": "in",
+                "value_type": "token",
+                "value": [
+                  "Abrazadera de manubrio",
+                  "Abrazadera de potencia / tija",
+                  "Correa elástica / silicona"
+                ]
+              }
+            ]
+          ]
+        },
+        "required_when": {
+          "kind": "when",
+          "rows": [
+            [
+              {
+                "field": "accessory_mount_kind",
+                "operator": "eq",
+                "value_type": "token",
+                "value": "Soporte de teléfono"
+              },
+              {
+                "field": "bike_attachment_kind",
+                "operator": "in",
+                "value_type": "token",
+                "value": [
+                  "Abrazadera de manubrio",
+                  "Abrazadera de potencia / tija",
+                  "Correa elástica / silicona"
+                ]
+              }
+            ]
+          ]
+        },
+        "evidence_requirements": "oem_or_package",
+        "definition_used_by_append": "accessory_mount"
+      }
+    },
+    {
+      "patch_id": "AD-ND13-accessory_mount-bar_diameter_min_mm",
+      "patch_index": 34,
+      "template": "accessory_mount",
+      "key": "bar_diameter_min_mm",
+      "path": "/templates/82/form_contract/{allowed_when}/bar_diameter_min_mm",
+      "decision": "aceptar",
+      "reason": "Root acepta sólo esta representación de campo; conserva el gate identificado, sin aprobar una compatibilidad ni una ficha completa. La guarda de representación es válida; falta el control ejecutable de orden de extremos.",
+      "finding_ids": [
+        "FA12"
+      ],
+      "resolution": "Resolve the linked finding and additional_required_changes before import; no uncertain override supplied."
+    },
+    {
+      "patch_id": "AD-ND13-accessory_mount-bar_diameter_max_mm",
+      "patch_index": 35,
+      "template": "accessory_mount",
+      "key": "bar_diameter_max_mm",
+      "path": "/templates/82/form_contract/{allowed_when}/bar_diameter_max_mm",
+      "decision": "aceptar",
+      "reason": "Root acepta sólo esta representación de campo; conserva el gate identificado, sin aprobar una compatibilidad ni una ficha completa. La guarda de representación es válida; falta el control ejecutable de orden de extremos.",
+      "finding_ids": [
+        "FA12"
+      ],
+      "resolution": "Resolve the linked finding and additional_required_changes before import; no uncertain override supplied."
+    },
+    {
+      "patch_id": "AD-ND13-accessory_mount-bar_clamp_configurations",
+      "patch_index": 36,
+      "template": "accessory_mount",
+      "key": "bar_clamp_configurations",
+      "path": "/templates/82/fields/- y /templates/82/form_contract/{roles,semantic_roles,allowed_when,required_when,evidence_requirements[,prerequisites,allowed_options]}/bar_clamp_configurations",
+      "decision": "corregir",
+      "reason": "No obligar método inventado ni colapsar configuraciones del mismo diámetro.",
+      "finding_ids": [
+        "FA11"
+      ],
+      "resolution": "definition_overrides[bar_clamp_configurations]"
+    },
+    {
+      "patch_id": "AD-ND13-accessory_mount-device_attachment_kind",
+      "patch_index": 37,
+      "template": "accessory_mount",
+      "key": "device_attachment_kind",
+      "path": "/templates/82/fields/- y /templates/82/form_contract/{roles,semantic_roles,allowed_when,required_when,evidence_requirements[,prerequisites,allowed_options]}/device_attachment_kind",
+      "decision": "corregir",
+      "reason": "Una interfaz propietaria puede admitir carcasa y adaptador como alternativas de la misma pieza.",
+      "finding_ids": [
+        "FA11"
+      ],
+      "resolution": "definition_overrides[device_attachment_kind]"
+    },
+    {
+      "patch_id": "AD-ND13-accessory_mount-device_system",
+      "patch_index": 38,
+      "template": "accessory_mount",
+      "key": "device_system",
+      "path": "/templates/82/fields/- y /templates/82/form_contract/{roles,semantic_roles,allowed_when,required_when,evidence_requirements[,prerequisites,allowed_options]}/device_system",
+      "decision": "corregir",
+      "reason": "Incluir la alternativa propietaria combinada en el sistema declarado.",
+      "finding_ids": [
+        "FA11"
+      ],
+      "after_override": {
+        "field_entry": {
+          "key": "device_system",
+          "section_key": "primary",
+          "sort_order": 140,
+          "is_required": false,
+          "visibility_rules": [],
+          "option_rules": [],
+          "constraint_rules": []
+        },
+        "roles": "primary",
+        "semantic_roles": "identity",
+        "allowed_when": {
+          "kind": "when",
+          "rows": [
+            [
+              {
+                "field": "accessory_mount_kind",
+                "operator": "eq",
+                "value_type": "token",
+                "value": "Soporte de teléfono"
+              },
+              {
+                "field": "device_attachment_kind",
+                "operator": "in",
+                "value_type": "token",
+                "value": [
+                  "Carcasa propietaria",
+                  "Adaptador universal adhesivo",
+                  "Interfaz propietaria (carcasa / adaptador)"
+                ]
+              }
+            ]
+          ]
+        },
+        "required_when": {
+          "kind": "never"
+        },
+        "evidence_requirements": "package_or_label",
+        "definition_used_by_append": "accessory_mount"
+      }
+    },
+    {
+      "patch_id": "AD-ND13-accessory_mount-device_width_min_mm",
+      "patch_index": 39,
+      "template": "accessory_mount",
+      "key": "device_width_min_mm",
+      "path": "/templates/82/form_contract/{allowed_when}/device_width_min_mm",
+      "decision": "aceptar",
+      "reason": "Separa lado bicicleta y dispositivo; esta aceptación no cubre todos los soportes ni valida un ajuste.",
+      "finding_ids": []
+    },
+    {
+      "patch_id": "AD-ND13-accessory_mount-device_width_max_mm",
+      "patch_index": 40,
+      "template": "accessory_mount",
+      "key": "device_width_max_mm",
+      "path": "/templates/82/form_contract/{allowed_when}/device_width_max_mm",
+      "decision": "aceptar",
+      "reason": "Separa lado bicicleta y dispositivo; esta aceptación no cubre todos los soportes ni valida un ajuste.",
+      "finding_ids": []
+    },
+    {
+      "patch_id": "AD-ND21-cycle_computer-connection",
+      "patch_index": 41,
+      "template": "cycle_computer",
+      "key": "connection",
+      "path": "/templates/80/form_contract/{required_when,roles,semantic_roles}/connection",
+      "decision": "aceptar",
+      "reason": "Eje descriptivo independiente o contenido; modelos/perfiles requieren evidencia aparte.",
+      "finding_ids": []
+    },
+    {
+      "patch_id": "AD-ND21-cycle_computer-positioning_source",
+      "patch_index": 42,
+      "template": "cycle_computer",
+      "key": "positioning_source",
+      "path": "/templates/80/fields/- y /templates/80/form_contract/{roles,semantic_roles,allowed_when,required_when,evidence_requirements[,prerequisites,allowed_options]}/positioning_source",
+      "decision": "corregir",
+      "reason": "Sin posicionamiento no implica sensor de rueda; fuente de velocidad ya es otro eje.",
+      "finding_ids": [
+        "FA13"
+      ],
+      "resolution": "definition_overrides[positioning_source]"
+    },
+    {
+      "patch_id": "AD-ND21-cycle_computer-speed_source",
+      "patch_index": 43,
+      "template": "cycle_computer",
+      "key": "speed_source",
+      "path": "/templates/80/fields/- y /templates/80/form_contract/{roles,semantic_roles,allowed_when,required_when,evidence_requirements[,prerequisites,allowed_options]}/speed_source",
+      "decision": "aceptar",
+      "reason": "Eje descriptivo independiente o contenido; modelos/perfiles requieren evidencia aparte.",
+      "finding_ids": []
+    },
+    {
+      "patch_id": "AD-ND21-cycle_computer-sensor_link_ant_plus",
+      "patch_index": 44,
+      "template": "cycle_computer",
+      "key": "sensor_link_ant_plus",
+      "path": "/templates/80/fields/- y /templates/80/form_contract/{roles,semantic_roles,allowed_when,required_when,evidence_requirements[,prerequisites,allowed_options]}/sensor_link_ant_plus",
+      "decision": "rechazar",
+      "reason": "Root: las parejas tipo de sensor/transporte/perfil/soportado tienen dueño en las filas. No introducir además booleanos de la misma afirmación; telefonía conserva su alcance separado.",
+      "finding_ids": []
+    },
+    {
+      "patch_id": "AD-ND21-cycle_computer-sensor_link_bluetooth",
+      "patch_index": 45,
+      "template": "cycle_computer",
+      "key": "sensor_link_bluetooth",
+      "path": "/templates/80/fields/- y /templates/80/form_contract/{roles,semantic_roles,allowed_when,required_when,evidence_requirements[,prerequisites,allowed_options]}/sensor_link_bluetooth",
+      "decision": "rechazar",
+      "reason": "Root: las parejas tipo de sensor/transporte/perfil/soportado tienen dueño en las filas. No introducir además booleanos de la misma afirmación; telefonía conserva su alcance separado.",
+      "finding_ids": []
+    },
+    {
+      "patch_id": "AD-ND21-cycle_computer-sensor_link_wired",
+      "patch_index": 46,
+      "template": "cycle_computer",
+      "key": "sensor_link_wired",
+      "path": "/templates/80/fields/- y /templates/80/form_contract/{roles,semantic_roles,allowed_when,required_when,evidence_requirements[,prerequisites,allowed_options]}/sensor_link_wired",
+      "decision": "rechazar",
+      "reason": "Root: las parejas tipo de sensor/transporte/perfil/soportado tienen dueño en las filas. No introducir además booleanos de la misma afirmación; telefonía conserva su alcance separado.",
+      "finding_ids": []
+    },
+    {
+      "patch_id": "AD-ND21-cycle_computer-phone_link",
+      "patch_index": 47,
+      "template": "cycle_computer",
+      "key": "phone_link",
+      "path": "/templates/80/fields/- y /templates/80/form_contract/{roles,semantic_roles,allowed_when,required_when,evidence_requirements[,prerequisites,allowed_options]}/phone_link",
+      "decision": "aceptar",
+      "reason": "Eje descriptivo independiente o contenido; modelos/perfiles requieren evidencia aparte.",
+      "finding_ids": []
+    },
+    {
+      "patch_id": "AD-ND21-cycle_computer-sensor_support_configurations",
+      "patch_index": 48,
+      "template": "cycle_computer",
+      "key": "sensor_support_configurations",
+      "path": "/templates/80/fields/- y /templates/80/form_contract/{roles,semantic_roles,allowed_when,required_when,evidence_requirements[,prerequisites,allowed_options]}/sensor_support_configurations",
+      "decision": "corregir",
+      "reason": "Filas necesitan perfil/estado y coherencia con capacidades de enlace; la fuente genérica no aporta matriz.",
+      "finding_ids": [
+        "FA13"
+      ],
+      "after_override": {
+        "field_entry": {
+          "key": "sensor_support_configurations",
+          "section_key": "measurement",
+          "sort_order": 120,
+          "is_required": false,
+          "visibility_rules": [],
+          "option_rules": [],
+          "constraint_rules": []
+        },
+        "roles": "measurement",
+        "semantic_roles": "compatibility",
+        "allowed_when": {
+          "kind": "always"
+        },
+        "required_when": {
+          "kind": "never"
+        },
+        "evidence_requirements": "oem_spec",
+        "definition_used_by_append": "cycle_computer"
+      }
+    },
+    {
+      "patch_id": "AD-ND21-cycle_computer-wheel_setting",
+      "patch_index": 49,
+      "template": "cycle_computer",
+      "key": "wheel_setting",
+      "path": "/templates/80/form_contract/{allowed_when}/wheel_setting",
+      "decision": "aceptar",
+      "reason": "Eje descriptivo independiente o contenido; modelos/perfiles requieren evidencia aparte.",
+      "finding_ids": []
+    },
+    {
+      "patch_id": "AD-ND21-cycle_computer-computer_contents",
+      "patch_index": 50,
+      "template": "cycle_computer",
+      "key": "computer_contents",
+      "path": "/templates/80/fields/- y /templates/80/form_contract/{roles,semantic_roles,allowed_when,required_when,evidence_requirements[,prerequisites,allowed_options]}/computer_contents",
+      "decision": "aceptar",
+      "reason": "Eje descriptivo independiente o contenido; modelos/perfiles requieren evidencia aparte.",
+      "finding_ids": []
+    },
+    {
+      "patch_id": "AD-ND22-label-rated_power_w",
+      "patch_index": 51,
+      "template": null,
+      "key": "rated_power_w",
+      "path": "/definitions/rated_power_w/label",
+      "decision": "corregir",
+      "reason": "Etiqueta total sólo para cargador; acompañar de guarda que retire ese campo del cable.",
+      "finding_ids": [
+        "FA16"
+      ],
+      "after_override": "Potencia nominal total del cargador"
+    },
+    {
+      "patch_id": "AD-ND22-consumer_electronics-connector_a",
+      "patch_index": 52,
+      "template": "consumer_electronics",
+      "key": "connector_a",
+      "path": "/templates/81/form_contract/{allowed_when}/connector_a",
+      "decision": "aceptar",
+      "reason": "Dato descriptivo/medida que se conserva de fuente exacta; formato/capacidad no crean compatibilidad.",
+      "finding_ids": []
+    },
+    {
+      "patch_id": "AD-ND22-consumer_electronics-power_port_configurations",
+      "patch_index": 53,
+      "template": "consumer_electronics",
+      "key": "power_port_configurations",
+      "path": "/templates/81/fields/- y /templates/81/form_contract/{roles,semantic_roles,allowed_when,required_when,evidence_requirements[,prerequisites,allowed_options]}/power_port_configurations",
+      "decision": "corregir",
+      "reason": "Género, perfiles V/A/protocolo y referencias a puertos aún necesarios.",
+      "finding_ids": [
+        "FA14"
+      ],
+      "resolution": "definition_overrides[power_port_configurations]"
+    },
+    {
+      "patch_id": "AD-ND22-consumer_electronics-power_budget_configurations",
+      "patch_index": 54,
+      "template": "consumer_electronics",
+      "key": "power_budget_configurations",
+      "path": "/templates/81/fields/- y /templates/81/form_contract/{roles,semantic_roles,allowed_when,required_when,evidence_requirements[,prerequisites,allowed_options]}/power_budget_configurations",
+      "decision": "aceptar",
+      "reason": "Root acepta sólo esta representación de campo; conserva el gate identificado, sin aprobar una compatibilidad ni una ficha completa. Declarar tipo de reparto/límite y presupuesto compartido antes de comprobar sumas.",
+      "finding_ids": [
+        "FA15"
+      ],
+      "resolution": "Resolve the linked finding and additional_required_changes before import; no uncertain override supplied."
+    },
+    {
+      "patch_id": "AD-ND22-consumer_electronics-cable_power_capacity_w",
+      "patch_index": 55,
+      "template": "consumer_electronics",
+      "key": "cable_power_capacity_w",
+      "path": "/templates/81/fields/- y /templates/81/form_contract/{roles,semantic_roles,allowed_when,required_when,evidence_requirements[,prerequisites,allowed_options]}/cable_power_capacity_w",
+      "decision": "aceptar",
+      "reason": "Dato descriptivo/medida que se conserva de fuente exacta; formato/capacidad no crean compatibilidad.",
+      "finding_ids": []
+    },
+    {
+      "patch_id": "AD-ND22-consumer_electronics-cable_data_capability",
+      "patch_index": 56,
+      "template": "consumer_electronics",
+      "key": "cable_data_capability",
+      "path": "/templates/81/fields/- y /templates/81/form_contract/{roles,semantic_roles,allowed_when,required_when,evidence_requirements[,prerequisites,allowed_options]}/cable_data_capability",
+      "decision": "corregir",
+      "reason": "Eliminar alias USB4/Thunderbolt; conservar estándares/velocidad declarados sin inferencia.",
+      "finding_ids": [
+        "FA16"
+      ],
+      "resolution": "definition_overrides[cable_data_capability]"
+    },
+    {
+      "patch_id": "AD-ND22-consumer_electronics-storage_capacity_label",
+      "patch_index": 57,
+      "template": "consumer_electronics",
+      "key": "storage_capacity_label",
+      "path": "/templates/81/fields/- y /templates/81/form_contract/{roles,semantic_roles,allowed_when,required_when,evidence_requirements[,prerequisites,allowed_options]}/storage_capacity_label",
+      "decision": "aceptar",
+      "reason": "Dato descriptivo/medida que se conserva de fuente exacta; formato/capacidad no crean compatibilidad.",
+      "finding_ids": []
+    },
+    {
+      "patch_id": "AD-ND22-consumer_electronics-card_format",
+      "patch_index": 58,
+      "template": "consumer_electronics",
+      "key": "card_format",
+      "path": "/templates/81/fields/- y /templates/81/form_contract/{roles,semantic_roles,allowed_when,required_when,evidence_requirements[,prerequisites,allowed_options]}/card_format",
+      "decision": "aceptar",
+      "reason": "Dato descriptivo/medida que se conserva de fuente exacta; formato/capacidad no crean compatibilidad.",
+      "finding_ids": []
+    },
+    {
+      "patch_id": "AD-ND22-consumer_electronics-speed_class_claim",
+      "patch_index": 59,
+      "template": "consumer_electronics",
+      "key": "speed_class_claim",
+      "path": "/templates/81/fields/- y /templates/81/form_contract/{roles,semantic_roles,allowed_when,required_when,evidence_requirements[,prerequisites,allowed_options]}/speed_class_claim",
+      "decision": "aceptar",
+      "reason": "Dato descriptivo/medida que se conserva de fuente exacta; formato/capacidad no crean compatibilidad.",
+      "finding_ids": []
+    },
+    {
+      "patch_id": "AD-ND23-def-food_item_kind",
+      "patch_index": 60,
+      "template": null,
+      "key": "food_item_kind",
+      "path": "/definitions/food_item_kind/allowed_values",
+      "decision": "aceptar",
+      "reason": "Distingue preparado/envase, contenido o receta. Cada hecho a llenar aún exige fuente del producto/receta.",
+      "finding_ids": []
+    },
+    {
+      "patch_id": "AD-ND23-label-serving_size",
+      "patch_index": 61,
+      "template": null,
+      "key": "serving_size",
+      "path": "/definitions/serving_size/label",
+      "decision": "aceptar",
+      "reason": "Distingue preparado/envase, contenido o receta. Cada hecho a llenar aún exige fuente del producto/receta.",
+      "finding_ids": []
+    },
+    {
+      "patch_id": "AD-ND23-food_beverage-preparation_kind",
+      "patch_index": 62,
+      "template": "food_beverage",
+      "key": "preparation_kind",
+      "path": "/templates/99/fields/- y /templates/99/form_contract/{roles,semantic_roles,allowed_when,required_when,evidence_requirements[,prerequisites,allowed_options]}/preparation_kind",
+      "decision": "aceptar",
+      "reason": "Distingue preparado/envase, contenido o receta. Cada hecho a llenar aún exige fuente del producto/receta.",
+      "finding_ids": []
+    },
+    {
+      "patch_id": "AD-ND23-food_beverage-spec_evidence_source",
+      "patch_index": 63,
+      "template": "food_beverage",
+      "key": "spec_evidence_source",
+      "path": "/templates/99/fields/- y /templates/99/form_contract/{roles,semantic_roles,allowed_when,required_when,evidence_requirements[,prerequisites,allowed_options]}/spec_evidence_source",
+      "decision": "aceptar",
+      "reason": "Distingue preparado/envase, contenido o receta. Cada hecho a llenar aún exige fuente del producto/receta.",
+      "finding_ids": []
+    },
+    {
+      "patch_id": "AD-ND23-food_beverage-serving_size",
+      "patch_index": 64,
+      "template": "food_beverage",
+      "key": "serving_size",
+      "path": "/templates/99/form_contract/{allowed_when,required_when}/serving_size",
+      "decision": "aceptar",
+      "reason": "Distingue preparado/envase, contenido o receta. Cada hecho a llenar aún exige fuente del producto/receta.",
+      "finding_ids": []
+    },
+    {
+      "patch_id": "AD-ND23-food_beverage-serving_volume_ml",
+      "patch_index": 65,
+      "template": "food_beverage",
+      "key": "serving_volume_ml",
+      "path": "/templates/99/form_contract/{allowed_when}/serving_volume_ml",
+      "decision": "aceptar",
+      "reason": "Distingue preparado/envase, contenido o receta. Cada hecho a llenar aún exige fuente del producto/receta.",
+      "finding_ids": []
+    },
+    {
+      "patch_id": "AD-ND23-food_beverage-temperature",
+      "patch_index": 66,
+      "template": "food_beverage",
+      "key": "temperature",
+      "path": "/templates/99/form_contract/{allowed_when}/temperature",
+      "decision": "aceptar",
+      "reason": "Distingue preparado/envase, contenido o receta. Cada hecho a llenar aún exige fuente del producto/receta.",
+      "finding_ids": []
+    },
+    {
+      "patch_id": "AD-ND23-food_beverage-milk",
+      "patch_index": 67,
+      "template": "food_beverage",
+      "key": "milk",
+      "path": "/templates/99/form_contract/{allowed_when,roles,semantic_roles}/milk",
+      "decision": "aceptar",
+      "reason": "Distingue preparado/envase, contenido o receta. Cada hecho a llenar aún exige fuente del producto/receta.",
+      "finding_ids": []
+    },
+    {
+      "patch_id": "AD-ND23-food_beverage-allergen_note",
+      "patch_index": 68,
+      "template": "food_beverage",
+      "key": "allergen_note",
+      "path": "/templates/99/form_contract/{prerequisites}/allergen_note",
+      "decision": "corregir",
+      "reason": "Sin fuente no debe habilitar una declaración de alérgenos.",
+      "finding_ids": [
+        "FA18"
+      ],
+      "after_override": {
+        "prerequisites": [
+          "allergen_statement_source",
+          "spec_evidence_source"
+        ],
+        "allowed_when": {
+          "kind": "when",
+          "rows": [
+            [
+              {
+                "field": "allergen_statement_source",
+                "operator": "in",
+                "value_type": "token",
+                "value": [
+                  "Etiqueta del envase",
+                  "Receta verificada del negocio",
+                  "Documento / página oficial del fabricante"
+                ]
+              }
+            ]
+          ]
+        }
+      },
+      "before_extensions": {
+        "allowed_when": {
+          "present": true,
+          "value": {
+            "kind": "always"
+          }
+        }
+      }
+    },
+    {
+      "patch_id": "AD-ND23-food_beverage-milk_in_recipe",
+      "patch_index": 69,
+      "template": "food_beverage",
+      "key": "milk_in_recipe",
+      "path": "/templates/99/fields/- y /templates/99/form_contract/{roles,semantic_roles,allowed_when,required_when,evidence_requirements[,prerequisites,allowed_options]}/milk_in_recipe",
+      "decision": "aceptar",
+      "reason": "Distingue preparado/envase, contenido o receta. Cada hecho a llenar aún exige fuente del producto/receta.",
+      "finding_ids": []
+    },
+    {
+      "patch_id": "AD-ND23-food_beverage-milk_substitution_offered",
+      "patch_index": 70,
+      "template": "food_beverage",
+      "key": "milk_substitution_offered",
+      "path": "/templates/99/fields/- y /templates/99/form_contract/{roles,semantic_roles,allowed_when,required_when,evidence_requirements[,prerequisites,allowed_options]}/milk_substitution_offered",
+      "decision": "aceptar",
+      "reason": "Distingue preparado/envase, contenido o receta. Cada hecho a llenar aún exige fuente del producto/receta.",
+      "finding_ids": []
+    },
+    {
+      "patch_id": "AD-ND23-food_beverage-recipe_reference",
+      "patch_index": 71,
+      "template": "food_beverage",
+      "key": "recipe_reference",
+      "path": "/templates/99/fields/- y /templates/99/form_contract/{roles,semantic_roles,allowed_when,required_when,evidence_requirements[,prerequisites,allowed_options]}/recipe_reference",
+      "decision": "aceptar",
+      "reason": "Distingue preparado/envase, contenido o receta. Cada hecho a llenar aún exige fuente del producto/receta.",
+      "finding_ids": []
+    },
+    {
+      "patch_id": "AD-ND23-food_beverage-net_mass_g",
+      "patch_index": 72,
+      "template": "food_beverage",
+      "key": "net_mass_g",
+      "path": "/templates/99/fields/- y /templates/99/form_contract/{roles,semantic_roles,allowed_when,required_when,evidence_requirements[,prerequisites,allowed_options]}/net_mass_g",
+      "decision": "aceptar",
+      "reason": "Distingue preparado/envase, contenido o receta. Cada hecho a llenar aún exige fuente del producto/receta.",
+      "finding_ids": []
+    },
+    {
+      "patch_id": "AD-ND23-food_beverage-net_volume_ml",
+      "patch_index": 73,
+      "template": "food_beverage",
+      "key": "net_volume_ml",
+      "path": "/templates/99/fields/- y /templates/99/form_contract/{roles,semantic_roles,allowed_when,required_when,evidence_requirements[,prerequisites,allowed_options]}/net_volume_ml",
+      "decision": "aceptar",
+      "reason": "Distingue preparado/envase, contenido o receta. Cada hecho a llenar aún exige fuente del producto/receta.",
+      "finding_ids": []
+    },
+    {
+      "patch_id": "AD-ND23-food_beverage-units_per_pack",
+      "patch_index": 74,
+      "template": "food_beverage",
+      "key": "units_per_pack",
+      "path": "/templates/99/fields/- y /templates/99/form_contract/{roles,semantic_roles,allowed_when,required_when,evidence_requirements[,prerequisites,allowed_options]}/units_per_pack",
+      "decision": "aceptar",
+      "reason": "Distingue preparado/envase, contenido o receta. Cada hecho a llenar aún exige fuente del producto/receta.",
+      "finding_ids": []
+    },
+    {
+      "patch_id": "AD-ND23-food_beverage-unit_mass_g",
+      "patch_index": 75,
+      "template": "food_beverage",
+      "key": "unit_mass_g",
+      "path": "/templates/99/fields/- y /templates/99/form_contract/{roles,semantic_roles,allowed_when,required_when,evidence_requirements[,prerequisites,allowed_options]}/unit_mass_g",
+      "decision": "aceptar",
+      "reason": "Distingue preparado/envase, contenido o receta. Cada hecho a llenar aún exige fuente del producto/receta.",
+      "finding_ids": []
+    },
+    {
+      "patch_id": "AD-ND23-food_beverage-nutrition_facts",
+      "patch_index": 76,
+      "template": "food_beverage",
+      "key": "nutrition_facts",
+      "path": "/templates/99/fields/- y /templates/99/form_contract/{roles,semantic_roles,allowed_when,required_when,evidence_requirements[,prerequisites,allowed_options]}/nutrition_facts",
+      "decision": "corregir",
+      "reason": "No negativos, base y unidad explícitas, un solo dueño para cafeína.",
+      "finding_ids": [
+        "FA17"
+      ],
+      "resolution": "definition_overrides[nutrition_facts]"
+    },
+    {
+      "patch_id": "AD-ND23-food_beverage-ingredients_text",
+      "patch_index": 77,
+      "template": "food_beverage",
+      "key": "ingredients_text",
+      "path": "/templates/99/fields/- y /templates/99/form_contract/{roles,semantic_roles,allowed_when,required_when,evidence_requirements[,prerequisites,allowed_options]}/ingredients_text",
+      "decision": "corregir",
+      "reason": "Ingredientes requieren fuente válida, no el token Sin fuente.",
+      "finding_ids": [
+        "FA18"
+      ],
+      "after_override": {
+        "field_entry": {
+          "key": "ingredients_text",
+          "section_key": "declaration",
+          "sort_order": 170,
+          "is_required": false,
+          "visibility_rules": [],
+          "option_rules": [],
+          "constraint_rules": []
+        },
+        "roles": "declaration",
+        "semantic_roles": "declaration",
+        "allowed_when": {
+          "kind": "when",
+          "rows": [
+            [
+              {
+                "field": "allergen_statement_source",
+                "operator": "in",
+                "value_type": "token",
+                "value": [
+                  "Etiqueta del envase",
+                  "Receta verificada del negocio",
+                  "Documento / página oficial del fabricante"
+                ]
+              }
+            ]
+          ]
+        },
+        "required_when": {
+          "kind": "never"
+        },
+        "evidence_requirements": "package_or_label",
+        "definition_used_by_append": "food_beverage",
+        "prerequisites": [
+          "allergen_statement_source",
+          "spec_evidence_source"
+        ]
+      }
+    },
+    {
+      "patch_id": "AD-ND23-food_beverage-allergen_statement_source",
+      "patch_index": 78,
+      "template": "food_beverage",
+      "key": "allergen_statement_source",
+      "path": "/templates/99/fields/- y /templates/99/form_contract/{roles,semantic_roles,allowed_when,required_when,evidence_requirements[,prerequisites,allowed_options]}/allergen_statement_source",
+      "decision": "corregir",
+      "reason": "Admitir fuente OEM real y exigir referencia trazable, distinta del selector de origen.",
+      "finding_ids": [
+        "FA18"
+      ],
+      "after_override": {
+        "field_entry": {
+          "key": "allergen_statement_source",
+          "section_key": "declaration",
+          "sort_order": 180,
+          "is_required": false,
+          "visibility_rules": [],
+          "option_rules": [],
+          "constraint_rules": []
+        },
+        "roles": "declaration",
+        "semantic_roles": "evidence",
+        "allowed_when": {
+          "kind": "always"
+        },
+        "required_when": {
+          "kind": "never"
+        },
+        "evidence_requirements": "package_or_label",
+        "definition_used_by_append": "food_beverage",
+        "prerequisites": [
+          "spec_evidence_source"
+        ]
+      }
+    },
+    {
+      "patch_id": "AD-ND23-food_beverage-allergens_declared_none",
+      "patch_index": 79,
+      "template": "food_beverage",
+      "key": "allergens_declared_none",
+      "path": "/templates/99/fields/- y /templates/99/form_contract/{roles,semantic_roles,allowed_when,required_when,evidence_requirements[,prerequisites,allowed_options]}/allergens_declared_none",
+      "decision": "rechazar",
+      "reason": "Retirar el booleano universal sin alcance; preservar texto de declaración con evidencia.",
+      "finding_ids": [
+        "FA18"
+      ]
+    },
+    {
+      "patch_id": "AD-ND23-food_beverage-caffeine_mg",
+      "patch_index": 80,
+      "template": "food_beverage",
+      "key": "caffeine_mg",
+      "path": "/templates/99/fields/- y /templates/99/form_contract/{roles,semantic_roles,allowed_when,required_when,evidence_requirements[,prerequisites,allowed_options]}/caffeine_mg",
+      "decision": "corregir",
+      "reason": "Debe admitir cero confirmado.",
+      "finding_ids": [
+        "FA17"
+      ],
+      "resolution": "definition_overrides[caffeine_mg]"
+    },
+    {
+      "patch_id": "AD-ND23-food_beverage-caffeine_basis",
+      "patch_index": 81,
+      "template": "food_beverage",
+      "key": "caffeine_basis",
+      "path": "/templates/99/fields/- y /templates/99/form_contract/{roles,semantic_roles,allowed_when,required_when,evidence_requirements[,prerequisites,allowed_options]}/caffeine_basis",
+      "decision": "aceptar",
+      "reason": "Root acepta sólo esta representación de campo; conserva el gate identificado, sin aprobar una compatibilidad ni una ficha completa. Por porción necesita una referencia/cantidad de porción; no sólo una etiqueta.",
+      "finding_ids": [
+        "FA17"
+      ],
+      "resolution": "Resolve the linked finding and additional_required_changes before import; no uncertain override supplied."
+    }
+  ],
+  "definition_overrides": {
+    "torx_size": {
+      "id": null,
+      "key": "torx_size",
+      "origin": "new",
+      "label": "Código Torx (por ejemplo T25)",
+      "data_type": "text",
+      "unit": null,
+      "allowed_values": [],
+      "validation_rules": {},
+      "used_by": []
+    },
+    "fastener_kit_members": {
+      "id": null,
+      "key": "fastener_kit_members",
+      "origin": "new",
+      "label": "Miembros del kit de fijación",
+      "data_type": "json",
+      "unit": null,
+      "allowed_values": [],
+      "validation_rules": {
+        "rows_schema": {
+          "version": 1,
+          "columns": [
+            {
+              "key": "member_role",
+              "label": "Pieza",
+              "type": "text",
+              "required": true
+            },
+            {
+              "key": "thread_nominal",
+              "label": "Designación nominal de rosca",
+              "type": "token",
+              "required": false,
+              "allowed_values": [
+                "M3",
+                "M4",
+                "M5",
+                "M6",
+                "M7",
+                "M8",
+                "M9",
+                "M10",
+                "M12",
+                "M14",
+                "M15",
+                "M18",
+                "M19",
+                "M20",
+                "M22",
+                "5/16\"",
+                "3/8\"",
+                "1/2\"",
+                "9/16\"",
+                "Otra",
+                "Desconocido / sin confirmar",
+                "9 mm",
+                "10 mm",
+                "36 mm",
+                "2.2 mm"
+              ]
+            },
+            {
+              "key": "thread_pitch_mm",
+              "label": "Paso",
+              "type": "decimal",
+              "unit": "mm",
+              "validation": {
+                "positive": true
+              }
+            },
+            {
+              "key": "thread_tpi",
+              "label": "TPI",
+              "type": "integer",
+              "unit": "tpi",
+              "validation": {
+                "positive": true
+              }
+            },
+            {
+              "key": "thread_hand",
+              "label": "Sentido",
+              "type": "token",
+              "allowed_values": [
+                "Derecha",
+                "Izquierda",
+                "Desconocido / sin confirmar"
+              ]
+            },
+            {
+              "key": "length_mm",
+              "label": "Largo",
+              "type": "decimal",
+              "unit": "mm",
+              "validation": {
+                "positive": true
+              }
+            },
+            {
+              "key": "length_datum",
+              "label": "Referencia del largo",
+              "type": "token",
+              "allowed_values": [
+                "Bajo cabeza",
+                "Total",
+                "Longitud roscada",
+                "Desconocido / sin confirmar"
+              ]
+            },
+            {
+              "key": "head_drive",
+              "label": "Accionamiento",
+              "type": "text"
+            },
+            {
+              "key": "quantity",
+              "label": "Cantidad",
+              "type": "integer",
+              "required": true,
+              "validation": {
+                "positive": true
+              }
+            },
+            {
+              "key": "source_url",
+              "label": "Fuente",
+              "type": "url"
+            },
+            {
+              "key": "member_kind",
+              "label": "Tipo de pieza declarado",
+              "type": "text"
+            },
+            {
+              "key": "inner_diameter_mm",
+              "label": "Diámetro interior de golilla / espaciador",
+              "type": "decimal",
+              "unit": "mm",
+              "validation": {
+                "positive": true
+              }
+            },
+            {
+              "key": "outer_diameter_mm",
+              "label": "Diámetro exterior de golilla / espaciador",
+              "type": "decimal",
+              "unit": "mm",
+              "validation": {
+                "positive": true
+              }
+            },
+            {
+              "key": "thickness_mm",
+              "label": "Espesor de golilla / espaciador",
+              "type": "decimal",
+              "unit": "mm",
+              "validation": {
+                "positive": true
+              }
+            }
+          ],
+          "ordered_pairs": [
+            [
+              "inner_diameter_mm",
+              "outer_diameter_mm"
+            ]
+          ]
+        }
+      },
+      "used_by": []
+    },
+    "tool_capabilities": {
+      "id": null,
+      "key": "tool_capabilities",
+      "origin": "new",
+      "label": "Capacidades de la herramienta por operación",
+      "data_type": "json",
+      "unit": null,
+      "allowed_values": [],
+      "validation_rules": {
+        "rows_schema": {
+          "version": 1,
+          "columns": [
+            {
+              "key": "member",
+              "label": "Pieza o bit (multiherramienta)",
+              "type": "text"
+            },
+            {
+              "key": "operation",
+              "label": "Operación",
+              "type": "token",
+              "required": true,
+              "allowed_values": [
+                "Apretar / aflojar",
+                "Extraer",
+                "Instalar",
+                "Cortar / extraer remache",
+                "Instalar remache",
+                "Peenar remache",
+                "Medir",
+                "Centrar / alinear",
+                "Purgar",
+                "Inflar / presurizar",
+                "Limpiar",
+                "Otra"
+              ]
+            },
+            {
+              "key": "target_standard",
+              "label": "Interfaz / estándar del objetivo",
+              "type": "text",
+              "required": true
+            },
+            {
+              "key": "supported",
+              "label": "Operación admitida según fuente (No = exclusión explícita)",
+              "type": "boolean",
+              "required": true
+            },
+            {
+              "key": "interface_measure_mm",
+              "label": "Medida nominal declarada",
+              "type": "decimal",
+              "unit": "mm",
+              "validation": {
+                "positive": true
+              }
+            },
+            {
+              "key": "drive_size",
+              "label": "Accionamiento requerido",
+              "type": "text"
+            },
+            {
+              "key": "speeds_min",
+              "label": "Velocidades mín.",
+              "type": "integer",
+              "validation": {
+                "positive": true
+              }
+            },
+            {
+              "key": "speeds_max",
+              "label": "Velocidades máx.",
+              "type": "integer",
+              "validation": {
+                "positive": true
+              }
+            },
+            {
+              "key": "brand_scope",
+              "label": "Alcance de marca / modelo",
+              "type": "text"
+            },
+            {
+              "key": "adapter_required",
+              "label": "Requiere adaptador",
+              "type": "boolean"
+            },
+            {
+              "key": "adapter_model",
+              "label": "Adaptador",
+              "type": "text"
+            },
+            {
+              "key": "source_url",
+              "label": "Fuente",
+              "type": "url"
+            },
+            {
+              "key": "interface_measure_kind",
+              "label": "Dimensión representada",
+              "type": "text"
+            },
+            {
+              "key": "interface_diameter_min_mm",
+              "label": "Diámetro mayor mínimo",
+              "type": "decimal",
+              "unit": "mm",
+              "validation": {
+                "positive": true
+              }
+            },
+            {
+              "key": "interface_diameter_max_mm",
+              "label": "Diámetro mayor máximo",
+              "type": "decimal",
+              "unit": "mm",
+              "validation": {
+                "positive": true
+              }
+            },
+            {
+              "key": "interface_minor_diameter_mm",
+              "label": "Diámetro menor",
+              "type": "decimal",
+              "unit": "mm",
+              "validation": {
+                "positive": true
+              }
+            },
+            {
+              "key": "interface_feature_count",
+              "label": "Cantidad de muescas / estrías declarada",
+              "type": "integer",
+              "validation": {
+                "positive": true
+              }
+            }
+          ],
+          "ordered_pairs": [
+            [
+              "speeds_min",
+              "speeds_max"
+            ],
+            [
+              "interface_diameter_min_mm",
+              "interface_diameter_max_mm"
+            ]
+          ]
+        }
+      },
+      "used_by": []
+    },
+    "tool_bits_included": {
+      "id": null,
+      "key": "tool_bits_included",
+      "origin": "new",
+      "label": "Piezas / bits incluidos",
+      "data_type": "json",
+      "unit": null,
+      "allowed_values": [],
+      "validation_rules": {
+        "rows_schema": {
+          "version": 1,
+          "columns": [
+            {
+              "key": "bit_kind",
+              "label": "Tipo",
+              "type": "token",
+              "required": true,
+              "allowed_values": [
+                "Hexagonal (Allen)",
+                "Torx",
+                "Destornillador plano",
+                "Destornillador cruz",
+                "Llave fija",
+                "Llave de rayos",
+                "Desmontador",
+                "Corta cadena",
+                "Llave de tubo",
+                "Otro",
+                "Llave estrella / cerrada"
+              ]
+            },
+            {
+              "key": "size",
+              "label": "Medida",
+              "type": "text",
+              "required": false
+            },
+            {
+              "key": "quantity",
+              "label": "Cantidad",
+              "type": "integer",
+              "required": true,
+              "validation": {
+                "positive": true
+              }
+            },
+            {
+              "key": "source_url",
+              "label": "Fuente",
+              "type": "url"
+            }
+          ]
+        }
+      },
+      "used_by": []
+    },
+    "light_member_configurations": {
+      "id": null,
+      "key": "light_member_configurations",
+      "origin": "new",
+      "label": "Luces del producto (una fila por luz)",
+      "data_type": "json",
+      "unit": null,
+      "allowed_values": [],
+      "validation_rules": {
+        "rows_schema": {
+          "version": 1,
+          "columns": [
+            {
+              "key": "member_id",
+              "label": "Luz",
+              "type": "text",
+              "required": true
+            },
+            {
+              "key": "position",
+              "label": "Posición",
+              "type": "token",
+              "required": true,
+              "allowed_values": [
+                "Delantera",
+                "Trasera",
+                "Casco / otra"
+              ]
+            },
+            {
+              "key": "battery_kind",
+              "label": "Batería / alimentación",
+              "type": "token",
+              "allowed_values": [
+                "Li-ion integrada",
+                "Li-ion extraíble",
+                "Pilas AA/AAA",
+                "Pila botón",
+                "Dinamo",
+                "Alimentación externa (USB)",
+                "Desconocido / sin confirmar"
+              ]
+            },
+            {
+              "key": "battery_capacity_mah",
+              "label": "Capacidad",
+              "type": "decimal",
+              "unit": "mAh",
+              "validation": {
+                "positive": true
+              }
+            },
+            {
+              "key": "battery_voltage_v",
+              "label": "Tensión",
+              "type": "decimal",
+              "unit": "V",
+              "validation": {
+                "positive": true
+              }
+            },
+            {
+              "key": "charge_connector",
+              "label": "Conector de carga",
+              "type": "token",
+              "allowed_values": [
+                "USB-C",
+                "Micro-USB",
+                "USB-A integrado",
+                "Propietario",
+                "Sin carga",
+                "Desconocido / sin confirmar",
+                "Otro"
+              ]
+            },
+            {
+              "key": "mount_kind",
+              "label": "Fijación",
+              "type": "token",
+              "allowed_values": [
+                "Correa de silicona",
+                "Abrazadera de manubrio",
+                "Abrazadera de tija",
+                "Soporte de casco",
+                "Soporte de horquilla",
+                "Otro"
+              ]
+            },
+            {
+              "key": "mount_diameter_min_mm",
+              "label": "Diámetro mín. de montaje",
+              "type": "decimal",
+              "unit": "mm",
+              "validation": {
+                "positive": true
+              }
+            },
+            {
+              "key": "mount_diameter_max_mm",
+              "label": "Diámetro máx. de montaje",
+              "type": "decimal",
+              "unit": "mm",
+              "validation": {
+                "positive": true
+              }
+            },
+            {
+              "key": "mount_circumference_max_mm",
+              "label": "Perímetro máx. (tija aero)",
+              "type": "decimal",
+              "unit": "mm",
+              "validation": {
+                "positive": true
+              }
+            },
+            {
+              "key": "ip_rating",
+              "label": "Grado IP",
+              "type": "text"
+            },
+            {
+              "key": "source_url",
+              "label": "Fuente",
+              "type": "url"
+            },
+            {
+              "key": "member_revision",
+              "label": "Revisión del miembro / fuente",
+              "type": "text"
+            },
+            {
+              "key": "mount_zone",
+              "label": "Zona y forma de montaje",
+              "type": "text"
+            },
+            {
+              "key": "power_input_connector",
+              "label": "Entrada de alimentación externa declarada",
+              "type": "text"
+            }
+          ],
+          "ordered_pairs": [
+            [
+              "mount_diameter_min_mm",
+              "mount_diameter_max_mm"
+            ]
+          ],
+          "unique_by": [
+            [
+              "member_id"
+            ]
+          ]
+        }
+      },
+      "used_by": []
+    },
+    "light_mode_configurations": {
+      "id": null,
+      "key": "light_mode_configurations",
+      "origin": "new",
+      "label": "Modos por luz (lúmenes y autonomía juntos)",
+      "data_type": "json",
+      "unit": null,
+      "allowed_values": [],
+      "validation_rules": {
+        "rows_schema": {
+          "version": 1,
+          "columns": [
+            {
+              "key": "member_id",
+              "label": "Luz",
+              "type": "text",
+              "required": true
+            },
+            {
+              "key": "mode",
+              "label": "Modo",
+              "type": "text",
+              "required": true
+            },
+            {
+              "key": "pattern",
+              "label": "Patrón",
+              "type": "token",
+              "allowed_values": [
+                "Constante",
+                "Intermitente",
+                "Constante + intermitente",
+                "Diurno",
+                "Otro"
+              ]
+            },
+            {
+              "key": "lumens",
+              "label": "Lúmenes",
+              "type": "decimal",
+              "unit": "lm",
+              "validation": {
+                "positive": true
+              }
+            },
+            {
+              "key": "lumens_secondary",
+              "label": "Lúmenes secundarios (modo doble)",
+              "type": "decimal",
+              "unit": "lm",
+              "validation": {
+                "positive": true
+              }
+            },
+            {
+              "key": "runtime_h",
+              "label": "Autonomía",
+              "type": "decimal",
+              "unit": "h",
+              "validation": {
+                "positive": true
+              }
+            },
+            {
+              "key": "runtime_max_h",
+              "label": "Autonomía máx. (rango declarado)",
+              "type": "decimal",
+              "unit": "h",
+              "validation": {
+                "positive": true
+              }
+            },
+            {
+              "key": "source_url",
+              "label": "Fuente",
+              "type": "url"
+            },
+            {
+              "key": "member_revision",
+              "label": "Revisión del miembro / fuente",
+              "type": "text"
+            }
+          ],
+          "ordered_pairs": [
+            [
+              "runtime_h",
+              "runtime_max_h"
+            ]
+          ],
+          "unique_by": [
+            [
+              "member_id",
+              "mode"
+            ]
+          ]
+        }
+      },
+      "used_by": []
+    },
+    "bar_clamp_configurations": {
+      "id": null,
+      "key": "bar_clamp_configurations",
+      "origin": "new",
+      "label": "Diámetros de abrazadera admitidos (una fila por medida)",
+      "data_type": "json",
+      "unit": null,
+      "allowed_values": [],
+      "validation_rules": {
+        "rows_schema": {
+          "version": 1,
+          "columns": [
+            {
+              "key": "nominal_diameter_mm",
+              "label": "Diámetro nominal",
+              "type": "decimal",
+              "unit": "mm",
+              "required": true,
+              "validation": {
+                "positive": true
+              }
+            },
+            {
+              "key": "fit_method",
+              "label": "Cómo se logra",
+              "type": "token",
+              "required": true,
+              "allowed_values": [
+                "Directo",
+                "Con espaciador incluido",
+                "Con espaciador opcional",
+                "Variante / versión distinta"
+              ]
+            },
+            {
+              "key": "spacer_or_variant",
+              "label": "Espaciador / variante",
+              "type": "text"
+            },
+            {
+              "key": "included",
+              "label": "Incluido",
+              "type": "boolean"
+            },
+            {
+              "key": "source_url",
+              "label": "Fuente",
+              "type": "url"
+            },
+            {
+              "key": "mount_revision",
+              "label": "Modelo / revisión del montaje",
+              "type": "text"
+            }
+          ]
+        }
+      },
+      "used_by": []
+    },
+    "device_attachment_kind": {
+      "id": null,
+      "key": "device_attachment_kind",
+      "origin": "new",
+      "label": "Unión al dispositivo",
+      "data_type": "single_select",
+      "unit": null,
+      "allowed_values": [
+        "Pinza / brazos ajustables",
+        "Carcasa propietaria",
+        "Adaptador universal adhesivo",
+        "Bolsa / funda transparente",
+        "Otro",
+        "Interfaz propietaria (carcasa / adaptador)"
+      ],
+      "validation_rules": {},
+      "used_by": []
+    },
+    "positioning_source": {
+      "id": null,
+      "key": "positioning_source",
+      "origin": "new",
+      "label": "Posicionamiento",
+      "data_type": "single_select",
+      "unit": null,
+      "allowed_values": [
+        "GNSS multibanda",
+        "GNSS",
+        "Sin posicionamiento",
+        "Desconocido / sin confirmar"
+      ],
+      "validation_rules": {},
+      "used_by": []
+    },
+    "sensor_support_configurations": {
+      "id": null,
+      "key": "sensor_support_configurations",
+      "origin": "new",
+      "label": "Sensores admitidos (tipo + transporte)",
+      "data_type": "json",
+      "unit": null,
+      "allowed_values": [],
+      "validation_rules": {
+        "rows_schema": {
+          "version": 1,
+          "columns": [
+            {
+              "key": "sensor_type",
+              "label": "Tipo de sensor",
+              "type": "token",
+              "required": true,
+              "allowed_values": [
+                "Velocidad",
+                "Cadencia",
+                "Velocidad / cadencia",
+                "Frecuencia cardiaca",
+                "Potencia",
+                "Radar",
+                "Luces",
+                "Cambio electrónico",
+                "eBike",
+                "Control remoto",
+                "Rodillo inteligente",
+                "Otro"
+              ]
+            },
+            {
+              "key": "transport",
+              "label": "Transporte",
+              "type": "token",
+              "required": true,
+              "allowed_values": [
+                "ANT+",
+                "Bluetooth",
+                "Cable",
+                "Propietario inalámbrico"
+              ]
+            },
+            {
+              "key": "models_note",
+              "label": "Modelos / perfiles declarados",
+              "type": "text"
+            },
+            {
+              "key": "source_url",
+              "label": "Fuente",
+              "type": "url"
+            },
+            {
+              "key": "profile",
+              "label": "Perfil / versión de comunicación declarado",
+              "type": "text"
+            },
+            {
+              "key": "supported",
+              "label": "Pareja admitida según fuente (No = exclusión explícita)",
+              "type": "boolean",
+              "required": true
+            }
+          ]
+        }
+      },
+      "used_by": []
+    },
+    "power_port_configurations": {
+      "id": null,
+      "key": "power_port_configurations",
+      "origin": "new",
+      "label": "Puertos (uno por fila)",
+      "data_type": "json",
+      "unit": null,
+      "allowed_values": [],
+      "validation_rules": {
+        "rows_schema": {
+          "version": 1,
+          "columns": [
+            {
+              "key": "port_id",
+              "label": "Puerto",
+              "type": "text",
+              "required": true
+            },
+            {
+              "key": "connector",
+              "label": "Conector",
+              "type": "token",
+              "required": true,
+              "allowed_values": [
+                "USB-C",
+                "USB-A",
+                "Micro-USB",
+                "Lightning",
+                "Otro"
+              ]
+            },
+            {
+              "key": "direction",
+              "label": "Dirección",
+              "type": "token",
+              "required": true,
+              "allowed_values": [
+                "Salida",
+                "Entrada",
+                "Entrada / salida"
+              ]
+            },
+            {
+              "key": "max_power_w",
+              "label": "Potencia máx. sola",
+              "type": "decimal",
+              "unit": "W",
+              "validation": {
+                "positive": true
+              }
+            },
+            {
+              "key": "protocols",
+              "label": "Protocolos declarados",
+              "type": "text"
+            },
+            {
+              "key": "source_url",
+              "label": "Fuente",
+              "type": "url"
+            },
+            {
+              "key": "connector_gender",
+              "label": "Género del conector declarado",
+              "type": "text"
+            }
+          ],
+          "unique_by": [
+            [
+              "port_id"
+            ]
+          ]
+        }
+      },
+      "used_by": []
+    },
+    "cable_data_capability": {
+      "id": null,
+      "key": "cable_data_capability",
+      "origin": "new",
+      "label": "Declaración de datos del cable (estándar y velocidad)",
+      "data_type": "text",
+      "unit": null,
+      "allowed_values": [],
+      "validation_rules": {},
+      "used_by": []
+    },
+    "nutrition_facts": {
+      "id": null,
+      "key": "nutrition_facts",
+      "origin": "new",
+      "label": "Información nutricional (con base explícita)",
+      "data_type": "json",
+      "unit": null,
+      "allowed_values": [],
+      "validation_rules": {
+        "rows_schema": {
+          "version": 1,
+          "columns": [
+            {
+              "key": "nutrient",
+              "label": "Nutriente",
+              "type": "token",
+              "required": true,
+              "allowed_values": [
+                "Energía (kcal)",
+                "Carbohidratos (g)",
+                "Azúcares (g)",
+                "Proteína (g)",
+                "Grasa (g)",
+                "Sodio (mg)",
+                "Fibra (g)",
+                "Otro"
+              ]
+            },
+            {
+              "key": "amount",
+              "label": "Cantidad",
+              "type": "decimal",
+              "required": true,
+              "validation": {
+                "min": "0"
+              }
+            },
+            {
+              "key": "basis",
+              "label": "Base",
+              "type": "token",
+              "required": true,
+              "allowed_values": [
+                "Por unidad / sobre",
+                "Por 100 g",
+                "Por 100 ml",
+                "Por porción declarada",
+                "Por porción servida"
+              ]
+            },
+            {
+              "key": "source_url",
+              "label": "Fuente",
+              "type": "url"
+            },
+            {
+              "key": "nutrient_name",
+              "label": "Nombre del nutriente cuando es Otro",
+              "type": "text"
+            },
+            {
+              "key": "amount_unit",
+              "label": "Unidad cuando es Otro",
+              "type": "text"
+            },
+            {
+              "key": "basis_amount",
+              "label": "Cantidad de la base",
+              "type": "decimal",
+              "validation": {
+                "positive": true
+              }
+            },
+            {
+              "key": "basis_unit",
+              "label": "Unidad de la base",
+              "type": "text"
+            },
+            {
+              "key": "serving_reference",
+              "label": "Referencia de porción / receta",
+              "type": "text"
+            },
+            {
+              "key": "qualifier",
+              "label": "Calificador literal del valor (por ejemplo aproximado)",
+              "type": "text"
+            }
+          ]
+        }
+      },
+      "used_by": []
+    },
+    "caffeine_mg": {
+      "id": null,
+      "key": "caffeine_mg",
+      "origin": "new",
+      "label": "Cafeína declarada",
+      "data_type": "number",
+      "unit": "mg",
+      "allowed_values": [],
+      "validation_rules": {
+        "min": "0"
+      },
+      "used_by": []
+    },
+    "allergen_statement_source": {
+      "id": null,
+      "key": "allergen_statement_source",
+      "origin": "new",
+      "label": "Origen de la declaración de ingredientes / alérgenos",
+      "data_type": "single_select",
+      "unit": null,
+      "allowed_values": [
+        "Etiqueta del envase",
+        "Receta verificada del negocio",
+        "Sin fuente",
+        "Documento / página oficial del fabricante"
+      ],
+      "validation_rules": {},
+      "used_by": []
+    }
+  },
+  "remaining_gates": [
+    {
+      "id": "AG01",
+      "finding_ids": [
+        "FA01"
+      ],
+      "paths": [
+        "fastener.thread_pitch_mm",
+        "fastener.thread_tpi",
+        "fastener_kit_members"
+      ],
+      "required_change": "Conservar designación original; seleccionar una representación de paso mm o TPI, o validar consistencia exacta si ambas se permiten. No deducir paso desde M, uso o tabla genérica.",
+      "status": "requires_owner_design",
+      "negative_case": "Paso 1 mm y26 TPI no pueden coexistir como el mismo dato confirmado."
+    },
+    {
+      "id": "AG02",
+      "finding_ids": [
+        "FA07"
+      ],
+      "paths": [
+        "light.power_source",
+        "light.light_mount_kind"
+      ],
+      "required_change": "Añadir guards de luz única a alimentación y montaje escalares; juegos usan miembros. Separar entrada externa de puerto de carga.",
+      "status": "additional_patch_required",
+      "negative_case": "Juego dinamo/batería no requiere fuente común."
+    },
+    {
+      "id": "AG03",
+      "finding_ids": [
+        "FA09",
+        "FA13"
+      ],
+      "paths": [
+        "light_mode_configurations.member_id",
+        "power_budget_configurations.port_id",
+        "sensor_support_configurations.transport"
+      ],
+      "required_change": "Contrato ejecutable de referencias por ID/revisión y coherencia de filas con upstream false explícito; cambios upstream marcan obsoletos sin borrar evidencia. Validar en Dart y SQL, no sólo fill.",
+      "status": "representation_engine_gap",
+      "negative_case": "Modo/puerto ghost o ANT+ false con pareja ANT+ supported=true no pueden quedar válidos."
+    },
+    {
+      "id": "AG04",
+      "finding_ids": [
+        "FA11",
+        "FA12"
+      ],
+      "paths": [
+        "accessory_mount.bar_diameter_min_mm",
+        "accessory_mount.bar_diameter_max_mm",
+        "accessory_mount.device_width_min_mm",
+        "accessory_mount.device_width_max_mm"
+      ],
+      "required_change": "Validar orden de extremos y zona de montaje. Lista discreta no se convierte en rango continuo.",
+      "status": "representation_engine_gap",
+      "negative_case": "35→22 y100→55 bloquean;30 no pertenece a22/25.4/31.8/35."
+    },
+    {
+      "id": "AG05",
+      "finding_ids": [
+        "FA14",
+        "FA15"
+      ],
+      "paths": [
+        "power_port_configurations",
+        "power_budget_configurations"
+      ],
+      "required_change": "Perfiles eléctricos por puerto/protocolo/tensión/corriente; distinguir límite individual, asignación simultánea y presupuesto compartido antes de agregar reglas de sumas.",
+      "status": "requires_owner_design",
+      "negative_case": "No aplicar sum(max_por_puerto)<=total universal; validar una asignación fija según su presupuesto y fuente."
+    },
+    {
+      "id": "AG06",
+      "finding_ids": [
+        "FA16"
+      ],
+      "paths": [
+        "consumer_electronics.rated_power_w"
+      ],
+      "required_change": "Restringir el campo de potencia total a cargador; cable tiene un único dueño cable_power_capacity_w.",
+      "status": "additional_patch_required",
+      "negative_case": "Cable no puede publicar total65 y capacidad100 como dos potencias de igual significado."
+    },
+    {
+      "id": "AG07",
+      "finding_ids": [
+        "FA17"
+      ],
+      "paths": [
+        "nutrition_facts",
+        "caffeine_basis"
+      ],
+      "required_change": "Obligatoriedad condicional de nutriente/unidad para Otro, base cuantificada/referencia para porción; campo de base de cafeína debe identificar porción/unidad/receta. No inventar condiciones de filas fuera de rows_schema v1.",
+      "status": "representation_engine_gap",
+      "negative_case": "Otro=5 sin unidad o porción sin denominador sigue incompleto; nunca concluir0 desde dato ausente."
+    },
+    {
+      "id": "AG08",
+      "finding_ids": [
+        "FA18",
+        "FA19"
+      ],
+      "paths": [
+        "spec_evidence_source",
+        "row.sources",
+        "representation_cases"
+      ],
+      "required_change": "El aplicador de llenado debe exigir evidencia vinculada al producto/modelo/revisión/mercado; metadata y URL bien formada no demuestran la afirmación. Borrador incompleto puede guardarse con avisos, pero no se certifica lleno ni compatible.",
+      "status": "fill_gate_required",
+      "negative_case": "Sin fuente, título de inventario o URL de especificaciones generales no habilitan una afirmación OEM concreta."
+    }
+  ],
+  "scope_note": "Sólo metadatos locales de representación. El dictamen independiente no es autoridad para llenar ni para declarar compatibilidad. Root resuelve guards de coherencia y conserva los demás pendientes."
+}

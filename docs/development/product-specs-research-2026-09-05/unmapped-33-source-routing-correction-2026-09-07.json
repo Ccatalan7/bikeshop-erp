@@ -1,0 +1,249 @@
+{
+  "schema_version": 1,
+  "title": "Corrección de ruta de fuentes: el cero de uso era mío, no de los productos",
+  "author": "Claude (revisor independiente)",
+  "prepared_on": "2026-09-07",
+  "corrects": [
+    {
+      "artifact": "unmapped-33-evidence-followup-2026-09-07.json",
+      "artifact_sha256": "68b2446fca850183d792411a312ef9fdd24a156920b4f944209f7033d65618b1",
+      "findings": [
+        "G1",
+        "G3"
+      ],
+      "corrections": [
+        "C1",
+        "C2",
+        "C3",
+        "C6"
+      ]
+    },
+    {
+      "artifact": "unmapped-ambiguous-and-business-review-2026-09-07.json",
+      "artifact_sha256": "d966352e06415821860eafc0138e9fc7a9797ab4e9b43d6622989277c5f1ae2c",
+      "fields": [
+        "source_preimage"
+      ]
+    }
+  ],
+  "root_evidence_relied_on": {
+    "artifact": "unmapped-26-root-evidence-2026-09-07.json",
+    "artifact_sha256": "12a927d454fce0eb7a721e6dd63b730ff032735effe34023f971015a8de271b5",
+    "scope": "26 registros de root; mis 7 quedan en este archivo"
+  },
+  "boundaries": "Lectura de producción sólo lectura por scripts/db/query.sh. Sin escrituras, sin sondas, sin mensajes externos, sin tocar productos ni archivos de root. Los artefactos anteriores quedan congelados y se corrigen por id.",
+  "route_coverage": [
+    {
+      "route": "sales_invoices.items (jsonb)",
+      "lines": 1741,
+      "distinct_products": 415,
+      "limit": "Líneas de venta vigentes. Es la ruta real y la que yo no consulté."
+    },
+    {
+      "route": "sales_order_items (normalizada)",
+      "lines": 0,
+      "distinct_products": 0,
+      "limit": "Vacía en todo el tenant. Yo concluí «cero ventas» consultando una tabla sin ninguna fila."
+    },
+    {
+      "route": "purchase_invoices.items (jsonb)",
+      "lines": 363,
+      "distinct_products": 278,
+      "limit": "Líneas de compra vigentes. Tampoco la consulté."
+    },
+    {
+      "route": "purchase_receipt_lines (normalizada)",
+      "lines": 28,
+      "distinct_products": 24,
+      "limit": "Sólo recepciones registradas: 24 productos frente a 278 con línea de compra, es decir menos del 9%. Yo la usé como si fuera el universo de compras."
+    },
+    {
+      "route": "stock_movements",
+      "lines": 2685,
+      "distinct_products": 892,
+      "limit": "La señal más amplia del tenant y la que más me faltó: tiene product_id propio y nunca la consulté."
+    },
+    {
+      "route": "product_images",
+      "lines": 0,
+      "distinct_products": 0,
+      "limit": "Vacía. Las 1 373 imágenes viven en products.image_url."
+    },
+    {
+      "route": "products.image_url",
+      "lines": 1373,
+      "distinct_products": 1373,
+      "limit": "Una imagen por producto; no hay galería."
+    }
+  ],
+  "corrections": [
+    {
+      "id": "R1",
+      "target": "finding G1 de unmapped-33-evidence-followup-2026-09-07.json",
+      "my_claim": "«Cero líneas en purchase_receipt_lines, cero en sales_order_items […] para los 33. El uso real no resuelve ninguno.»",
+      "why_wrong": "Derivé una ausencia general de dos tablas parciales. Medido: sales_order_items está vacía en todo el tenant, y purchase_receipt_lines cubre 24 productos frente a 278 con línea de compra vigente. Las líneas actuales viven en sales_invoices.items y purchase_invoices.items, y además existe stock_movements con product_id propio, que nunca consulté.",
+      "evidence": "Tu lectura encontró M010 en FV-00714 y FV-00986, NNV43 en cinco ventas pagadas, NNV155 en FV-00457 y Test en FV-00446. La mía, por las rutas reales, encuentra uso en cinco de mis siete.",
+      "correction": "G1 queda anulado. La formulación correcta es «cero coincidencias en las rutas consultadas», nombrando cada ruta y su cobertura, y nunca «sin uso»."
+    },
+    {
+      "id": "R2",
+      "target": "C1, C2 y C3 de unmapped-33-evidence-followup-2026-09-07.json",
+      "my_claim": "En C1 dije que los seis rótulos «tienen cero líneas de compra y cero de venta»; en C2, «cero movimiento en todos»; en C3, que para M010 «el uso no decide».",
+      "why_wrong": "Las tres frases descansaban en el mismo cero falso.",
+      "evidence": "M010 aparece en dos facturas de venta según tu lectura. Los seis rótulos y los cinco inactivos son de tus 26 y tu evidencia manda sobre ellos.",
+      "correction": "Se anula la parte probatoria de las tres. Lo que sobrevive de C1 es la distinción entre coincidencia con un proveedor registrado e identidad del registro, que no dependía del cero. Lo que sobrevive de C2 es que inactivo no es fuera de alcance. C3 se mantiene en su conclusión —no descartar el material físico de M010— y ahora con evidencia a favor en vez de un cero."
+    },
+    {
+      "id": "R3",
+      "target": "C6 de unmapped-33-evidence-followup-2026-09-07.json",
+      "my_claim": "«El objeto queda resuelto; la plantilla dueña no», tras retirar mi argumento del noodle_angle_deg.",
+      "why_wrong": "Retirar una razón inválida no vuelve irresoluble una decisión que el discriminante correcto sí respalda. Me quedé a medio camino y te devolví una pregunta que el catálogo ya contestaba.",
+      "evidence": "Verificado en el catálogo 934: control_part_kind admite literalmente «Fuelle / goma protectora», y noodle_angle_deg tiene allowed_when igual a control_part_kind = «Noodle V-brake», así que con el fuelle el ángulo ni se pide ni se puede llenar. brake_part_kind, en cambio, sólo ofrece pasador, resorte, perno y «Otro»: el fuelle sólo cabría como «Otro».",
+      "correction": "control_small_part es la dueña, respaldada. La razón que yo había dado era inválida; la correcta es que la plantilla tiene un token literal para este objeto y que el campo que me preocupaba está cerrado por condición."
+    },
+    {
+      "id": "R4",
+      "target": "finding G3 de unmapped-33-evidence-followup-2026-09-07.json",
+      "my_claim": "Presenté is_service = false en los 33 como el dato del ERP que contradice mi lectura de «servicio».",
+      "why_wrong": "Estamos auditando errores de clasificación. Un campo mal puesto no es prueba mecánica de lo que el producto es; usarlo así convierte el error auditado en evidencia.",
+      "evidence": "Las líneas de venta llevan su propio is_service, distinto del campo del producto, y los movimientos de 1541 y 2854 registran conversiones de inventario a consumible de taller: la clasificación de estos registros cambia con el tiempo y por decisión.",
+      "correction": "is_service pasa a ser un dato observado más, no un veredicto. Ni el nombre ni el campo deciden solos."
+    },
+    {
+      "id": "R5",
+      "target": "campo source_preimage de unmapped-ambiguous-and-business-review-2026-09-07.json",
+      "my_claim": "Lo llamé preimagen y dije «preimagen literal».",
+      "why_wrong": "Es una proyección de campos elegidos por mí, no una copia completa del registro original. Llamarla preimagen literal promete más de lo que entrega.",
+      "evidence": "Tú conservaste los originales completos en unmapped-26-root-evidence-2026-09-07.json y verificaste que mis valores retenidos y los 33 tríos de plantilla coinciden.",
+      "correction": "El campo se lee como «projection_of_source_record». La copia completa de los 26 está en tu artefacto; para mis siete, la copia viva queda en este archivo."
+    },
+    {
+      "id": "R6",
+      "target": "redacción general sobre evidencia faltante",
+      "my_claim": "En varios lugares escribí que algo «no está declarado» junto a la familia propuesta, de forma que se lee como una limitación del producto.",
+      "why_wrong": "La falta de aprobación o de declaración no es incompatibilidad. Ya lo habías corregido para not_for y la regla es general.",
+      "evidence": "Ninguna: es una regla de redacción.",
+      "correction": "Lo no declarado se escribe como hueco de evidencia y nunca junto a un veredicto de aptitud. Aplica a los siete registros de este archivo."
+    }
+  ],
+  "requeried_seven": [
+    {
+      "sku": "2854",
+      "id": "9dace983-0f30-49c7-9a3f-7a1b8ea62133",
+      "name": "Aceite Mineral Chepark",
+      "sales_items": 1,
+      "purchase_items": 0,
+      "stock_movements": 3,
+      "documents": [
+        "FV-00016 (draft, 2025-11-15), cantidad 1, is_catalog_product true"
+      ],
+      "movements": [
+        "2025-11-13 initial IN 1000",
+        "2026-01-09 manual IN 1",
+        "2026-06-19 correction OUT 1000, «Conversión interna de inventario a consumible de taller»"
+      ],
+      "what_changes": "Deja de ser «sin uso». Tiene una venta en borrador y tres movimientos, e incorpora un discriminante nuevo: la existencia inicial es 1000, que coincide con la presentación de 1000 ml del BIC-860 que encontré en la búsqueda pública. Sube la plausibilidad de brake_fluid sin confirmarla: el campo unit del producto dice «unit», así que 1000 podría ser mililitros anotados como unidades o mil unidades, y sólo el documento o el envase lo resuelve.",
+      "next": "Leer la línea de la factura de compra si aparece en otra ruta, o el envase, para fijar código y volumen. El discriminante es si 1000 es mililitros."
+    },
+    {
+      "sku": "67",
+      "id": "ccdb85f9-8456-4da3-930a-e3d359ca6f47",
+      "name": "ACEITE NACIONAL",
+      "sales_items": 1,
+      "purchase_items": 0,
+      "stock_movements": 0,
+      "documents": [
+        "FV-00016 (draft, 2025-11-15), cantidad 1, is_catalog_product true"
+      ],
+      "movements": [],
+      "what_changes": "Deja de ser «sin uso»: se vende como producto de catálogo, en la misma factura en borrador que el aceite Chepark. Eso refuerza que es una mercadería y no una intervención, sin tocar la lectura de la etiqueta.",
+      "next": "Seguir FV-00016 completa: qué más lleva esa factura dice para qué se usaron los dos aceites juntos."
+    },
+    {
+      "sku": "1541",
+      "id": "49b90689-b504-4216-81e3-b311e29bfb90",
+      "name": "GOMITA PARA FRENO V-BRAKE COMPATIBLE / GENERICO",
+      "sales_items": 0,
+      "purchase_items": 0,
+      "stock_movements": 2,
+      "documents": [],
+      "movements": [
+        "2025-11-13 initial IN 38",
+        "2026-07-07 correction OUT 38, «Conversión interna de inventario a consumible de taller»"
+      ],
+      "what_changes": "Deja de ser «sin uso». Y los movimientos explican de dónde viene el purchase_treatment = workshop_consumable que yo había leído como un dato dado: es el resultado de una conversión registrada el 2026-07-07, es decir un evento de reclasificación, justo el tipo de cosa que esta auditoría busca.",
+      "next": "Ninguno para la familia: la decisión queda cerrada por C6-bis. Queda medir el diámetro interior para llenar la ficha."
+    },
+    {
+      "sku": "1197",
+      "id": "19539d72-bff0-4875-b22e-a130297741d3",
+      "name": "Limpiador Cadena y Piñón Chepark",
+      "sales_items": 0,
+      "purchase_items": 0,
+      "stock_movements": 2,
+      "documents": [],
+      "movements": [
+        "2025-11-13 initial IN 425",
+        "2025-12-17 manual OUT 425"
+      ],
+      "what_changes": "Deja de ser «sin uso» y aparece el mismo discriminante de cantidad: 425 es una existencia difícil de sostener para una máquina de limpieza y fácil para un volumen. Inclina hacia químico sobre herramienta, sin cerrarlo, porque el campo unit dice «unit».",
+      "next": "Confrontar 425 con el envase o el documento de Vittal: si es mililitros, la familia es workshop_chemical."
+    },
+    {
+      "sku": "1559",
+      "id": "b887f8e9-755a-42c6-8668-e4c451a537ae",
+      "name": "LIMPIADOR TRIPLE PLATO PP-01",
+      "sales_items": 0,
+      "purchase_items": 0,
+      "stock_movements": 1,
+      "documents": [],
+      "movements": [
+        "2025-11-13 initial IN 1"
+      ],
+      "what_changes": "Deja de ser «sin uso». La existencia inicial de 1 unidad es coherente con la herramienta que vi en la imagen y contrasta con los 425 y los 1000 de los dos limpiadores líquidos. Refuerza workshop_tool sin depender del nombre.",
+      "next": "Sin cambio: falta la resolución de imagen o el catálogo Rito para el tipo exacto."
+    },
+    {
+      "sku": "24131",
+      "id": "2ea1138a-82f3-4e4f-85d4-2ab6d3c979cc",
+      "name": "Set Cubre Manubrio 125mm/220mm Black",
+      "sales_items": 0,
+      "purchase_items": 0,
+      "stock_movements": 0,
+      "documents": [],
+      "movements": [],
+      "what_changes": "Sigue en cero, pero ahora es «cero en las cinco rutas consultadas» y no «sin uso». La lectura de la imagen no dependía de esto.",
+      "next": "Buscar el artículo en rutas archivadas o no normalizadas antes de afirmar cualquier ausencia."
+    },
+    {
+      "sku": "NNV162",
+      "id": "b4f7fe80-76c4-4dea-ae7a-adde6efe2aa0",
+      "name": "Rotor Freno Trasero BMX PadroBikes",
+      "sales_items": 0,
+      "purchase_items": 0,
+      "stock_movements": 0,
+      "documents": [],
+      "movements": [],
+      "what_changes": "Igual: cero en las cinco rutas consultadas, no ausencia. Es el único de mis siete sin imagen y sin ningún rastro, así que sigue apoyado sólo en el vocabulario.",
+      "next": "Igual que el anterior, más el documento de Padro Bikes."
+    }
+  ],
+  "new_discriminant": {
+    "name": "la existencia inicial registrada",
+    "text": "Los movimientos iniciales separan los tres limpiadores mejor que sus nombres: 1 unidad para la herramienta PP-01, 38 para la gomita, 425 para el limpiador de cadena y 1000 para el aceite Chepark. Un 1000 encaja con la presentación de 1000 ml que devolvió la búsqueda pública y un 425 encaja con un volumen, no con una máquina. Es una señal, no una prueba: el campo unit de los cuatro dice «unit»."
+  },
+  "lesson": "La regla que rompí, escrita para no repetirla: una ausencia general no se deriva de una tabla parcial. Antes de afirmar «no hay», hay que medir la cobertura de la ruta y nombrarla en la afirmación. Dos de las tablas que usé tenían cero filas en todo el tenant, y yo leí ese cero como un hecho del producto.",
+  "gates": {
+    "publication": false,
+    "fill": false,
+    "assignment": false,
+    "mechanical_approval": false
+  },
+  "stats": {
+    "routes_measured": 7,
+    "corrections": 6,
+    "requeried": 7,
+    "with_use_found": 5,
+    "zero_in_consulted_routes": 2
+  }
+}

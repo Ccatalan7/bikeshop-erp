@@ -1,0 +1,22 @@
+{
+  "schema_version": 1,
+  "stage": "original_candidate_shared_definition_audit",
+  "templates": 37,
+  "definitions": 376,
+  "input_sha256": {
+    "existing-bearing-bb-catalog-2026-09-07.json": "62bd5a7e860000bbc3e36ce2b2a10e9640052b8e501ffca8b6690640a29bc2b6",
+    "existing-brakes-catalog-2026-09-07.json": "a3c9c6c17151a3433ff8792718e827f6376ebda64b04ce760f56754179171ee4",
+    "existing-rear-cogs-catalog-2026-09-07.json": "21b3b278bbee57c32d93b0a599196582db815be4117363121bf552d2329fd15b",
+    "existing-tires-tubes-catalog-2026-09-08.json": "b9e30b145346d52489dc807400a56e7dd38788e74a0e0b269c48f2f35412e619",
+    "existing-spoke-catalog-2026-09-08.json": "4a604b432a05f598dc3d1233880c111e4714fed986a6823b71a3292142f2353f",
+    "existing-headset-catalog-2026-09-08.json": "02968a0066cc3c51f401de205bc6dab933923b8cfe3ea4e9d2c42561f166db57",
+    "existing-hub-rim-catalog-2026-09-08.json": "7585bdb1f1b5365e7474324b37e6d20a287d92cbce74319ed53af3ffb663b1a3",
+    "existing-drivetrain-service-parts-catalog-2026-09-08.json": "1c10d400a1bea3f26c33c67c5a81dece3cdae9c7a4f954eea74be695b0c2216f",
+    "existing-chain-drive-catalog-2026-09-08.json": "ab1e52a97a73ea1530d48845b7b470871f35ec7898687bbbcda71e4d80dcd1f5",
+    "existing-shifting-adjudicated-catalog-2026-09-08.json": "924a77009aff0db778c3e909c8e286edf9d80037c94f0739a0d800d89d145c39",
+    "existing-crank-drive-adjudicated-catalog-2026-09-08.json": "b477332c223b3d667a0a2542701fca8697802d5bee5c98f703e05588448b5458"
+  },
+  "shared_definition_conflicts": [],
+  "publication_authorized": false,
+  "product_writes": false
+}

@@ -297,6 +297,14 @@ void main() {
       notifications,
       contains("queryParameters: {'paymentId': entityId}"),
     );
+    expect(
+      notifications,
+      contains("if (type == 'sales_payment_voided')"),
+    );
+    expect(
+      notifications,
+      contains("'/sales/invoices/\${Uri.encodeComponent(invoiceId)}'"),
+    );
 
     final paymentBranch = _section(
       accounting,

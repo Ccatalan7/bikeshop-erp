@@ -8,12 +8,16 @@ import '../../../shared/services/tenant_service.dart';
 import '../models/conversation.dart';
 import '../models/conversation_context_hint.dart';
 import '../models/message.dart';
+import '../models/message_reaction.dart';
 import '../services/conversation_context_hint_cache.dart';
+import '../services/conversation_history_store.dart';
 import '../services/meta_messaging_service.dart';
 import '../services/messaging_service.dart';
 import '../utils/message_receipt_projection.dart';
 import '../utils/message_receipt_refresh_coalescer.dart';
 import '../utils/message_timeline_merge.dart';
+import '../models/message_reply.dart';
+import '../models/chat_attachment_draft.dart';
 import '../../../shared/services/notification_service.dart';
 
 class ConversationDraft {
@@ -74,6 +78,10 @@ class _OutgoingConversationPreview {
 
 class ChatProvider extends ChangeNotifier {
   final MessagingService _service = MessagingService();
+
+  /// Recent timeline of each conversation on this device, so a chat opens on
+  /// what it already has instead of on a spinner. See the store's note.
+  final ConversationHistoryStore _historyStore = ConversationHistoryStore();
   MetaMessagingService? _metaMessagingService;
   final ConversationContextHintCache _contextHintCache =
       ConversationContextHintCache();
@@ -99,6 +107,8 @@ class ChatProvider extends ChangeNotifier {
   final Map<String, Message> _optimisticMessages = {};
   final Map<String, Map<String, dynamic>> _userCache = {}; // id -> user data
   final Map<String, ConversationDraft> _conversationDrafts = {};
+  final Map<String, ChatComposerDraft> _composerDrafts = {};
+  final Map<String, List<PendingChatAttachment>> _composerAttachments = {};
   final Map<String, MetaConversationTransport> _metaConversationTransports = {};
   final Set<String> _metaOutboundReceiptSnapshots = {};
   final Set<String> _metaConversationTransportSnapshots = {};
@@ -132,6 +142,24 @@ class ChatProvider extends ChangeNotifier {
 
   // Subscriptions
   StreamSubscription? _messagesSubscription;
+  StreamSubscription? _reactionsSubscription;
+
+  /// My reaction as I just set it, per message, until the server's snapshot
+  /// carries it. `null` means «removed». Painted at once, like WhatsApp; a
+  /// refused write puts the previous state back.
+  final Map<String, String?> _pendingReactionOverrides = <String, String?>{};
+  // Reacciones del chat abierto, por id de mensaje. Viven aparte del timeline
+  // porque son de otra tabla: `messages` se transmite por realtime y un stream
+  // de Supabase no trae relaciones embebidas.
+  Map<String, List<MessageReaction>> _reactionsByMessageId = const {};
+
+  /// Última foto conocida de reacciones por conversación. Sobrevive al cierre
+  /// del chat para que reabrirlo pinte los chips en la primera trama, en vez de
+  /// dejarlos aparecer cuando llega la consulta inicial del stream. Es el mismo
+  /// principio que el estado de vista del panel: el widget es desechable, lo
+  /// que se muestra no tiene por qué reconstruirse desde cero.
+  final Map<String, Map<String, List<MessageReaction>>>
+      _reactionsByConversation = {};
   RealtimeChannel? _conversationsSubscription;
   StreamSubscription? _notificationSubscription;
   StreamSubscription<AuthState>? _authStateSubscription;
@@ -397,6 +425,9 @@ class ChatProvider extends ChangeNotifier {
       final mustClearBeforeResolution =
           state.event == AuthChangeEvent.signedOut ||
               state.session?.user.id != _sessionUserId;
+      // Another person signing in on this device must not open the previous
+      // person's chats from disk.
+      if (mustClearBeforeResolution) unawaited(_historyStore.clear());
       unawaited(
         synchronizeSessionScope(
           clearBeforeResolution: mustClearBeforeResolution,
@@ -461,6 +492,8 @@ class ChatProvider extends ChangeNotifier {
   }
 
   void _invalidateSessionState({required String? nextUserId}) {
+    _composerDrafts.clear();
+    _composerAttachments.clear();
     _sessionEpoch += 1;
     _sessionReady = false;
     _sessionUserId = nextUserId;
@@ -472,12 +505,16 @@ class ChatProvider extends ChangeNotifier {
     _messagesRetryTimer?.cancel();
     _contextHintCachePersistTimer?.cancel();
     unawaited(_messagesSubscription?.cancel() ?? Future<void>.value());
+    unawaited(_reactionsSubscription?.cancel() ?? Future<void>.value());
     unawaited(_notificationSubscription?.cancel() ?? Future<void>.value());
     final conversationsSubscription = _conversationsSubscription;
     if (conversationsSubscription != null) {
       unawaited(conversationsSubscription.unsubscribe());
     }
     _messagesSubscription = null;
+    _reactionsSubscription = null;
+    _reactionsByMessageId = const {};
+    _reactionsByConversation.clear();
     _notificationSubscription = null;
     _conversationsSubscription = null;
 
@@ -630,6 +667,7 @@ class ChatProvider extends ChangeNotifier {
       },
       onMessageReceiptUpdate: (update) {
         if (!_isCurrentSession(epoch)) return;
+        _applyRealtimeReceipt(update);
         _messageReceiptRefreshCoalescer.schedule(
           conversationId: update.conversationId,
           messageId: update.messageId,
@@ -822,6 +860,7 @@ class ChatProvider extends ChangeNotifier {
       createdBy: old.createdBy,
       creatorName: old.creatorName,
       contextHint: old.contextHint,
+      taskThreadContexts: old.taskThreadContexts,
     );
 
     _sortConversationsByRecentActivity();
@@ -866,6 +905,86 @@ class ChatProvider extends ChangeNotifier {
         }
       },
     );
+  }
+
+  /// Paints a provider receipt straight from the realtime row, on the bubble
+  /// and on the inbox tile. The coalesced server read that follows stays
+  /// authoritative, but it costs 1.0–1.25 s of round trips (measured
+  /// 2026-09-03); the double check must not wait for it.
+  void _applyRealtimeReceipt(MessageReceiptRealtimeUpdate update) {
+    if (update.record.isEmpty) return;
+    final Message message;
+    try {
+      message = Message.fromJson(
+        Map<String, dynamic>.from(update.record),
+        currentUserId: _service.currentUserId,
+      );
+    } catch (_) {
+      return;
+    }
+
+    Message merge(Message existing) => Message(
+          id: existing.id,
+          conversationId: existing.conversationId,
+          senderId: existing.senderId ?? message.senderId,
+          content: message.content,
+          type: message.type,
+          metadata: Map<String, dynamic>.from(existing.metadata)
+            ..addAll(message.metadata),
+          createdAt: existing.createdAt,
+          messageSequence: existing.messageSequence ?? message.messageSequence,
+          threadRootMessageId:
+              existing.threadRootMessageId ?? message.threadRootMessageId,
+          isMe: existing.isMe,
+        );
+
+    var changed = false;
+    final cached = _cachedMessageLocation(message.id);
+    if (cached != null) {
+      cached.$1[cached.$2] = merge(cached.$1[cached.$2]);
+      changed = true;
+    }
+    final activeIndex = _activeMessages.indexWhere((m) => m.id == message.id);
+    if (activeIndex != -1) {
+      _activeMessages = List<Message>.of(_activeMessages)
+        ..[activeIndex] = merge(_activeMessages[activeIndex]);
+      changed = true;
+    }
+
+    var tile = false;
+    final index =
+        _conversations.indexWhere((c) => c.id == message.conversationId);
+    if (index != -1) {
+      final old = _conversations[index];
+      final clientMessageId = message.metadata['client_message_id']?.toString();
+      final preview = _outgoingConversationPreviews[message.conversationId];
+      final previewOwns = preview != null &&
+          clientMessageId != null &&
+          preview.clientMessageId == clientMessageId;
+      final sequenceOwns = old.lastMessageSequence != null &&
+          message.messageSequence != null &&
+          message.messageSequence! >= old.lastMessageSequence!;
+      tile = old.lastMessageId == message.id || previewOwns || sequenceOwns;
+      if (tile) {
+        _conversations[index] = projectLatestMessageReceipt(old, message);
+        if (previewOwns) {
+          _outgoingConversationPreviews.remove(message.conversationId);
+        }
+        changed = true;
+      }
+    }
+
+    _debugInboxSync(
+      'messageReceipts:realtime',
+      conversationId: message.conversationId,
+      messageId: message.id,
+      details: {
+        'status': update.externalStatus,
+        'bubble': cached != null || activeIndex != -1,
+        'tile': tile,
+      },
+    );
+    if (changed) notifyListeners();
   }
 
   Future<void> _refreshMessageReceipts(
@@ -975,7 +1094,16 @@ class ChatProvider extends ChangeNotifier {
       if (c.isSupplierConversation &&
           hintedSupplier != null &&
           hintedSupplier.isNotEmpty) {
-        return hintedSupplier;
+        // La empresa y, cuando se sabe, la persona: dos hilos del mismo
+        // proveedor con distinto vendedor se veían idénticos en la bandeja.
+        final person = c.contextHint?.contactPersonName?.trim();
+        if (person == null || person.isEmpty) return hintedSupplier;
+        // Un contacto desactivado conserva su hilo, pero ya no es a quien se
+        // le escribe: la bandeja lo dice en el título.
+        final former = c.contextHint?.contactPersonIsActive == false;
+        return former
+            ? '$hintedSupplier · $person (anterior)'
+            : '$hintedSupplier · $person';
       }
       if (c.creatorName != null && c.creatorName!.isNotEmpty) {
         return c.creatorName ?? 'Cliente';
@@ -1031,6 +1159,36 @@ class ChatProvider extends ChangeNotifier {
 
   ConversationDraft? getConversationDraft(String conversationId) {
     return _conversationDrafts[conversationId];
+  }
+
+  int get composerSession => _sessionEpoch;
+
+  List<PendingChatAttachment> getComposerAttachments(String conversationId) =>
+      List.unmodifiable(_composerAttachments[conversationId] ?? const []);
+
+  void saveComposerAttachments(
+      String conversationId, List<PendingChatAttachment> attachments,
+      {required int session}) {
+    if (_disposed || session != _sessionEpoch) return;
+    if (attachments.isEmpty) {
+      _composerAttachments.remove(conversationId);
+    } else {
+      _composerAttachments[conversationId] = List.of(attachments);
+    }
+  }
+
+  ChatComposerDraft? getComposerDraft(String conversationId) =>
+      _composerDrafts[conversationId];
+
+  /// Storage only: typing and disposal must not rebuild the provider's tree.
+  void saveComposerDraft(String conversationId, ChatComposerDraft draft,
+      {required int session}) {
+    if (_disposed || session != _sessionEpoch) return;
+    if (draft.text.isEmpty && draft.reply == null) {
+      _composerDrafts.remove(conversationId);
+    } else {
+      _composerDrafts[conversationId] = draft;
+    }
   }
 
   int takeOpeningUnreadCount(String conversationId, {int fallback = 0}) {
@@ -1113,7 +1271,9 @@ class ChatProvider extends ChangeNotifier {
       _conversations = _applyOutgoingConversationPreviews(
         _applyIncomingConversationPreviews(
           _applyLocalReadOverrides(
-            _mergeCachedContextHints(newConversations),
+            _mergeCachedContextHints(
+              _keepFresherLocalLastMessage(newConversations),
+            ),
           ),
         ),
       );
@@ -1375,6 +1535,7 @@ class ChatProvider extends ChangeNotifier {
       createdBy: conversation.createdBy,
       creatorName: creatorName ?? conversation.creatorName,
       contextHint: contextHint,
+      taskThreadContexts: conversation.taskThreadContexts,
     );
   }
 
@@ -1484,6 +1645,28 @@ class ChatProvider extends ChangeNotifier {
     _trimMessageCache();
   }
 
+  /// Hands the on-device tail to a chat whose memory cache is empty, unless
+  /// the live stream got there first. The stream's snapshot then merges over
+  /// these rows exactly as it merges over the memory cache.
+  Future<void> _restoreConversationHistory(String conversationId) async {
+    final epoch = _sessionEpoch;
+    final restored = await _historyStore.read(
+      conversationId,
+      currentUserId: _service.currentUserId,
+    );
+    if (_disposed ||
+        !_isCurrentSession(epoch) ||
+        restored.isEmpty ||
+        (_messageCacheByConversation[conversationId]?.isNotEmpty ?? false)) {
+      return;
+    }
+    _cacheMessages(conversationId, restored, preserveFullHistory: true);
+    if (_activeConversationId == conversationId) {
+      _isLoading = false;
+    }
+    notifyListeners();
+  }
+
   void _cacheMessages(
     String conversationId,
     List<Message> messages, {
@@ -1494,6 +1677,7 @@ class ChatProvider extends ChangeNotifier {
             ? messages.sublist(messages.length - _recentMessageCacheLimit)
             : List<Message>.of(messages);
     _messageCacheByConversation[conversationId] = bounded;
+    _historyStore.scheduleWrite(conversationId, bounded);
     _messageTimelineRevisionByConversation[conversationId] =
         (_messageTimelineRevisionByConversation[conversationId] ?? 0) + 1;
     _messageCacheOrder
@@ -1579,6 +1763,9 @@ class ChatProvider extends ChangeNotifier {
         _messageCacheByConversation[conversationId] ?? <Message>[];
     _isLoading = _activeMessages.isEmpty;
     notifyListeners();
+    if (_activeMessages.isEmpty) {
+      unawaited(_restoreConversationHistory(conversationId));
+    }
 
     // Keep the unread badge until the visible message stream confirms the chat
     // is actually open. This prevents stale selections in compact panels from
@@ -1806,6 +1993,9 @@ class ChatProvider extends ChangeNotifier {
     _messagesRetryAttempt = 0;
     _messagesSubscription?.cancel();
     _messagesSubscription = null;
+    _reactionsSubscription?.cancel();
+    _reactionsSubscription = null;
+    _reactionsByMessageId = const {};
 
     _activeConversationId = null;
     _activeMessages = [];
@@ -1815,9 +2005,204 @@ class ChatProvider extends ChangeNotifier {
     }
   }
 
+  /// Reacciones del mensaje, ya agrupadas por emoji y sabiendo si el usuario
+  /// actual está dentro.
+  List<MessageReactionGroup> reactionGroupsFor(String messageId) {
+    final reactions = _reactionsByMessageId[messageId];
+    if (reactions == null || reactions.isEmpty) {
+      return const <MessageReactionGroup>[];
+    }
+    return MessageReactionGroup.group(
+      reactions,
+      currentUserId: _service.currentUserId,
+    );
+  }
+
+  /// El emoji con el que el usuario actual reaccionó a este mensaje, si hay.
+  String? myReactionFor(String messageId) {
+    final userId = _service.currentUserId;
+    if (userId == null) return null;
+    for (final reaction in _reactionsByMessageId[messageId] ?? const []) {
+      if (reaction.reactorUserId == userId) return reaction.emoji;
+    }
+    return null;
+  }
+
+  /// Pone, reemplaza o quita la reacción del usuario sobre un mensaje.
+  ///
+  /// Tocar el mismo emoji que ya pusiste la retira, como en WhatsApp. El
+  /// chip se pinta en el acto con la reacción del usuario y el servidor
+  /// confirma detrás; si rechaza la escritura —permisos, o Meta no aceptó la
+  /// reacción— el estado anterior vuelve y el error sube al que llamó.
+  Future<void> toggleMyReaction({
+    required Message message,
+    required String emoji,
+  }) async {
+    // Tocar el emoji que ya pusiste lo retira, como en WhatsApp.
+    final isRemoval = myReactionFor(message.id) == emoji;
+    final userId = _service.currentUserId;
+
+    final index =
+        _conversations.indexWhere((c) => c.id == message.conversationId);
+    final conversation = index == -1 ? null : _conversations[index];
+
+    final previousReactions =
+        List<MessageReaction>.of(_reactionsByMessageId[message.id] ?? const []);
+    final previousOverride = _pendingReactionOverrides[message.id];
+    final hadOverride = _pendingReactionOverrides.containsKey(message.id);
+    if (userId != null) {
+      _pendingReactionOverrides[message.id] = isRemoval ? null : emoji;
+      _applyMyReactionLocally(
+        messageId: message.id,
+        userId: userId,
+        emoji: isRemoval ? null : emoji,
+      );
+      notifyListeners();
+    }
+
+    try {
+      // En una conversación de WhatsApp la reacción tiene que llegarle al
+      // contacto. Escribirla sólo en nuestra base mostraría en el ERP algo
+      // que el proveedor nunca vio, que es peor que no tener la función.
+      if (conversation != null && conversation.isWhatsApp) {
+        await _service.sendWhatsAppReaction(
+          message: message,
+          emoji: isRemoval ? '' : emoji,
+        );
+      } else if (isRemoval) {
+        await _service.removeMyReaction(messageId: message.id);
+      } else {
+        await _service.setMyReaction(
+          messageId: message.id,
+          conversationId: message.conversationId,
+          emoji: emoji,
+        );
+      }
+    } catch (_) {
+      if (hadOverride) {
+        _pendingReactionOverrides[message.id] = previousOverride;
+      } else {
+        _pendingReactionOverrides.remove(message.id);
+      }
+      if (_activeConversationId == message.conversationId) {
+        final restored =
+            Map<String, List<MessageReaction>>.from(_reactionsByMessageId);
+        if (previousReactions.isEmpty) {
+          restored.remove(message.id);
+        } else {
+          restored[message.id] = previousReactions;
+        }
+        _reactionsByMessageId = restored;
+        _reactionsByConversation[message.conversationId] = restored;
+        notifyListeners();
+      }
+      rethrow;
+    }
+  }
+
+  /// Rewrites my entry for [messageId] in the reactions in memory.
+  void _applyMyReactionLocally({
+    required String messageId,
+    required String userId,
+    required String? emoji,
+  }) {
+    final updated =
+        Map<String, List<MessageReaction>>.from(_reactionsByMessageId);
+    final others = (updated[messageId] ?? const <MessageReaction>[])
+        .where((reaction) => reaction.reactorUserId != userId)
+        .toList();
+    if (emoji != null) {
+      others.add(
+        MessageReaction(
+          id: 'local-$messageId-$userId',
+          messageId: messageId,
+          emoji: emoji,
+          reactorUserId: userId,
+          createdAt: DateTime.now(),
+        ),
+      );
+    }
+    if (others.isEmpty) {
+      updated.remove(messageId);
+    } else {
+      updated[messageId] = others;
+    }
+    _reactionsByMessageId = updated;
+    final conversationId = _activeConversationId;
+    if (conversationId != null) {
+      _reactionsByConversation[conversationId] = updated;
+    }
+  }
+
+  /// A server snapshot that still lacks a reaction I set a moment ago keeps
+  /// my version; one that carries it (or its removal) settles the override.
+  Map<String, List<MessageReaction>> _overlayPendingReactions(
+    Map<String, List<MessageReaction>> grouped,
+  ) {
+    final userId = _service.currentUserId;
+    if (userId == null || _pendingReactionOverrides.isEmpty) return grouped;
+    final merged = Map<String, List<MessageReaction>>.from(grouped);
+    for (final entry in List.of(_pendingReactionOverrides.entries)) {
+      final messageId = entry.key;
+      final expected = entry.value;
+      final serverMine = (grouped[messageId] ?? const <MessageReaction>[])
+          .where((reaction) => reaction.reactorUserId == userId)
+          .map((reaction) => reaction.emoji)
+          .firstOrNull;
+      if (serverMine == expected) {
+        _pendingReactionOverrides.remove(messageId);
+        continue;
+      }
+      final others = (grouped[messageId] ?? const <MessageReaction>[])
+          .where((reaction) => reaction.reactorUserId != userId)
+          .toList();
+      if (expected != null) {
+        others.add(
+          MessageReaction(
+            id: 'local-$messageId-$userId',
+            messageId: messageId,
+            emoji: expected,
+            reactorUserId: userId,
+            createdAt: DateTime.now(),
+          ),
+        );
+      }
+      if (others.isEmpty) {
+        merged.remove(messageId);
+      } else {
+        merged[messageId] = others;
+      }
+    }
+    return merged;
+  }
+
+  void _subscribeToActiveReactions(String conversationId, int operationEpoch) {
+    _reactionsSubscription?.cancel();
+    _reactionsByMessageId =
+        _reactionsByConversation[conversationId] ?? const {};
+    _reactionsSubscription = _service.getReactionsStream(conversationId).listen(
+      (snapshot) {
+        // Un evento tardío de una conversación que ya se cerró no debe pintar
+        // reacciones sobre la que está abierta.
+        if (!_isCurrentSession(operationEpoch) ||
+            _activeConversationId != conversationId) {
+          return;
+        }
+        final grouped = _overlayPendingReactions(snapshot);
+        _reactionsByConversation[conversationId] = grouped;
+        _reactionsByMessageId = grouped;
+        notifyListeners();
+      },
+      onError: (Object error) {
+        debugPrint('Error en el realtime de reacciones: $error');
+      },
+    );
+  }
+
   void _subscribeToActiveMessages(String conversationId) {
     if (_activeConversationId != conversationId) return;
     final operationEpoch = _sessionEpoch;
+    _subscribeToActiveReactions(conversationId, operationEpoch);
 
     _messagesRetryTimer?.cancel();
     _messagesSubscription?.cancel();
@@ -2117,6 +2502,73 @@ class ChatProvider extends ChangeNotifier {
     });
   }
 
+  /// A conversation read can answer after a receipt that arrived by realtime
+  /// while it was in flight. The list it brings is then behind the tile: the
+  /// same message with a weaker receipt, or a last message older than the one
+  /// already shown. Neither moves a tile backwards (the owner watched
+  /// 1 → 2 → 1 → 2 checks, 2026-09-03). Unread counts, read cursors and
+  /// context still come from the server row.
+  List<Conversation> _keepFresherLocalLastMessage(List<Conversation> loaded) {
+    if (_conversations.isEmpty) return loaded;
+    final localById = {for (final c in _conversations) c.id: c};
+    return loaded.map((server) {
+      final local = localById[server.id];
+      if (local == null || local.lastMessageId == null) return server;
+      final localSequence = local.lastMessageSequence;
+      final serverSequence = server.lastMessageSequence;
+      final localIsNewer = localSequence != null &&
+          serverSequence != null &&
+          localSequence > serverSequence;
+      final localReceiptStronger =
+          local.lastMessageId == server.lastMessageId &&
+              receiptRank(local.lastMessageExternalStatus) >
+                  receiptRank(server.lastMessageExternalStatus);
+      if (!localIsNewer && !localReceiptStronger) return server;
+
+      _debugInboxSync(
+        'loadConversations:keptLocalReceipt',
+        conversationId: server.id,
+        messageId: local.lastMessageId,
+        details: {
+          'localIsNewer': localIsNewer,
+          'local': local.lastMessageExternalStatus,
+          'server': server.lastMessageExternalStatus,
+        },
+      );
+      return Conversation(
+        id: server.id,
+        type: server.type,
+        channel: server.channel,
+        isGroup: server.isGroup,
+        counterpartyType: server.counterpartyType,
+        status: server.status,
+        title: server.title,
+        contextType: server.contextType,
+        contextId: server.contextId,
+        updatedAt: local.updatedAt.isAfter(server.updatedAt)
+            ? local.updatedAt
+            : server.updatedAt,
+        lastMessageAt: local.lastMessageAt ?? server.lastMessageAt,
+        staffLastReadAt: server.staffLastReadAt,
+        staffLastReadMessageSequence: server.staffLastReadMessageSequence,
+        lastMessageId: local.lastMessageId,
+        lastMessageSequence: local.lastMessageSequence,
+        lastMessageContent: local.lastMessageContent,
+        lastMessageType: local.lastMessageType,
+        lastMessageMetadata: local.lastMessageMetadata,
+        lastMessageIsMine: local.lastMessageIsMine,
+        lastMessageDirection: local.lastMessageDirection,
+        lastMessageExternalStatus: local.lastMessageExternalStatus,
+        unreadCount: server.unreadCount,
+        participantIds: server.participantIds,
+        createdBy: server.createdBy,
+        creatorName: server.creatorName,
+        contextHint: server.contextHint,
+        taskThreadContexts: server.taskThreadContexts,
+      );
+    }).toList(growable: false);
+  }
+
   List<Conversation> _applyLocalReadOverrides(
       List<Conversation> conversations) {
     if (_localReadAtByConversation.isEmpty) return conversations;
@@ -2324,6 +2776,7 @@ class ChatProvider extends ChangeNotifier {
       createdBy: old.createdBy,
       creatorName: old.creatorName,
       contextHint: old.contextHint,
+      taskThreadContexts: old.taskThreadContexts,
     );
   }
 
@@ -2369,6 +2822,7 @@ class ChatProvider extends ChangeNotifier {
       createdBy: old.createdBy,
       creatorName: old.creatorName,
       contextHint: old.contextHint,
+      taskThreadContexts: old.taskThreadContexts,
     );
   }
 
@@ -2434,6 +2888,7 @@ class ChatProvider extends ChangeNotifier {
       createdBy: old.createdBy,
       creatorName: old.creatorName,
       contextHint: old.contextHint,
+      taskThreadContexts: old.taskThreadContexts,
     );
   }
 
@@ -2556,6 +3011,7 @@ class ChatProvider extends ChangeNotifier {
     String type = 'text',
     Map<String, dynamic>? metadata,
     String? conversationId,
+    String? threadRootMessageId,
   }) async {
     final operationEpoch = _sessionEpoch;
     if (!_isCurrentSession(operationEpoch)) return;
@@ -2571,7 +3027,7 @@ class ChatProvider extends ChangeNotifier {
     }
     final sendStartedAt = DateTime.now();
 
-    final tempId = 'temp-${DateTime.now().millisecondsSinceEpoch}';
+    final tempId = 'temp-${DateTime.now().microsecondsSinceEpoch}';
     final messageMetadata = <String, dynamic>{
       ...?metadata,
       'client_message_id': tempId,
@@ -2586,6 +3042,7 @@ class ChatProvider extends ChangeNotifier {
       type: type,
       metadata: messageMetadata,
       createdAt: DateTime.now(),
+      threadRootMessageId: threadRootMessageId,
       isMe: true,
     );
 
@@ -2614,6 +3071,7 @@ class ChatProvider extends ChangeNotifier {
         content: content,
         type: type,
         metadata: messageMetadata,
+        threadRootMessageId: threadRootMessageId,
       );
       _debugInboxSync(
         'sendMessage:serverDone',
@@ -2796,6 +3254,65 @@ class ChatProvider extends ChangeNotifier {
     return previousConversation;
   }
 
+  /// The inbox tile shows the same optimistic row as the bubble, so a receipt
+  /// that the bubble learns locally (database acceptance, provider acceptance,
+  /// failure) has to reach the tile the same instant. Without this the tile
+  /// kept the clock until the next server reload, one or two seconds after
+  /// the bubble had already shown its check.
+  bool _syncOutgoingPreviewWithMessage(
+    String messageId, {
+    String? content,
+    Map<String, dynamic>? metadataUpdates,
+  }) {
+    String? conversationId;
+    _OutgoingConversationPreview? preview;
+    for (final entry in _outgoingConversationPreviews.entries) {
+      if (entry.value.clientMessageId == messageId) {
+        conversationId = entry.key;
+        preview = entry.value;
+        break;
+      }
+    }
+    if (conversationId == null || preview == null) return false;
+
+    final index = _conversations.indexWhere((c) => c.id == conversationId);
+    if (index == -1) return false;
+    final current = _conversations[index];
+    // A newer row already owns the tile: leave it alone.
+    if (current.lastMessageMetadata['client_message_id']?.toString() !=
+        messageId) {
+      return false;
+    }
+
+    final metadata = Map<String, dynamic>.from(preview.metadata);
+    if (metadataUpdates != null) metadata.addAll(metadataUpdates);
+    final externalStatus = metadata['external_status']?.toString() ??
+        metadata['whatsapp_status']?.toString() ??
+        preview.externalStatus;
+    final next = _OutgoingConversationPreview(
+      clientMessageId: preview.clientMessageId,
+      content: content ?? preview.content,
+      messageType: preview.messageType,
+      metadata: metadata,
+      direction: preview.direction,
+      externalStatus: externalStatus,
+      createdAt: preview.createdAt,
+      previousConversation: preview.previousConversation,
+    );
+    _outgoingConversationPreviews[conversationId] = next;
+    _conversations[index] = _conversationWithOutgoingPreview(current, next);
+    _debugInboxSync(
+      'outgoingPreview:receipt',
+      conversationId: conversationId,
+      messageId: messageId,
+      details: {
+        'externalStatus': externalStatus,
+        'pending': metadata['pending'],
+      },
+    );
+    return true;
+  }
+
   void removeMessageById(String messageId) {
     if (_disposed) return;
     final removedOptimistic = _optimisticMessages.remove(messageId) != null;
@@ -2846,8 +3363,11 @@ class ChatProvider extends ChangeNotifier {
         metadata: updatedMetadata,
         createdAt: optimisticMessage.createdAt,
         messageSequence: optimisticMessage.messageSequence,
+        threadRootMessageId: optimisticMessage.threadRootMessageId,
         isMe: optimisticMessage.isMe,
       );
+      _syncOutgoingPreviewWithMessage(messageId,
+          metadataUpdates: metadataUpdates);
       notifyListeners();
       return;
     }
@@ -2869,9 +3389,12 @@ class ChatProvider extends ChangeNotifier {
       metadata: updatedMetadata,
       createdAt: existing.createdAt,
       messageSequence: existing.messageSequence,
+      threadRootMessageId: existing.threadRootMessageId,
       isMe: existing.isMe,
     );
 
+    _syncOutgoingPreviewWithMessage(messageId,
+        metadataUpdates: metadataUpdates);
     notifyListeners();
   }
 
@@ -2899,7 +3422,13 @@ class ChatProvider extends ChangeNotifier {
         metadata: updatedMetadata,
         createdAt: optimisticMessage.createdAt,
         messageSequence: optimisticMessage.messageSequence,
+        threadRootMessageId: optimisticMessage.threadRootMessageId,
         isMe: optimisticMessage.isMe,
+      );
+      _syncOutgoingPreviewWithMessage(
+        messageId,
+        content: content,
+        metadataUpdates: metadataUpdates,
       );
       notifyListeners();
       return;
@@ -2924,9 +3453,15 @@ class ChatProvider extends ChangeNotifier {
       metadata: updatedMetadata,
       createdAt: existing.createdAt,
       messageSequence: existing.messageSequence,
+      threadRootMessageId: existing.threadRootMessageId,
       isMe: existing.isMe,
     );
 
+    _syncOutgoingPreviewWithMessage(
+      messageId,
+      content: content,
+      metadataUpdates: metadataUpdates,
+    );
     notifyListeners();
   }
 
@@ -3011,12 +3546,14 @@ class ChatProvider extends ChangeNotifier {
   void dispose() {
     _disposed = true;
     _sessionResolutionEpoch += 1;
+    _historyStore.dispose();
     _conversationsRefreshTimer?.cancel();
     _conversationsFollowUpRefreshTimer?.cancel();
     _messagesRetryTimer?.cancel();
     _contextHintCachePersistTimer?.cancel();
     _messageReceiptRefreshCoalescer.dispose();
     _messagesSubscription?.cancel();
+    _reactionsSubscription?.cancel();
     _conversationsSubscription?.unsubscribe();
     _notificationSubscription?.cancel();
     _authStateSubscription?.cancel();

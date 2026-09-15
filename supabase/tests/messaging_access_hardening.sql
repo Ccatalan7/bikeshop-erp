@@ -3,7 +3,7 @@ begin;
 select set_config('request.jwt.claims', '{}', true);
 select set_config('request.jwt.claim.sub', '', true);
 
-select plan(114);
+select plan(115);
 
 -- Two tenants, three staff identities and three customer identities exercise
 -- same-tenant shared support, participant-only internal chat, and strict
@@ -36,6 +36,17 @@ insert into auth.users (
     'authenticated', 'authenticated', 'msg-staff-other@example.invalid', '', now(),
     '{}'::jsonb,
     jsonb_build_object('tenant_id', '9f190001-0000-4000-8000-000000000002'),
+    now(), now()
+  ),
+  (
+    '9f190001-0000-4000-8000-000000000094',
+    'authenticated', 'authenticated', 'msg-owner@example.invalid', '', now(),
+    jsonb_build_object('account_type', 'erp_owner'),
+    jsonb_build_object(
+      'display_name', 'Viñabike',
+      'full_name', 'Viñabike',
+      'name', 'Viñabike'
+    ),
     now(), now()
   ),
   (
@@ -76,6 +87,7 @@ where user_id in (
   '9f190001-0000-4000-8000-000000000091',
   '9f190001-0000-4000-8000-000000000092',
   '9f190001-0000-4000-8000-000000000093',
+  '9f190001-0000-4000-8000-000000000094',
   '9f190001-0000-4000-8000-000000000191',
   '9f190001-0000-4000-8000-000000000192',
   '9f190001-0000-4000-8000-000000000193'
@@ -100,6 +112,12 @@ set raw_user_meta_data = case id
     jsonb_build_object(
       'tenant_id', '9f190001-0000-4000-8000-000000000002'
     )
+  when '9f190001-0000-4000-8000-000000000094'::uuid then
+    jsonb_build_object(
+      'display_name', 'Viñabike',
+      'full_name', 'Viñabike',
+      'name', 'Viñabike'
+    )
   when '9f190001-0000-4000-8000-000000000191'::uuid then
     jsonb_build_object(
       'account_type', 'public_store_customer',
@@ -120,6 +138,7 @@ where id in (
   '9f190001-0000-4000-8000-000000000091',
   '9f190001-0000-4000-8000-000000000092',
   '9f190001-0000-4000-8000-000000000093',
+  '9f190001-0000-4000-8000-000000000094',
   '9f190001-0000-4000-8000-000000000191',
   '9f190001-0000-4000-8000-000000000192',
   '9f190001-0000-4000-8000-000000000193'
@@ -141,6 +160,11 @@ insert into public.user_profiles (
   (
     '9f190001-0000-4000-8000-000000000093',
     '9f190001-0000-4000-8000-000000000002',
+    'admin', '{}'::jsonb, true
+  ),
+  (
+    '9f190001-0000-4000-8000-000000000094',
+    '9f190001-0000-4000-8000-000000000001',
     'admin', '{}'::jsonb, true
   );
 
@@ -164,6 +188,12 @@ insert into public.customers (
     '9f190001-0000-4000-8000-000000000002',
     'Messaging Customer Other', 'msg-customer-other@example.invalid',
     '9f190001-0000-4000-8000-000000000193'
+  ),
+  (
+    '9f190001-0000-4000-8000-000000000114',
+    '9f190001-0000-4000-8000-000000000001',
+    'Usuario', 'msg-owner@example.invalid',
+    '9f190001-0000-4000-8000-000000000094'
   );
 
 -- Auth bootstrap triggers can leave transaction-local claims behind.
@@ -859,6 +889,29 @@ select throws_ok(
   '42501',
   'permission denied for function get_public_user_info',
   'anonymous callers cannot invoke participant profile lookup'
+);
+reset role;
+
+select set_config(
+  'request.jwt.claims',
+  jsonb_build_object(
+    'sub', '9f190001-0000-4000-8000-000000000094',
+    'role', 'authenticated'
+  )::text,
+  true
+);
+select set_config(
+  'request.jwt.claim.sub',
+  '9f190001-0000-4000-8000-000000000094',
+  true
+);
+set local role authenticated;
+select is(
+  public.get_public_user_info(
+    '9f190001-0000-4000-8000-000000000094'
+  )->>'name',
+  'Viñabike',
+  'an ERP owner label wins over a legacy customer membership'
 );
 reset role;
 

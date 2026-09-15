@@ -73,6 +73,11 @@ class SalesService extends ChangeNotifier {
   RealtimeChannel? _invoiceChannel;
   RealtimeChannel? _paymentChannel;
 
+  /// Tenant the live channels are bound to. Every invoice or payment load
+  /// used to tear both channels down and rebuild them; loads in flight left
+  /// one set orphaned and the events of the gap were lost.
+  String? _realtimeTenantId;
+
   final List<Invoice> _invoices = [];
   final List<Payment> _payments = [];
 
@@ -449,8 +454,11 @@ class SalesService extends ChangeNotifier {
         tenantId: savedInvoice.tenantId,
       );
 
-      await _accountingService.initialize();
-      await _accountingService.journalEntries.loadJournalEntries();
+      // The trigger only touches the journal for a posted document. Saving a
+      // draft waited here for the chart of accounts and a page of entries.
+      if (_postsAccounting(savedInvoice.status)) {
+        unawaited(_refreshAccountingProjection());
+      }
 
       invalidateInvoicesCache();
       notifyListeners();
@@ -515,7 +523,11 @@ class SalesService extends ChangeNotifier {
     if (invoice == null) {
       throw StateError('La factura atómica no pudo volver a cargarse.');
     }
-    await loadPayments(forceRefresh: true);
+    // The sale and its payments are committed in one command; the POS and
+    // the quick sale show the receipt from what they already know. The
+    // payments list is a projection and refreshes in the background instead
+    // of holding the counter.
+    unawaited(loadPayments(forceRefresh: true));
     return invoice;
   }
 
@@ -724,10 +736,13 @@ class SalesService extends ChangeNotifier {
         tenantId: savedPayment.tenantId,
       );
 
+      // The payment is committed and already in the cache; the invoice
+      // balance is read back because the screen shows it next. The full
+      // payments list and the accounting book are projections — they refresh
+      // in the background instead of holding the payment screen.
       await fetchInvoice(savedPayment.invoiceId, refresh: true);
-      await loadPayments(forceRefresh: true);
-      await _accountingService.initialize();
-      await _accountingService.journalEntries.loadJournalEntries();
+      unawaited(_refreshPaymentsQuietly());
+      unawaited(_refreshAccountingProjection());
 
       invalidatePaymentsCache();
       invalidateInvoicesCache(); // Invoice balance changes when payment added
@@ -804,9 +819,8 @@ class SalesService extends ChangeNotifier {
         tenantId: savedPayment.tenantId,
       );
       await fetchInvoice(savedPayment.invoiceId, refresh: true);
-      await loadPayments(forceRefresh: true);
-      await _accountingService.initialize();
-      await _accountingService.journalEntries.loadJournalEntries();
+      unawaited(_refreshPaymentsQuietly());
+      unawaited(_refreshAccountingProjection());
       invalidateInvoicesCache();
       invalidatePaymentsCache();
       notifyListeners();
@@ -885,14 +899,14 @@ class SalesService extends ChangeNotifier {
     // a false save failure or invite a second correction attempt.
     try {
       await fetchInvoice(result.payment.invoiceId, refresh: true);
-      await loadPayments(forceRefresh: true);
-      await _accountingService.initialize();
-      await _accountingService.journalEntries.loadJournalEntries();
     } catch (error) {
       debugPrint(
         'SalesService.correctSalesPayment post-commit refresh failed: $error',
       );
     }
+    // loadPayments reports its own failures; it needs no wrapper here.
+    unawaited(loadPayments(forceRefresh: true));
+    unawaited(_refreshAccountingProjection());
     return result;
   }
 
@@ -976,8 +990,7 @@ class SalesService extends ChangeNotifier {
         entityId: paymentId,
         tenantId: _tenantService.currentTenantId,
       );
-      await _accountingService.initialize();
-      await _accountingService.journalEntries.loadJournalEntries();
+      unawaited(_refreshAccountingProjection());
       invalidatePaymentsCache();
       invalidateInvoicesCache(); // Invoice balance changes when payment deleted
       notifyListeners();
@@ -1092,6 +1105,7 @@ class SalesService extends ChangeNotifier {
       final payload = {
         'status': status.name,
       };
+      final previous = _cachedInvoice(invoiceId);
       final result = await _databaseService.update(
           _invoicesCollection, invoiceId, payload);
       final updated = Invoice.fromJson(result);
@@ -1105,9 +1119,20 @@ class SalesService extends ChangeNotifier {
         tenantId: updated.tenantId,
       );
 
-      await _accountingService.initialize();
-      await _accountingService.journalEntries.loadJournalEntries();
+      // The trigger posts or deletes the journal entry only when the document
+      // enters or leaves confirmed/paid/overdue. Draft ↔ sent touches no
+      // accounting, yet every transition waited here for the chart of
+      // accounts and a page of journal entries. When the journal did change
+      // the reload runs in the background: nothing on the invoice page reads
+      // it before the next frame.
+      if (_postsAccounting(status) ||
+          previous == null ||
+          _postsAccounting(previous.status)) {
+        unawaited(_refreshAccountingProjection());
+      }
 
+      // Read the row back: AFTER triggers recalculate balances the RETURNING
+      // row does not carry yet.
       final refreshed = await fetchInvoice(invoiceId, refresh: true);
 
       if (status == InvoiceStatus.paid) {
@@ -1121,12 +1146,47 @@ class SalesService extends ChangeNotifier {
     }
   }
 
+  /// Statuses whose journal entry the database keeps: the trigger's
+  /// `v_non_posted` list is draft, sent and cancelled.
+  static bool _postsAccounting(InvoiceStatus status) =>
+      status == InvoiceStatus.confirmed ||
+      status == InvoiceStatus.paid ||
+      status == InvoiceStatus.overdue;
+
+  Invoice? _cachedInvoice(String id) {
+    for (final invoice in _invoices) {
+      if (invoice.id == id) return invoice;
+    }
+    return null;
+  }
+
+  Future<void> _refreshAccountingProjection() async {
+    try {
+      await _accountingService.initialize();
+      await _accountingService.journalEntries.loadJournalEntries();
+    } catch (e) {
+      debugPrint('SalesService: no se pudo refrescar el libro diario: $e');
+    }
+  }
+
+  Future<void> _refreshPaymentsQuietly() async {
+    try {
+      await loadPayments(forceRefresh: true);
+    } catch (e) {
+      debugPrint('SalesService: no se pudo refrescar los pagos: $e');
+    }
+  }
+
   void _ensureRealtimeSubscriptions() async {
     try {
       final tenantId = await _tenantService.getTenantId();
       if (tenantId == null) {
         return;
       }
+      if (_realtimeTenantId == tenantId && _invoiceChannel != null) {
+        return;
+      }
+      _realtimeTenantId = tenantId;
 
       final client = Supabase.instance.client;
 
@@ -1250,6 +1310,7 @@ class SalesService extends ChangeNotifier {
     _realtimeNotifyDebounce?.cancel();
     _invoiceChannel?.unsubscribe();
     _paymentChannel?.unsubscribe();
+    _realtimeTenantId = null;
     super.dispose();
   }
 

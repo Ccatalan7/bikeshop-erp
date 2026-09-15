@@ -829,12 +829,19 @@ abstract final class VinabikeThemeResolver {
               onContainer: Color(0xFFD7F7E5),
               border: Color(0xFF347757),
             )
+          // Light triads are the guide's `F-01` values (fg · soft · border);
+          // `onContainer` keeps a darker ink of the same hue so 9.5 px badge
+          // text on the soft surface clears contrast. Until 2026-09-05 these
+          // were approximations with a saturated border that read as
+          // «verde infantil» in every success badge. The success foreground
+          // stays #18764B, not the guide's #1F8A54: measured on `surface`
+          // that one is 4.36:1, under the 4.5:1 this resolver guarantees.
           : const VinabikeSemanticTone(
               accent: Color(0xFF18764B),
               onAccent: Color(0xFFFFFFFF),
-              container: Color(0xFFDFF4E9),
+              container: Color(0xFFE6F4EC),
               onContainer: Color(0xFF14583A),
-              border: Color(0xFF75BC97),
+              border: Color(0xFFB6DDC6),
             ),
       warning: isDark
           ? const VinabikeSemanticTone(
@@ -845,11 +852,11 @@ abstract final class VinabikeThemeResolver {
               border: Color(0xFF8D6B2D),
             )
           : const VinabikeSemanticTone(
-              accent: Color(0xFF8A5700),
+              accent: Color(0xFF8A5A00),
               onAccent: Color(0xFFFFFFFF),
-              container: Color(0xFFFFEDD0),
+              container: Color(0xFFFDF0DC),
               onContainer: Color(0xFF5C3A00),
-              border: Color(0xFFD6A653),
+              border: Color(0xFFF0CF95),
             ),
       danger: isDark
           ? const VinabikeSemanticTone(
@@ -862,9 +869,9 @@ abstract final class VinabikeThemeResolver {
           : const VinabikeSemanticTone(
               accent: Color(0xFFA8352E),
               onAccent: Color(0xFFFFFFFF),
-              container: Color(0xFFFAE5E2),
+              container: Color(0xFFFBE9E7),
               onContainer: Color(0xFF6E211C),
-              border: Color(0xFFDCA69F),
+              border: Color(0xFFEDB9B2),
             ),
       info: VinabikeSemanticTone(
         accent: scheme.primary,
@@ -885,14 +892,37 @@ abstract final class VinabikeThemeResolver {
               border: Color(0xFF56616E),
             )
           : const VinabikeSemanticTone(
-              accent: Color(0xFF596573),
+              accent: Color(0xFF5D6B78),
               onAccent: Color(0xFFFFFFFF),
-              container: Color(0xFFE9EDF2),
+              container: Color(0xFFEEF1F4),
               onContainer: Color(0xFF37414C),
-              border: Color(0xFFAAB3BE),
+              border: Color(0xFFD5DBE1),
             ),
       selectionContainer: scheme.primaryContainer,
       onSelectionContainer: scheme.onPrimaryContainer,
+      // Separador interno: una capa diseñada de la escalera de superficies
+      // usada como línea, no un borde con la opacidad bajada — esa derivación
+      // está prohibida y además no sigue al preset. Queda entre la superficie
+      // y `outlineVariant`, que es el lugar que ocupa `--hair` en los diseños.
+      hairline:
+          isDark ? scheme.surfaceContainerHighest : scheme.surfaceContainerHigh,
+      // Borde de la familia del acento para lo ya teñido con
+      // `selectionContainer`: más presente que el relleno, más suave que el
+      // acento pleno. Mezcla de dos roles diseñados, no un alpha sobre el
+      // acento, para que cada preset lo resuelva con su propio azul.
+      accentBorder: Color.lerp(
+        scheme.primaryContainer,
+        scheme.primary,
+        isDark ? 0.42 : 0.34,
+      )!,
+      // Tercer nivel de tinta. Se aleja de `onSurfaceVariant` hacia la
+      // superficie lo justo para quedar por debajo del caveat y bien por
+      // encima de deshabilitado, que baja bastante más.
+      faintForeground: Color.lerp(
+        scheme.onSurfaceVariant,
+        scheme.surface,
+        isDark ? 0.26 : 0.30,
+      )!,
       focusRing: scheme.primary,
       disabledForeground:
           scheme.onSurfaceVariant.withValues(alpha: isDark ? 0.5 : 0.56),

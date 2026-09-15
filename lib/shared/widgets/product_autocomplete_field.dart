@@ -19,6 +19,7 @@ enum _ProductCompatibilityBrowseMode {
 /// - Adding notes/descriptions to catalog products
 class ProductAutocompleteField extends StatefulWidget {
   final Function(ProductSelection) onProductSelected;
+  final ValueChanged<String>? onTextChanged;
   final TextEditingController? controller;
   final FocusNode? focusNode; // Allow external focus control
   final String? initialValue;
@@ -28,6 +29,9 @@ class ProductAutocompleteField extends StatefulWidget {
   final bool enabled;
   final bool showCost; // Show cost instead of price (for purchase invoices)
   final bool autoFocus; // Auto-focus when created
+  final bool preloadCatalog;
+  final int minimumSearchCharacters;
+  final bool compactSuggestions;
   final Future<Map<String, ProductCompatibilityAssessment>> Function(
       List<Product> products)? compatibilityResolver;
   final Object? compatibilityContextKey;
@@ -35,6 +39,7 @@ class ProductAutocompleteField extends StatefulWidget {
   const ProductAutocompleteField({
     super.key,
     required this.onProductSelected,
+    this.onTextChanged,
     this.controller,
     this.focusNode,
     this.initialValue,
@@ -44,9 +49,12 @@ class ProductAutocompleteField extends StatefulWidget {
     this.enabled = true,
     this.showCost = false, // Default to showing price
     this.autoFocus = false,
+    this.preloadCatalog = true,
+    this.minimumSearchCharacters = 0,
+    this.compactSuggestions = false,
     this.compatibilityResolver,
     this.compatibilityContextKey,
-  });
+  }) : assert(minimumSearchCharacters >= 0);
 
   @override
   State<ProductAutocompleteField> createState() =>
@@ -100,6 +108,9 @@ class _ProductAutocompleteFieldState extends State<ProductAutocompleteField> {
   }
 
   bool get _hasCompatibilityCapability => widget.compatibilityResolver != null;
+
+  bool get _hasSufficientQuery =>
+      _controller.text.trim().length >= widget.minimumSearchCharacters;
 
   bool get _isCompatibilityEngineActive =>
       _hasCompatibilityCapability && _compatibilityEngineEnabled;
@@ -182,6 +193,7 @@ class _ProductAutocompleteFieldState extends State<ProductAutocompleteField> {
   int _compatibilityRequestSerial = 0;
   int _catalogRequestSerial = 0;
   String? _lastCompatibilitySignature;
+  bool _initialCatalogLoadRequested = false;
 
   ProductType? get _exclusiveProductTypeFilter {
     if (_filterShowServices && !_filterShowProducts) {
@@ -196,18 +208,19 @@ class _ProductAutocompleteFieldState extends State<ProductAutocompleteField> {
   @override
   void initState() {
     super.initState();
-    _controller = widget.controller ?? TextEditingController();
+    _controller = widget.controller ??
+        TextEditingController(text: widget.initialValue ?? '');
     _focusNode = widget.focusNode ?? FocusNode();
     _compatibilityEngineEnabled = widget.compatibilityResolver != null;
     _inventoryService =
         Provider.of<shared_inventory.InventoryService>(context, listen: false);
-    _controller.text = widget.initialValue ?? '';
-    _controller.text = widget.initialValue ?? '';
-
-    // Defer loading to avoid "setState() called during build" if service notifies synchronously
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) _loadProducts();
-    });
+    if ((widget.preloadCatalog || widget.autoFocus) && _hasSufficientQuery) {
+      // Defer loading to avoid "setState() called during build" if the
+      // service notifies synchronously.
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _ensureInitialCatalogLoaded();
+      });
+    }
 
     _focusNode.addListener(() {
       if (_focusNode.hasFocus) {
@@ -298,6 +311,8 @@ class _ProductAutocompleteFieldState extends State<ProductAutocompleteField> {
     if (!mounted) return;
     _removeOverlay();
 
+    if (!_hasSufficientQuery) return;
+
     if (_filteredProducts.isEmpty &&
         _allFetchedProducts.isEmpty &&
         !widget.allowCustomItems) {
@@ -318,8 +333,11 @@ class _ProductAutocompleteFieldState extends State<ProductAutocompleteField> {
     final relativeY = position.dy - overlayPosition.dy;
     final relativeX = position.dx - overlayPosition.dx;
 
-    // Use a wider dropdown so the filter bar has room for all chips.
-    final dropdownWidth = size.width < 980 ? 980.0 : size.width;
+    // Full catalog browsing keeps room for its filter controls. Embedded
+    // capture flows use the field width and a deliberately simpler result row.
+    final dropdownWidth = widget.compactSuggestions
+        ? size.width
+        : (size.width < 980 ? 980.0 : size.width);
 
     const margin = 8.0;
     final fieldBottomInOverlay = relativeY + size.height;
@@ -407,7 +425,7 @@ class _ProductAutocompleteFieldState extends State<ProductAutocompleteField> {
             children: [
               if (_hasCompatibilityCapability)
                 _buildCompatibilityControls(theme),
-              _buildFiltersBar(theme),
+              if (!widget.compactSuggestions) _buildFiltersBar(theme),
               Flexible(
                 child: filteredProducts.isEmpty && !canShowCustomItem
                     ? _buildEmptyResultsState(theme)
@@ -427,7 +445,9 @@ class _ProductAutocompleteFieldState extends State<ProductAutocompleteField> {
                           }
 
                           final product = filteredProducts[index];
-                          return _buildProductTile(product, theme);
+                          return widget.compactSuggestions
+                              ? _buildCompactProductTile(product, theme)
+                              : _buildProductTile(product, theme);
                         },
                       ),
               ),
@@ -1232,6 +1252,55 @@ class _ProductAutocompleteFieldState extends State<ProductAutocompleteField> {
     );
   }
 
+  Widget _buildCompactProductTile(Product product, ThemeData theme) {
+    final details = <String>[
+      'SKU ${product.sku}',
+      if (product.supplierName?.trim().isNotEmpty == true)
+        product.supplierName!.trim(),
+      if (product.trackStock)
+        product.availableStockQuantity > 0
+            ? '${product.availableStockQuantity} ${product.unit.name} disponibles'
+            : 'Sin stock',
+    ];
+
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        ListTile(
+          leading: Icon(
+            product.productType == ProductType.service
+                ? Icons.build_outlined
+                : Icons.inventory_2_outlined,
+            color: theme.colorScheme.onSurfaceVariant,
+          ),
+          title: Text(
+            product.name,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+          ),
+          subtitle: Text(
+            details.join(' · '),
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+          ),
+          trailing: Text(
+            widget.showCost
+                ? '\$${product.cost.toStringAsFixed(0)}'
+                : '\$${product.price.toStringAsFixed(0)}',
+            style: theme.textTheme.titleSmall?.copyWith(
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          onTap: () {
+            _selectProduct(product);
+            _removeOverlay();
+          },
+        ),
+        Divider(height: 1, color: theme.colorScheme.outlineVariant),
+      ],
+    );
+  }
+
   /// Overlay entry for the enlarged image preview
   OverlayEntry? _imagePreviewOverlay;
   Timer? _imagePreviewTimer;
@@ -1355,8 +1424,30 @@ class _ProductAutocompleteFieldState extends State<ProductAutocompleteField> {
     await _reloadProductsForCurrentQuery();
   }
 
+  void _ensureInitialCatalogLoaded() {
+    if (_initialCatalogLoadRequested || !_hasSufficientQuery) return;
+    _initialCatalogLoadRequested = true;
+    unawaited(
+      _loadProducts().onError((error, stackTrace) {
+        if (mounted) {
+          _initialCatalogLoadRequested = false;
+        }
+      }),
+    );
+  }
+
   Future<void> _reloadProductsForCurrentQuery() async {
     if (!mounted) return;
+
+    if (!_hasSufficientQuery) {
+      ++_catalogRequestSerial;
+      setState(() {
+        _allFetchedProducts = [];
+        _isLoading = false;
+      });
+      _removeOverlay();
+      return;
+    }
 
     final requestSerial = ++_catalogRequestSerial;
     final productType = _exclusiveProductTypeFilter;
@@ -1394,6 +1485,19 @@ class _ProductAutocompleteFieldState extends State<ProductAutocompleteField> {
   }
 
   void _onTextChanged(String value) {
+    widget.onTextChanged?.call(value);
+
+    if (!_hasSufficientQuery) {
+      _debounce?.cancel();
+      ++_catalogRequestSerial;
+      setState(() {
+        _allFetchedProducts = [];
+        _isLoading = false;
+      });
+      _removeOverlay();
+      return;
+    }
+
     if (value.isEmpty) {
       _debounce
           ?.cancel(); // cancel any pending search before reloading full list
@@ -1462,8 +1566,9 @@ class _ProductAutocompleteFieldState extends State<ProductAutocompleteField> {
         _hasUserInteracted = true;
       });
     }
+    if (_hasSufficientQuery) _ensureInitialCatalogLoaded();
     // Show overlay when user explicitly taps the field
-    if (_focusNode.hasFocus) {
+    if (_focusNode.hasFocus && _hasSufficientQuery) {
       _showOverlay();
     }
   }

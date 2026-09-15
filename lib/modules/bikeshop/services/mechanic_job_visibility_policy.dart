@@ -1,9 +1,62 @@
 import '../models/bikeshop_models.dart';
+import '../../sales/models/sales_models.dart';
+import 'mechanic_job_sale_ui_policy.dart';
 
 bool isMechanicJobCurrentlyDelivered(MechanicJob job) {
   return job.status == JobStatus.entregado ||
       job.customStatus?.triggersDelivery == true ||
       job.customStatus?.code.trim().toLowerCase() == 'entregado';
+}
+
+/// Canonical eligibility for every UI that promises "Trabajos activos".
+///
+/// This deliberately matches the default Activos scope of the Jobs table:
+/// completed work remains operational until delivery, and a delivered job
+/// remains active while its invoice is still unpaid. Historical, cancelled,
+/// closed quotation, paid sale and completed warranty records do not qualify.
+bool isMechanicJobOperationallyActive(
+  MechanicJob job, {
+  Invoice? invoice,
+  String? customerName,
+  String? bikeName,
+  String? bikeBrand,
+  String? bikeModel,
+  String? bikeSerialNumber,
+}) {
+  if (job.deletedAt != null) return false;
+  if (mechanicJobMatchesTestFixture(
+    job,
+    customerName: customerName,
+    bikeName: bikeName,
+    bikeBrand: bikeBrand,
+    bikeModel: bikeModel,
+    bikeSerialNumber: bikeSerialNumber,
+  )) {
+    return false;
+  }
+
+  if (job.isSaleWorkflow) {
+    return isMechanicJobSaleActive(job, invoice);
+  }
+
+  if (job.isStandaloneQuotation &&
+      (job.effectiveQuotationStatus == QuotationStatus.rejected ||
+          job.effectiveQuotationStatus == QuotationStatus.expired)) {
+    return false;
+  }
+
+  if (job.status == JobStatus.cancelado) return false;
+
+  final isDelivered = isMechanicJobCurrentlyDelivered(job);
+  final isInvoiced = job.invoiceId != null || job.isInvoiced;
+  final isPaid =
+      invoice != null ? invoice.status == InvoiceStatus.paid : job.isPaid;
+  if (isDelivered && isInvoiced && isPaid) return false;
+
+  final isFinishedWarranty = job.isWarrantyJob &&
+      isDelivered &&
+      (job.totalCost <= 0 || (isInvoiced && isPaid));
+  return !isFinishedWarranty;
 }
 
 bool mechanicJobMatchesTestFixture(

@@ -1,0 +1,201 @@
+{
+  "patches": [
+    {
+      "id": "RV-seatpost",
+      "op": "replace_template_coherence",
+      "template": "seatpost",
+      "key": "row_conditions",
+      "before": {
+        "present": true,
+        "value": {
+          "version": 1,
+          "fields": {
+            "seatpost_saddle_configurations": {
+              "required_when": {
+                "clamp_part": {
+                  "kind": "when",
+                  "rows": [
+                    [
+                      {
+                        "field": "configuration_state",
+                        "operator": "in",
+                        "value_type": "token",
+                        "value": [
+                          "Con kit incluido",
+                          "Con kit opcional"
+                        ]
+                      }
+                    ]
+                  ]
+                },
+                "mount_system": {
+                  "kind": "when",
+                  "rows": [
+                    [
+                      {
+                        "field": "rail_geometry",
+                        "operator": "in",
+                        "value_type": "token",
+                        "value": [
+                          "Sistema propietario",
+                          "Otro"
+                        ]
+                      }
+                    ]
+                  ]
+                }
+              }
+            }
+          }
+        }
+      },
+      "after": {
+        "version": 1,
+        "fields": {
+          "seatpost_saddle_configurations": {
+            "required_when": {
+              "clamp_part": {
+                "kind": "when",
+                "rows": [
+                  [
+                    {
+                      "field": "configuration_state",
+                      "operator": "in",
+                      "value_type": "token",
+                      "value": [
+                        "Con kit incluido",
+                        "Con kit opcional"
+                      ]
+                    }
+                  ]
+                ]
+              },
+              "mount_system": {
+                "kind": "when",
+                "rows": [
+                  [
+                    {
+                      "field": "rail_geometry",
+                      "operator": "in",
+                      "value_type": "token",
+                      "value": [
+                        "Sistema propietario",
+                        "Otro"
+                      ]
+                    }
+                  ]
+                ]
+              }
+            },
+            "value_when": {
+              "clamp_included": [
+                {
+                  "when": {
+                    "kind": "when",
+                    "rows": [
+                      [
+                        {
+                          "field": "configuration_state",
+                          "operator": "eq",
+                          "value_type": "token",
+                          "value": "Con kit incluido"
+                        }
+                      ]
+                    ]
+                  },
+                  "expected": {
+                    "value_type": "boolean",
+                    "value": true
+                  }
+                }
+              ]
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "RV-accessory_mount",
+      "op": "replace_template_coherence",
+      "template": "accessory_mount",
+      "key": "row_conditions",
+      "before": {
+        "present": true,
+        "value": {
+          "version": 1,
+          "fields": {
+            "bar_clamp_configurations": {
+              "required_when": {
+                "spacer_or_variant": {
+                  "kind": "when",
+                  "rows": [
+                    [
+                      {
+                        "field": "fit_method",
+                        "operator": "in",
+                        "value_type": "token",
+                        "value": [
+                          "Con espaciador incluido",
+                          "Con espaciador opcional"
+                        ]
+                      }
+                    ]
+                  ]
+                }
+              }
+            }
+          }
+        }
+      },
+      "after": {
+        "version": 1,
+        "fields": {
+          "bar_clamp_configurations": {
+            "required_when": {
+              "spacer_or_variant": {
+                "kind": "when",
+                "rows": [
+                  [
+                    {
+                      "field": "fit_method",
+                      "operator": "in",
+                      "value_type": "token",
+                      "value": [
+                        "Con espaciador incluido",
+                        "Con espaciador opcional"
+                      ]
+                    }
+                  ]
+                ]
+              }
+            },
+            "value_when": {
+              "included": [
+                {
+                  "when": {
+                    "kind": "when",
+                    "rows": [
+                      [
+                        {
+                          "field": "fit_method",
+                          "operator": "eq",
+                          "value_type": "token",
+                          "value": "Con espaciador incluido"
+                        }
+                      ]
+                    ]
+                  },
+                  "expected": {
+                    "value_type": "boolean",
+                    "value": true
+                  }
+                }
+              ]
+            }
+          }
+        }
+      }
+    }
+  ],
+  "new_definitions": {}
+}

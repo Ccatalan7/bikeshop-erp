@@ -5,11 +5,11 @@ void main() {
   group('ServiceWizardService brake normalization', () {
     test('normalizes live brake_type_mech option values to canonical values',
         () {
-      final profile = ServiceWizardProfile(
+      const profile = ServiceWizardProfile(
         id: 'profile-1',
         name: 'Cable brake service',
         serviceFamily: 'brake',
-        questions: const [
+        questions: [
           ServiceProfileQuestion(
             id: 'question-1',
             key: 'brake_type_mech',
@@ -47,11 +47,11 @@ void main() {
     });
 
     test('normalizes live mechanical brake answers to canonical values', () {
-      final profile = ServiceWizardProfile(
+      const profile = ServiceWizardProfile(
         id: 'profile-2',
         name: 'Cable brake service',
         serviceFamily: 'brake',
-        questions: const [
+        questions: [
           ServiceProfileQuestion(
             id: 'question-2',
             key: 'brake_type_mech',

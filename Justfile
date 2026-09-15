@@ -56,6 +56,10 @@ db-query-file environment file:
     #!/usr/bin/env bash
     exec bash scripts/db/query.sh "{{environment}}" --file "{{file}}"
 
+db-migration-status *migrations:
+    #!/usr/bin/env bash
+    exec bash scripts/db/migration_status.sh {{migrations}}
+
 db-trace environment kind id:
     #!/usr/bin/env bash
     exec bash scripts/db/trace.sh "{{environment}}" "{{kind}}" "{{id}}"
@@ -80,6 +84,10 @@ db-smoke environment="local":
 db-health environment="local":
     #!/usr/bin/env bash
     exec bash scripts/db/health.sh "{{environment}}"
+
+db-cpu environment="production":
+    #!/usr/bin/env bash
+    exec bash scripts/db/query.sh "{{environment}}" --file supabase/manual_checks/diagnostics/cpu_pressure_profile.sql
 
 e2e:
     #!/usr/bin/env bash

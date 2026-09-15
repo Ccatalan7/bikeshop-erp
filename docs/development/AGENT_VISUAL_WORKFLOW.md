@@ -364,6 +364,19 @@ scripts/dev/app_control.sh tap --label "Nóminas" --index 0
 Si `tap` se queja de varios candidatos, `find --label X` los lista y `--index N`
 desempata. Nunca por coordenada.
 
+**La rueda no mueve la lista de la revisión OCR; el drag sí (2026-09-05).**
+`scroll X Y N` con el punto dentro del batch no desplazó nada;
+`drag 1000 800 1000 300` sí. Para tocar una fila fuera de pantalla: `find
+--key` en bucle con un `drag` corto entre intentos, y se declara «no
+alcanzable» si tras cinco no aparece.
+
+**En el picker, `--index` cuenta botones en el orden del árbol, no el visual
+(2026-09-05).** «Seleccionar producto» índice 1 vinculó el candidato que se
+veía primero. Se localiza el botón por la coordenada `y` del nombre del
+candidato (`find --label "<nombre>"`) y se toca el `find --label "Seleccionar
+producto"` de esa misma fila; o se escribe en el buscador del picker hasta que
+quede un solo botón.
+
 ### Llegar a un módulo EN COMPACTO (por el drawer)
 
 Por debajo de 900 no hay barra lateral, y el drawer no se deja tocar por
@@ -423,6 +436,28 @@ en su fila `Sesión canónica`**, no esta receta: durante la migración de Nómi
 ese valor es `Oscuro`, y una versión anterior de esta línea decía `Claro`, que
 contradecía al handoff y hacía que cada ronda lo dejara distinto. Comprueba el
 check en su sitio antes de cerrar.
+
+**El camino corto es el popover «Apariencia» del sidebar (2026-09-02).** El
+botón `Apariencia` al pie del menú lateral abre un popover con los segmentos
+`Sistema · Claro · Oscuro`, cuyos textos llevan clave: `theme-mode-light` y
+`theme-mode-dark`. Se cambia con `tap --key theme-mode-dark` y se vuelve con
+`tap --key theme-mode-light`; espera ~3 s antes de capturar, porque el frame
+siguiente al toque todavía puede traer el tema anterior. Dos trampas que
+costaron una ronda: **mientras el popover está abierto, su velo se traga todo
+`tap --label` del resto de la app** («sin coincidencias: nada que controlar»
+sobre el sidebar, la búsqueda y el panel, aunque `read` los liste), y **no se
+cierra por identidad**: se cierra con un `click X Y` sobre el velo, tomado del
+`shot` actual, lejos del popover. Confirma el estado final con el `shot` del
+popover reabierto —el segmento activo se ve resaltado— y ciérralo otra vez.
+
+**Precisión 2026-09-05: `tap --label "Oscuro"` resolvió el `Text` (clave
+`theme-mode-dark`, 39×16) aunque `read` liste el botón de 106×32, y el tema no
+cambió; la ronda perdió tres capturas «oscuras» en claro.** Lo que sí cambia
+el tema es un `click X Y` sobre el segmento, con la coordenada del `shot`
+actual (el popover siempre se abre en la misma esquina), y el popover se
+cierra con un `click` sobre el velo lejos de él. Confirma con un `shot` del
+popover reabierto y luego `find --label "Oscuro"`: si no aparece, el popover
+está cerrado.
 
 **Si el toggle se resiste, no insistas a ciegas.** El pase oscuro también se
 verifica sin la UI: `payroll_redesign_dark_host_test.dart` monta las superficies
@@ -497,6 +532,31 @@ con razón): por cada archivo, guarda una copia del árbol, escribe encima la
 versión de `HEAD` con `git show HEAD:<ruta> > <ruta>`, formatéala y **compárala
 con la copia**. Si son idénticas, el único cambio era tu formato y revertir es
 correcto; si difieren, había trabajo ajeno y se restituye la copia intacta.
+
+### En widget test, arrastrar desde el CENTRO de la lista lo come el TextField
+
+`scrollUntilVisible` / `dragUntilVisible` arrastran desde el **centro** del
+`Scrollable` que se les pasa. Si en ese centro hay un campo de texto —el de
+«Razón de confirmación» de una fila desplegada, por ejemplo— el gesto lo consume
+la selección de texto, la lista **no se mueve**, y al agotar las iteraciones el
+error que sale es `Bad state: No element` **sobre el objetivo**, no sobre el
+campo: parece que el widget buscado no existe cuando en realidad nunca se llegó
+a él. Costó una ronda el 2026-08-10.
+
+La forma que sí funciona es arrastrar desde un punto propio, pegado al borde:
+
+```dart
+final list = find.byType(ListView).first;
+final origin = tester.getTopLeft(list) + const Offset(12, 40);
+for (var i = 0; i < 20 && objetivo.evaluate().isEmpty; i++) {
+  await tester.dragFrom(origin, const Offset(0, 400));  // + baja: sube la vista
+  await tester.pump();
+}
+await tester.ensureVisible(objetivo);
+```
+
+Un `drag` sobre ese punto no dispara el `onTap` de la fila que haya debajo: son
+gestos distintos.
 
 ### Generar las capturas de HARNESS de una etapa inalcanzable en vivo
 
@@ -723,6 +783,22 @@ preciosa que afirma algo falso, y un ERP donde cada módulo navega distinto.
 > producto.** La app, el repositorio y los datos reales son la fuente de
 > funcionalidad, UX, lenguaje y reglas; `DesignSync` sigue siendo la fuente
 > literal de cada valor visual.
+
+> **Precisión del dueño, 2026-08-17. Qué significa «el aspecto», y cómo se
+> demuestra.** «De la guía canónica: … anatomía de chips, botones, tablas e
+> inputs» no se agota en el control suelto. También son aspecto, y se copian
+> exactos: la **contención** (que un bloque sea un panel con superficie, borde,
+> radio y padding, no elementos sueltos sobre el fondo), el **ancho y centrado de
+> la columna**, la **escala tipográfica** y el **espaciado entre bloques** —
+> aunque el contenido y las palabras de adentro sean nuestros, y aunque ese
+> bloque no exista en ningún frame. «Layout» del lado de Codex significa **qué
+> bloques hay y en qué orden**, nunca cómo se ven.
+>
+> Y la compuerta **no se cierra con constantes**: se cierra con evidencia
+> pareada, el frame real de la app junto al de Design en la misma celda. El
+> Asistente de compras tenía todas las medidas del `spec.json` correctas en el
+> código y no se parecía; se declaró implementado sobre esa base y hubo que
+> rehacerlo. Ver `DESIGN_HANDOFF_SYNC_CONTRACT.md`, corrección 2026-08-17.
 
 ### Qué hacer con cada resultado
 
@@ -1125,6 +1201,115 @@ Cerré un turno diciendo «sigo ahora mismo, no me detengo» y terminé el turno
 > **La regla:** si dices que sigues, sigue. Y si el trabajo es largo, el ledger
 > se escribe **al cerrar cada frame**, no al final: es lo único que sobrevive si
 > el chat se acaba.
+
+### Un control declarado y nunca pasado no aparece en ninguna captura
+
+**2026-08-19.** El módulo de compras declaraba `onOpenCriteria` en la barra de
+necesidad y **nadie se lo pasaba**: la CTA «Criterios» que el contrato nombra
+era código muerto, y la ranura del resumen recibía el origen de la necesidad en
+vez de sus criterios. Miradas al lado del frame, esas pantallas se veían
+completas: lo que faltaba no dejaba hueco.
+
+Lo mismo con el `»` de colapsar del inspector, y con el título del plan vacío.
+Los tres son ausencias, y una ausencia no se ve.
+
+> **La regla:** una superficie no se audita sólo comparando lo que hay. Se
+> recorren `blocks` y `acciones` del contrato **entrada por entrada**, y de cada
+> control declarado se comprueba que exista **y que alguien lo pase**. Un
+> parámetro opcional que nadie provee es exactamente igual a no tenerlo.
+>
+> **El corolario para las pruebas:** una prueba sobre el widget suelto no ve
+> nada de esto, porque el widget siempre estuvo bien. La que muerde es la que
+> monta la pantalla real y afirma que el control llegó.
+
+### El `spec.json` manda sobre los frames, y lo dice él mismo
+
+**2026-08-19.** `handoff-t23/spec.json` lleva escrito: «Ante discrepancia entre
+un frame y este spec, **manda el spec**». Leerlo entero cerró tres huecos que
+mirar los frames no resolvía —el stepper del pie del inspector, los asteriscos
+de obligatoriedad, la nota de la línea del plan— y **corrigió una decisión ya
+tomada**: yo había colapsado el inspector al mínimo del panel razonando que a
+cero sería indistinguible de cerrar, y el spec dice «riel de 28px», que es
+justo lo que distingue las dos cosas.
+
+> **La regla:** los frames son la evidencia de aspecto; el `spec.json` es el
+> contrato. Antes de decidir una geometría o un comportamiento por lo que se ve
+> en una imagen, se busca en `blocks`, `geometry` y `resize` del spec. Y cuesta
+> una sola llamada: entra completo, no está por sobre el cap.
+
+### Dos agentes no caben en una sesión de debug
+
+**2026-08-19.** Con otro agente trabajando en el mismo checkout, la app se fue
+sola a Correo, a Taller y a un borrador de factura en mitad de tres
+verificaciones. No es un fallo de la herramienta: es que la sesión nativa es
+**una** y el runbook prohíbe abrir una segunda.
+
+La vista web **no** es la salida: pide credenciales, y un agente no las teclea.
+
+> **La regla:** cuando la sesión está ocupada por otro agente, se le **pide**
+> —`list_sessions` da quién está activo— y mientras tanto se cierra todo lo que
+> no depende de la pantalla. Disputarle la ventana pierde el turno de los dos.
+
+### Un grep de una línea no verifica una migración tipográfica
+
+**2026-08-19.** El módulo se declaró con `textTheme.` en cero contándolo con
+`grep -c 'textTheme\.'`. Ese patrón **no** encuentra la forma partida:
+
+```dart
+style: Theme.of(context)
+    .textTheme
+    .labelSmall
+    ?.copyWith(color: tone.onContainer),
+```
+
+Quedaba una conversión viva en un módulo declarado al 100 %.
+
+> **La regla:** para contar usos de un miembro encadenado, el patrón cruza
+> saltos de línea — `textTheme\s*\.\s*\n?\s*[a-zA-Z]` — o se cuenta con el
+> analizador, no con `grep -c`.
+
+### La celda que ninguna prueba montó es la que explota en la app
+
+**2026-09-03, rediseño de la ficha del proveedor.** La batería de la ficha
+estaba verde —once pruebas, claves auditadas, retorno— y la app real abría la
+ficha en blanco: `BoxConstraints forces an infinite height` en la fila de
+bloques de cifra. Las pruebas montaban la ficha a 390 (donde esa fila envuelve
+y nunca es una `Row`) y a 1100 sólo con fixtures **sin actividad económica**
+(donde la fila no existe). La combinación escritorio × datos reales no tenía
+prueba, y era la única que el dueño iba a mirar.
+
+> **La regla:** antes de dar por verde una superficie, cruza el fixture con
+> el host. Cada rama de `LayoutBuilder` necesita al menos una prueba con los
+> datos que la hacen aparecer, en el ancho que la elige. Y una `Row` con
+> `CrossAxisAlignment.stretch` dentro de una `Column` sin alto acotado pide
+> alto infinito: va dentro de `IntrinsicHeight` o no lleva `stretch`.
+
+### El segmento del popover se toca por su botón, no por su texto
+
+**2026-09-03.** `tap --key theme-mode-dark` resolvía el `Text` del segmento
+(39×16), imprimía la fila como si hubiera tocado, y el tema no cambiaba; el
+`click` de cierre sobre el velo tampoco cerraba, y cuatro capturas «oscuras»
+salieron en claro con el popover encima. Lo que sí cambia el tema es tocar el
+**botón** (`tap --label "Oscuro"`, que `read` lista como `[botón] · 106x32`),
+y el popover se cierra volviendo a tocar `Apariencia`. Comprueba con
+`find --label "Oscuro"`: si sigue encontrándolo, el popover sigue abierto y
+todo `tap` sobre el resto de la app se pierde.
+
+### Un `--index` después de un diálogo que no abrió cae en la lista de atrás
+
+**2026-09-05, revisión OCR, y el error fue mío.** `tap --label "Buscar en
+inventario" --index 5` falló con «índice fuera de rango» porque sólo cinco
+filas eran tocables en el viewport; el `enter-text` siguiente falló por no
+haber diálogo; y el `tap --label "Seleccionar producto" --index 0` que iba
+dirigido al picker **tocó la fila 5 de la lista de fondo** y vinculó un
+portabotellas a unas pegatinas. Fue una decisión local y se deshizo con
+«Cambiar selección», pero en otra pantalla habría escrito.
+
+> **La regla:** en una cadena, cada `tap` que depende de un diálogo abierto
+> se condiciona a que el diálogo esté (`find` de un control que sólo exista
+> dentro), y un `--index` se elige leyendo la lista **en ese momento**, no
+> contando filas de una lectura anterior. `find` sólo devuelve lo tocable en
+> el viewport: al desplazar, los índices cambian.
 
 ---
 

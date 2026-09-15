@@ -1,0 +1,2447 @@
+{
+  "schema_version": 1,
+  "approval_scope": "field_representation",
+  "reviewed_by": "Codex root",
+  "base_sha256": "1b7c6aca8d2219804c6d9052bae95adee674273b7705fd87733bb759ee95b3c0",
+  "proposal_sha256": "b43aa4798dab2be7029660efb08dd3836ecfb350ccfb80b97549f53bf7b56b8d",
+  "independent_review_sha256": "a1c6bfc5fae5c11b3b7f804b240ea36b2a36db2f6e4ba2ff868c061802856820",
+  "independent_review_file": "field-addendum-b-independent-adjudication-2026-09-07.json",
+  "patch_adjudications": [
+    {
+      "patch_id": "AD-ND03-pedal-pedal_thread",
+      "patch_index": 0,
+      "template": "pedal",
+      "key": "pedal_thread",
+      "path": "/templates/37/form_contract/{allowed_options}/pedal_thread",
+      "decision": "corregir",
+      "reason": "Aplicar el after/definition override y los gates indicados; no es aprobación de compatibilidad.",
+      "finding_ids": [
+        "FB01"
+      ],
+      "after_override": {
+        "allowed_options": [
+          "9/16",
+          "1/2",
+          "Otro",
+          "Desconocido / sin confirmar"
+        ],
+        "roles": "legacy",
+        "semantic_roles": "legacy"
+      },
+      "before_extensions": {
+        "roles": {
+          "present": true,
+          "value": "measurement"
+        },
+        "semantic_roles": {
+          "present": true,
+          "value": "compatibility"
+        }
+      }
+    },
+    {
+      "patch_id": "AD-ND03-pedal-pedal_thread_standard",
+      "patch_index": 1,
+      "template": "pedal",
+      "key": "pedal_thread_standard",
+      "path": "/templates/37/fields/- y /templates/37/form_contract/{roles,semantic_roles,allowed_when,required_when,evidence_requirements[,prerequisites,allowed_options]}/pedal_thread_standard",
+      "decision": "corregir",
+      "reason": "Aplicar el after/definition override y los gates indicados; no es aprobación de compatibilidad.",
+      "finding_ids": [
+        "FB01"
+      ],
+      "after_override": {
+        "field_entry": {
+          "key": "pedal_thread_standard",
+          "section_key": "measurement",
+          "sort_order": 140,
+          "is_required": false,
+          "visibility_rules": [],
+          "option_rules": [],
+          "constraint_rules": []
+        },
+        "roles": "measurement",
+        "semantic_roles": "compatibility",
+        "allowed_when": {
+          "kind": "always"
+        },
+        "required_when": {
+          "kind": "always"
+        },
+        "evidence_requirements": "package_or_label",
+        "definition_used_by_append": "pedal"
+      }
+    },
+    {
+      "patch_id": "AD-ND03-pedal-pedal_wrench_interface",
+      "patch_index": 2,
+      "template": "pedal",
+      "key": "pedal_wrench_interface",
+      "path": "/templates/37/fields/- y /templates/37/form_contract/{roles,semantic_roles,allowed_when,required_when,evidence_requirements[,prerequisites,allowed_options]}/pedal_wrench_interface",
+      "decision": "corregir",
+      "reason": "Aplicar el after/definition override y los gates indicados; no es aprobación de compatibilidad.",
+      "finding_ids": [
+        "FB01"
+      ]
+    },
+    {
+      "patch_id": "AD-ND04-label-grip_inner_diameter_mm",
+      "patch_index": 3,
+      "template": null,
+      "key": "grip_inner_diameter_mm",
+      "path": "/definitions/grip_inner_diameter_mm/label",
+      "decision": "aceptar",
+      "reason": "Cambio de representación válido en su alcance. Los casos y las advertencias de fuente se adjudican aparte; no es una regla mecánica universal.",
+      "finding_ids": []
+    },
+    {
+      "patch_id": "AD-ND04-label-grip_length_mm",
+      "patch_index": 4,
+      "template": null,
+      "key": "grip_length_mm",
+      "path": "/definitions/grip_length_mm/label",
+      "decision": "corregir",
+      "reason": "Aplicar el after/definition override y los gates indicados; no es aprobación de compatibilidad.",
+      "finding_ids": [
+        "FB02"
+      ],
+      "after_override": "Largo de la unidad (sin asignación de lado)"
+    },
+    {
+      "patch_id": "AD-ND04-grip-grip_inner_diameter_mm",
+      "patch_index": 5,
+      "template": "grip",
+      "key": "grip_inner_diameter_mm",
+      "path": "/templates/39/form_contract/{required_when,semantic_roles}/grip_inner_diameter_mm",
+      "decision": "aceptar",
+      "reason": "Cambio de representación válido en su alcance. Los casos y las advertencias de fuente se adjudican aparte; no es una regla mecánica universal.",
+      "finding_ids": []
+    },
+    {
+      "patch_id": "AD-ND04-grip-grip_length_mm",
+      "patch_index": 6,
+      "template": "grip",
+      "key": "grip_length_mm",
+      "path": "/templates/39/form_contract/{roles,semantic_roles}/grip_length_mm",
+      "decision": "corregir",
+      "reason": "Aplicar el after/definition override y los gates indicados; no es aprobación de compatibilidad.",
+      "finding_ids": [
+        "FB02"
+      ],
+      "after_override": {
+        "roles": "measurement",
+        "semantic_roles": "measurement",
+        "allowed_when": {
+          "kind": "when",
+          "rows": [
+            [
+              {
+                "field": "sold_as",
+                "operator": "in",
+                "value_type": "token",
+                "value": [
+                  "Unidad",
+                  "Unidad izquierda",
+                  "Unidad derecha"
+                ]
+              }
+            ]
+          ]
+        }
+      },
+      "before_extensions": {
+        "allowed_when": {
+          "present": true,
+          "value": {
+            "kind": "always"
+          }
+        }
+      }
+    },
+    {
+      "patch_id": "AD-ND04-grip-grip_bar_nominal_diameter_mm",
+      "patch_index": 7,
+      "template": "grip",
+      "key": "grip_bar_nominal_diameter_mm",
+      "path": "/templates/39/fields/- y /templates/39/form_contract/{roles,semantic_roles,allowed_when,required_when,evidence_requirements[,prerequisites,allowed_options]}/grip_bar_nominal_diameter_mm",
+      "decision": "aceptar",
+      "reason": "Cambio de representación válido en su alcance. Los casos y las advertencias de fuente se adjudican aparte; no es una regla mecánica universal.",
+      "finding_ids": []
+    },
+    {
+      "patch_id": "AD-ND04-grip-grip_length_left_mm",
+      "patch_index": 8,
+      "template": "grip",
+      "key": "grip_length_left_mm",
+      "path": "/templates/39/fields/- y /templates/39/form_contract/{roles,semantic_roles,allowed_when,required_when,evidence_requirements[,prerequisites,allowed_options]}/grip_length_left_mm",
+      "decision": "corregir",
+      "reason": "Aplicar el after/definition override y los gates indicados; no es aprobación de compatibilidad.",
+      "finding_ids": [
+        "FB02"
+      ],
+      "after_override": {
+        "field_entry": {
+          "key": "grip_length_left_mm",
+          "section_key": "measurement",
+          "sort_order": 100,
+          "is_required": false,
+          "visibility_rules": [],
+          "option_rules": [],
+          "constraint_rules": []
+        },
+        "roles": "measurement",
+        "semantic_roles": "measurement",
+        "allowed_when": {
+          "kind": "when",
+          "rows": [
+            [
+              {
+                "field": "sold_as",
+                "operator": "in",
+                "value_type": "token",
+                "value": [
+                  "Par",
+                  "Unidad izquierda"
+                ]
+              }
+            ]
+          ]
+        },
+        "required_when": {
+          "kind": "never"
+        },
+        "evidence_requirements": "oem_or_package",
+        "definition_used_by_append": "grip"
+      }
+    },
+    {
+      "patch_id": "AD-ND04-grip-grip_length_right_mm",
+      "patch_index": 9,
+      "template": "grip",
+      "key": "grip_length_right_mm",
+      "path": "/templates/39/fields/- y /templates/39/form_contract/{roles,semantic_roles,allowed_when,required_when,evidence_requirements[,prerequisites,allowed_options]}/grip_length_right_mm",
+      "decision": "corregir",
+      "reason": "Aplicar el after/definition override y los gates indicados; no es aprobación de compatibilidad.",
+      "finding_ids": [
+        "FB02"
+      ],
+      "after_override": {
+        "field_entry": {
+          "key": "grip_length_right_mm",
+          "section_key": "measurement",
+          "sort_order": 110,
+          "is_required": false,
+          "visibility_rules": [],
+          "option_rules": [],
+          "constraint_rules": []
+        },
+        "roles": "measurement",
+        "semantic_roles": "measurement",
+        "allowed_when": {
+          "kind": "when",
+          "rows": [
+            [
+              {
+                "field": "sold_as",
+                "operator": "in",
+                "value_type": "token",
+                "value": [
+                  "Par",
+                  "Unidad derecha"
+                ]
+              }
+            ]
+          ]
+        },
+        "required_when": {
+          "kind": "never"
+        },
+        "evidence_requirements": "oem_or_package",
+        "definition_used_by_append": "grip"
+      }
+    },
+    {
+      "patch_id": "AD-ND04-grip-grip_straight_length_required_mm",
+      "patch_index": 10,
+      "template": "grip",
+      "key": "grip_straight_length_required_mm",
+      "path": "/templates/39/fields/- y /templates/39/form_contract/{roles,semantic_roles,allowed_when,required_when,evidence_requirements[,prerequisites,allowed_options]}/grip_straight_length_required_mm",
+      "decision": "aceptar",
+      "reason": "Root acepta sólo esta representación de campo; conserva el gate identificado, sin aprobar una compatibilidad ni una ficha completa. Corregir la coherencia o cobertura indicada antes de usar el dato para compatibilidad/llenado; no se propone una sintaxis que el contrato actual no implemente.",
+      "finding_ids": [
+        "FB02"
+      ]
+    },
+    {
+      "patch_id": "AD-ND04-grip-grip_clamp_torque_nm",
+      "patch_index": 11,
+      "template": "grip",
+      "key": "grip_clamp_torque_nm",
+      "path": "/templates/39/fields/- y /templates/39/form_contract/{roles,semantic_roles,allowed_when,required_when,evidence_requirements[,prerequisites,allowed_options]}/grip_clamp_torque_nm",
+      "decision": "aceptar",
+      "reason": "Cambio de representación válido en su alcance. Los casos y las advertencias de fuente se adjudican aparte; no es una regla mecánica universal.",
+      "finding_ids": []
+    },
+    {
+      "patch_id": "AD-ND05-label-stem_steerer_clamp_diameter_mm",
+      "patch_index": 12,
+      "template": null,
+      "key": "stem_steerer_clamp_diameter_mm",
+      "path": "/definitions/stem_steerer_clamp_diameter_mm/label",
+      "decision": "aceptar",
+      "reason": "Cambio de representación válido en su alcance. Los casos y las advertencias de fuente se adjudican aparte; no es una regla mecánica universal.",
+      "finding_ids": []
+    },
+    {
+      "patch_id": "AD-ND05-stem-quill_min_insertion_mm",
+      "patch_index": 13,
+      "template": "stem",
+      "key": "quill_min_insertion_mm",
+      "path": "/templates/42/fields/- y /templates/42/form_contract/{roles,semantic_roles,allowed_when,required_when,evidence_requirements[,prerequisites,allowed_options]}/quill_min_insertion_mm",
+      "decision": "aceptar",
+      "reason": "Cambio de representación válido en su alcance. Los casos y las advertencias de fuente se adjudican aparte; no es una regla mecánica universal.",
+      "finding_ids": []
+    },
+    {
+      "patch_id": "AD-ND06-rows-seatpost_saddle_configurations",
+      "patch_index": 14,
+      "template": null,
+      "key": "seatpost_saddle_configurations",
+      "path": "/definitions/seatpost_saddle_configurations/validation_rules/rows_schema/columns",
+      "decision": "aceptar",
+      "reason": "Cambio de representación válido en su alcance. Los casos y las advertencias de fuente se adjudican aparte; no es una regla mecánica universal.",
+      "finding_ids": [
+        "FB03"
+      ]
+    },
+    {
+      "patch_id": "AD-ND06-label-saddle_mount_model",
+      "patch_index": 15,
+      "template": null,
+      "key": "saddle_mount_model",
+      "path": "/definitions/saddle_mount_model/label",
+      "decision": "aceptar",
+      "reason": "Cambio de representación válido en su alcance. Los casos y las advertencias de fuente se adjudican aparte; no es una regla mecánica universal.",
+      "finding_ids": [
+        "FB03"
+      ]
+    },
+    {
+      "patch_id": "AD-ND07-seatpost-dropper_actuation",
+      "patch_index": 16,
+      "template": "seatpost",
+      "key": "dropper_actuation",
+      "path": "/templates/43/form_contract/{roles,semantic_roles}/dropper_actuation",
+      "decision": "aceptar",
+      "reason": "Cambio de representación válido en su alcance. Los casos y las advertencias de fuente se adjudican aparte; no es una regla mecánica universal.",
+      "finding_ids": []
+    },
+    {
+      "patch_id": "AD-ND07-seatpost-dropper_control_kind",
+      "patch_index": 17,
+      "template": "seatpost",
+      "key": "dropper_control_kind",
+      "path": "/templates/43/fields/- y /templates/43/form_contract/{roles,semantic_roles,allowed_when,required_when,evidence_requirements[,prerequisites,allowed_options]}/dropper_control_kind",
+      "decision": "aceptar",
+      "reason": "Cambio de representación válido en su alcance. Los casos y las advertencias de fuente se adjudican aparte; no es una regla mecánica universal.",
+      "finding_ids": []
+    },
+    {
+      "patch_id": "AD-ND07-seatpost-dropper_cable_routing",
+      "patch_index": 18,
+      "template": "seatpost",
+      "key": "dropper_cable_routing",
+      "path": "/templates/43/fields/- y /templates/43/form_contract/{roles,semantic_roles,allowed_when,required_when,evidence_requirements[,prerequisites,allowed_options]}/dropper_cable_routing",
+      "decision": "corregir",
+      "reason": "Aplicar el after/definition override y los gates indicados; no es aprobación de compatibilidad.",
+      "finding_ids": [
+        "FB04"
+      ]
+    },
+    {
+      "patch_id": "AD-ND07-seatpost-dropper_remote_included",
+      "patch_index": 19,
+      "template": "seatpost",
+      "key": "dropper_remote_included",
+      "path": "/templates/43/fields/- y /templates/43/form_contract/{roles,semantic_roles,allowed_when,required_when,evidence_requirements[,prerequisites,allowed_options]}/dropper_remote_included",
+      "decision": "aceptar",
+      "reason": "Cambio de representación válido en su alcance. Los casos y las advertencias de fuente se adjudican aparte; no es una regla mecánica universal.",
+      "finding_ids": [
+        "FB03"
+      ]
+    },
+    {
+      "patch_id": "AD-ND07-seatpost-dropper_remote_model",
+      "patch_index": 20,
+      "template": "seatpost",
+      "key": "dropper_remote_model",
+      "path": "/templates/43/fields/- y /templates/43/form_contract/{roles,semantic_roles,allowed_when,required_when,evidence_requirements[,prerequisites,allowed_options]}/dropper_remote_model",
+      "decision": "corregir",
+      "reason": "Aplicar el after/definition override y los gates indicados; no es aprobación de compatibilidad.",
+      "finding_ids": [
+        "FB03"
+      ],
+      "after_override": {
+        "field_entry": {
+          "key": "dropper_remote_model",
+          "section_key": "contents",
+          "sort_order": 160,
+          "is_required": false,
+          "visibility_rules": [],
+          "option_rules": [],
+          "constraint_rules": []
+        },
+        "roles": "contents",
+        "semantic_roles": "contents",
+        "allowed_when": {
+          "kind": "when",
+          "rows": [
+            [
+              {
+                "field": "seatpost_kind",
+                "operator": "eq",
+                "value_type": "token",
+                "value": "Telescópica (dropper)"
+              },
+              {
+                "field": "dropper_remote_included",
+                "operator": "eq",
+                "value_type": "boolean",
+                "value": true
+              }
+            ]
+          ]
+        },
+        "required_when": {
+          "kind": "never"
+        },
+        "evidence_requirements": "oem_or_package",
+        "definition_used_by_append": "seatpost"
+      }
+    },
+    {
+      "patch_id": "AD-ND07-seatpost-seatpost_min_insertion_mm",
+      "patch_index": 21,
+      "template": "seatpost",
+      "key": "seatpost_min_insertion_mm",
+      "path": "/templates/43/fields/- y /templates/43/form_contract/{roles,semantic_roles,allowed_when,required_when,evidence_requirements[,prerequisites,allowed_options]}/seatpost_min_insertion_mm",
+      "decision": "corregir",
+      "reason": "Aplicar el after/definition override y los gates indicados; no es aprobación de compatibilidad.",
+      "finding_ids": [
+        "FB05"
+      ],
+      "after_override": {
+        "field_entry": {
+          "key": "seatpost_min_insertion_mm",
+          "section_key": "measurement",
+          "sort_order": 170,
+          "is_required": false,
+          "visibility_rules": [],
+          "option_rules": [],
+          "constraint_rules": []
+        },
+        "roles": "measurement",
+        "semantic_roles": "compatibility",
+        "allowed_when": {
+          "kind": "when",
+          "rows": [
+            [
+              {
+                "field": "seatpost_kind",
+                "operator": "in",
+                "value_type": "token",
+                "value": [
+                  "Rígida",
+                  "Con suspensión",
+                  "Telescópica (dropper)",
+                  "Otro"
+                ]
+              }
+            ]
+          ]
+        },
+        "required_when": {
+          "kind": "never"
+        },
+        "evidence_requirements": "oem_spec",
+        "definition_used_by_append": "seatpost",
+        "prerequisites": [
+          "seatpost_dimension_document"
+        ]
+      }
+    },
+    {
+      "patch_id": "AD-ND07-seatpost-seatpost_min_exposed_mm",
+      "patch_index": 22,
+      "template": "seatpost",
+      "key": "seatpost_min_exposed_mm",
+      "path": "/templates/43/fields/- y /templates/43/form_contract/{roles,semantic_roles,allowed_when,required_when,evidence_requirements[,prerequisites,allowed_options]}/seatpost_min_exposed_mm",
+      "decision": "corregir",
+      "reason": "Aplicar el after/definition override y los gates indicados; no es aprobación de compatibilidad.",
+      "finding_ids": [
+        "FB05"
+      ],
+      "after_override": {
+        "field_entry": {
+          "key": "seatpost_min_exposed_mm",
+          "section_key": "measurement",
+          "sort_order": 180,
+          "is_required": false,
+          "visibility_rules": [],
+          "option_rules": [],
+          "constraint_rules": []
+        },
+        "roles": "measurement",
+        "semantic_roles": "compatibility",
+        "allowed_when": {
+          "kind": "when",
+          "rows": [
+            [
+              {
+                "field": "seatpost_kind",
+                "operator": "eq",
+                "value_type": "token",
+                "value": "Telescópica (dropper)"
+              }
+            ]
+          ]
+        },
+        "required_when": {
+          "kind": "never"
+        },
+        "evidence_requirements": "oem_spec",
+        "definition_used_by_append": "seatpost",
+        "prerequisites": [
+          "seatpost_dimension_document"
+        ]
+      }
+    },
+    {
+      "patch_id": "AD-ND07-seatpost-seatpost_bottom_clearance_mm",
+      "patch_index": 23,
+      "template": "seatpost",
+      "key": "seatpost_bottom_clearance_mm",
+      "path": "/templates/43/fields/- y /templates/43/form_contract/{roles,semantic_roles,allowed_when,required_when,evidence_requirements[,prerequisites,allowed_options]}/seatpost_bottom_clearance_mm",
+      "decision": "corregir",
+      "reason": "Aplicar el after/definition override y los gates indicados; no es aprobación de compatibilidad.",
+      "finding_ids": [
+        "FB05"
+      ],
+      "after_override": {
+        "field_entry": {
+          "key": "seatpost_bottom_clearance_mm",
+          "section_key": "measurement",
+          "sort_order": 190,
+          "is_required": false,
+          "visibility_rules": [],
+          "option_rules": [],
+          "constraint_rules": []
+        },
+        "roles": "measurement",
+        "semantic_roles": "compatibility",
+        "allowed_when": {
+          "kind": "when",
+          "rows": [
+            [
+              {
+                "field": "seatpost_kind",
+                "operator": "in",
+                "value_type": "token",
+                "value": [
+                  "Rígida",
+                  "Con suspensión",
+                  "Telescópica (dropper)",
+                  "Otro"
+                ]
+              }
+            ]
+          ]
+        },
+        "required_when": {
+          "kind": "never"
+        },
+        "evidence_requirements": "oem_spec",
+        "definition_used_by_append": "seatpost",
+        "prerequisites": [
+          "seatpost_dimension_document"
+        ]
+      }
+    },
+    {
+      "patch_id": "AD-ND07-seatpost-seatpost_dimension_document",
+      "patch_index": 24,
+      "template": "seatpost",
+      "key": "seatpost_dimension_document",
+      "path": "/templates/43/fields/- y /templates/43/form_contract/{roles,semantic_roles,allowed_when,required_when,evidence_requirements[,prerequisites,allowed_options]}/seatpost_dimension_document",
+      "decision": "aceptar",
+      "reason": "Cambio de representación válido en su alcance. Los casos y las advertencias de fuente se adjudican aparte; no es una regla mecánica universal.",
+      "finding_ids": [
+        "FB05"
+      ]
+    },
+    {
+      "patch_id": "AD-ND07-label-seatpost_length_mm",
+      "patch_index": 25,
+      "template": null,
+      "key": "seatpost_length_mm",
+      "path": "/definitions/seatpost_length_mm/label",
+      "decision": "corregir",
+      "reason": "Aplicar el after/definition override y los gates indicados; no es aprobación de compatibilidad.",
+      "finding_ids": [
+        "FB05"
+      ],
+      "after_override": "Largo declarado de la tija (referencia OEM)"
+    },
+    {
+      "patch_id": "AD-ND08-handlebar-bar_construction",
+      "patch_index": 26,
+      "template": "handlebar",
+      "key": "bar_construction",
+      "path": "/templates/41/fields/- y /templates/41/form_contract/{roles,semantic_roles,allowed_when,required_when,evidence_requirements[,prerequisites,allowed_options]}/bar_construction",
+      "decision": "aceptar",
+      "reason": "Cambio de representación válido en su alcance. Los casos y las advertencias de fuente se adjudican aparte; no es una regla mecánica universal.",
+      "finding_ids": []
+    },
+    {
+      "patch_id": "AD-ND08-handlebar-bar_clamp_diameter_mm",
+      "patch_index": 27,
+      "template": "handlebar",
+      "key": "bar_clamp_diameter_mm",
+      "path": "/templates/41/form_contract/{allowed_when,required_when}/bar_clamp_diameter_mm",
+      "decision": "aceptar",
+      "reason": "Cambio de representación válido en su alcance. Los casos y las advertencias de fuente se adjudican aparte; no es una regla mecánica universal.",
+      "finding_ids": []
+    },
+    {
+      "patch_id": "AD-ND08-handlebar-bar_width_mm",
+      "patch_index": 28,
+      "template": "handlebar",
+      "key": "bar_width_mm",
+      "path": "/templates/41/form_contract/{prerequisites}/bar_width_mm",
+      "decision": "aceptar",
+      "reason": "Cambio de representación válido en su alcance. Los casos y las advertencias de fuente se adjudican aparte; no es una regla mecánica universal.",
+      "finding_ids": [
+        "FB06"
+      ]
+    },
+    {
+      "patch_id": "AD-ND08-handlebar-bar_width_reference",
+      "patch_index": 29,
+      "template": "handlebar",
+      "key": "bar_width_reference",
+      "path": "/templates/41/fields/- y /templates/41/form_contract/{roles,semantic_roles,allowed_when,required_when,evidence_requirements[,prerequisites,allowed_options]}/bar_width_reference",
+      "decision": "aceptar",
+      "reason": "Cambio de representación válido en su alcance. Los casos y las advertencias de fuente se adjudican aparte; no es una regla mecánica universal.",
+      "finding_ids": []
+    },
+    {
+      "patch_id": "AD-ND08-handlebar-bar_width_hoods_mm",
+      "patch_index": 30,
+      "template": "handlebar",
+      "key": "bar_width_hoods_mm",
+      "path": "/templates/41/fields/- y /templates/41/form_contract/{roles,semantic_roles,allowed_when,required_when,evidence_requirements[,prerequisites,allowed_options]}/bar_width_hoods_mm",
+      "decision": "corregir",
+      "reason": "Aplicar el after/definition override y los gates indicados; no es aprobación de compatibilidad.",
+      "finding_ids": [
+        "FB06"
+      ]
+    },
+    {
+      "patch_id": "AD-ND08-handlebar-bar_width_drops_mm",
+      "patch_index": 31,
+      "template": "handlebar",
+      "key": "bar_width_drops_mm",
+      "path": "/templates/41/fields/- y /templates/41/form_contract/{roles,semantic_roles,allowed_when,required_when,evidence_requirements[,prerequisites,allowed_options]}/bar_width_drops_mm",
+      "decision": "corregir",
+      "reason": "Aplicar el after/definition override y los gates indicados; no es aprobación de compatibilidad.",
+      "finding_ids": [
+        "FB06"
+      ]
+    },
+    {
+      "patch_id": "AD-ND08-handlebar-bar_reach_mm",
+      "patch_index": 32,
+      "template": "handlebar",
+      "key": "bar_reach_mm",
+      "path": "/templates/41/fields/- y /templates/41/form_contract/{roles,semantic_roles,allowed_when,required_when,evidence_requirements[,prerequisites,allowed_options]}/bar_reach_mm",
+      "decision": "aceptar",
+      "reason": "Cambio de representación válido en su alcance. Los casos y las advertencias de fuente se adjudican aparte; no es una regla mecánica universal.",
+      "finding_ids": []
+    },
+    {
+      "patch_id": "AD-ND08-handlebar-bar_drop_mm",
+      "patch_index": 33,
+      "template": "handlebar",
+      "key": "bar_drop_mm",
+      "path": "/templates/41/fields/- y /templates/41/form_contract/{roles,semantic_roles,allowed_when,required_when,evidence_requirements[,prerequisites,allowed_options]}/bar_drop_mm",
+      "decision": "aceptar",
+      "reason": "Cambio de representación válido en su alcance. Los casos y las advertencias de fuente se adjudican aparte; no es una regla mecánica universal.",
+      "finding_ids": []
+    },
+    {
+      "patch_id": "AD-ND08-handlebar-integrated_stem_length_mm",
+      "patch_index": 34,
+      "template": "handlebar",
+      "key": "integrated_stem_length_mm",
+      "path": "/templates/41/fields/- y /templates/41/form_contract/{roles,semantic_roles,allowed_when,required_when,evidence_requirements[,prerequisites,allowed_options]}/integrated_stem_length_mm",
+      "decision": "aceptar",
+      "reason": "Cambio de representación válido en su alcance. Los casos y las advertencias de fuente se adjudican aparte; no es una regla mecánica universal.",
+      "finding_ids": [
+        "FB06"
+      ]
+    },
+    {
+      "patch_id": "AD-ND08-handlebar-integrated_stem_angle_deg",
+      "patch_index": 35,
+      "template": "handlebar",
+      "key": "integrated_stem_angle_deg",
+      "path": "/templates/41/fields/- y /templates/41/form_contract/{roles,semantic_roles,allowed_when,required_when,evidence_requirements[,prerequisites,allowed_options]}/integrated_stem_angle_deg",
+      "decision": "aceptar",
+      "reason": "Cambio de representación válido en su alcance. Los casos y las advertencias de fuente se adjudican aparte; no es una regla mecánica universal.",
+      "finding_ids": [
+        "FB06"
+      ]
+    },
+    {
+      "patch_id": "AD-ND08-handlebar-integrated_steerer_clamp_mm",
+      "patch_index": 36,
+      "template": "handlebar",
+      "key": "integrated_steerer_clamp_mm",
+      "path": "/templates/41/fields/- y /templates/41/form_contract/{roles,semantic_roles,allowed_when,required_when,evidence_requirements[,prerequisites,allowed_options]}/integrated_steerer_clamp_mm",
+      "decision": "aceptar",
+      "reason": "Cambio de representación válido en su alcance. Los casos y las advertencias de fuente se adjudican aparte; no es una regla mecánica universal.",
+      "finding_ids": [
+        "FB06"
+      ]
+    },
+    {
+      "patch_id": "AD-ND08-handlebar-cable_routing",
+      "patch_index": 37,
+      "template": "handlebar",
+      "key": "cable_routing",
+      "path": "/templates/41/fields/- y /templates/41/form_contract/{roles,semantic_roles,allowed_when,required_when,evidence_requirements[,prerequisites,allowed_options]}/cable_routing",
+      "decision": "aceptar",
+      "reason": "Cambio de representación válido en su alcance. Los casos y las advertencias de fuente se adjudican aparte; no es una regla mecánica universal.",
+      "finding_ids": []
+    },
+    {
+      "patch_id": "AD-ND08-handlebar-accessory_mount_ports_text",
+      "patch_index": 38,
+      "template": "handlebar",
+      "key": "accessory_mount_ports_text",
+      "path": "/templates/41/fields/- y /templates/41/form_contract/{roles,semantic_roles,allowed_when,required_when,evidence_requirements[,prerequisites,allowed_options]}/accessory_mount_ports_text",
+      "decision": "aceptar",
+      "reason": "Cambio de representación válido en su alcance. Los casos y las advertencias de fuente se adjudican aparte; no es una regla mecánica universal.",
+      "finding_ids": []
+    },
+    {
+      "patch_id": "AD-ND08-handlebar-conflicting_claims",
+      "patch_index": 39,
+      "template": "handlebar",
+      "key": "conflicting_claims",
+      "path": "/templates/41/fields/- y /templates/41/form_contract/{roles,semantic_roles,allowed_when,required_when,evidence_requirements[,prerequisites,allowed_options]}/conflicting_claims",
+      "decision": "corregir",
+      "reason": "Aplicar el after/definition override y los gates indicados; no es aprobación de compatibilidad.",
+      "finding_ids": [
+        "FB17",
+        "FB18"
+      ]
+    },
+    {
+      "patch_id": "AD-ND11-lock-security_rating_claim",
+      "patch_index": 40,
+      "template": "lock",
+      "key": "security_rating_claim",
+      "path": "/templates/77/form_contract/{roles,semantic_roles}/security_rating_claim",
+      "decision": "aceptar",
+      "reason": "Cambio de representación válido en su alcance. Los casos y las advertencias de fuente se adjudican aparte; no es una regla mecánica universal.",
+      "finding_ids": []
+    },
+    {
+      "patch_id": "AD-ND11-lock-security_rating_configurations",
+      "patch_index": 41,
+      "template": "lock",
+      "key": "security_rating_configurations",
+      "path": "/templates/77/fields/- y /templates/77/form_contract/{roles,semantic_roles,allowed_when,required_when,evidence_requirements[,prerequisites,allowed_options]}/security_rating_configurations",
+      "decision": "corregir",
+      "reason": "Aplicar el after/definition override y los gates indicados; no es aprobación de compatibilidad.",
+      "finding_ids": [
+        "FB19"
+      ]
+    },
+    {
+      "patch_id": "AD-ND11-lock-cable_diameter_mm",
+      "patch_index": 42,
+      "template": "lock",
+      "key": "cable_diameter_mm",
+      "path": "/templates/77/fields/- y /templates/77/form_contract/{roles,semantic_roles,allowed_when,required_when,evidence_requirements[,prerequisites,allowed_options]}/cable_diameter_mm",
+      "decision": "aceptar",
+      "reason": "Cambio de representación válido en su alcance. Los casos y las advertencias de fuente se adjudican aparte; no es una regla mecánica universal.",
+      "finding_ids": []
+    },
+    {
+      "patch_id": "AD-ND14-def-carrier_mount_kind",
+      "patch_index": 43,
+      "template": null,
+      "key": "carrier_mount_kind",
+      "path": "/definitions/carrier_mount_kind/allowed_values",
+      "decision": "aceptar",
+      "reason": "Cambio de representación válido en su alcance. Los casos y las advertencias de fuente se adjudican aparte; no es una regla mecánica universal.",
+      "finding_ids": []
+    },
+    {
+      "patch_id": "AD-ND14-rack_basket-rack_top_interface",
+      "patch_index": 44,
+      "template": "rack_basket",
+      "key": "rack_top_interface",
+      "path": "/templates/85/fields/- y /templates/85/form_contract/{roles,semantic_roles,allowed_when,required_when,evidence_requirements[,prerequisites,allowed_options]}/rack_top_interface",
+      "decision": "corregir",
+      "reason": "Aplicar el after/definition override y los gates indicados; no es aprobación de compatibilidad.",
+      "finding_ids": [
+        "FB07"
+      ]
+    },
+    {
+      "patch_id": "AD-ND14-rack_basket-rack_eyelets_required",
+      "patch_index": 45,
+      "template": "rack_basket",
+      "key": "rack_eyelets_required",
+      "path": "/templates/85/fields/- y /templates/85/form_contract/{roles,semantic_roles,allowed_when,required_when,evidence_requirements[,prerequisites,allowed_options]}/rack_eyelets_required",
+      "decision": "aceptar",
+      "reason": "Cambio de representación válido en su alcance. Los casos y las advertencias de fuente se adjudican aparte; no es una regla mecánica universal.",
+      "finding_ids": [
+        "FB08"
+      ]
+    },
+    {
+      "patch_id": "AD-ND14-rack_basket-rack_mount_configurations",
+      "patch_index": 46,
+      "template": "rack_basket",
+      "key": "rack_mount_configurations",
+      "path": "/templates/85/fields/- y /templates/85/form_contract/{roles,semantic_roles,allowed_when,required_when,evidence_requirements[,prerequisites,allowed_options]}/rack_mount_configurations",
+      "decision": "corregir",
+      "reason": "Aplicar el after/definition override y los gates indicados; no es aprobación de compatibilidad.",
+      "finding_ids": [
+        "FB08"
+      ]
+    },
+    {
+      "patch_id": "AD-ND14-rack_basket-load_reference",
+      "patch_index": 47,
+      "template": "rack_basket",
+      "key": "load_reference",
+      "path": "/templates/85/fields/- y /templates/85/form_contract/{roles,semantic_roles,allowed_when,required_when,evidence_requirements[,prerequisites,allowed_options]}/load_reference",
+      "decision": "aceptar",
+      "reason": "Cambio de representación válido en su alcance. Los casos y las advertencias de fuente se adjudican aparte; no es una regla mecánica universal.",
+      "finding_ids": []
+    },
+    {
+      "patch_id": "AD-ND14-def-attachment",
+      "patch_index": 48,
+      "template": null,
+      "key": "attachment",
+      "path": "/definitions/attachment/allowed_values",
+      "decision": "aceptar",
+      "reason": "Cambio de representación válido en su alcance. Los casos y las advertencias de fuente se adjudican aparte; no es una regla mecánica universal.",
+      "finding_ids": [
+        "FB07"
+      ]
+    },
+    {
+      "patch_id": "AD-ND14-bike_bag-bag_rack_interface",
+      "patch_index": 49,
+      "template": "bike_bag",
+      "key": "bag_rack_interface",
+      "path": "/templates/88/fields/- y /templates/88/form_contract/{roles,semantic_roles,allowed_when,required_when,evidence_requirements[,prerequisites,allowed_options]}/bag_rack_interface",
+      "decision": "corregir",
+      "reason": "Aplicar el after/definition override y los gates indicados; no es aprobación de compatibilidad.",
+      "finding_ids": [
+        "FB07"
+      ]
+    },
+    {
+      "patch_id": "AD-ND14-bike_bag-bag_interface_generation",
+      "patch_index": 50,
+      "template": "bike_bag",
+      "key": "bag_interface_generation",
+      "path": "/templates/88/fields/- y /templates/88/form_contract/{roles,semantic_roles,allowed_when,required_when,evidence_requirements[,prerequisites,allowed_options]}/bag_interface_generation",
+      "decision": "rechazar",
+      "reason": "La generación queda junto a su interfaz en cada fila; no introducir un segundo propietario escalar.",
+      "finding_ids": [
+        "FB07"
+      ]
+    },
+    {
+      "patch_id": "AD-ND14-bike_bag-auxiliary_part_requirements",
+      "patch_index": 51,
+      "template": "bike_bag",
+      "key": "auxiliary_part_requirements",
+      "path": "/templates/88/fields/- y /templates/88/form_contract/{roles,semantic_roles,allowed_when,required_when,evidence_requirements[,prerequisites,allowed_options]}/auxiliary_part_requirements",
+      "decision": "aceptar",
+      "reason": "Cambio de representación válido en su alcance. Los casos y las advertencias de fuente se adjudican aparte; no es una regla mecánica universal.",
+      "finding_ids": [
+        "FB09"
+      ]
+    },
+    {
+      "patch_id": "AD-ND14-bike_bag-bag_member_configurations",
+      "patch_index": 52,
+      "template": "bike_bag",
+      "key": "bag_member_configurations",
+      "path": "/templates/88/fields/- y /templates/88/form_contract/{roles,semantic_roles,allowed_when,required_when,evidence_requirements[,prerequisites,allowed_options]}/bag_member_configurations",
+      "decision": "corregir",
+      "reason": "Aplicar el after/definition override y los gates indicados; no es aprobación de compatibilidad.",
+      "finding_ids": [
+        "FB09"
+      ]
+    },
+    {
+      "patch_id": "AD-ND14-bike_bag-conflicting_claims",
+      "patch_index": 53,
+      "template": "bike_bag",
+      "key": "conflicting_claims",
+      "path": "/templates/88/fields/- y /templates/88/form_contract/{roles,semantic_roles,allowed_when,required_when,evidence_requirements[,prerequisites,allowed_options]}/conflicting_claims",
+      "decision": "corregir",
+      "reason": "Aplicar el after/definition override y los gates indicados; no es aprobación de compatibilidad.",
+      "finding_ids": [
+        "FB17",
+        "FB18"
+      ]
+    },
+    {
+      "patch_id": "AD-ND15-kickstand-kickstand_mount_standard",
+      "patch_index": 54,
+      "template": "kickstand",
+      "key": "kickstand_mount_standard",
+      "path": "/templates/87/fields/- y /templates/87/form_contract/{roles,semantic_roles,allowed_when,required_when,evidence_requirements[,prerequisites,allowed_options]}/kickstand_mount_standard",
+      "decision": "corregir",
+      "reason": "Aplicar el after/definition override y los gates indicados; no es aprobación de compatibilidad.",
+      "finding_ids": [
+        "FB10"
+      ]
+    },
+    {
+      "patch_id": "AD-ND15-kickstand-mount_hole_spacing_mm",
+      "patch_index": 55,
+      "template": "kickstand",
+      "key": "mount_hole_spacing_mm",
+      "path": "/templates/87/fields/- y /templates/87/form_contract/{roles,semantic_roles,allowed_when,required_when,evidence_requirements[,prerequisites,allowed_options]}/mount_hole_spacing_mm",
+      "decision": "aceptar",
+      "reason": "Root acepta sólo esta representación de campo; conserva el gate identificado, sin aprobar una compatibilidad ni una ficha completa. Corregir la coherencia o cobertura indicada antes de usar el dato para compatibilidad/llenado; no se propone una sintaxis que el contrato actual no implemente.",
+      "finding_ids": [
+        "FB10"
+      ]
+    },
+    {
+      "patch_id": "AD-ND15-kickstand-mount_bolt_count",
+      "patch_index": 56,
+      "template": "kickstand",
+      "key": "mount_bolt_count",
+      "path": "/templates/87/fields/- y /templates/87/form_contract/{roles,semantic_roles,allowed_when,required_when,evidence_requirements[,prerequisites,allowed_options]}/mount_bolt_count",
+      "decision": "aceptar",
+      "reason": "Root acepta sólo esta representación de campo; conserva el gate identificado, sin aprobar una compatibilidad ni una ficha completa. Corregir la coherencia o cobertura indicada antes de usar el dato para compatibilidad/llenado; no se propone una sintaxis que el contrato actual no implemente.",
+      "finding_ids": [
+        "FB10"
+      ]
+    },
+    {
+      "patch_id": "AD-ND15-kickstand-thread",
+      "patch_index": 57,
+      "template": "kickstand",
+      "key": "thread",
+      "path": "/templates/87/fields/- y /templates/87/form_contract/{roles,semantic_roles,allowed_when,required_when,evidence_requirements[,prerequisites,allowed_options]}/thread",
+      "decision": "aceptar",
+      "reason": "Root acepta sólo esta representación de campo; conserva el gate identificado, sin aprobar una compatibilidad ni una ficha completa. Corregir la coherencia o cobertura indicada antes de usar el dato para compatibilidad/llenado; no se propone una sintaxis que el contrato actual no implemente.",
+      "finding_ids": [
+        "FB10"
+      ]
+    },
+    {
+      "patch_id": "AD-ND15-kickstand-kickstand_length_reference",
+      "patch_index": 58,
+      "template": "kickstand",
+      "key": "kickstand_length_reference",
+      "path": "/templates/87/fields/- y /templates/87/form_contract/{roles,semantic_roles,allowed_when,required_when,evidence_requirements[,prerequisites,allowed_options]}/kickstand_length_reference",
+      "decision": "corregir",
+      "reason": "Aplicar el after/definition override y los gates indicados; no es aprobación de compatibilidad.",
+      "finding_ids": [
+        "FB11"
+      ]
+    },
+    {
+      "patch_id": "AD-ND15-kickstand-installed_height_min_mm",
+      "patch_index": 59,
+      "template": "kickstand",
+      "key": "installed_height_min_mm",
+      "path": "/templates/87/fields/- y /templates/87/form_contract/{roles,semantic_roles,allowed_when,required_when,evidence_requirements[,prerequisites,allowed_options]}/installed_height_min_mm",
+      "decision": "corregir",
+      "reason": "Aplicar el after/definition override y los gates indicados; no es aprobación de compatibilidad.",
+      "finding_ids": [
+        "FB11"
+      ],
+      "after_override": {
+        "field_entry": {
+          "key": "installed_height_min_mm",
+          "section_key": "measurement",
+          "sort_order": 130,
+          "is_required": false,
+          "visibility_rules": [],
+          "option_rules": [],
+          "constraint_rules": []
+        },
+        "roles": "measurement",
+        "semantic_roles": "compatibility",
+        "allowed_when": {
+          "kind": "always"
+        },
+        "required_when": {
+          "kind": "never"
+        },
+        "evidence_requirements": "oem_spec",
+        "definition_used_by_append": "kickstand",
+        "prerequisites": [
+          "kickstand_length_reference"
+        ]
+      }
+    },
+    {
+      "patch_id": "AD-ND15-kickstand-installed_height_max_mm",
+      "patch_index": 60,
+      "template": "kickstand",
+      "key": "installed_height_max_mm",
+      "path": "/templates/87/fields/- y /templates/87/form_contract/{roles,semantic_roles,allowed_when,required_when,evidence_requirements[,prerequisites,allowed_options]}/installed_height_max_mm",
+      "decision": "corregir",
+      "reason": "Aplicar el after/definition override y los gates indicados; no es aprobación de compatibilidad.",
+      "finding_ids": [
+        "FB11"
+      ],
+      "after_override": {
+        "field_entry": {
+          "key": "installed_height_max_mm",
+          "section_key": "measurement",
+          "sort_order": 140,
+          "is_required": false,
+          "visibility_rules": [],
+          "option_rules": [],
+          "constraint_rules": []
+        },
+        "roles": "measurement",
+        "semantic_roles": "compatibility",
+        "allowed_when": {
+          "kind": "always"
+        },
+        "required_when": {
+          "kind": "never"
+        },
+        "evidence_requirements": "oem_spec",
+        "definition_used_by_append": "kickstand",
+        "prerequisites": [
+          "kickstand_length_reference"
+        ]
+      }
+    },
+    {
+      "patch_id": "AD-ND15-kickstand-max_bike_weight_kg",
+      "patch_index": 61,
+      "template": "kickstand",
+      "key": "max_bike_weight_kg",
+      "path": "/templates/87/fields/- y /templates/87/form_contract/{roles,semantic_roles,allowed_when,required_when,evidence_requirements[,prerequisites,allowed_options]}/max_bike_weight_kg",
+      "decision": "aceptar",
+      "reason": "Cambio de representación válido en su alcance. Los casos y las advertencias de fuente se adjudican aparte; no es una regla mecánica universal.",
+      "finding_ids": [
+        "FB21"
+      ]
+    },
+    {
+      "patch_id": "AD-ND15-kickstand-frame_requirement_text",
+      "patch_index": 62,
+      "template": "kickstand",
+      "key": "frame_requirement_text",
+      "path": "/templates/87/fields/- y /templates/87/form_contract/{roles,semantic_roles,allowed_when,required_when,evidence_requirements[,prerequisites,allowed_options]}/frame_requirement_text",
+      "decision": "aceptar",
+      "reason": "Cambio de representación válido en su alcance. Los casos y las advertencias de fuente se adjudican aparte; no es una regla mecánica universal.",
+      "finding_ids": []
+    },
+    {
+      "patch_id": "AD-ND15-kickstand-length_min_mm",
+      "patch_index": 63,
+      "template": "kickstand",
+      "key": "length_min_mm",
+      "path": "/templates/87/form_contract/{prerequisites}/length_min_mm",
+      "decision": "aceptar",
+      "reason": "Root acepta sólo esta representación de campo; conserva el gate identificado, sin aprobar una compatibilidad ni una ficha completa. Corregir la coherencia o cobertura indicada antes de usar el dato para compatibilidad/llenado; no se propone una sintaxis que el contrato actual no implemente.",
+      "finding_ids": [
+        "FB11"
+      ]
+    },
+    {
+      "patch_id": "AD-ND15-kickstand-length_max_mm",
+      "patch_index": 64,
+      "template": "kickstand",
+      "key": "length_max_mm",
+      "path": "/templates/87/form_contract/{prerequisites}/length_max_mm",
+      "decision": "aceptar",
+      "reason": "Root acepta sólo esta representación de campo; conserva el gate identificado, sin aprobar una compatibilidad ni una ficha completa. Corregir la coherencia o cobertura indicada antes de usar el dato para compatibilidad/llenado; no se propone una sintaxis que el contrato actual no implemente.",
+      "finding_ids": [
+        "FB11"
+      ]
+    },
+    {
+      "patch_id": "AD-ND16-bottle-bottle_retention_system",
+      "patch_index": 65,
+      "template": "bottle",
+      "key": "bottle_retention_system",
+      "path": "/templates/84/fields/- y /templates/84/form_contract/{roles,semantic_roles,allowed_when,required_when,evidence_requirements[,prerequisites,allowed_options]}/bottle_retention_system",
+      "decision": "aceptar",
+      "reason": "Cambio de representación válido en su alcance. Los casos y las advertencias de fuente se adjudican aparte; no es una regla mecánica universal.",
+      "finding_ids": [
+        "FB12"
+      ]
+    },
+    {
+      "patch_id": "AD-ND16-bottle-bottle_diameter_mm",
+      "patch_index": 66,
+      "template": "bottle",
+      "key": "bottle_diameter_mm",
+      "path": "/templates/84/form_contract/{allowed_when}/bottle_diameter_mm",
+      "decision": "corregir",
+      "reason": "Aplicar el after/definition override y los gates indicados; no es aprobación de compatibilidad.",
+      "finding_ids": [
+        "FB12"
+      ],
+      "after_override": {
+        "allowed_when": {
+          "kind": "always"
+        },
+        "semantic_roles": "measurement"
+      },
+      "before_extensions": {
+        "semantic_roles": {
+          "present": true,
+          "value": "compatibility"
+        }
+      }
+    },
+    {
+      "patch_id": "AD-ND16-bottle-base_included",
+      "patch_index": 67,
+      "template": "bottle",
+      "key": "base_included",
+      "path": "/templates/84/fields/- y /templates/84/form_contract/{roles,semantic_roles,allowed_when,required_when,evidence_requirements[,prerequisites,allowed_options]}/base_included",
+      "decision": "aceptar",
+      "reason": "Cambio de representación válido en su alcance. Los casos y las advertencias de fuente se adjudican aparte; no es una regla mecánica universal.",
+      "finding_ids": [
+        "FB12"
+      ]
+    },
+    {
+      "patch_id": "AD-ND16-bottle-included_base_model",
+      "patch_index": 68,
+      "template": "bottle",
+      "key": "included_base_model",
+      "path": "/templates/84/fields/- y /templates/84/form_contract/{roles,semantic_roles,allowed_when,required_when,evidence_requirements[,prerequisites,allowed_options]}/included_base_model",
+      "decision": "aceptar",
+      "reason": "Cambio de representación válido en su alcance. Los casos y las advertencias de fuente se adjudican aparte; no es una regla mecánica universal.",
+      "finding_ids": [
+        "FB12"
+      ]
+    },
+    {
+      "patch_id": "AD-ND16-def-cage_mount",
+      "patch_index": 69,
+      "template": null,
+      "key": "cage_mount",
+      "path": "/definitions/cage_mount/allowed_values",
+      "decision": "aceptar",
+      "reason": "Cambio de representación válido en su alcance. Los casos y las advertencias de fuente se adjudican aparte; no es una regla mecánica universal.",
+      "finding_ids": []
+    },
+    {
+      "patch_id": "AD-ND16-bottle_cage-cage_retention_system",
+      "patch_index": 70,
+      "template": "bottle_cage",
+      "key": "cage_retention_system",
+      "path": "/templates/83/fields/- y /templates/83/form_contract/{roles,semantic_roles,allowed_when,required_when,evidence_requirements[,prerequisites,allowed_options]}/cage_retention_system",
+      "decision": "aceptar",
+      "reason": "Cambio de representación válido en su alcance. Los casos y las advertencias de fuente se adjudican aparte; no es una regla mecánica universal.",
+      "finding_ids": [
+        "FB12"
+      ]
+    },
+    {
+      "patch_id": "AD-ND16-bottle_cage-bottle_diameter_mm",
+      "patch_index": 71,
+      "template": "bottle_cage",
+      "key": "bottle_diameter_mm",
+      "path": "/templates/83/form_contract/{allowed_when}/bottle_diameter_mm",
+      "decision": "aceptar",
+      "reason": "Cambio de representación válido en su alcance. Los casos y las advertencias de fuente se adjudican aparte; no es una regla mecánica universal.",
+      "finding_ids": [
+        "FB12"
+      ]
+    },
+    {
+      "patch_id": "AD-ND16-bottle_cage-frame_tube_width_min_mm",
+      "patch_index": 72,
+      "template": "bottle_cage",
+      "key": "frame_tube_width_min_mm",
+      "path": "/templates/83/fields/- y /templates/83/form_contract/{roles,semantic_roles,allowed_when,required_when,evidence_requirements[,prerequisites,allowed_options]}/frame_tube_width_min_mm",
+      "decision": "aceptar",
+      "reason": "Root acepta sólo esta representación de campo; conserva el gate identificado, sin aprobar una compatibilidad ni una ficha completa. Corregir la coherencia o cobertura indicada antes de usar el dato para compatibilidad/llenado; no se propone una sintaxis que el contrato actual no implemente.",
+      "finding_ids": [
+        "FB11"
+      ]
+    },
+    {
+      "patch_id": "AD-ND16-bottle_cage-frame_tube_width_max_mm",
+      "patch_index": 73,
+      "template": "bottle_cage",
+      "key": "frame_tube_width_max_mm",
+      "path": "/templates/83/fields/- y /templates/83/form_contract/{roles,semantic_roles,allowed_when,required_when,evidence_requirements[,prerequisites,allowed_options]}/frame_tube_width_max_mm",
+      "decision": "aceptar",
+      "reason": "Root acepta sólo esta representación de campo; conserva el gate identificado, sin aprobar una compatibilidad ni una ficha completa. Corregir la coherencia o cobertura indicada antes de usar el dato para compatibilidad/llenado; no se propone una sintaxis que el contrato actual no implemente.",
+      "finding_ids": [
+        "FB11"
+      ]
+    },
+    {
+      "patch_id": "AD-ND16-bottle_cage-boss_spacing_mm",
+      "patch_index": 74,
+      "template": "bottle_cage",
+      "key": "boss_spacing_mm",
+      "path": "/templates/83/fields/- y /templates/83/form_contract/{roles,semantic_roles,allowed_when,required_when,evidence_requirements[,prerequisites,allowed_options]}/boss_spacing_mm",
+      "decision": "aceptar",
+      "reason": "Cambio de representación válido en su alcance. Los casos y las advertencias de fuente se adjudican aparte; no es una regla mecánica universal.",
+      "finding_ids": [
+        "FB10"
+      ]
+    },
+    {
+      "patch_id": "AD-ND16-bottle_cage-boss_count",
+      "patch_index": 75,
+      "template": "bottle_cage",
+      "key": "boss_count",
+      "path": "/templates/83/fields/- y /templates/83/form_contract/{roles,semantic_roles,allowed_when,required_when,evidence_requirements[,prerequisites,allowed_options]}/boss_count",
+      "decision": "aceptar",
+      "reason": "Root acepta sólo esta representación de campo; conserva el gate identificado, sin aprobar una compatibilidad ni una ficha completa. Corregir la coherencia o cobertura indicada antes de usar el dato para compatibilidad/llenado; no se propone una sintaxis que el contrato actual no implemente.",
+      "finding_ids": [
+        "FB10"
+      ]
+    },
+    {
+      "patch_id": "AD-ND16-bottle_cage-side_entry_side",
+      "patch_index": 76,
+      "template": "bottle_cage",
+      "key": "side_entry_side",
+      "path": "/templates/83/fields/- y /templates/83/form_contract/{roles,semantic_roles,allowed_when,required_when,evidence_requirements[,prerequisites,allowed_options]}/side_entry_side",
+      "decision": "aceptar",
+      "reason": "Cambio de representación válido en su alcance. Los casos y las advertencias de fuente se adjudican aparte; no es una regla mecánica universal.",
+      "finding_ids": []
+    },
+    {
+      "patch_id": "AD-ND17-def-pump_kind",
+      "patch_index": 77,
+      "template": null,
+      "key": "pump_kind",
+      "path": "/definitions/pump_kind/allowed_values",
+      "decision": "aceptar",
+      "reason": "Cambio de representación válido en su alcance. Los casos y las advertencias de fuente se adjudican aparte; no es una regla mecánica universal.",
+      "finding_ids": []
+    },
+    {
+      "patch_id": "AD-ND17-pump-co2_cartridge_interface",
+      "patch_index": 78,
+      "template": "pump",
+      "key": "co2_cartridge_interface",
+      "path": "/templates/100/fields/- y /templates/100/form_contract/{roles,semantic_roles,allowed_when,required_when,evidence_requirements[,prerequisites,allowed_options]}/co2_cartridge_interface",
+      "decision": "rechazar",
+      "reason": "La rosca ya queda en la fila con alcance y contraparte; no introducir otro propietario de interfaz.",
+      "finding_ids": [
+        "FB13"
+      ]
+    },
+    {
+      "patch_id": "AD-ND17-pump-co2_cartridge_configurations",
+      "patch_index": 79,
+      "template": "pump",
+      "key": "co2_cartridge_configurations",
+      "path": "/templates/100/fields/- y /templates/100/form_contract/{roles,semantic_roles,allowed_when,required_when,evidence_requirements[,prerequisites,allowed_options]}/co2_cartridge_configurations",
+      "decision": "corregir",
+      "reason": "Aplicar el after/definition override y los gates indicados; no es aprobación de compatibilidad.",
+      "finding_ids": [
+        "FB13"
+      ]
+    },
+    {
+      "patch_id": "AD-ND17-pump-pack_quantity",
+      "patch_index": 80,
+      "template": "pump",
+      "key": "pack_quantity",
+      "path": "/templates/100/fields/- y /templates/100/form_contract/{roles,semantic_roles,allowed_when,required_when,evidence_requirements[,prerequisites,allowed_options]}/pack_quantity",
+      "decision": "aceptar",
+      "reason": "Root acepta sólo esta representación de campo; conserva el gate identificado, sin aprobar una compatibilidad ni una ficha completa. Corregir la coherencia o cobertura indicada antes de usar el dato para compatibilidad/llenado; no se propone una sintaxis que el contrato actual no implemente.",
+      "finding_ids": [
+        "FB13"
+      ]
+    },
+    {
+      "patch_id": "AD-ND17-pump-inflation_target_note",
+      "patch_index": 81,
+      "template": "pump",
+      "key": "inflation_target_note",
+      "path": "/templates/100/fields/- y /templates/100/form_contract/{roles,semantic_roles,allowed_when,required_when,evidence_requirements[,prerequisites,allowed_options]}/inflation_target_note",
+      "decision": "aceptar",
+      "reason": "Cambio de representación válido en su alcance. Los casos y las advertencias de fuente se adjudican aparte; no es una regla mecánica universal.",
+      "finding_ids": []
+    },
+    {
+      "patch_id": "AD-ND17-pump-valve_heads_supported",
+      "patch_index": 82,
+      "template": "pump",
+      "key": "valve_heads_supported",
+      "path": "/templates/100/form_contract/{allowed_when,required_when}/valve_heads_supported",
+      "decision": "aceptar",
+      "reason": "Cambio de representación válido en su alcance. Los casos y las advertencias de fuente se adjudican aparte; no es una regla mecánica universal.",
+      "finding_ids": []
+    },
+    {
+      "patch_id": "AD-ND18-helmet-certification_claim",
+      "patch_index": 83,
+      "template": "helmet",
+      "key": "certification_claim",
+      "path": "/templates/95/form_contract/{roles,semantic_roles}/certification_claim",
+      "decision": "aceptar",
+      "reason": "Cambio de representación válido en su alcance. Los casos y las advertencias de fuente se adjudican aparte; no es una regla mecánica universal.",
+      "finding_ids": [
+        "FB14"
+      ]
+    },
+    {
+      "patch_id": "AD-ND18-helmet-label_evidence_state",
+      "patch_index": 84,
+      "template": "helmet",
+      "key": "label_evidence_state",
+      "path": "/templates/95/fields/- y /templates/95/form_contract/{roles,semantic_roles,allowed_when,required_when,evidence_requirements[,prerequisites,allowed_options]}/label_evidence_state",
+      "decision": "aceptar",
+      "reason": "Root acepta sólo esta representación de campo; conserva el gate identificado, sin aprobar una compatibilidad ni una ficha completa. Corregir la coherencia o cobertura indicada antes de usar el dato para compatibilidad/llenado; no se propone una sintaxis que el contrato actual no implemente.",
+      "finding_ids": [
+        "FB14"
+      ]
+    },
+    {
+      "patch_id": "AD-ND18-helmet-certification_configurations",
+      "patch_index": 85,
+      "template": "helmet",
+      "key": "certification_configurations",
+      "path": "/templates/95/fields/- y /templates/95/form_contract/{roles,semantic_roles,allowed_when,required_when,evidence_requirements[,prerequisites,allowed_options]}/certification_configurations",
+      "decision": "corregir",
+      "reason": "Aplicar el after/definition override y los gates indicados; no es aprobación de compatibilidad.",
+      "finding_ids": [
+        "FB14",
+        "FB19"
+      ]
+    },
+    {
+      "patch_id": "AD-ND18-helmet-helmet_construction",
+      "patch_index": 86,
+      "template": "helmet",
+      "key": "helmet_construction",
+      "path": "/templates/95/fields/- y /templates/95/form_contract/{roles,semantic_roles,allowed_when,required_when,evidence_requirements[,prerequisites,allowed_options]}/helmet_construction",
+      "decision": "corregir",
+      "reason": "Aplicar el after/definition override y los gates indicados; no es aprobación de compatibilidad.",
+      "finding_ids": [
+        "FB15"
+      ]
+    },
+    {
+      "patch_id": "AD-ND18-helmet-intended_audience",
+      "patch_index": 87,
+      "template": "helmet",
+      "key": "intended_audience",
+      "path": "/templates/95/fields/- y /templates/95/form_contract/{roles,semantic_roles,allowed_when,required_when,evidence_requirements[,prerequisites,allowed_options]}/intended_audience",
+      "decision": "aceptar",
+      "reason": "Cambio de representación válido en su alcance. Los casos y las advertencias de fuente se adjudican aparte; no es una regla mecánica universal.",
+      "finding_ids": [
+        "FB15"
+      ]
+    },
+    {
+      "patch_id": "AD-ND18-rider_protection-certification_configurations",
+      "patch_index": 88,
+      "template": "rider_protection",
+      "key": "certification_configurations",
+      "path": "/templates/98/fields/- y /templates/98/form_contract/{roles,semantic_roles,allowed_when,required_when,evidence_requirements[,prerequisites,allowed_options]}/certification_configurations",
+      "decision": "corregir",
+      "reason": "Aplicar el after/definition override y los gates indicados; no es aprobación de compatibilidad.",
+      "finding_ids": [
+        "FB14"
+      ]
+    },
+    {
+      "patch_id": "AD-ND18-rider_protection-intended_audience",
+      "patch_index": 89,
+      "template": "rider_protection",
+      "key": "intended_audience",
+      "path": "/templates/98/fields/- y /templates/98/form_contract/{roles,semantic_roles,allowed_when,required_when,evidence_requirements[,prerequisites,allowed_options]}/intended_audience",
+      "decision": "aceptar",
+      "reason": "Cambio de representación válido en su alcance. Los casos y las advertencias de fuente se adjudican aparte; no es una regla mecánica universal.",
+      "finding_ids": [
+        "FB15"
+      ]
+    },
+    {
+      "patch_id": "AD-ND19-rows-eyewear_lens_configurations",
+      "patch_index": 90,
+      "template": null,
+      "key": "eyewear_lens_configurations",
+      "path": "/definitions/eyewear_lens_configurations/validation_rules/rows_schema/columns",
+      "decision": "aceptar",
+      "reason": "Cambio de representación válido en su alcance. Los casos y las advertencias de fuente se adjudican aparte; no es una regla mecánica universal.",
+      "finding_ids": [
+        "FB20"
+      ]
+    },
+    {
+      "patch_id": "AD-ND19-rows-eyewear_lens_configurations-ordered",
+      "patch_index": 91,
+      "template": null,
+      "key": "eyewear_lens_configurations",
+      "path": "/definitions/eyewear_lens_configurations/validation_rules/rows_schema/ordered_pairs",
+      "decision": "aceptar",
+      "reason": "Cambio de representación válido en su alcance. Los casos y las advertencias de fuente se adjudican aparte; no es una regla mecánica universal.",
+      "finding_ids": [
+        "FB20"
+      ]
+    },
+    {
+      "patch_id": "AD-ND20-rider_apparel-intended_audience",
+      "patch_index": 92,
+      "template": "rider_apparel",
+      "key": "intended_audience",
+      "path": "/templates/97/fields/- y /templates/97/form_contract/{roles,semantic_roles,allowed_when,required_when,evidence_requirements[,prerequisites,allowed_options]}/intended_audience",
+      "decision": "aceptar",
+      "reason": "Cambio de representación válido en su alcance. Los casos y las advertencias de fuente se adjudican aparte; no es una regla mecánica universal.",
+      "finding_ids": [
+        "FB15"
+      ]
+    },
+    {
+      "patch_id": "AD-ND20-rider_apparel-fit_cut",
+      "patch_index": 93,
+      "template": "rider_apparel",
+      "key": "fit_cut",
+      "path": "/templates/97/fields/- y /templates/97/form_contract/{roles,semantic_roles,allowed_when,required_when,evidence_requirements[,prerequisites,allowed_options]}/fit_cut",
+      "decision": "corregir",
+      "reason": "Aplicar el after/definition override y los gates indicados; no es aprobación de compatibilidad.",
+      "finding_ids": [
+        "FB16"
+      ]
+    },
+    {
+      "patch_id": "AD-ND20-rider_apparel-fabric_composition_text",
+      "patch_index": 94,
+      "template": "rider_apparel",
+      "key": "fabric_composition_text",
+      "path": "/templates/97/fields/- y /templates/97/form_contract/{roles,semantic_roles,allowed_when,required_when,evidence_requirements[,prerequisites,allowed_options]}/fabric_composition_text",
+      "decision": "aceptar",
+      "reason": "Cambio de representación válido en su alcance. Los casos y las advertencias de fuente se adjudican aparte; no es una regla mecánica universal.",
+      "finding_ids": [
+        "FB16"
+      ]
+    },
+    {
+      "patch_id": "AD-ND20-rider_glove-intended_audience",
+      "patch_index": 95,
+      "template": "rider_glove",
+      "key": "intended_audience",
+      "path": "/templates/94/fields/- y /templates/94/form_contract/{roles,semantic_roles,allowed_when,required_when,evidence_requirements[,prerequisites,allowed_options]}/intended_audience",
+      "decision": "aceptar",
+      "reason": "Cambio de representación válido en su alcance. Los casos y las advertencias de fuente se adjudican aparte; no es una regla mecánica universal.",
+      "finding_ids": [
+        "FB15"
+      ]
+    },
+    {
+      "patch_id": "AD-ND20-rider_glove-fit_cut",
+      "patch_index": 96,
+      "template": "rider_glove",
+      "key": "fit_cut",
+      "path": "/templates/94/fields/- y /templates/94/form_contract/{roles,semantic_roles,allowed_when,required_when,evidence_requirements[,prerequisites,allowed_options]}/fit_cut",
+      "decision": "corregir",
+      "reason": "Aplicar el after/definition override y los gates indicados; no es aprobación de compatibilidad.",
+      "finding_ids": [
+        "FB16"
+      ]
+    },
+    {
+      "patch_id": "AD-ND20-rider_glove-fabric_composition_text",
+      "patch_index": 97,
+      "template": "rider_glove",
+      "key": "fabric_composition_text",
+      "path": "/templates/94/fields/- y /templates/94/form_contract/{roles,semantic_roles,allowed_when,required_when,evidence_requirements[,prerequisites,allowed_options]}/fabric_composition_text",
+      "decision": "aceptar",
+      "reason": "Cambio de representación válido en su alcance. Los casos y las advertencias de fuente se adjudican aparte; no es una regla mecánica universal.",
+      "finding_ids": [
+        "FB16"
+      ]
+    },
+    {
+      "patch_id": "AD-ND20-label-gender_fit",
+      "patch_index": 98,
+      "template": null,
+      "key": "gender_fit",
+      "path": "/definitions/gender_fit/label",
+      "decision": "aceptar",
+      "reason": "Root acepta sólo esta representación de campo; conserva el gate identificado, sin aprobar una compatibilidad ni una ficha completa. Corregir la coherencia o cobertura indicada antes de usar el dato para compatibilidad/llenado; no se propone una sintaxis que el contrato actual no implemente.",
+      "finding_ids": [
+        "FB15",
+        "FB16"
+      ]
+    },
+    {
+      "patch_id": "AD-ND24-label-volume_l",
+      "patch_index": 99,
+      "template": null,
+      "key": "volume_l",
+      "path": "/definitions/volume_l/label",
+      "decision": "corregir",
+      "reason": "Aplicar el after/definition override y los gates indicados; no es aprobación de compatibilidad.",
+      "finding_ids": [
+        "FB17"
+      ],
+      "after_override": "Capacidad declarada"
+    }
+  ],
+  "definition_overrides": {
+    "pedal_thread_standard": {
+      "id": null,
+      "key": "pedal_thread_standard",
+      "origin": "new",
+      "label": "Estándar de rosca del pedal (diámetro + paso)",
+      "data_type": "single_select",
+      "unit": null,
+      "allowed_values": [
+        "9/16\" x 20 TPI",
+        "1/2\" x 20 TPI",
+        "M14 x 1.25",
+        "1\" x 24 TPI (Shimano Dyna Drive)",
+        "Otro",
+        "Desconocido / sin confirmar"
+      ],
+      "validation_rules": {},
+      "used_by": []
+    },
+    "pedal_wrench_interface": {
+      "id": null,
+      "key": "pedal_wrench_interface",
+      "origin": "new",
+      "label": "Accionamiento para montar el pedal",
+      "data_type": "multi_select",
+      "unit": null,
+      "allowed_values": [
+        "Llave de pedal 15 mm",
+        "Hexágono 6 mm",
+        "Hexágono 8 mm",
+        "Otro",
+        "Desconocido / sin confirmar"
+      ],
+      "validation_rules": {},
+      "used_by": []
+    },
+    "dropper_cable_routing": {
+      "id": null,
+      "key": "dropper_cable_routing",
+      "origin": "new",
+      "label": "Ruta del cable o latiguillo de la telescópica",
+      "data_type": "single_select",
+      "unit": null,
+      "allowed_values": [
+        "Interna (stealth)",
+        "Externa",
+        "Desconocido / sin confirmar"
+      ],
+      "validation_rules": {},
+      "used_by": []
+    },
+    "dropper_remote_model": {
+      "id": null,
+      "key": "dropper_remote_model",
+      "origin": "new",
+      "label": "Modelo del mando incluido",
+      "data_type": "text",
+      "unit": null,
+      "allowed_values": [],
+      "validation_rules": {},
+      "used_by": []
+    },
+    "seatpost_bottom_clearance_mm": {
+      "id": null,
+      "key": "seatpost_bottom_clearance_mm",
+      "origin": "new",
+      "label": "Proyección inferior adicional a la longitud declarada (cota OEM)",
+      "data_type": "number",
+      "unit": "mm",
+      "allowed_values": [],
+      "validation_rules": {
+        "min": "0"
+      },
+      "used_by": []
+    },
+    "bar_width_hoods_mm": {
+      "id": null,
+      "key": "bar_width_hoods_mm",
+      "origin": "new",
+      "label": "Ancho en manetas (centro a centro)",
+      "data_type": "number",
+      "unit": "mm",
+      "allowed_values": [],
+      "validation_rules": {
+        "positive": true
+      },
+      "used_by": []
+    },
+    "bar_width_drops_mm": {
+      "id": null,
+      "key": "bar_width_drops_mm",
+      "origin": "new",
+      "label": "Ancho en drops (centro a centro)",
+      "data_type": "number",
+      "unit": "mm",
+      "allowed_values": [],
+      "validation_rules": {
+        "positive": true
+      },
+      "used_by": []
+    },
+    "rack_top_interface": {
+      "id": null,
+      "key": "rack_top_interface",
+      "origin": "new",
+      "label": "Interfaces superiores declaradas (por configuración)",
+      "data_type": "json",
+      "unit": null,
+      "allowed_values": [],
+      "validation_rules": {
+        "rows_schema": {
+          "version": 1,
+          "columns": [
+            {
+              "key": "interface",
+              "label": "Interfaz declarada",
+              "type": "text",
+              "required": true
+            },
+            {
+              "key": "generation",
+              "label": "Generación declarada",
+              "type": "text"
+            },
+            {
+              "key": "counterpart_model",
+              "label": "Contraparte / familia exacta de la declaración",
+              "type": "text"
+            },
+            {
+              "key": "configuration",
+              "label": "Configuración de montaje",
+              "type": "text"
+            },
+            {
+              "key": "required_part",
+              "label": "Adaptador o pieza requerida",
+              "type": "text"
+            },
+            {
+              "key": "conditions",
+              "label": "Condiciones y alcance",
+              "type": "text"
+            },
+            {
+              "key": "source_url",
+              "label": "Fuente",
+              "type": "url"
+            }
+          ]
+        }
+      },
+      "used_by": []
+    },
+    "bag_rack_interface": {
+      "id": null,
+      "key": "bag_rack_interface",
+      "origin": "new",
+      "label": "Interfaces bolso a parrilla declaradas (por configuración)",
+      "data_type": "json",
+      "unit": null,
+      "allowed_values": [],
+      "validation_rules": {
+        "rows_schema": {
+          "version": 1,
+          "columns": [
+            {
+              "key": "interface",
+              "label": "Interfaz declarada",
+              "type": "text",
+              "required": true
+            },
+            {
+              "key": "generation",
+              "label": "Generación declarada",
+              "type": "text"
+            },
+            {
+              "key": "counterpart_model",
+              "label": "Contraparte / familia exacta de la declaración",
+              "type": "text"
+            },
+            {
+              "key": "configuration",
+              "label": "Configuración de montaje",
+              "type": "text"
+            },
+            {
+              "key": "required_part",
+              "label": "Adaptador o pieza requerida",
+              "type": "text"
+            },
+            {
+              "key": "conditions",
+              "label": "Condiciones y alcance",
+              "type": "text"
+            },
+            {
+              "key": "source_url",
+              "label": "Fuente",
+              "type": "url"
+            }
+          ]
+        }
+      },
+      "used_by": []
+    },
+    "rack_mount_configurations": {
+      "id": null,
+      "key": "rack_mount_configurations",
+      "origin": "new",
+      "label": "Puntos de anclaje de la parrilla (uno por fila)",
+      "data_type": "json",
+      "unit": null,
+      "allowed_values": [],
+      "validation_rules": {
+        "rows_schema": {
+          "version": 1,
+          "columns": [
+            {
+              "key": "mount_point",
+              "label": "Punto de anclaje",
+              "type": "token",
+              "required": true,
+              "allowed_values": [
+                "Ojales de parrilla en punteras y tirantes",
+                "Correas a tirantes (sin ojales)",
+                "Abrazadera a tija",
+                "Abrazaderas de manubrio",
+                "Eje delantero / horquilla",
+                "Otro"
+              ]
+            },
+            {
+              "key": "requirement",
+              "label": "Requisito declarado",
+              "type": "text"
+            },
+            {
+              "key": "tube_diameter_min_mm",
+              "label": "Tubo mín.",
+              "type": "decimal",
+              "unit": "mm",
+              "validation": {
+                "positive": true
+              }
+            },
+            {
+              "key": "tube_diameter_max_mm",
+              "label": "Tubo máx.",
+              "type": "decimal",
+              "unit": "mm",
+              "validation": {
+                "positive": true
+              }
+            },
+            {
+              "key": "span_min_mm",
+              "label": "Separación mín.",
+              "type": "decimal",
+              "unit": "mm",
+              "validation": {
+                "positive": true
+              }
+            },
+            {
+              "key": "span_max_mm",
+              "label": "Separación máx.",
+              "type": "decimal",
+              "unit": "mm",
+              "validation": {
+                "positive": true
+              }
+            },
+            {
+              "key": "exclusions",
+              "label": "Exclusiones OEM",
+              "type": "text"
+            },
+            {
+              "key": "source_url",
+              "label": "Fuente",
+              "type": "url"
+            },
+            {
+              "key": "configuration",
+              "label": "Configuración / variante",
+              "type": "text"
+            },
+            {
+              "key": "tube_diameter_min_inclusive",
+              "label": "Incluye el diámetro mínimo",
+              "type": "boolean"
+            },
+            {
+              "key": "tube_diameter_max_inclusive",
+              "label": "Incluye el diámetro máximo",
+              "type": "boolean"
+            },
+            {
+              "key": "mount_length_mm",
+              "label": "Longitud de montaje requerida",
+              "type": "decimal",
+              "unit": "mm",
+              "validation": {
+                "positive": true
+              }
+            },
+            {
+              "key": "advisories",
+              "label": "Recomendaciones OEM (separadas de exclusiones)",
+              "type": "text"
+            }
+          ],
+          "ordered_pairs": [
+            [
+              "tube_diameter_min_mm",
+              "tube_diameter_max_mm"
+            ],
+            [
+              "span_min_mm",
+              "span_max_mm"
+            ]
+          ]
+        }
+      },
+      "used_by": []
+    },
+    "bag_member_configurations": {
+      "id": null,
+      "key": "bag_member_configurations",
+      "origin": "new",
+      "label": "Miembros del bolso (alforjas, módulos)",
+      "data_type": "json",
+      "unit": null,
+      "allowed_values": [],
+      "validation_rules": {
+        "rows_schema": {
+          "version": 1,
+          "columns": [
+            {
+              "key": "member",
+              "label": "Miembro",
+              "type": "text",
+              "required": true
+            },
+            {
+              "key": "position",
+              "label": "Posición",
+              "type": "token",
+              "required": true,
+              "allowed_values": [
+                "Superior",
+                "Lateral izquierda",
+                "Lateral derecha",
+                "Ambos laterales",
+                "Otra"
+              ]
+            },
+            {
+              "key": "volume_l",
+              "label": "Volumen",
+              "type": "decimal",
+              "unit": "L",
+              "validation": {
+                "positive": true
+              }
+            },
+            {
+              "key": "width_mm",
+              "label": "Ancho",
+              "type": "decimal",
+              "unit": "mm",
+              "validation": {
+                "positive": true
+              }
+            },
+            {
+              "key": "height_mm",
+              "label": "Alto",
+              "type": "decimal",
+              "unit": "mm",
+              "validation": {
+                "positive": true
+              }
+            },
+            {
+              "key": "depth_mm",
+              "label": "Fondo",
+              "type": "decimal",
+              "unit": "mm",
+              "validation": {
+                "positive": true
+              }
+            },
+            {
+              "key": "source_url",
+              "label": "Fuente",
+              "type": "url"
+            },
+            {
+              "key": "configuration",
+              "label": "Estado / configuración del miembro",
+              "type": "text"
+            },
+            {
+              "key": "measurement_reference",
+              "label": "Referencia de las dimensiones",
+              "type": "text"
+            }
+          ]
+        }
+      },
+      "used_by": []
+    },
+    "security_rating_configurations": {
+      "id": null,
+      "key": "security_rating_configurations",
+      "origin": "new",
+      "label": "Clasificación de seguridad por componente y emisor",
+      "data_type": "json",
+      "unit": null,
+      "allowed_values": [],
+      "validation_rules": {
+        "rows_schema": {
+          "version": 1,
+          "columns": [
+            {
+              "key": "component",
+              "label": "Componente cubierto",
+              "type": "token",
+              "required": true,
+              "allowed_values": [
+                "U / arco",
+                "Cable",
+                "Cadena",
+                "Plegable",
+                "Conjunto (kit)"
+              ]
+            },
+            {
+              "key": "issuer",
+              "label": "Emisor / escala",
+              "type": "token",
+              "required": true,
+              "allowed_values": [
+                "Kryptonite (escala 1–10)",
+                "OnGuard (escala)",
+                "ABUS (escala)",
+                "Sold Secure",
+                "ART",
+                "Otro"
+              ]
+            },
+            {
+              "key": "level",
+              "label": "Nivel tal como se publica",
+              "type": "text",
+              "required": true
+            },
+            {
+              "key": "scope_note",
+              "label": "Alcance / exclusiones",
+              "type": "text"
+            },
+            {
+              "key": "source_url",
+              "label": "Fuente",
+              "type": "url"
+            },
+            {
+              "key": "component_model",
+              "label": "Modelo de componente cubierto",
+              "type": "text"
+            },
+            {
+              "key": "edition",
+              "label": "Edición / fecha de la clasificación",
+              "type": "text"
+            },
+            {
+              "key": "certificate_id",
+              "label": "Identificador de certificado (no nivel)",
+              "type": "text"
+            }
+          ]
+        }
+      },
+      "used_by": []
+    },
+    "kickstand_mount_standard": {
+      "id": null,
+      "key": "kickstand_mount_standard",
+      "origin": "new",
+      "label": "Estándar de montaje de la pata",
+      "data_type": "single_select",
+      "unit": null,
+      "allowed_values": [
+        "KSA 18 (separación 18 mm, 2 pernos)",
+        "KSA 40 (separación 40 mm, 2 pernos)",
+        "Placa central de un perno",
+        "Abrazadera a vaina",
+        "Otro",
+        "Desconocido / sin confirmar"
+      ],
+      "validation_rules": {},
+      "used_by": []
+    },
+    "kickstand_length_reference": {
+      "id": null,
+      "key": "kickstand_length_reference",
+      "origin": "new",
+      "label": "Referencia exacta de longitud / altura (datum OEM)",
+      "data_type": "text",
+      "unit": null,
+      "allowed_values": [],
+      "validation_rules": {},
+      "used_by": []
+    },
+    "co2_cartridge_configurations": {
+      "id": null,
+      "key": "co2_cartridge_configurations",
+      "origin": "new",
+      "label": "Cartuchos admitidos o incluidos (uno por fila)",
+      "data_type": "json",
+      "unit": null,
+      "allowed_values": [],
+      "validation_rules": {
+        "rows_schema": {
+          "version": 1,
+          "columns": [
+            {
+              "key": "configuration_kind",
+              "label": "Alcance de la fila",
+              "type": "token",
+              "required": true,
+              "allowed_values": [
+                "Cartucho de esta presentación",
+                "Cartucho compatible declarado"
+              ]
+            },
+            {
+              "key": "gas_mass_g",
+              "label": "CO2 neto",
+              "type": "decimal",
+              "unit": "g",
+              "required": true,
+              "validation": {
+                "positive": true
+              }
+            },
+            {
+              "key": "threaded",
+              "label": "Roscado",
+              "type": "boolean",
+              "required": true
+            },
+            {
+              "key": "included_quantity",
+              "label": "Cantidad incluida",
+              "type": "integer",
+              "validation": {
+                "min": "0"
+              }
+            },
+            {
+              "key": "gross_weight_g",
+              "label": "Peso físico del cartucho",
+              "type": "decimal",
+              "unit": "g",
+              "validation": {
+                "positive": true
+              }
+            },
+            {
+              "key": "source_url",
+              "label": "Fuente",
+              "type": "url"
+            },
+            {
+              "key": "thread_designation",
+              "label": "Rosca exacta declarada (diámetro, paso y sentido)",
+              "type": "text"
+            },
+            {
+              "key": "counterpart_model",
+              "label": "Inflador / contraparte declarada",
+              "type": "text"
+            },
+            {
+              "key": "conditions",
+              "label": "Condiciones de la declaración",
+              "type": "text"
+            },
+            {
+              "key": "cartridge_length_mm",
+              "label": "Largo físico del cartucho",
+              "type": "decimal",
+              "unit": "mm",
+              "validation": {
+                "positive": true
+              }
+            },
+            {
+              "key": "cartridge_diameter_mm",
+              "label": "Diámetro físico del cartucho",
+              "type": "decimal",
+              "unit": "mm",
+              "validation": {
+                "positive": true
+              }
+            }
+          ]
+        }
+      },
+      "used_by": []
+    },
+    "certification_configurations": {
+      "id": null,
+      "key": "certification_configurations",
+      "origin": "new",
+      "label": "Certificaciones declaradas (norma, edición, mercado, evidencia)",
+      "data_type": "json",
+      "unit": null,
+      "allowed_values": [],
+      "validation_rules": {
+        "rows_schema": {
+          "version": 1,
+          "columns": [
+            {
+              "key": "standard",
+              "label": "Norma",
+              "type": "token",
+              "required": true,
+              "allowed_values": [
+                "CPSC 16 CFR 1203",
+                "EN 1078",
+                "AS/NZS 2063",
+                "NTA 8776",
+                "ASTM F1952",
+                "ASTM F2032",
+                "ASTM F1447",
+                "EN 1621-1",
+                "Otra"
+              ]
+            },
+            {
+              "key": "standard_text",
+              "label": "Denominación de norma tal como se publica",
+              "type": "text",
+              "required": true
+            },
+            {
+              "key": "edition",
+              "label": "Edición",
+              "type": "text"
+            },
+            {
+              "key": "market",
+              "label": "Mercado / jurisdicción",
+              "type": "text"
+            },
+            {
+              "key": "scope_model",
+              "label": "Modelo / variante alcanzada",
+              "type": "text"
+            },
+            {
+              "key": "evidence_kind",
+              "label": "Tipo de evidencia",
+              "type": "token",
+              "required": true,
+              "allowed_values": [
+                "Etiqueta observada en la unidad",
+                "Documento OEM (declaración / certificado)",
+                "Página OEM",
+                "Envase / caja"
+              ]
+            },
+            {
+              "key": "evidence_date",
+              "label": "Fecha del documento / observación",
+              "type": "text"
+            },
+            {
+              "key": "source_url",
+              "label": "Fuente",
+              "type": "url"
+            },
+            {
+              "key": "level",
+              "label": "Nivel de la norma declarado",
+              "type": "text"
+            },
+            {
+              "key": "body_region",
+              "label": "Pieza / zona cubierta",
+              "type": "text"
+            },
+            {
+              "key": "configuration",
+              "label": "Configuración ensayada o declarada",
+              "type": "text"
+            }
+          ]
+        }
+      },
+      "used_by": []
+    },
+    "helmet_construction": {
+      "id": null,
+      "key": "helmet_construction",
+      "origin": "new",
+      "label": "Construcción declarada por el OEM",
+      "data_type": "text",
+      "unit": null,
+      "allowed_values": [],
+      "validation_rules": {},
+      "used_by": []
+    },
+    "fit_cut": {
+      "id": null,
+      "key": "fit_cut",
+      "origin": "new",
+      "label": "Corte declarado por el OEM (texto literal)",
+      "data_type": "text",
+      "unit": null,
+      "allowed_values": [],
+      "validation_rules": {},
+      "used_by": []
+    },
+    "conflicting_claims": {
+      "id": null,
+      "key": "conflicting_claims",
+      "origin": "new",
+      "label": "Afirmaciones OEM en conflicto (una por fuente)",
+      "data_type": "json",
+      "unit": null,
+      "allowed_values": [],
+      "validation_rules": {
+        "rows_schema": {
+          "version": 1,
+          "columns": [
+            {
+              "key": "field_key",
+              "label": "Campo afectado",
+              "type": "text",
+              "required": true
+            },
+            {
+              "key": "value",
+              "label": "Valor tal como aparece",
+              "type": "text",
+              "required": true
+            },
+            {
+              "key": "unit",
+              "label": "Unidad",
+              "type": "text"
+            },
+            {
+              "key": "source_kind",
+              "label": "Tipo de fuente",
+              "type": "token",
+              "required": true,
+              "allowed_values": [
+                "Página vigente del fabricante",
+                "Catálogo oficial",
+                "Manual / ficha técnica",
+                "Etiqueta / envase",
+                "Otro"
+              ]
+            },
+            {
+              "key": "source_date",
+              "label": "Fecha / edición",
+              "type": "text"
+            },
+            {
+              "key": "locator",
+              "label": "Ubicación en la fuente",
+              "type": "text"
+            },
+            {
+              "key": "measurement_context",
+              "label": "Contexto de medición",
+              "type": "text"
+            },
+            {
+              "key": "source_url",
+              "label": "Fuente",
+              "type": "url"
+            }
+          ]
+        }
+      },
+      "used_by": []
+    }
+  },
+  "remaining_gates": [
+    {
+      "id": "GB01",
+      "gate": "before_compatibility_consumption",
+      "scope": [
+        "kickstand",
+        "bottle_cage",
+        "handlebar"
+      ],
+      "requires": "Coherencia ejecutable para código KSA/geometría/pernos, dos insertos/count y anchos duplicados con igual datum.",
+      "negative_cases": [
+        "KSA18+40mm+1perno",
+        "dos insertos+count3",
+        "anchohoods400+bar_width380 con referenciahoods"
+      ],
+      "unknown_behavior": "Fuera de estándares documentados queda desconocido; adapter ausente no prueba imposibilidad global."
+    },
+    {
+      "id": "GB02",
+      "gate": "before_fill_or_consumer_use",
+      "scope": [
+        "kickstand",
+        "bottle_cage",
+        "helmet"
+      ],
+      "requires": "Pares escalares min<=max comparados como decimales exactos en Dart y SQL; referencia de medición presente.",
+      "negative_cases": [
+        "390>340",
+        "360>260",
+        "62>28",
+        "59>55"
+      ],
+      "unknown_behavior": "Un extremo ausente no se inventa; no combinar tamaños de variantes diferentes."
+    },
+    {
+      "id": "GB03",
+      "gate": "before_compatibility_consumption",
+      "scope": [
+        "rack_basket",
+        "bike_bag",
+        "seatpost",
+        "grip"
+      ],
+      "requires": "Comparación por configuración/contraparte que respete extremo abierto, recomendación frente exclusión, piezas requeridas y requisitos por lado/datum.",
+      "negative_cases": [
+        "TetraRack tubo15mm exacto",
+        "derecha93 comparada al máximo128 de otro lado",
+        "sumar E dos veces a longitud que ya lo incluye"
+      ],
+      "unknown_behavior": "Una fila positiva no es lista exhaustiva; fuera de filas documentadas no se emite negativa global."
+    },
+    {
+      "id": "GB04",
+      "gate": "before_fill_or_consumer_use",
+      "scope": [
+        "pump"
+      ],
+      "requires": "Cantidad total coherente sólo con filas Cartucho de esta presentación conocidas; capacidades admitidas se excluyen del conteo. Rosca/modelo/dimensiones respaldan ajuste.",
+      "negative_cases": [
+        "pack5 versus30 incluidos",
+        "sumar16g+25g admitidos como unidades en caja",
+        "aprobar cualquier roscado por bool"
+      ],
+      "unknown_behavior": "Cantidad no informada y pieza no incluida son estados distintos."
+    },
+    {
+      "id": "GB05",
+      "gate": "before_verified_declarations",
+      "scope": [
+        "helmet",
+        "rider_protection",
+        "lock",
+        "eyewear"
+      ],
+      "requires": "Evidencia por afirmación y componente/modelo/revisión; estado de etiqueta coherente con observaciones. URL HTTP válida no prueba respaldo.",
+      "negative_cases": [
+        "Otra sin norma exacta",
+        "etiqueta no observada + fila observada",
+        "ART4064 convertido a nivel4",
+        "Sheldon manubrios como fuenteSCVCN"
+      ],
+      "unknown_behavior": "Sin evidencia queda pendiente, no una declaración confirmada ni incumplimiento."
+    },
+    {
+      "id": "GB06",
+      "gate": "before_canonical_scalar_fill",
+      "scope": [
+        "handlebar",
+        "bike_bag"
+      ],
+      "requires": "conflicting_claims vinculado al campo y a identidad/revisión; guardar conflicto activo debe impedir usar escalar único como confirmado en búsqueda/ficha/publicación; conservar observaciones y resolución auditable.",
+      "negative_cases": [
+        "field_key fantasma",
+        "dos fuentes discordantes+volumen canónico confirmado",
+        "fuentes distintas mismo valor falsamente duplicadas"
+      ],
+      "unknown_behavior": "No todo par de observaciones históricas es conflicto activo; nunca borrar historial para simplificar."
+    },
+    {
+      "id": "GB07",
+      "gate": "before_metadata_import",
+      "scope": [
+        "pedal",
+        "grip",
+        "rider_apparel",
+        "rider_glove",
+        "helmet"
+      ],
+      "requires": "Preservación legacy y de observaciones al retirar alias/edad. Campo retirado no es destino para hechos nuevos. Separar público de tipo/corte antiguos.",
+      "negative_cases": [
+        "escribir132 a grip_length retirado",
+        "Niño+Adulto como ejes contradictorios",
+        "traducir9/16 a20TPI sin evidencia"
+      ],
+      "unknown_behavior": "No completar género/corte desde edad; conservar el dato anterior para reversión."
+    },
+    {
+      "id": "GB08",
+      "gate": "before_full_family_fill_claim",
+      "scope": [
+        "all B templates"
+      ],
+      "requires": "Identificar producto/modelo/generación/variante, completar representación faltante de grip por lado, dimensiones de bolso por configuración y cuerpo no circular de botella; ejecutar importación y simulación de consumidores bajo root.",
+      "negative_cases": [
+        "clampset rellenado como tija27.2",
+        "Eclipse28.6 desde Park genérico",
+        "familia Julbo como lente incluida",
+        "Roval crossjoin de tallas/largos"
+      ],
+      "unknown_behavior": "Las26 fixtures y este dictamen no acreditan cobertura de17 plantillas ni catálogos completos."
+    }
+  ],
+  "scope_note": "Sólo metadatos locales de representación. El dictamen independiente no es autoridad para llenar ni para declarar compatibilidad. Root resuelve guards de coherencia y conserva los demás pendientes."
+}

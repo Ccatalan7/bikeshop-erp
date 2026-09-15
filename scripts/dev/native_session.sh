@@ -35,6 +35,51 @@ SCREENRC="$RUN_DIR/screenrc"
 FLUTTER="$REPO_ROOT/.fvm/flutter_sdk/bin/flutter"
 TARGET="${NATIVE_SESSION_TARGET:-lib/main.dart}"
 DEBUG_APP_GLOB="build/macos/Build/Products/Debug/vinabike_erp.app/Contents/MacOS/vinabike_erp"
+XCODE_PROJECT="$REPO_ROOT/macos/Runner.xcodeproj"
+EXPECTED_DEBUG_BUNDLE_ID='com.vinabike.vinabikeErp.debug'
+EXPECTED_RELEASE_BUNDLE_ID='com.vinabike.vinabikeErp'
+
+# Closed compile-time rollout inputs. The canonical development session runs the
+# same modern AI gateway as release builds by default; legacy is available only
+# as an explicit rollback with `NATIVE_SESSION_AI_AGENT_GATEWAY_ENABLED=false`.
+# Both values are emitted as dart-defines so the selected runtime is visible in
+# the process arguments instead of being inferred from an absent flag. The
+# owner must preserve argument boundaries and never eval caller-controlled text.
+# The modern Supabase key is public, but it is still kept out of this script and
+# its logs.
+FLUTTER_ROLLOUT_ARGS=()
+AI_AGENT_GATEWAY_MODE="${NATIVE_SESSION_AI_AGENT_GATEWAY_ENABLED:-true}"
+case "$AI_AGENT_GATEWAY_MODE" in
+  true) FLUTTER_ROLLOUT_ARGS+=(--dart-define=AI_AGENT_GATEWAY_ENABLED=true) ;;
+  false) FLUTTER_ROLLOUT_ARGS+=(--dart-define=AI_AGENT_GATEWAY_ENABLED=false) ;;
+  '') echo "NATIVE_SESSION_AI_AGENT_GATEWAY_ENABLED no puede estar vacío" >&2; exit 64 ;;
+  *) echo "NATIVE_SESSION_AI_AGENT_GATEWAY_ENABLED debe ser true o false" >&2; exit 64 ;;
+esac
+
+# The public client key is process configuration, not repository state. Prefer
+# an explicit per-launch value, otherwise use the approved Keychain entry. A
+# gateway launch without it used to compile successfully and fail only after
+# the operator sent a message, which made a broken session look healthy.
+NATIVE_PUBLISHABLE_KEY="${NATIVE_SESSION_SUPABASE_PUBLISHABLE_KEY:-}"
+if [ -z "$NATIVE_PUBLISHABLE_KEY" ] && [ "$AI_AGENT_GATEWAY_MODE" = true ] \
+   && command -v security >/dev/null 2>&1; then
+  NATIVE_PUBLISHABLE_KEY="$(security find-generic-password \
+    -s 'Vinabike ERP Supabase publishable key' \
+    -a supabase -w 2>/dev/null || true)"
+fi
+if [ -n "$NATIVE_PUBLISHABLE_KEY" ]; then
+  case "$NATIVE_PUBLISHABLE_KEY" in
+    sb_publishable_*)
+      FLUTTER_ROLLOUT_ARGS+=(
+        "--dart-define=SUPABASE_PUBLISHABLE_KEY=$NATIVE_PUBLISHABLE_KEY"
+      )
+      ;;
+    *) echo "NATIVE_SESSION_SUPABASE_PUBLISHABLE_KEY no es una publishable key válida" >&2; exit 64 ;;
+  esac
+elif [ "$AI_AGENT_GATEWAY_MODE" = true ]; then
+  echo "El gateway IA requiere la publishable key en Keychain o NATIVE_SESSION_SUPABASE_PUBLISHABLE_KEY." >&2
+  exit 64
+fi
 
 app_pid() { pgrep -f "$DEBUG_APP_GLOB" | head -1; }
 # `screen -ls` exits 1 even when sessions exist, so under `set -o pipefail` a
@@ -50,6 +95,46 @@ session_alive() {
 vm_uri() {
   grep -a "Dart VM Service on macOS is available at:" "$LOG" 2>/dev/null |
     tail -1 | sed 's/.*at: //' | tr -d ' \r\n'
+}
+
+effective_bundle_id() { # effective_bundle_id <Debug|Release>
+  local configuration="$1" settings
+  command -v xcodebuild >/dev/null 2>&1 || return 1
+  settings="$(xcodebuild \
+    -project "$XCODE_PROJECT" \
+    -target Runner \
+    -configuration "$configuration" \
+    -showBuildSettings 2>/dev/null)" || return 1
+  printf '%s\n' "$settings" |
+    sed -n 's/^[[:space:]]*PRODUCT_BUNDLE_IDENTIFIER = //p' |
+    sed -n '1p'
+}
+
+verify_bundle_id_separation() {
+  local debug_bundle_id release_bundle_id
+  debug_bundle_id="$(effective_bundle_id Debug)" || {
+    echo 'no pude resolver el bundle ID efectivo de Debug con Xcode.' >&2
+    return 1
+  }
+  release_bundle_id="$(effective_bundle_id Release)" || {
+    echo 'no pude resolver el bundle ID efectivo de Release con Xcode.' >&2
+    return 1
+  }
+
+  if [ "$debug_bundle_id" != "$EXPECTED_DEBUG_BUNDLE_ID" ]; then
+    echo "Debug resolvería el bundle ID inseguro '$debug_bundle_id'." >&2
+    echo "Esperado: $EXPECTED_DEBUG_BUNDLE_ID" >&2
+    return 1
+  fi
+  if [ "$release_bundle_id" != "$EXPECTED_RELEASE_BUNDLE_ID" ]; then
+    echo "Release resolvería un bundle ID inesperado '$release_bundle_id'." >&2
+    echo "Esperado: $EXPECTED_RELEASE_BUNDLE_ID" >&2
+    return 1
+  fi
+  if [ "$debug_bundle_id" = "$release_bundle_id" ]; then
+    echo 'Debug y Release compartirían sesión, preferencias y cachés de macOS.' >&2
+    return 1
+  fi
 }
 
 # `grep -c` prints the count but exits 1 when it is zero, so the old
@@ -88,11 +173,19 @@ case "${1:-}" in
       echo "ciérrala desde su ventana (o desde VS Code) antes de continuar." >&2
       exit 1
     fi
+    verify_bundle_id_separation || exit 1
     mkdir -p "$RUN_DIR"
     : > "$LOG"
     # screen 4.x (el de macOS) no acepta -Logfile: el destino se declara aquí.
     printf 'logfile %s\nlogfile flush 1\ndeflog on\n' "$LOG" > "$SCREENRC"
-    screen -c "$SCREENRC" -dmS "$SESSION" "$FLUTTER" run -d macos -t "$TARGET"
+    if [ "${#FLUTTER_ROLLOUT_ARGS[@]}" -gt 0 ]; then
+      screen -c "$SCREENRC" -dmS "$SESSION" "$FLUTTER" run -d macos -t "$TARGET" \
+        "${FLUTTER_ROLLOUT_ARGS[@]}"
+    else
+      # Bash 3.2 treats an empty-array expansion as an unbound variable under
+      # `set -u`, so keep the no-rollout launch path argument-free.
+      screen -c "$SCREENRC" -dmS "$SESSION" "$FLUTTER" run -d macos -t "$TARGET"
+    fi
     echo "compilando… (primer arranque ~1-2 min, luego los reload son de segundos)"
     if wait_for "Flutter run key commands" 900; then
       echo "app arriba · pid $(app_pid) · VM $(vm_uri)"

@@ -5,13 +5,21 @@ import 'dart:math' as math;
 import 'dart:typed_data';
 
 import 'package:flutter/foundation.dart'
-    show TargetPlatform, defaultTargetPlatform, kDebugMode, kIsWeb;
+    show
+        TargetPlatform,
+        compute,
+        defaultTargetPlatform,
+        kDebugMode,
+        kIsWeb,
+        visibleForTesting;
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart'
     show KeyDownEvent, KeyRepeatEvent, LogicalKeyboardKey, rootBundle;
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
+import '../utils/browser_passkey_policy.dart';
 import 'package:http/http.dart' as http;
+import 'package:image/image.dart' as img;
 import 'package:pdf/pdf.dart';
 import 'package:printing/printing.dart';
 import 'package:provider/provider.dart';
@@ -24,14 +32,21 @@ import '../../modules/storage/models/app_stored_file.dart';
 import '../../modules/storage/services/app_file_storage_service.dart';
 import '../services/auth_service.dart';
 import '../services/aliexpress_daily_invoice_service.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+
+import '../services/supplier_availability_service.dart';
+import '../services/supplier_portal_probe_service.dart';
+import '../services/supplier_portal_reading.dart';
 import '../services/aliexpress_pending_days_service.dart';
 import '../services/browser_credential_vault.dart';
 import '../services/browser_profile_service.dart';
 import '../services/browser_site_memory_service.dart';
 import '../services/browser_supplier_credential_resolver.dart';
+import '../services/supplier_legacy_login_policy.dart';
 import '../services/browser_supplier_portal_catalog.dart';
 import '../services/current_user_profile_service.dart';
 import '../services/document_relay_service.dart';
+import '../services/html_pdf_renderer_service.dart';
 import '../services/ocr_file_handoff_service.dart';
 import '../services/smart_screenshot_service.dart';
 import '../services/window_zoom_service.dart';
@@ -40,7 +55,10 @@ import '../utils/browser_omnibox.dart';
 import '../utils/browser_user_agent.dart';
 import '../utils/responsive_viewport.dart';
 import 'browser_popup_window.dart';
+import '../services/browser_automatic_login_policy.dart';
+import '../services/supplier_portal_session_keeper.dart';
 import '../utils/browser_credential_autofill.dart';
+import '../utils/browser_alert_policy.dart';
 import '../utils/file_download.dart';
 import 'vb_marked_date_picker.dart';
 import 'vb_notice.dart';
@@ -87,6 +105,7 @@ class _WebViewModulePageState extends State<WebViewModulePage>
   final List<UserScript> _browserInitialUserScriptEntries = <UserScript>[
     if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android)
       browserPopupOpenCaptureUserScript(),
+    browserPasskeyUnavailableUserScript(),
     UserScript(
       groupName: 'VinabikeCredentialCapture',
       source: browserCredentialCaptureUserScript,
@@ -103,6 +122,7 @@ class _WebViewModulePageState extends State<WebViewModulePage>
   final GlobalKey _browserViewportKey =
       GlobalKey(debugLabel: 'browser viewport');
   final DocumentRelayService _documentRelayService = DocumentRelayService();
+  final HtmlPdfRendererService _htmlPdfRenderer = HtmlPdfRendererService();
   final BrowserCredentialVault _credentialVault =
       BrowserCredentialVault.instance;
   final TextEditingController _addressController = TextEditingController();
@@ -121,6 +141,8 @@ class _WebViewModulePageState extends State<WebViewModulePage>
   int _loadingProgress = 0;
   String _currentUrl = '';
   String? _pageTitle;
+  String? _pageSiteName;
+  String? _pageFaviconUrl;
   String? _platformMessage;
   String? _lastErrorMessage;
   String? _relayPreviewSourceUrl;
@@ -152,13 +174,24 @@ class _WebViewModulePageState extends State<WebViewModulePage>
   List<_BrowserAddressSuggestion> _visibleSuggestions = const [];
   bool _showFavoritesBar = true;
   static const _favoritesBarPrefsKey = 'vinabike_browser_favorites_bar_v1';
-  final Set<String> _automaticCredentialSubmitAttempts = {};
+  // Cuándo el portal entra solo: cada vez que vuelve el formulario, salvo
+  // que el envío anterior haya sido rechazado. Reemplaza el «una vez por
+  // origen y pestaña» que dejaba al operador un clic por cada sesión vencida.
+  final BrowserAutomaticLoginPolicy _automaticLoginPolicy =
+      BrowserAutomaticLoginPolicy();
+  // Proveedor cuya credencial administrada rellenó cada origen: sólo el id,
+  // nunca el secreto. Sirve para mantener viva la sesión que acaba de entrar.
+  final Map<String, String> _supplierIdByLoginOrigin = <String, String>{};
   final Set<String> _credentialAutofillInFlight = {};
   final Set<String> _credentialSavedFeedbackOrigins = {};
   String? _registeredScreenshotWorkspaceId;
   late final String _browserProfileIdentity;
   Completer<void>? _aliExpressNavigationCompleter;
   String? _aliExpressBridgeSource;
+  String? _supplierProbeSource;
+  bool _runningPortalDiscovery = false;
+  bool _runningAvailabilityCheck = false;
+  String? _availabilityProgress;
   bool _isAliExpressImportRunning = false;
   final Map<String, String> _aliExpressInvoiceImageDataCache = {};
 
@@ -327,6 +360,9 @@ class _WebViewModulePageState extends State<WebViewModulePage>
     unawaited(_loadDocumentRelayAvailability());
     unawaited(_prepareBrowser());
     unawaited(_restoreAliExpressOrderDates());
+    // La página que esta pestaña venía a abrir: si un portal la desvía a su
+    // login y el navegador entra solo, después vuelve a ella.
+    _automaticLoginPolicy.setIntendedDestination(widget.url);
   }
 
   @override
@@ -406,10 +442,138 @@ class _WebViewModulePageState extends State<WebViewModulePage>
             workspaceId,
             url: url,
             title: title,
+            siteName: _pageSiteName,
+            faviconUrl: _pageFaviconUrl,
           );
     } catch (_) {
       // The workspace provider can disappear during app shutdown.
     }
+  }
+
+  String? _browserIdentityOrigin(String value) {
+    final uri = Uri.tryParse(value);
+    if (uri == null ||
+        (uri.scheme != 'http' && uri.scheme != 'https') ||
+        uri.host.isEmpty) {
+      return null;
+    }
+    return uri.origin;
+  }
+
+  bool _stillOwnsBrowserIdentity(String requestedUrl) =>
+      _browserIdentityOrigin(requestedUrl) != null &&
+      _browserIdentityOrigin(requestedUrl) ==
+          _browserIdentityOrigin(_currentUrl);
+
+  Future<({String? siteName, String? faviconUrl})> _readDeclaredBrowserIdentity(
+    InAppWebViewController controller,
+  ) async {
+    try {
+      final result = await controller.evaluateJavascript(
+        source: r'''
+(() => {
+  const content = (selector) =>
+    document.querySelector(selector)?.getAttribute('content')?.trim() || '';
+  const siteName = content('meta[property="og:site_name"]') ||
+    content('meta[name="application-name"]') ||
+    content('meta[name="apple-mobile-web-app-title"]');
+  const icons = Array.from(document.querySelectorAll(
+    'link[rel~="icon"], link[rel="apple-touch-icon"]'
+  ));
+  const favicon =
+    icons.find((link) => link.sizes?.value?.split(/\s+/).includes('32x32')) ||
+    icons.find((link) => link.sizes?.value?.split(/\s+/).includes('16x16')) ||
+    icons.find((link) => link.rel === 'shortcut icon') ||
+    icons.find((link) => link.rel === 'icon') ||
+    icons[0];
+  return {
+    siteName: siteName || null,
+    faviconUrl: favicon?.href || null,
+  };
+})()
+''',
+      ).timeout(const Duration(seconds: 1));
+      Map<dynamic, dynamic>? payload;
+      if (result is Map) {
+        payload = result;
+      } else if (result is String && result.trim().startsWith('{')) {
+        final decoded = jsonDecode(result);
+        if (decoded is Map) payload = decoded;
+      }
+      final siteName = payload?['siteName']?.toString().trim();
+      return (
+        siteName: siteName?.isNotEmpty == true ? siteName : null,
+        faviconUrl: sanitizeBrowserFaviconUrl(
+          payload?['faviconUrl']?.toString(),
+        ),
+      );
+    } catch (_) {
+      return (siteName: null, faviconUrl: null);
+    }
+  }
+
+  String? _bestBrowserFaviconUrl(List<Favicon> favicons) {
+    final candidates = favicons
+        .where(
+          (favicon) =>
+              sanitizeBrowserFaviconUrl(favicon.url.toString()) != null,
+        )
+        .toList(growable: false);
+    if (candidates.isEmpty) return null;
+
+    int score(Favicon favicon) {
+      final size = math.max(favicon.width ?? 32, favicon.height ?? 32);
+      var value = (size - 32).abs();
+      if (size < 16) value += 80;
+      if (size > 128) value += 32;
+      final rel = favicon.rel?.toLowerCase() ?? '';
+      if (rel.contains('mask')) value += 80;
+      if (rel.contains('apple-touch')) value += 16;
+      if (favicon.url.path.toLowerCase().endsWith('.svg')) value += 24;
+      return value;
+    }
+
+    candidates.sort((left, right) => score(left).compareTo(score(right)));
+    return sanitizeBrowserFaviconUrl(candidates.first.url.toString());
+  }
+
+  Future<void> _refreshBrowserPageIdentity(
+    InAppWebViewController controller,
+    String requestedUrl,
+  ) async {
+    if (_browserIdentityOrigin(requestedUrl) == null) return;
+
+    final declared = await _readDeclaredBrowserIdentity(controller);
+    if (!mounted || !_stillOwnsBrowserIdentity(requestedUrl)) return;
+    _pageSiteName = declared.siteName;
+    _pageFaviconUrl = declared.faviconUrl;
+    if (kDebugMode) {
+      debugPrint(
+        '🌐 [BrowserIdentity] host='
+        '${Uri.tryParse(requestedUrl)?.host ?? ''} '
+        'site=${_pageSiteName ?? '-'} favicon='
+        '${_pageFaviconUrl ?? '-'}',
+      );
+    }
+    _publishBrowserWorkspaceState(url: _currentUrl, title: _pageTitle);
+    if (_pageFaviconUrl != null) return;
+
+    List<Favicon> favicons;
+    try {
+      favicons =
+          await controller.getFavicons().timeout(const Duration(seconds: 3));
+    } catch (_) {
+      favicons = const <Favicon>[];
+    }
+    if (!mounted || !_stillOwnsBrowserIdentity(requestedUrl)) return;
+    _pageFaviconUrl = _bestBrowserFaviconUrl(favicons);
+    if (kDebugMode) {
+      debugPrint(
+        '🌐 [BrowserIdentity] fallback favicon='
+        '${_pageFaviconUrl ?? '-'}',
+      );
+    }
+    _publishBrowserWorkspaceState(url: _currentUrl, title: _pageTitle);
   }
 
   Future<Uint8List?> _takeBrowserScreenshot() async {
@@ -678,6 +842,199 @@ class _WebViewModulePageState extends State<WebViewModulePage>
         Uri.tryParse(_currentUrl),
       );
 
+  /// El reconocimiento sólo se ofrece donde puede servir: una página http(s)
+  /// que no es AliExpress —ése tiene su propio puente— y sólo mientras el
+  /// portal no esté configurado. Es una herramienta de puesta en marcha, no un
+  /// botón permanente en la barra del operador.
+  bool get _canDiscoverSupplierPortal {
+    if (_isAliExpressPage) return false;
+    final uri = Uri.tryParse(_currentUrl);
+    if (uri == null) return false;
+    return uri.scheme == 'https' || uri.scheme == 'http';
+  }
+
+  /// Inyecta la sonda, la corre en modo reconocimiento y guarda lo que vio.
+  ///
+  /// No decide nada sobre el portal: distinguir «sin stock» de «se cayó la
+  /// sesión» es una regla de negocio y esta página no tiene contexto para
+  /// tomarla. Sólo trae hechos.
+  Future<void> _discoverSupplierPortal() async {
+    final controller = _controller;
+    if (controller == null || _runningPortalDiscovery) return;
+    setState(() => _runningPortalDiscovery = true);
+    try {
+      _supplierProbeSource ??= await rootBundle.loadString(
+        'assets/browser/supplier_portal_probe.js',
+      );
+      await controller.evaluateJavascript(source: _supplierProbeSource!);
+      final raw = await controller.evaluateJavascript(
+        source: 'JSON.stringify('
+            'globalThis.__vinabikeSupplierProbe.discover())',
+      );
+      final report = SupplierPortalProbeService.decodeReport(raw);
+      if (!mounted) return;
+      if (report == null) {
+        _showPortalDiscoveryMessage(
+          'La página no respondió al reconocimiento. Recárgala e inténtalo otra vez.',
+        );
+        return;
+      }
+      final supplier = await SupplierPortalProbeService(
+        Supabase.instance.client,
+      ).recordDiscovery(originUrl: _currentUrl, report: report);
+      if (!mounted) return;
+      _showPortalDiscoveryMessage(
+        supplier == null
+            // Que no calce no es un fallo: significa que esta pestaña no es el
+            // portal de ningún proveedor registrado, y escribir evidencia a
+            // nombre de nadie sería peor que no escribir.
+            ? 'Esta página no corresponde a un proveedor con credenciales guardadas.'
+            : 'Reconocimiento de $supplier guardado.',
+      );
+    } catch (error) {
+      if (!mounted) return;
+      _showPortalDiscoveryMessage('No se pudo reconocer el portal: $error');
+    } finally {
+      if (mounted) setState(() => _runningPortalDiscovery = false);
+    }
+  }
+
+  /// **Confirmar disponibilidad con el proveedor abierto.**
+  ///
+  /// Recorre los códigos que vale la pena preguntar, navega a la ficha de cada
+  /// uno y anota lo que el portal contestó. No decide ni compra: deja hechos
+  /// con su hora y su fuente.
+  ///
+  /// Es lento por naturaleza —una navegación por código— así que informa
+  /// avance y se puede mirar. El operador ve exactamente lo que la sonda ve.
+  Future<void> _confirmSupplierAvailability() async {
+    final controller = _controller;
+    if (controller == null || _runningAvailabilityCheck) return;
+    final origin = _currentUrl;
+    final service = SupplierAvailabilityService(Supabase.instance.client);
+    setState(() {
+      _runningAvailabilityCheck = true;
+      _availabilityProgress = 'Buscando qué confirmar…';
+    });
+    try {
+      final supplierId = await SupplierPortalProbeService(
+        Supabase.instance.client,
+      ).supplierForOrigin(origin);
+      if (supplierId == null) {
+        _showPortalDiscoveryMessage(
+          'Esta página no corresponde a un proveedor con credenciales guardadas.',
+        );
+        return;
+      }
+      final probe = await service.enabledProbe(supplierId);
+      if (probe == null) {
+        // Configurada pero apagada, o sin configurar: las dos cosas se
+        // arreglan fuera de acá y ninguna es un error del chequeo.
+        _showPortalDiscoveryMessage(
+          'Este portal todavía no tiene una consulta habilitada.',
+        );
+        return;
+      }
+      final targets = await service.targets(supplierId);
+      if (targets.isEmpty) {
+        _showPortalDiscoveryMessage(
+          'No hay productos de este proveedor bajo su mínimo para confirmar.',
+        );
+        return;
+      }
+      _supplierProbeSource ??= await rootBundle.loadString(
+        'assets/browser/supplier_portal_probe.js',
+      );
+
+      var confirmados = 0;
+      for (var index = 0; index < targets.length; index++) {
+        if (!mounted || !_runningAvailabilityCheck) break;
+        final target = targets[index];
+        setState(() => _availabilityProgress =
+            'Confirmando ${index + 1} de ${targets.length}: ${target.name}');
+        final url = probe.urlForCode(target.supplierCode);
+        await controller.loadUrl(
+          urlRequest: URLRequest(url: WebUri(url)),
+        );
+        // El portal es de los noventa en algunos casos: se le da tiempo a
+        // dibujar antes de leerlo, o la sonda leería una página a medias y
+        // eso se informaría como «ilegible» sin serlo.
+        await Future<void>.delayed(const Duration(milliseconds: 2600));
+        await controller.evaluateJavascript(source: _supplierProbeSource!);
+        final raw = await controller.evaluateJavascript(
+          source: 'JSON.stringify(globalThis.__vinabikeSupplierProbe.probe('
+              '${jsonEncode(target.supplierCode)}))',
+        );
+        final report = SupplierPortalProbeService.decodeReport(raw);
+        if (report == null) continue;
+        final body = report['bodySample']?.toString() ?? '';
+        final session = report['session'];
+        final reading = readSupplierPortal(
+          SupplierPortalObservation(
+            code: target.supplierCode,
+            url: url,
+            bodyText: body,
+            hasPasswordField:
+                session is Map && session['hasPasswordField'] == true,
+          ),
+          probe,
+        );
+        await service.record(
+          supplierId: supplierId,
+          target: target,
+          reading: reading,
+          sourceUrl: url,
+          evidenceSample: body,
+        );
+        confirmados++;
+        // Una sesión caída invalida todo lo que venga después: seguir
+        // preguntando escribiría una fila de «no encontrado» por cada
+        // producto, y eso es peor que no preguntar.
+        if (reading.status == SupplierAvailabilityStatus.sessionExpired) {
+          _showPortalDiscoveryMessage(
+            'La sesión del portal se cayó. Se anotó y se detuvo: '
+            'vuelve a entrar y reintenta.',
+          );
+          return;
+        }
+      }
+      if (!mounted) return;
+      _showPortalDiscoveryMessage(
+        'Listo: $confirmados de ${targets.length} confirmados con el proveedor.',
+      );
+    } catch (error) {
+      if (!mounted) return;
+      _showPortalDiscoveryMessage(
+        'No se pudo confirmar durante '
+        '${_availabilityProgress ?? 'la consulta'}: $error',
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _runningAvailabilityCheck = false;
+          _availabilityProgress = null;
+        });
+      }
+    }
+  }
+
+  void _showPortalDiscoveryMessage(String message) {
+    final messenger = ScaffoldMessenger.maybeOf(context);
+    messenger?.showSnackBar(SnackBar(content: Text(message)));
+  }
+
+  bool get _isAliExpressOrderDetailPage {
+    if (!kDebugMode) return false;
+    final uri = Uri.tryParse(_currentUrl);
+    if (!AliExpressDailyInvoiceService.isTrustedUri(uri) || uri == null) {
+      return false;
+    }
+    final path = uri.path.toLowerCase();
+    final orderId = uri.queryParameters['orderId']?.trim() ?? '';
+    return path.contains('/p/order/detail.html') &&
+        RegExp(r'^\d{8,}$').hasMatch(orderId);
+  }
+
   /// Días en los que esta cuenta tiene pedidos, aprendidos de la última
   /// consulta a la API. Alimentan la marca del calendario para no elegir a
   /// ciegas un día sin compras.
@@ -685,6 +1042,14 @@ class _WebViewModulePageState extends State<WebViewModulePage>
 
   /// Días de compra que ya tienen factura emitida en el ERP.
   final Set<String> _aliExpressInvoicedDates = <String>{};
+
+  /// The registered invoice behind each invoiced day, so «Día ya facturado»
+  /// can open it instead of only stating it.
+  final Map<String, String> _aliExpressInvoiceIdsByDate = <String, String>{};
+
+  /// Set by «Cancelar» on the progress dialog; honoured between orders, so
+  /// the browser is never left mid-navigation.
+  bool _aliExpressImportCancelRequested = false;
   int _aliExpressInvoiceDateRefreshGeneration = 0;
 
   void _rememberAliExpressOrderDates(Iterable<String> dates) {
@@ -705,12 +1070,16 @@ class _WebViewModulePageState extends State<WebViewModulePage>
     try {
       final purchaseService = context.read<PurchaseService>();
       final invoiced = <String>{};
+      final invoiceIds = <String, String>{};
       for (final day in orderDates) {
         final date = DateTime.tryParse(day);
         if (date == null) continue;
         final number = AliExpressPendingDaysService.invoiceNumberForDate(date);
-        if (await purchaseService.checkInvoiceNumberExists(number) != null) {
+        final existing = await purchaseService.checkInvoiceNumberExists(number);
+        if (existing != null) {
           invoiced.add(day);
+          final id = existing.id?.trim();
+          if (id != null && id.isNotEmpty) invoiceIds[day] = id;
         }
       }
       if (!mounted || generation != _aliExpressInvoiceDateRefreshGeneration) {
@@ -720,6 +1089,9 @@ class _WebViewModulePageState extends State<WebViewModulePage>
         _aliExpressInvoicedDates
           ..clear()
           ..addAll(invoiced);
+        _aliExpressInvoiceIdsByDate
+          ..clear()
+          ..addAll(invoiceIds);
       });
       _announceAliExpressPendingDays();
     } catch (error) {
@@ -765,9 +1137,11 @@ class _WebViewModulePageState extends State<WebViewModulePage>
       '${date.month.toString().padLeft(2, '0')}-'
       '${date.day.toString().padLeft(2, '0')}';
 
-  Future<_AliExpressDateIndexRefresh> _refreshAliExpressOrderDateIndex() async {
+  Future<_AliExpressDateIndexRefresh> _refreshAliExpressOrderDateIndex({
+    void Function(String phase)? onPhase,
+  }) async {
     final controller = _controller;
-    final openingUrl = _currentUrl;
+    var openingUrl = _currentUrl;
     if (controller == null ||
         !AliExpressDailyInvoiceService.isTrustedUri(
           Uri.tryParse(openingUrl),
@@ -778,6 +1152,26 @@ class _WebViewModulePageState extends State<WebViewModulePage>
     }
 
     try {
+      // The calendar borrows the listing request that the order history page
+      // makes for itself; no other AliExpress page ever makes it. Opened from
+      // the home page, the dialog used to give up with "sin plantilla de
+      // petición capturada" (owner, 2026-09-03). Now it goes there first,
+      // like "Preparar factura" already did.
+      if (!AliExpressDailyInvoiceService.isOrdersListUri(
+        Uri.tryParse(openingUrl),
+      )) {
+        onPhase?.call('Abriendo el historial de pedidos…');
+        await _navigateAliExpressAndWait(
+          Uri.parse(AliExpressDailyInvoiceService.ordersUri),
+        );
+        if (!identical(controller, _controller) || !mounted) {
+          return const _AliExpressDateIndexRefresh.unavailable(
+            'La página cambió mientras se abría el historial de pedidos.',
+          );
+        }
+        openingUrl = _currentUrl;
+      }
+      onPhase?.call('Buscando días con compras…');
       await _installAliExpressBridge(controller);
       await _runAliExpressBridge(
         controller,
@@ -796,6 +1190,17 @@ class _WebViewModulePageState extends State<WebViewModulePage>
           );
 
       var result = await collectDates();
+      // The page issues its listing request a moment after it finishes
+      // loading; give the capture a few seconds before falling back.
+      for (var attempt = 0;
+          attempt < 4 &&
+              result['ok'] != true &&
+              result['reason']?.toString().contains('plantilla') == true;
+          attempt++) {
+        await Future<void>.delayed(const Duration(milliseconds: 1500));
+        if (!identical(controller, _controller) || !mounted) break;
+        result = await collectDates();
+      }
       if (result['ok'] != true &&
           result['reason']?.toString().contains('plantilla') == true) {
         // Compatibilidad con la página que ya estaba abierta antes de que el
@@ -833,6 +1238,12 @@ class _WebViewModulePageState extends State<WebViewModulePage>
         _rememberAliExpressOrderDates(dates);
       }
       await _refreshAliExpressInvoicedDates();
+      _aliExpressDebug('orders.date-index.ready', <String, dynamic>{
+        'datesFound': dates.length,
+        'known': _aliExpressOrderDates.length,
+        'coverageComplete': result['coverageComplete'] == true,
+        'navigated': openingUrl != _currentUrl ? 'changed' : 'same',
+      });
       return _AliExpressDateIndexRefresh.ready(
         datesFound: dates.length,
         coverageComplete: result['coverageComplete'] == true,
@@ -896,6 +1307,9 @@ class _WebViewModulePageState extends State<WebViewModulePage>
     final selectedKey = _dateKey(selectedDate);
     final hasOrders = _aliExpressOrderDates.contains(selectedKey);
     final alreadyInvoiced = _aliExpressInvoicedDates.contains(selectedKey);
+    final invoiceId = _aliExpressInvoiceIdsByDate[selectedKey];
+    final invoiceNumber =
+        AliExpressPendingDaysService.invoiceNumberForDate(selectedDate);
 
     return Padding(
       padding: const EdgeInsets.only(top: 10),
@@ -918,6 +1332,30 @@ class _WebViewModulePageState extends State<WebViewModulePage>
             : hasOrders
                 ? 'Las compras de este día aún no se registran en el ERP.'
                 : 'No consta una compra para esta fecha en el índice disponible.',
+        action: alreadyInvoiced && invoiceId != null
+            ? TextButton(
+                key: const ValueKey('aliexpress-open-existing-invoice'),
+                onPressed: () {
+                  // Same pattern as the import itself: the registered invoice
+                  // opens in its own workspace tab, and the signed-in
+                  // AliExpress tab keeps its page and its name.
+                  final workspaces = context.read<WorkspaceManager>();
+                  if (workspaces.workspaces.length >=
+                      WorkspaceManager.maxWorkspaces) {
+                    _showBrowserSnack(
+                      'No hay espacio para abrir la factura. Cierra una pestaña del ERP e inténtalo nuevamente.',
+                    );
+                    return;
+                  }
+                  Navigator.of(context).pop();
+                  workspaces.addWorkspace(
+                    title: 'Factura $invoiceNumber',
+                    initialRoute: '/purchases/$invoiceId',
+                  );
+                },
+                child: Text('Abrir factura $invoiceNumber'),
+              )
+            : null,
       ),
     );
   }
@@ -939,11 +1377,17 @@ class _WebViewModulePageState extends State<WebViewModulePage>
   Future<_AliExpressImportRequest?> _pickAliExpressImportRequest() async {
     var selectedDate = DateTime.now();
     var isRefreshingDateIndex = true;
+    var refreshPhase = 'Buscando días con compras…';
     _AliExpressDateIndexRefresh? dateIndexRefresh;
     StateSetter? rebuildDialog;
     var dialogIsOpen = true;
     unawaited(
-      _refreshAliExpressOrderDateIndex().then((result) {
+      _refreshAliExpressOrderDateIndex(
+        onPhase: (phase) {
+          refreshPhase = phase;
+          if (dialogIsOpen) rebuildDialog?.call(() {});
+        },
+      ).then((result) {
         dateIndexRefresh = result;
         isRefreshingDateIndex = false;
         if (dialogIsOpen) rebuildDialog?.call(() {});
@@ -1019,15 +1463,15 @@ class _WebViewModulePageState extends State<WebViewModulePage>
                       const SizedBox(height: 10),
                       Semantics(
                         liveRegion: true,
-                        label: 'Buscando días con compras en AliExpress',
-                        child: const Row(
+                        label: refreshPhase,
+                        child: Row(
                           children: [
-                            SizedBox.square(
+                            const SizedBox.square(
                               dimension: 18,
                               child: CircularProgressIndicator(strokeWidth: 2),
                             ),
-                            SizedBox(width: 10),
-                            Expanded(child: Text('Buscando días con compras…')),
+                            const SizedBox(width: 10),
+                            Expanded(child: Text(refreshPhase)),
                           ],
                         ),
                       ),
@@ -1108,7 +1552,10 @@ class _WebViewModulePageState extends State<WebViewModulePage>
     final progressTitle = request.mode == _AliExpressImportMode.preview
         ? 'Generando preview AliExpress'
         : 'Preparando factura AliExpress';
-    setState(() => _isAliExpressImportRunning = true);
+    setState(() {
+      _isAliExpressImportRunning = true;
+      _aliExpressImportCancelRequested = false;
+    });
     unawaited(
       showDialog<void>(
         context: context,
@@ -1117,6 +1564,16 @@ class _WebViewModulePageState extends State<WebViewModulePage>
         builder: (dialogContext) {
           progressNavigator = Navigator.of(dialogContext);
           return AlertDialog(
+            actions: [
+              TextButton(
+                key: const ValueKey('aliexpress-import-cancel'),
+                onPressed: () {
+                  _aliExpressImportCancelRequested = true;
+                  progress.value = 'Cancelando al terminar el pedido actual…';
+                },
+                child: const Text('Cancelar'),
+              ),
+            ],
             content: SizedBox(
               width: 390,
               child: Row(
@@ -1209,6 +1666,9 @@ class _WebViewModulePageState extends State<WebViewModulePage>
             sourceSupplierWebsite: 'https://www.aliexpress.com',
             structuredInvoiceData: invoice,
           );
+    } on _AliExpressImportCancelled {
+      closeProgressDialog();
+      _showBrowserSnack('Importación cancelada. No se guardó nada.');
     } catch (error) {
       closeProgressDialog();
       _showBrowserSnack(_friendlyAliExpressImportError(error));
@@ -1222,6 +1682,127 @@ class _WebViewModulePageState extends State<WebViewModulePage>
         InAppWebViewController.clearAllCache(includeDiskFiles: false)
             .catchError((_) {}),
       );
+      if (mounted) setState(() => _isAliExpressImportRunning = false);
+    }
+  }
+
+  /// Debug-only one-row bridge used to prove the real AliExpress -> OCR -> AI
+  /// contract without spending calls on every order from a day. It is generic:
+  /// the currently open order must contain exactly one supplier line, and the
+  /// resulting document remains read-only (`evaluationOnly`).
+  Future<void> _startAliExpressCurrentOrderCanary() async {
+    if (!kDebugMode || _isAliExpressImportRunning) return;
+    final controller = _controller;
+    final sourceUri = Uri.tryParse(_currentUrl);
+    if (controller == null ||
+        sourceUri == null ||
+        !_isAliExpressOrderDetailPage) {
+      _showBrowserSnack(
+        'Abre el detalle de un pedido AliExpress antes de ejecutar el canario.',
+      );
+      return;
+    }
+
+    setState(() => _isAliExpressImportRunning = true);
+    try {
+      await _installAliExpressBridge(controller);
+      final detail = await _runAliExpressBridge(
+        controller,
+        method: 'extractOrder',
+      );
+      if (!mounted ||
+          !identical(controller, _controller) ||
+          sourceUri.toString() != _currentUrl) {
+        throw StateError(
+          'La pagina cambio mientras se extraia el pedido canario.',
+        );
+      }
+
+      final rawItems = detail['items'];
+      final itemCount = rawItems is List ? rawItems.length : 0;
+      if (itemCount != 1) {
+        throw StateError(
+          'El canario exige exactamente una linea; AliExpress entrego '
+          '$itemCount.',
+        );
+      }
+      final rawItem = rawItems!.single;
+      if (rawItem is! Map) {
+        throw StateError('AliExpress entrego una linea con formato invalido.');
+      }
+      final item = Map<String, dynamic>.from(rawItem);
+      final declaredVariantKey = item['variantKey']?.toString().trim() ?? '';
+      final hasImmutableVariantKey = RegExp(
+        r'^(?:sku|props):[a-z0-9:|._-]+$',
+        caseSensitive: false,
+      ).hasMatch(declaredVariantKey);
+      if (!hasImmutableVariantKey) {
+        // The detail-page bridge may derive a display identity from the human
+        // option label or image. That evidence remains in `variant`, but it
+        // must not be presented to the resolution graph as immutable supplier
+        // authority. The certified list API already emits sku:/props: keys and
+        // those pass through unchanged.
+        item.remove('variantKey');
+      }
+      final canonicalDetail = <String, dynamic>{
+        ...detail,
+        'items': <Map<String, dynamic>>[item],
+      };
+      final urlOrderId = sourceUri.queryParameters['orderId']!.trim();
+      final extractedOrderId =
+          canonicalDetail['orderNumber']?.toString().trim() ?? '';
+      if (extractedOrderId.isNotEmpty && extractedOrderId != urlOrderId) {
+        throw StateError(
+          'El pedido extraido no coincide con la pagina abierta.',
+        );
+      }
+
+      final extractedDate = DateTime.tryParse(
+        canonicalDetail['orderDate']?.toString().trim() ?? '',
+      );
+      if (extractedDate == null) {
+        throw StateError('AliExpress no entrego una fecha valida del pedido.');
+      }
+      final invoice = AliExpressDailyInvoiceService.buildDailyInvoice(
+        date: extractedDate,
+        orders: <Map<String, dynamic>>[canonicalDetail],
+        sourcePageUrl: sourceUri.toString(),
+      )
+        ..['evaluationOnly'] = true
+        ..['coverage'] = <String, dynamic>{
+          'certified': false,
+          'targetDateComplete': false,
+          'scope': 'single_order_canary',
+        };
+      final fileName = 'aliexpress-canary-$urlOrderId.pdf';
+      final bytes = await _buildAliExpressInvoicePdf(invoice);
+      if (!mounted) return;
+
+      final workspaceManager = context.read<WorkspaceManager>();
+      if (workspaceManager.workspaces.length >=
+          WorkspaceManager.maxWorkspaces) {
+        throw StateError(
+          'No hay espacio para abrir el canario OCR. Cierra una pestana del ERP.',
+        );
+      }
+      workspaceManager.addWorkspace(
+        title: 'Canario AliExpress',
+        initialRoute: '/purchases/new',
+      );
+      context.read<OcrFileHandoffService>().queue(
+            target: OcrFileHandoffTarget.purchaseInvoice,
+            fileName: fileName,
+            mimeType: 'application/pdf',
+            bytes: bytes,
+            extension: 'pdf',
+            sourceLabel: 'Navegador ERP · AliExpress · canario de un pedido',
+            sourceSupplierName: 'AliExpress Marketplace',
+            sourceSupplierWebsite: 'https://www.aliexpress.com',
+            structuredInvoiceData: invoice,
+          );
+    } catch (error) {
+      _showBrowserSnack(_friendlyAliExpressImportError(error));
+    } finally {
       if (mounted) setState(() => _isAliExpressImportRunning = false);
     }
   }
@@ -1272,6 +1853,16 @@ class _WebViewModulePageState extends State<WebViewModulePage>
       dateText: dateText,
       onProgress: onProgress,
     );
+    final listCoverage = listResult['coverage'] is Map
+        ? Map<String, dynamic>.from(listResult['coverage'] as Map)
+        : <String, dynamic>{};
+    final listTermination = listResult['termination'] is Map
+        ? Map<String, dynamic>.from(listResult['termination'] as Map)
+        : <String, dynamic>{};
+    final listWarnings = <String>[
+      for (final warning in (listResult['warnings'] as List? ?? const []))
+        if (warning.toString().trim().isNotEmpty) warning.toString().trim(),
+    ];
     final rawOrders = listResult['orders'];
     final orders = <Map<String, dynamic>>[
       if (rawOrders is List)
@@ -1285,13 +1876,31 @@ class _WebViewModulePageState extends State<WebViewModulePage>
       'duplicateOrderNumbers': _aliExpressDuplicateOrderNumbers(orders),
       'warnings': listResult['warnings'],
       'preload': listResult['preload'],
+      'coverage': listCoverage,
+      'termination': listTermination,
       'orders': orders.map(_aliExpressOrderDebugSummary).toList(),
     });
+    final targetDateComplete = listCoverage['targetDateComplete'] == true &&
+        listTermination['naturalExhaustion'] == true &&
+        listCoverage['certified'] == true;
+    final readOnlyEvaluation = listResult['evaluationOnly'] == true;
+    if (!targetDateComplete) {
+      final reason = listTermination['reason']?.toString().trim() ?? '';
+      final message = listWarnings.isNotEmpty
+          ? listWarnings.join(' ')
+          : 'AliExpress no pudo confirmar que leyó todos los pedidos del '
+              '$dateText${reason.isEmpty ? '' : ' ($reason)'}. '
+              'No se generó una factura parcial.';
+      _aliExpressDebug('list.coverage.rejected', <String, dynamic>{
+        'date': dateText,
+        'message': message,
+        'coverage': listCoverage,
+        'termination': listTermination,
+      });
+      throw StateError(message);
+    }
     if (orders.isEmpty) {
-      final warnings = (listResult['warnings'] as List? ?? const [])
-          .map((value) => value.toString())
-          .where((value) => value.isNotEmpty)
-          .join(' ');
+      final warnings = listWarnings.join(' ');
       throw StateError(
         warnings.isEmpty
             ? 'No encontré pedidos para $dateText. Verifica la sesión y la fecha.'
@@ -1313,6 +1922,9 @@ class _WebViewModulePageState extends State<WebViewModulePage>
         throw StateError(
           'El pedido ${listOrder['orderNumber'] ?? index + 1} no tiene un enlace válido.',
         );
+      }
+      if (_aliExpressImportCancelRequested) {
+        throw const _AliExpressImportCancelled();
       }
       onProgress(
         'Leyendo pedido ${index + 1} de ${orders.length} '
@@ -1358,6 +1970,13 @@ class _WebViewModulePageState extends State<WebViewModulePage>
       orders: enriched,
       sourcePageUrl: listResult['pageUrl']?.toString(),
     );
+    if (readOnlyEvaluation) {
+      // Only an explicitly diagnostic collector may mark the resulting OCR
+      // workspace read-only. A certified daily invoice is operational in both
+      // debug and release builds; build mode is not a business permission.
+      invoice['evaluationOnly'] = true;
+      invoice['coverage'] = listCoverage;
+    }
     _aliExpressDebug('invoice.combined', <String, dynamic>{
       'inputOrderCount': enriched.length,
       'duplicateOrderNumbers': _aliExpressDuplicateOrderNumbers(enriched),
@@ -1441,6 +2060,9 @@ class _WebViewModulePageState extends State<WebViewModulePage>
         'quantity': item['quantity'],
         'sourcePurchaseQuantity': item['sourcePurchaseQuantity'],
         'unitsPerPurchase': item['unitsPerPurchase'],
+        'rawPackCount': item['rawPackCount'],
+        'rawUnitToken': item['rawUnitToken'],
+        'rawPackEvidenceConflict': item['rawPackEvidenceConflict'] == true,
         'sourceTotal': item['sourceTotal'],
         'total': item['total'],
         'hasImage': (item['imageUrl']?.toString().isNotEmpty ?? false),
@@ -1480,8 +2102,8 @@ class _WebViewModulePageState extends State<WebViewModulePage>
   /// línea con su imagen tal como los tiene AliExpress, pagina por número de
   /// página y no depende del scroll, de la lista virtualizada, del rótulo del
   /// botón «View orders» ni del carrusel de recomendaciones. El recorrido del
-  /// DOM queda sólo como respaldo para cuando la página no exponga su cliente
-  /// de API.
+  /// DOM conserva valor diagnóstico, pero no puede probar cobertura completa
+  /// de una fecha y por eso nunca autoriza una factura exacta.
   Future<Map<String, dynamic>?> _collectAliExpressOrdersViaApi(
     InAppWebViewController controller, {
     required String dateText,
@@ -1497,20 +2119,135 @@ class _WebViewModulePageState extends State<WebViewModulePage>
         controller,
         method: 'ordersListClickLoadMore',
       );
-      if (clicked['clicked'] != true) return null;
-      await Future<void>.delayed(const Duration(seconds: 6));
+      if (clicked['clicked'] == true) {
+        await Future<void>.delayed(const Duration(seconds: 6));
+      }
+
+      // La plantilla firmada y la metadata de paginación sólo existen dentro
+      // del WebView. En debug se toma una única muestra sanitizada antes del
+      // recorrido: nombres de campos y contadores, nunca cuerpo, token, cookie
+      // ni datos de pedidos. No participa en la decisión de completitud hasta
+      // que su forma real tenga un contrato probado.
+      if (kDebugMode) {
+        try {
+          final shape = await _runAliExpressBridge(
+            controller,
+            method: 'ordersApiShapeProbe',
+          );
+          final template = shape['template'] is Map
+              ? Map<String, dynamic>.from(shape['template'] as Map)
+              : <String, dynamic>{};
+          final templateFields = template['fields'] is Map
+              ? Map<String, dynamic>.from(template['fields'] as Map)
+              : <String, dynamic>{};
+          final response = shape['response'] is Map
+              ? Map<String, dynamic>.from(shape['response'] as Map)
+              : <String, dynamic>{};
+          final responsePagination = response['pagination'] is Map
+              ? Map<String, dynamic>.from(response['pagination'] as Map)
+              : <String, dynamic>{};
+          final responseFilters = response['filters'] is Map
+              ? Map<String, dynamic>.from(response['filters'] as Map)
+              : <String, dynamic>{};
+          Object? scalarByLeaf(Map<String, dynamic> fields, String leaf) {
+            final normalizedLeaf = leaf.toLowerCase();
+            for (final entry in fields.entries) {
+              if (entry.key.split('.').last.toLowerCase() == normalizedLeaf) {
+                return entry.value;
+              }
+            }
+            return null;
+          }
+
+          _aliExpressDebug(
+            'orders.api.shape',
+            <String, dynamic>{
+              'ok': shape['ok'],
+              'reason': shape['reason'],
+              'template': <String, dynamic>{
+                'pageIndexSlots': template['pageIndexSlots'],
+                'pageIndex': scalarByLeaf(templateFields, 'pageIndex'),
+                'pageSize': scalarByLeaf(templateFields, 'pageSize'),
+                'hasMore': scalarByLeaf(templateFields, 'hasMore'),
+                'statusTab': scalarByLeaf(templateFields, 'statusTab'),
+                'timeOption': scalarByLeaf(templateFields, 'timeOption'),
+                'searchOption': scalarByLeaf(templateFields, 'searchOption'),
+              },
+              'response': <String, dynamic>{
+                'pageIndex': scalarByLeaf(responsePagination, 'pageIndex'),
+                'pageSize': scalarByLeaf(responsePagination, 'pageSize'),
+                'hasMore': scalarByLeaf(responsePagination, 'hasMore'),
+                'statusTab': scalarByLeaf(responseFilters, 'statusTab'),
+                'timeOption': scalarByLeaf(responseFilters, 'timeOption'),
+                'searchOption': scalarByLeaf(responseFilters, 'searchOption'),
+                'filterOptions': response['filterOptions'],
+                'orderModuleCount': response['orderModuleCount'],
+              },
+            },
+          );
+        } catch (error) {
+          _aliExpressDebug('orders.api.shape.failed', <String, dynamic>{
+            'error': error.toString(),
+          });
+        }
+      }
 
       onProgress('Consultando pedidos del $dateText en AliExpress...');
       final result = await _runAliExpressBridge(
         controller,
         method: 'ordersApiCollect',
         arguments: <String, dynamic>{
-          'filters': <String, dynamic>{'exactDate': dateText, 'maxPages': 30},
+          'filters': <String, dynamic>{
+            'exactDate': dateText,
+            'maxPages': 60,
+            // Debug must exercise the same exact collector as release. The
+            // read-only guard is attached to the resulting invoice below;
+            // selecting the discovery collector here previously made real
+            // runtime verification incapable of detecting release failures.
+            'evaluationOnly': false,
+          },
         },
       );
-      if (result['ok'] != true) {
-        _aliExpressDebug('orders.api.unavailable', result);
-        return null;
+      final coverage = result['coverage'] is Map
+          ? Map<String, dynamic>.from(result['coverage'] as Map)
+          : <String, dynamic>{};
+      final termination = result['termination'] is Map
+          ? Map<String, dynamic>.from(result['termination'] as Map)
+          : <String, dynamic>{};
+      final certification = result['certification'] is Map
+          ? Map<String, dynamic>.from(result['certification'] as Map)
+          : <String, dynamic>{};
+      final warnings = <String>[
+        for (final warning in (result['warnings'] as List? ?? const []))
+          if (warning.toString().trim().isNotEmpty) warning.toString().trim(),
+      ];
+      final targetDateComplete = result['ok'] == true &&
+          coverage['targetDateComplete'] == true &&
+          termination['naturalExhaustion'] == true &&
+          certification['certified'] == true;
+      _aliExpressDebug(
+        targetDateComplete ? 'orders.api.complete' : 'orders.api.rejected',
+        <String, dynamic>{
+          'date': dateText,
+          'orderCount': (result['orders'] as List?)?.length ?? 0,
+          'partialOrderCount': result['partialOrderCount'],
+          'pagesRead': result['pagesRead'],
+          'reason': result['reason'],
+          'warnings': warnings,
+          'coverage': coverage,
+          'termination': termination,
+          'certification': certification,
+        },
+      );
+      if (!targetDateComplete) {
+        final reason = termination['reason']?.toString().trim() ?? '';
+        throw StateError(
+          warnings.isNotEmpty
+              ? warnings.join(' ')
+              : 'AliExpress no pudo confirmar todos los pedidos del '
+                  '$dateText${reason.isEmpty ? '' : ' ($reason)'}. '
+                  'No se generó una factura parcial.',
+        );
       }
 
       final orders = <Map<String, dynamic>>[
@@ -1524,30 +2261,32 @@ class _WebViewModulePageState extends State<WebViewModulePage>
       if (datesWithOrders.isNotEmpty) {
         _rememberAliExpressOrderDates(datesWithOrders);
       }
-      _aliExpressDebug('orders.api.collected', <String, dynamic>{
-        'date': dateText,
-        'orderCount': orders.length,
-        'pagesRead': result['pagesRead'],
-        'reason': result['reason'],
-        'datesWithOrders': datesWithOrders.length,
-      });
-
       return <String, dynamic>{
         'orders': orders,
         'scannedCount': orders.length,
         'pageUrl': _currentUrl,
-        'warnings': const <String>[],
+        'warnings': warnings,
+        'coverage': coverage,
+        'termination': termination,
+        'certification': certification,
+        // This exact-date result passed the same two-pass certification in
+        // every build, so it is an operational invoice. The single-order
+        // canary and any partial diagnostic path set evaluationOnly themselves.
+        'evaluationOnly': false,
         'preload': <String, dynamic>{
           'source': 'api',
           'pagesRead': result['pagesRead'],
           'terminationReason': result['reason'],
+          'coverage': coverage,
+          'termination': termination,
+          'certification': certification,
         },
       };
     } catch (error) {
       _aliExpressDebug('orders.api.failed', <String, dynamic>{
         'error': error.toString(),
       });
-      return null;
+      rethrow;
     }
   }
 
@@ -1676,19 +2415,48 @@ class _WebViewModulePageState extends State<WebViewModulePage>
     final matchingOrders = harvestedOrders
         .where((order) => order['orderDate']?.toString() == dateText)
         .toList();
+    final fallbackReason = 'dom-fallback-$terminationReason';
+    final fallbackWarning =
+        'AliExpress no pudo confirmar por API todos los pedidos del '
+        '$dateText. El recorrido visual terminó por $terminationReason y se '
+        'conservó sólo como diagnóstico; no se generó una factura parcial.';
+    final termination = <String, dynamic>{
+      'kind': 'dom-diagnostic',
+      'reason': fallbackReason,
+      'naturalExhaustion': false,
+      'hitPageLimit': terminationReason == 'max-passes',
+      'pagesRead': null,
+      'pageLimit': null,
+    };
+    final coverage = <String, dynamic>{
+      'mode': 'exact-date',
+      'complete': false,
+      'partial': true,
+      'targetDateComplete': false,
+      'pageLimit': null,
+      'pagesRead': null,
+      'observedFromDate': null,
+      'observedToDate': null,
+      'stopReason': fallbackReason,
+      'termination': termination,
+    };
 
     return <String, dynamic>{
       'orders': matchingOrders,
       'scannedCount': harvestedOrders.length,
       'pageUrl': _currentUrl,
-      'warnings': matchingOrders.isEmpty && harvestedOrders.isNotEmpty
-          ? <String>[
-              'Recorrí ${harvestedOrders.length} pedidos y ninguno es del $dateText.',
-            ]
-          : const <String>[],
+      'warnings': <String>[
+        fallbackWarning,
+        if (matchingOrders.isEmpty && harvestedOrders.isNotEmpty)
+          'Recorrí ${harvestedOrders.length} pedidos y ninguno es del $dateText.',
+      ],
+      'coverage': coverage,
+      'termination': termination,
       'preload': <String, dynamic>{
         'terminationReason': terminationReason,
         'loadMoreClicks': loadMoreClicks,
+        'coverage': coverage,
+        'termination': termination,
       },
     };
   }
@@ -1752,6 +2520,7 @@ class _WebViewModulePageState extends State<WebViewModulePage>
       'ordersApiProbeInstall',
       'ordersApiProbeRead',
       'ordersApiShapeProbe',
+      'ordersApiScopeProbe',
       'ordersApiCollect',
       'ordersListDebugTail',
       'ordersListScrollTo',
@@ -1766,9 +2535,10 @@ class _WebViewModulePageState extends State<WebViewModulePage>
     // reemplazado) dejaba este await colgado PARA SIEMPRE con el diálogo de
     // progreso girando (2026-08-05). El recorrido largo de la lista puede
     // tardar minutos legítimos; el detalle de un pedido, no.
-    final bridgeTimeout = method == 'extractOrdersList'
-        ? const Duration(minutes: 8)
-        : const Duration(seconds: 60);
+    final bridgeTimeout =
+        method == 'extractOrdersList' || method == 'ordersApiCollect'
+            ? const Duration(minutes: 8)
+            : const Duration(seconds: 60);
     final result = await controller.callAsyncJavaScript(
       functionBody: '''
         const bridge = globalThis.__ALIEXPRESS_INVOICE_BRIDGE__;
@@ -1812,20 +2582,20 @@ class _WebViewModulePageState extends State<WebViewModulePage>
     Map<String, dynamic> invoice,
   ) async {
     try {
-      final printingInfo = await Printing.info();
-      if (!printingInfo.canConvertHtml) {
-        throw UnsupportedError(
-          'Este equipo no puede convertir la plantilla HTML de AliExpress.',
-        );
-      }
       final html = await _buildAliExpressInvoiceHtml(invoice);
       // The extension invoice is HTML-first. Converting that same renderer
       // keeps the ERP preview and Chrome document on one visual contract.
-      // ignore: deprecated_member_use
-      return await Printing.convertHtml(
+      final bytes = await _htmlPdfRenderer.render(
         html: html,
         format: PdfPageFormat.letter,
+        readySelector: '#invoiceRoot',
+        readyFlag: '__ALIEXPRESS_INVOICE_READY__',
       );
+      _aliExpressDebug(
+          'invoice.canonical-renderer.succeeded', <String, dynamic>{
+        'bytes': bytes.length,
+      });
+      return bytes;
     } catch (error) {
       _aliExpressDebug('invoice.canonical-renderer.failed', <String, dynamic>{
         'error': error.toString(),
@@ -1958,10 +2728,33 @@ class _WebViewModulePageState extends State<WebViewModulePage>
           mimeType.startsWith('image/') &&
           response.bodyBytes.isNotEmpty &&
           response.bodyBytes.length <= 8 * 1024 * 1024) {
-        final dataUri =
-            'data:$mimeType;base64,${base64Encode(response.bodyBytes)}';
-        _aliExpressInvoiceImageDataCache[value] = dataUri;
-        return dataUri;
+        // A product photo arrives at full size but prints inside an 84 px
+        // box. Embedding the originals made the document 1.3 MB and Android's
+        // HTML-to-PDF converter never returned; at thumbnail size the same
+        // invoice converts in ~3 s (measured on Android, 2026-09-04).
+        final thumbnail = await compute(
+          shrinkInvoiceThumbnail,
+          response.bodyBytes,
+        );
+        if (thumbnail != null) {
+          final dataUri = 'data:image/jpeg;base64,${base64Encode(thumbnail)}';
+          _aliExpressInvoiceImageDataCache[value] = dataUri;
+          return dataUri;
+        }
+        if (response.bodyBytes.length <= _invoiceThumbnailByteBudget) {
+          final dataUri =
+              'data:$mimeType;base64,${base64Encode(response.bodyBytes)}';
+          _aliExpressInvoiceImageDataCache[value] = dataUri;
+          return dataUri;
+        }
+        // Undecodable and too heavy to embed: the document has to stay
+        // printable, so this line keeps its text and loses the photo.
+        debugPrint(
+          '🖼️ [AliExpressInvoice] dropped an unreadable ${response.bodyBytes.length}'
+          ' byte photo to keep the PDF printable',
+        );
+        _aliExpressInvoiceImageDataCache[value] = '';
+        return '';
       }
     } catch (_) {
       // The canonical renderer keeps the trusted remote URL as a last resort;
@@ -2045,6 +2838,12 @@ class _WebViewModulePageState extends State<WebViewModulePage>
         break;
       case _BrowserMenuAction.bookmarks:
         await _showBrowserLibraryDialog(_BrowserLibraryKind.bookmarks);
+      case _BrowserMenuAction.discoverSupplierPortal:
+        await _discoverSupplierPortal();
+        break;
+      case _BrowserMenuAction.confirmSupplierAvailability:
+        await _confirmSupplierAvailability();
+        break;
       case _BrowserMenuAction.clearData:
         await _confirmClearBrowserData();
       case _BrowserMenuAction.forgetSiteCredentials:
@@ -3661,6 +4460,12 @@ class _WebViewModulePageState extends State<WebViewModulePage>
         password.length > 4096) {
       return false;
     }
+    // Un envío hecho a mano cuenta igual que uno automático: si el portal lo
+    // devuelve enseguida, tampoco se insiste solo.
+    _automaticLoginPolicy.recordManualSubmit(
+      origin,
+      actionUrl: payload['action']?.toString(),
+    );
 
     try {
       final localCredential = await _localCredentialForOrigin(origin);
@@ -3710,21 +4515,184 @@ class _WebViewModulePageState extends State<WebViewModulePage>
     }
   }
 
+  /// Lee la declaración de transporte legacy de la sonda del proveedor.
+  ///
+  /// Una sola consulta acotada por el origen canónico candidato. Si el origen
+  /// no está registrado, o su sonda no declara el par, devuelve `null` y el
+  /// autofill sigue exigiendo HTTPS como siempre.
+  Future<SupplierLegacyLoginTransport?> _declaredLegacyLoginTransport(
+    String? loadedUrl,
+  ) async {
+    try {
+      return await findSupplierLegacyLoginTransport(
+        loadedUrl: loadedUrl,
+        readDeclaration: (canonicalOrigin) async {
+          // **Frontera sin secretos.** `supplier_credentials` tiene `revoke
+          // all` para `authenticated` y su relación con la sonda es entre
+          // hermanas, así que consultarla desde acá no funciona ni debe: caía
+          // al catch y devolvía `null` en silencio, que es por qué el autofill
+          // no se disparaba. Esta RPC entrega sólo el transporte del portal.
+          final raw = await Supabase.instance.client.rpc(
+            'supplier_legacy_transport_for_origin_v1',
+            params: <String, dynamic>{'p_canonical_origin': canonicalOrigin},
+          );
+          if (raw is! Map || raw['status'] != 'declared') return null;
+          final legacy = raw['legacy'];
+          return legacy is Map
+              ? legacy.map((key, value) => MapEntry('$key', value))
+              : null;
+        },
+      );
+    } catch (_) {
+      // Sin declaración legible no hay excepción: se sigue exigiendo HTTPS.
+      return null;
+    }
+  }
+
+  /// El origen canónico vigente para la URL que el WebView tiene ahora.
+  ///
+  /// **Con declaración manda la declaración.** Normalizar primero por origen
+  /// dejaba pasar cualquier otra página del mismo portal —misma `https://`,
+  /// otra ruta— y desde ahí se habría autorizado el destino legacy. La
+  /// declaración cubre URLs exactas, así que es ella la que decide.
+  String? _liveOriginUnder(
+    WebUri? liveUrl,
+    SupplierLegacyLoginTransport? legacy,
+  ) =>
+      legacy == null
+          ? normalizeSupplierBrowserOrigin(liveUrl?.toString())
+          : supplierLegacyLoginCanonicalOrigin(
+              loadedUrl: liveUrl?.toString(),
+              formAction: legacy.actionUrl,
+              transport: legacy,
+            );
+
+  /// La página que siguió a un envío respondió sin formulario: la sesión está
+  /// abierta. Se mantiene viva con el mismo keeper del chequeo headless (misma
+  /// cookie jar en WebKit) para que el portal no la cierre por inactividad
+  /// mientras la app siga abierta. Sólo para credenciales administradas: el
+  /// id del proveedor es lo único que se recuerda, nunca el secreto.
+  void _keepSupplierSessionAlive(String origin, String? loadedUrl) {
+    final supplierId = _supplierIdByLoginOrigin[origin];
+    if (supplierId == null || loadedUrl == null) return;
+    // La política salta la respuesta al POST del ingreso (RBX:
+    // `valida_ingreso.asp`) y entrega la primera página real que la sigue.
+    final target = _automaticLoginPolicy.keepAliveTargetAfterLoad(
+      origin,
+      loadedUrl,
+    );
+    if (target == null) return;
+    SupplierPortalSessionKeeper.shared.activate(
+      supplierId: supplierId,
+      url: target,
+    );
+    if (kDebugMode) {
+      debugPrint(
+        '🌐 Sesión de proveedor abierta en $origin; keep-alive sobre $target',
+      );
+    }
+  }
+
+  /// Si esta pestaña venía a abrir una página concreta y el portal la desvió a
+  /// su ingreso, después de entrar vuelve a ella una sola vez.
+  void _resumeIntendedDestination(
+    String origin,
+    String? loadedUrl, {
+    required bool afterLogin,
+  }) {
+    if (loadedUrl == null) return;
+    final destination = _automaticLoginPolicy.consumeIntendedDestination(
+      origin: origin,
+      loadedUrl: loadedUrl,
+      afterLogin: afterLogin,
+    );
+    if (destination == null) return;
+    final uri = Uri.tryParse(destination);
+    if (uri == null) return;
+    if (kDebugMode) {
+      debugPrint('🌐 Tras entrar en $origin, se vuelve a $destination');
+    }
+    unawaited(_loadUri(uri));
+  }
+
+  /// Cierra el desenlace de un envío pendiente cuando la carga siguiente cae
+  /// fuera del origen administrado pero dentro del mismo sitio del proveedor.
+  /// Un formulario de ingreso en esa carga no dice nada del envío; una página
+  /// de otro sitio tampoco.
+  Future<void> _observeForeignLoadAfterSubmit(
+    InAppWebViewController controller,
+    WebUri? loadedUrl,
+  ) async {
+    final loaded = loadedUrl?.toString();
+    if (loaded == null) return;
+    bool sameSite(String origin) =>
+        browserAddressesShareSupplierSite(origin, loaded);
+    final pending = _automaticLoginPolicy.originsAwaitingOutcome
+        .where(sameSite)
+        .toList(growable: false);
+    final wanted = _automaticLoginPolicy.originsWantingKeepAlive
+        .where(sameSite)
+        .toList(growable: false);
+    if (pending.isEmpty && wanted.isEmpty) return;
+    try {
+      final result = await controller.evaluateJavascript(
+        source: browserLoginFormDetectionScript,
+      );
+      final hasLoginForm =
+          result == true || result?.toString().toLowerCase() == 'true';
+      if (hasLoginForm) return;
+      final succeeded = <String>{};
+      for (final origin in pending) {
+        final observation = _automaticLoginPolicy.observeLoad(
+          origin,
+          hasLoginForm: false,
+        );
+        if (observation == BrowserAutomaticLoginObservation.loginSucceeded) {
+          succeeded.add(origin);
+        }
+      }
+      for (final origin in {...pending, ...wanted}) {
+        _keepSupplierSessionAlive(origin, loaded);
+      }
+      for (final origin in {...pending, ...wanted}) {
+        _resumeIntendedDestination(
+          origin,
+          loaded,
+          afterLogin: succeeded.contains(origin),
+        );
+      }
+    } catch (error) {
+      if (kDebugMode) {
+        debugPrint('🌐 Browser login outcome skipped: ${error.runtimeType}');
+      }
+    }
+  }
+
   Future<void> _autofillSavedBrowserCredential(
     InAppWebViewController controller,
     WebUri? loadedUrl,
   ) async {
-    final origin = normalizeSupplierBrowserOrigin(
-      loadedUrl?.toString(),
-    );
-    if (origin == null || !_credentialAutofillInFlight.add(origin)) return;
+    // **El transporte legacy declarado también entra por acá.** `portal.
+    // rburgos.cl` degrada a `http://…/login/` al abrir su formulario, y el
+    // normalizador —que exige HTTPS— devolvía `null`: el autofill volvía antes
+    // de consultar la credencial administrada, así que un portal configurado
+    // para iniciar sesión solo no podía hacerlo. La excepción nace de la
+    // configuración de la sonda y sólo alcanza al par página+destino declarado.
+    final legacy = await _declaredLegacyLoginTransport(loadedUrl?.toString());
+    final origin = normalizeSupplierBrowserOrigin(loadedUrl?.toString()) ??
+        legacy?.canonicalOrigin;
+    if (origin == null) {
+      // Una página que no es un origen administrado igual puede ser la que
+      // sigue a un ingreso: RBX entra por `portal.rburgos.cl` y aterriza en
+      // `www.rburgos.cl` por HTTP. Se mira sólo para cerrar ese desenlace.
+      await _observeForeignLoadAfterSubmit(controller, loadedUrl);
+      return;
+    }
+    if (!_credentialAutofillInFlight.add(origin)) return;
 
     try {
       final liveUrlBeforeDetection = await controller.getUrl();
-      if (normalizeSupplierBrowserOrigin(
-            liveUrlBeforeDetection?.toString(),
-          ) !=
-          origin) {
+      if (_liveOriginUnder(liveUrlBeforeDetection, legacy) != origin) {
         return;
       }
       final loginFormResult = await controller.evaluateJavascript(
@@ -3732,6 +4700,26 @@ class _WebViewModulePageState extends State<WebViewModulePage>
       );
       final hasLoginForm = loginFormResult == true ||
           loginFormResult?.toString().toLowerCase() == 'true';
+      final observation = _automaticLoginPolicy.observeLoad(
+        origin,
+        hasLoginForm: hasLoginForm,
+      );
+      if (!hasLoginForm) {
+        final loaded = liveUrlBeforeDetection?.toString();
+        _keepSupplierSessionAlive(origin, loaded);
+        _resumeIntendedDestination(
+          origin,
+          loaded,
+          afterLogin:
+              observation == BrowserAutomaticLoginObservation.loginSucceeded,
+        );
+      }
+      if (kDebugMode && hasLoginForm) {
+        debugPrint(
+          '🌐 Browser login form on $origin: $observation → '
+          '${_automaticLoginPolicy.decide(origin)}',
+        );
+      }
       if (!hasLoginForm) return;
 
       final secureOrigin = BrowserCredentialVault.normalizeOrigin(origin);
@@ -3774,6 +4762,7 @@ class _WebViewModulePageState extends State<WebViewModulePage>
       // credential is only a fallback after a confirmed protected no-match.
       BrowserSavedCredential? vaultCredential;
       if (supplierCredential != null) {
+        _supplierIdByLoginOrigin[origin] = supplierCredential.supplierId;
         await _deleteLocalCredential(secureOrigin);
       } else if (supplierLookup.status ==
           BrowserSupplierCredentialLookupStatus.noMatch) {
@@ -3787,18 +4776,22 @@ class _WebViewModulePageState extends State<WebViewModulePage>
       if (username == null || password == null) return;
 
       final liveUrl = await controller.getUrl();
-      if (normalizeSupplierBrowserOrigin(liveUrl?.toString()) != origin) {
+      if (_liveOriginUnder(liveUrl, legacy) != origin) {
         return;
       }
 
-      final mayAutoSubmit =
-          !_automaticCredentialSubmitAttempts.contains(origin);
+      final mayAutoSubmit = _automaticLoginPolicy.decide(origin) ==
+          BrowserAutomaticLoginDecision.submit;
       final fillSource = browserCredentialFillScript(
         expectedOrigin: origin,
         username: username,
         password: password,
         autoSubmit: mayAutoSubmit,
-        allowInsecureSupplierOrigin: false,
+        // El bajón de esquema se acepta SÓLO con declaración, y el script
+        // comprueba además el destino real contra el declarado.
+        allowInsecureSupplierOrigin: legacy != null,
+        expectedInsecureAction: legacy?.actionUrl,
+        expectedDeclaredPageUrls: legacy?.pageUrls,
       );
       if (!authority.isCurrent(
         profile: profileService.profile,
@@ -3811,9 +4804,14 @@ class _WebViewModulePageState extends State<WebViewModulePage>
       final result = await controller.evaluateJavascript(
         source: fillSource,
       );
-      if (mayAutoSubmit &&
-          result?.toString().contains('filled-and-submitted') == true) {
-        _automaticCredentialSubmitAttempts.add(origin);
+      final resultText = result?.toString() ?? '';
+      if (mayAutoSubmit && resultText.contains('filled-and-submitted')) {
+        final separator = resultText.indexOf('|');
+        _automaticLoginPolicy.recordAutomaticSubmit(
+          origin,
+          actionUrl: legacy?.actionUrl ??
+              (separator >= 0 ? resultText.substring(separator + 1) : null),
+        );
       }
     } catch (error) {
       if (kDebugMode) {
@@ -4035,7 +5033,8 @@ class _WebViewModulePageState extends State<WebViewModulePage>
       _showBrowserSnack('No pude acceder al llavero del sistema.');
       return;
     }
-    _automaticCredentialSubmitAttempts.remove(origin);
+    _automaticLoginPolicy.forget(origin);
+    _supplierIdByLoginOrigin.remove(origin);
     _credentialSavedFeedbackOrigins.remove(origin);
     _showBrowserSnack('Credenciales de $host eliminadas.');
   }
@@ -4048,8 +5047,15 @@ class _WebViewModulePageState extends State<WebViewModulePage>
         value.startsWith('data:') && _relayPreviewSourceUrl != null
             ? _relayPreviewSourceUrl!
             : value;
+    final changedOrigin = _browserIdentityOrigin(_currentUrl) !=
+        _browserIdentityOrigin(displayValue);
     setState(() {
       _currentUrl = displayValue;
+      if (changedOrigin) {
+        _pageTitle = null;
+        _pageSiteName = null;
+        _pageFaviconUrl = null;
+      }
     });
     _syncAddressField(displayValue);
     _publishBrowserWorkspaceState(url: displayValue, title: _pageTitle);
@@ -4273,6 +5279,24 @@ class _WebViewModulePageState extends State<WebViewModulePage>
                 unawaited(_applyBrowserZoom(browserZoom));
                 unawaited(_refreshNavigationState());
               },
+              onJsAlert: (_, request) async {
+                if (!shouldAutoConfirmBrowserAlert(
+                  pageUrl: _currentUrl,
+                  message: request.message,
+                )) {
+                  return JsAlertResponse(handledByClient: false);
+                }
+                if (kDebugMode) {
+                  debugPrint(
+                    '🌐 [BrowserAlert] RBX empty-result alert acknowledged '
+                    'inside its workspace.',
+                  );
+                }
+                return JsAlertResponse(
+                  handledByClient: true,
+                  action: JsAlertResponseAction.CONFIRM,
+                );
+              },
               onWebContentProcessDidTerminate: (controller) {
                 // WebKit reinicia su proceso de contenido tras un crash u
                 // OOM sin avisar visualmente: los promises de JavaScript en
@@ -4336,6 +5360,12 @@ class _WebViewModulePageState extends State<WebViewModulePage>
                 _publishBrowserWorkspaceState(
                   url: _currentUrl,
                   title: _pageTitle,
+                );
+                unawaited(
+                  _refreshBrowserPageIdentity(
+                    controller,
+                    _currentUrl,
+                  ),
                 );
                 unawaited(_recordBrowserHistory(url, title: _pageTitle));
                 if (mounted) setState(() {});
@@ -5131,6 +6161,25 @@ class _WebViewModulePageState extends State<WebViewModulePage>
                     ),
                     const SizedBox(width: 6),
                   ],
+                  if (_isAliExpressOrderDetailPage) ...[
+                    IconButton(
+                      key: const ValueKey(
+                        'browser-aliexpress-current-order-canary',
+                      ),
+                      onPressed: canUseWebView && !_isAliExpressImportRunning
+                          ? _startAliExpressCurrentOrderCanary
+                          : null,
+                      icon: const Icon(Icons.science_outlined, size: 20),
+                      color: theme.colorScheme.primary,
+                      tooltip: 'Canario OCR: pedido actual',
+                      padding: EdgeInsets.zero,
+                      constraints: BoxConstraints(
+                        minWidth: compactBrowserChrome ? 48 : 36,
+                        minHeight: compactBrowserChrome ? 48 : 36,
+                      ),
+                    ),
+                    if (!compactBrowserChrome) const SizedBox(width: 6),
+                  ],
                   // En compacto sólo sobrevive «Atrás»: es el control que se
                   // usa a cada rato y el único que no tiene equivalente obvio
                   // dentro del menú. Adelante, recargar e inicio se van al
@@ -5389,6 +6438,24 @@ class _WebViewModulePageState extends State<WebViewModulePage>
                           title: Text('Olvidar credenciales del sitio'),
                         ),
                       ),
+                      if (_canDiscoverSupplierPortal)
+                        const PopupMenuItem(
+                          value: _BrowserMenuAction.confirmSupplierAvailability,
+                          child: ListTile(
+                            dense: true,
+                            leading: Icon(Icons.fact_check_outlined),
+                            title: Text('Confirmar disponibilidad'),
+                          ),
+                        ),
+                      if (kDebugMode && _canDiscoverSupplierPortal)
+                        const PopupMenuItem(
+                          value: _BrowserMenuAction.discoverSupplierPortal,
+                          child: ListTile(
+                            dense: true,
+                            leading: Icon(Icons.travel_explore_outlined),
+                            title: Text('Reconocer este portal'),
+                          ),
+                        ),
                       const PopupMenuItem(
                         value: _BrowserMenuAction.clearData,
                         child: ListTile(
@@ -5663,6 +6730,12 @@ class _WebViewModulePageState extends State<WebViewModulePage>
 
 enum _AliExpressImportMode { preview, directToOcr }
 
+/// The operator pressed «Cancelar» on the progress dialog. Raised between
+/// orders only, so the browser never stops mid-navigation.
+class _AliExpressImportCancelled implements Exception {
+  const _AliExpressImportCancelled();
+}
+
 class _AliExpressDateIndexRefresh {
   const _AliExpressDateIndexRefresh.ready({
     required this.datesFound,
@@ -5770,15 +6843,12 @@ class _AliExpressInvoicePreviewDialog extends StatelessWidget {
             ),
             Divider(height: 1, color: theme.dividerColor),
             Expanded(
-              child: PdfPreview(
+              // `PdfPreview` only zooms on a double tap, which nobody finds on
+              // a phone, and pinch does nothing there (owner, 2026-09-04).
+              // Same rasteriser, own page layout: one tap opens the page.
+              child: PdfPreviewCustom(
                 build: (_) async => bytes,
-                useActions: false,
-                allowPrinting: false,
-                allowSharing: false,
-                canChangeOrientation: false,
-                canChangePageFormat: false,
-                canDebug: false,
-                pdfFileName: fileName,
+                pageFormat: PdfPageFormat.letter,
                 maxPageWidth: 1500,
                 scrollViewDecoration: const BoxDecoration(
                   color: Color(0xFFE5E7EB),
@@ -5786,6 +6856,8 @@ class _AliExpressInvoicePreviewDialog extends StatelessWidget {
                 loadingWidget: const Center(
                   child: CircularProgressIndicator(strokeWidth: 2),
                 ),
+                pagesBuilder: (context, pages) =>
+                    InvoicePreviewPages(pages: pages),
               ),
             ),
             Divider(height: 1, color: theme.dividerColor),
@@ -5812,6 +6884,7 @@ class _AliExpressInvoicePreviewDialog extends StatelessWidget {
                     ],
                   );
                   final status = Text(
+                    'Toca una página para ampliarla. '
                     'Solo se enviará al OCR cuando lo confirmes.',
                     style: theme.textTheme.bodySmall?.copyWith(
                       color: theme.colorScheme.onSurfaceVariant,
@@ -5842,6 +6915,116 @@ class _AliExpressInvoicePreviewDialog extends StatelessWidget {
       ),
     );
   }
+}
+
+/// The invoice pages, each one openable. Tapping a page is the affordance the
+/// package hides behind a double tap.
+/// The scrollable invoice preview: one tappable page per sheet.
+///
+/// Public so a widget test can mount it and prove the tap really opens the
+/// zoom. Asserting the source text instead only proves the code was typed.
+@visibleForTesting
+class InvoicePreviewPages extends StatelessWidget {
+  const InvoicePreviewPages({super.key, required this.pages});
+
+  final List<PdfPreviewPageData> pages;
+
+  @override
+  Widget build(BuildContext context) {
+    return ListView.builder(
+      padding: const EdgeInsets.symmetric(vertical: 12),
+      itemCount: pages.length,
+      itemBuilder: (context, index) {
+        final page = pages[index];
+        return Semantics(
+          button: true,
+          label: 'Ampliar página ${index + 1} de ${pages.length}',
+          child: GestureDetector(
+            onTap: () => openInvoicePageZoom(
+              context,
+              page: page,
+              pageNumber: index + 1,
+              pageCount: pages.length,
+            ),
+            child: Container(
+              margin: const EdgeInsets.symmetric(
+                horizontal: 12,
+                vertical: 8,
+              ),
+              decoration: const BoxDecoration(
+                color: Colors.white,
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black26,
+                    blurRadius: 8,
+                    offset: Offset(0, 3),
+                  ),
+                ],
+              ),
+              child: AspectRatio(
+                aspectRatio: page.width / page.height,
+                child: Image(image: page.image, fit: BoxFit.contain),
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+/// One page, pinch-zoomable and pannable, with a double tap back to fit.
+@visibleForTesting
+Future<void> openInvoicePageZoom(
+  BuildContext context, {
+  required PdfPreviewPageData page,
+  required int pageNumber,
+  required int pageCount,
+}) {
+  return showDialog<void>(
+    context: context,
+    useRootNavigator: false,
+    barrierColor: Colors.black87,
+    builder: (dialogContext) {
+      final controller = TransformationController();
+      return Dialog.fullscreen(
+        backgroundColor: Colors.black87,
+        child: SafeArea(
+          child: Column(
+            children: [
+              Row(
+                children: [
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: Text(
+                      'Página $pageNumber de $pageCount',
+                      style: const TextStyle(color: Colors.white),
+                    ),
+                  ),
+                  IconButton(
+                    tooltip: 'Cerrar',
+                    onPressed: () => Navigator.of(dialogContext).pop(),
+                    icon: const Icon(Icons.close, color: Colors.white),
+                  ),
+                ],
+              ),
+              Expanded(
+                child: GestureDetector(
+                  onDoubleTap: () => controller.value = Matrix4.identity(),
+                  child: InteractiveViewer(
+                    transformationController: controller,
+                    minScale: 1,
+                    maxScale: 8,
+                    child: Center(child: Image(image: page.image)),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    },
+  );
 }
 
 class _BrowserHistoryEntry {
@@ -6011,6 +7194,10 @@ enum _BrowserMenuAction {
   bookmarks,
   favoritesBar,
   forgetSiteCredentials,
+  // Puesta en marcha de un portal de proveedor: vive en el menú y no en la
+  // barra porque se usa una vez por proveedor, no todos los días.
+  discoverSupplierPortal,
+  confirmSupplierAvailability,
   clearData,
   openInChrome,
   openExternal,
@@ -6157,4 +7344,32 @@ class _NativeBrowserZoomBoundary extends StatelessWidget {
       },
     );
   }
+}
+
+/// Widest edge kept for an invoice thumbnail. The printed box is 84 px at
+/// most, so this still oversamples for a crisp print while keeping the
+/// document small enough for the platform converters.
+const int invoiceThumbnailMaxEdge = 220;
+
+/// Largest original that may be embedded untouched when it cannot be decoded.
+const int _invoiceThumbnailByteBudget = 48 * 1024;
+
+/// Decodes, shrinks and re-encodes a product photo, off the UI isolate.
+/// Returns null when the bytes are not a decodable image.
+Uint8List? shrinkInvoiceThumbnail(Uint8List bytes) {
+  final decoded = img.decodeImage(bytes);
+  if (decoded == null) return null;
+  final longestEdge =
+      decoded.width > decoded.height ? decoded.width : decoded.height;
+  final resized = longestEdge <= invoiceThumbnailMaxEdge
+      ? decoded
+      : img.copyResize(
+          decoded,
+          width:
+              decoded.width >= decoded.height ? invoiceThumbnailMaxEdge : null,
+          height:
+              decoded.height > decoded.width ? invoiceThumbnailMaxEdge : null,
+          interpolation: img.Interpolation.average,
+        );
+  return Uint8List.fromList(img.encodeJpg(resized, quality: 82));
 }

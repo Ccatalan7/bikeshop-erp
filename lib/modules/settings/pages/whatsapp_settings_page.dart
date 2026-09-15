@@ -69,7 +69,7 @@ class _WhatsAppSettingsPageState extends State<WhatsAppSettingsPage> {
         _templateLanguageController.text.trim() !=
             preferences.firstContactTemplateLanguage ||
         currentRate == null ||
-        (currentRate - preferences.utilityConversationUsd).abs() > 0.0001;
+        (currentRate - preferences.messageRateUsd).abs() > 0.0001;
   }
 
   Future<void> _load() async {
@@ -107,8 +107,7 @@ class _WhatsAppSettingsPageState extends State<WhatsAppSettingsPage> {
   void _applyPreferences(WhatsAppSettingsPreferences preferences) {
     _templateNameController.text = preferences.firstContactTemplateName;
     _templateLanguageController.text = preferences.firstContactTemplateLanguage;
-    _utilityRateController.text =
-        preferences.utilityConversationUsd.toStringAsFixed(2);
+    _utilityRateController.text = preferences.messageRateUsd.toStringAsFixed(2);
   }
 
   void _resetToDefaults() {
@@ -128,7 +127,7 @@ class _WhatsAppSettingsPageState extends State<WhatsAppSettingsPage> {
     final preferences = panelData.preferences.copyWith(
       firstContactTemplateName: _templateNameController.text.trim(),
       firstContactTemplateLanguage: _templateLanguageController.text.trim(),
-      utilityConversationUsd: rate,
+      messageRateUsd: rate,
     );
 
     setState(() => _isSavingPreferences = true);
@@ -203,10 +202,10 @@ class _WhatsAppSettingsPageState extends State<WhatsAppSettingsPage> {
               failedMessages30d: panelData.snapshot.failedMessages30d,
               activeCustomerServiceWindows:
                   panelData.snapshot.activeCustomerServiceWindows,
-              openBillableWindows: panelData.snapshot.openBillableWindows,
-              billableWindowsToday: panelData.snapshot.billableWindowsToday,
+              directSendAttempts30d: panelData.snapshot.directSendAttempts30d,
+              billableMessagesToday: panelData.snapshot.billableMessagesToday,
               templateMessagesByName: panelData.snapshot.templateMessagesByName,
-              billableWindows30d: panelData.snapshot.billableWindows30d,
+              billableMessages30d: panelData.snapshot.billableMessages30d,
               estimatedCost30dUsd: panelData.snapshot.estimatedCost30dUsd,
             ),
           );
@@ -354,7 +353,7 @@ class _WhatsAppSettingsPageState extends State<WhatsAppSettingsPage> {
                       if (!isWide) {
                         return Column(
                           children: [
-                            _buildBillableWindowsCard(context, panelData),
+                            _buildBillableMessagesCard(context, panelData),
                             const SizedBox(height: 16),
                             _buildDiagnosticsCard(context, panelData),
                           ],
@@ -366,7 +365,7 @@ class _WhatsAppSettingsPageState extends State<WhatsAppSettingsPage> {
                         children: [
                           Expanded(
                             child:
-                                _buildBillableWindowsCard(context, panelData),
+                                _buildBillableMessagesCard(context, panelData),
                           ),
                           const SizedBox(width: 16),
                           Expanded(
@@ -545,15 +544,15 @@ class _WhatsAppSettingsPageState extends State<WhatsAppSettingsPage> {
                     ),
                   ),
                   _ConfigField(
-                    title: 'Tarifa referencial por conversacion',
+                    title: 'Tarifa referencial por mensaje entregado',
                     description:
-                        'Valor usado por el estimador interno. No reemplaza la factura oficial de Meta.',
+                        'Promedio usado por el estimador interno cuando Meta confirma que un mensaje fue cobrable. No reemplaza la factura oficial.',
                     child: TextField(
                       controller: _utilityRateController,
                       keyboardType:
                           const TextInputType.numberWithOptions(decimal: true),
                       decoration: InputDecoration(
-                        labelText: 'USD por ventana',
+                        labelText: 'USD por mensaje',
                         prefixText: 'US\$ ',
                         border: const OutlineInputBorder(),
                         errorText: _hasValidRate
@@ -642,7 +641,7 @@ class _WhatsAppSettingsPageState extends State<WhatsAppSettingsPage> {
             ),
             const SizedBox(height: 6),
             Text(
-              'La parte util del dashboard sigue aqui, pero compacta y legible.',
+              'Direct Send para utilidad, plantillas para marketing y costos según los recibos de Meta.',
               style: theme.textTheme.bodyMedium?.copyWith(
                 color: theme.colorScheme.onSurface.withValues(alpha: 0.72),
               ),
@@ -659,9 +658,9 @@ class _WhatsAppSettingsPageState extends State<WhatsAppSettingsPage> {
                   accent: const Color(0xFF14532D),
                 ),
                 _StatTile(
-                  title: 'Ventanas cobrables 30d',
-                  value: '${snapshot.billableWindows30d.length}',
-                  subtitle: 'Aperturas estimadas por template',
+                  title: 'Mensajes cobrables 30d',
+                  value: '${snapshot.billableMessages30d.length}',
+                  subtitle: 'Confirmados por el recibo de Meta',
                   accent: const Color(0xFF7C2D12),
                 ),
                 _StatTile(
@@ -705,6 +704,11 @@ class _WhatsAppSettingsPageState extends State<WhatsAppSettingsPage> {
                     context,
                     'Envios 30d de ese template',
                     '$templateCount',
+                  ),
+                  _buildDetailLine(
+                    context,
+                    'Intentos Direct Send 30d',
+                    '${snapshot.directSendAttempts30d}',
                   ),
                   _buildDetailLine(
                     context,
@@ -894,12 +898,12 @@ class _WhatsAppSettingsPageState extends State<WhatsAppSettingsPage> {
     );
   }
 
-  Widget _buildBillableWindowsCard(
+  Widget _buildBillableMessagesCard(
     BuildContext context,
     WhatsAppSettingsPanelData panelData,
   ) {
     final theme = Theme.of(context);
-    final windows = panelData.snapshot.billableWindows30d;
+    final messages = panelData.snapshot.billableMessages30d;
 
     return Card(
       child: Theme(
@@ -909,36 +913,38 @@ class _WhatsAppSettingsPageState extends State<WhatsAppSettingsPage> {
           childrenPadding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
           initiallyExpanded: true,
           title: Text(
-            'Ventanas cobrables estimadas',
+            'Mensajes cobrables confirmados',
             style: theme.textTheme.titleMedium?.copyWith(
               fontWeight: FontWeight.w800,
             ),
           ),
           subtitle: Text(
-            'Detalle secundario: util para auditar el estimador sin convertir la pantalla en un muro de datos.',
+            'Meta cobra por mensaje entregado. Aquí sólo contamos los que traen evidencia de pricing del proveedor.',
             style: theme.textTheme.bodySmall,
           ),
           children: [
-            if (windows.isEmpty)
+            if (messages.isEmpty)
               Align(
                 alignment: Alignment.centerLeft,
                 child: Text(
-                  'No hay ventanas cobrables estimadas en los ultimos 30 dias.',
+                  'No hay mensajes cobrables confirmados en los ultimos 30 dias.',
                   style: theme.textTheme.bodyMedium,
                 ),
               )
             else
-              ...windows.take(10).map((window) {
+              ...messages.take(10).map((message) {
+                final isDirectSend =
+                    message.deliveryStrategy == 'direct_send_utility';
                 return Container(
                   margin: const EdgeInsets.only(top: 10),
                   padding: const EdgeInsets.all(14),
                   decoration: BoxDecoration(
-                    color: window.isActive
+                    color: isDirectSend
                         ? const Color(0xFFF0FDF4)
                         : const Color(0xFFF8FAFC),
                     borderRadius: BorderRadius.circular(14),
                     border: Border.all(
-                      color: window.isActive
+                      color: isDirectSend
                           ? const Color(0xFFBBF7D0)
                           : const Color(0xFFE2E8F0),
                     ),
@@ -950,16 +956,16 @@ class _WhatsAppSettingsPageState extends State<WhatsAppSettingsPage> {
                         children: [
                           Expanded(
                             child: Text(
-                              window.contactName?.isNotEmpty == true
-                                  ? window.contactName!
-                                  : window.phoneNumber,
+                              message.contactName?.isNotEmpty == true
+                                  ? message.contactName!
+                                  : message.phoneNumber,
                               style: theme.textTheme.titleSmall?.copyWith(
                                 fontWeight: FontWeight.w800,
                               ),
                             ),
                           ),
                           Text(
-                            _usdFormat.format(window.estimatedCostUsd),
+                            _usdFormat.format(message.estimatedCostUsd),
                             style: theme.textTheme.titleSmall?.copyWith(
                               fontWeight: FontWeight.w800,
                               color: const Color(0xFF14532D),
@@ -972,14 +978,16 @@ class _WhatsAppSettingsPageState extends State<WhatsAppSettingsPage> {
                         spacing: 10,
                         runSpacing: 10,
                         children: [
-                          _MetaPill(label: window.templateName),
-                          _MetaPill(label: window.category),
+                          _MetaPill(label: message.templateName),
+                          _MetaPill(label: message.category),
                           _MetaPill(
-                            label: window.isActive ? 'Activa' : 'Cerrada',
-                            background: window.isActive
+                            label: isDirectSend
+                                ? 'Direct Send'
+                                : 'Plantilla clásica',
+                            background: isDirectSend
                                 ? const Color(0xFFDCFCE7)
                                 : const Color(0xFFF3F4F6),
-                            color: window.isActive
+                            color: isDirectSend
                                 ? const Color(0xFF166534)
                                 : const Color(0xFF4B5563),
                           ),
@@ -987,7 +995,7 @@ class _WhatsAppSettingsPageState extends State<WhatsAppSettingsPage> {
                       ),
                       const SizedBox(height: 8),
                       Text(
-                        'Abierta ${_shortFormat.format(window.openedAt.toLocal())} · Expira ${_shortFormat.format(window.expiresAt.toLocal())}',
+                        'Entregado ${_shortFormat.format(message.deliveredAt.toLocal())}',
                         style: theme.textTheme.bodyMedium,
                       ),
                     ],

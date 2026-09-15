@@ -11,6 +11,15 @@ como evidencia de estado, no se edita). Cada ítem tiene un criterio de
 verificación concreto. Una corrección puntual del owner se resuelve y verifica
 sin abandonar el puntero de la sección 10.
 
+> **Enmienda vigente — 2026-08-11.** La cartola no es dueña del pago ni de una
+> conciliación total. OCR sólo lee, detecta candidatos y prepara evidencia para
+> el único `PayrollPaymentWorkspace`; no paga, no confirma semanas, no compone
+> efectivo/anticipos/conceptos y no exige resolver movimientos que no se usarán.
+> Esta enmienda reemplaza las descripciones históricas de F3, F5, F8 y del ledger
+> que hablan de `Aplicar conciliación`, cobertura completa del documento o
+> efectivo dentro del flujo OCR. Se conservan abajo únicamente como evidencia de
+> lo que existió y por qué fue sustituido.
+
 ---
 
 ## 1. Resultado exigido (del handoff, verbatim en espíritu)
@@ -20,10 +29,11 @@ sin abandonar el puntero de la sección 10.
 2. Light y dark completos en **cada** superficie, estado, overlay, fondo y
    remanente vacío de Nóminas.
 3. Import de cartola end-to-end: elegir PDF/imagen/cámara según soporte,
-   extraer, matchear, revisar cada transferencia, responder efectivo, aplicar
-   el lote revisado atómicamente y mostrar evidencia durable.
-4. Semanas, Historial, Anticipos, pago manual, efectivo, evidencia y
-   conciliación completos, sin placeholders "próximamente".
+   extraer, encontrar candidatos útiles y entregar al workspace de pago sólo la
+   selección/evidencia que pueda precargar, sin bloquear por el resto de la
+   cartola.
+4. Semanas, Historial, Anticipos y un único workspace de pago —manual o
+   asistido por cartola— completos, sin placeholders "próximamente".
 5. Integración de shell sin branding duplicado ni controles workspace/globales
    repetidos.
 6. Analyzer enfocado, tests Flutter, gates de base de datos y flujo nativo
@@ -32,6 +42,56 @@ sin abandonar el puntero de la sección 10.
 No se declara el módulo completo mientras la acción OCR visible siga bloqueada
 o cualquier superficie Payroll registrada sea sólo parcialmente compatible con
 dark mode.
+
+### 1.1 Contrato único de preparación y pago (vigente desde 2026-08-11)
+
+- `PayrollPaymentWorkspace` y `PayrollPaymentWorkspaceController` son el único
+  editor y owner de estado para componer, validar, guardar y registrar pagos de
+  Nóminas.
+- La acción individual de la cola abre ese mismo workspace enfocado en una
+  persona de una semana. El handoff de cartola lo abre en modo batch con varias
+  semanas y personas. No existen formularios, totales ni writers alternativos
+  para el caso OCR.
+- El batch ordena semanas por fecha descendente, mantiene a sus personas dentro
+  de cada semana y conserva por trabajador la ecuación sueldo, anticipos, dinero
+  nuevo, pagado y saldo.
+- Ese batch es un cuarto paso de ancho completo dentro de `Importar cartola`:
+  todas las obligaciones positivas de todas las semanas abiertas quedan
+  visibles simultáneamente, aunque OCR no haya encontrado un calce. La selección
+  del paso anterior sólo decide qué evidencia se precarga; nunca filtra personas
+  o semanas. El caso simple se resuelve con método por fila, los recursos
+  avanzados se expanden inline y un único CTA registra el conjunto
+  atómicamente. El side sheet se usa sólo para `Pagar` a una persona desde
+  Nóminas.
+- Un sueldo puede componerse con varias piernas: más de una transferencia,
+  efectivo y anticipos, completos o parciales. Cada pierna conserva método,
+  cuenta, fecha, referencia y, si viene de cartola, la evidencia exacta que la
+  sugirió.
+- Un reembolso, gasto del negocio u otro concepto no salarial conserva
+  descripción, cuenta y monto propios y exige una disposición explícita. `Ya
+  incluido en la nómina` reclasifica y cubre una parte del total salarial
+  autoritativo sin aumentar el dinero a entregar; `se suma aparte` crea una
+  obligación adicional. Nunca se infiere el modo por los montos. Así `$62.000`
+  de sueldo más `$10.000` incluidos como gasto cubren un total de `$72.000` y
+  dejan `$0` pendiente, mientras el mismo concepto marcado como adicional lleva
+  el total a `$82.000`. Ningún modo cambia horas ni tarifa. La cuenta se busca
+  con `S-06` y toda la rama salarial queda excluida por cliente y servidor.
+- Una salida bancaria puede repartirse entre sueldo y conceptos separados; el
+  saldo disponible de esa evidencia se calcula entre todos los trabajadores y
+  conceptos del workspace y jamás puede sobreasignarse.
+- OCR se limita a leer movimientos, ordenar candidatos y precargar calces
+  directos. No decide efectivo, anticipos, parciales ni conceptos adicionales;
+  no registra dinero, no confirma semanas y no obliga a clasificar toda la
+  cartola. Las filas no elegidas permanecen como evidencia no usada y no
+  bloquean `Continuar con pagos`.
+- Sólo el workspace ejecuta la escritura versionada e idempotente. La misma
+  validación de saldos, asignaciones de evidencia, conceptos adicionales y
+  resultado aplica a la entrada individual y a la entrada batch. Un target que
+  el servidor confirmó queda bloqueado en esa instancia; un pago posterior se
+  inicia reabriendo Nóminas contra su saldo y versión recargados.
+- El handoff conserva la ruta y su estado de revisión mientras monta el cuarto
+  paso batch en el mismo owner. Volver restaura las propuestas sin perder la
+  selección; terminar cierra el flujo una vez y recarga Nóminas una vez.
 
 ## 2. Autoridad, ownership y reglas de operación
 
@@ -612,10 +672,10 @@ esta lista cierra los huecos):
       documento); jamás se persiste el archivo fuente, imágenes de página ni
       texto OCR completo; ningún log contiene texto crudo de cartola ni
       números de cuenta; sólo queda la evidencia estructurada mínima de fila.
-- [x] F3c.3 ✅ 2026-08-02 — **Matching acotado:** propuesta sólo con transferencia
-      únicamente identificada por fecha (inicio de la semana payroll → +5
-      días tras el cierre), beneficiario/alias canónico y monto dentro del
-      margen más estricto entre % y CLP configurados. Ambigüedad, duplicado
+- [x] F3c.3 ✅ 2026-08-11 — **Matching acotado:** propuesta sólo con transferencia
+      cuya fecha bancaria cae entre el cierre de la semana y cinco días
+      después, ambos inclusive; beneficiario/alias canónico; y diferencia
+      absoluta de monto de hasta `$1.000`. Ambigüedad, duplicado
       de beneficiario, método canónico faltante, varianza fuera de margen o
       fila OCR incompleta ⇒ revisión manual explícita, nunca auto-match.
 - [x] F3c.4 ✅ 2026-08-02 — **Cero falsos positivos con transferencias extra:** una
@@ -698,7 +758,7 @@ esta lista cierra los huecos):
       - Detalle cierra por `ReturnNavigation.close` ✓
         (`payroll_reconciliation_page.dart:1684` + test 'closing returns to
         the host' + guard del repo).
-      - Ventana matcher inicio-semana→+5 días y tolerancia %/CLP ✓
+      - Ventana matcher cierre→cierre+5 días y diferencia absoluta ≤ `$1.000` ✓
         (`payroll_statement_matcher.dart:185-194` + suite matcher).
       - **Métodos duplicados identifican su cuenta contable — DIVERGENCIA
         CORREGIDA**: la implementación desambiguaba con sufijo numérico

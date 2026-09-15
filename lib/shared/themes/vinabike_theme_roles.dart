@@ -92,6 +92,9 @@ class VinabikeThemeRoles extends ThemeExtension<VinabikeThemeRoles> {
     required this.neutral,
     required this.selectionContainer,
     required this.onSelectionContainer,
+    required this.hairline,
+    required this.accentBorder,
+    required this.faintForeground,
     required this.focusRing,
     required this.disabledForeground,
     required this.scrim,
@@ -122,6 +125,32 @@ class VinabikeThemeRoles extends ThemeExtension<VinabikeThemeRoles> {
   final VinabikeSemanticTone neutral;
   final Color selectionContainer;
   final Color onSelectionContainer;
+
+  /// Separador interno más tenue que `outlineVariant`: divide filas **dentro**
+  /// de una superficie sin dibujar el contorno de otra caja.
+  ///
+  /// `outlineVariant` delimita un objeto; una lista de filas dentro de ese
+  /// objeto necesita una línea que se lea como pausa, no como borde. Sin este
+  /// rol la única salida era bajarle la opacidad a un borde, que el contrato de
+  /// paletas prohíbe.
+  final Color hairline;
+
+  /// Borde del acento para un contenedor ya teñido con `selectionContainer`.
+  ///
+  /// El relleno solo no basta cuando el bloque tiene que leerse como elegido o
+  /// como propio del operador: necesita cerrar con un borde de la misma familia,
+  /// más presente que el relleno y más suave que el acento pleno.
+  final Color accentBorder;
+
+  /// Tercer nivel de tinta: lo prescindible —etiquetas de columna, unidades,
+  /// atajos de teclado—, por debajo de `mutedForeground` y por encima de
+  /// `disabledForeground`.
+  ///
+  /// No es lo mismo que deshabilitado: esto se lee, sólo que último. La
+  /// distinción importa porque `mutedForeground` carga los caveats que cambian
+  /// una decisión; si lo prescindible usa ese mismo tono, el caveat deja de
+  /// destacar y la jerarquía se aplana.
+  final Color faintForeground;
   final Color focusRing;
   final Color disabledForeground;
   final Color scrim;
@@ -160,6 +189,9 @@ class VinabikeThemeRoles extends ThemeExtension<VinabikeThemeRoles> {
     VinabikeSemanticTone? neutral,
     Color? selectionContainer,
     Color? onSelectionContainer,
+    Color? hairline,
+    Color? accentBorder,
+    Color? faintForeground,
     Color? focusRing,
     Color? disabledForeground,
     Color? scrim,
@@ -184,6 +216,9 @@ class VinabikeThemeRoles extends ThemeExtension<VinabikeThemeRoles> {
       neutral: neutral ?? this.neutral,
       selectionContainer: selectionContainer ?? this.selectionContainer,
       onSelectionContainer: onSelectionContainer ?? this.onSelectionContainer,
+      hairline: hairline ?? this.hairline,
+      accentBorder: accentBorder ?? this.accentBorder,
+      faintForeground: faintForeground ?? this.faintForeground,
       focusRing: focusRing ?? this.focusRing,
       disabledForeground: disabledForeground ?? this.disabledForeground,
       scrim: scrim ?? this.scrim,
@@ -217,6 +252,9 @@ class VinabikeThemeRoles extends ThemeExtension<VinabikeThemeRoles> {
           Color.lerp(selectionContainer, other.selectionContainer, t)!,
       onSelectionContainer:
           Color.lerp(onSelectionContainer, other.onSelectionContainer, t)!,
+      hairline: Color.lerp(hairline, other.hairline, t)!,
+      accentBorder: Color.lerp(accentBorder, other.accentBorder, t)!,
+      faintForeground: Color.lerp(faintForeground, other.faintForeground, t)!,
       focusRing: Color.lerp(focusRing, other.focusRing, t)!,
       disabledForeground:
           Color.lerp(disabledForeground, other.disabledForeground, t)!,

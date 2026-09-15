@@ -1,0 +1,169 @@
+{
+  "schema_version": 1,
+  "status": "local_metadata_partial_no_product_fill",
+  "compiled_sha256": "7ebf2b5b5e69784e3d146b81ad2bec8b7581113565cef022e8da70ba4c7a66fa",
+  "findings": [
+    {
+      "id": "ND01",
+      "status": "partially_integrated_local",
+      "correction_ids": [
+        "C13"
+      ],
+      "remaining": "Rosca, mano y montaje se revisan por separado en ND03; no se activó una conclusión mecánica."
+    },
+    {
+      "id": "ND02",
+      "status": "partially_integrated_local",
+      "correction_ids": [
+        "C13"
+      ],
+      "remaining": "Filas por apoyo y contenido de calas implementados en propuesta; pendiente prueba con productos exactos."
+    },
+    {
+      "id": "ND03",
+      "status": "pending_integration",
+      "correction_ids": [],
+      "remaining": "Mantener aliases legacy 9/16 y 1/2 con significado explícito ×20 TPI sólo cuando estén confirmados; representar otro estándar exacto como 14×1.25 y mano/lado. Comparar diámetro, paso y lado de montaje; no aprobar por igualdad del diámetro abreviado."
+    },
+    {
+      "id": "ND04",
+      "status": "pending_integration",
+      "correction_ids": [],
+      "remaining": "Registrar izquierda/derecha por fila o campos separados, diámetro nominal de manubrio admitido y longitud recta libre requerida. Reservar interior medido para mediciones reales, sin exigir igualdad geométrica literal con el tubo."
+    },
+    {
+      "id": "ND05",
+      "status": "partially_integrated_local",
+      "correction_ids": [
+        "C14"
+      ],
+      "remaining": "Faltan mínimos de inserción y demás geometría OEM por edición, además de reglas de montaje."
+    },
+    {
+      "id": "ND06",
+      "status": "partially_integrated_local",
+      "correction_ids": [
+        "C15"
+      ],
+      "remaining": "Falta enlazar material, abrazadera exacta y configuración a relaciones verificadas de montaje."
+    },
+    {
+      "id": "ND07",
+      "status": "partially_integrated_local",
+      "correction_ids": [
+        "C15"
+      ],
+      "remaining": "Sólo separación del suplemento: faltan accionamiento/ruta, mando y longitudes de montaje OEM."
+    },
+    {
+      "id": "ND08",
+      "status": "pending_integration",
+      "correction_ids": [],
+      "remaining": "Añadir construcción separada/integrada y hacer no aplicable una abrazadera inexistente. Mantener ancho y referencia de medición, reach/drop y puertos de guiado/soportes OEM. No convertir un dato web contradictorio de abrazadera en un montaje ficticio."
+    },
+    {
+      "id": "ND09",
+      "status": "pending_integration",
+      "correction_ids": [],
+      "remaining": "Registrar rosca completa o diámetro nominal+paso+mano, longitud con referencia (bajo cabeza/total), tamaño de accionamiento y clase sólo declarada. Para kit, filas de miembros con su propia rosca/longitud/cantidad. M5/M6 de la aguja de collarín no prueban su largo ni fijación al modelo."
+    },
+    {
+      "id": "ND10",
+      "status": "pending_integration",
+      "correction_ids": [],
+      "remaining": "Permitir capacidades por herramienta/miembro y operación, estándar/modelo/forma y adaptador. Eliminar ese ejemplo de HG/XD: la interfaz de extracción es distinta del spline de instalación. Añadir medidas del drive/herramienta cuando existan sin generalizar compatibilidad de todas las 12v."
+    },
+    {
+      "id": "ND11",
+      "status": "partially_integrated_local",
+      "correction_ids": [
+        "C16"
+      ],
+      "remaining": "Guardas y longitudes separadas; falta alcance, emisor y escala de seguridad por miembro."
+    },
+    {
+      "id": "ND12",
+      "status": "pending_integration",
+      "correction_ids": [],
+      "remaining": "Usar referencias a miembros o filas por luz y modo que unan posición, modo, lúmenes y duración; batería/puerto/montaje propios de cada luz. Separar batería extraíble, alimentación externa y química de recarga. Diámetro no describe toda tija aero: preservar forma/circunferencia cuando lo indique OEM."
+    },
+    {
+      "id": "ND13",
+      "status": "pending_integration",
+      "correction_ids": [],
+      "remaining": "Separar anclaje a bicicleta y unión al dispositivo. Elegir representación de rango continuo sólo si OEM lo declara; si enumera medidas, usar filas diámetro+espaciador/modelo+incluido/instalado. Comparar con la zona real de montaje, no siempre el puño. Guardar interfaz de carcasa y espacio del dispositivo si corresponde."
+    },
+    {
+      "id": "ND14",
+      "status": "pending_integration",
+      "correction_ids": [],
+      "remaining": "Separar parrilla→bicicleta y bolso→parrilla, conservar sistema/generación/adapter exacto y soporte lateral requerido. Añadir dimensiones/posición por miembro cuando haya alforjas. Los límites de carga deben indicar objeto y configuración; falta de ojales sólo bloquea una configuración que realmente los requiera."
+    },
+    {
+      "id": "ND15",
+      "status": "pending_integration",
+      "correction_ids": [],
+      "remaining": "Añadir estándar/patrón de agujeros, separación, número de fijaciones, rosca y posición con referencia de medida. Guardar altura instalada/rango OEM separado de largo total. No derivar KSA ni compatibilidad de cuadro del diámetro de rueda."
+    },
+    {
+      "id": "ND16",
+      "status": "pending_integration",
+      "correction_ids": [],
+      "remaining": "Añadir sistema de retención botella→base y base→bicicleta con referencias de modelo y contenido incluido. Conservar medidas con nombre correcto y dar diámetro sólo cuando corresponda. Para jaula lateral añadir lado de extracción; tipo de anclaje no equivale a cantidad o separación correcta de insertos."
+    },
+    {
+      "id": "ND17",
+      "status": "pending_integration",
+      "correction_ids": [],
+      "remaining": "Para CO2 añadir interfaz de cartucho roscado/no roscado exacta, tamaños admitidos declarados y contenido por presentación. El máximo de presión no es promesa de presión final para toda rueda. Mantener requisitos de válvula/adaptador por configuración."
+    },
+    {
+      "id": "ND18",
+      "status": "partially_integrated_local",
+      "correction_ids": [
+        "C18"
+      ],
+      "remaining": "Sólo talla OEM exacta y guía; certificaciones y alcance por modelo/mercado siguen pendientes."
+    },
+    {
+      "id": "ND19",
+      "status": "partially_integrated_local",
+      "correction_ids": [
+        "C17"
+      ],
+      "remaining": "Propiedades ópticas por lente; faltan categoría/VLT y alcance de la declaración UV."
+    },
+    {
+      "id": "ND20",
+      "status": "partially_integrated_local",
+      "correction_ids": [
+        "C18"
+      ],
+      "remaining": "Manga y talla OEM; faltan público/corte y composición declarada."
+    },
+    {
+      "id": "ND21",
+      "status": "pending_integration",
+      "correction_ids": [],
+      "remaining": "Separar posicionamiento/GNSS, enlace al sensor, enlace al teléfono/red y perfiles/modelos soportados. El ajuste de rueda aplica según la fuente de velocidad; incluir montaje de unidad/sensor y contenido. Compartir Bluetooth no aprueba cualquier sensor."
+    },
+    {
+      "id": "ND22",
+      "status": "pending_integration",
+      "correction_ids": [],
+      "remaining": "Registrar puertos por ID y forma/género; perfiles de salida V/A/protocolo y presupuesto simultáneo por configuración, conservando potencia nominal total como declaración distinta. Para cable, extremos/capacidad de carga/datos por variante; para memoria, formato y clase OEM, sin derivarlos de GB."
+    },
+    {
+      "id": "ND23",
+      "status": "pending_integration",
+      "correction_ids": [],
+      "remaining": "Separar preparado y envasado, receta/variante/modificadores de venta; masa neta, volumen, unidades y porción con base explícita. Añadir fuente y texto de ingredientes/alérgenos/cafeína por etiqueta o receta verificada. No inferir ausencia de alérgenos por título, nombre de leche vegetal o una nota vacía. Nutrición por 100g/porción debe conservar la base."
+    },
+    {
+      "id": "ND24",
+      "status": "pending_integration",
+      "correction_ids": [],
+      "remaining": "Conservar las afirmaciones con fecha/locator y contexto de medición; dejar la magnitud pendiente cuando no puede resolverse variante/revisión. La investigación puede llenar otros atributos no contradictorios del mismo producto."
+    }
+  ]
+}

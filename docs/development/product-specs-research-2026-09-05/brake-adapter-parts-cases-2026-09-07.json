@@ -1,0 +1,1679 @@
+{
+  "schema_version": 1,
+  "title": "All-family physical-port cardinality",
+  "catalogue_sha256": "a5e3add682ae2ee881daaa158b55478d3762341de2f7fb35ddf05525a928897a",
+  "independent_review_hashes": [
+    "4cbd9cd4e1ccb2f41ab3249cbaed83fe419689aa6ba1dbb24a5b9dd856bd66d1",
+    "a1c6bfc5fae5c11b3b7f804b240ea36b2a36db2f6e4ba2ff868c061802856820"
+  ],
+  "mechanical_coverage_complete": false,
+  "automatic_fill_authorized": false,
+  "cases": [
+    {
+      "id": "RCF38",
+      "template": "rotor_mount_adapter",
+      "field": "rotor_adapter_fitments",
+      "kind": "synthetic_regression",
+      "values": {
+        "rotor_adapter_fitments": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "hub_mount": "Rosca especificada",
+                "rotor_mount": "6 pernos",
+                "source_url": "https://example.com/synthetic-rotor-adapter",
+                "status": "Compatible declarado",
+                "adapter_function": "Tipo de fijación"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_row_condition_issues": [
+        {
+          "code": "row_required_missing",
+          "field": "rotor_adapter_fitments",
+          "row_id": "r1",
+          "column": "hub_thread_spec",
+          "blocking": false
+        }
+      ],
+      "expected_blocking": [],
+      "source_ids": [
+        "CATALOG",
+        "ENGINE2200"
+      ],
+      "purpose": "Rosca específica sin designación queda pendiente.",
+      "gap_ids": [],
+      "not_a_mechanical_verdict": true,
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "successor_translation": "Se añade status=\"Compatible declarado\", que la fila ya significaba. No se altera ninguna expectativa ni el propósito adjudicado."
+    },
+    {
+      "id": "RCF39",
+      "template": "rotor_mount_adapter",
+      "field": "rotor_adapter_fitments",
+      "kind": "synthetic_regression",
+      "values": {
+        "rotor_adapter_fitments": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "hub_mount": "Centerlock",
+                "rotor_mount": "6 pernos",
+                "source_url": "https://example.com/synthetic-rotor-adapter",
+                "status": "Compatible declarado",
+                "adapter_function": "Tipo de fijación",
+                "lockring_thread_spec": "Información del anillo OEM de prueba"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_row_condition_issues": [],
+      "expected_blocking": [],
+      "source_ids": [
+        "CATALOG",
+        "ENGINE2200"
+      ],
+      "purpose": "Centerlock puede conservar detalles de anillo; no aplicar una negación universal de roscas.",
+      "gap_ids": [],
+      "not_a_mechanical_verdict": true,
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "successor_translation": "Se conserva el dato explícito del anillo en lockring_thread_spec; la rosca de fijación de maza tiene su propia celda. No es una regla para inferir propietarios de datos reales."
+    },
+    {
+      "id": "ba_documented_exclusion_is_recordable",
+      "template": "brake_mount_adapter",
+      "values": {
+        "brake_adapter_fitments": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "position": "Delantero",
+                "frame_mount": "Post Mount",
+                "caliper_mount": "Post Mount",
+                "rotor_diameter_mm": "180",
+                "adapter_model": "Sintético",
+                "status": "Excluido declarado",
+                "frame_base_form": "No publicado",
+                "caliper_brand": "Sintética",
+                "caliper_model": "Sintético"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "ba_conditional_fitment_needs_its_condition",
+      "template": "brake_mount_adapter",
+      "values": {
+        "brake_adapter_fitments": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "position": "Delantero",
+                "frame_mount": "Post Mount",
+                "caliper_mount": "Post Mount",
+                "rotor_diameter_mm": "180",
+                "adapter_model": "Sintético",
+                "status": "Condicional",
+                "frame_base_form": "No publicado"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "expected_issue_subset": [
+        {
+          "code": "row_required_missing",
+          "field": "brake_adapter_fitments",
+          "blocking": false
+        }
+      ],
+      "expected_sql_issue_subset": [
+        {
+          "code": "row_required_missing",
+          "field": "brake_adapter_fitments",
+          "blocking": false
+        }
+      ]
+    },
+    {
+      "id": "ba_unpublished_base_cannot_carry_a_figure",
+      "template": "brake_mount_adapter",
+      "values": {
+        "brake_adapter_fitments": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "position": "Delantero",
+                "frame_mount": "Post Mount",
+                "caliper_mount": "Post Mount",
+                "rotor_diameter_mm": "180",
+                "adapter_model": "Sintético",
+                "status": "Compatible declarado",
+                "frame_base_form": "No publicado",
+                "frame_base_rotor_mm": "160"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [
+        {
+          "code": "row_field_applicability",
+          "field": "brake_adapter_fitments"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "ba_declared_base_and_target_travel_together",
+      "template": "brake_mount_adapter",
+      "values": {
+        "brake_adapter_fitments": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "position": "Delantero",
+                "frame_mount": "Post Mount",
+                "caliper_mount": "Post Mount",
+                "rotor_diameter_mm": "180",
+                "adapter_model": "Sintético",
+                "status": "Compatible declarado",
+                "frame_base_form": "Declarado",
+                "frame_base_rotor_mm": "160"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "ba_base_published_as_a_designation",
+      "template": "brake_mount_adapter",
+      "values": {
+        "brake_adapter_fitments": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "position": "Delantero",
+                "frame_mount": "Post Mount",
+                "caliper_mount": "Post Mount",
+                "rotor_diameter_mm": "180",
+                "adapter_model": "Sintético",
+                "status": "Compatible declarado",
+                "frame_base_form": "Designación OEM",
+                "frame_base_designation": "Designación sintética"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "ba_designated_base_cannot_carry_a_figure",
+      "template": "brake_mount_adapter",
+      "values": {
+        "brake_adapter_fitments": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "position": "Delantero",
+                "frame_mount": "Post Mount",
+                "caliper_mount": "Post Mount",
+                "rotor_diameter_mm": "180",
+                "adapter_model": "Sintético",
+                "status": "Compatible declarado",
+                "frame_base_form": "Designación OEM",
+                "frame_base_designation": "Designación sintética",
+                "frame_base_rotor_mm": "160"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [
+        {
+          "code": "row_field_applicability",
+          "field": "brake_adapter_fitments"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "ba_hardware_belongs_to_a_configuration",
+      "template": "brake_mount_adapter",
+      "values": {
+        "brake_adapter_fitments": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "position": "Delantero",
+                "frame_mount": "Post Mount",
+                "caliper_mount": "Post Mount",
+                "rotor_diameter_mm": "180",
+                "adapter_model": "Sintético",
+                "status": "Compatible declarado",
+                "frame_base_form": "No publicado"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "brake_adapter_included_hardware": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "piece": "Perno de cáliper",
+                "piece_kind": "Perno",
+                "quantity": "2",
+                "configuration_row_id": "r1",
+                "length_form": "Declarado",
+                "length_mm": "18",
+                "length_datum": "Bajo cabeza",
+                "thread_form": "Roscada",
+                "thread_diameter_unit": "mm",
+                "thread_diameter_mm": "6",
+                "thread_pitch_unit": "mm",
+                "thread_pitch_mm": "1"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "ba_hardware_cannot_point_at_absent_configuration",
+      "template": "brake_mount_adapter",
+      "values": {
+        "brake_adapter_fitments": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "position": "Delantero",
+                "frame_mount": "Post Mount",
+                "caliper_mount": "Post Mount",
+                "rotor_diameter_mm": "180",
+                "adapter_model": "Sintético",
+                "status": "Compatible declarado",
+                "frame_base_form": "No publicado"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "brake_adapter_included_hardware": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "piece": "Perno",
+                "piece_kind": "Perno",
+                "configuration_row_id": "r9",
+                "length_form": "No publicado",
+                "thread_form": "Sin rosca"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [
+        {
+          "code": "row_reference_unresolved",
+          "field": "brake_adapter_included_hardware"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "ba_length_without_datum_is_pending",
+      "template": "brake_mount_adapter",
+      "values": {
+        "brake_adapter_fitments": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "position": "Delantero",
+                "frame_mount": "Post Mount",
+                "caliper_mount": "Post Mount",
+                "rotor_diameter_mm": "180",
+                "adapter_model": "Sintético",
+                "status": "Compatible declarado",
+                "frame_base_form": "No publicado"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "brake_adapter_included_hardware": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "piece": "Perno",
+                "piece_kind": "Perno",
+                "length_form": "Declarado",
+                "length_mm": "18",
+                "thread_form": "Sin rosca"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "expected_issue_subset": [
+        {
+          "code": "row_required_missing",
+          "field": "brake_adapter_included_hardware",
+          "blocking": false
+        }
+      ],
+      "expected_sql_issue_subset": [
+        {
+          "code": "row_required_missing",
+          "field": "brake_adapter_included_hardware",
+          "blocking": false
+        }
+      ]
+    },
+    {
+      "id": "ba_spacer_is_not_threaded",
+      "template": "brake_mount_adapter",
+      "values": {
+        "brake_adapter_fitments": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "position": "Delantero",
+                "frame_mount": "Post Mount",
+                "caliper_mount": "Post Mount",
+                "rotor_diameter_mm": "180",
+                "adapter_model": "Sintético",
+                "status": "Compatible declarado",
+                "frame_base_form": "No publicado"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "brake_adapter_included_hardware": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "piece": "Espaciador",
+                "piece_kind": "Espaciador",
+                "length_form": "No publicado",
+                "thread_form": "Sin rosca",
+                "thread_pitch_mm": "1"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [
+        {
+          "code": "row_field_applicability",
+          "field": "brake_adapter_included_hardware"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "ba_centerlock_route_keeps_its_ring_thread",
+      "template": "rotor_mount_adapter",
+      "values": {
+        "rotor_adapter_fitments": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "hub_mount": "Centerlock",
+                "rotor_mount": "6 pernos",
+                "status": "Compatible declarado",
+                "source_url": "https://example.com/synthetic-rotor-adapter",
+                "lockring_thread_spec": "Información sintética del anillo"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "successor_translation": "Se conserva el dato explícito del anillo en lockring_thread_spec; la rosca de fijación de maza tiene su propia celda. No es una regla para inferir propietarios de datos reales."
+    },
+    {
+      "id": "ba_hub_fixing_thread_declares_its_owner",
+      "template": "rotor_mount_adapter",
+      "values": {
+        "rotor_adapter_fitments": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "hub_mount": "Rosca especificada",
+                "rotor_mount": "6 pernos",
+                "status": "Compatible declarado",
+                "source_url": "https://example.com/synthetic-rotor-adapter",
+                "hub_thread_spec": "Rosca sintética de fijación"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "ba_rotor_exclusion_by_model_is_recordable",
+      "template": "rotor_mount_adapter",
+      "values": {
+        "rotor_adapter_fitments": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "hub_mount": "Centerlock",
+                "rotor_mount": "6 pernos",
+                "status": "Excluido declarado",
+                "source_url": "https://example.com/synthetic-rotor-adapter",
+                "rotor_model": "Sintético",
+                "conditions": "Excluido por su fuente"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "ba_spring_is_never_threaded",
+      "template": "brake_small_part",
+      "values": {
+        "brake_part_kind": "Resorte de retorno (freno de llanta)",
+        "brake_small_part_components": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "piece": "Resorte",
+                "piece_kind": "Resorte",
+                "thread_form": "Roscada"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [
+        {
+          "code": "row_value_conflict",
+          "field": "brake_small_part_components"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "ba_clip_is_never_threaded",
+      "template": "brake_small_part",
+      "values": {
+        "brake_part_kind": "Clip / retención sin rosca",
+        "brake_small_part_components": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "piece": "Clip",
+                "piece_kind": "Clip de retención",
+                "thread_form": "Sin rosca"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "ba_pin_and_clip_keep_their_own_shapes",
+      "template": "brake_small_part",
+      "values": {
+        "brake_part_kind": "Pasador / pin de pastilla",
+        "brake_small_part_components": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "piece": "Pasador",
+                "piece_kind": "Pasador de pastilla",
+                "quantity": "1",
+                "thread_form": "Roscada",
+                "thread_diameter_unit": "mm",
+                "thread_diameter_mm": "4",
+                "thread_pitch_unit": "mm",
+                "thread_pitch_mm": "0.7"
+              },
+              "sources": []
+            },
+            {
+              "id": "r2",
+              "values": {
+                "piece": "Clip de seguridad",
+                "piece_kind": "Clip de retención",
+                "quantity": "1",
+                "thread_form": "Sin rosca"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "ba_unthreaded_piece_cannot_carry_a_pitch",
+      "template": "brake_small_part",
+      "values": {
+        "brake_part_kind": "Otro",
+        "brake_small_part_components": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "piece": "Clip",
+                "piece_kind": "Clip de retención",
+                "thread_form": "Sin rosca",
+                "thread_pitch_mm": "0.7"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [
+        {
+          "code": "row_field_applicability",
+          "field": "brake_small_part_components"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "ba_coaster_is_a_rear_hub_worked_by_backpedalling",
+      "template": "hub_brake",
+      "values": {
+        "hub_brake_kind": "Contrapedal",
+        "hub_brake_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "configuration": "Sintética",
+                "mechanism": "Contrapedal",
+                "product_scope": "Freno integrado en la maza",
+                "position": "Trasera",
+                "actuation": "Contrapedal (retropedaleo)",
+                "reaction_arm_required": "Sí",
+                "reaction_arm_fixing": "Vaina",
+                "drum_form": "No publicado",
+                "source_url": "https://www.sheldonbrown.com/coaster-brakes.html"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [
+        "https://www.sheldonbrown.com/coaster-brakes.html"
+      ]
+    },
+    {
+      "id": "ba_coaster_cannot_be_cable_actuated",
+      "template": "hub_brake",
+      "values": {
+        "hub_brake_kind": "Contrapedal",
+        "hub_brake_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "configuration": "Sintética",
+                "mechanism": "Contrapedal",
+                "product_scope": "Freno integrado en la maza",
+                "position": "Trasera",
+                "actuation": "Cable",
+                "reaction_arm_required": "Sí",
+                "reaction_arm_fixing": "Vaina",
+                "drum_form": "No publicado",
+                "source_url": "https://www.sheldonbrown.com/coaster-brakes.html"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [
+        {
+          "code": "row_value_conflict",
+          "field": "hub_brake_configurations"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [
+        "https://www.sheldonbrown.com/coaster-brakes.html"
+      ]
+    },
+    {
+      "id": "ba_coaster_cannot_be_declared_front",
+      "template": "hub_brake",
+      "values": {
+        "hub_brake_kind": "Contrapedal",
+        "hub_brake_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "configuration": "Sintética",
+                "mechanism": "Contrapedal",
+                "product_scope": "Freno integrado en la maza",
+                "position": "Delantera",
+                "actuation": "Contrapedal (retropedaleo)",
+                "reaction_arm_required": "Sí",
+                "reaction_arm_fixing": "Vaina",
+                "drum_form": "No publicado",
+                "source_url": "https://www.sheldonbrown.com/coaster-brakes.html"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [
+        {
+          "code": "row_value_conflict",
+          "field": "hub_brake_configurations"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [
+        "https://www.sheldonbrown.com/coaster-brakes.html"
+      ]
+    },
+    {
+      "id": "ba_front_drum_is_ordinary",
+      "template": "hub_brake",
+      "values": {
+        "hub_brake_kind": "Tambor",
+        "hub_brake_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "configuration": "Sintética",
+                "mechanism": "Tambor",
+                "product_scope": "Freno integrado en la maza",
+                "position": "Delantera",
+                "actuation": "Cable",
+                "reaction_arm_required": "Sí",
+                "reaction_arm_fixing": "Horquilla",
+                "drum_form": "No publicado"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "ba_brake_with_internal_gears_is_one_assembly",
+      "template": "hub_brake",
+      "values": {
+        "hub_brake_kind": "Tambor",
+        "hub_brake_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "configuration": "Sintética",
+                "mechanism": "Tambor",
+                "product_scope": "Maza con freno y cambio interno",
+                "position": "Trasera",
+                "actuation": "Cable",
+                "reaction_arm_required": "Sí",
+                "reaction_arm_fixing": "Vaina",
+                "drum_form": "No publicado"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "ba_unpublished_drum_cannot_carry_a_figure",
+      "template": "hub_brake",
+      "values": {
+        "hub_brake_kind": "Tambor",
+        "hub_brake_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "configuration": "Sintética",
+                "mechanism": "Tambor",
+                "product_scope": "Freno integrado en la maza",
+                "position": "Trasera",
+                "actuation": "Cable",
+                "drum_form": "No publicado",
+                "drum_diameter_mm": "90"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [
+        {
+          "code": "row_field_applicability",
+          "field": "hub_brake_configurations"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "ba_no_reaction_arm_has_no_fixing",
+      "template": "hub_brake",
+      "values": {
+        "hub_brake_kind": "Rodillo (roller)",
+        "hub_brake_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "configuration": "Sintética",
+                "mechanism": "Rodillo (roller)",
+                "product_scope": "Freno integrado en la maza",
+                "position": "Trasera",
+                "actuation": "Cable",
+                "reaction_arm_required": "No",
+                "reaction_arm_fixing": "Vaina",
+                "drum_form": "No publicado"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [
+        {
+          "code": "row_field_applicability",
+          "field": "hub_brake_configurations"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "ba_root_oem_rotor_exclusion_is_explicit",
+      "template": "rotor_mount_adapter",
+      "values": {
+        "rotor_adapter_fitments": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "hub_mount": "Centerlock",
+                "rotor_mount": "6 pernos",
+                "adapter_model": "SM-RTAD05",
+                "adapter_function": "Tipo de fijación",
+                "configuration": "Montaje rotor SM-RT86",
+                "source_scope": "DM-MDBR001-05 p.8",
+                "rotor_model": "SM-RT86",
+                "status": "Excluido declarado",
+                "source_url": "https://si.shimano.com/en/pdfs/dm/MDBR001/DM-MDBR001-05-ENG.pdf",
+                "conditions": "La estructura del rotor con adaptador de aluminio está excluida."
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [
+        "https://si.shimano.com/en/pdfs/dm/MDBR001/DM-MDBR001-05-ENG.pdf"
+      ]
+    },
+    {
+      "id": "ba_root_one_exact_route_cannot_be_approved_and_excluded",
+      "template": "rotor_mount_adapter",
+      "values": {
+        "rotor_adapter_fitments": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "hub_mount": "Centerlock",
+                "rotor_mount": "6 pernos",
+                "adapter_model": "SM-RTAD05",
+                "adapter_function": "Tipo de fijación",
+                "configuration": "Montaje rotor SM-RT86",
+                "source_scope": "DM-MDBR001-05 p.8",
+                "rotor_model": "SM-RT86",
+                "status": "Excluido declarado",
+                "source_url": "https://si.shimano.com/en/pdfs/dm/MDBR001/DM-MDBR001-05-ENG.pdf",
+                "conditions": "La estructura del rotor con adaptador de aluminio está excluida."
+              },
+              "sources": []
+            },
+            {
+              "id": "r2",
+              "values": {
+                "hub_mount": "Centerlock",
+                "rotor_mount": "6 pernos",
+                "adapter_model": "SM-RTAD05",
+                "adapter_function": "Tipo de fijación",
+                "configuration": "Montaje rotor SM-RT86",
+                "source_scope": "DM-MDBR001-05 p.8",
+                "rotor_model": "SM-RT86",
+                "status": "Compatible declarado",
+                "source_url": "https://si.shimano.com/en/pdfs/dm/MDBR001/DM-MDBR001-05-ENG.pdf",
+                "conditions": "La estructura del rotor con adaptador de aluminio está excluida."
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [
+        {
+          "code": "row_shape",
+          "field": "rotor_adapter_fitments"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "ba_root_another_configuration_is_not_collapsed",
+      "template": "rotor_mount_adapter",
+      "values": {
+        "rotor_adapter_fitments": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "hub_mount": "Centerlock",
+                "rotor_mount": "6 pernos",
+                "adapter_model": "SM-RTAD05",
+                "adapter_function": "Tipo de fijación",
+                "configuration": "Montaje rotor SM-RT86",
+                "source_scope": "DM-MDBR001-05 p.8",
+                "rotor_model": "SM-RT86",
+                "status": "Excluido declarado",
+                "source_url": "https://si.shimano.com/en/pdfs/dm/MDBR001/DM-MDBR001-05-ENG.pdf",
+                "conditions": "La estructura del rotor con adaptador de aluminio está excluida."
+              },
+              "sources": []
+            },
+            {
+              "id": "r2",
+              "values": {
+                "hub_mount": "Centerlock",
+                "rotor_mount": "6 pernos",
+                "adapter_model": "SM-RTAD05",
+                "adapter_function": "Tipo de fijación",
+                "configuration": "Otra configuración sintética",
+                "source_scope": "DM-MDBR001-05 p.8",
+                "rotor_model": "SM-RT86",
+                "status": "Excluido declarado",
+                "source_url": "https://si.shimano.com/en/pdfs/dm/MDBR001/DM-MDBR001-05-ENG.pdf",
+                "conditions": "La estructura del rotor con adaptador de aluminio está excluida."
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "ba_root_both_thread_owners_can_be_described_together",
+      "template": "rotor_mount_adapter",
+      "values": {
+        "rotor_adapter_fitments": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "hub_mount": "Rosca especificada",
+                "rotor_mount": "6 pernos",
+                "adapter_model": "Adaptador sintético",
+                "adapter_function": "Tipo de fijación",
+                "configuration": "Dos interfaces",
+                "source_scope": "DM-MDBR001-05 p.8",
+                "rotor_model": "SM-RT86",
+                "status": "Excluido declarado",
+                "source_url": "https://example.com/synthetic-rotor-adapter",
+                "conditions": "La estructura del rotor con adaptador de aluminio está excluida.",
+                "hub_thread_spec": "Rosca A sintética",
+                "lockring_thread_spec": "Rosca B sintética"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "ba_root_ring_detail_is_not_a_threaded_hub_attachment",
+      "template": "rotor_mount_adapter",
+      "values": {
+        "rotor_adapter_fitments": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "hub_mount": "Centerlock",
+                "rotor_mount": "6 pernos",
+                "adapter_model": "SM-RTAD05",
+                "adapter_function": "Tipo de fijación",
+                "configuration": "Montaje rotor SM-RT86",
+                "source_scope": "DM-MDBR001-05 p.8",
+                "rotor_model": "SM-RT86",
+                "status": "Excluido declarado",
+                "source_url": "https://si.shimano.com/en/pdfs/dm/MDBR001/DM-MDBR001-05-ENG.pdf",
+                "conditions": "La estructura del rotor con adaptador de aluminio está excluida.",
+                "hub_thread_spec": "Rosca del anillo"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [
+        {
+          "code": "row_field_applicability",
+          "field": "rotor_adapter_fitments"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "ba_root_same_six_bolt_interfaces_can_shift_the_rotor",
+      "template": "rotor_mount_adapter",
+      "values": {
+        "rotor_adapter_fitments": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "hub_mount": "6 pernos",
+                "rotor_mount": "6 pernos",
+                "adapter_model": "Boostinator HR",
+                "adapter_function": "Posición del rotor",
+                "configuration": "Maza Hope Pro 2 EVO trasera 12x142",
+                "hub_model": "Hope Pro 2 EVO",
+                "status": "Compatible declarado",
+                "source_scope": "Rear Boostinator kits / HR",
+                "rotor_max_mm": "183",
+                "conditions": "Sólo trasero de seis pernos; requiere cambio de aparaguado, tapa de eje y pernos del kit. No se infiere compatibilidad de un separador suelto.",
+                "source_url": "https://www.wolftoothcomponents.com/products/boostinator"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [
+        "https://www.wolftoothcomponents.com/products/boostinator"
+      ]
+    },
+    {
+      "id": "ba_root_numeric_inch_thread_is_recordable",
+      "template": "brake_mount_adapter",
+      "values": {
+        "brake_adapter_included_hardware": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "piece": "Perno sintético",
+                "piece_kind": "Perno",
+                "quantity": "1",
+                "length_form": "No publicado",
+                "thread_form": "Roscada",
+                "thread_diameter_unit": "in",
+                "thread_diameter_in": "0.25",
+                "thread_pitch_unit": "tpi",
+                "thread_pitch_tpi": "20"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "ba_root_diameter_cannot_embed_a_second_pitch",
+      "template": "brake_mount_adapter",
+      "values": {
+        "brake_adapter_included_hardware": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "piece": "Perno sintético",
+                "piece_kind": "Perno",
+                "quantity": "1",
+                "length_form": "No publicado",
+                "thread_form": "Roscada",
+                "thread_diameter_unit": "in",
+                "thread_diameter_in": "1/4x26",
+                "thread_pitch_unit": "tpi",
+                "thread_pitch_tpi": "20"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [
+        {
+          "code": "row_shape",
+          "field": "brake_adapter_included_hardware"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "ba_root_zero_hardware_quantity_is_not_unknown",
+      "template": "brake_mount_adapter",
+      "values": {
+        "brake_adapter_included_hardware": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "piece": "Perno sintético",
+                "piece_kind": "Perno",
+                "quantity": "0",
+                "length_form": "No publicado",
+                "thread_form": "Roscada",
+                "thread_diameter_unit": "in",
+                "thread_diameter_in": "0.25",
+                "thread_pitch_unit": "tpi",
+                "thread_pitch_tpi": "20"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [
+        {
+          "code": "row_shape",
+          "field": "brake_adapter_included_hardware"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "ba_root_one_mount_configuration_cannot_have_two_results",
+      "template": "brake_mount_adapter",
+      "values": {
+        "brake_adapter_fitments": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "adapter_model": "Sintético",
+                "configuration": "C1",
+                "source_scope": "Manual1",
+                "position": "Delantero",
+                "frame_mount": "Post Mount",
+                "caliper_mount": "Post Mount",
+                "frame_base_form": "Declarado",
+                "frame_base_rotor_mm": "160",
+                "rotor_diameter_mm": "180",
+                "status": "Compatible declarado"
+              },
+              "sources": []
+            },
+            {
+              "id": "r2",
+              "values": {
+                "adapter_model": "Sintético",
+                "configuration": "C1",
+                "source_scope": "Manual1",
+                "position": "Delantero",
+                "frame_mount": "Post Mount",
+                "caliper_mount": "Post Mount",
+                "frame_base_form": "Declarado",
+                "frame_base_rotor_mm": "160",
+                "rotor_diameter_mm": "203",
+                "status": "Compatible declarado"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [
+        {
+          "code": "row_shape",
+          "field": "brake_adapter_fitments"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "ba_root_different_mount_configurations_keep_their_target",
+      "template": "brake_mount_adapter",
+      "values": {
+        "brake_adapter_fitments": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "adapter_model": "Sintético",
+                "configuration": "C1",
+                "source_scope": "Manual1",
+                "position": "Delantero",
+                "frame_mount": "Post Mount",
+                "caliper_mount": "Post Mount",
+                "frame_base_form": "Declarado",
+                "frame_base_rotor_mm": "160",
+                "rotor_diameter_mm": "180",
+                "status": "Compatible declarado"
+              },
+              "sources": []
+            },
+            {
+              "id": "r2",
+              "values": {
+                "adapter_model": "Sintético",
+                "configuration": "C2",
+                "source_scope": "Manual1",
+                "position": "Delantero",
+                "frame_mount": "Post Mount",
+                "caliper_mount": "Post Mount",
+                "frame_base_form": "Declarado",
+                "frame_base_rotor_mm": "160",
+                "rotor_diameter_mm": "203",
+                "status": "Compatible declarado"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "ba_root_hub_old_has_its_own_scope",
+      "template": "hub_brake",
+      "values": {
+        "hub_brake_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "configuration": "C1",
+                "brake_model": "Sintético",
+                "edition": "E1",
+                "mechanism": "Tambor",
+                "product_scope": "Freno integrado en la maza",
+                "position": "Delantera",
+                "actuation": "Cable",
+                "drum_form": "No publicado"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "hub_brake_attachment_interfaces": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "configuration_row_id": "r1",
+                "interface": "Separación",
+                "interface_kind": "Separación OLD",
+                "old_mm": "100"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "ba_root_old_cannot_carry_an_axle_thread",
+      "template": "hub_brake",
+      "values": {
+        "hub_brake_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "configuration": "C1",
+                "brake_model": "Sintético",
+                "edition": "E1",
+                "mechanism": "Tambor",
+                "product_scope": "Freno integrado en la maza",
+                "position": "Delantera",
+                "actuation": "Cable",
+                "drum_form": "No publicado"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "hub_brake_attachment_interfaces": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "configuration_row_id": "r1",
+                "interface": "Separación",
+                "interface_kind": "Separación OLD",
+                "old_mm": "100",
+                "pitch": "26"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [
+        {
+          "code": "row_field_applicability",
+          "field": "hub_brake_attachment_interfaces"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "ba_root_hub_interface_requires_existing_configuration",
+      "template": "hub_brake",
+      "values": {
+        "hub_brake_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "configuration": "C1",
+                "brake_model": "Sintético",
+                "edition": "E1",
+                "mechanism": "Tambor",
+                "product_scope": "Freno integrado en la maza",
+                "position": "Delantera",
+                "actuation": "Cable",
+                "drum_form": "No publicado"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "hub_brake_attachment_interfaces": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "configuration_row_id": "absent",
+                "interface": "Separación",
+                "interface_kind": "Separación OLD",
+                "old_mm": "100"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [
+        {
+          "code": "row_reference_unresolved",
+          "field": "hub_brake_attachment_interfaces"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "ba_root_same_hub_configuration_cannot_be_front_and_rear",
+      "template": "hub_brake",
+      "values": {
+        "hub_brake_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "configuration": "C1",
+                "brake_model": "Sintético",
+                "edition": "E1",
+                "mechanism": "Tambor",
+                "product_scope": "Freno integrado en la maza",
+                "position": "Delantera",
+                "actuation": "Cable",
+                "drum_form": "No publicado"
+              },
+              "sources": []
+            },
+            {
+              "id": "r2",
+              "values": {
+                "configuration": "C1",
+                "brake_model": "Sintético",
+                "edition": "E1",
+                "mechanism": "Tambor",
+                "product_scope": "Freno integrado en la maza",
+                "position": "Trasera",
+                "actuation": "Cable",
+                "drum_form": "No publicado"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [
+        {
+          "code": "row_shape",
+          "field": "hub_brake_configurations"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "ba_root_two_hub_editions_are_not_collapsed",
+      "template": "hub_brake",
+      "values": {
+        "hub_brake_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "configuration": "C1",
+                "brake_model": "Sintético",
+                "edition": "E1",
+                "mechanism": "Tambor",
+                "product_scope": "Freno integrado en la maza",
+                "position": "Delantera",
+                "actuation": "Cable",
+                "drum_form": "No publicado"
+              },
+              "sources": []
+            },
+            {
+              "id": "r2",
+              "values": {
+                "configuration": "C1",
+                "brake_model": "Sintético",
+                "edition": "E2",
+                "mechanism": "Tambor",
+                "product_scope": "Freno integrado en la maza",
+                "position": "Trasera",
+                "actuation": "Cable",
+                "drum_form": "No publicado"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    }
+  ],
+  "root_nd_case_overrides": [
+    {
+      "id": "helmet_smith_mainline_certifications_by_row",
+      "reason": "Integral pertenece al eje de construcción, no al uso."
+    },
+    {
+      "id": "helmet_inventory_best_enduro_certificado_sin_norma",
+      "reason": "Se conserva Enduro sin inferir cobertura desde el título."
+    },
+    {
+      "id": "RCF25",
+      "reason": "Una variante distinta del soporte no es montaje de este SKU; se rechaza el token retirado."
+    }
+  ],
+  "root_row_value_case_overrides": [
+    "RCF08",
+    "CPC_GAP_INCLUDED_CLAMP_FALSE"
+  ],
+  "deferred_pressure_fixture_ids": [],
+  "superseded_pressure_fixtures": [
+    "wrfp_hookless_row_maximum_is_not_the_headline",
+    "wrfp_schwalbe_general_maximum_in_bar",
+    "wrfp_unit_without_value_is_pending",
+    "wrfp_value_without_unit_stays_pending"
+  ],
+  "required_server_migration": "20260907025000"
+}

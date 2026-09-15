@@ -11,6 +11,8 @@ import '../pages/auth_callback_page.dart';
 import '../pages/app_link_landing_page.dart';
 import '../../modules/mail/pages/mail_inbox_page.dart' as mail;
 import '../../modules/storage/pages/storage_page.dart' as storage;
+import '../../modules/hr/payroll/payment_workspace/payroll_payment_workspace_models.dart';
+import '../../modules/purchases/models/purchase_invoice_draft_seed.dart';
 import '../../public_store/widgets/persistent_editor_shell.dart';
 import '../../public_store/widgets/storefront_navigation_guard_scope.dart';
 import '../services/auth_service.dart';
@@ -25,6 +27,7 @@ import 'erp_routes_barrel.dart' deferred as erp
         AttendancesPage,
         BackupManagementPage,
         BalanceSheetPage,
+        BankReconciliationPage,
         BikeBrandsPage,
         BikeEncyclopediaPage,
         BluetoothScannerPage,
@@ -54,6 +57,7 @@ import 'erp_routes_barrel.dart' deferred as erp
         GoogleSheetsModulePage,
         HierarchicalCategoryPage,
         IncomeStatementPage,
+        IntelligentPurchasingWorkspacePage,
         IntegrationsPage,
         InvoiceFormPage,
         InvoiceListPage,
@@ -80,6 +84,7 @@ import 'erp_routes_barrel.dart' deferred as erp
         POSReceiptPage,
         PageManagementPage,
         PaymentMethodsSettingsPage,
+        PaymentTerminalsSettingsPage,
         PayrollRedesignRoute,
         PayrollReconciliationPage,
         MetaSettingsPage,
@@ -1561,6 +1566,14 @@ class AppRouter {
           ),
         ),
         GoRoute(
+          path: '/accounting/bank-reconciliation',
+          pageBuilder: (context, state) => _buildDeferredPageWithNoTransition(
+            context,
+            state,
+            () => erp.BankReconciliationPage(),
+          ),
+        ),
+        GoRoute(
           path: '/accounting/expense-categories',
           pageBuilder: (context, state) => _buildDeferredPageWithNoTransition(
             context,
@@ -2224,12 +2237,15 @@ class AppRouter {
           path: '/chat',
           pageBuilder: (context, state) {
             final conversationId = state.uri.queryParameters['conversation'];
+            final threadRootMessageId =
+                state.uri.queryParameters['thread_root'];
             return _buildDeferredPageWithNoTransition(
               context,
               state,
               () => MainLayout(
                 child: erp.EmployeeChatPage(
                   initialConversationId: conversationId,
+                  initialThreadRootMessageId: threadRootMessageId,
                 ),
               ),
             );
@@ -2290,6 +2306,10 @@ class AppRouter {
           pageBuilder: (context, state) {
             final prepaymentParam = state.uri.queryParameters['prepayment'];
             final isPrepayment = prepaymentParam == 'true';
+            final documentKind = state.uri.queryParameters['documentKind'];
+            final draftSeed = state.extra is PurchaseInvoiceDraftSeed
+                ? state.extra! as PurchaseInvoiceDraftSeed
+                : null;
             debugPrint(
                 '🔍 DEBUG: prepayment param = "$prepaymentParam", isPrepayment = $isPrepayment');
             return _buildDeferredPageWithNoTransition(
@@ -2297,6 +2317,9 @@ class AppRouter {
               state,
               () => erp.PurchaseInvoiceFormPage(
                 isPrepayment: isPrepayment,
+                initialSourceDocumentKind:
+                    draftSeed?.sourceDocumentKind ?? documentKind,
+                initialDraftSeed: draftSeed,
                 exitGuardScope: purchaseInvoiceExitKey(state),
               ),
             );
@@ -2340,6 +2363,22 @@ class AppRouter {
           },
         ),
         GoRoute(
+          path: '/purchases/assistant',
+          pageBuilder: (context, state) => _buildDeferredPageWithNoTransition(
+            context,
+            state,
+            () => erp.IntelligentPurchasingWorkspacePage(
+              initialNeedId: state.uri.queryParameters['need'],
+              mechanicJobId: state.uri.queryParameters['job'],
+              // Llegar desde «Pedidos» abre la ficha del proveedor con ese
+              // pedido ya cargado: un folio que no se puede reabrir donde se
+              // armó obliga a rearmarlo.
+              initialSupplierId: state.uri.queryParameters['supplier'],
+              initialOrderId: state.uri.queryParameters['order'],
+            ),
+          ),
+        ),
+        GoRoute(
           path: '/purchases/smart-list',
           pageBuilder: (context, state) => _buildDeferredPageWithNoTransition(
             context,
@@ -2372,6 +2411,9 @@ class AppRouter {
               () => erp.PurchaseInvoiceFormPage(
                 invoiceId: id,
                 referrer: referrer,
+                // `?edit=true`: the list's «Editar» already said what the
+                // operator wants; the form must not ask a second time.
+                startInEditMode: state.uri.queryParameters['edit'] == 'true',
                 exitGuardScope: purchaseInvoiceExitKey(state),
               ),
             );
@@ -2579,6 +2621,18 @@ class AppRouter {
           ),
         ),
         GoRoute(
+          path: '/settings/payment-terminals',
+          pageBuilder: (context, state) => _buildDeferredPageWithNoTransition(
+            context,
+            state,
+            // Deferred page classes cannot be constructed with const.
+            // ignore: prefer_const_constructors
+            () => MainLayout(
+              child: erp.PaymentTerminalsSettingsPage(),
+            ),
+          ),
+        ),
+        GoRoute(
           path: '/settings/bluetooth-scanner',
           pageBuilder: (context, state) => _buildDeferredPageWithNoTransition(
             context,
@@ -2756,8 +2810,13 @@ class AppRouter {
                   // A deferred class cannot participate in a const expression.
                   // ignore: prefer_const_constructors
                   MainLayout(
-                title: 'Conciliar nóminas',
-                child: erp.PayrollReconciliationPage(),
+                title: 'Importar cartola',
+                child: erp.PayrollReconciliationPage(
+                  onPaymentHandoff:
+                      state.extra is PayrollPaymentWorkspaceHandoff
+                          ? state.extra as PayrollPaymentWorkspaceHandoff
+                          : null,
+                ),
               ),
             ),
           ),

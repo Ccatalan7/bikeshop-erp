@@ -66,6 +66,125 @@ void main() {
     },
   );
 
+  testWidgets('deferred catalog stays idle until the field is opened',
+      (tester) async {
+    await tester.binding.setSurfaceSize(const Size(1000, 700));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    final inventory = _RecordingInventoryService();
+    await tester.pumpWidget(
+      ChangeNotifierProvider<InventoryService>.value(
+        value: inventory,
+        child: MaterialApp(
+          home: Scaffold(
+            body: SizedBox(
+              width: 500,
+              child: ProductAutocompleteField(
+                preloadCatalog: false,
+                onProductSelected: (_) {},
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(inventory.requests, isEmpty);
+
+    await tester.tap(find.byType(TextField));
+    await tester.pumpAndSettle();
+
+    expect(inventory.requests, hasLength(1));
+    expect(inventory.requests.single.query, isEmpty);
+  });
+
+  testWidgets(
+    'external controller keeps its text and reports user edits',
+    (tester) async {
+      final inventory = _RecordingInventoryService();
+      final controller = TextEditingController(text: 'Disco de freno');
+      addTearDown(controller.dispose);
+      final changes = <String>[];
+
+      await tester.pumpWidget(
+        ChangeNotifierProvider<InventoryService>.value(
+          value: inventory,
+          child: MaterialApp(
+            home: Scaffold(
+              body: ProductAutocompleteField(
+                controller: controller,
+                preloadCatalog: false,
+                minimumSearchCharacters: 2,
+                onTextChanged: changes.add,
+                onProductSelected: (_) {},
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(controller.text, 'Disco de freno');
+      expect(find.text('Disco de freno'), findsOneWidget);
+
+      await tester.enterText(find.byType(TextField), 'Disco delantero');
+      await tester.pump();
+
+      expect(controller.text, 'Disco delantero');
+      expect(changes, ['Disco delantero']);
+    },
+  );
+
+  testWidgets(
+    'compact deferred search stays closed until the query is useful',
+    (tester) async {
+      await tester.binding.setSurfaceSize(const Size(1000, 700));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+
+      final inventory = _RecordingInventoryService();
+      await tester.pumpWidget(
+        ChangeNotifierProvider<InventoryService>.value(
+          value: inventory,
+          child: MaterialApp(
+            home: Scaffold(
+              body: Align(
+                alignment: Alignment.topLeft,
+                child: SizedBox(
+                  width: 360,
+                  child: ProductAutocompleteField(
+                    autoFocus: true,
+                    preloadCatalog: false,
+                    minimumSearchCharacters: 2,
+                    compactSuggestions: true,
+                    onProductSelected: (_) {},
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(inventory.requests, isEmpty);
+      expect(find.text('Filtros:'), findsNothing);
+
+      await tester.enterText(find.byType(TextField), 'p');
+      await tester.pump(const Duration(milliseconds: 350));
+      expect(inventory.requests, isEmpty);
+
+      await tester.enterText(find.byType(TextField), 'pi');
+      await tester.pump(const Duration(milliseconds: 350));
+      await tester.pumpAndSettle();
+
+      expect(inventory.requests.single.query, 'pi');
+      expect(find.text('Piñón de prueba'), findsOneWidget);
+      expect(find.text('Filtros:'), findsNothing);
+      expect(find.byType(FilterChip), findsNothing);
+    },
+  );
+
   testWidgets('sale picker labels but allows child products from a set',
       (tester) async {
     await tester.binding.setSurfaceSize(const Size(1000, 700));
@@ -125,6 +244,46 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Pieza de juego'), findsOneWidget);
+  });
+
+  testWidgets('locked catalog identity keeps the normal description editor',
+      (tester) async {
+    final description = TextEditingController();
+    addTearDown(description.dispose);
+    final changes = <ProductFieldSelection?>[];
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            width: 600,
+            child: SmartProductField(
+              initialData: ProductFieldData(
+                product: _setComponent,
+                productName: _setComponent.name,
+                productSku: _setComponent.sku,
+                isCatalogProduct: true,
+              ),
+              descriptionController: description,
+              canChangeProduct: false,
+              onProductChanged: changes.add,
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Freno delantero'), findsOneWidget);
+    expect(find.byIcon(Icons.close), findsNothing);
+    expect(find.byType(TextField), findsOneWidget);
+
+    await tester.enterText(find.byType(TextField), 'Componente delantero');
+    await tester.pump();
+
+    expect(description.text, 'Componente delantero');
+    expect(changes.single?.description, 'Componente delantero');
+    expect(changes.single?.product?.id, _setComponent.id);
   });
 }
 

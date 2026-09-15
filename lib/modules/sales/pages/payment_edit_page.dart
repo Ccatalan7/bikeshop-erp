@@ -488,7 +488,7 @@ class _PaymentEditPageState extends State<PaymentEditPage> {
     PaymentMethodService service,
     Payment payment,
   ) {
-    final options = [...service.paymentMethods];
+    final options = [...service.incomingPaymentMethods];
     final current = service.getPaymentMethodById(payment.paymentMethodId);
     if (current != null && !options.any((item) => item.id == current.id)) {
       options.insert(0, current);

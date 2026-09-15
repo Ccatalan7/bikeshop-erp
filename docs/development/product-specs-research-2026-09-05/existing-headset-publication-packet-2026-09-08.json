@@ -1,0 +1,2777 @@
+{
+  "schema_version": 2,
+  "scope": "existing_global_metadata_forward_only",
+  "audited_tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+  "catalog_sha256": "02968a0066cc3c51f401de205bc6dab933923b8cfe3ea4e9d2c42561f166db57",
+  "cases_sha256": "1eda457a90cf3e17c17a8c52ba420db1d755a2da47d1acc6fde342d1ad33fa75",
+  "preimage_sha256": "4112b2b4b7bbc970617aafcd0c5cca54903d7f3f82cdb1a0897959358a469131",
+  "families": [
+    "headset"
+  ],
+  "reused_definitions": [
+    {
+      "id": "75de7b40-1094-439a-950c-da205c76af48",
+      "key": "bearing_system",
+      "unit": null,
+      "label": "Sistema de Rodamientos",
+      "options": [
+        {
+          "id": "7c367ff9-2daa-459c-95ae-5aa456c80eee",
+          "code": "rodamientos_sellados",
+          "label": "Rodamientos sellados",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-08-21T17:58:02.773721+00:00",
+          "sort_order": 1,
+          "updated_at": "2026-08-21T17:58:02.773721+00:00",
+          "spec_definition_id": "75de7b40-1094-439a-950c-da205c76af48"
+        },
+        {
+          "id": "86d6747a-36b6-4a0b-a382-77fb778ab3d6",
+          "code": "bolas_sueltas",
+          "label": "Bolas sueltas",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-08-21T17:58:02.773721+00:00",
+          "sort_order": 2,
+          "updated_at": "2026-08-21T17:58:02.773721+00:00",
+          "spec_definition_id": "75de7b40-1094-439a-950c-da205c76af48"
+        },
+        {
+          "id": "c0717a3d-d5d3-44dc-8a33-1a94c0371c76",
+          "code": "mixto",
+          "label": "Mixto",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-08-21T17:58:02.773721+00:00",
+          "sort_order": 3,
+          "updated_at": "2026-08-21T17:58:02.773721+00:00",
+          "spec_definition_id": "75de7b40-1094-439a-950c-da205c76af48"
+        }
+      ],
+      "data_type": "single_select",
+      "tenant_id": null,
+      "created_at": "2026-04-20T20:47:54.99401+00:00",
+      "group_name": "Especificaciones",
+      "sort_order": 110,
+      "updated_at": "2026-04-20T20:47:54.99401+00:00",
+      "description": null,
+      "is_filterable": true,
+      "allowed_values": [
+        "Rodamientos sellados",
+        "Bolas sueltas",
+        "Mixto"
+      ],
+      "validation_rules": {},
+      "is_customer_visible": true,
+      "is_mechanic_visible": true,
+      "is_required_by_default": false,
+      "is_compatibility_relevant": false
+    },
+    {
+      "id": "9454127c-4fb8-5630-94ff-78e5ab8f6dac",
+      "key": "headset_lower_shis",
+      "unit": null,
+      "label": "Código SHIS inferior",
+      "options": [],
+      "data_type": "text",
+      "tenant_id": null,
+      "created_at": "2026-09-08T03:31:21.359847+00:00",
+      "group_name": null,
+      "sort_order": 0,
+      "updated_at": "2026-09-08T03:31:21.359847+00:00",
+      "description": null,
+      "is_filterable": false,
+      "allowed_values": [],
+      "validation_rules": {},
+      "is_customer_visible": false,
+      "is_mechanic_visible": true,
+      "is_required_by_default": false,
+      "is_compatibility_relevant": false
+    },
+    {
+      "id": "b5f274fc-6260-4715-ac4c-3dfb558e4eec",
+      "key": "headset_standard",
+      "unit": null,
+      "label": "Estándar de Dirección",
+      "options": [
+        {
+          "id": "00562a26-7214-4148-966d-58312e372a9b",
+          "code": "semi_integrado",
+          "label": "Semi-integrado",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-08-21T17:58:02.773721+00:00",
+          "sort_order": 2,
+          "updated_at": "2026-08-21T17:58:02.773721+00:00",
+          "spec_definition_id": "b5f274fc-6260-4715-ac4c-3dfb558e4eec"
+        },
+        {
+          "id": "0d884e27-9e57-47ca-adf5-c4e9644e80a8",
+          "code": "integrado",
+          "label": "Integrado",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-08-21T17:58:02.773721+00:00",
+          "sort_order": 1,
+          "updated_at": "2026-08-21T17:58:02.773721+00:00",
+          "spec_definition_id": "b5f274fc-6260-4715-ac4c-3dfb558e4eec"
+        },
+        {
+          "id": "4b8c7e4e-0618-461c-88cc-061c8a4ffc92",
+          "code": "tapered",
+          "label": "Tapered",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-08-21T17:58:02.773721+00:00",
+          "sort_order": 5,
+          "updated_at": "2026-08-21T17:58:02.773721+00:00",
+          "spec_definition_id": "b5f274fc-6260-4715-ac4c-3dfb558e4eec"
+        },
+        {
+          "id": "5e53879e-d329-46a9-8571-8e2a32e60028",
+          "code": "externo",
+          "label": "Externo",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-08-21T17:58:02.773721+00:00",
+          "sort_order": 3,
+          "updated_at": "2026-08-21T17:58:02.773721+00:00",
+          "spec_definition_id": "b5f274fc-6260-4715-ac4c-3dfb558e4eec"
+        },
+        {
+          "id": "84d10ba5-4bca-4dd9-a3f9-d613b9422b5e",
+          "code": "rosca",
+          "label": "Rosca",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-08-21T17:58:02.773721+00:00",
+          "sort_order": 4,
+          "updated_at": "2026-08-21T17:58:02.773721+00:00",
+          "spec_definition_id": "b5f274fc-6260-4715-ac4c-3dfb558e4eec"
+        }
+      ],
+      "data_type": "single_select",
+      "tenant_id": null,
+      "created_at": "2026-04-20T20:47:54.99401+00:00",
+      "group_name": "Compatibilidad",
+      "sort_order": 120,
+      "updated_at": "2026-04-20T20:47:54.99401+00:00",
+      "description": null,
+      "is_filterable": true,
+      "allowed_values": [
+        "Integrado",
+        "Semi-integrado",
+        "Externo",
+        "Rosca",
+        "Tapered"
+      ],
+      "validation_rules": {},
+      "is_customer_visible": true,
+      "is_mechanic_visible": true,
+      "is_required_by_default": false,
+      "is_compatibility_relevant": true
+    },
+    {
+      "id": "8ae147f2-a69a-55f0-b2d9-2ebce8e5f507",
+      "key": "headset_upper_shis",
+      "unit": null,
+      "label": "Código SHIS superior",
+      "options": [],
+      "data_type": "text",
+      "tenant_id": null,
+      "created_at": "2026-09-08T03:31:21.359847+00:00",
+      "group_name": null,
+      "sort_order": 0,
+      "updated_at": "2026-09-08T03:31:21.359847+00:00",
+      "description": null,
+      "is_filterable": false,
+      "allowed_values": [],
+      "validation_rules": {},
+      "is_customer_visible": false,
+      "is_mechanic_visible": true,
+      "is_required_by_default": false,
+      "is_compatibility_relevant": false
+    },
+    {
+      "id": "4f055961-6c16-430b-a4e2-e6b09dc1cccc",
+      "key": "spec_evidence_source",
+      "unit": null,
+      "label": "Fuente de la declaración",
+      "options": [],
+      "data_type": "text",
+      "tenant_id": null,
+      "created_at": "2026-09-06T06:58:57.745728+00:00",
+      "group_name": null,
+      "sort_order": 900,
+      "updated_at": "2026-09-06T06:58:57.745728+00:00",
+      "description": "URL del fabricante, manual o identificación del envase que respalda la declaración.",
+      "is_filterable": false,
+      "allowed_values": [],
+      "validation_rules": {},
+      "is_customer_visible": false,
+      "is_mechanic_visible": true,
+      "is_required_by_default": false,
+      "is_compatibility_relevant": false
+    },
+    {
+      "id": "f38b08bc-7a09-4153-a19f-125250d75101",
+      "key": "steerer_type",
+      "unit": null,
+      "label": "Tipo de Tubo de Dirección",
+      "options": [
+        {
+          "id": "2406adb7-4241-4511-bc21-0379dddddb87",
+          "code": "otro",
+          "label": "Otro",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-08-21T17:58:02.773721+00:00",
+          "sort_order": 4,
+          "updated_at": "2026-08-21T17:58:02.773721+00:00",
+          "spec_definition_id": "f38b08bc-7a09-4153-a19f-125250d75101"
+        },
+        {
+          "id": "8667c820-08bd-45ab-9368-eca4d02db950",
+          "code": "v_1",
+          "label": "1\"",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-08-21T17:58:02.773721+00:00",
+          "sort_order": 1,
+          "updated_at": "2026-08-21T17:58:02.773721+00:00",
+          "spec_definition_id": "f38b08bc-7a09-4153-a19f-125250d75101"
+        },
+        {
+          "id": "a3b1a0f3-d7a0-4785-b22b-3d208d8613aa",
+          "code": "tapered_1_1_8_1_5",
+          "label": "Tapered 1 1/8\" - 1.5\"",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-08-21T17:58:02.773721+00:00",
+          "sort_order": 3,
+          "updated_at": "2026-08-21T17:58:02.773721+00:00",
+          "spec_definition_id": "f38b08bc-7a09-4153-a19f-125250d75101"
+        },
+        {
+          "id": "b3bee03d-bd4d-4afc-afc7-fa9c16f74bc1",
+          "code": "v_1_1_8_recto",
+          "label": "1 1/8\" recto",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-08-21T17:58:02.773721+00:00",
+          "sort_order": 2,
+          "updated_at": "2026-08-21T17:58:02.773721+00:00",
+          "spec_definition_id": "f38b08bc-7a09-4153-a19f-125250d75101"
+        }
+      ],
+      "data_type": "single_select",
+      "tenant_id": null,
+      "created_at": "2026-04-20T20:47:54.99401+00:00",
+      "group_name": "Especificaciones",
+      "sort_order": 130,
+      "updated_at": "2026-04-20T20:47:54.99401+00:00",
+      "description": null,
+      "is_filterable": true,
+      "allowed_values": [
+        "1\"",
+        "1 1/8\" recto",
+        "Tapered 1 1/8\" - 1.5\"",
+        "Otro"
+      ],
+      "validation_rules": {},
+      "is_customer_visible": true,
+      "is_mechanic_visible": true,
+      "is_required_by_default": false,
+      "is_compatibility_relevant": false
+    }
+  ],
+  "records": {
+    "spec_definitions": [
+      {
+        "id": "9e4c4b60-57fd-5559-b725-ec8aa1257f1a",
+        "key": "headset_part_scope",
+        "label": "Partes de dirección incluidas",
+        "data_type": "single_select",
+        "unit": null,
+        "allowed_values": [
+          "Superior",
+          "Inferior",
+          "Completa",
+          "Desconocido / sin confirmar"
+        ],
+        "validation_rules": {},
+        "tenant_id": null,
+        "is_customer_visible": false,
+        "is_compatibility_relevant": false,
+        "description": null,
+        "is_filterable": false,
+        "is_required_by_default": false,
+        "is_mechanic_visible": true,
+        "group_name": null,
+        "sort_order": 0
+      },
+      {
+        "id": "4fa524b7-b848-515a-ac0f-e58a42df6e17",
+        "key": "crown_race_included",
+        "label": "Incluye pista de corona",
+        "data_type": "boolean",
+        "unit": null,
+        "allowed_values": [],
+        "validation_rules": {},
+        "tenant_id": null,
+        "is_customer_visible": false,
+        "is_compatibility_relevant": false,
+        "description": null,
+        "is_filterable": false,
+        "is_required_by_default": false,
+        "is_mechanic_visible": true,
+        "group_name": null,
+        "sort_order": 0
+      },
+      {
+        "id": "52f39247-a5c0-5489-b73c-b5317a768302",
+        "key": "headset_upper_bearing_configuration",
+        "label": "Rodamiento superior",
+        "data_type": "json",
+        "unit": null,
+        "allowed_values": [],
+        "validation_rules": {
+          "rows_schema": {
+            "version": 2,
+            "columns": [
+              {
+                "key": "position",
+                "label": "Extremo",
+                "type": "token",
+                "required": true,
+                "allowed_values": [
+                  "Superior"
+                ]
+              },
+              {
+                "key": "construction",
+                "label": "Construcción",
+                "type": "token",
+                "required": true,
+                "allowed_values": [
+                  "Cartucho",
+                  "Bolas sueltas",
+                  "Canastillo con bolas",
+                  "Otro",
+                  "Desconocido / sin confirmar"
+                ]
+              },
+              {
+                "key": "seat_geometry",
+                "label": "Geometría de apoyo del cartucho",
+                "type": "token",
+                "allowed_values": [
+                  "Biseles interior y exterior",
+                  "Sólo bisel interior",
+                  "Sólo bisel exterior",
+                  "Sin biseles de apoyo",
+                  "Otro",
+                  "Desconocido / sin confirmar"
+                ]
+              },
+              {
+                "key": "inner_contact_angle_deg",
+                "label": "Ángulo del bisel interior",
+                "type": "decimal",
+                "unit": "°",
+                "validation": {
+                  "positive": true,
+                  "max": "90"
+                }
+              },
+              {
+                "key": "outer_contact_angle_deg",
+                "label": "Ángulo del bisel exterior",
+                "type": "decimal",
+                "unit": "°",
+                "validation": {
+                  "positive": true,
+                  "max": "90"
+                }
+              },
+              {
+                "key": "bearing_outer_diameter_mm",
+                "label": "Diámetro exterior",
+                "type": "decimal",
+                "unit": "mm",
+                "validation": {
+                  "positive": true
+                }
+              },
+              {
+                "key": "bearing_inner_diameter_mm",
+                "label": "Diámetro interior",
+                "type": "decimal",
+                "unit": "mm",
+                "validation": {
+                  "positive": true
+                }
+              },
+              {
+                "key": "bearing_height_mm",
+                "label": "Altura",
+                "type": "decimal",
+                "unit": "mm",
+                "validation": {
+                  "positive": true
+                }
+              },
+              {
+                "key": "bearing_reference",
+                "label": "Referencia del rodamiento",
+                "type": "text"
+              },
+              {
+                "key": "source_url",
+                "label": "Fuente",
+                "type": "url"
+              },
+              {
+                "key": "ball_count",
+                "label": "Bolas de este conjunto",
+                "type": "integer",
+                "validation": {
+                  "positive": true
+                }
+              },
+              {
+                "key": "ball_diameter_mm",
+                "label": "Diámetro de bola",
+                "type": "decimal",
+                "unit": "mm",
+                "validation": {
+                  "positive": true
+                }
+              },
+              {
+                "key": "source_document",
+                "label": "Documento, envase o referencia del conjunto",
+                "type": "text",
+                "required": true
+              }
+            ],
+            "unique_by": [
+              [
+                "position"
+              ]
+            ],
+            "strict_ordered_pairs": [
+              [
+                "bearing_inner_diameter_mm",
+                "bearing_outer_diameter_mm"
+              ]
+            ]
+          }
+        },
+        "tenant_id": null,
+        "is_customer_visible": false,
+        "is_compatibility_relevant": false,
+        "description": null,
+        "is_filterable": false,
+        "is_required_by_default": false,
+        "is_mechanic_visible": true,
+        "group_name": null,
+        "sort_order": 0
+      },
+      {
+        "id": "bc7f6b18-7729-5429-a8c1-968e578f92ba",
+        "key": "headset_upper_stack_height_mm",
+        "label": "Altura instalada superior",
+        "data_type": "number",
+        "unit": "mm",
+        "allowed_values": [],
+        "validation_rules": {
+          "min": "0"
+        },
+        "tenant_id": null,
+        "is_customer_visible": false,
+        "is_compatibility_relevant": false,
+        "description": null,
+        "is_filterable": false,
+        "is_required_by_default": false,
+        "is_mechanic_visible": true,
+        "group_name": null,
+        "sort_order": 0
+      },
+      {
+        "id": "8f8e35c0-fe8f-5b80-8b2c-992269049564",
+        "key": "headset_lower_bearing_configuration",
+        "label": "Rodamiento inferior",
+        "data_type": "json",
+        "unit": null,
+        "allowed_values": [],
+        "validation_rules": {
+          "rows_schema": {
+            "version": 2,
+            "columns": [
+              {
+                "key": "position",
+                "label": "Extremo",
+                "type": "token",
+                "required": true,
+                "allowed_values": [
+                  "Inferior"
+                ]
+              },
+              {
+                "key": "construction",
+                "label": "Construcción",
+                "type": "token",
+                "required": true,
+                "allowed_values": [
+                  "Cartucho",
+                  "Bolas sueltas",
+                  "Canastillo con bolas",
+                  "Otro",
+                  "Desconocido / sin confirmar"
+                ]
+              },
+              {
+                "key": "seat_geometry",
+                "label": "Geometría de apoyo del cartucho",
+                "type": "token",
+                "allowed_values": [
+                  "Biseles interior y exterior",
+                  "Sólo bisel interior",
+                  "Sólo bisel exterior",
+                  "Sin biseles de apoyo",
+                  "Otro",
+                  "Desconocido / sin confirmar"
+                ]
+              },
+              {
+                "key": "inner_contact_angle_deg",
+                "label": "Ángulo del bisel interior",
+                "type": "decimal",
+                "unit": "°",
+                "validation": {
+                  "positive": true,
+                  "max": "90"
+                }
+              },
+              {
+                "key": "outer_contact_angle_deg",
+                "label": "Ángulo del bisel exterior",
+                "type": "decimal",
+                "unit": "°",
+                "validation": {
+                  "positive": true,
+                  "max": "90"
+                }
+              },
+              {
+                "key": "bearing_outer_diameter_mm",
+                "label": "Diámetro exterior",
+                "type": "decimal",
+                "unit": "mm",
+                "validation": {
+                  "positive": true
+                }
+              },
+              {
+                "key": "bearing_inner_diameter_mm",
+                "label": "Diámetro interior",
+                "type": "decimal",
+                "unit": "mm",
+                "validation": {
+                  "positive": true
+                }
+              },
+              {
+                "key": "bearing_height_mm",
+                "label": "Altura",
+                "type": "decimal",
+                "unit": "mm",
+                "validation": {
+                  "positive": true
+                }
+              },
+              {
+                "key": "bearing_reference",
+                "label": "Referencia del rodamiento",
+                "type": "text"
+              },
+              {
+                "key": "source_url",
+                "label": "Fuente",
+                "type": "url"
+              },
+              {
+                "key": "ball_count",
+                "label": "Bolas de este conjunto",
+                "type": "integer",
+                "validation": {
+                  "positive": true
+                }
+              },
+              {
+                "key": "ball_diameter_mm",
+                "label": "Diámetro de bola",
+                "type": "decimal",
+                "unit": "mm",
+                "validation": {
+                  "positive": true
+                }
+              },
+              {
+                "key": "source_document",
+                "label": "Documento, envase o referencia del conjunto",
+                "type": "text",
+                "required": true
+              }
+            ],
+            "unique_by": [
+              [
+                "position"
+              ]
+            ],
+            "strict_ordered_pairs": [
+              [
+                "bearing_inner_diameter_mm",
+                "bearing_outer_diameter_mm"
+              ]
+            ]
+          }
+        },
+        "tenant_id": null,
+        "is_customer_visible": false,
+        "is_compatibility_relevant": false,
+        "description": null,
+        "is_filterable": false,
+        "is_required_by_default": false,
+        "is_mechanic_visible": true,
+        "group_name": null,
+        "sort_order": 0
+      },
+      {
+        "id": "421f6cb3-c995-57f9-b534-a6658a11822f",
+        "key": "headset_lower_stack_height_mm",
+        "label": "Altura instalada inferior",
+        "data_type": "number",
+        "unit": "mm",
+        "allowed_values": [],
+        "validation_rules": {
+          "min": "0"
+        },
+        "tenant_id": null,
+        "is_customer_visible": false,
+        "is_compatibility_relevant": false,
+        "description": null,
+        "is_filterable": false,
+        "is_required_by_default": false,
+        "is_mechanic_visible": true,
+        "group_name": null,
+        "sort_order": 0
+      },
+      {
+        "id": "2cd52bde-c5d9-5278-8f48-7219d38d221c",
+        "key": "headset_supplied_crown_race_reference",
+        "label": "Pista de corona incluida",
+        "data_type": "text",
+        "unit": null,
+        "allowed_values": [],
+        "validation_rules": {},
+        "tenant_id": null,
+        "is_customer_visible": false,
+        "is_compatibility_relevant": false,
+        "description": null,
+        "is_filterable": false,
+        "is_required_by_default": false,
+        "is_mechanic_visible": true,
+        "group_name": null,
+        "sort_order": 0
+      }
+    ],
+    "spec_definition_values": [
+      {
+        "id": "5121852c-9066-5fa3-b800-3b89bbeb30f2",
+        "tenant_id": null,
+        "spec_definition_id": "9e4c4b60-57fd-5559-b725-ec8aa1257f1a",
+        "code": "catalog_64dbb87794fbe7f587582b27d08ace2b",
+        "label": "Superior",
+        "sort_order": 0,
+        "is_active": true
+      },
+      {
+        "id": "17f1e3a5-9859-5108-9c5d-8baf64d34383",
+        "tenant_id": null,
+        "spec_definition_id": "9e4c4b60-57fd-5559-b725-ec8aa1257f1a",
+        "code": "catalog_b5e2299a2eabcc8fbba9a826454799d2",
+        "label": "Inferior",
+        "sort_order": 1,
+        "is_active": true
+      },
+      {
+        "id": "53686a33-3db3-5e71-8062-eadc2e565ef6",
+        "tenant_id": null,
+        "spec_definition_id": "9e4c4b60-57fd-5559-b725-ec8aa1257f1a",
+        "code": "catalog_f9dc2d29f6e3a84b1959cc2565806d1e",
+        "label": "Completa",
+        "sort_order": 2,
+        "is_active": true
+      },
+      {
+        "id": "205c1613-f7e9-5199-9772-2afcc9b35034",
+        "tenant_id": null,
+        "spec_definition_id": "9e4c4b60-57fd-5559-b725-ec8aa1257f1a",
+        "code": "catalog_de6e897b1c6ced32e6762f3ceaebffd6",
+        "label": "Desconocido / sin confirmar",
+        "sort_order": 3,
+        "is_active": true
+      }
+    ],
+    "spec_templates": [
+      {
+        "id": "f55b7846-c3df-45ba-b4b7-ac55970db612",
+        "key": "headset",
+        "name": "Juego de Dirección",
+        "is_active": true,
+        "tenant_id": null,
+        "created_at": "2026-04-20T20:47:55.193543+00:00",
+        "description": "Headsets con estándar y tipo de tubo de dirección",
+        "default_tags": [],
+        "form_contract": {
+          "rules_version": 2,
+          "roles": {
+            "headset_part_scope": "primary",
+            "headset_upper_shis": "measurement",
+            "headset_lower_shis": "measurement",
+            "headset_standard": "legacy",
+            "steerer_type": "legacy",
+            "bearing_system": "legacy",
+            "crown_race_included": "contents",
+            "spec_evidence_source": "declaration",
+            "headset_upper_bearing_configuration": "measurement",
+            "headset_upper_stack_height_mm": "measurement",
+            "headset_lower_bearing_configuration": "measurement",
+            "headset_lower_stack_height_mm": "measurement",
+            "headset_supplied_crown_race_reference": "contents"
+          },
+          "semantic_roles": {
+            "headset_part_scope": "intrinsic",
+            "headset_upper_shis": "compatibility",
+            "headset_lower_shis": "compatibility",
+            "headset_standard": "legacy",
+            "steerer_type": "legacy",
+            "bearing_system": "legacy",
+            "crown_race_included": "contents",
+            "spec_evidence_source": "evidence",
+            "headset_upper_bearing_configuration": "compatibility",
+            "headset_upper_stack_height_mm": "compatibility",
+            "headset_lower_bearing_configuration": "compatibility",
+            "headset_lower_stack_height_mm": "compatibility",
+            "headset_supplied_crown_race_reference": "contents"
+          },
+          "labels": {},
+          "allowed_when": {
+            "headset_part_scope": {
+              "kind": "always"
+            },
+            "headset_upper_shis": {
+              "kind": "when",
+              "rows": [
+                [
+                  {
+                    "field": "headset_part_scope",
+                    "operator": "in",
+                    "value_type": "token",
+                    "value": [
+                      "Superior",
+                      "Completa"
+                    ]
+                  }
+                ]
+              ]
+            },
+            "headset_lower_shis": {
+              "kind": "when",
+              "rows": [
+                [
+                  {
+                    "field": "headset_part_scope",
+                    "operator": "in",
+                    "value_type": "token",
+                    "value": [
+                      "Inferior",
+                      "Completa"
+                    ]
+                  }
+                ]
+              ]
+            },
+            "headset_standard": {
+              "kind": "never"
+            },
+            "steerer_type": {
+              "kind": "never"
+            },
+            "bearing_system": {
+              "kind": "never"
+            },
+            "crown_race_included": {
+              "kind": "always"
+            },
+            "spec_evidence_source": {
+              "kind": "always"
+            },
+            "headset_upper_bearing_configuration": {
+              "kind": "when",
+              "rows": [
+                [
+                  {
+                    "field": "headset_part_scope",
+                    "operator": "in",
+                    "value_type": "token",
+                    "value": [
+                      "Superior",
+                      "Completa"
+                    ]
+                  }
+                ]
+              ]
+            },
+            "headset_upper_stack_height_mm": {
+              "kind": "when",
+              "rows": [
+                [
+                  {
+                    "field": "headset_part_scope",
+                    "operator": "in",
+                    "value_type": "token",
+                    "value": [
+                      "Superior",
+                      "Completa"
+                    ]
+                  }
+                ]
+              ]
+            },
+            "headset_lower_bearing_configuration": {
+              "kind": "when",
+              "rows": [
+                [
+                  {
+                    "field": "headset_part_scope",
+                    "operator": "in",
+                    "value_type": "token",
+                    "value": [
+                      "Inferior",
+                      "Completa"
+                    ]
+                  }
+                ]
+              ]
+            },
+            "headset_lower_stack_height_mm": {
+              "kind": "when",
+              "rows": [
+                [
+                  {
+                    "field": "headset_part_scope",
+                    "operator": "in",
+                    "value_type": "token",
+                    "value": [
+                      "Inferior",
+                      "Completa"
+                    ]
+                  }
+                ]
+              ]
+            },
+            "headset_supplied_crown_race_reference": {
+              "kind": "when",
+              "rows": [
+                [
+                  {
+                    "field": "crown_race_included",
+                    "operator": "eq",
+                    "value_type": "boolean",
+                    "value": true
+                  }
+                ]
+              ]
+            }
+          },
+          "required_when": {
+            "headset_part_scope": {
+              "kind": "always"
+            },
+            "headset_upper_shis": {
+              "kind": "when",
+              "rows": [
+                [
+                  {
+                    "field": "headset_part_scope",
+                    "operator": "in",
+                    "value_type": "token",
+                    "value": [
+                      "Superior",
+                      "Completa"
+                    ]
+                  }
+                ]
+              ]
+            },
+            "headset_lower_shis": {
+              "kind": "when",
+              "rows": [
+                [
+                  {
+                    "field": "headset_part_scope",
+                    "operator": "in",
+                    "value_type": "token",
+                    "value": [
+                      "Inferior",
+                      "Completa"
+                    ]
+                  }
+                ]
+              ]
+            },
+            "headset_standard": {
+              "kind": "never"
+            },
+            "steerer_type": {
+              "kind": "never"
+            },
+            "bearing_system": {
+              "kind": "never"
+            },
+            "crown_race_included": {
+              "kind": "always"
+            },
+            "spec_evidence_source": {
+              "kind": "always"
+            },
+            "headset_upper_bearing_configuration": {
+              "kind": "when",
+              "rows": [
+                [
+                  {
+                    "field": "headset_part_scope",
+                    "operator": "in",
+                    "value_type": "token",
+                    "value": [
+                      "Superior",
+                      "Completa"
+                    ]
+                  }
+                ]
+              ]
+            },
+            "headset_upper_stack_height_mm": {
+              "kind": "never"
+            },
+            "headset_lower_bearing_configuration": {
+              "kind": "when",
+              "rows": [
+                [
+                  {
+                    "field": "headset_part_scope",
+                    "operator": "in",
+                    "value_type": "token",
+                    "value": [
+                      "Inferior",
+                      "Completa"
+                    ]
+                  }
+                ]
+              ]
+            },
+            "headset_lower_stack_height_mm": {
+              "kind": "never"
+            },
+            "headset_supplied_crown_race_reference": {
+              "kind": "when",
+              "rows": [
+                [
+                  {
+                    "field": "crown_race_included",
+                    "operator": "eq",
+                    "value_type": "boolean",
+                    "value": true
+                  }
+                ]
+              ]
+            }
+          },
+          "allowed_options": {},
+          "prerequisites": {
+            "headset_upper_shis": [
+              "spec_evidence_source"
+            ],
+            "headset_upper_stack_height_mm": [
+              "spec_evidence_source"
+            ],
+            "headset_lower_shis": [
+              "spec_evidence_source"
+            ],
+            "headset_lower_stack_height_mm": [
+              "spec_evidence_source"
+            ],
+            "headset_supplied_crown_race_reference": [
+              "spec_evidence_source"
+            ]
+          },
+          "helpers": {
+            "headset_part_scope": "Extremos de dirección que contiene esta variante. Los códigos y rodamientos superiores e inferiores conservan su dueño.",
+            "headset_upper_shis": "Código SHIS publicado para este extremo. Sus números son códigos nominales, no dimensiones medidas ni una tolerancia universal. No se infiere el código desde una medida aislada del nombre.",
+            "headset_upper_bearing_configuration": "Datos del conjunto de este extremo; no son una lista de otros modelos posibles. La falta de fuente queda pendiente.",
+            "headset_upper_stack_height_mm": "Altura instalada de este extremo, según el datum OEM. No sumar piezas sueltas ni copiar la altura total del juego.",
+            "headset_lower_shis": "Código SHIS publicado para este extremo. Sus números son códigos nominales, no dimensiones medidas ni una tolerancia universal. No se infiere el código desde una medida aislada del nombre.",
+            "headset_lower_bearing_configuration": "Datos del conjunto de este extremo; no son una lista de otros modelos posibles. La falta de fuente queda pendiente.",
+            "headset_lower_stack_height_mm": "Altura instalada de este extremo, según el datum OEM. No sumar piezas sueltas ni copiar la altura total del juego.",
+            "headset_supplied_crown_race_reference": "Identidad declarada de la pieza incluida. El asiento de la horquilla es otra propiedad; no se rellena a partir de esta referencia."
+          },
+          "evidence_requirements": {
+            "headset_part_scope": "oem_or_package",
+            "headset_upper_shis": "oem_or_package",
+            "headset_lower_shis": "oem_or_package",
+            "headset_standard": "name_reading_hint_only",
+            "steerer_type": "name_reading_hint_only",
+            "bearing_system": "package_or_label",
+            "crown_race_included": "package_or_label",
+            "spec_evidence_source": "oem_or_package",
+            "headset_upper_bearing_configuration": "oem_or_package",
+            "headset_upper_stack_height_mm": "oem_or_package",
+            "headset_lower_bearing_configuration": "oem_or_package",
+            "headset_lower_stack_height_mm": "oem_or_package",
+            "headset_supplied_crown_race_reference": "oem_or_package"
+          },
+          "row_conditions": {
+            "version": 1,
+            "fields": {
+              "headset_upper_bearing_configuration": {
+                "allowed_when": {
+                  "seat_geometry": {
+                    "kind": "when",
+                    "rows": [
+                      [
+                        {
+                          "field": "construction",
+                          "operator": "eq",
+                          "value_type": "token",
+                          "value": "Cartucho"
+                        }
+                      ]
+                    ]
+                  },
+                  "inner_contact_angle_deg": {
+                    "kind": "when",
+                    "rows": [
+                      [
+                        {
+                          "field": "construction",
+                          "operator": "eq",
+                          "value_type": "token",
+                          "value": "Cartucho"
+                        },
+                        {
+                          "field": "seat_geometry",
+                          "operator": "in",
+                          "value_type": "token",
+                          "value": [
+                            "Biseles interior y exterior",
+                            "Sólo bisel interior"
+                          ]
+                        }
+                      ]
+                    ]
+                  },
+                  "outer_contact_angle_deg": {
+                    "kind": "when",
+                    "rows": [
+                      [
+                        {
+                          "field": "construction",
+                          "operator": "eq",
+                          "value_type": "token",
+                          "value": "Cartucho"
+                        },
+                        {
+                          "field": "seat_geometry",
+                          "operator": "in",
+                          "value_type": "token",
+                          "value": [
+                            "Biseles interior y exterior",
+                            "Sólo bisel exterior"
+                          ]
+                        }
+                      ]
+                    ]
+                  },
+                  "bearing_inner_diameter_mm": {
+                    "kind": "when",
+                    "rows": [
+                      [
+                        {
+                          "field": "construction",
+                          "operator": "in",
+                          "value_type": "token",
+                          "value": [
+                            "Cartucho",
+                            "Canastillo con bolas"
+                          ]
+                        }
+                      ]
+                    ]
+                  },
+                  "bearing_outer_diameter_mm": {
+                    "kind": "when",
+                    "rows": [
+                      [
+                        {
+                          "field": "construction",
+                          "operator": "in",
+                          "value_type": "token",
+                          "value": [
+                            "Cartucho",
+                            "Canastillo con bolas"
+                          ]
+                        }
+                      ]
+                    ]
+                  },
+                  "bearing_height_mm": {
+                    "kind": "when",
+                    "rows": [
+                      [
+                        {
+                          "field": "construction",
+                          "operator": "in",
+                          "value_type": "token",
+                          "value": [
+                            "Cartucho",
+                            "Canastillo con bolas"
+                          ]
+                        }
+                      ]
+                    ]
+                  },
+                  "ball_count": {
+                    "kind": "when",
+                    "rows": [
+                      [
+                        {
+                          "field": "construction",
+                          "operator": "in",
+                          "value_type": "token",
+                          "value": [
+                            "Bolas sueltas",
+                            "Canastillo con bolas"
+                          ]
+                        }
+                      ]
+                    ]
+                  },
+                  "ball_diameter_mm": {
+                    "kind": "when",
+                    "rows": [
+                      [
+                        {
+                          "field": "construction",
+                          "operator": "in",
+                          "value_type": "token",
+                          "value": [
+                            "Bolas sueltas",
+                            "Canastillo con bolas"
+                          ]
+                        }
+                      ]
+                    ]
+                  }
+                },
+                "required_when": {
+                  "inner_contact_angle_deg": {
+                    "kind": "when",
+                    "rows": [
+                      [
+                        {
+                          "field": "construction",
+                          "operator": "eq",
+                          "value_type": "token",
+                          "value": "Cartucho"
+                        },
+                        {
+                          "field": "seat_geometry",
+                          "operator": "in",
+                          "value_type": "token",
+                          "value": [
+                            "Biseles interior y exterior",
+                            "Sólo bisel interior"
+                          ]
+                        }
+                      ]
+                    ]
+                  },
+                  "outer_contact_angle_deg": {
+                    "kind": "when",
+                    "rows": [
+                      [
+                        {
+                          "field": "construction",
+                          "operator": "eq",
+                          "value_type": "token",
+                          "value": "Cartucho"
+                        },
+                        {
+                          "field": "seat_geometry",
+                          "operator": "in",
+                          "value_type": "token",
+                          "value": [
+                            "Biseles interior y exterior",
+                            "Sólo bisel exterior"
+                          ]
+                        }
+                      ]
+                    ]
+                  },
+                  "ball_count": {
+                    "kind": "when",
+                    "rows": [
+                      [
+                        {
+                          "field": "construction",
+                          "operator": "in",
+                          "value_type": "token",
+                          "value": [
+                            "Bolas sueltas",
+                            "Canastillo con bolas"
+                          ]
+                        }
+                      ]
+                    ]
+                  },
+                  "ball_diameter_mm": {
+                    "kind": "when",
+                    "rows": [
+                      [
+                        {
+                          "field": "construction",
+                          "operator": "in",
+                          "value_type": "token",
+                          "value": [
+                            "Bolas sueltas",
+                            "Canastillo con bolas"
+                          ]
+                        }
+                      ]
+                    ]
+                  },
+                  "seat_geometry": {
+                    "kind": "when",
+                    "rows": [
+                      [
+                        {
+                          "field": "construction",
+                          "operator": "eq",
+                          "value_type": "token",
+                          "value": "Cartucho"
+                        }
+                      ]
+                    ]
+                  }
+                },
+                "allowed_options": {}
+              },
+              "headset_lower_bearing_configuration": {
+                "allowed_when": {
+                  "seat_geometry": {
+                    "kind": "when",
+                    "rows": [
+                      [
+                        {
+                          "field": "construction",
+                          "operator": "eq",
+                          "value_type": "token",
+                          "value": "Cartucho"
+                        }
+                      ]
+                    ]
+                  },
+                  "inner_contact_angle_deg": {
+                    "kind": "when",
+                    "rows": [
+                      [
+                        {
+                          "field": "construction",
+                          "operator": "eq",
+                          "value_type": "token",
+                          "value": "Cartucho"
+                        },
+                        {
+                          "field": "seat_geometry",
+                          "operator": "in",
+                          "value_type": "token",
+                          "value": [
+                            "Biseles interior y exterior",
+                            "Sólo bisel interior"
+                          ]
+                        }
+                      ]
+                    ]
+                  },
+                  "outer_contact_angle_deg": {
+                    "kind": "when",
+                    "rows": [
+                      [
+                        {
+                          "field": "construction",
+                          "operator": "eq",
+                          "value_type": "token",
+                          "value": "Cartucho"
+                        },
+                        {
+                          "field": "seat_geometry",
+                          "operator": "in",
+                          "value_type": "token",
+                          "value": [
+                            "Biseles interior y exterior",
+                            "Sólo bisel exterior"
+                          ]
+                        }
+                      ]
+                    ]
+                  },
+                  "bearing_inner_diameter_mm": {
+                    "kind": "when",
+                    "rows": [
+                      [
+                        {
+                          "field": "construction",
+                          "operator": "in",
+                          "value_type": "token",
+                          "value": [
+                            "Cartucho",
+                            "Canastillo con bolas"
+                          ]
+                        }
+                      ]
+                    ]
+                  },
+                  "bearing_outer_diameter_mm": {
+                    "kind": "when",
+                    "rows": [
+                      [
+                        {
+                          "field": "construction",
+                          "operator": "in",
+                          "value_type": "token",
+                          "value": [
+                            "Cartucho",
+                            "Canastillo con bolas"
+                          ]
+                        }
+                      ]
+                    ]
+                  },
+                  "bearing_height_mm": {
+                    "kind": "when",
+                    "rows": [
+                      [
+                        {
+                          "field": "construction",
+                          "operator": "in",
+                          "value_type": "token",
+                          "value": [
+                            "Cartucho",
+                            "Canastillo con bolas"
+                          ]
+                        }
+                      ]
+                    ]
+                  },
+                  "ball_count": {
+                    "kind": "when",
+                    "rows": [
+                      [
+                        {
+                          "field": "construction",
+                          "operator": "in",
+                          "value_type": "token",
+                          "value": [
+                            "Bolas sueltas",
+                            "Canastillo con bolas"
+                          ]
+                        }
+                      ]
+                    ]
+                  },
+                  "ball_diameter_mm": {
+                    "kind": "when",
+                    "rows": [
+                      [
+                        {
+                          "field": "construction",
+                          "operator": "in",
+                          "value_type": "token",
+                          "value": [
+                            "Bolas sueltas",
+                            "Canastillo con bolas"
+                          ]
+                        }
+                      ]
+                    ]
+                  }
+                },
+                "required_when": {
+                  "inner_contact_angle_deg": {
+                    "kind": "when",
+                    "rows": [
+                      [
+                        {
+                          "field": "construction",
+                          "operator": "eq",
+                          "value_type": "token",
+                          "value": "Cartucho"
+                        },
+                        {
+                          "field": "seat_geometry",
+                          "operator": "in",
+                          "value_type": "token",
+                          "value": [
+                            "Biseles interior y exterior",
+                            "Sólo bisel interior"
+                          ]
+                        }
+                      ]
+                    ]
+                  },
+                  "outer_contact_angle_deg": {
+                    "kind": "when",
+                    "rows": [
+                      [
+                        {
+                          "field": "construction",
+                          "operator": "eq",
+                          "value_type": "token",
+                          "value": "Cartucho"
+                        },
+                        {
+                          "field": "seat_geometry",
+                          "operator": "in",
+                          "value_type": "token",
+                          "value": [
+                            "Biseles interior y exterior",
+                            "Sólo bisel exterior"
+                          ]
+                        }
+                      ]
+                    ]
+                  },
+                  "ball_count": {
+                    "kind": "when",
+                    "rows": [
+                      [
+                        {
+                          "field": "construction",
+                          "operator": "in",
+                          "value_type": "token",
+                          "value": [
+                            "Bolas sueltas",
+                            "Canastillo con bolas"
+                          ]
+                        }
+                      ]
+                    ]
+                  },
+                  "ball_diameter_mm": {
+                    "kind": "when",
+                    "rows": [
+                      [
+                        {
+                          "field": "construction",
+                          "operator": "in",
+                          "value_type": "token",
+                          "value": [
+                            "Bolas sueltas",
+                            "Canastillo con bolas"
+                          ]
+                        }
+                      ]
+                    ]
+                  },
+                  "seat_geometry": {
+                    "kind": "when",
+                    "rows": [
+                      [
+                        {
+                          "field": "construction",
+                          "operator": "eq",
+                          "value_type": "token",
+                          "value": "Cartucho"
+                        }
+                      ]
+                    ]
+                  }
+                },
+                "allowed_options": {}
+              }
+            }
+          }
+        },
+        "contract_version": 16,
+        "technical_family": "headset"
+      }
+    ],
+    "spec_template_fields": [
+      {
+        "section_key": "primary",
+        "sort_order": 0,
+        "is_required": false,
+        "visibility_rules": [],
+        "option_rules": [],
+        "constraint_rules": [],
+        "id": "e7f15403-c5c4-595e-a9c3-d4e23d3f2699",
+        "tenant_id": null,
+        "template_id": "f55b7846-c3df-45ba-b4b7-ac55970db612",
+        "spec_definition_id": "9e4c4b60-57fd-5559-b725-ec8aa1257f1a",
+        "default_value_json": null,
+        "helper_text": null
+      },
+      {
+        "section_key": "measurement",
+        "sort_order": 10,
+        "is_required": false,
+        "visibility_rules": [],
+        "option_rules": [],
+        "constraint_rules": [],
+        "id": "a0e24355-b9a0-5e45-8718-beaac1c4ac43",
+        "tenant_id": null,
+        "template_id": "f55b7846-c3df-45ba-b4b7-ac55970db612",
+        "spec_definition_id": "8ae147f2-a69a-55f0-b2d9-2ebce8e5f507",
+        "default_value_json": null,
+        "helper_text": null
+      },
+      {
+        "section_key": "measurement",
+        "sort_order": 20,
+        "is_required": false,
+        "visibility_rules": [],
+        "option_rules": [],
+        "constraint_rules": [],
+        "id": "c511d836-717c-56b3-9d6c-bd2359e94d6e",
+        "tenant_id": null,
+        "template_id": "f55b7846-c3df-45ba-b4b7-ac55970db612",
+        "spec_definition_id": "9454127c-4fb8-5630-94ff-78e5ab8f6dac",
+        "default_value_json": null,
+        "helper_text": null
+      },
+      {
+        "id": "e33cc7fe-c7bc-4982-b855-8d3979315ec9",
+        "tenant_id": null,
+        "created_at": "2026-04-20T20:47:55.39882+00:00",
+        "sort_order": 30,
+        "helper_text": null,
+        "is_required": false,
+        "section_key": "legacy",
+        "template_id": "f55b7846-c3df-45ba-b4b7-ac55970db612",
+        "option_rules": [],
+        "constraint_rules": [],
+        "visibility_rules": [],
+        "default_value_json": null,
+        "spec_definition_id": "b5f274fc-6260-4715-ac4c-3dfb558e4eec"
+      },
+      {
+        "id": "284afd10-26ff-4a01-a9e7-36f37e8e97c0",
+        "tenant_id": null,
+        "created_at": "2026-04-20T20:47:55.39882+00:00",
+        "sort_order": 40,
+        "helper_text": null,
+        "is_required": false,
+        "section_key": "legacy",
+        "template_id": "f55b7846-c3df-45ba-b4b7-ac55970db612",
+        "option_rules": [],
+        "constraint_rules": [],
+        "visibility_rules": [],
+        "default_value_json": null,
+        "spec_definition_id": "f38b08bc-7a09-4153-a19f-125250d75101"
+      },
+      {
+        "id": "cd764858-c8ad-4b92-97d2-a0999eb28374",
+        "tenant_id": null,
+        "created_at": "2026-04-20T20:47:55.39882+00:00",
+        "sort_order": 70,
+        "helper_text": null,
+        "is_required": false,
+        "section_key": "legacy",
+        "template_id": "f55b7846-c3df-45ba-b4b7-ac55970db612",
+        "option_rules": [],
+        "constraint_rules": [],
+        "visibility_rules": [],
+        "default_value_json": null,
+        "spec_definition_id": "75de7b40-1094-439a-950c-da205c76af48"
+      },
+      {
+        "section_key": "contents",
+        "sort_order": 80,
+        "is_required": false,
+        "visibility_rules": [],
+        "option_rules": [],
+        "constraint_rules": [],
+        "id": "646357c6-91bb-5a5d-a042-018eb33ffe31",
+        "tenant_id": null,
+        "template_id": "f55b7846-c3df-45ba-b4b7-ac55970db612",
+        "spec_definition_id": "4fa524b7-b848-515a-ac0f-e58a42df6e17",
+        "default_value_json": null,
+        "helper_text": null
+      },
+      {
+        "id": "785c0b74-f99b-4e79-850a-9f2f10f50a12",
+        "tenant_id": null,
+        "created_at": "2026-09-06T06:58:57.745728+00:00",
+        "sort_order": 90,
+        "helper_text": null,
+        "is_required": false,
+        "section_key": "declaration",
+        "template_id": "f55b7846-c3df-45ba-b4b7-ac55970db612",
+        "option_rules": [],
+        "constraint_rules": [],
+        "visibility_rules": [],
+        "default_value_json": null,
+        "spec_definition_id": "4f055961-6c16-430b-a4e2-e6b09dc1cccc"
+      },
+      {
+        "section_key": "measurement",
+        "sort_order": 100,
+        "is_required": false,
+        "visibility_rules": [],
+        "option_rules": [],
+        "constraint_rules": [],
+        "id": "e552d9af-f3d4-543e-9a26-53b79212fb28",
+        "tenant_id": null,
+        "template_id": "f55b7846-c3df-45ba-b4b7-ac55970db612",
+        "spec_definition_id": "52f39247-a5c0-5489-b73c-b5317a768302",
+        "default_value_json": null,
+        "helper_text": null
+      },
+      {
+        "section_key": "measurement",
+        "sort_order": 110,
+        "is_required": false,
+        "visibility_rules": [],
+        "option_rules": [],
+        "constraint_rules": [],
+        "id": "cf875d5d-6043-5790-8065-c6517bcd4589",
+        "tenant_id": null,
+        "template_id": "f55b7846-c3df-45ba-b4b7-ac55970db612",
+        "spec_definition_id": "bc7f6b18-7729-5429-a8c1-968e578f92ba",
+        "default_value_json": null,
+        "helper_text": null
+      },
+      {
+        "section_key": "measurement",
+        "sort_order": 120,
+        "is_required": false,
+        "visibility_rules": [],
+        "option_rules": [],
+        "constraint_rules": [],
+        "id": "e68232a1-a010-56cc-b3e1-43c188c48565",
+        "tenant_id": null,
+        "template_id": "f55b7846-c3df-45ba-b4b7-ac55970db612",
+        "spec_definition_id": "8f8e35c0-fe8f-5b80-8b2c-992269049564",
+        "default_value_json": null,
+        "helper_text": null
+      },
+      {
+        "section_key": "measurement",
+        "sort_order": 130,
+        "is_required": false,
+        "visibility_rules": [],
+        "option_rules": [],
+        "constraint_rules": [],
+        "id": "6814f161-4191-54ef-b2e0-07fbcf9dbc18",
+        "tenant_id": null,
+        "template_id": "f55b7846-c3df-45ba-b4b7-ac55970db612",
+        "spec_definition_id": "421f6cb3-c995-57f9-b534-a6658a11822f",
+        "default_value_json": null,
+        "helper_text": null
+      },
+      {
+        "section_key": "contents",
+        "sort_order": 140,
+        "is_required": false,
+        "visibility_rules": [],
+        "option_rules": [],
+        "constraint_rules": [],
+        "id": "8f138543-5664-5c3b-ace2-adec0d2cfcc6",
+        "tenant_id": null,
+        "template_id": "f55b7846-c3df-45ba-b4b7-ac55970db612",
+        "spec_definition_id": "2cd52bde-c5d9-5278-8f48-7219d38d221c",
+        "default_value_json": null,
+        "helper_text": null
+      }
+    ]
+  },
+  "before": {
+    "spec_templates": [
+      {
+        "id": "f55b7846-c3df-45ba-b4b7-ac55970db612",
+        "key": "headset",
+        "name": "Juego de Dirección",
+        "is_active": true,
+        "tenant_id": null,
+        "created_at": "2026-04-20T20:47:55.193543+00:00",
+        "updated_at": "2026-04-20T20:47:55.193543+00:00",
+        "description": "Headsets con estándar y tipo de tubo de dirección",
+        "default_tags": [],
+        "form_contract": {
+          "roles": {
+            "steerer_type": "primary",
+            "bearing_system": "primary",
+            "headset_standard": "primary",
+            "spec_evidence_source": "declaration"
+          },
+          "labels": {},
+          "helpers": {},
+          "version": 1,
+          "coverage": "template",
+          "prerequisites": {}
+        },
+        "contract_version": 2,
+        "technical_family": "headset"
+      }
+    ],
+    "spec_template_fields": [
+      {
+        "id": "284afd10-26ff-4a01-a9e7-36f37e8e97c0",
+        "tenant_id": null,
+        "created_at": "2026-04-20T20:47:55.39882+00:00",
+        "sort_order": 20,
+        "updated_at": "2026-04-20T20:47:55.39882+00:00",
+        "helper_text": null,
+        "is_required": false,
+        "section_key": "specs",
+        "template_id": "f55b7846-c3df-45ba-b4b7-ac55970db612",
+        "option_rules": [],
+        "constraint_rules": [],
+        "visibility_rules": [],
+        "default_value_json": null,
+        "spec_definition_id": "f38b08bc-7a09-4153-a19f-125250d75101"
+      },
+      {
+        "id": "785c0b74-f99b-4e79-850a-9f2f10f50a12",
+        "tenant_id": null,
+        "created_at": "2026-09-06T06:58:57.745728+00:00",
+        "sort_order": 5,
+        "updated_at": "2026-09-06T06:58:57.745728+00:00",
+        "helper_text": null,
+        "is_required": false,
+        "section_key": "declaration",
+        "template_id": "f55b7846-c3df-45ba-b4b7-ac55970db612",
+        "option_rules": [],
+        "constraint_rules": [],
+        "visibility_rules": [],
+        "default_value_json": null,
+        "spec_definition_id": "4f055961-6c16-430b-a4e2-e6b09dc1cccc"
+      },
+      {
+        "id": "cd764858-c8ad-4b92-97d2-a0999eb28374",
+        "tenant_id": null,
+        "created_at": "2026-04-20T20:47:55.39882+00:00",
+        "sort_order": 10,
+        "updated_at": "2026-04-20T20:47:55.39882+00:00",
+        "helper_text": null,
+        "is_required": false,
+        "section_key": "specs",
+        "template_id": "f55b7846-c3df-45ba-b4b7-ac55970db612",
+        "option_rules": [],
+        "constraint_rules": [],
+        "visibility_rules": [],
+        "default_value_json": null,
+        "spec_definition_id": "75de7b40-1094-439a-950c-da205c76af48"
+      },
+      {
+        "id": "e33cc7fe-c7bc-4982-b855-8d3979315ec9",
+        "tenant_id": null,
+        "created_at": "2026-04-20T20:47:55.39882+00:00",
+        "sort_order": 10,
+        "updated_at": "2026-04-20T20:47:55.39882+00:00",
+        "helper_text": null,
+        "is_required": true,
+        "section_key": "compatibility",
+        "template_id": "f55b7846-c3df-45ba-b4b7-ac55970db612",
+        "option_rules": [],
+        "constraint_rules": [],
+        "visibility_rules": [],
+        "default_value_json": null,
+        "spec_definition_id": "b5f274fc-6260-4715-ac4c-3dfb558e4eec"
+      }
+    ]
+  },
+  "patches": [
+    {
+      "table": "spec_template_fields",
+      "before": {
+        "id": "e33cc7fe-c7bc-4982-b855-8d3979315ec9",
+        "tenant_id": null,
+        "created_at": "2026-04-20T20:47:55.39882+00:00",
+        "sort_order": 10,
+        "updated_at": "2026-04-20T20:47:55.39882+00:00",
+        "helper_text": null,
+        "is_required": true,
+        "section_key": "compatibility",
+        "template_id": "f55b7846-c3df-45ba-b4b7-ac55970db612",
+        "option_rules": [],
+        "constraint_rules": [],
+        "visibility_rules": [],
+        "default_value_json": null,
+        "spec_definition_id": "b5f274fc-6260-4715-ac4c-3dfb558e4eec"
+      },
+      "after": {
+        "id": "e33cc7fe-c7bc-4982-b855-8d3979315ec9",
+        "tenant_id": null,
+        "created_at": "2026-04-20T20:47:55.39882+00:00",
+        "sort_order": 30,
+        "helper_text": null,
+        "is_required": false,
+        "section_key": "legacy",
+        "template_id": "f55b7846-c3df-45ba-b4b7-ac55970db612",
+        "option_rules": [],
+        "constraint_rules": [],
+        "visibility_rules": [],
+        "default_value_json": null,
+        "spec_definition_id": "b5f274fc-6260-4715-ac4c-3dfb558e4eec"
+      }
+    },
+    {
+      "table": "spec_template_fields",
+      "before": {
+        "id": "284afd10-26ff-4a01-a9e7-36f37e8e97c0",
+        "tenant_id": null,
+        "created_at": "2026-04-20T20:47:55.39882+00:00",
+        "sort_order": 20,
+        "updated_at": "2026-04-20T20:47:55.39882+00:00",
+        "helper_text": null,
+        "is_required": false,
+        "section_key": "specs",
+        "template_id": "f55b7846-c3df-45ba-b4b7-ac55970db612",
+        "option_rules": [],
+        "constraint_rules": [],
+        "visibility_rules": [],
+        "default_value_json": null,
+        "spec_definition_id": "f38b08bc-7a09-4153-a19f-125250d75101"
+      },
+      "after": {
+        "id": "284afd10-26ff-4a01-a9e7-36f37e8e97c0",
+        "tenant_id": null,
+        "created_at": "2026-04-20T20:47:55.39882+00:00",
+        "sort_order": 40,
+        "helper_text": null,
+        "is_required": false,
+        "section_key": "legacy",
+        "template_id": "f55b7846-c3df-45ba-b4b7-ac55970db612",
+        "option_rules": [],
+        "constraint_rules": [],
+        "visibility_rules": [],
+        "default_value_json": null,
+        "spec_definition_id": "f38b08bc-7a09-4153-a19f-125250d75101"
+      }
+    },
+    {
+      "table": "spec_template_fields",
+      "before": {
+        "id": "cd764858-c8ad-4b92-97d2-a0999eb28374",
+        "tenant_id": null,
+        "created_at": "2026-04-20T20:47:55.39882+00:00",
+        "sort_order": 10,
+        "updated_at": "2026-04-20T20:47:55.39882+00:00",
+        "helper_text": null,
+        "is_required": false,
+        "section_key": "specs",
+        "template_id": "f55b7846-c3df-45ba-b4b7-ac55970db612",
+        "option_rules": [],
+        "constraint_rules": [],
+        "visibility_rules": [],
+        "default_value_json": null,
+        "spec_definition_id": "75de7b40-1094-439a-950c-da205c76af48"
+      },
+      "after": {
+        "id": "cd764858-c8ad-4b92-97d2-a0999eb28374",
+        "tenant_id": null,
+        "created_at": "2026-04-20T20:47:55.39882+00:00",
+        "sort_order": 70,
+        "helper_text": null,
+        "is_required": false,
+        "section_key": "legacy",
+        "template_id": "f55b7846-c3df-45ba-b4b7-ac55970db612",
+        "option_rules": [],
+        "constraint_rules": [],
+        "visibility_rules": [],
+        "default_value_json": null,
+        "spec_definition_id": "75de7b40-1094-439a-950c-da205c76af48"
+      }
+    },
+    {
+      "table": "spec_template_fields",
+      "before": {
+        "id": "785c0b74-f99b-4e79-850a-9f2f10f50a12",
+        "tenant_id": null,
+        "created_at": "2026-09-06T06:58:57.745728+00:00",
+        "sort_order": 5,
+        "updated_at": "2026-09-06T06:58:57.745728+00:00",
+        "helper_text": null,
+        "is_required": false,
+        "section_key": "declaration",
+        "template_id": "f55b7846-c3df-45ba-b4b7-ac55970db612",
+        "option_rules": [],
+        "constraint_rules": [],
+        "visibility_rules": [],
+        "default_value_json": null,
+        "spec_definition_id": "4f055961-6c16-430b-a4e2-e6b09dc1cccc"
+      },
+      "after": {
+        "id": "785c0b74-f99b-4e79-850a-9f2f10f50a12",
+        "tenant_id": null,
+        "created_at": "2026-09-06T06:58:57.745728+00:00",
+        "sort_order": 90,
+        "helper_text": null,
+        "is_required": false,
+        "section_key": "declaration",
+        "template_id": "f55b7846-c3df-45ba-b4b7-ac55970db612",
+        "option_rules": [],
+        "constraint_rules": [],
+        "visibility_rules": [],
+        "default_value_json": null,
+        "spec_definition_id": "4f055961-6c16-430b-a4e2-e6b09dc1cccc"
+      }
+    },
+    {
+      "table": "spec_templates",
+      "before": {
+        "id": "f55b7846-c3df-45ba-b4b7-ac55970db612",
+        "key": "headset",
+        "name": "Juego de Dirección",
+        "is_active": true,
+        "tenant_id": null,
+        "created_at": "2026-04-20T20:47:55.193543+00:00",
+        "updated_at": "2026-04-20T20:47:55.193543+00:00",
+        "description": "Headsets con estándar y tipo de tubo de dirección",
+        "default_tags": [],
+        "form_contract": {
+          "roles": {
+            "steerer_type": "primary",
+            "bearing_system": "primary",
+            "headset_standard": "primary",
+            "spec_evidence_source": "declaration"
+          },
+          "labels": {},
+          "helpers": {},
+          "version": 1,
+          "coverage": "template",
+          "prerequisites": {}
+        },
+        "contract_version": 2,
+        "technical_family": "headset"
+      },
+      "after": {
+        "id": "f55b7846-c3df-45ba-b4b7-ac55970db612",
+        "key": "headset",
+        "name": "Juego de Dirección",
+        "is_active": true,
+        "tenant_id": null,
+        "created_at": "2026-04-20T20:47:55.193543+00:00",
+        "description": "Headsets con estándar y tipo de tubo de dirección",
+        "default_tags": [],
+        "form_contract": {
+          "rules_version": 2,
+          "roles": {
+            "headset_part_scope": "primary",
+            "headset_upper_shis": "measurement",
+            "headset_lower_shis": "measurement",
+            "headset_standard": "legacy",
+            "steerer_type": "legacy",
+            "bearing_system": "legacy",
+            "crown_race_included": "contents",
+            "spec_evidence_source": "declaration",
+            "headset_upper_bearing_configuration": "measurement",
+            "headset_upper_stack_height_mm": "measurement",
+            "headset_lower_bearing_configuration": "measurement",
+            "headset_lower_stack_height_mm": "measurement",
+            "headset_supplied_crown_race_reference": "contents"
+          },
+          "semantic_roles": {
+            "headset_part_scope": "intrinsic",
+            "headset_upper_shis": "compatibility",
+            "headset_lower_shis": "compatibility",
+            "headset_standard": "legacy",
+            "steerer_type": "legacy",
+            "bearing_system": "legacy",
+            "crown_race_included": "contents",
+            "spec_evidence_source": "evidence",
+            "headset_upper_bearing_configuration": "compatibility",
+            "headset_upper_stack_height_mm": "compatibility",
+            "headset_lower_bearing_configuration": "compatibility",
+            "headset_lower_stack_height_mm": "compatibility",
+            "headset_supplied_crown_race_reference": "contents"
+          },
+          "labels": {},
+          "allowed_when": {
+            "headset_part_scope": {
+              "kind": "always"
+            },
+            "headset_upper_shis": {
+              "kind": "when",
+              "rows": [
+                [
+                  {
+                    "field": "headset_part_scope",
+                    "operator": "in",
+                    "value_type": "token",
+                    "value": [
+                      "Superior",
+                      "Completa"
+                    ]
+                  }
+                ]
+              ]
+            },
+            "headset_lower_shis": {
+              "kind": "when",
+              "rows": [
+                [
+                  {
+                    "field": "headset_part_scope",
+                    "operator": "in",
+                    "value_type": "token",
+                    "value": [
+                      "Inferior",
+                      "Completa"
+                    ]
+                  }
+                ]
+              ]
+            },
+            "headset_standard": {
+              "kind": "never"
+            },
+            "steerer_type": {
+              "kind": "never"
+            },
+            "bearing_system": {
+              "kind": "never"
+            },
+            "crown_race_included": {
+              "kind": "always"
+            },
+            "spec_evidence_source": {
+              "kind": "always"
+            },
+            "headset_upper_bearing_configuration": {
+              "kind": "when",
+              "rows": [
+                [
+                  {
+                    "field": "headset_part_scope",
+                    "operator": "in",
+                    "value_type": "token",
+                    "value": [
+                      "Superior",
+                      "Completa"
+                    ]
+                  }
+                ]
+              ]
+            },
+            "headset_upper_stack_height_mm": {
+              "kind": "when",
+              "rows": [
+                [
+                  {
+                    "field": "headset_part_scope",
+                    "operator": "in",
+                    "value_type": "token",
+                    "value": [
+                      "Superior",
+                      "Completa"
+                    ]
+                  }
+                ]
+              ]
+            },
+            "headset_lower_bearing_configuration": {
+              "kind": "when",
+              "rows": [
+                [
+                  {
+                    "field": "headset_part_scope",
+                    "operator": "in",
+                    "value_type": "token",
+                    "value": [
+                      "Inferior",
+                      "Completa"
+                    ]
+                  }
+                ]
+              ]
+            },
+            "headset_lower_stack_height_mm": {
+              "kind": "when",
+              "rows": [
+                [
+                  {
+                    "field": "headset_part_scope",
+                    "operator": "in",
+                    "value_type": "token",
+                    "value": [
+                      "Inferior",
+                      "Completa"
+                    ]
+                  }
+                ]
+              ]
+            },
+            "headset_supplied_crown_race_reference": {
+              "kind": "when",
+              "rows": [
+                [
+                  {
+                    "field": "crown_race_included",
+                    "operator": "eq",
+                    "value_type": "boolean",
+                    "value": true
+                  }
+                ]
+              ]
+            }
+          },
+          "required_when": {
+            "headset_part_scope": {
+              "kind": "always"
+            },
+            "headset_upper_shis": {
+              "kind": "when",
+              "rows": [
+                [
+                  {
+                    "field": "headset_part_scope",
+                    "operator": "in",
+                    "value_type": "token",
+                    "value": [
+                      "Superior",
+                      "Completa"
+                    ]
+                  }
+                ]
+              ]
+            },
+            "headset_lower_shis": {
+              "kind": "when",
+              "rows": [
+                [
+                  {
+                    "field": "headset_part_scope",
+                    "operator": "in",
+                    "value_type": "token",
+                    "value": [
+                      "Inferior",
+                      "Completa"
+                    ]
+                  }
+                ]
+              ]
+            },
+            "headset_standard": {
+              "kind": "never"
+            },
+            "steerer_type": {
+              "kind": "never"
+            },
+            "bearing_system": {
+              "kind": "never"
+            },
+            "crown_race_included": {
+              "kind": "always"
+            },
+            "spec_evidence_source": {
+              "kind": "always"
+            },
+            "headset_upper_bearing_configuration": {
+              "kind": "when",
+              "rows": [
+                [
+                  {
+                    "field": "headset_part_scope",
+                    "operator": "in",
+                    "value_type": "token",
+                    "value": [
+                      "Superior",
+                      "Completa"
+                    ]
+                  }
+                ]
+              ]
+            },
+            "headset_upper_stack_height_mm": {
+              "kind": "never"
+            },
+            "headset_lower_bearing_configuration": {
+              "kind": "when",
+              "rows": [
+                [
+                  {
+                    "field": "headset_part_scope",
+                    "operator": "in",
+                    "value_type": "token",
+                    "value": [
+                      "Inferior",
+                      "Completa"
+                    ]
+                  }
+                ]
+              ]
+            },
+            "headset_lower_stack_height_mm": {
+              "kind": "never"
+            },
+            "headset_supplied_crown_race_reference": {
+              "kind": "when",
+              "rows": [
+                [
+                  {
+                    "field": "crown_race_included",
+                    "operator": "eq",
+                    "value_type": "boolean",
+                    "value": true
+                  }
+                ]
+              ]
+            }
+          },
+          "allowed_options": {},
+          "prerequisites": {
+            "headset_upper_shis": [
+              "spec_evidence_source"
+            ],
+            "headset_upper_stack_height_mm": [
+              "spec_evidence_source"
+            ],
+            "headset_lower_shis": [
+              "spec_evidence_source"
+            ],
+            "headset_lower_stack_height_mm": [
+              "spec_evidence_source"
+            ],
+            "headset_supplied_crown_race_reference": [
+              "spec_evidence_source"
+            ]
+          },
+          "helpers": {
+            "headset_part_scope": "Extremos de dirección que contiene esta variante. Los códigos y rodamientos superiores e inferiores conservan su dueño.",
+            "headset_upper_shis": "Código SHIS publicado para este extremo. Sus números son códigos nominales, no dimensiones medidas ni una tolerancia universal. No se infiere el código desde una medida aislada del nombre.",
+            "headset_upper_bearing_configuration": "Datos del conjunto de este extremo; no son una lista de otros modelos posibles. La falta de fuente queda pendiente.",
+            "headset_upper_stack_height_mm": "Altura instalada de este extremo, según el datum OEM. No sumar piezas sueltas ni copiar la altura total del juego.",
+            "headset_lower_shis": "Código SHIS publicado para este extremo. Sus números son códigos nominales, no dimensiones medidas ni una tolerancia universal. No se infiere el código desde una medida aislada del nombre.",
+            "headset_lower_bearing_configuration": "Datos del conjunto de este extremo; no son una lista de otros modelos posibles. La falta de fuente queda pendiente.",
+            "headset_lower_stack_height_mm": "Altura instalada de este extremo, según el datum OEM. No sumar piezas sueltas ni copiar la altura total del juego.",
+            "headset_supplied_crown_race_reference": "Identidad declarada de la pieza incluida. El asiento de la horquilla es otra propiedad; no se rellena a partir de esta referencia."
+          },
+          "evidence_requirements": {
+            "headset_part_scope": "oem_or_package",
+            "headset_upper_shis": "oem_or_package",
+            "headset_lower_shis": "oem_or_package",
+            "headset_standard": "name_reading_hint_only",
+            "steerer_type": "name_reading_hint_only",
+            "bearing_system": "package_or_label",
+            "crown_race_included": "package_or_label",
+            "spec_evidence_source": "oem_or_package",
+            "headset_upper_bearing_configuration": "oem_or_package",
+            "headset_upper_stack_height_mm": "oem_or_package",
+            "headset_lower_bearing_configuration": "oem_or_package",
+            "headset_lower_stack_height_mm": "oem_or_package",
+            "headset_supplied_crown_race_reference": "oem_or_package"
+          },
+          "row_conditions": {
+            "version": 1,
+            "fields": {
+              "headset_upper_bearing_configuration": {
+                "allowed_when": {
+                  "seat_geometry": {
+                    "kind": "when",
+                    "rows": [
+                      [
+                        {
+                          "field": "construction",
+                          "operator": "eq",
+                          "value_type": "token",
+                          "value": "Cartucho"
+                        }
+                      ]
+                    ]
+                  },
+                  "inner_contact_angle_deg": {
+                    "kind": "when",
+                    "rows": [
+                      [
+                        {
+                          "field": "construction",
+                          "operator": "eq",
+                          "value_type": "token",
+                          "value": "Cartucho"
+                        },
+                        {
+                          "field": "seat_geometry",
+                          "operator": "in",
+                          "value_type": "token",
+                          "value": [
+                            "Biseles interior y exterior",
+                            "Sólo bisel interior"
+                          ]
+                        }
+                      ]
+                    ]
+                  },
+                  "outer_contact_angle_deg": {
+                    "kind": "when",
+                    "rows": [
+                      [
+                        {
+                          "field": "construction",
+                          "operator": "eq",
+                          "value_type": "token",
+                          "value": "Cartucho"
+                        },
+                        {
+                          "field": "seat_geometry",
+                          "operator": "in",
+                          "value_type": "token",
+                          "value": [
+                            "Biseles interior y exterior",
+                            "Sólo bisel exterior"
+                          ]
+                        }
+                      ]
+                    ]
+                  },
+                  "bearing_inner_diameter_mm": {
+                    "kind": "when",
+                    "rows": [
+                      [
+                        {
+                          "field": "construction",
+                          "operator": "in",
+                          "value_type": "token",
+                          "value": [
+                            "Cartucho",
+                            "Canastillo con bolas"
+                          ]
+                        }
+                      ]
+                    ]
+                  },
+                  "bearing_outer_diameter_mm": {
+                    "kind": "when",
+                    "rows": [
+                      [
+                        {
+                          "field": "construction",
+                          "operator": "in",
+                          "value_type": "token",
+                          "value": [
+                            "Cartucho",
+                            "Canastillo con bolas"
+                          ]
+                        }
+                      ]
+                    ]
+                  },
+                  "bearing_height_mm": {
+                    "kind": "when",
+                    "rows": [
+                      [
+                        {
+                          "field": "construction",
+                          "operator": "in",
+                          "value_type": "token",
+                          "value": [
+                            "Cartucho",
+                            "Canastillo con bolas"
+                          ]
+                        }
+                      ]
+                    ]
+                  },
+                  "ball_count": {
+                    "kind": "when",
+                    "rows": [
+                      [
+                        {
+                          "field": "construction",
+                          "operator": "in",
+                          "value_type": "token",
+                          "value": [
+                            "Bolas sueltas",
+                            "Canastillo con bolas"
+                          ]
+                        }
+                      ]
+                    ]
+                  },
+                  "ball_diameter_mm": {
+                    "kind": "when",
+                    "rows": [
+                      [
+                        {
+                          "field": "construction",
+                          "operator": "in",
+                          "value_type": "token",
+                          "value": [
+                            "Bolas sueltas",
+                            "Canastillo con bolas"
+                          ]
+                        }
+                      ]
+                    ]
+                  }
+                },
+                "required_when": {
+                  "inner_contact_angle_deg": {
+                    "kind": "when",
+                    "rows": [
+                      [
+                        {
+                          "field": "construction",
+                          "operator": "eq",
+                          "value_type": "token",
+                          "value": "Cartucho"
+                        },
+                        {
+                          "field": "seat_geometry",
+                          "operator": "in",
+                          "value_type": "token",
+                          "value": [
+                            "Biseles interior y exterior",
+                            "Sólo bisel interior"
+                          ]
+                        }
+                      ]
+                    ]
+                  },
+                  "outer_contact_angle_deg": {
+                    "kind": "when",
+                    "rows": [
+                      [
+                        {
+                          "field": "construction",
+                          "operator": "eq",
+                          "value_type": "token",
+                          "value": "Cartucho"
+                        },
+                        {
+                          "field": "seat_geometry",
+                          "operator": "in",
+                          "value_type": "token",
+                          "value": [
+                            "Biseles interior y exterior",
+                            "Sólo bisel exterior"
+                          ]
+                        }
+                      ]
+                    ]
+                  },
+                  "ball_count": {
+                    "kind": "when",
+                    "rows": [
+                      [
+                        {
+                          "field": "construction",
+                          "operator": "in",
+                          "value_type": "token",
+                          "value": [
+                            "Bolas sueltas",
+                            "Canastillo con bolas"
+                          ]
+                        }
+                      ]
+                    ]
+                  },
+                  "ball_diameter_mm": {
+                    "kind": "when",
+                    "rows": [
+                      [
+                        {
+                          "field": "construction",
+                          "operator": "in",
+                          "value_type": "token",
+                          "value": [
+                            "Bolas sueltas",
+                            "Canastillo con bolas"
+                          ]
+                        }
+                      ]
+                    ]
+                  },
+                  "seat_geometry": {
+                    "kind": "when",
+                    "rows": [
+                      [
+                        {
+                          "field": "construction",
+                          "operator": "eq",
+                          "value_type": "token",
+                          "value": "Cartucho"
+                        }
+                      ]
+                    ]
+                  }
+                },
+                "allowed_options": {}
+              },
+              "headset_lower_bearing_configuration": {
+                "allowed_when": {
+                  "seat_geometry": {
+                    "kind": "when",
+                    "rows": [
+                      [
+                        {
+                          "field": "construction",
+                          "operator": "eq",
+                          "value_type": "token",
+                          "value": "Cartucho"
+                        }
+                      ]
+                    ]
+                  },
+                  "inner_contact_angle_deg": {
+                    "kind": "when",
+                    "rows": [
+                      [
+                        {
+                          "field": "construction",
+                          "operator": "eq",
+                          "value_type": "token",
+                          "value": "Cartucho"
+                        },
+                        {
+                          "field": "seat_geometry",
+                          "operator": "in",
+                          "value_type": "token",
+                          "value": [
+                            "Biseles interior y exterior",
+                            "Sólo bisel interior"
+                          ]
+                        }
+                      ]
+                    ]
+                  },
+                  "outer_contact_angle_deg": {
+                    "kind": "when",
+                    "rows": [
+                      [
+                        {
+                          "field": "construction",
+                          "operator": "eq",
+                          "value_type": "token",
+                          "value": "Cartucho"
+                        },
+                        {
+                          "field": "seat_geometry",
+                          "operator": "in",
+                          "value_type": "token",
+                          "value": [
+                            "Biseles interior y exterior",
+                            "Sólo bisel exterior"
+                          ]
+                        }
+                      ]
+                    ]
+                  },
+                  "bearing_inner_diameter_mm": {
+                    "kind": "when",
+                    "rows": [
+                      [
+                        {
+                          "field": "construction",
+                          "operator": "in",
+                          "value_type": "token",
+                          "value": [
+                            "Cartucho",
+                            "Canastillo con bolas"
+                          ]
+                        }
+                      ]
+                    ]
+                  },
+                  "bearing_outer_diameter_mm": {
+                    "kind": "when",
+                    "rows": [
+                      [
+                        {
+                          "field": "construction",
+                          "operator": "in",
+                          "value_type": "token",
+                          "value": [
+                            "Cartucho",
+                            "Canastillo con bolas"
+                          ]
+                        }
+                      ]
+                    ]
+                  },
+                  "bearing_height_mm": {
+                    "kind": "when",
+                    "rows": [
+                      [
+                        {
+                          "field": "construction",
+                          "operator": "in",
+                          "value_type": "token",
+                          "value": [
+                            "Cartucho",
+                            "Canastillo con bolas"
+                          ]
+                        }
+                      ]
+                    ]
+                  },
+                  "ball_count": {
+                    "kind": "when",
+                    "rows": [
+                      [
+                        {
+                          "field": "construction",
+                          "operator": "in",
+                          "value_type": "token",
+                          "value": [
+                            "Bolas sueltas",
+                            "Canastillo con bolas"
+                          ]
+                        }
+                      ]
+                    ]
+                  },
+                  "ball_diameter_mm": {
+                    "kind": "when",
+                    "rows": [
+                      [
+                        {
+                          "field": "construction",
+                          "operator": "in",
+                          "value_type": "token",
+                          "value": [
+                            "Bolas sueltas",
+                            "Canastillo con bolas"
+                          ]
+                        }
+                      ]
+                    ]
+                  }
+                },
+                "required_when": {
+                  "inner_contact_angle_deg": {
+                    "kind": "when",
+                    "rows": [
+                      [
+                        {
+                          "field": "construction",
+                          "operator": "eq",
+                          "value_type": "token",
+                          "value": "Cartucho"
+                        },
+                        {
+                          "field": "seat_geometry",
+                          "operator": "in",
+                          "value_type": "token",
+                          "value": [
+                            "Biseles interior y exterior",
+                            "Sólo bisel interior"
+                          ]
+                        }
+                      ]
+                    ]
+                  },
+                  "outer_contact_angle_deg": {
+                    "kind": "when",
+                    "rows": [
+                      [
+                        {
+                          "field": "construction",
+                          "operator": "eq",
+                          "value_type": "token",
+                          "value": "Cartucho"
+                        },
+                        {
+                          "field": "seat_geometry",
+                          "operator": "in",
+                          "value_type": "token",
+                          "value": [
+                            "Biseles interior y exterior",
+                            "Sólo bisel exterior"
+                          ]
+                        }
+                      ]
+                    ]
+                  },
+                  "ball_count": {
+                    "kind": "when",
+                    "rows": [
+                      [
+                        {
+                          "field": "construction",
+                          "operator": "in",
+                          "value_type": "token",
+                          "value": [
+                            "Bolas sueltas",
+                            "Canastillo con bolas"
+                          ]
+                        }
+                      ]
+                    ]
+                  },
+                  "ball_diameter_mm": {
+                    "kind": "when",
+                    "rows": [
+                      [
+                        {
+                          "field": "construction",
+                          "operator": "in",
+                          "value_type": "token",
+                          "value": [
+                            "Bolas sueltas",
+                            "Canastillo con bolas"
+                          ]
+                        }
+                      ]
+                    ]
+                  },
+                  "seat_geometry": {
+                    "kind": "when",
+                    "rows": [
+                      [
+                        {
+                          "field": "construction",
+                          "operator": "eq",
+                          "value_type": "token",
+                          "value": "Cartucho"
+                        }
+                      ]
+                    ]
+                  }
+                },
+                "allowed_options": {}
+              }
+            }
+          }
+        },
+        "contract_version": 16,
+        "technical_family": "headset"
+      }
+    }
+  ],
+  "adjudication": {
+    "ends": "Upper and lower SHIS, bearings and installed heights have separate physical owners.",
+    "dimensions": "SHIS codes are not literal measured bores; cartridge bodies and loose balls have different dimensions.",
+    "contents": "A supplied crown race is identified content and does not declare a fork interface.",
+    "legacy": "Existing standard, steerer and bearing-system readings are retained without selecting new end interfaces.",
+    "activation_gate": "Requires the undeployed rows-schema v2 strict-order extension, independent review, model-scoped relations and client distribution."
+  },
+  "product_writes": false,
+  "fill_allowed": false,
+  "mechanical_approval": false
+}

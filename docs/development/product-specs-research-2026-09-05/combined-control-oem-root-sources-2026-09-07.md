@@ -1,0 +1,11 @@
+# Mandos: fuentes OEM abiertas por root (2026-09-07)
+
+Lecturas de páginas públicas, sin datos de inventario ni escrituras. Son evidencia de dominio para revisar el candidato; no una investigación terminada de un SKU del negocio.
+
+- [SRAM FAQ sobre reasignar acciones](https://support.sram.com/hc/en-us/articles/16420328834459-Can-I-change-assign-shifter-functions-in-the-AXS-app-e-g-move-the-derailleur-outboard-with-a-left-shifter-click), abierta completa: la app permite personalizar las palancas de cambio y Wireless Blips. El ejemplo explícito del título es usar el izquierdo para mover el cambio hacia afuera. No trasladar esa capacidad a todos los modelos de mando.
+- [SRAM Road AXS Welcome Guide](https://www.sram.com/en/learn/road-axs-welcome-guide), apartados3 y4, abiertos: la lógica entregada usa ambas palancas para distintas direcciones del cambio trasero; Bonus Buttons/Wireless Blips pueden controlar funciones del ciclocomputador. Reasignación no es indexación mecánica ni determina el freno.
+- [SRAM Rival eTap AXS HRD ED-RIV-D1](https://www.sram.com/en/sram/models/ed-riv-d1), descripción abierta: cambio inalámbrico y freno de disco hidráulico coexisten en ese sistema exacto. No tomar todos los componentes AXS como intercambiables.
+- [SRAM RED eTap AXS EB-RED-D1, servicio](https://www.sram.com/en/service/models/eb-red-d1), abierta completa: publica tipo de cambio ETAP, protocolo AXS y longitudes de cable/funda de freno. La página pide número de serie/parte para las especificaciones exactas y enlaza manuales relacionados; esos enlaces no convierten el producto en un sistema HRD. No se toman sus largos como un SKU adjudicado del inventario.
+- [Sheldon, Front Derailers](https://sheldonbrown.com/front-derailers.html), abierto en host sin www: el ajuste de trim y las posiciones de indexación afectan el desviador delantero. La cantidad de posiciones físicas del mando no se equipara sin contexto al número de platos; tampoco se afirma que no pueda corresponder con ellos en un modelo concreto.
+
+El 403 de otra herramienta no equivale a inexistencia de la fuente. No repetir accesos fallidos por el mismo camino: estas lecturas se obtuvieron mediante el navegador de fuentes y se consignan como verificación de root, no de Claude.

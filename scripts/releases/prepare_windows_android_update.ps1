@@ -100,92 +100,6 @@ function Protect-PrivateStateFile {
     [System.IO.File]::SetAccessControl($Path, $security)
 }
 
-function Get-Sha256Hex {
-    param([byte[]]$Bytes)
-
-    $sha256 = [System.Security.Cryptography.SHA256]::Create()
-    try {
-        return (
-            [System.BitConverter]::ToString($sha256.ComputeHash($Bytes))
-        ).Replace('-', '').ToLowerInvariant()
-    } finally {
-        $sha256.Dispose()
-    }
-}
-
-function Get-ReusableCodexCandidate {
-    param(
-        [string]$StatePath,
-        [string]$FromCommit,
-        [string]$ToCommit
-    )
-
-    if (-not (Test-Path -LiteralPath $StatePath -PathType Leaf)) {
-        return $null
-    }
-    try {
-        $item = Get-Item -LiteralPath $StatePath -Force
-        if (
-            ($item.Attributes -band [System.IO.FileAttributes]::ReparsePoint) -ne
-                0
-        ) {
-            return $null
-        }
-        $state = Get-Content -LiteralPath $StatePath -Raw |
-            ConvertFrom-Json
-        $notes = Get-ObjectProperty $state 'release_notes'
-        $targets = @(Get-ObjectProperty $state 'targets')
-        $candidateBase64 = [string](
-            Get-ObjectProperty $notes 'candidate_b64'
-        )
-        $candidateSha256 = [string](
-            Get-ObjectProperty $notes 'candidate_sha256'
-        )
-        if (
-            (
-                (Get-ObjectProperty $state 'schema_version') -ne 2 -and
-                (Get-ObjectProperty $state 'schema_version') -ne 3
-            ) -or
-            $targets -notcontains 'windows' -or
-            $targets -notcontains 'android' -or
-            (Get-ObjectProperty $state 'head_sha') -ne $ToCommit -or
-            (Get-ObjectProperty $notes 'from_commit') -ne $FromCommit -or
-            [string]::IsNullOrEmpty($candidateBase64) -or
-            $candidateBase64.Length -gt 16384 -or
-            $candidateSha256 -notmatch '^[0-9a-f]{64}$'
-        ) {
-            return $null
-        }
-
-        $bytes = [System.Convert]::FromBase64String($candidateBase64)
-        if (
-            $bytes.Length -lt 2 -or
-            $bytes.Length -gt 12288 -or
-            (Get-Sha256Hex -Bytes $bytes) -ne $candidateSha256
-        ) {
-            return $null
-        }
-        $envelope = (
-            [System.Text.Encoding]::UTF8.GetString($bytes) |
-                ConvertFrom-Json
-        )
-        if (
-            (Get-ObjectProperty $envelope 'schema_version') -ne 1 -or
-            (Get-ObjectProperty $envelope 'from_commit') -ne $FromCommit -or
-            (Get-ObjectProperty $envelope 'to_commit') -ne $ToCommit -or
-            $null -eq (Get-ObjectProperty $envelope 'candidate')
-        ) {
-            return $null
-        }
-        return [pscustomobject]@{
-            Base64 = $candidateBase64
-            Sha256 = $candidateSha256
-        }
-    } catch {
-        return $null
-    }
-}
-
 function Invoke-FlutterDependencyNormalization {
     param([string]$RepositoryRoot)
 
@@ -318,94 +232,6 @@ function Get-LatestWindowsReleaseBase {
     return [string]$rootCommit
 }
 
-function Get-LocalCodexCandidate {
-    param(
-        [string]$RepositoryRoot,
-        [string]$FromCommit,
-        [string]$ToCommit,
-        [string]$OutputPath
-    )
-
-    $codex = Get-Command codex.exe,codex.cmd,codex `
-        -ErrorAction SilentlyContinue |
-        Select-Object -First 1
-    if ($null -eq $codex) {
-        Write-Host 'Local Codex release notes unavailable; protected CI will use its safe fallback.'
-        return $null
-    }
-    $gitleaks = Get-Command gitleaks.exe,gitleaks `
-        -ErrorAction SilentlyContinue |
-        Select-Object -First 1
-    if ($null -eq $gitleaks) {
-        Write-Host 'Local Codex release notes skipped because gitleaks is unavailable; protected CI will use its safe fallback.'
-        return $null
-    }
-
-    $node = Require-Command node
-    $git = Get-Command git.exe,git -ErrorAction Stop |
-        Select-Object -First 1
-    $generator = Join-Path `
-        $RepositoryRoot `
-        'scripts\releases\generate_codex_release_notes.mjs'
-    $privateScanLog = Join-Path `
-        ([System.IO.Path]::GetDirectoryName($OutputPath)) `
-        'gitleaks-private.log'
-    & $gitleaks.Source git `
-        "--log-opts=$FromCommit..$ToCommit" `
-        --config (Join-Path $RepositoryRoot '.gitleaks.toml') `
-        --gitleaks-ignore-path (Join-Path $RepositoryRoot '.gitleaksignore') `
-        --redact=100 `
-        --no-banner `
-        --no-color `
-        --timeout 120 `
-        $RepositoryRoot *> $privateScanLog
-    if ($LASTEXITCODE -ne 0) {
-        Write-Host 'Local Codex release notes skipped because the committed range did not pass the private secret scan.'
-        return $null
-    }
-
-    & $node.Source $generator `
-            --from-commit $FromCommit `
-            --to-commit $ToCommit `
-            --output $OutputPath `
-            --codex-bin $codex.Source `
-            --git-bin $git.Source |
-        Out-Host
-    $generatorExitCode = $LASTEXITCODE
-    if ($generatorExitCode -ne 0 -or -not (
-        Test-Path -LiteralPath $OutputPath -PathType Leaf
-    )) {
-        Write-Host 'Local Codex candidate was unavailable; publication will continue with the protected fallback.'
-        return $null
-    }
-
-    try {
-        $bytes = [System.IO.File]::ReadAllBytes($OutputPath)
-        if ($bytes.Length -lt 2 -or $bytes.Length -gt 12288) {
-            throw 'candidate size'
-        }
-        $envelope = (
-            [System.Text.Encoding]::UTF8.GetString($bytes) |
-                ConvertFrom-Json
-        )
-        if (
-            (Get-ObjectProperty $envelope 'schema_version') -ne 1 -or
-            (Get-ObjectProperty $envelope 'from_commit') -ne $FromCommit -or
-            (Get-ObjectProperty $envelope 'to_commit') -ne $ToCommit -or
-            $null -eq (Get-ObjectProperty $envelope 'candidate')
-        ) {
-            throw 'candidate identity'
-        }
-        return [pscustomobject]@{
-            Base64 = [System.Convert]::ToBase64String($bytes)
-            Sha256 = Get-Sha256Hex -Bytes $bytes
-        }
-    } catch {
-        Write-Host 'Local Codex candidate failed local validation; publication will continue with the protected fallback.'
-        return $null
-    }
-}
-
 $git = Require-Command git
 $null = Require-Command gh
 $node = Require-Command node
@@ -506,107 +332,76 @@ if ($releaseNotesFromCommit -notmatch '^[0-9a-f]{40}$') {
 $statePath = Resolve-ErpUpdateStatePath `
     -RequestedPath $StateFile `
     -RepositoryRoot $repoRoot
-$temporaryRoot = Join-Path `
-    ([System.IO.Path]::GetTempPath()) `
-    "vinabike-codex-notes-$([guid]::NewGuid().ToString('N'))"
-New-Item -ItemType Directory -Path $temporaryRoot | Out-Null
+Write-Host 'Gemini Flash will generate the shared release notes inside protected CI.'
+$candidateBase64 = ''
+$candidateSha256 = ''
+
+if (
+    (git rev-parse HEAD).Trim() -ne $headSha -or
+    (git branch --show-current).Trim() -ne $branch -or
+    -not [string]::IsNullOrWhiteSpace((git status --porcelain))
+) {
+    throw 'The local source changed while the release was being prepared.'
+}
+
+Write-Step "Pushing the shared source commit $headSha"
+git push origin "${headSha}:refs/heads/$branch"
+if ($LASTEXITCODE -ne 0) {
+    throw 'Could not push the shared ERP update commit.'
+}
+
+$remoteLine = @(
+    git ls-remote --heads origin "refs/heads/$branch"
+) | Select-Object -First 1
+$remoteAfter = if ([string]::IsNullOrWhiteSpace([string]$remoteLine)) {
+    ''
+} else {
+    ([string]$remoteLine -split '\s+')[0]
+}
+if ($remoteAfter -ne $headSha) {
+    throw 'The live remote branch does not identify the shared ERP update commit.'
+}
+
+$createdEpoch = [int64](
+    [DateTime]::UtcNow - [DateTime]'1970-01-01T00:00:00Z'
+).TotalSeconds
+$state = [ordered]@{
+    schema_version = 2
+    targets = @('windows', 'android')
+    repository_root = $repoRoot
+    remote = 'origin'
+    branch = $branch
+    head_sha = $headSha
+    created_epoch = $createdEpoch
+    release_notes = [ordered]@{
+        from_commit = $releaseNotesFromCommit
+        candidate_b64 = $candidateBase64
+        candidate_sha256 = $candidateSha256
+    }
+}
+
+$stateTemporaryPath = "$statePath.tmp-$([guid]::NewGuid().ToString('N'))"
 try {
-    Write-Step 'Preparing one optional Codex summary for both platforms'
-    $candidatePath = Join-Path $temporaryRoot 'release-notes-candidate.json'
-    $candidate = Get-ReusableCodexCandidate `
-        -StatePath $statePath `
-        -FromCommit $releaseNotesFromCommit `
-        -ToCommit $headSha
-    if ($null -ne $candidate) {
-        Write-Host 'Reusing the exact Codex candidate already bound to this commit.'
-    } else {
-        $candidate = Get-LocalCodexCandidate `
-            -RepositoryRoot $repoRoot `
-            -FromCommit $releaseNotesFromCommit `
-            -ToCommit $headSha `
-            -OutputPath $candidatePath
-    }
-    $candidateBase64 = if ($null -eq $candidate) {
-        ''
-    } else {
-        $candidate.Base64
-    }
-    $candidateSha256 = if ($null -eq $candidate) {
-        ''
-    } else {
-        $candidate.Sha256
-    }
-
-    if (
-        (git rev-parse HEAD).Trim() -ne $headSha -or
-        (git branch --show-current).Trim() -ne $branch -or
-        -not [string]::IsNullOrWhiteSpace((git status --porcelain))
-    ) {
-        throw 'The local source changed while the Codex summary was being prepared.'
-    }
-
-    Write-Step "Pushing the shared source commit $headSha"
-    git push origin "${headSha}:refs/heads/$branch"
-    if ($LASTEXITCODE -ne 0) {
-        throw 'Could not push the shared ERP update commit.'
-    }
-
-    $remoteLine = @(
-        git ls-remote --heads origin "refs/heads/$branch"
-    ) | Select-Object -First 1
-    $remoteAfter = if ([string]::IsNullOrWhiteSpace([string]$remoteLine)) {
-        ''
-    } else {
-        ([string]$remoteLine -split '\s+')[0]
-    }
-    if ($remoteAfter -ne $headSha) {
-        throw 'The live remote branch does not identify the shared ERP update commit.'
-    }
-
-    $createdEpoch = [int64](
-        [DateTime]::UtcNow - [DateTime]'1970-01-01T00:00:00Z'
-    ).TotalSeconds
-    $state = [ordered]@{
-        schema_version = 2
-        targets = @('windows', 'android')
-        repository_root = $repoRoot
-        remote = 'origin'
-        branch = $branch
-        head_sha = $headSha
-        created_epoch = $createdEpoch
-        release_notes = [ordered]@{
-            from_commit = $releaseNotesFromCommit
-            candidate_b64 = $candidateBase64
-            candidate_sha256 = $candidateSha256
-        }
-    }
-
-    $stateTemporaryPath = "$statePath.tmp-$([guid]::NewGuid().ToString('N'))"
-    try {
-        $stateJson = $state | ConvertTo-Json -Depth 5 -Compress
-        $utf8WithoutBom = New-Object System.Text.UTF8Encoding($false)
-        [System.IO.File]::WriteAllText(
-            $stateTemporaryPath,
-            $stateJson,
-            $utf8WithoutBom
-        )
-        Protect-PrivateStateFile -Path $stateTemporaryPath
-        Move-Item `
-            -LiteralPath $stateTemporaryPath `
-            -Destination $statePath `
-            -Force
-        Protect-PrivateStateFile -Path $statePath
-    } finally {
-        Remove-Item -LiteralPath $stateTemporaryPath -Force `
-            -ErrorAction SilentlyContinue
-    }
-
-    Write-Host ''
-    Write-Host 'Prepared one shared Windows and Android ERP update:'
-    Write-Host "  Source: $headSha"
-    Write-Host "  Release-note base: $releaseNotesFromCommit"
-    Write-Host 'VS Code can now start both protected publishers in parallel.'
+    $stateJson = $state | ConvertTo-Json -Depth 5 -Compress
+    $utf8WithoutBom = New-Object System.Text.UTF8Encoding($false)
+    [System.IO.File]::WriteAllText(
+        $stateTemporaryPath,
+        $stateJson,
+        $utf8WithoutBom
+    )
+    Protect-PrivateStateFile -Path $stateTemporaryPath
+    Move-Item `
+        -LiteralPath $stateTemporaryPath `
+        -Destination $statePath `
+        -Force
+    Protect-PrivateStateFile -Path $statePath
 } finally {
-    Remove-Item -LiteralPath $temporaryRoot -Recurse -Force `
+    Remove-Item -LiteralPath $stateTemporaryPath -Force `
         -ErrorAction SilentlyContinue
 }
+
+Write-Host ''
+Write-Host 'Prepared one shared Windows and Android ERP update:'
+Write-Host "  Source: $headSha"
+Write-Host "  Release-note base: $releaseNotesFromCommit"
+Write-Host 'VS Code can now start both protected publishers in parallel.'

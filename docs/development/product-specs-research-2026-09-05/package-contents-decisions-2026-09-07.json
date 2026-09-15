@@ -1,0 +1,45 @@
+{
+  "approval_scope": "field_representation",
+  "base_sha256": "58e68f0c4f0d7b8e824a84a3931cf9f7bd03767f8a65aaa55020bc6af7465f03",
+  "proposal_sha256": "8428447ff39b385d29da28faa5d2997bffca34ee252308359b910dc13fcbaac8",
+  "source_cases_sha256": "0eb5dfda6a7087cf115afd54e08a9908b00511acbae59d58217b783d371da810",
+  "patch_adjudications": [
+    {
+      "patch_id": "CONT-01",
+      "decision": "aceptar",
+      "reason": "El contenido de la variante se declara por separado de la capacidad y del sistema instalado; el nombre no fabrica miembros."
+    },
+    {
+      "patch_id": "CONT-02",
+      "decision": "aceptar",
+      "reason": "El contenido de la variante se declara por separado de la capacidad y del sistema instalado; el nombre no fabrica miembros."
+    },
+    {
+      "patch_id": "CONT-03",
+      "decision": "aceptar",
+      "reason": "El contenido de la variante se declara por separado de la capacidad y del sistema instalado; el nombre no fabrica miembros."
+    },
+    {
+      "patch_id": "CONT-04",
+      "decision": "aceptar",
+      "reason": "El contenido de la variante se declara por separado de la capacidad y del sistema instalado; el nombre no fabrica miembros."
+    },
+    {
+      "patch_id": "CONT-05",
+      "decision": "aceptar",
+      "reason": "El contenido de la variante se declara por separado de la capacidad y del sistema instalado; el nombre no fabrica miembros."
+    },
+    {
+      "patch_id": "CONT-06",
+      "decision": "aceptar",
+      "reason": "El contenido de la variante se declara por separado de la capacidad y del sistema instalado; el nombre no fabrica miembros."
+    },
+    {
+      "patch_id": "CONT-07",
+      "decision": "aceptar",
+      "reason": "El contenido de la variante se declara por separado de la capacidad y del sistema instalado; el nombre no fabrica miembros."
+    }
+  ],
+  "mechanical_coverage_complete": false,
+  "automatic_fill_authorized": false
+}

@@ -15,7 +15,6 @@ RELEASE_NOTES_CANDIDATE_SHA256=''
 RELEASE_NOTES_FROM_COMMIT=''
 INTEGRITY_RUN_ID=''
 INTEGRITY_RUN_ATTEMPT=''
-release_notes_temp_dir=''
 
 # shellcheck source=scripts/releases/erp_update_state.sh
 source "$SCRIPT_DIR/releases/erp_update_state.sh"
@@ -395,53 +394,13 @@ verify_published_release() {
     "$head_sha"
 }
 
-cleanup_release_notes_temp_dir() {
-  if [[ -z "$release_notes_temp_dir" ]]; then
-    return
-  fi
-  case "$release_notes_temp_dir" in
-    "${TMPDIR:-/tmp}"/vinabike-codex-release-notes.*)
-      rm -rf -- "$release_notes_temp_dir"
-      ;;
-  esac
-}
-
-find_codex_binary() {
-  if command -v codex >/dev/null 2>&1; then
-    command -v codex
-    return
-  fi
-  local bundled_codex='/Applications/ChatGPT.app/Contents/Resources/codex'
-  if [[ -x "$bundled_codex" ]]; then
-    printf '%s\n' "$bundled_codex"
-    return
-  fi
-  return 1
-}
-
-prepare_local_codex_release_notes() {
+prepare_gemini_release_notes() {
   local head_commit="$1"
-  local codex_binary
   local base_commit
-  local candidate_file
-  local private_log
-  local candidate_json
 
   RELEASE_NOTES_CANDIDATE_B64=''
   RELEASE_NOTES_CANDIDATE_SHA256=''
   RELEASE_NOTES_FROM_COMMIT=''
-  if ! command -v node >/dev/null 2>&1; then
-    echo 'Local Codex notes skipped: Node is unavailable; protected CI will use its fallback chain.'
-    return
-  fi
-  if ! command -v gitleaks >/dev/null 2>&1; then
-    echo 'Local Codex notes skipped: gitleaks is unavailable; protected CI will use its fallback chain.'
-    return
-  fi
-  if ! codex_binary="$(find_codex_binary)"; then
-    echo 'Local Codex notes skipped: Codex is unavailable; protected CI will use its fallback chain.'
-    return
-  fi
   if ! base_commit="$(
     GH_REPO="$REPO" \
       bash scripts/releases/resolve_previous_release_commit.sh \
@@ -450,92 +409,27 @@ prepare_local_codex_release_notes() {
         "$head_commit" \
         2>/dev/null
   )"; then
-    echo 'Local Codex notes skipped: the previous release could not be resolved.'
-    return
+    echo 'The previous macOS release could not be resolved for Gemini notes.' >&2
+    exit 1
   fi
   if [[ ! "$base_commit" =~ ^[0-9a-f]{40}$ || "$base_commit" == "$head_commit" ]]; then
-    echo 'Local Codex notes skipped: the release range is unavailable.'
-    return
+    echo 'The release-note range is unavailable.' >&2
+    exit 1
   fi
   RELEASE_NOTES_FROM_COMMIT="$base_commit"
-
-  release_notes_temp_dir="$(
-    mktemp -d "${TMPDIR:-/tmp}/vinabike-codex-release-notes.XXXXXX"
-  )"
-  chmod 700 "$release_notes_temp_dir"
-  candidate_file="$release_notes_temp_dir/candidate-envelope.json"
-  private_log="$release_notes_temp_dir/private.log"
-  : > "$private_log"
-  chmod 600 "$private_log"
-
-  step 'Checking the committed release range before local Codex notes'
-  if ! gitleaks git \
-    --log-opts="${base_commit}..${head_commit}" \
-    --config .gitleaks.toml \
-    --gitleaks-ignore-path .gitleaksignore \
-    --redact=100 \
-    --no-banner \
-    --no-color \
-    --timeout 120 \
-    "$repo_root" \
-    >"$private_log" 2>&1; then
-    echo 'Local Codex notes skipped: the committed range did not pass the private secret scan.'
-    return
-  fi
-
-  step 'Preparing user-friendly notes with local Codex'
-  if ! env \
-    -u OPENAI_API_KEY \
-    -u OPENAI_RELEASE_NOTES_ENDPOINT \
-    -u OPENAI_RELEASE_NOTES_MODEL \
-    -u GEMINI_RELEASE_API_KEY \
-    -u GH_TOKEN \
-    node scripts/releases/generate_codex_release_notes.mjs \
-      --from-commit "$base_commit" \
-      --to-commit "$head_commit" \
-      --output "$candidate_file" \
-      --codex-bin "$codex_binary" \
-      --git-bin "$(command -v git)" \
-      >"$private_log" 2>&1; then
-    echo 'Local Codex notes unavailable; protected CI will use Gemini or deterministic notes.'
-    return
-  fi
-
-  if ! candidate_json="$(jq -c . "$candidate_file" 2>/dev/null)"; then
-    echo 'Local Codex notes unavailable; protected CI will use Gemini or deterministic notes.'
-    return
-  fi
-  RELEASE_NOTES_CANDIDATE_B64="$(
-    printf '%s' "$candidate_json" | base64 | tr -d '\r\n'
-  )"
-  RELEASE_NOTES_CANDIDATE_SHA256="$(
-    printf '%s' "$candidate_json" | shasum -a 256 | awk '{print $1}'
-  )"
-  if [[
-    ${#RELEASE_NOTES_CANDIDATE_B64} -gt 16384 ||
-    ! "$RELEASE_NOTES_CANDIDATE_B64" =~ ^[A-Za-z0-9+/]*={0,2}$ ||
-    ! "$RELEASE_NOTES_CANDIDATE_SHA256" =~ ^[0-9a-f]{64}$
-  ]]; then
-    RELEASE_NOTES_CANDIDATE_B64=''
-    RELEASE_NOTES_CANDIDATE_SHA256=''
-    echo 'Local Codex notes unavailable; protected CI will use Gemini or deterministic notes.'
-    return
-  fi
-  echo 'Local Codex prepared a bounded candidate; protected CI will validate it again.'
+  echo 'Gemini Flash will generate release notes inside protected CI.'
 }
 
 require_command awk
 require_command git
 require_command gh
 require_command jq
-for required in \
-  base64 bash chmod date env grep head mktemp rm shasum sleep tail tr wc; do
+for required in bash date grep sleep tail wc; do
   require_command "$required"
 done
 
 repo_root="$(git rev-parse --show-toplevel)"
 cd "$repo_root"
-trap cleanup_release_notes_temp_dir EXIT
 
 branch="$(git branch --show-current)"
 if [[ -z "$branch" ]]; then
@@ -602,13 +496,13 @@ else
   fi
 
   head_sha="$(git rev-parse HEAD)"
-  prepare_local_codex_release_notes "$head_sha"
+  prepare_gemini_release_notes "$head_sha"
 
   step "Pushing $branch at $head_sha"
   git push origin "$branch"
 fi
 
-notes_title_identity="${RELEASE_NOTES_CANDIDATE_SHA256:-fallback}"
+notes_title_identity="${RELEASE_NOTES_CANDIDATE_SHA256:-gemini}"
 notes_base_identity="${RELEASE_NOTES_FROM_COMMIT:-auto}"
 integrity_title_identity="${INTEGRITY_RUN_ID:-self}"
 expected_run_title="macOS publish · ${head_sha} · notes ${notes_title_identity} · from ${notes_base_identity} · integrity ${integrity_title_identity}"

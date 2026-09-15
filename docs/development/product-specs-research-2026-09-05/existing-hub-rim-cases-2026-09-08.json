@@ -1,0 +1,1695 @@
+{
+  "cases": [
+    {
+      "id": "hu_a_front_hub_carries_its_own_ends",
+      "template": "hub",
+      "values": {
+        "hub_package_position": "Delantera",
+        "hub_old_mm": "100",
+        "spoke_hole_count": "32",
+        "axle_type": "Cierre rápido 9 mm (delantero)",
+        "spec_evidence_source": "https://example.invalid/synthetic"
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "hu_a_hub_without_its_package_position_is_pending",
+      "template": "hub",
+      "values": {
+        "spec_evidence_source": "https://example.invalid/synthetic",
+        "bearing_system": "Rodamientos sellados"
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "expected_issue_subset": [
+        {
+          "code": "required_missing",
+          "field": "hub_package_position",
+          "blocking": false
+        }
+      ],
+      "expected_sql_issue_subset": [
+        {
+          "code": "required_missing",
+          "field": "hub_package_position",
+          "blocking": false
+        }
+      ]
+    },
+    {
+      "id": "hu_a_rear_hub_declares_its_drive_receiver",
+      "template": "hub",
+      "values": {
+        "hub_package_position": "Trasera",
+        "hub_old_mm": "135",
+        "spoke_hole_count": "36",
+        "axle_type": "Cierre rápido 10 mm (trasero)",
+        "spec_evidence_source": "https://example.invalid/synthetic",
+        "rear_drive_interface": "Shimano HG spline M (8/9/10v y MTB 11v; ROAD 11v y 7v sólo según filas C-731; LINKGLIDE según C-649)"
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "hu_a_threaded_freewheel_hub_is_not_a_cassette_body",
+      "template": "hub",
+      "values": {
+        "hub_package_position": "Trasera",
+        "hub_old_mm": "135",
+        "spoke_hole_count": "36",
+        "axle_type": "Cierre rápido 10 mm (trasero)",
+        "spec_evidence_source": "https://example.invalid/synthetic",
+        "rear_drive_interface": "Rueda libre roscada 1.37\" x 24 tpi"
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "hu_a_coaster_hub_declares_its_receiver",
+      "template": "hub",
+      "values": {
+        "hub_package_position": "Trasera",
+        "hub_old_mm": "135",
+        "spoke_hole_count": "36",
+        "axle_type": "Cierre rápido 10 mm (trasero)",
+        "spec_evidence_source": "https://example.invalid/synthetic",
+        "rear_drive_interface": "Contrapedal"
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "hu_a_pair_declares_the_receiver_of_its_rear_piece",
+      "template": "hub",
+      "values": {
+        "hub_package_position": "Juego delantera + trasera",
+        "spec_evidence_source": "https://example.invalid/synthetic",
+        "rear_drive_interface": "Contrapedal",
+        "hub_package_pieces": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "piece_position": "Delantera",
+                "evidence_source": "Envase del juego",
+                "old_mm": "100",
+                "spoke_hole_count": "36",
+                "drive_interface_present": false
+              },
+              "sources": []
+            },
+            {
+              "id": "r2",
+              "values": {
+                "piece_position": "Trasera",
+                "evidence_source": "Envase del juego",
+                "old_mm": "135",
+                "spoke_hole_count": "36",
+                "drive_interface_present": true,
+                "drive_receiver_kind": "Otra interfaz OEM",
+                "drive_receiver_reference": "Receptor sintético del conjunto trasero"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "predecessor_values": {
+        "hub_package_position": "Juego delantera + trasera",
+        "spec_evidence_source": "https://example.invalid/synthetic",
+        "rear_drive_interface": "Contrapedal",
+        "hub_package_pieces": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "piece_position": "Delantera",
+                "evidence_source": "Envase del juego",
+                "old_mm": "100",
+                "spoke_hole_count": "36",
+                "drive_interface_present": false
+              },
+              "sources": []
+            },
+            {
+              "id": "r2",
+              "values": {
+                "piece_position": "Trasera",
+                "evidence_source": "Envase del juego",
+                "old_mm": "135",
+                "spoke_hole_count": "36",
+                "drive_interface_present": true
+              },
+              "sources": []
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "hu_a_pair_cannot_carry_one_scalar_width",
+      "template": "hub",
+      "values": {
+        "hub_package_position": "Juego delantera + trasera",
+        "spec_evidence_source": "https://example.invalid/synthetic",
+        "hub_old_mm": "100"
+      },
+      "expected_blocking": [
+        {
+          "code": "field_applicability",
+          "field": "hub_old_mm"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "hu_a_pair_cannot_carry_one_scalar_hole_count",
+      "template": "hub",
+      "values": {
+        "hub_package_position": "Juego delantera + trasera",
+        "spec_evidence_source": "https://example.invalid/synthetic",
+        "spoke_hole_count": "36"
+      },
+      "expected_blocking": [
+        {
+          "code": "field_applicability",
+          "field": "spoke_hole_count"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "hu_the_same_piece_twice_blocks",
+      "template": "hub",
+      "values": {
+        "hub_package_position": "Juego delantera + trasera",
+        "spec_evidence_source": "https://example.invalid/synthetic",
+        "hub_package_pieces": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "piece_position": "Trasera",
+                "evidence_source": "Envase del juego",
+                "old_mm": "135"
+              },
+              "sources": []
+            },
+            {
+              "id": "r2",
+              "values": {
+                "piece_position": "Trasera",
+                "evidence_source": "Envase del juego",
+                "old_mm": "142"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [
+        {
+          "code": "row_shape",
+          "field": "hub_package_pieces"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "hu_a_piece_without_its_evidence_is_pending",
+      "template": "hub",
+      "values": {
+        "hub_package_position": "Juego delantera + trasera",
+        "spec_evidence_source": "https://example.invalid/synthetic",
+        "hub_package_pieces": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "piece_position": "Trasera",
+                "old_mm": "135"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "expected_issue_subset": [
+        {
+          "code": "row_incomplete",
+          "field": "hub_package_pieces",
+          "blocking": false
+        }
+      ],
+      "expected_sql_issue_subset": [
+        {
+          "code": "row_incomplete",
+          "field": "hub_package_pieces",
+          "blocking": false
+        }
+      ]
+    },
+    {
+      "id": "hu_a_single_hub_cannot_list_package_pieces",
+      "template": "hub",
+      "values": {
+        "hub_package_position": "Delantera",
+        "hub_old_mm": "100",
+        "spoke_hole_count": "32",
+        "axle_type": "Cierre rápido 9 mm (delantero)",
+        "spec_evidence_source": "https://example.invalid/synthetic",
+        "hub_package_pieces": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "piece_position": "Delantera",
+                "evidence_source": "Envase del juego",
+                "old_mm": "100"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [
+        {
+          "code": "field_applicability",
+          "field": "hub_package_pieces"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "hu_no_disc_anchor_forbids_a_rotor_mount",
+      "template": "hub",
+      "values": {
+        "hub_package_position": "Delantera",
+        "hub_old_mm": "100",
+        "spoke_hole_count": "32",
+        "axle_type": "Cierre rápido 9 mm (delantero)",
+        "spec_evidence_source": "https://example.invalid/synthetic",
+        "hub_rotor_mount_present": false,
+        "rotor_mount_type": "6 pernos"
+      },
+      "expected_blocking": [
+        {
+          "code": "field_applicability",
+          "field": "rotor_mount_type"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "hu_an_undeclared_disc_anchor_leaves_the_mount_pending",
+      "template": "hub",
+      "values": {
+        "hub_package_position": "Delantera",
+        "hub_old_mm": "100",
+        "spoke_hole_count": "32",
+        "axle_type": "Cierre rápido 9 mm (delantero)",
+        "spec_evidence_source": "https://example.invalid/synthetic",
+        "rotor_mount_type": "Centerlock"
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "expected_issue_subset": [
+        {
+          "code": "prerequisite",
+          "field": "rotor_mount_type",
+          "blocking": false
+        }
+      ],
+      "expected_sql_issue_subset": [
+        {
+          "code": "field_applicability",
+          "field": "rotor_mount_type",
+          "blocking": false
+        }
+      ]
+    },
+    {
+      "id": "hu_a_quick_release_hub_cannot_supply_a_thru_axle_reference",
+      "template": "hub",
+      "values": {
+        "hub_package_position": "Delantera",
+        "hub_old_mm": "100",
+        "spoke_hole_count": "32",
+        "axle_type": "Cierre rápido 9 mm (delantero)",
+        "spec_evidence_source": "https://example.invalid/synthetic",
+        "thru_axle_thread": "M12 x 1.0",
+        "hub_axle_mount_kind": "Cierre rápido",
+        "hub_supplied_thru_axle_reference": "Eje sintético"
+      },
+      "expected_blocking": [
+        {
+          "code": "field_applicability",
+          "field": "hub_supplied_thru_axle_reference"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "predecessor_values": {
+        "hub_package_position": "Delantera",
+        "hub_old_mm": "100",
+        "spoke_hole_count": "32",
+        "axle_type": "Cierre rápido 9 mm (delantero)",
+        "spec_evidence_source": "https://example.invalid/synthetic",
+        "thru_axle_thread": "M12 x 1.0"
+      }
+    },
+    {
+      "id": "hu_flange_distance_and_centre_distances_coexist",
+      "template": "hub",
+      "values": {
+        "hub_package_position": "Trasera",
+        "hub_old_mm": "135",
+        "spoke_hole_count": "36",
+        "axle_type": "Cierre rápido 10 mm (trasero)",
+        "spec_evidence_source": "https://example.invalid/synthetic",
+        "rear_drive_interface": "Shimano HG spline M (8/9/10v y MTB 11v; ROAD 11v y 7v sólo según filas C-731; LINKGLIDE según C-649)",
+        "hub_flange_to_flange_mm": "58.4",
+        "center_to_flange_left_mm": "36.0",
+        "center_to_flange_right_mm": "22.4",
+        "flange_pcd_left_mm": "58",
+        "flange_pcd_right_mm": "58",
+        "spoke_hole_diameter_mm": "2.6"
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [
+        "https://www.messingschlager.com/en/products/disc-brake-hubs_t50/novatec-d042sb-rear-disc-brake-hub_a326221-S"
+      ]
+    },
+    {
+      "id": "hu_a_spoke_anchor_without_evidence_is_pending",
+      "template": "hub",
+      "values": {
+        "hub_package_position": "Delantera",
+        "hub_spoke_head_interface": "Straight Pull"
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [
+        "https://www.sheldonbrown.com/wheelbuild.html"
+      ],
+      "expected_issue_subset": [
+        {
+          "code": "prerequisite",
+          "field": "hub_spoke_head_interface",
+          "blocking": false
+        }
+      ],
+      "expected_sql_issue_subset": [
+        {
+          "code": "prerequisite_missing",
+          "field": "hub_spoke_head_interface",
+          "blocking": false
+        }
+      ]
+    },
+    {
+      "id": "hu_legacy_position_spacing_holes_and_driver_are_preserved",
+      "template": "hub",
+      "values": {
+        "hub_package_position": "Delantera",
+        "hub_old_mm": "100",
+        "spoke_hole_count": "32",
+        "axle_type": "Cierre rápido 9 mm (delantero)",
+        "spec_evidence_source": "https://example.invalid/synthetic",
+        "hub_spacing_mm": "100",
+        "spoke_holes": "32",
+        "freehub_type": "Shimano HG",
+        "wheel_position": "Delantera"
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "ri_a_rim_is_identified_by_its_bead_seat_diameter",
+      "template": "rim",
+      "values": {
+        "bead_seat_diameter_mm": "622",
+        "rim_internal_width_mm": "19",
+        "spoke_hole_count": "32",
+        "spec_evidence_source": "https://example.invalid/synthetic",
+        "rim_bead_profile": "Con gancho (hooked)"
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [
+        "https://www.sheldonbrown.com/tire-sizing.html"
+      ]
+    },
+    {
+      "id": "ri_one_bead_seat_diameter_answers_three_market_names",
+      "template": "rim",
+      "values": {
+        "bead_seat_diameter_mm": "622",
+        "rim_internal_width_mm": "19",
+        "spoke_hole_count": "32",
+        "spec_evidence_source": "https://example.invalid/synthetic",
+        "rim_etrto": "19-622",
+        "rim_bead_profile": "Con gancho (hooked)"
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [
+        "https://www.sheldonbrown.com/tire-sizing.html",
+        "https://www.weinmanntek.com/technology/6/6"
+      ]
+    },
+    {
+      "id": "ri_a_braking_surface_carries_its_wear_indicator",
+      "template": "rim",
+      "values": {
+        "bead_seat_diameter_mm": "622",
+        "rim_internal_width_mm": "19",
+        "spoke_hole_count": "32",
+        "spec_evidence_source": "https://example.invalid/synthetic",
+        "brake_track": true,
+        "rim_brake_wear_indicator": "Wear indicator line",
+        "rim_bead_profile": "Con gancho (hooked)"
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [
+        "https://www.weinmanntek.com/technology/6/6"
+      ]
+    },
+    {
+      "id": "ri_a_rim_without_a_braking_surface_has_no_indicator",
+      "template": "rim",
+      "values": {
+        "bead_seat_diameter_mm": "622",
+        "rim_internal_width_mm": "19",
+        "spoke_hole_count": "32",
+        "spec_evidence_source": "https://example.invalid/synthetic",
+        "brake_track": false,
+        "rim_brake_wear_indicator": "Wear indicator line",
+        "rim_bead_profile": "Con gancho (hooked)"
+      },
+      "expected_blocking": [
+        {
+          "code": "field_applicability",
+          "field": "rim_brake_wear_indicator"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [
+        "https://www.weinmanntek.com/technology/6/6"
+      ]
+    },
+    {
+      "id": "ri_an_undeclared_braking_surface_leaves_it_pending",
+      "template": "rim",
+      "values": {
+        "bead_seat_diameter_mm": "622",
+        "rim_internal_width_mm": "19",
+        "spoke_hole_count": "32",
+        "spec_evidence_source": "https://example.invalid/synthetic",
+        "rim_brake_wear_indicator": "Safety line",
+        "rim_bead_profile": "Con gancho (hooked)"
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "expected_issue_subset": [
+        {
+          "code": "prerequisite",
+          "field": "rim_brake_wear_indicator",
+          "blocking": false
+        }
+      ],
+      "expected_sql_issue_subset": [
+        {
+          "code": "field_applicability",
+          "field": "rim_brake_wear_indicator",
+          "blocking": false
+        }
+      ]
+    },
+    {
+      "id": "ri_the_offset_needs_an_asymmetric_rim",
+      "template": "rim",
+      "values": {
+        "bead_seat_diameter_mm": "622",
+        "rim_internal_width_mm": "19",
+        "spoke_hole_count": "32",
+        "spec_evidence_source": "https://example.invalid/synthetic",
+        "rim_symmetry": "Simétrica",
+        "rim_asymmetric_offset_mm": "3",
+        "rim_bead_profile": "Con gancho (hooked)"
+      },
+      "expected_blocking": [
+        {
+          "code": "field_applicability",
+          "field": "rim_asymmetric_offset_mm"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "ri_an_asymmetric_rim_declares_its_offset",
+      "template": "rim",
+      "values": {
+        "bead_seat_diameter_mm": "622",
+        "rim_internal_width_mm": "19",
+        "spoke_hole_count": "32",
+        "spec_evidence_source": "https://example.invalid/synthetic",
+        "rim_symmetry": "Asimétrica",
+        "rim_asymmetric_offset_mm": "3",
+        "rim_bead_profile": "Con gancho (hooked)"
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [
+        "https://www.weinmanntek.com/technology/6/6"
+      ]
+    },
+    {
+      "id": "ri_a_width_range_documented_by_the_package",
+      "template": "rim",
+      "values": {
+        "bead_seat_diameter_mm": "622",
+        "rim_internal_width_mm": "19",
+        "spoke_hole_count": "32",
+        "spec_evidence_source": "https://example.invalid/synthetic",
+        "tire_width_range_mm": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "width_min_mm": "25",
+                "width_max_mm": "50",
+                "evidence_source": "Etiqueta del envase"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "rim_bead_profile": "Con gancho (hooked)"
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [
+        "https://www.sheldonbrown.com/tire-sizing.html"
+      ]
+    },
+    {
+      "id": "ri_a_width_range_without_any_evidence_is_pending",
+      "template": "rim",
+      "values": {
+        "bead_seat_diameter_mm": "622",
+        "rim_internal_width_mm": "19",
+        "spoke_hole_count": "32",
+        "spec_evidence_source": "https://example.invalid/synthetic",
+        "tire_width_range_mm": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "width_min_mm": "25",
+                "width_max_mm": "50"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "rim_bead_profile": "Con gancho (hooked)"
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "expected_issue_subset": [
+        {
+          "code": "row_incomplete",
+          "field": "tire_width_range_mm",
+          "blocking": false
+        }
+      ],
+      "expected_sql_issue_subset": [
+        {
+          "code": "row_incomplete",
+          "field": "tire_width_range_mm",
+          "blocking": false
+        }
+      ]
+    },
+    {
+      "id": "ri_an_inverted_width_range_blocks",
+      "template": "rim",
+      "values": {
+        "bead_seat_diameter_mm": "622",
+        "rim_internal_width_mm": "19",
+        "spoke_hole_count": "32",
+        "spec_evidence_source": "https://example.invalid/synthetic",
+        "tire_width_range_mm": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "width_min_mm": "50",
+                "width_max_mm": "25",
+                "evidence_source": "Etiqueta del envase"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "rim_bead_profile": "Con gancho (hooked)"
+      },
+      "expected_blocking": [
+        {
+          "code": "row_shape",
+          "field": "tire_width_range_mm"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "expected_sql_blocking": [
+        {
+          "code": "field_constraint",
+          "field": "tire_width_range_mm"
+        }
+      ]
+    },
+    {
+      "id": "ri_the_nipple_hole_diameter_is_a_rim_fact",
+      "template": "rim",
+      "values": {
+        "bead_seat_diameter_mm": "622",
+        "rim_internal_width_mm": "19",
+        "spoke_hole_count": "32",
+        "spec_evidence_source": "https://example.invalid/synthetic",
+        "rim_spoke_hole_diameter_mm": "4.5",
+        "rim_bead_profile": "Con gancho (hooked)"
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [
+        "https://www.weinmanntek.com/technology/6/6"
+      ]
+    },
+    {
+      "id": "ri_a_nipple_hole_without_evidence_is_pending",
+      "template": "rim",
+      "values": {
+        "bead_seat_diameter_mm": "622",
+        "rim_spoke_hole_diameter_mm": "4.5",
+        "rim_bead_profile": "Con gancho (hooked)"
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [
+        "https://www.weinmanntek.com/technology/6/6"
+      ],
+      "expected_issue_subset": [
+        {
+          "code": "prerequisite",
+          "field": "rim_spoke_hole_diameter_mm",
+          "blocking": false
+        }
+      ],
+      "expected_sql_issue_subset": [
+        {
+          "code": "prerequisite_missing",
+          "field": "rim_spoke_hole_diameter_mm",
+          "blocking": false
+        }
+      ]
+    },
+    {
+      "id": "ri_legacy_size_valve_and_holes_are_preserved",
+      "template": "rim",
+      "values": {
+        "bead_seat_diameter_mm": "622",
+        "rim_internal_width_mm": "19",
+        "spoke_hole_count": "32",
+        "spec_evidence_source": "https://example.invalid/synthetic",
+        "wheel_size": "29\"",
+        "spoke_holes": "32",
+        "valve_type": "Presta (francesa)",
+        "rim_bead_profile": "Con gancho (hooked)"
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "hur_pair_rejects_global_hub_axle_mount_kind",
+      "template": "hub",
+      "values": {
+        "hub_package_position": "Juego delantera + trasera",
+        "hub_axle_mount_kind": "Eje pasante",
+        "spec_evidence_source": "https://example.invalid/synthetic"
+      },
+      "expected_blocking": [
+        {
+          "code": "field_applicability",
+          "field": "hub_axle_mount_kind"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "hur_pair_rejects_global_hub_spoke_head_interface",
+      "template": "hub",
+      "values": {
+        "hub_package_position": "Juego delantera + trasera",
+        "hub_spoke_head_interface": "J-Bend",
+        "spec_evidence_source": "https://example.invalid/synthetic"
+      },
+      "expected_blocking": [
+        {
+          "code": "field_applicability",
+          "field": "hub_spoke_head_interface"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "hur_pair_rejects_global_hub_rotor_mount_present",
+      "template": "hub",
+      "values": {
+        "hub_package_position": "Juego delantera + trasera",
+        "hub_rotor_mount_present": true,
+        "spec_evidence_source": "https://example.invalid/synthetic"
+      },
+      "expected_blocking": [
+        {
+          "code": "field_applicability",
+          "field": "hub_rotor_mount_present"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "hur_pair_rejects_global_hub_flange_to_flange_mm",
+      "template": "hub",
+      "values": {
+        "hub_package_position": "Juego delantera + trasera",
+        "hub_flange_to_flange_mm": "58",
+        "spec_evidence_source": "https://example.invalid/synthetic"
+      },
+      "expected_blocking": [
+        {
+          "code": "field_applicability",
+          "field": "hub_flange_to_flange_mm"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "hur_pair_rejects_global_center_to_flange_left_mm",
+      "template": "hub",
+      "values": {
+        "hub_package_position": "Juego delantera + trasera",
+        "center_to_flange_left_mm": "35",
+        "spec_evidence_source": "https://example.invalid/synthetic"
+      },
+      "expected_blocking": [
+        {
+          "code": "field_applicability",
+          "field": "center_to_flange_left_mm"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "hur_pair_rejects_global_center_to_flange_right_mm",
+      "template": "hub",
+      "values": {
+        "hub_package_position": "Juego delantera + trasera",
+        "center_to_flange_right_mm": "23",
+        "spec_evidence_source": "https://example.invalid/synthetic"
+      },
+      "expected_blocking": [
+        {
+          "code": "field_applicability",
+          "field": "center_to_flange_right_mm"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "hur_pair_rejects_global_flange_pcd_left_mm",
+      "template": "hub",
+      "values": {
+        "hub_package_position": "Juego delantera + trasera",
+        "flange_pcd_left_mm": "58",
+        "spec_evidence_source": "https://example.invalid/synthetic"
+      },
+      "expected_blocking": [
+        {
+          "code": "field_applicability",
+          "field": "flange_pcd_left_mm"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "hur_pair_rejects_global_flange_pcd_right_mm",
+      "template": "hub",
+      "values": {
+        "hub_package_position": "Juego delantera + trasera",
+        "flange_pcd_right_mm": "58",
+        "spec_evidence_source": "https://example.invalid/synthetic"
+      },
+      "expected_blocking": [
+        {
+          "code": "field_applicability",
+          "field": "flange_pcd_right_mm"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "hur_pair_rejects_global_spoke_hole_diameter_mm",
+      "template": "hub",
+      "values": {
+        "hub_package_position": "Juego delantera + trasera",
+        "spoke_hole_diameter_mm": "2.6",
+        "spec_evidence_source": "https://example.invalid/synthetic"
+      },
+      "expected_blocking": [
+        {
+          "code": "field_applicability",
+          "field": "spoke_hole_diameter_mm"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "hur_pair_rejects_global_bearing_system",
+      "template": "hub",
+      "values": {
+        "hub_package_position": "Juego delantera + trasera",
+        "bearing_system": "Bolas sueltas",
+        "spec_evidence_source": "https://example.invalid/synthetic"
+      },
+      "expected_blocking": [
+        {
+          "code": "field_applicability",
+          "field": "bearing_system"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "hur_one_hub_uses_the_same_receiver_presence_as_a_package_piece",
+      "template": "hub",
+      "values": {
+        "hub_package_position": "Delantera",
+        "hub_drive_receiver_present": true,
+        "hub_drive_receiver_kind": "Otra interfaz OEM",
+        "hub_drive_receiver_reference": "Declaración sintética: no certifica montaje",
+        "spec_evidence_source": "https://example.invalid/synthetic"
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "hur_an_absent_receiver_blocks_its_reference_on_one_hub",
+      "template": "hub",
+      "values": {
+        "hub_package_position": "Delantera",
+        "hub_drive_receiver_present": false,
+        "hub_drive_receiver_reference": "Synthetic receiver",
+        "spec_evidence_source": "https://example.invalid/synthetic"
+      },
+      "expected_blocking": [
+        {
+          "code": "field_applicability",
+          "field": "hub_drive_receiver_reference"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "hur_an_unconfirmed_receiver_keeps_its_reference_pending",
+      "template": "hub",
+      "values": {
+        "hub_package_position": "Trasera",
+        "hub_drive_receiver_reference": "Synthetic receiver",
+        "spec_evidence_source": "https://example.invalid/synthetic"
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "expected_issue_subset": [
+        {
+          "code": "prerequisite",
+          "field": "hub_drive_receiver_reference",
+          "blocking": false
+        }
+      ],
+      "expected_sql_issue_subset": [
+        {
+          "code": "field_applicability",
+          "field": "hub_drive_receiver_reference",
+          "blocking": false
+        }
+      ]
+    },
+    {
+      "id": "hur_a_front_and_rear_package_with_one_piece_stays_pending",
+      "template": "hub",
+      "values": {
+        "hub_package_position": "Juego delantera + trasera",
+        "hub_package_piece_count": "2",
+        "spec_evidence_source": "https://example.invalid/synthetic",
+        "hub_package_pieces": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "piece_position": "Trasera",
+                "piece_identity": "Synthetic Trasera",
+                "evidence_source": "Synthetic package"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "expected_issue_subset": [
+        {
+          "code": "row_cardinality_pending",
+          "field": "hub_package_pieces",
+          "blocking": false
+        }
+      ],
+      "expected_sql_issue_subset": [
+        {
+          "code": "row_cardinality_pending",
+          "field": "hub_package_pieces",
+          "blocking": false
+        }
+      ]
+    },
+    {
+      "id": "hur_two_unique_ends_match_the_declared_package",
+      "template": "hub",
+      "values": {
+        "hub_package_position": "Juego delantera + trasera",
+        "hub_package_piece_count": "2",
+        "spec_evidence_source": "https://example.invalid/synthetic",
+        "hub_package_pieces": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "piece_position": "Delantera",
+                "piece_identity": "Synthetic Delantera",
+                "evidence_source": "Synthetic package"
+              },
+              "sources": []
+            },
+            {
+              "id": "r2",
+              "values": {
+                "piece_position": "Trasera",
+                "piece_identity": "Synthetic Trasera",
+                "evidence_source": "Synthetic package"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "hur_pair_preserves_two_axles_and_rotor_mounts",
+      "template": "hub",
+      "values": {
+        "hub_package_position": "Juego delantera + trasera",
+        "spec_evidence_source": "https://example.invalid/synthetic",
+        "hub_package_pieces": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "piece_position": "Delantera",
+                "piece_identity": "Synthetic Delantera",
+                "evidence_source": "Synthetic package",
+                "axle_mount_kind": "Eje pasante",
+                "axle_diameter_mm": "15",
+                "axle_diameter_datum": "Paso declarado",
+                "rotor_mount_present": true,
+                "rotor_mount_type": "Centerlock"
+              },
+              "sources": []
+            },
+            {
+              "id": "r2",
+              "values": {
+                "piece_position": "Trasera",
+                "piece_identity": "Synthetic Trasera",
+                "evidence_source": "Synthetic package",
+                "axle_mount_kind": "Eje con tuercas",
+                "axle_diameter_mm": "14",
+                "axle_diameter_datum": "Diámetro exterior del eje",
+                "rotor_mount_present": false
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "hur_piece_without_disc_cannot_carry_its_mount",
+      "template": "hub",
+      "values": {
+        "hub_package_position": "Juego delantera + trasera",
+        "hub_package_pieces": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "piece_position": "Delantera",
+                "piece_identity": "Synthetic Delantera",
+                "evidence_source": "Synthetic package",
+                "rotor_mount_present": false,
+                "rotor_mount_type": "6 pernos"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [
+        {
+          "code": "row_field_applicability",
+          "field": "hub_package_pieces"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "hur_piece_without_receiver_cannot_claim_one",
+      "template": "hub",
+      "values": {
+        "hub_package_position": "Juego delantera + trasera",
+        "hub_package_pieces": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "piece_position": "Delantera",
+                "piece_identity": "Synthetic Delantera",
+                "evidence_source": "Synthetic package",
+                "drive_interface_present": false,
+                "drive_receiver_kind": "Driver BMX"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [
+        {
+          "code": "row_field_applicability",
+          "field": "hub_package_pieces"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "hur_piece_diameter_requires_its_own_datum",
+      "template": "hub",
+      "values": {
+        "hub_package_position": "Juego delantera + trasera",
+        "hub_package_pieces": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "piece_position": "Trasera",
+                "piece_identity": "Synthetic Trasera",
+                "evidence_source": "Synthetic package",
+                "axle_diameter_mm": "14"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "expected_issue_subset": [
+        {
+          "code": "row_required_missing",
+          "field": "hub_package_pieces",
+          "blocking": false
+        }
+      ],
+      "expected_sql_issue_subset": [
+        {
+          "code": "row_required_missing",
+          "field": "hub_package_pieces",
+          "blocking": false
+        }
+      ]
+    },
+    {
+      "id": "hur_a_documented_14mm_axle_does_not_need_a_legacy_token",
+      "template": "hub",
+      "values": {
+        "hub_package_position": "Trasera",
+        "hub_axle_mount_kind": "Eje con tuercas",
+        "hub_axle_diameter_mm": "14",
+        "hub_axle_diameter_datum": "Diámetro exterior del eje",
+        "spec_evidence_source": "https://www.profileracing.com/profiles-tech-tip-29-mind-the-gap-converting-your-axle-from-14mm-to-38/"
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [
+        "https://www.profileracing.com/profiles-tech-tip-29-mind-the-gap-converting-your-axle-from-14mm-to-38/"
+      ]
+    },
+    {
+      "id": "hur_a_diameter_alone_does_not_name_its_interface",
+      "template": "hub",
+      "values": {
+        "hub_package_position": "Trasera",
+        "hub_axle_diameter_mm": "13",
+        "spec_evidence_source": "https://example.invalid/synthetic"
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "expected_issue_subset": [
+        {
+          "code": "prerequisite",
+          "field": "hub_axle_diameter_mm",
+          "blocking": false
+        }
+      ],
+      "expected_sql_issue_subset": [
+        {
+          "code": "prerequisite_missing",
+          "field": "hub_axle_diameter_mm",
+          "blocking": false
+        }
+      ]
+    },
+    {
+      "id": "hur_an_unsupplied_thru_axle_has_no_supplied_reference",
+      "template": "hub",
+      "values": {
+        "hub_package_position": "Delantera",
+        "hub_axle_mount_kind": "Eje pasante",
+        "hub_thru_axle_supplied": false,
+        "hub_supplied_thru_axle_reference": "Synthetic axle",
+        "spec_evidence_source": "https://example.invalid/synthetic"
+      },
+      "expected_blocking": [
+        {
+          "code": "field_applicability",
+          "field": "hub_supplied_thru_axle_reference"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [
+        "https://www.parktool.com/en-us/product/thru-axle-tap-tap-20-2"
+      ]
+    },
+    {
+      "id": "rir_tubular_disallows_clincher_bead_seat_diameter_mm",
+      "template": "rim",
+      "values": {
+        "rim_bead_profile": "Tubular / de pegar",
+        "bead_seat_diameter_mm": "622",
+        "spec_evidence_source": "https://www.tufo.com/en/tubular/"
+      },
+      "expected_blocking": [
+        {
+          "code": "field_applicability",
+          "field": "bead_seat_diameter_mm"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [
+        "https://www.tufo.com/en/tubular/"
+      ]
+    },
+    {
+      "id": "rir_tubular_disallows_clincher_rim_internal_width_mm",
+      "template": "rim",
+      "values": {
+        "rim_bead_profile": "Tubular / de pegar",
+        "rim_internal_width_mm": "20",
+        "spec_evidence_source": "https://www.tufo.com/en/tubular/"
+      },
+      "expected_blocking": [
+        {
+          "code": "field_applicability",
+          "field": "rim_internal_width_mm"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [
+        "https://www.tufo.com/en/tubular/"
+      ]
+    },
+    {
+      "id": "rir_tubular_disallows_clincher_rim_tubeless_ready",
+      "template": "rim",
+      "values": {
+        "rim_bead_profile": "Tubular / de pegar",
+        "rim_tubeless_ready": true,
+        "spec_evidence_source": "https://www.tufo.com/en/tubular/"
+      },
+      "expected_blocking": [
+        {
+          "code": "field_applicability",
+          "field": "rim_tubeless_ready"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [
+        "https://www.tufo.com/en/tubular/"
+      ]
+    },
+    {
+      "id": "rir_nipple_seat_and_tire_bed_holes_have_different_owners",
+      "template": "rim",
+      "values": {
+        "rim_spoke_hole_diameter_mm": "5.5",
+        "rim_tire_bed_access_hole_mm": "9",
+        "spec_evidence_source": "https://www.ryde.nl/andra-29-r/"
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [
+        "https://www.ryde.nl/andra-29-r/"
+      ]
+    },
+    {
+      "id": "rir_drilling_preserves_its_three_distinct_oem_figures",
+      "template": "rim",
+      "values": {
+        "rim_drilling_patterns": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "pattern_identity": "Patrón declarado para la variante de ejemplo",
+                "datum": "Convención Angle rad/axi y ZIG ZAG de la ficha Ryde",
+                "radial_angle_deg": "8",
+                "axial_angle_deg": "2",
+                "zigzag_mm": "2",
+                "source_document": "Andra 29 R, apartado de perforación",
+                "source_url": "https://www.ryde.nl/andra-29-r/"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [
+        "https://www.ryde.nl/andra-29-r/"
+      ]
+    },
+    {
+      "id": "rir_an_angle_without_its_datum_stays_pending",
+      "template": "rim",
+      "values": {
+        "rim_drilling_patterns": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "pattern_identity": "Synthetic pattern",
+                "radial_angle_deg": "8",
+                "source_document": "Synthetic document"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "expected_issue_subset": [
+        {
+          "code": "row_incomplete",
+          "field": "rim_drilling_patterns",
+          "blocking": false
+        }
+      ],
+      "expected_sql_issue_subset": [
+        {
+          "code": "row_incomplete",
+          "field": "rim_drilling_patterns",
+          "blocking": false
+        }
+      ]
+    },
+    {
+      "id": "rir_missing_bead_profile_is_pending",
+      "template": "rim",
+      "values": {
+        "spec_evidence_source": "https://example.invalid/synthetic"
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "expected_issue_subset": [
+        {
+          "code": "required_missing",
+          "field": "rim_bead_profile",
+          "blocking": false
+        }
+      ],
+      "expected_sql_issue_subset": [
+        {
+          "code": "required_missing",
+          "field": "rim_bead_profile",
+          "blocking": false
+        }
+      ]
+    },
+    {
+      "id": "rir_one_erd_keeps_the_oem_datum",
+      "template": "rim",
+      "values": {
+        "rim_erd_mm": "596",
+        "rim_erd_datum": "ID -2mm publicado por Ryde",
+        "spec_evidence_source": "https://www.ryde.nl/andra-29-r/"
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [
+        "https://www.ryde.nl/andra-29-r/"
+      ]
+    },
+    {
+      "id": "rir_erd_without_its_datum_is_pending",
+      "template": "rim",
+      "values": {
+        "rim_erd_mm": "596",
+        "spec_evidence_source": "https://example.invalid/synthetic"
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "expected_issue_subset": [
+        {
+          "code": "prerequisite",
+          "field": "rim_erd_mm",
+          "blocking": false
+        }
+      ],
+      "expected_sql_issue_subset": [
+        {
+          "code": "prerequisite_missing",
+          "field": "rim_erd_mm",
+          "blocking": false
+        }
+      ]
+    },
+    {
+      "id": "rir_rim_limit_is_not_a_measured_wheel_tension",
+      "template": "rim",
+      "values": {
+        "rim_spoke_tension_limits": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "configuration_identity": "Andra 29 R, alcance de la ficha OEM",
+                "maximum": "1400",
+                "unit": "N",
+                "source_document": "MAX. SPOKE TENSION",
+                "source_url": "https://www.ryde.nl/andra-29-r/"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [
+        "https://www.parktool.com/en-us/blog/repair-help/wheel-tension-measurement",
+        "https://www.ryde.nl/andra-29-r/"
+      ]
+    },
+    {
+      "id": "rir_a_tensiometer_scale_is_not_a_force_unit",
+      "template": "rim",
+      "values": {
+        "rim_spoke_tension_limits": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "configuration_identity": "Synthetic limit",
+                "maximum": "23",
+                "unit": "Lectura TM-1",
+                "source_document": "Synthetic document"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [
+        {
+          "code": "row_shape",
+          "field": "rim_spoke_tension_limits"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "expected_sql_blocking": [
+        {
+          "code": "field_constraint",
+          "field": "rim_spoke_tension_limits"
+        }
+      ]
+    }
+  ],
+  "pending_cases": [
+    {
+      "id": "hub_convertible_end_caps_need_a_configuration_table",
+      "required_result": "unknown_without_configuration_table",
+      "reason": "One captured hub declares two axle configurations; a single scalar end cannot hold both and no table exists."
+    },
+    {
+      "id": "hub_locknut_referenced_flange_figures_are_not_converted",
+      "required_result": "unknown_without_arithmetic_coherence",
+      "reason": "OEM sheets publish lock-nut to flange distances; the engine compares ordered pairs, never sums."
+    },
+    {
+      "id": "rim_etrto_text_contradicting_the_bead_seat_diameter",
+      "required_result": "unknown_without_parsed_declaration",
+      "reason": "The ETRTO string is free text; nothing compares it with the typed diameter and internal width."
+    },
+    {
+      "id": "legacy_inch_size_cannot_be_converted_to_a_diameter",
+      "required_result": "identity_pending",
+      "reason": "Sheldon lists several bead seat diameters for 20, 24 and 26 inch marks; the legacy token cannot be filled automatically."
+    },
+    {
+      "id": "hub_and_rim_wheelbuild_requires_model_scoped_evidence",
+      "required_result": "unknown_without_model_scoped_evidence",
+      "reason": "Spoke length, dish and tension are outcomes of a built wheel, never nominal facts of a hub or a rim."
+    }
+  ],
+  "catalogue_sha256": "7585bdb1f1b5365e7474324b37e6d20a287d92cbce74319ed53af3ffb663b1a3"
+}

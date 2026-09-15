@@ -81,6 +81,24 @@ void main() {
       expect(resolution.category?.fullPath,
           'Componentes / Ruedas / Cintas de llanta');
     });
+
+    test('una cuña de sillín es adaptador de tija, no un asiento', () {
+      final profile = ProductIdentityExtractor.extract(
+        const ProductIdentityInput(
+          name: 'Adaptador tija MUQZI 27.2-30.0 100mm',
+          sourceTitle: 'MUQZI-Cuña de sillín de 100mm de largo, adaptador de '
+              'tubo de poste de asiento (27.2-30.0)',
+        ),
+      );
+      final resolution = resolver.resolve(profile);
+
+      expect(profile.familyId, 'seatpost_shim');
+      expect(profile.familyCandidates, isNot(contains('saddle')));
+      expect(
+        resolution.category?.fullPath,
+        'Accesorios / Asientos / Adaptadores de tija',
+      );
+    });
   });
 
   group('un nodo de sistema nunca es la categoría de un producto', () {
@@ -134,17 +152,17 @@ void main() {
   });
 
   group('la foto y el título se reconcilian, no se ignoran', () {
-    test('una foto segura corrige un título que nombró el sistema vecino', () {
+    test('una foto segura que contradice al título exige revisión', () {
       final resolution = resolver.resolve(
         profileOf(
-          'Repuesto para caliper de freno aluminio',
+          'Caliper de freno hidráulico aluminio',
           visualFamilyId: 'rim_brake_arm',
           visualConfidence: 0.92,
         ),
       );
-      expect(resolution.category?.fullPath,
-          'Componentes / Frenos / V-Brake / Herraduras');
-      expect(resolution.evidence.first, contains('La foto'));
+      expect(resolution.isResolved, isFalse);
+      expect(resolution.refusal, ProductCategoryRefusal.conflictingEvidence);
+      expect(resolution.reviewReason, contains('cosas distintas'));
     });
 
     test('una foto dudosa que contradice al título manda a revisión', () {
@@ -171,6 +189,61 @@ void main() {
       expect(resolver.resolve(profile).isResolved, isTrue);
     });
 
+    test('un espaciador preciso admite que la foto diga juego de dirección',
+        () {
+      final profile = profileOf(
+        'Espaciadores de dirección aluminio 1 1/8',
+        visualFamilyId: 'headset',
+        visualConfidence: 0.95,
+      );
+      expect(profile.familyEvidenceConflicts, isFalse);
+      expect(profile.effectiveFamilyId, 'stem_spacer');
+      expect(
+        resolver.resolve(profile).category?.fullPath,
+        'Componentes / Dirección / Espaciadores',
+      );
+    });
+
+    test('un título de proveedor preciso no cede ante una foto mal leída', () {
+      final profile = ProductIdentityExtractor.extract(
+        const ProductIdentityInput(
+          name: 'Tope de piola cambio RISK Basic 4mm',
+          sourceTitle:
+              'RISK-Tapas básicas para Cable de bicicleta, cubierta para Cable de freno de 4mm (100pcs 4mm Shift Cap)',
+        ),
+      ).withVisualReading(
+        visualFamilyId: 'tire',
+        visualConfidence: 0.95,
+      );
+
+      expect(profile.supplierTitleFamilyIsAuthoritative, isTrue);
+      expect(profile.familyEvidenceConflicts, isFalse);
+      expect(
+        resolver.resolve(profile).category?.fullPath,
+        'Componentes / Fundas y piolas / Cambios',
+      );
+    });
+
+    test('una funda de freno cae en Frenos, no en Accesorios / Fundas', () {
+      final resolution = resolver.resolve(
+        profileOf('Funda de freno teflonada 5mm'),
+      );
+
+      expect(
+        resolution.category?.fullPath,
+        'Componentes / Fundas y piolas / Frenos',
+      );
+    });
+
+    test('una funda sin uso decidido no elige Cambio o Freno al azar', () {
+      final resolution = resolver.resolve(profileOf('Funda de cable 4mm'));
+
+      expect(resolution.isResolved, isFalse);
+      expect(resolution.refusal, ProductCategoryRefusal.ambiguousLeaf);
+      expect(resolution.evidence.join(' '), contains('Cambios'));
+      expect(resolution.evidence.join(' '), contains('Frenos'));
+    });
+
     test('una foto floja no manda a revisión una fila sana', () {
       final profile = profileOf(
         'Pastillas de freno resina',
@@ -185,16 +258,16 @@ void main() {
       );
     });
 
-    test('el texto no puede suprimir a la visión', () {
-      // La regla general: un familyId de texto NO nulo pero equivocado ya no
-      // impide que la foto se lea ni que contradiga.
+    test('ni texto ni visión pueden sobrescribirse en un conflicto', () {
       final wrongText = profileOf(
-        'Repuesto para caliper de freno aluminio',
+        'Caliper de freno hidráulico aluminio',
         visualFamilyId: 'rim_brake_arm',
         visualConfidence: 0.92,
       );
       expect(wrongText.familyId, isNotNull);
-      expect(wrongText.effectiveFamilyId, 'rim_brake_arm');
+      expect(wrongText.familyEvidenceConflicts, isTrue);
+      expect(wrongText.requiresIdentityReview, isTrue);
+      expect(wrongText.effectiveFamilyId, isNull);
     });
   });
 
@@ -247,11 +320,33 @@ final _tree = <Category>[
   _c('frenos-adapt', 'Adaptadores', 'Componentes / Frenos / Adaptadores', 2,
       parent: 'frenos'),
   _c('ruedas', 'Ruedas', 'Componentes / Ruedas', 1, parent: 'componentes'),
+  _c('direccion', 'Dirección', 'Componentes / Dirección', 1,
+      parent: 'componentes'),
+  _c('espaciadores', 'Espaciadores', 'Componentes / Dirección / Espaciadores',
+      2,
+      parent: 'direccion'),
   _c('mazas', 'Mazas', 'Componentes / Ruedas / Mazas', 2, parent: 'ruedas'),
   _c('maza', 'Maza', 'Componentes / Ruedas / Mazas / Maza', 3, parent: 'mazas'),
   _c('cintas', 'Cintas de llanta', 'Componentes / Ruedas / Cintas de llanta', 2,
       parent: 'ruedas'),
+  _c('fundas-piolas', 'Fundas y piolas', 'Componentes / Fundas y piolas', 1,
+      parent: 'componentes'),
+  _c('fundas-cambios', 'Cambios', 'Componentes / Fundas y piolas / Cambios', 2,
+      parent: 'fundas-piolas'),
+  _c('fundas-frenos', 'Frenos', 'Componentes / Fundas y piolas / Frenos', 2,
+      parent: 'fundas-piolas'),
   _c('accesorios', 'Accesorios', 'Accesorios', 0),
+  _c('asientos', 'Asientos', 'Accesorios / Asientos', 1, parent: 'accesorios'),
+  _c('asiento', 'Asiento', 'Accesorios / Asientos / Asiento', 2,
+      parent: 'asientos'),
+  _c('tija', 'Tija', 'Accesorios / Asientos / Tija', 2, parent: 'asientos'),
+  _c(
+    'adaptadores-tija',
+    'Adaptadores de tija',
+    'Accesorios / Asientos / Adaptadores de tija',
+    2,
+    parent: 'asientos',
+  ),
   _c('acc-adapt', 'Adaptadores', 'Accesorios / Adaptadores', 1,
       parent: 'accesorios'),
   _c('herramientas', 'Herramientas', 'Herramientas', 0),

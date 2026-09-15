@@ -7,6 +7,7 @@ class Message {
   final Map<String, dynamic> metadata;
   final DateTime createdAt;
   final int? messageSequence;
+  final String? threadRootMessageId;
   final bool isMe; // Helper for UI
 
   Message({
@@ -18,8 +19,25 @@ class Message {
     required this.metadata,
     required this.createdAt,
     this.messageSequence,
+    this.threadRootMessageId,
     this.isMe = false,
   });
+
+  bool get isThreadReply => threadRootMessageId != null;
+  bool get isTopLevelMessage => threadRootMessageId == null;
+
+  /// Row shape [Message.fromJson] reads back, for the on-device history.
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'conversation_id': conversationId,
+        'sender_id': senderId,
+        'content': content,
+        'type': type,
+        'metadata': metadata,
+        'created_at': createdAt.toUtc().toIso8601String(),
+        'message_sequence': messageSequence,
+        'thread_root_message_id': threadRootMessageId,
+      };
 
   factory Message.fromJson(Map<String, dynamic> json, {String? currentUserId}) {
     final metadata = Map<String, dynamic>.from(
@@ -56,6 +74,8 @@ class Message {
         final value when value != null => int.tryParse(value.toString()),
         _ => null,
       },
+      threadRootMessageId: json['thread_root_message_id']?.toString() ??
+          metadata['thread_root_message_id']?.toString(),
       isMe: currentUserId != null && json['sender_id'] == currentUserId,
     );
   }

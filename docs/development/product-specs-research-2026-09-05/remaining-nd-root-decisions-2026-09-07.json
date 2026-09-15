@@ -1,0 +1,281 @@
+{
+  "schema_version": 1,
+  "approval_scope": "field_representation",
+  "base_sha256": "d7f8510ca112da4430f485720243ddde899daa097f39fb00aec49fe35027b7ca",
+  "proposal_file": "remaining-nd-normalized-patches-2026-09-07.json",
+  "proposal_sha256": "96f65c22acd5167216978e0b856944f89c2229f29acf48a2f0fb41fb3bcb5d97",
+  "source_hashes": {
+    "remaining-non-drivetrain-addendum-review-2026-09-07.json": "fd78724798b4c83773e599d33e6705d51fb5298526743470f5a223f5f586d0e1",
+    "all-family-contact-integrated-2026-09-07.json": "d7f8510ca112da4430f485720243ddde899daa097f39fb00aec49fe35027b7ca"
+  },
+  "patch_adjudications": [
+    {
+      "patch_id": "RND-ND09-thread_pitch_system",
+      "decision": "corregir",
+      "reason": "Selector de expresión del paso, independiente de la unidad del diámetro nominal. No certifica equivalencia ni ajuste.",
+      "after_override": {
+        "field_entry": {
+          "key": "thread_pitch_system",
+          "section_key": "measurement",
+          "sort_order": 300,
+          "is_required": false,
+          "visibility_rules": [],
+          "option_rules": [],
+          "constraint_rules": []
+        },
+        "definition_used_by_append": "fastener",
+        "roles": "measurement",
+        "semantic_roles": "compatibility",
+        "allowed_when": {
+          "kind": "when",
+          "rows": [
+            [
+              {
+                "field": "fastener_kind",
+                "operator": "in",
+                "value_type": "token",
+                "value": [
+                  "Perno",
+                  "Tornillo",
+                  "Tuerca",
+                  "Otro"
+                ]
+              }
+            ]
+          ]
+        },
+        "required_when": {
+          "kind": "never"
+        },
+        "prerequisites": [
+          "thread"
+        ],
+        "evidence_requirements": "oem_spec"
+      }
+    },
+    {
+      "patch_id": "RND-ND09-thread_pitch_mm-gate",
+      "decision": "corregir",
+      "reason": "Una expresión canónica por ficha; la fuente original conserva equivalencias. Sin selector permanece pendiente, no mecánicamente aprobado.",
+      "after_override": {
+        "allowed_when": {
+          "kind": "when",
+          "rows": [
+            [
+              {
+                "field": "fastener_kind",
+                "operator": "in",
+                "value_type": "token",
+                "value": [
+                  "Perno",
+                  "Tornillo",
+                  "Tuerca",
+                  "Otro"
+                ]
+              },
+              {
+                "field": "thread_pitch_system",
+                "operator": "eq",
+                "value_type": "token",
+                "value": "Paso en milímetros"
+              }
+            ]
+          ]
+        },
+        "required_when": {
+          "kind": "when",
+          "rows": [
+            [
+              {
+                "field": "fastener_kind",
+                "operator": "in",
+                "value_type": "token",
+                "value": [
+                  "Perno",
+                  "Tornillo",
+                  "Tuerca",
+                  "Otro"
+                ]
+              },
+              {
+                "field": "thread_pitch_system",
+                "operator": "eq",
+                "value_type": "token",
+                "value": "Paso en milímetros"
+              }
+            ]
+          ]
+        }
+      }
+    },
+    {
+      "patch_id": "RND-ND09-thread_tpi-gate",
+      "decision": "corregir",
+      "reason": "Una expresión canónica por ficha; la fuente original conserva equivalencias. Sin selector permanece pendiente, no mecánicamente aprobado.",
+      "after_override": {
+        "allowed_when": {
+          "kind": "when",
+          "rows": [
+            [
+              {
+                "field": "fastener_kind",
+                "operator": "in",
+                "value_type": "token",
+                "value": [
+                  "Perno",
+                  "Tornillo",
+                  "Tuerca",
+                  "Otro"
+                ]
+              },
+              {
+                "field": "thread_pitch_system",
+                "operator": "eq",
+                "value_type": "token",
+                "value": "Hilos por pulgada"
+              }
+            ]
+          ]
+        },
+        "required_when": {
+          "kind": "when",
+          "rows": [
+            [
+              {
+                "field": "fastener_kind",
+                "operator": "in",
+                "value_type": "token",
+                "value": [
+                  "Perno",
+                  "Tornillo",
+                  "Tuerca",
+                  "Otro"
+                ]
+              },
+              {
+                "field": "thread_pitch_system",
+                "operator": "eq",
+                "value_type": "token",
+                "value": "Hilos por pulgada"
+              }
+            ]
+          ]
+        }
+      }
+    },
+    {
+      "patch_id": "RND-ND10-tool_capabilities-unique_by",
+      "decision": "rechazar",
+      "reason": "Operación y estándar no identifican miembro, medida, adaptador ni alcance de modelo."
+    },
+    {
+      "patch_id": "RND-ND11-security_rating_configurations-unique_by",
+      "decision": "rechazar",
+      "reason": "ABUS 540 tiene Sold Secure Pedal Cycle Diamond y Powered Cycle Gold; falta el programa."
+    },
+    {
+      "patch_id": "RND-ND13-bar_clamp_configurations-unique_by",
+      "decision": "rechazar",
+      "reason": "Igual diámetro y método pueden usar piezas diferentes; la ficha tampoco puede incluir otra variante del soporte."
+    },
+    {
+      "patch_id": "RND-ND14-bag_member_configurations-unique_by",
+      "decision": "rechazar",
+      "reason": "El mismo miembro puede medirse cerrado o expandido; el nombre libre no identifica la configuración."
+    },
+    {
+      "patch_id": "RND-ND17-co2_cartridge_configurations-unique_by",
+      "decision": "rechazar",
+      "reason": "Igual masa y roscado no identifican modelo, rosca ni condiciones de la contraparte."
+    },
+    {
+      "patch_id": "RND-ND19-eyewear_lens_configurations-unique_by",
+      "decision": "rechazar",
+      "reason": "El modelo libre no identifica revisión, lente izquierda/derecha, tinte o condición de medición."
+    },
+    {
+      "patch_id": "RND-ND23-nutrition_facts-unique_by",
+      "decision": "rechazar",
+      "reason": "Otro incluye nutrientes distintos; una porción declarada tampoco identifica su cantidad o preparación."
+    },
+    {
+      "patch_id": "RND-ND16-bottle_diameter-gate",
+      "decision": "aceptar",
+      "reason": "Representación de campos; no identidad OEM ni aprobación mecánica."
+    },
+    {
+      "patch_id": "RND-ND17-max_pressure-gate",
+      "decision": "corregir",
+      "reason": "Se conserva el escalar sin alcance como legacy; las cifras nuevas declaran magnitud, unidad y configuración. No se veta CO2 por no bombear.",
+      "after_override": {
+        "roles": "legacy"
+      }
+    },
+    {
+      "patch_id": "RND-ND18-helmet_kind-options",
+      "decision": "corregir",
+      "reason": "Se retiran público y construcción de este eje; Integral sigue en helmet_construction y Niño en intended_audience.",
+      "after_override": [
+        "Urbano",
+        "MTB / trail",
+        "Enduro",
+        "Ruta",
+        "Otro"
+      ]
+    },
+    {
+      "patch_id": "ROOT-RND-label-bottle_diameter_mm",
+      "decision": "aceptar",
+      "reason": "El campo compartido con portabidón describe la interfaz, no cualquier dimensión exterior."
+    },
+    {
+      "patch_id": "ROOT-RND-add-bottle_body_dimensions",
+      "decision": "aceptar",
+      "reason": "Magnitud o alcance explícito, conservando faltantes como pendientes."
+    },
+    {
+      "patch_id": "ROOT-RND-add-pump_pressure_specifications",
+      "decision": "aceptar",
+      "reason": "Magnitud o alcance explícito, conservando faltantes como pendientes."
+    },
+    {
+      "patch_id": "ROOT-RND-conditions-pump",
+      "decision": "aceptar",
+      "reason": "La condición se evalúa dentro de su propia configuración; no usa otra fila como evidencia."
+    },
+    {
+      "patch_id": "ROOT-RND-schema-co2_cartridge_configurations",
+      "decision": "aceptar",
+      "reason": "En una ficha de inflador la contraparte puede ser un cartucho; no se fija al nombre de otra familia."
+    },
+    {
+      "patch_id": "ROOT-RND-schema-security_rating_configurations",
+      "decision": "aceptar",
+      "reason": "Sold Secure clasifica el mismo componente en programas distintos; no se deduplica por emisor."
+    },
+    {
+      "patch_id": "ROOT-RND-conditions-lock",
+      "decision": "aceptar",
+      "reason": "La condición se evalúa dentro de su propia configuración; no usa otra fila como evidencia."
+    },
+    {
+      "patch_id": "ROOT-RND-schema-bar_clamp_configurations",
+      "decision": "aceptar",
+      "reason": "La variante física pertenece a identidad; una tabla de montajes no combina SKUs de un modelo."
+    },
+    {
+      "patch_id": "ROOT-RND-conditions-accessory_mount",
+      "decision": "aceptar",
+      "reason": "La condición se evalúa dentro de su propia configuración; no usa otra fila como evidencia."
+    },
+    {
+      "patch_id": "ROOT-RND-label-helmet_kind",
+      "decision": "aceptar",
+      "reason": "No se mezcla uso, público y construcción de carcasa."
+    }
+  ],
+  "mechanical_coverage_complete": false,
+  "automatic_fill_authorized": false,
+  "product_writes": 0,
+  "cases_sha256": "5ad80fea8cc1b40ebc83de29aa8dce98f1fc6f92fd38515c62b1dc184d700207"
+}

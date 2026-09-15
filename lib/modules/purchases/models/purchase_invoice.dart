@@ -28,13 +28,57 @@ DateTime _parseDate(dynamic value, {DateTime? fallback}) {
 
 double _clp(num value) => value.roundToDouble();
 
+class PurchaseSourceDocumentKind {
+  const PurchaseSourceDocumentKind({
+    required this.code,
+    required this.displayName,
+    required this.description,
+    required this.workflowKind,
+    required this.sortOrder,
+    required this.isActive,
+  });
+
+  static const String defaultCode = 'tax_invoice';
+
+  final String code;
+  final String displayName;
+  final String description;
+  final String workflowKind;
+  final int sortOrder;
+  final bool isActive;
+
+  bool get isDirectPurchase => workflowKind == 'direct_purchase';
+
+  factory PurchaseSourceDocumentKind.fromJson(Map<String, dynamic> json) {
+    final code = json['code']?.toString().trim() ?? '';
+    final displayName = json['display_name']?.toString().trim() ?? '';
+    final workflowKind = json['workflow_kind']?.toString().trim() ?? '';
+    if (code.isEmpty ||
+        displayName.isEmpty ||
+        !const {'ordered_purchase', 'direct_purchase'}.contains(workflowKind)) {
+      throw const FormatException(
+        'Invalid purchase source document kind row',
+      );
+    }
+    return PurchaseSourceDocumentKind(
+      code: code,
+      displayName: displayName,
+      description: json['description']?.toString().trim() ?? '',
+      workflowKind: workflowKind,
+      sortOrder: (json['sort_order'] as num?)?.toInt() ?? 0,
+      isActive: json['is_active'] as bool? ?? true,
+    );
+  }
+}
+
 class PurchaseInvoice {
   static const String listPreviewSelect =
       'id,tenant_id,invoice_number,supplier_id,supplier_name,supplier_rut,'
       'date,due_date,status,subtotal,tax,total,net_amount,paid_amount,balance,'
       'supplier_refunded_amount,credited_amount,supplier_credit_balance,'
       'prepayment_model,sent_date,confirmed_date,received_date,paid_date,'
-      'items,created_at,updated_at';
+      'items,created_at,updated_at,source_document_kind,'
+      'source_document_kind_label,source_document_workflow_kind';
   static const String listReadModelSelect =
       '$listPreviewSelect,receipt_state,receipt_expected_quantity,'
       'receipt_accepted_quantity,receipt_reported_difference_quantity,'
@@ -47,6 +91,9 @@ class PurchaseInvoice {
   final String? id;
   final String tenantId;
   final String invoiceNumber;
+  final String sourceDocumentKind;
+  final String? sourceDocumentKindLabel;
+  final String? sourceDocumentWorkflowKind;
   final String? supplierId;
   final String? supplierName;
   final String? supplierRut;
@@ -90,6 +137,9 @@ class PurchaseInvoice {
     this.id,
     required this.tenantId,
     required this.invoiceNumber,
+    this.sourceDocumentKind = PurchaseSourceDocumentKind.defaultCode,
+    this.sourceDocumentKindLabel,
+    this.sourceDocumentWorkflowKind,
     required this.supplierId,
     this.supplierName,
     this.supplierRut,
@@ -132,6 +182,9 @@ class PurchaseInvoice {
     String? id,
     String? tenantId,
     String? invoiceNumber,
+    String? sourceDocumentKind,
+    String? sourceDocumentKindLabel,
+    String? sourceDocumentWorkflowKind,
     String? supplierId,
     String? supplierName,
     String? supplierRut,
@@ -171,6 +224,11 @@ class PurchaseInvoice {
       id: id ?? this.id,
       tenantId: tenantId ?? this.tenantId,
       invoiceNumber: invoiceNumber ?? this.invoiceNumber,
+      sourceDocumentKind: sourceDocumentKind ?? this.sourceDocumentKind,
+      sourceDocumentKindLabel:
+          sourceDocumentKindLabel ?? this.sourceDocumentKindLabel,
+      sourceDocumentWorkflowKind:
+          sourceDocumentWorkflowKind ?? this.sourceDocumentWorkflowKind,
       supplierId: supplierId ?? this.supplierId,
       supplierName: supplierName ?? this.supplierName,
       supplierRut: supplierRut ?? this.supplierRut,
@@ -218,6 +276,11 @@ class PurchaseInvoice {
       id: json['id']?.toString(),
       tenantId: json['tenant_id']?.toString() ?? '',
       invoiceNumber: json['invoice_number']?.toString() ?? '',
+      sourceDocumentKind: json['source_document_kind']?.toString() ??
+          PurchaseSourceDocumentKind.defaultCode,
+      sourceDocumentKindLabel: json['source_document_kind_label']?.toString(),
+      sourceDocumentWorkflowKind:
+          json['source_document_workflow_kind']?.toString(),
       supplierId: json['supplier_id']?.toString(),
       supplierName: json['supplier_name'] as String?,
       supplierRut: json['supplier_rut'] as String?,
@@ -286,6 +349,7 @@ class PurchaseInvoice {
       if (id != null) 'id': id,
       'tenant_id': tenantId,
       'invoice_number': invoiceNumber,
+      'source_document_kind': sourceDocumentKind,
       'supplier_id': supplierId,
       'supplier_name': supplierName,
       'supplier_rut': supplierRut,
@@ -348,6 +412,9 @@ extension PurchaseInvoiceStatusX on PurchaseInvoiceStatus {
 }
 
 class PurchaseInvoiceItem {
+  /// Stable client/source line identity. Legacy invoice rows may omit it.
+  final String? lineId;
+  final String? sourceNeedId;
   final String productId;
   final String? productName;
   final String? productSku;
@@ -359,7 +426,38 @@ class PurchaseInvoiceItem {
   final double ivaRate;
   final DateTime createdAt;
 
+  /// Provenance for a source row expanded through a supplier resolution graph.
+  ///
+  /// These fields are optional only for backward compatibility. If any of the
+  /// reserved supplier-resolution fields is present, the complete staged
+  /// snapshot is required by the database before the draft can be saved.
+  final String? resolutionApplicationId;
+  final String? resolutionRevisionId;
+  final String? sourceLineKey;
+  final int? componentPosition;
+  final String? componentRole;
+  final double? sourcePurchaseQuantity;
+  final int? catalogUnitsPerPurchase;
+  final int? sourceLineTotalMinor;
+  final int? allocatedLineTotalMinor;
+  final double? allocationRatio;
+
+  // Lossless supplier-owned source evidence retained with every expanded row.
+  final int? sourceRowIndex;
+  final List<String> sourceOrderNumbers;
+  final String? supplierListingId;
+  final String? supplierVariantKey;
+  final String? optionEvidenceHash;
+  final String? sourceTitle;
+  final String? selectedOption;
+  final int? rawPackCount;
+  final String? rawUnitToken;
+  final bool rawPackEvidenceConflict;
+  final Map<String, dynamic> sourceEvidenceSnapshot;
+
   PurchaseInvoiceItem({
+    this.lineId,
+    this.sourceNeedId,
     required this.productId,
     this.productName,
     this.productSku,
@@ -369,10 +467,35 @@ class PurchaseInvoiceItem {
     required this.unitCost,
     this.discount = 0,
     this.ivaRate = 0.19,
+    this.resolutionApplicationId,
+    this.resolutionRevisionId,
+    this.sourceLineKey,
+    this.componentPosition,
+    this.componentRole,
+    this.sourcePurchaseQuantity,
+    this.catalogUnitsPerPurchase,
+    this.sourceLineTotalMinor,
+    this.allocatedLineTotalMinor,
+    this.allocationRatio,
+    this.sourceRowIndex,
+    List<String> sourceOrderNumbers = const <String>[],
+    this.supplierListingId,
+    this.supplierVariantKey,
+    this.optionEvidenceHash,
+    this.sourceTitle,
+    this.selectedOption,
+    this.rawPackCount,
+    this.rawUnitToken,
+    this.rawPackEvidenceConflict = false,
+    Map<String, dynamic> sourceEvidenceSnapshot = const <String, dynamic>{},
     DateTime? createdAt,
-  }) : createdAt = createdAt ?? DateTime.now();
+  })  : sourceOrderNumbers = List<String>.unmodifiable(sourceOrderNumbers),
+        sourceEvidenceSnapshot = _immutableJsonMap(sourceEvidenceSnapshot),
+        createdAt = createdAt ?? DateTime.now();
 
   PurchaseInvoiceItem copyWith({
+    String? lineId,
+    String? sourceNeedId,
     String? productId,
     String? productName,
     String? productSku,
@@ -382,9 +505,32 @@ class PurchaseInvoiceItem {
     double? unitCost,
     double? discount,
     double? ivaRate,
+    String? resolutionApplicationId,
+    String? resolutionRevisionId,
+    String? sourceLineKey,
+    int? componentPosition,
+    String? componentRole,
+    double? sourcePurchaseQuantity,
+    int? catalogUnitsPerPurchase,
+    int? sourceLineTotalMinor,
+    int? allocatedLineTotalMinor,
+    double? allocationRatio,
+    int? sourceRowIndex,
+    List<String>? sourceOrderNumbers,
+    String? supplierListingId,
+    String? supplierVariantKey,
+    String? optionEvidenceHash,
+    String? sourceTitle,
+    String? selectedOption,
+    int? rawPackCount,
+    String? rawUnitToken,
+    bool? rawPackEvidenceConflict,
+    Map<String, dynamic>? sourceEvidenceSnapshot,
     DateTime? createdAt,
   }) {
     return PurchaseInvoiceItem(
+      lineId: lineId ?? this.lineId,
+      sourceNeedId: sourceNeedId ?? this.sourceNeedId,
       productId: productId ?? this.productId,
       productName: productName ?? this.productName,
       productSku: productSku ?? this.productSku,
@@ -394,12 +540,65 @@ class PurchaseInvoiceItem {
       unitCost: unitCost ?? this.unitCost,
       discount: discount ?? this.discount,
       ivaRate: ivaRate ?? this.ivaRate,
+      resolutionApplicationId:
+          resolutionApplicationId ?? this.resolutionApplicationId,
+      resolutionRevisionId: resolutionRevisionId ?? this.resolutionRevisionId,
+      sourceLineKey: sourceLineKey ?? this.sourceLineKey,
+      componentPosition: componentPosition ?? this.componentPosition,
+      componentRole: componentRole ?? this.componentRole,
+      sourcePurchaseQuantity:
+          sourcePurchaseQuantity ?? this.sourcePurchaseQuantity,
+      catalogUnitsPerPurchase:
+          catalogUnitsPerPurchase ?? this.catalogUnitsPerPurchase,
+      sourceLineTotalMinor: sourceLineTotalMinor ?? this.sourceLineTotalMinor,
+      allocatedLineTotalMinor:
+          allocatedLineTotalMinor ?? this.allocatedLineTotalMinor,
+      allocationRatio: allocationRatio ?? this.allocationRatio,
+      sourceRowIndex: sourceRowIndex ?? this.sourceRowIndex,
+      sourceOrderNumbers: sourceOrderNumbers ?? this.sourceOrderNumbers,
+      supplierListingId: supplierListingId ?? this.supplierListingId,
+      supplierVariantKey: supplierVariantKey ?? this.supplierVariantKey,
+      optionEvidenceHash: optionEvidenceHash ?? this.optionEvidenceHash,
+      sourceTitle: sourceTitle ?? this.sourceTitle,
+      selectedOption: selectedOption ?? this.selectedOption,
+      rawPackCount: rawPackCount ?? this.rawPackCount,
+      rawUnitToken: rawUnitToken ?? this.rawUnitToken,
+      rawPackEvidenceConflict:
+          rawPackEvidenceConflict ?? this.rawPackEvidenceConflict,
+      sourceEvidenceSnapshot:
+          sourceEvidenceSnapshot ?? this.sourceEvidenceSnapshot,
       createdAt: createdAt ?? this.createdAt,
+    );
+  }
+
+  /// Converts a graph-backed supplier component into an ordinary manual
+  /// invoice line while preserving the operator-visible commercial values.
+  ///
+  /// Supplier-resolution provenance is an all-or-nothing database contract:
+  /// retaining only part of it would make the invoice look editable while the
+  /// save trigger correctly rejects the drift. Callers must detach every line
+  /// sharing the same resolution application together.
+  PurchaseInvoiceItem withoutSupplierResolutionProvenance() {
+    return PurchaseInvoiceItem(
+      lineId: lineId,
+      sourceNeedId: sourceNeedId,
+      productId: productId,
+      productName: productName,
+      productSku: productSku,
+      description: description,
+      purchaseTreatment: purchaseTreatment,
+      quantity: quantity,
+      unitCost: unitCost,
+      discount: discount,
+      ivaRate: ivaRate,
+      createdAt: createdAt,
     );
   }
 
   factory PurchaseInvoiceItem.fromJson(Map<String, dynamic> json) {
     return PurchaseInvoiceItem(
+      lineId: json['line_id']?.toString(),
+      sourceNeedId: json['source_need_id']?.toString(),
       productId: json['product_id']?.toString() ?? '',
       productName: json['product_name'] as String?,
       productSku: json['product_sku'] as String?,
@@ -411,12 +610,45 @@ class PurchaseInvoiceItem {
       unitCost: (json['unit_cost'] as num?)?.toDouble() ?? 0,
       discount: (json['discount'] as num?)?.toDouble() ?? 0,
       ivaRate: (json['iva_rate'] as num?)?.toDouble() ?? 0.19,
+      resolutionApplicationId:
+          json['supplier_resolution_application_id']?.toString(),
+      resolutionRevisionId: json['supplier_resolution_revision_id']?.toString(),
+      sourceLineKey: json['source_line_key']?.toString(),
+      componentPosition: _optionalExactInteger(
+        json,
+        'supplier_resolution_edge_ordinal',
+      ),
+      componentRole: json['supplier_resolution_component_role']?.toString(),
+      sourcePurchaseQuantity:
+          (json['source_purchase_quantity'] as num?)?.toDouble(),
+      catalogUnitsPerPurchase: _optionalExactInteger(
+        json,
+        'catalog_units_per_purchase',
+      ),
+      sourceLineTotalMinor:
+          _optionalExactInteger(json, 'source_line_total_minor'),
+      allocatedLineTotalMinor:
+          _optionalExactInteger(json, 'allocated_line_total_minor'),
+      allocationRatio: (json['allocation_ratio'] as num?)?.toDouble(),
+      sourceRowIndex: _optionalExactInteger(json, 'source_row_index'),
+      sourceOrderNumbers: _stringList(json['source_order_numbers']),
+      supplierListingId: json['supplier_listing_id']?.toString(),
+      supplierVariantKey: json['supplier_variant_key']?.toString(),
+      optionEvidenceHash: json['option_evidence_hash']?.toString(),
+      sourceTitle: json['source_title']?.toString(),
+      selectedOption: json['selected_option']?.toString(),
+      rawPackCount: _optionalExactInteger(json, 'raw_pack_count'),
+      rawUnitToken: json['raw_unit_code']?.toString(),
+      rawPackEvidenceConflict: json['pack_evidence_conflict'] == true,
+      sourceEvidenceSnapshot: _optionalMap(json['source_snapshot']),
       createdAt: _parseDate(json['created_at']),
     );
   }
 
   Map<String, dynamic> toJson() {
     return {
+      if (lineId != null) 'line_id': lineId,
+      if (sourceNeedId != null) 'source_need_id': sourceNeedId,
       'product_id': productId,
       'product_name': productName,
       'product_sku': productSku,
@@ -427,11 +659,132 @@ class PurchaseInvoiceItem {
       'discount': discount,
       'iva_rate': ivaRate,
       'created_at': createdAt.toUtc().toIso8601String(),
+      if (resolutionApplicationId != null)
+        'supplier_resolution_application_id': resolutionApplicationId,
+      if (resolutionRevisionId != null)
+        'supplier_resolution_revision_id': resolutionRevisionId,
+      if (sourceLineKey != null) 'source_line_key': sourceLineKey,
+      if (componentPosition != null)
+        'supplier_resolution_edge_ordinal': componentPosition,
+      if (componentRole != null)
+        'supplier_resolution_component_role': componentRole,
+      if (sourcePurchaseQuantity != null)
+        'source_purchase_quantity': sourcePurchaseQuantity,
+      if (catalogUnitsPerPurchase != null)
+        'catalog_units_per_purchase': catalogUnitsPerPurchase,
+      if (sourceLineTotalMinor != null)
+        'source_line_total_minor': sourceLineTotalMinor,
+      if (allocatedLineTotalMinor != null)
+        'allocated_line_total_minor': allocatedLineTotalMinor,
+      if (allocationRatio != null) 'allocation_ratio': allocationRatio,
+      if (sourceRowIndex != null) 'source_row_index': sourceRowIndex,
+      if (sourceOrderNumbers.isNotEmpty)
+        'source_order_numbers': sourceOrderNumbers,
+      if (supplierListingId != null) 'supplier_listing_id': supplierListingId,
+      if (supplierVariantKey != null)
+        'supplier_variant_key': supplierVariantKey,
+      if (optionEvidenceHash != null)
+        'option_evidence_hash': optionEvidenceHash,
+      if (sourceTitle != null) 'source_title': sourceTitle,
+      if (selectedOption != null) 'selected_option': selectedOption,
+      if (rawPackCount != null) 'raw_pack_count': rawPackCount,
+      if (rawUnitToken != null) 'raw_unit_code': rawUnitToken,
+      if (hasSupplierSourceEvidence || rawPackEvidenceConflict)
+        'pack_evidence_conflict': rawPackEvidenceConflict,
+      if (sourceEvidenceSnapshot.isNotEmpty)
+        'source_snapshot': sourceEvidenceSnapshot,
     };
   }
 
+  bool get hasSupplierResolutionProvenance =>
+      resolutionApplicationId != null ||
+      resolutionRevisionId != null ||
+      sourceLineKey != null ||
+      componentPosition != null ||
+      sourcePurchaseQuantity != null ||
+      catalogUnitsPerPurchase != null ||
+      sourceLineTotalMinor != null ||
+      allocatedLineTotalMinor != null ||
+      allocationRatio != null;
+
+  bool get hasSupplierSourceEvidence =>
+      sourceRowIndex != null ||
+      sourceOrderNumbers.isNotEmpty ||
+      supplierListingId != null ||
+      supplierVariantKey != null ||
+      optionEvidenceHash != null ||
+      sourceTitle != null ||
+      selectedOption != null ||
+      rawPackCount != null ||
+      rawUnitToken != null ||
+      sourceEvidenceSnapshot.isNotEmpty;
+
+  bool get hasCompleteSupplierResolutionProvenance =>
+      resolutionApplicationId != null &&
+      resolutionRevisionId != null &&
+      sourceLineKey != null &&
+      componentPosition != null &&
+      componentPosition! > 0 &&
+      sourcePurchaseQuantity != null &&
+      sourcePurchaseQuantity! > 0 &&
+      catalogUnitsPerPurchase != null &&
+      catalogUnitsPerPurchase! > 0 &&
+      sourceLineTotalMinor != null &&
+      sourceLineTotalMinor! >= 0 &&
+      allocatedLineTotalMinor != null &&
+      allocatedLineTotalMinor! >= 0 &&
+      allocationRatio != null &&
+      allocationRatio! > 0 &&
+      allocationRatio! <= 1;
+
   double get netAmount => (quantity * unitCost) - discount;
   double get netAmountClamped => netAmount < 0 ? 0 : netAmount;
+}
+
+int? _optionalExactInteger(Map<String, dynamic> json, String key) {
+  if (!json.containsKey(key) || json[key] == null) return null;
+  final value = json[key];
+  if (value is int) return value;
+  if (value is num && value.isFinite && value == value.roundToDouble()) {
+    return value.toInt();
+  }
+  final text = value.toString().trim();
+  final match = RegExp(r'^([+-]?[0-9]+)(?:\.0+)?$').firstMatch(text);
+  if (match != null) return int.parse(match.group(1)!);
+  throw FormatException('$key must be an exact integer.');
+}
+
+List<String> _stringList(Object? value) {
+  if (value == null) return const <String>[];
+  if (value is! List) {
+    throw const FormatException('Expected a JSON string list.');
+  }
+  return List<String>.unmodifiable(
+    value.map((entry) => entry.toString()),
+  );
+}
+
+Map<String, dynamic> _optionalMap(Object? value) {
+  if (value == null) return const <String, dynamic>{};
+  return _ensureMap(value);
+}
+
+Map<String, dynamic> _immutableJsonMap(Map<String, dynamic> value) {
+  Object? freeze(Object? raw) {
+    if (raw is Map) {
+      return Map<String, dynamic>.unmodifiable(
+        raw.map(
+          (key, nested) => MapEntry(key.toString(), freeze(nested)),
+        ),
+      );
+    }
+    if (raw is List) {
+      return List<Object?>.unmodifiable(raw.map(freeze));
+    }
+    return raw;
+  }
+
+  return freeze(value)! as Map<String, dynamic>;
 }
 
 class PurchaseAdditionalCost {

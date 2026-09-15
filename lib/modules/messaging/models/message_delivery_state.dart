@@ -8,6 +8,7 @@ import 'message.dart';
 enum MessageDeliveryStage {
   none,
   pending,
+  queued,
   outcomeUnknown,
   accepted,
   sent,
@@ -68,6 +69,7 @@ class MessageDeliveryState {
       return const MessageDeliveryState(stage: MessageDeliveryStage.pending);
     }
     final stage = switch (status) {
+      'queued' => MessageDeliveryStage.queued,
       'accepted' => MessageDeliveryStage.accepted,
       'outcome_unknown' => MessageDeliveryStage.outcomeUnknown,
       'sent' => MessageDeliveryStage.sent,
@@ -121,9 +123,14 @@ class MessageDeliveryState {
     var positiveRank = 0;
     var hasFailure = false;
     var hasUnknownOutcome = false;
+    var hasQueueReceipt = false;
     for (final raw in candidates) {
       final status = raw?.trim().toLowerCase();
       if (status == null || status.isEmpty) continue;
+      if (status == 'queued') {
+        hasQueueReceipt = true;
+        continue;
+      }
       if (status == 'failed') {
         hasFailure = true;
         continue;
@@ -152,7 +159,9 @@ class MessageDeliveryState {
             ? 'failed'
             : hasUnknownOutcome
                 ? 'outcome_unknown'
-                : null);
+                : hasQueueReceipt
+                    ? 'queued'
+                    : null);
   }
 
   static String _failureMessage(

@@ -41,6 +41,22 @@ consulta de nuevo al matcher— en vez de rehacer el flujo desde el navegador.
 
 ## The three surfaces, and when to use each
 
+**2026-09-06 — model and draft transitions during hot reload.** The product ficha
+introduced constructor fields and controller listeners while an older editor
+was open. Reload does not rerun constructors or `initState`: old instances
+returned null for new non-null fields, and model edits did not refresh reference
+choices until listeners were rebound. Use a backward-compatible field read and
+fresh metadata hydration; rebind the affected listeners idempotently in
+`reassemble` when preserving that already-open editor. Do not restart merely to
+make the problem disappear. Capture the old draft before refreshing a new
+category/revision key. The first refresh here lost the user's unsaved test
+selections (stored product data was unchanged); the corrected transition was
+verified by refreshing HV408 with 6/7/8, 11/128 and 7.1 still selected, then
+binding/unbinding a reference without discarding those manual values. See the
+[result](product-specs-research-2026-09-05/implementation-result.md). This is a
+specific preserved-session transition, not a reason to add reassembly hooks to
+every widget.
+
 | Surface | Loop | Use it for |
 |---|---|---|
 | **macOS debug session** (`scripts/dev/native_session.sh`) | hot reload 2–5 s | Default for every desktop/tablet UI round. Real data, real services. |
@@ -57,6 +73,31 @@ scripts/dev/native_session.sh errors     # compile errors / exceptions
 scripts/dev/native_session.sh status
 scripts/dev/native_session.sh stop
 ```
+
+La sesión canónica usa por defecto el mismo gateway moderno del release. El
+owner acepta sólo los defines cerrados; no acepta un fragmento arbitrario de
+shell. La clave pública se resuelve en el proceso que lanza la sesión, primero
+desde `NATIVE_SESSION_SUPABASE_PUBLISHABLE_KEY` y luego desde el Keychain
+aprobado, y no se escribe en el repositorio ni en el log. Por eso el arranque
+normal es simplemente:
+
+```bash
+scripts/dev/native_session.sh start
+```
+
+Si la entrada de Keychain no existe, el launcher falla antes de compilar en vez
+de abrir una sesión cuyo primer mensaje inevitablemente fallará. Un valor de
+entorno explícito sigue siendo válido para una sesión acotada.
+
+El asistente legado queda disponible sólo como rollback explícito y visible:
+
+```bash
+NATIVE_SESSION_AI_AGENT_GATEWAY_ENABLED=false \
+  scripts/dev/native_session.sh start
+```
+
+Un hot reload no puede cambiar un `dart-define`: para activar o revertir este
+rollout se reemplaza deliberadamente la sesión completa.
 
 The session lives in a detached `screen` named `payroll`. The owner can take
 it over at any time with **`screen -x payroll`** (`Ctrl+A`, then `D` to
@@ -179,7 +220,7 @@ Traps this encodes, each of which cost a full round when hit:
     máquina** (2026-08-06). macOS protege los contenedores de las demás apps:
     un `flutter run` lanzado desde el shell del agente (hijo de Claude.app, con
     o sin sandbox propio) no puede escribir el DevFS en
-    `~/Library/Containers/com.vinabike.vinabikeErp/Data/tmp/` — «Operation not
+    `~/Library/Containers/com.vinabike.vinabikeErp.debug/Data/tmp/` — «Operation not
     permitted». El arranque en frío funciona (instala por el bundle), pero el
     **primer** `r`/`R` imprime «Flutter failed to create file/directory at
     .../Data/tmp/...» y `flutter run` **muere**, llevándose el `screen`. El
@@ -200,6 +241,35 @@ Traps this encodes, each of which cost a full round when hit:
     leer sólo lo nuevo, usa `tail -c`/`tail -n` o marca la posición antes de
     empezar; para empezar de cero, reemplaza la sesión (`stop && start`), que
     reescribe la línea del VM service.
+
+### Debug y la app instalada no comparten identidad (2026-08-27)
+
+La copia instalada y el build Debug llegaron a ejecutarse simultáneamente con
+el mismo bundle ID, `com.vinabike.vinabikeErp`. Para macOS eran la misma app:
+ambas quedaron dentro de un solo sandbox y escribieron el mismo registro de
+Supabase en SharedPreferences. El último inicio de sesión reemplazaba la sesión
+persistida de las dos; la otra ventana podía conservar el usuario antiguo en
+memoria hasta un reinicio o refresh y entonces cambiar de cuenta. El mismo
+choque alcanzaba preferencias, SQLite y datos persistentes de WebKit.
+
+La separación obligatoria es:
+
+- Debug: `com.vinabike.vinabikeErp.debug`;
+- Release y Profile: `com.vinabike.vinabikeErp`.
+
+La identidad se resuelve por configuración en
+`macos/Runner/Configs/{Debug,Release}.xcconfig`; no se arregla cambiando sólo la
+clave local de Supabase, porque eso dejaría todas las demás cachés compartidas.
+`native_session.sh start` lee los build settings efectivos de Xcode y falla
+antes de lanzar Flutter si Debug y Release vuelven a coincidir o si cambia la
+identidad estable de Release.
+
+El primer arranque con la identidad separada crea un contenedor Debug limpio;
+no copies preferencias desde el contenedor Release, porque eso reintroduciría
+la sesión y datos locales que justamente se aislaron. Las dos apps pueden quedar
+abiertas con usuarios distintos. Sus ejecutables aún se llaman
+`vinabike_erp`, así que todo control sigue resolviendo la ruta Debug y el PID
+exactos, nunca el nombre del proceso.
 
 ### Verifying dark and compact without leaving a trace
 
@@ -242,6 +312,35 @@ scripts/dev/app_control.sh key 36            # 36 return · 53 esc · 48 tab
 scripts/dev/app_control.sh choose-file /ruta/absoluta/cartola.png
 ```
 
+### `type` y `key` se caen solos; `enter-text` no (2026-08-21)
+
+`type` y `key` son los **únicos** subcomandos que salen por AppleScript
+(`System Events`). Esa autorización es del proceso que corre el shell, así que
+puede estar concedida a una sesión y **denegada a la siguiente sin que cambie
+nada en el repo**: `osascript` devuelve `-1743 Not authorized to send Apple
+events`, `app_control.sh type` lo traga con `>/dev/null 2>&1` y sale 1 **en
+silencio**. El campo se ve enfocado, con cursor y borde activo, y el texto
+simplemente no llega — se parece exactísimo a un `TextField` deshabilitado.
+
+`click`, `tap`, `scroll`, `drag`, `find`, `read` y `enter-text` van por el
+canal de depuración de Flutter y siguen funcionando con la autorización
+denegada. Por eso el síntoma es «los clics andan pero no puedo escribir», que
+manda a buscar el defecto en la app.
+
+Escribe siempre con `enter-text --key`, no con `type`:
+
+```bash
+scripts/dev/app_control.sh enter-text --key ai-assistant-message-input \
+  --text "contacta al cliente Test"
+scripts/dev/app_control.sh tap --label "Enviar mensaje al asistente"
+```
+
+Confirma con el eco que imprime (`texto ingresado (N caracteres) en <key>`).
+`type` queda para el caso en que **no haya** `ValueKey` y haga falta el camino
+real del sistema operativo; comprueba entonces su salida en vez de descartarla.
+
+Costó cinco rondas el 2026-08-21 dando por rota la app.
+
 ### El selector de archivos es una ventana del sistema (2026-08-01)
 
 `Elegir archivo` abre un panel de macOS que no pertenece al árbol semántico de
@@ -258,6 +357,12 @@ scripts/dev/app_control.sh tap --label "Elegir archivo"
 scripts/dev/app_control.sh choose-file \
   /Users/Claudio/Dev/bikeshop-erp/tmp/pdfs/cartola_analysis/page-01.png
 ```
+
+**2026-09-04 — Galería y Archivo no exponen el mismo panel nativo.**
+`ImagePicker` puede abrir un `AXSheet` con descripción `open` dentro de la ventana,
+mientras `FilePicker` abre una ventana `Open`. El wrapper reconoce ambas formas
+antes de enviar teclas y al comprobar el cierre. Buscar sólo ventanas por nombre
+rechazaba una Galería correctamente abierta; no era un fallo del adjunto.
 
 `choose-file` exige un archivo real y una ruta absoluta, resuelve el panel
 `Open` del PID debug exacto, lo trae al frente y abre `Go to Folder`. **La ruta
@@ -276,10 +381,11 @@ System Events serializa después esa referencia por **nombre**, y si la copia
 instalada y la debug se llaman ambas `vinabike_erp`, `tell targetProcess`
 resuelve la primera homónima. El síntoma engañoso fue `name of every window`
 como lista anidada y `-1700`, aunque el PID inicial era correcto. Tampoco uses
-`open -a` para enfocar: dos bundles con el mismo identificador pueden activar
-la copia instalada. `choose-file` mantiene ahora el predicado de PID inline y
-enumera cada ventana por índice; esta trampa costó una ronda completa el
-2026-08-01.
+`open -a` para enfocar: aunque Debug y Release ya tienen identificadores
+distintos, ambos ejecutables conservan el nombre `vinabike_erp` y resolver por
+nombre puede activar la copia instalada. `choose-file` mantiene ahora el
+predicado de PID inline y enumera cada ventana por índice; esta trampa costó una
+ronda completa el 2026-08-01.
 
 ### Tap by identity; pixels are a one-frame fallback (2026-07-31)
 
@@ -314,6 +420,12 @@ Three properties that matter:
   `tap` refuses and lists them. `--index N` is a zero-based integer into that
   list; a missing index for multiple matches, non-integer, negative, or
   out-of-range value is rejected before any pointer event is sent.
+  **Read that list before choosing the index (2026-09-02).** `tap --label
+  Archivos --index 0` hit the sidebar module «Archivos» and replaced the
+  owner's workspace tab; the chat-panel tab I wanted was not in the list at
+  all, because its text carries a count badge. `--index 0` is not "the one I
+  mean", it is "the first thing that matched". When the target is missing
+  from the list, use `click X Y` from the current frame instead.
 - **The target must be live and usable now.** Its chosen point must be inside
   the current logical viewport and its branch must win the live hit test.
   Offstage, ignored, absorbed, semantics-disabled, disabled-button, covered,
@@ -325,6 +437,17 @@ Three properties that matter:
 Keep `click X Y` for what has no identity — a canvas, a chart, a spot inside an
 image — and for testing the OS event path itself. For anything with a key or a
 label, use `tap`; never reuse a coordinate from an earlier frame.
+
+**2026-09-15 — una coincidencia única puede ser el control equivocado.** La
+búsqueda por etiqueta admite subcadenas: `Productos` dentro del formulario
+coincidió con el texto del interruptor «Los productos inactivos…», no con el
+módulo de inventario, y cambió el estado activo del borrador. Se cerró sin
+guardar y una lectura autenticada confirmó el estado original. Ante una
+etiqueta corta o un cambio de contexto, ejecutar `find`, comprobar la etiqueta
+completa y el tipo de control, y sólo entonces `tap`. La unicidad no sustituye
+esa identificación. En esta misma sesión, los clics AX movían el foco sin
+activar `Añadir configuración`; el backend `app` del wrapper sí produjo el
+cambio comprobado en la semántica y en un frame actual.
 
 ### Text fields: update Flutter, not only the macOS AX proxy (2026-08-03)
 
@@ -360,6 +483,14 @@ and hot restart the **same canonical session** once before diagnosing app
 logic. Do not launch a second Flutter session; verify the restarted isolate is
 clean and continue from there.
 
+If restoring the current route can trigger production writes, arm and verify
+the repository's no-write seam **before** any hot restart. A restart rebuilds
+the isolate and may restore the routed workspace immediately, before an agent
+can navigate it somewhere harmless; parking the old frame is not protection
+against that restoration. After the restart, prove the seam is active before
+opening the write-capable surface and read the affected production invariant
+back again when the visual round ends.
+
 Do not treat a changed AX value as evidence. Completion evidence is the same
 text in a fresh rendered frame/semantics read and the expected result after the
 real submit control is tapped.
@@ -389,6 +520,44 @@ costs text instead of an image. `--filter` narrows it to one region.
 Use both: **structure from `read`, appearance from `shot`.** When they
 disagree, the semantics tree is what a screen reader will announce — that
 disagreement is itself the bug.
+
+**2026-09-07 — empty OCR tree is not evidence of a blank app.** In the live
+Flutter 3.38.5 session, closing the supplier picker over `DataTable` could
+produce the SDK assertion `owner!._nodes.containsKey(id)` in
+`RenderTable.assembleSemanticsNode`, followed by an empty `read`. Fresh frames
+still showed the completed supplier selection and code edits. Check the
+exception and verify the changed value in a new frame plus identity-based
+input before calling the business operation stuck. Keeping a persistent
+semantics handle passed an isolated test but did not recover this session;
+that exploratory patch was removed. The SDK/reader failure remains open.
+Do not restart the owner's session to investigate it while other workspaces
+contain unsaved edits.
+
+**Precisión 2026-08-19: un `shot` puede estar viejo, y entonces no desmiente
+nada.** Si la ventana de la app está detrás de otra —o su ciclo de vida quedó
+en `hidden`/`paused`—, macOS deja de pedirle frames y `_flutter.screenshot`
+devuelve el último raster que sí se dibujó: la captura muestra la pantalla
+*anterior* a la interacción. `read` no se conforma con eso, bombea frames antes
+de leer, así que sí ve el estado nuevo. Así que cuando `shot` y `read`
+discrepan y `read` describe algo que `shot` no muestra, lo primero que se
+descarta es que la app esté ociosa; el propio `read` lo avisa con «el engine no
+entregó frame en 3 s». El costo real: un diálogo recién abierto se dio por no
+abierto, y el paso siguiente habría sido «arreglar» código que ya funcionaba.
+`window` no rescata ese caso: fotografía el rectángulo de la pantalla, de modo
+que devuelve la ventana que esté delante —y de paso captura lo que el dueño
+tenga abierto—, no la app.
+
+**Precisión 2026-08-30: recuperar un raster atrasado sin reiniciar.** En una
+prueba del Asistente de compras, enfocar la ventana debug y ejecutar su acción
+AX `Raise` no bastó: dos `shot` seguían mostrando el borrador anterior mientras
+`read` ya anunciaba el nuevo. Con la identidad y geometría de la ventana
+canónica comprobadas, cambiar temporalmente su ancho de 1455 a 1454 mediante
+`app_control.sh resize` produjo un frame actual; después se restauró 1455. Es
+un recurso acotado a ese síntoma, no un paso obligatorio de cada captura.
+Verifica visualmente el frame resultante contra la semántica y restaura la
+geometría; no aceptes las capturas atrasadas como evidencia ni recargues el
+estado de trabajo para resolver sólo el repintado. El costo observado fueron
+dos capturas inválidas, no una regresión del formulario.
 
 ### Two input backends — the default does not touch the owner's cursor
 
@@ -570,6 +739,35 @@ can present its own `Test finished` surface even while the Flutter test is
 still reporting. Use the integration screenshot and the measured inset, not
 that external frame.
 
+## 4.b El escritorio dibuja a **0,8**: la captura no está en el espacio del spec
+
+**2026-08-18, costo real: casi «arreglo» una columna que ya era correcta.**
+
+`WindowZoomService._defaultScale` es **0,8** —el dueño lo pidió así, «equivalent
+to pressing Cmd- twice»— y `window_zoom_scope.dart` lo aplica con un
+`Transform.scale` sobre **todo** el contenido de escritorio. La consecuencia no
+es cosmética: la captura y el spec hablan **dos idiomas distintos**.
+
+- `shot` y `find` devuelven **píxeles pintados**: ya multiplicados por 0,8.
+- `read` (árbol de semántica) devuelve **tamaños lógicos**: sin multiplicar.
+- El contenido compone contra `ancho de ventana / 0,8`. Con la ventana en 1681
+  el módulo no ve 1681, ve ~2101, y por eso elige composición de escritorio
+  donde la captura «parece» de tablet.
+- Bajo 900 px de ancho de ventana el scope aplica escala **1,0**
+  (`appliedScale = constraints.maxWidth < desktopMin ? 1.0 : scale`), así que
+  las capturas de teléfono y tablet **sí** son 1:1.
+
+Síntoma exacto: el paso Necesidad medía **621 px** en la captura y el handoff
+declara `column_max: 780`. No había defecto — 780 × 0,8 = 624, que es lo que
+`find` devuelve para el `SingleChildScrollView` de la columna, y el árbol de
+semántica confirma 780 lógicos para la misma fila. Sin esta corrección, cada
+medida de escritorio parece un 20 % chica y se «corrige» geometría que ya
+cumplía el contrato.
+
+Regla: **para contrastar con un spec, divide la captura por 0,8, o mide con
+`read`, que ya viene en lógicos.** Y nunca elijas el breakpoint mirando el
+ancho de la captura.
+
 ## 5. Cost discipline
 
 The mechanism is cheap; **looking** is what costs. A screenshot is ~2 k
@@ -591,3 +789,24 @@ tokens of context, a hot reload is a few hundred bytes of log.
   rollout that complete an implementation/fix/ship are agent-owned and are
   routed from Claude to Codex when the Claude guard denies them.
 - Anything typed into Design, or any message sent on their behalf.
+
+## `shot` no ve el navegador integrado, ni ninguna vista nativa (2026-08-23)
+
+`app_control.sh shot` pide `_flutter.screenshot` al VM service, así que devuelve
+**el frame que dibuja Flutter**. El navegador integrado es un `WKWebView`: una
+vista nativa que macOS compone *encima* de la superficie de Flutter. En ese
+frame no existe, y sale **en blanco siempre** — haya cargado la página o no.
+
+**El costo real:** reporté dos veces al dueño que el CTA «Entrar al portal»
+abría el sitio y la página quedaba en blanco, como posible defecto del producto.
+No lo era: teknobike.cl cargaba perfecto y él lo vio en su propia pantalla. Dos
+rondas perdidas y un defecto inventado.
+
+Para cualquier superficie compuesta por el sistema —navegador integrado, visor
+de PDF, video, mapas— la captura es `app_control.sh window`, que hace
+`screencapture` del marco real de la ventana. Cuesta permiso de Grabación de
+pantalla y la ventana no puede estar tapada, pero es lo único que muestra lo que
+el operador ve.
+
+Regla corta: **si lo que quieres verificar no lo dibuja Flutter, `shot` no
+sirve como evidencia de que falta; sólo prueba que Flutter no lo dibujó.**

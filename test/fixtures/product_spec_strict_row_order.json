@@ -1,0 +1,49 @@
+{
+  "schema": {
+    "version": 2,
+    "columns": [
+      {"key": "inner", "label": "Diámetro interior", "type": "decimal", "unit": "mm", "required": true, "validation": {"positive": true}},
+      {"key": "outer", "label": "Diámetro exterior", "type": "decimal", "unit": "mm", "required": true, "validation": {"positive": true}},
+      {"key": "minimum", "label": "Mínimo", "type": "decimal", "unit": "bar"},
+      {"key": "maximum", "label": "Máximo", "type": "decimal", "unit": "bar"},
+      {"key": "name", "label": "Modelo", "type": "text"},
+      {"key": "middle", "label": "Cota intermedia", "type": "decimal", "unit": "mm"}
+    ],
+    "strict_ordered_pairs": [["inner", "outer"]],
+    "ordered_pairs": [["minimum", "maximum"]]
+  },
+  "cases": [
+    {"id": "positive_annular_body", "values": [{"inner": "30", "outer": "41"}], "valid": true, "missing_required": 0},
+    {"id": "zero_wall_thickness_rejected", "values": [{"inner": "41", "outer": "41"}], "valid": false},
+    {"id": "reversed_body_rejected", "values": [{"inner": "41", "outer": "30"}], "valid": false},
+    {"id": "equivalent_decimal_text_is_equal", "values": [{"inner": "4.1e1", "outer": "41.00"}], "valid": false},
+    {"id": "exact_sub_float_difference_preserved", "values": [{"inner": "9007199254740993.1", "outer": "9007199254740993.2"}], "valid": true, "missing_required": 0},
+    {"id": "exact_sub_float_reversal_rejected", "values": [{"inner": "9007199254740993.2", "outer": "9007199254740993.1"}], "valid": false},
+    {"id": "inclusive_equal_bounds_remain_valid", "values": [{"inner": "30", "outer": "41", "minimum": "2", "maximum": "2"}], "valid": true, "missing_required": 0},
+    {"id": "inclusive_reversal_still_rejected", "values": [{"inner": "30", "outer": "41", "minimum": "3", "maximum": "2"}], "valid": false},
+    {"id": "missing_outer_is_pending", "values": [{"inner": "30"}], "valid": true, "missing_required": 1},
+    {"id": "missing_inner_is_pending", "values": [{"outer": "41"}], "valid": true, "missing_required": 1},
+    {"id": "separate_rows_never_supply_each_others_dimensions", "values": [{"inner": "41"}, {"outer": "30"}], "valid": true, "missing_required": 2},
+    {"id": "numeric_json_cannot_hide_a_rounded_dimension", "values": [{"inner": 30, "outer": "41"}], "valid": false},
+    {"id": "old_envelope_cannot_enter_new_schema", "envelope_version": 1, "values": [{"inner": "30", "outer": "41"}], "valid": false},
+    {"id": "legacy_v1_inclusive_equality_is_preserved", "legacy_schema": true, "values": [{"inner": "41", "outer": "41"}], "valid": true, "missing_required": 0},
+    {"id": "inclusive_cycles_can_express_equality", "schema_set": {"strict_ordered_pairs": [], "ordered_pairs": [["inner", "outer"], ["outer", "inner"]]}, "values": [{"inner": "41", "outer": "41"}], "valid": true, "missing_required": 0},
+    {"id": "consistent_strict_and_inclusive_pair_is_valid", "schema_set": {"ordered_pairs": [["inner", "outer"]]}, "values": [{"inner": "30", "outer": "41"}], "valid": true, "missing_required": 0}
+  ],
+  "invalid_schemas": [
+    {"id": "strict_key_rejected_in_v1", "set": {"version": 1}},
+    {"id": "strict_null_rejected", "set": {"strict_ordered_pairs": null}},
+    {"id": "strict_pair_needs_two_columns", "set": {"strict_ordered_pairs": [["inner"]]}},
+    {"id": "strict_pair_rejects_three_columns", "set": {"strict_ordered_pairs": [["inner", "outer", "maximum"]]}},
+    {"id": "strict_pair_rejects_same_column", "set": {"strict_ordered_pairs": [["inner", "inner"]]}},
+    {"id": "strict_pair_rejects_unknown_column", "set": {"strict_ordered_pairs": [["inner", "absent"]]}},
+    {"id": "strict_pair_rejects_text", "set": {"strict_ordered_pairs": [["name", "outer"]]}},
+    {"id": "strict_pair_rejects_different_units", "set": {"strict_ordered_pairs": [["inner", "maximum"]]}},
+    {"id": "future_version_rejected", "set": {"version": 3}},
+    {"id": "inclusive_pair_rejects_different_units_v2", "set": {"ordered_pairs": [["inner", "maximum"]]}},
+    {"id": "inclusive_pair_rejects_different_units_v1", "set": {"version": 1, "ordered_pairs": [["inner", "maximum"]]}, "remove": ["strict_ordered_pairs"]},
+    {"id": "opposed_inclusive_and_strict_pairs_rejected", "set": {"ordered_pairs": [["inner", "outer"]], "strict_ordered_pairs": [["outer", "inner"]]}},
+    {"id": "opposed_strict_pairs_rejected", "set": {"strict_ordered_pairs": [["inner", "outer"], ["outer", "inner"]]}},
+    {"id": "long_cycle_with_a_strict_edge_rejected", "set": {"ordered_pairs": [["inner", "middle"], ["middle", "outer"]], "strict_ordered_pairs": [["outer", "inner"]]}}
+  ]
+}

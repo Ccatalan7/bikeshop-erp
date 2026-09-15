@@ -19,6 +19,21 @@ class ConversationContextHint {
   final String? supplierId;
   final String? supplierName;
   final String? supplierPhone;
+
+  /// La persona detrás de un hilo de proveedor (vendedor registrado o nombre
+  /// de perfil de WhatsApp), nunca la empresa.
+  final String? contactPersonName;
+
+  /// La persona atada al hilo (`supplier_contacts`), cuando el vínculo la
+  /// conoce. `contactPersonIsActive` falso = un contacto desactivado: el
+  /// hilo se conserva, pero el ERP ya no le escribe.
+  final String? contactPersonId;
+  final String? contactPersonRole;
+  final bool? contactPersonIsActive;
+  final bool? contactPersonIsPrimary;
+
+  /// El contacto principal del proveedor (a quien el ERP le escribe hoy).
+  final String? supplierPrimaryContactName;
   final String? purchaseInvoiceId;
   final String? purchaseInvoiceNumber;
   final String? purchaseInvoiceStatus;
@@ -46,6 +61,12 @@ class ConversationContextHint {
     this.supplierId,
     this.supplierName,
     this.supplierPhone,
+    this.contactPersonName,
+    this.contactPersonId,
+    this.contactPersonRole,
+    this.contactPersonIsActive,
+    this.contactPersonIsPrimary,
+    this.supplierPrimaryContactName,
     this.purchaseInvoiceId,
     this.purchaseInvoiceNumber,
     this.purchaseInvoiceStatus,
@@ -83,6 +104,17 @@ class ConversationContextHint {
       supplierId: json['supplier_id']?.toString(),
       supplierName: json['supplier_name']?.toString(),
       supplierPhone: json['supplier_phone']?.toString(),
+      contactPersonName: json['contact_person_name']?.toString(),
+      contactPersonId: json['contact_person_id']?.toString(),
+      contactPersonRole: json['contact_person_role']?.toString(),
+      contactPersonIsActive: json['contact_person_is_active'] is bool
+          ? json['contact_person_is_active'] as bool
+          : null,
+      contactPersonIsPrimary: json['contact_person_is_primary'] is bool
+          ? json['contact_person_is_primary'] as bool
+          : null,
+      supplierPrimaryContactName:
+          json['supplier_primary_contact_name']?.toString(),
       purchaseInvoiceId: json['purchase_invoice_id']?.toString(),
       purchaseInvoiceNumber: json['purchase_invoice_number']?.toString(),
       purchaseInvoiceStatus: json['purchase_invoice_status']?.toString(),
@@ -114,6 +146,15 @@ class ConversationContextHint {
       if (supplierId != null) 'supplier_id': supplierId,
       if (supplierName != null) 'supplier_name': supplierName,
       if (supplierPhone != null) 'supplier_phone': supplierPhone,
+      if (contactPersonName != null) 'contact_person_name': contactPersonName,
+      if (contactPersonId != null) 'contact_person_id': contactPersonId,
+      if (contactPersonRole != null) 'contact_person_role': contactPersonRole,
+      if (contactPersonIsActive != null)
+        'contact_person_is_active': contactPersonIsActive,
+      if (contactPersonIsPrimary != null)
+        'contact_person_is_primary': contactPersonIsPrimary,
+      if (supplierPrimaryContactName != null)
+        'supplier_primary_contact_name': supplierPrimaryContactName,
       if (purchaseInvoiceId != null) 'purchase_invoice_id': purchaseInvoiceId,
       if (purchaseInvoiceNumber != null)
         'purchase_invoice_number': purchaseInvoiceNumber,

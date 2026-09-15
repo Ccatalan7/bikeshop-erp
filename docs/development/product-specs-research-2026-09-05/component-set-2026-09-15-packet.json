@@ -1,0 +1,382 @@
+{
+  "schema_version": 1,
+  "scope": "new_global_metadata_only",
+  "audited_tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+  "catalog_sha256": "2e64c7ebebb44d28bb4751b24b99a6c4e05df870b9253a53e7f29ecedd431f69",
+  "preimage_sha256": "bd2be92df06430d92486f3698d8ea85fe0ca268acb1a18de6eb3647a35666862",
+  "families": [
+    "component_set"
+  ],
+  "reused_definitions": [
+    {
+      "id": "d0cfc800-78a6-5bba-945b-ccbff6fa88e1",
+      "key": "kit_members",
+      "unit": null,
+      "label": "Componentes incluidos",
+      "options": [],
+      "data_type": "json",
+      "tenant_id": null,
+      "created_at": "2026-09-07T22:33:40.381707+00:00",
+      "group_name": null,
+      "sort_order": 0,
+      "updated_at": "2026-09-07T22:33:40.381707+00:00",
+      "description": null,
+      "is_filterable": false,
+      "allowed_values": [],
+      "validation_rules": {
+        "rows_schema": {
+          "columns": [
+            {
+              "key": "member_role",
+              "type": "token",
+              "label": "Componente",
+              "required": true,
+              "allowed_values": [
+                "maneta",
+                "cáliper",
+                "manguera",
+                "rotor",
+                "adaptador",
+                "cassette",
+                "cadena",
+                "biela",
+                "pedalier",
+                "copas",
+                "rodamientos",
+                "eje",
+                "plato",
+                "mando",
+                "cambio trasero",
+                "desviador",
+                "pastilla",
+                "parche",
+                "pegamento",
+                "válvula",
+                "cinta",
+                "sellante",
+                "rueda delantera",
+                "rueda trasera",
+                "llanta",
+                "maza",
+                "rayos",
+                "cubierta",
+                "tapa",
+                "araña",
+                "oliva",
+                "inserto",
+                "otro",
+                "cable",
+                "soporte",
+                "correa",
+                "espaciador"
+              ]
+            },
+            {
+              "key": "family",
+              "type": "token",
+              "label": "Familia técnica",
+              "required": true,
+              "allowed_values": [
+                "accessory_mount",
+                "audible_signal",
+                "bearing",
+                "bicycle",
+                "bike_bag",
+                "bike_protection",
+                "bmx_cable_detangler",
+                "bottle",
+                "bottle_cage",
+                "bottom_bracket",
+                "bottom_bracket_axle",
+                "bottom_bracket_bearing",
+                "bottom_bracket_cup",
+                "brake_caliper",
+                "brake_fluid",
+                "brake_lever",
+                "brake_mount_adapter",
+                "brake_pad",
+                "brake_shift_combined_control",
+                "brake_small_part",
+                "cassette",
+                "cassette_lockring",
+                "cassette_spacer",
+                "chain",
+                "chain_guide",
+                "chain_link",
+                "chainring",
+                "chainring_guard",
+                "consumer_electronics",
+                "control_cable",
+                "control_housing",
+                "control_small_part",
+                "crank_arm",
+                "crankset",
+                "cycle_computer",
+                "derailleur_hanger",
+                "derailleur_hanger_extender",
+                "derailleur_pulley",
+                "drivetrain_kit",
+                "eyewear",
+                "fastener",
+                "fender",
+                "fixed_cog",
+                "food_beverage",
+                "fork",
+                "frame",
+                "freewheel",
+                "front_derailleur",
+                "grip",
+                "handlebar",
+                "handlebar_covering",
+                "headset",
+                "headset_small_part",
+                "helmet",
+                "hub",
+                "hub_axle",
+                "hub_brake",
+                "hub_small_part",
+                "hydraulic_disc_brake",
+                "hydraulic_fitting",
+                "hydraulic_hose",
+                "kickstand",
+                "light",
+                "lock",
+                "mechanical_disc_brake",
+                "pedal",
+                "pedal_peg",
+                "pump",
+                "rack_basket",
+                "rear_derailleur",
+                "rear_shock",
+                "reflector",
+                "rider_apparel",
+                "rider_bag",
+                "rider_glove",
+                "rider_protection",
+                "rim",
+                "rim_brake",
+                "rim_strip",
+                "rotor",
+                "rotor_mount_adapter",
+                "saddle",
+                "saddle_cover",
+                "seat_clamp",
+                "seatpost",
+                "shifter",
+                "souvenir",
+                "spacer",
+                "spoke",
+                "spoke_nipple",
+                "stem",
+                "tire",
+                "tire_liner",
+                "training_wheel",
+                "tube",
+                "tube_repair",
+                "tubeless_consumable",
+                "tubeless_repair",
+                "tubeless_tape",
+                "tubeless_valve",
+                "valve_small_part",
+                "wheel",
+                "wheel_retention",
+                "workshop_chemical",
+                "workshop_tool"
+              ]
+            },
+            {
+              "key": "quantity",
+              "type": "integer",
+              "label": "Cantidad",
+              "required": true,
+              "validation": {
+                "positive": true
+              }
+            },
+            {
+              "key": "position",
+              "type": "token",
+              "label": "Posición",
+              "required": true,
+              "allowed_values": [
+                "Delantero",
+                "Trasero",
+                "Izquierdo",
+                "Derecho",
+                "Sin posición"
+              ]
+            },
+            {
+              "key": "identity_brand",
+              "type": "text",
+              "label": "Marca",
+              "required": false
+            },
+            {
+              "key": "identity_model",
+              "type": "text",
+              "label": "Modelo",
+              "required": false
+            }
+          ],
+          "version": 1
+        }
+      },
+      "is_customer_visible": false,
+      "is_mechanic_visible": true,
+      "is_required_by_default": false,
+      "is_compatibility_relevant": false
+    },
+    {
+      "id": "4f055961-6c16-430b-a4e2-e6b09dc1cccc",
+      "key": "spec_evidence_source",
+      "unit": null,
+      "label": "Fuente de la declaración",
+      "options": [],
+      "data_type": "text",
+      "tenant_id": null,
+      "created_at": "2026-09-06T06:58:57.745728+00:00",
+      "group_name": null,
+      "sort_order": 900,
+      "updated_at": "2026-09-06T06:58:57.745728+00:00",
+      "description": "URL del fabricante, manual o identificación del envase que respalda la declaración.",
+      "is_filterable": false,
+      "allowed_values": [],
+      "validation_rules": {},
+      "is_customer_visible": false,
+      "is_mechanic_visible": true,
+      "is_required_by_default": false,
+      "is_compatibility_relevant": false
+    }
+  ],
+  "records": {
+    "spec_definitions": [],
+    "spec_definition_values": [],
+    "spec_templates": [
+      {
+        "id": "8209a066-4ec9-5707-b177-0d6d5cf8acdd",
+        "key": "component_set",
+        "name": "Conjunto de piezas",
+        "technical_family": "component_set",
+        "form_contract": {
+          "rules_version": 2,
+          "roles": {
+            "kit_members": "contents",
+            "spec_evidence_source": "declaration"
+          },
+          "semantic_roles": {
+            "kit_members": "contents",
+            "spec_evidence_source": "evidence"
+          },
+          "labels": {},
+          "allowed_options": {},
+          "allowed_when": {
+            "kit_members": {
+              "kind": "always"
+            },
+            "spec_evidence_source": {
+              "kind": "always"
+            }
+          },
+          "required_when": {
+            "kit_members": {
+              "kind": "always"
+            },
+            "spec_evidence_source": {
+              "kind": "always"
+            }
+          },
+          "prerequisites": {
+            "kit_members": [
+              "spec_evidence_source"
+            ]
+          },
+          "helpers": {
+            "kit_members": "Identifica las piezas que realmente incluye esta presentación. Separa piezas con medidas, posición o modelo diferentes; agrupa cantidades sólo cuando sean piezas idénticas. Cada fila tiene su propia ficha. Compartir envase no acredita compatibilidad."
+          },
+          "evidence_requirements": {
+            "kit_members": "package_or_label",
+            "spec_evidence_source": "oem_or_package"
+          },
+          "row_conditions": {
+            "version": 1,
+            "fields": {
+              "kit_members": {
+                "allowed_options": {
+                  "family": [
+                    "bearing",
+                    "brake_caliper",
+                    "brake_lever",
+                    "brake_pad",
+                    "fastener",
+                    "hub_small_part",
+                    "seat_clamp",
+                    "wheel_retention"
+                  ]
+                }
+              }
+            }
+          },
+          "member_profiles": {
+            "version": 1,
+            "collections": [
+              {
+                "field": "kit_members",
+                "family_column": "family",
+                "identity_columns": [
+                  "member_role",
+                  "position",
+                  "identity_brand",
+                  "identity_model"
+                ]
+              }
+            ]
+          }
+        },
+        "tenant_id": null,
+        "is_active": true,
+        "description": null,
+        "default_tags": [],
+        "contract_version": 3
+      }
+    ],
+    "spec_template_fields": [
+      {
+        "section_key": "declaration",
+        "sort_order": 0,
+        "is_required": false,
+        "visibility_rules": [],
+        "option_rules": [],
+        "constraint_rules": [],
+        "default_value_json": null,
+        "helper_text": null,
+        "id": "f960008c-d1df-5a73-811b-427817eadbe4",
+        "tenant_id": null,
+        "template_id": "8209a066-4ec9-5707-b177-0d6d5cf8acdd",
+        "spec_definition_id": "4f055961-6c16-430b-a4e2-e6b09dc1cccc"
+      },
+      {
+        "section_key": "contents",
+        "sort_order": 10,
+        "is_required": false,
+        "visibility_rules": [],
+        "option_rules": [],
+        "constraint_rules": [],
+        "default_value_json": null,
+        "helper_text": null,
+        "id": "06bc8dd1-0b5f-5bca-9565-65c3a2c99885",
+        "tenant_id": null,
+        "template_id": "8209a066-4ec9-5707-b177-0d6d5cf8acdd",
+        "spec_definition_id": "d0cfc800-78a6-5bba-945b-ccbff6fa88e1"
+      }
+    ]
+  },
+  "product_writes": false,
+  "fill_allowed": false,
+  "mechanical_approval": false,
+  "adjudication": {
+    "scope": "Commercial collection of explicitly identified physical pieces; first eight supported piece families. Rim-brake presentation remains excluded pending ownership review.",
+    "no_recursive_member_family": true,
+    "no_intrinsic_root_facts": true
+  }
+}

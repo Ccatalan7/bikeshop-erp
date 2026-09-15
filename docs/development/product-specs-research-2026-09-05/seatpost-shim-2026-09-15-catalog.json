@@ -1,0 +1,913 @@
+{
+  "schema_version": 2,
+  "templates": [
+    {
+      "id": "bdd99089-75c5-5370-919c-38a6cdefd892",
+      "key": "seatpost_shim",
+      "name": "Casquillo reductor de tija",
+      "technical_family": "seatpost_shim",
+      "origin": "new",
+      "form_contract": {
+        "rules_version": 2,
+        "roles": {
+          "spec_evidence_source": "declaration",
+          "seatpost_shim_shape": "measurement",
+          "shim_inner_diameter_mm": "measurement",
+          "shim_outer_diameter_mm": "measurement",
+          "seatpost_shim_oem_interface": "measurement",
+          "seatpost_shim_length_mm": "measurement",
+          "seatpost_shim_support_length_mm": "measurement",
+          "material": "measurement",
+          "weight_g": "measurement",
+          "seatpost_shim_mount_instructions": "declaration"
+        },
+        "semantic_roles": {
+          "spec_evidence_source": "evidence",
+          "seatpost_shim_shape": "compatibility",
+          "shim_inner_diameter_mm": "compatibility",
+          "shim_outer_diameter_mm": "compatibility",
+          "seatpost_shim_oem_interface": "compatibility",
+          "seatpost_shim_length_mm": "compatibility",
+          "seatpost_shim_support_length_mm": "compatibility",
+          "material": "compatibility",
+          "weight_g": "compatibility",
+          "seatpost_shim_mount_instructions": "evidence"
+        },
+        "labels": {
+          "seatpost_shim_length_mm": "Longitud total del casquillo",
+          "shim_inner_diameter_mm": "Diámetro nominal de tija admitida",
+          "shim_outer_diameter_mm": "Diámetro nominal del alojamiento en el cuadro"
+        },
+        "allowed_options": {
+          "material": [
+            "Aluminio",
+            "Acero",
+            "Acero inoxidable",
+            "Titanio",
+            "Carbono",
+            "Plástico",
+            "Nylon",
+            "Latón",
+            "Otro"
+          ]
+        },
+        "allowed_when": {
+          "spec_evidence_source": {
+            "kind": "always"
+          },
+          "seatpost_shim_shape": {
+            "kind": "always"
+          },
+          "shim_inner_diameter_mm": {
+            "kind": "when",
+            "rows": [
+              [
+                {
+                  "field": "seatpost_shim_shape",
+                  "operator": "eq",
+                  "value_type": "token",
+                  "value": "Circular"
+                }
+              ]
+            ]
+          },
+          "shim_outer_diameter_mm": {
+            "kind": "when",
+            "rows": [
+              [
+                {
+                  "field": "seatpost_shim_shape",
+                  "operator": "eq",
+                  "value_type": "token",
+                  "value": "Circular"
+                }
+              ]
+            ]
+          },
+          "seatpost_shim_oem_interface": {
+            "kind": "when",
+            "rows": [
+              [
+                {
+                  "field": "seatpost_shim_shape",
+                  "operator": "eq",
+                  "value_type": "token",
+                  "value": "Perfil específico del fabricante"
+                }
+              ]
+            ]
+          },
+          "seatpost_shim_length_mm": {
+            "kind": "always"
+          },
+          "seatpost_shim_support_length_mm": {
+            "kind": "always"
+          },
+          "material": {
+            "kind": "always"
+          },
+          "weight_g": {
+            "kind": "always"
+          },
+          "seatpost_shim_mount_instructions": {
+            "kind": "always"
+          }
+        },
+        "required_when": {
+          "spec_evidence_source": {
+            "kind": "always"
+          },
+          "seatpost_shim_shape": {
+            "kind": "always"
+          },
+          "shim_inner_diameter_mm": {
+            "kind": "when",
+            "rows": [
+              [
+                {
+                  "field": "seatpost_shim_shape",
+                  "operator": "eq",
+                  "value_type": "token",
+                  "value": "Circular"
+                }
+              ]
+            ]
+          },
+          "shim_outer_diameter_mm": {
+            "kind": "when",
+            "rows": [
+              [
+                {
+                  "field": "seatpost_shim_shape",
+                  "operator": "eq",
+                  "value_type": "token",
+                  "value": "Circular"
+                }
+              ]
+            ]
+          },
+          "seatpost_shim_oem_interface": {
+            "kind": "when",
+            "rows": [
+              [
+                {
+                  "field": "seatpost_shim_shape",
+                  "operator": "eq",
+                  "value_type": "token",
+                  "value": "Perfil específico del fabricante"
+                }
+              ]
+            ]
+          },
+          "seatpost_shim_length_mm": {
+            "kind": "never"
+          },
+          "seatpost_shim_support_length_mm": {
+            "kind": "never"
+          },
+          "material": {
+            "kind": "never"
+          },
+          "weight_g": {
+            "kind": "never"
+          },
+          "seatpost_shim_mount_instructions": {
+            "kind": "never"
+          }
+        },
+        "prerequisites": {
+          "spec_evidence_source": [],
+          "seatpost_shim_shape": [
+            "spec_evidence_source"
+          ],
+          "shim_inner_diameter_mm": [
+            "spec_evidence_source",
+            "seatpost_shim_shape"
+          ],
+          "shim_outer_diameter_mm": [
+            "spec_evidence_source",
+            "seatpost_shim_shape"
+          ],
+          "seatpost_shim_oem_interface": [
+            "spec_evidence_source",
+            "seatpost_shim_shape"
+          ],
+          "seatpost_shim_length_mm": [
+            "spec_evidence_source"
+          ],
+          "seatpost_shim_support_length_mm": [
+            "spec_evidence_source",
+            "seatpost_shim_length_mm"
+          ],
+          "material": [
+            "spec_evidence_source"
+          ],
+          "weight_g": [
+            "spec_evidence_source"
+          ],
+          "seatpost_shim_mount_instructions": [
+            "spec_evidence_source"
+          ]
+        },
+        "helpers": {
+          "seatpost_shim_shape": "Una pieza concreta. No mezclar medidas de variantes ni conjuntos de casquillos.",
+          "shim_inner_diameter_mm": "Medida nominal de la tija que acepta esta pieza; no un intervalo de diámetros.",
+          "shim_outer_diameter_mm": "Medida nominal del ajuste interior del cuadro. No es el diámetro exterior del tubo ni el de su abrazadera.",
+          "seatpost_shim_oem_interface": "Identifica el perfil o código OEM de esta pieza. No sustituir una forma específica por un diámetro circular.",
+          "seatpost_shim_length_mm": "Longitud física de esta pieza cuando la fuente la publica; no determina la inserción mínima de la tija en el cuadro.",
+          "seatpost_shim_support_length_mm": "Sólo la zona útil de apoyo declarada. No puede superar la longitud total del casquillo.",
+          "material": "Material del casquillo indicado por la fuente. No determina qué materiales de cuadro o tija admite.",
+          "seatpost_shim_mount_instructions": "Conserva las condiciones de la fuente para esta variante: montaje, materiales y restricciones. La coincidencia de diámetros por sí sola no acredita una instalación."
+        },
+        "evidence_requirements": {
+          "spec_evidence_source": "oem_or_measurement",
+          "seatpost_shim_shape": "oem_or_measurement",
+          "shim_inner_diameter_mm": "oem_or_measurement",
+          "shim_outer_diameter_mm": "oem_or_measurement",
+          "seatpost_shim_oem_interface": "oem_or_measurement",
+          "seatpost_shim_length_mm": "oem_or_measurement",
+          "seatpost_shim_support_length_mm": "oem_or_measurement",
+          "material": "oem_or_measurement",
+          "weight_g": "oem_or_measurement",
+          "seatpost_shim_mount_instructions": "oem_or_measurement"
+        },
+        "scalar_ordered_pairs": [
+          [
+            "shim_inner_diameter_mm",
+            "shim_outer_diameter_mm",
+            "lt"
+          ],
+          [
+            "seatpost_shim_support_length_mm",
+            "seatpost_shim_length_mm"
+          ]
+        ]
+      },
+      "fields": [
+        {
+          "key": "spec_evidence_source",
+          "section_key": "declaration",
+          "sort_order": 0,
+          "is_required": false,
+          "visibility_rules": [],
+          "option_rules": [],
+          "constraint_rules": [],
+          "helper_text": null,
+          "default_value_json": null
+        },
+        {
+          "key": "seatpost_shim_shape",
+          "section_key": "construction",
+          "sort_order": 10,
+          "is_required": false,
+          "visibility_rules": [],
+          "option_rules": [],
+          "constraint_rules": [],
+          "helper_text": null,
+          "default_value_json": null
+        },
+        {
+          "key": "shim_inner_diameter_mm",
+          "section_key": "compatibility",
+          "sort_order": 20,
+          "is_required": false,
+          "visibility_rules": [],
+          "option_rules": [],
+          "constraint_rules": [],
+          "helper_text": null,
+          "default_value_json": null
+        },
+        {
+          "key": "shim_outer_diameter_mm",
+          "section_key": "compatibility",
+          "sort_order": 30,
+          "is_required": false,
+          "visibility_rules": [],
+          "option_rules": [],
+          "constraint_rules": [],
+          "helper_text": null,
+          "default_value_json": null
+        },
+        {
+          "key": "seatpost_shim_oem_interface",
+          "section_key": "compatibility",
+          "sort_order": 40,
+          "is_required": false,
+          "visibility_rules": [],
+          "option_rules": [],
+          "constraint_rules": [],
+          "helper_text": null,
+          "default_value_json": null
+        },
+        {
+          "key": "seatpost_shim_length_mm",
+          "section_key": "construction",
+          "sort_order": 50,
+          "is_required": false,
+          "visibility_rules": [],
+          "option_rules": [],
+          "constraint_rules": [],
+          "helper_text": null,
+          "default_value_json": null
+        },
+        {
+          "key": "seatpost_shim_support_length_mm",
+          "section_key": "construction",
+          "sort_order": 60,
+          "is_required": false,
+          "visibility_rules": [],
+          "option_rules": [],
+          "constraint_rules": [],
+          "helper_text": null,
+          "default_value_json": null
+        },
+        {
+          "key": "material",
+          "section_key": "construction",
+          "sort_order": 70,
+          "is_required": false,
+          "visibility_rules": [],
+          "option_rules": [],
+          "constraint_rules": [],
+          "helper_text": null,
+          "default_value_json": null
+        },
+        {
+          "key": "weight_g",
+          "section_key": "construction",
+          "sort_order": 80,
+          "is_required": false,
+          "visibility_rules": [],
+          "option_rules": [],
+          "constraint_rules": [],
+          "helper_text": null,
+          "default_value_json": null
+        },
+        {
+          "key": "seatpost_shim_mount_instructions",
+          "section_key": "compatibility",
+          "sort_order": 90,
+          "is_required": false,
+          "visibility_rules": [],
+          "option_rules": [],
+          "constraint_rules": [],
+          "helper_text": null,
+          "default_value_json": null
+        }
+      ]
+    }
+  ],
+  "definitions": {
+    "material": {
+      "id": "7da3359a-e29f-57d8-901f-355753d1c6b3",
+      "key": "material",
+      "unit": null,
+      "label": "Material",
+      "options": [
+        {
+          "id": "0f7a88b0-4cf7-5429-9678-30180a13c41e",
+          "code": "catalog_903afabafdfb27787b1e00c966021b0c",
+          "label": "Policarbonato / plástico",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-09-07T22:33:40.381707+00:00",
+          "sort_order": 10,
+          "updated_at": "2026-09-07T22:33:40.381707+00:00",
+          "spec_definition_id": "7da3359a-e29f-57d8-901f-355753d1c6b3"
+        },
+        {
+          "id": "11fbf5fa-89db-5f5d-bf42-d4b4f27ce3b4",
+          "code": "catalog_70cc49d9167b975547d0730eee2beddf",
+          "label": "Titanio",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-09-07T22:33:40.381707+00:00",
+          "sort_order": 11,
+          "updated_at": "2026-09-07T22:33:40.381707+00:00",
+          "spec_definition_id": "7da3359a-e29f-57d8-901f-355753d1c6b3"
+        },
+        {
+          "id": "18676042-bb7f-53a8-825f-6e1779939de0",
+          "code": "catalog_e266cfd65ad46a67fc54b0efd38e40dd",
+          "label": "Polar",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-09-07T22:33:40.381707+00:00",
+          "sort_order": 26,
+          "updated_at": "2026-09-07T22:33:40.381707+00:00",
+          "spec_definition_id": "7da3359a-e29f-57d8-901f-355753d1c6b3"
+        },
+        {
+          "id": "1b12240f-919b-5ff0-ba34-35e949e21483",
+          "code": "catalog_8265ca77f1ed28b82afd09bc72da0884",
+          "label": "Acero",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-09-07T22:33:40.381707+00:00",
+          "sort_order": 0,
+          "updated_at": "2026-09-07T22:33:40.381707+00:00",
+          "spec_definition_id": "7da3359a-e29f-57d8-901f-355753d1c6b3"
+        },
+        {
+          "id": "2a4d8d37-e119-5797-b9be-b168b918353f",
+          "code": "catalog_83c79025b595f0896b60de03d1fc64f2",
+          "label": "Neopreno",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-09-07T22:33:40.381707+00:00",
+          "sort_order": 24,
+          "updated_at": "2026-09-07T22:33:40.381707+00:00",
+          "spec_definition_id": "7da3359a-e29f-57d8-901f-355753d1c6b3"
+        },
+        {
+          "id": "32b400b8-9ed3-5b8e-834a-0252f819e27d",
+          "code": "catalog_5756f15654fa53239591def5b5a0f2bc",
+          "label": "Poliéster",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-09-07T22:33:40.381707+00:00",
+          "sort_order": 25,
+          "updated_at": "2026-09-07T22:33:40.381707+00:00",
+          "spec_definition_id": "7da3359a-e29f-57d8-901f-355753d1c6b3"
+        },
+        {
+          "id": "4ffab964-2ebc-5021-90c0-be85480b68ec",
+          "code": "catalog_f1bf3336d6fd120b3eee3952c39c0677",
+          "label": "Carbono",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-09-07T22:33:40.381707+00:00",
+          "sort_order": 8,
+          "updated_at": "2026-09-07T22:33:40.381707+00:00",
+          "spec_definition_id": "7da3359a-e29f-57d8-901f-355753d1c6b3"
+        },
+        {
+          "id": "5941e1d7-4af1-53fc-891d-07d61d639e01",
+          "code": "catalog_666b8b46df3bf02a807530692d01ecf4",
+          "label": "PE / plástico",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-09-07T22:33:40.381707+00:00",
+          "sort_order": 20,
+          "updated_at": "2026-09-07T22:33:40.381707+00:00",
+          "spec_definition_id": "7da3359a-e29f-57d8-901f-355753d1c6b3"
+        },
+        {
+          "id": "6df2768e-61d3-5383-ad5a-001a88f6879f",
+          "code": "catalog_eda88ba0a167a288dce3e99be54bfa69",
+          "label": "Gel / PU",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-09-07T22:33:40.381707+00:00",
+          "sort_order": 6,
+          "updated_at": "2026-09-07T22:33:40.381707+00:00",
+          "spec_definition_id": "7da3359a-e29f-57d8-901f-355753d1c6b3"
+        },
+        {
+          "id": "72005f61-79a3-54cb-882d-0f3c92ab0efc",
+          "code": "catalog_d09dfb57de9bcb275cdbffe1d9f7d4ed",
+          "label": "Latón",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-09-07T22:33:40.381707+00:00",
+          "sort_order": 12,
+          "updated_at": "2026-09-07T22:33:40.381707+00:00",
+          "spec_definition_id": "7da3359a-e29f-57d8-901f-355753d1c6b3"
+        },
+        {
+          "id": "76ab4355-d966-5e41-b886-d2b357a66e64",
+          "code": "catalog_3add2a4e04f3365b9551044bf9e00baf",
+          "label": "Plástico",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-09-07T22:33:40.381707+00:00",
+          "sort_order": 2,
+          "updated_at": "2026-09-07T22:33:40.381707+00:00",
+          "spec_definition_id": "7da3359a-e29f-57d8-901f-355753d1c6b3"
+        },
+        {
+          "id": "78c8ca78-87a0-5370-9fe0-bfd99b9bb1db",
+          "code": "catalog_978d237a8b99eff81cf349e2409e9ee3",
+          "label": "Plástico / nylon",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-09-07T22:33:40.381707+00:00",
+          "sort_order": 18,
+          "updated_at": "2026-09-07T22:33:40.381707+00:00",
+          "spec_definition_id": "7da3359a-e29f-57d8-901f-355753d1c6b3"
+        },
+        {
+          "id": "7d421327-d744-5f53-9e0f-3a86cb84ae4e",
+          "code": "catalog_c2295235a535ea3e85b7a0e5ab85afb0",
+          "label": "Otro",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-09-07T22:33:40.381707+00:00",
+          "sort_order": 3,
+          "updated_at": "2026-09-07T22:33:40.381707+00:00",
+          "spec_definition_id": "7da3359a-e29f-57d8-901f-355753d1c6b3"
+        },
+        {
+          "id": "81b9ec48-84af-50c5-9331-0c084bf8b952",
+          "code": "catalog_83967661f51953134a64311d65e5541a",
+          "label": "Goma",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-09-07T22:33:40.381707+00:00",
+          "sort_order": 19,
+          "updated_at": "2026-09-07T22:33:40.381707+00:00",
+          "spec_definition_id": "7da3359a-e29f-57d8-901f-355753d1c6b3"
+        },
+        {
+          "id": "8cb43060-b124-5141-aecb-d7ca8c301784",
+          "code": "catalog_d4ab62ce43f88267676dc8fd37c1af6f",
+          "label": "Acero inoxidable",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-09-07T22:33:40.381707+00:00",
+          "sort_order": 16,
+          "updated_at": "2026-09-07T22:33:40.381707+00:00",
+          "spec_definition_id": "7da3359a-e29f-57d8-901f-355753d1c6b3"
+        },
+        {
+          "id": "9aabd194-418e-57b7-9162-b1fa27275915",
+          "code": "catalog_c93a50726342225b7b323e2de4064ebc",
+          "label": "Magnesio / mixta",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-09-07T22:33:40.381707+00:00",
+          "sort_order": 9,
+          "updated_at": "2026-09-07T22:33:40.381707+00:00",
+          "spec_definition_id": "7da3359a-e29f-57d8-901f-355753d1c6b3"
+        },
+        {
+          "id": "a03a449f-2130-5fd7-9b8a-76698d86cb8b",
+          "code": "catalog_959ebb89f0689b5549189de2bcd866c6",
+          "label": "Tritan",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-09-07T22:33:40.381707+00:00",
+          "sort_order": 21,
+          "updated_at": "2026-09-07T22:33:40.381707+00:00",
+          "spec_definition_id": "7da3359a-e29f-57d8-901f-355753d1c6b3"
+        },
+        {
+          "id": "a6404bd8-4942-56d4-b8b0-40404909ed8d",
+          "code": "catalog_e8abd84a32604632f01c81dac8526457",
+          "label": "Poliéster / PET",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-09-07T22:33:40.381707+00:00",
+          "sort_order": 13,
+          "updated_at": "2026-09-07T22:33:40.381707+00:00",
+          "spec_definition_id": "7da3359a-e29f-57d8-901f-355753d1c6b3"
+        },
+        {
+          "id": "aed6613f-f75c-591e-ac95-01d904df245e",
+          "code": "catalog_f0fa8cf43bf1f7c3f4a4b7385d51ce0b",
+          "label": "Algodón",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-09-07T22:33:40.381707+00:00",
+          "sort_order": 27,
+          "updated_at": "2026-09-07T22:33:40.381707+00:00",
+          "spec_definition_id": "7da3359a-e29f-57d8-901f-355753d1c6b3"
+        },
+        {
+          "id": "b6430da5-0bbc-5fb6-8309-830153bfde99",
+          "code": "catalog_d65a2876c47595510cc52a5bd5d589f6",
+          "label": "Mezcla",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-09-07T22:33:40.381707+00:00",
+          "sort_order": 28,
+          "updated_at": "2026-09-07T22:33:40.381707+00:00",
+          "spec_definition_id": "7da3359a-e29f-57d8-901f-355753d1c6b3"
+        },
+        {
+          "id": "bb2e4d96-1e8d-50c2-822b-d2e286f1654c",
+          "code": "catalog_78b342449927661ac3b622233fc2869b",
+          "label": "Acero galvanizado",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-09-07T22:33:40.381707+00:00",
+          "sort_order": 15,
+          "updated_at": "2026-09-07T22:33:40.381707+00:00",
+          "spec_definition_id": "7da3359a-e29f-57d8-901f-355753d1c6b3"
+        },
+        {
+          "id": "c5dfe1a4-1133-5f84-af73-82564d0b5766",
+          "code": "catalog_4ba389f6e8a3692d46102e09d396ddc2",
+          "label": "EVA",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-09-07T22:33:40.381707+00:00",
+          "sort_order": 4,
+          "updated_at": "2026-09-07T22:33:40.381707+00:00",
+          "spec_definition_id": "7da3359a-e29f-57d8-901f-355753d1c6b3"
+        },
+        {
+          "id": "c5fda83c-954f-52a2-a67d-1c6a8ca0808a",
+          "code": "catalog_98b40d133309aed77e37fb1843cdbc27",
+          "label": "PVC / vinilo",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-09-07T22:33:40.381707+00:00",
+          "sort_order": 23,
+          "updated_at": "2026-09-07T22:33:40.381707+00:00",
+          "spec_definition_id": "7da3359a-e29f-57d8-901f-355753d1c6b3"
+        },
+        {
+          "id": "d1ada999-7a10-5de2-837d-d1b4a2f72af6",
+          "code": "catalog_708f9ce7c90b4bd833fed140664df384",
+          "label": "Mimbre",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-09-07T22:33:40.381707+00:00",
+          "sort_order": 22,
+          "updated_at": "2026-09-07T22:33:40.381707+00:00",
+          "spec_definition_id": "7da3359a-e29f-57d8-901f-355753d1c6b3"
+        },
+        {
+          "id": "d3e3d8c7-43eb-5d4e-ac76-fa34e0a57b40",
+          "code": "catalog_6691e26bfeea24b353c9357ca4275ab6",
+          "label": "Aluminio",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-09-07T22:33:40.381707+00:00",
+          "sort_order": 1,
+          "updated_at": "2026-09-07T22:33:40.381707+00:00",
+          "spec_definition_id": "7da3359a-e29f-57d8-901f-355753d1c6b3"
+        },
+        {
+          "id": "dc1c2129-e647-50bc-816f-a315d2621247",
+          "code": "catalog_1ba6129627b0af4dc9d3e3cf9b84e6ea",
+          "label": "Recubierto (teflón / polímero)",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-09-07T22:33:40.381707+00:00",
+          "sort_order": 17,
+          "updated_at": "2026-09-07T22:33:40.381707+00:00",
+          "spec_definition_id": "7da3359a-e29f-57d8-901f-355753d1c6b3"
+        },
+        {
+          "id": "dc2b5e86-8a3f-5283-9b72-338e2c362cbd",
+          "code": "catalog_025d10f299c1af11ed2b61ff7dd07ee8",
+          "label": "Corcho",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-09-07T22:33:40.381707+00:00",
+          "sort_order": 5,
+          "updated_at": "2026-09-07T22:33:40.381707+00:00",
+          "spec_definition_id": "7da3359a-e29f-57d8-901f-355753d1c6b3"
+        },
+        {
+          "id": "f8fd17f7-50df-5e55-9904-bb7d6a3e11e0",
+          "code": "catalog_457724ad08d0131d0c80c98ad534533e",
+          "label": "Silicona",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-09-07T22:33:40.381707+00:00",
+          "sort_order": 7,
+          "updated_at": "2026-09-07T22:33:40.381707+00:00",
+          "spec_definition_id": "7da3359a-e29f-57d8-901f-355753d1c6b3"
+        },
+        {
+          "id": "f94df7ee-e1e0-5d45-8a4c-385ff5bb6671",
+          "code": "catalog_1ab67d54125e7b2bd931c766113c49df",
+          "label": "Nylon",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-09-07T22:33:40.381707+00:00",
+          "sort_order": 14,
+          "updated_at": "2026-09-07T22:33:40.381707+00:00",
+          "spec_definition_id": "7da3359a-e29f-57d8-901f-355753d1c6b3"
+        }
+      ],
+      "data_type": "single_select",
+      "tenant_id": null,
+      "created_at": "2026-09-07T22:33:40.381707+00:00",
+      "group_name": null,
+      "sort_order": 0,
+      "updated_at": "2026-09-07T22:33:40.381707+00:00",
+      "description": null,
+      "is_filterable": false,
+      "allowed_values": [
+        "Policarbonato / plástico",
+        "Titanio",
+        "Polar",
+        "Acero",
+        "Neopreno",
+        "Poliéster",
+        "Carbono",
+        "PE / plástico",
+        "Gel / PU",
+        "Latón",
+        "Plástico",
+        "Plástico / nylon",
+        "Otro",
+        "Goma",
+        "Acero inoxidable",
+        "Magnesio / mixta",
+        "Tritan",
+        "Poliéster / PET",
+        "Algodón",
+        "Mezcla",
+        "Acero galvanizado",
+        "EVA",
+        "PVC / vinilo",
+        "Mimbre",
+        "Aluminio",
+        "Recubierto (teflón / polímero)",
+        "Corcho",
+        "Silicona",
+        "Nylon"
+      ],
+      "validation_rules": {},
+      "is_customer_visible": false,
+      "is_mechanic_visible": true,
+      "is_required_by_default": false,
+      "is_compatibility_relevant": false,
+      "origin": "existing"
+    },
+    "seatpost_shim_length_mm": {
+      "id": "f60cf6cb-2a3a-504d-acbd-d4e07d1d92d1",
+      "key": "seatpost_shim_length_mm",
+      "unit": "mm",
+      "label": "Longitud del suplemento de tija",
+      "options": [],
+      "data_type": "number",
+      "tenant_id": null,
+      "created_at": "2026-09-07T23:48:35.383021+00:00",
+      "group_name": null,
+      "sort_order": 0,
+      "updated_at": "2026-09-07T23:48:35.383021+00:00",
+      "description": null,
+      "is_filterable": false,
+      "allowed_values": [],
+      "validation_rules": {
+        "positive": true
+      },
+      "is_customer_visible": false,
+      "is_mechanic_visible": true,
+      "is_required_by_default": false,
+      "is_compatibility_relevant": false,
+      "origin": "existing"
+    },
+    "shim_inner_diameter_mm": {
+      "id": "fa6ff71e-7b9b-5415-8669-a0dfe586d6c8",
+      "key": "shim_inner_diameter_mm",
+      "unit": "mm",
+      "label": "Diámetro interior del suplemento",
+      "options": [],
+      "data_type": "number",
+      "tenant_id": null,
+      "created_at": "2026-09-07T23:48:35.383021+00:00",
+      "group_name": null,
+      "sort_order": 0,
+      "updated_at": "2026-09-07T23:48:35.383021+00:00",
+      "description": null,
+      "is_filterable": false,
+      "allowed_values": [],
+      "validation_rules": {
+        "positive": true
+      },
+      "is_customer_visible": false,
+      "is_mechanic_visible": true,
+      "is_required_by_default": false,
+      "is_compatibility_relevant": false,
+      "origin": "existing"
+    },
+    "shim_outer_diameter_mm": {
+      "id": "f091e753-d9f4-5b85-9f1b-2556821054ec",
+      "key": "shim_outer_diameter_mm",
+      "unit": "mm",
+      "label": "Diámetro exterior del suplemento",
+      "options": [],
+      "data_type": "number",
+      "tenant_id": null,
+      "created_at": "2026-09-07T23:48:35.383021+00:00",
+      "group_name": null,
+      "sort_order": 0,
+      "updated_at": "2026-09-07T23:48:35.383021+00:00",
+      "description": null,
+      "is_filterable": false,
+      "allowed_values": [],
+      "validation_rules": {
+        "positive": true
+      },
+      "is_customer_visible": false,
+      "is_mechanic_visible": true,
+      "is_required_by_default": false,
+      "is_compatibility_relevant": false,
+      "origin": "existing"
+    },
+    "spec_evidence_source": {
+      "id": "4f055961-6c16-430b-a4e2-e6b09dc1cccc",
+      "key": "spec_evidence_source",
+      "unit": null,
+      "label": "Fuente de la declaración",
+      "options": [],
+      "data_type": "text",
+      "tenant_id": null,
+      "created_at": "2026-09-06T06:58:57.745728+00:00",
+      "group_name": null,
+      "sort_order": 900,
+      "updated_at": "2026-09-06T06:58:57.745728+00:00",
+      "description": "URL del fabricante, manual o identificación del envase que respalda la declaración.",
+      "is_filterable": false,
+      "allowed_values": [],
+      "validation_rules": {},
+      "is_customer_visible": false,
+      "is_mechanic_visible": true,
+      "is_required_by_default": false,
+      "is_compatibility_relevant": false,
+      "origin": "existing"
+    },
+    "weight_g": {
+      "id": "2cd304b2-2891-5706-84ab-c949d3099430",
+      "key": "weight_g",
+      "unit": "g",
+      "label": "Peso",
+      "options": [],
+      "data_type": "number",
+      "tenant_id": null,
+      "created_at": "2026-09-07T22:33:40.381707+00:00",
+      "group_name": null,
+      "sort_order": 0,
+      "updated_at": "2026-09-07T22:33:40.381707+00:00",
+      "description": null,
+      "is_filterable": false,
+      "allowed_values": [],
+      "validation_rules": {
+        "positive": true
+      },
+      "is_customer_visible": false,
+      "is_mechanic_visible": true,
+      "is_required_by_default": false,
+      "is_compatibility_relevant": false,
+      "origin": "existing"
+    },
+    "seatpost_shim_shape": {
+      "id": "ab1c57da-ab4c-5a6c-84dc-7b9effb11310",
+      "key": "seatpost_shim_shape",
+      "label": "Geometría del casquillo",
+      "data_type": "single_select",
+      "unit": null,
+      "origin": "new",
+      "used_by": [
+        "seatpost_shim"
+      ],
+      "allowed_values": [
+        "Circular",
+        "Perfil específico del fabricante",
+        "Desconocido / sin confirmar"
+      ],
+      "validation_rules": {}
+    },
+    "seatpost_shim_oem_interface": {
+      "id": "96b9c385-c10b-50e5-9f09-7f5d032c98ca",
+      "key": "seatpost_shim_oem_interface",
+      "label": "Perfil e interfaz específicos del fabricante",
+      "data_type": "text",
+      "unit": null,
+      "origin": "new",
+      "used_by": [
+        "seatpost_shim"
+      ],
+      "allowed_values": [],
+      "validation_rules": {}
+    },
+    "seatpost_shim_support_length_mm": {
+      "id": "e3eab3eb-79cb-5424-ac2f-6a219babd860",
+      "key": "seatpost_shim_support_length_mm",
+      "label": "Longitud de apoyo útil declarada",
+      "data_type": "number",
+      "unit": "mm",
+      "origin": "new",
+      "used_by": [
+        "seatpost_shim"
+      ],
+      "allowed_values": [],
+      "validation_rules": {
+        "positive": true
+      }
+    },
+    "seatpost_shim_mount_instructions": {
+      "id": "9ec47488-3553-5449-a9bb-51f1517cb84b",
+      "key": "seatpost_shim_mount_instructions",
+      "label": "Condiciones de montaje del fabricante",
+      "data_type": "text",
+      "unit": null,
+      "origin": "new",
+      "used_by": [
+        "seatpost_shim"
+      ],
+      "allowed_values": [],
+      "validation_rules": {}
+    }
+  },
+  "publication_authorized": false,
+  "automatic_fill_authorized": false,
+  "mechanical_coverage_complete": false
+}
