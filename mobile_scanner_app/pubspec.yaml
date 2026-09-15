@@ -26,7 +26,7 @@ dependencies:
   uuid: ^4.4.0
   intl: ^0.20.0
 
-  cupertino_icons: ^1.0.6
+  cupertino_icons: ^1.0.9
 
 dev_dependencies:
   flutter_test:
