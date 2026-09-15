@@ -62,3 +62,49 @@ cierre), las tres migraciones con sus verificadores, `progress-measurement-2026-
   base local. Quien necesite ensayar de nuevo debe restaurar primero el esquema
   local; no lo hice yo para no pisar la sesión concurrente.
 
+## Estado de git al parar (2026-09-15, ~20:20Z) y qué debe hacer la migración a `main`
+
+Tres commits locales sobre `71926a11`, sin push:
+
+| Commit | Contenido |
+|---|---|
+| `62a68acc` | 115 archivos: todas las migraciones aplicadas en producción del 09-06 al 09-15 con sus verificadores y suites pgTAP (incluye, por error de filtro, `20260915190000_reject_stale_need_portal_search_definitively.sql` y su verificador, de la otra sesión; están APPLIED en producción y su contenido es el de esa sesión, sin tocar) |
+| `ea38266b` | 685 archivos: carpeta de investigación de fichas (sin `assigned-product-family-adjudication-2026-09-07.json`, que trae campos comerciales), docs de arquitectura y desarrollo modificados, `scripts/inventory`, `test/scripts`, `test/tools` |
+| `8f3d8926` | 101 archivos: extensión cliente Dart y pruebas; analizador 0 errores. Incluye, por el mismo error de filtro, cuatro archivos terminados de la otra sesión (`supplier_portal_headless_runner.dart`, `supplier_availability_service.dart`, `intelligent_purchasing_workspace_page.dart`, `supplier_receipt_transport_test.dart`), con su contenido íntegro |
+
+Quedan sin commit, a propósito: `supabase/migrations/20260723023000_add_audited_sales_payment_corrections.sql`
+(migración aplicada editada después; no es mía), `supabase/tests/supply_need_edit_modes.sql`
+y `supabase/tests/supply_need_stock_scope_before_evaluating.sql` (otra sesión).
+Copias de seguridad de todo lo no commiteado antes de estos commits:
+`.tmp/backups/untracked-20260915-checkpoint.tgz` y
+`.tmp/backups/tracked-modifications-20260915-checkpoint.patch`.
+
+`origin/smartpegas1.0` (`f51f3777`) sigue tres commits por delante de `71926a11`
+(release del 09-07 desde un clon). Verificado archivo por archivo: los 152
+archivos que esos commits cambian ya están en este árbol con ese contenido
+(129 idénticos, 23 con ediciones locales encima que contienen sus hunks). El
+hook del checkout impide mover HEAD con reset; la fusión la hace quien
+promueva a `main`: `git merge origin/smartpegas1.0` sobre estos commits debe
+resolver limpio o, en los 23 archivos, conservar la versión local. `origin/main`
+(`75cb391f`) está 94 commits por detrás de `origin/smartpegas1.0`.
+
+## Base local
+
+El reset de la otra sesión dejó la base local en el baseline `core_schema.sql`,
+que trae `spec_definitions`, `spec_templates`, `spec_template_fields`,
+`category_tech_mappings` y `product_spec_values`, pero no `spec_definition_values`
+ni `spec_facts`. Para volver a ensayar hay que reaplicar en orden, con
+`VINABIKE_DB_WRITE_CONFIRM=local scripts/db/query.sh local --write --file`, las
+migraciones de motor desde `20260821160000` (vocabulario en filas) y
+`20260821180000` (registro unificado) hasta `20260915200000`, saltando las que
+exigen preimagen exacta de producción (publicaciones `nd_publication_document`,
+`existing_global_metadata_forward_only`, `assignment_document`): esas se ensayan
+con siembra (`prepare`). Pendiente hasta que termine la migración a `main`.
+
+## Punto de parada
+
+Trabajo detenido aquí por decisión del dueño hasta cerrar la migración a `main`.
+Al reanudar: (1) restaurar la base local; (2) 27 registros sin plantilla;
+(3) reemplazos originales; (4) release del cliente y asignación de AE0266/AE0274;
+(5) gates del llenado.
+
