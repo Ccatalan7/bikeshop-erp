@@ -43,6 +43,25 @@ void main() {
     expect(OcrPurchaseReviewFlow.identitiesComplete([fresh]), isTrue);
     expect(OcrPurchaseReviewFlow.amountsComplete([fresh]), isTrue);
   });
+  test('a remembered rule must be applied or changed before amounts confirm',
+      () {
+    const ruled = OcrPurchaseReviewDecision(
+        identity: OcrProductIdentityDecision.existing,
+        selected: true,
+        productId: '20000000-0000-4000-8000-000000000001',
+        rulePending: true);
+    const excludedRuled = OcrPurchaseReviewDecision(
+        identity: OcrProductIdentityDecision.existing,
+        selected: false,
+        productId: '20000000-0000-4000-8000-000000000001',
+        rulePending: true);
+    expect(OcrPurchaseReviewFlow.pendingRuleCount([ruled, chosen, fresh]), 1);
+    expect(OcrPurchaseReviewFlow.rulesSettled([ruled, chosen]), isFalse);
+    expect(OcrPurchaseReviewFlow.rulesSettled([chosen, fresh]), isTrue);
+    expect(OcrPurchaseReviewFlow.rulesSettled([excludedRuled, chosen]), isTrue,
+        reason: 'an excluded row cannot hold the batch');
+    expect(OcrPurchaseReviewFlow.rulesSettled(const []), isTrue);
+  });
   test('excluded rows do not force an inventory identity or economic decision',
       () {
     const excluded = OcrPurchaseReviewDecision(

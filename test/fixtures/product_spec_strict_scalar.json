@@ -1,0 +1,288 @@
+{
+  "schema_version": 1,
+  "types": {
+    "post_mm": "number",
+    "frame_mm": "number",
+    "other_mm": "number"
+  },
+  "units": {
+    "post_mm": "mm",
+    "frame_mm": "mm",
+    "other_mm": "mm"
+  },
+  "contract": {
+    "rules_version": 2,
+    "scalar_ordered_pairs": [
+      [
+        "post_mm",
+        "frame_mm",
+        "lt"
+      ]
+    ]
+  },
+  "cases": [
+    {
+      "id": "reducer_27_2_to_30_9",
+      "values": {
+        "post_mm": "27.2",
+        "frame_mm": "30.9"
+      },
+      "expected_fields": []
+    },
+    {
+      "id": "zero_wall",
+      "values": {
+        "post_mm": "27.2",
+        "frame_mm": "27.2"
+      },
+      "expected_fields": [
+        "post_mm",
+        "frame_mm"
+      ]
+    },
+    {
+      "id": "equivalent_decimal_zero_wall",
+      "values": {
+        "post_mm": "27.20",
+        "frame_mm": "2.72e1"
+      },
+      "expected_fields": [
+        "post_mm",
+        "frame_mm"
+      ]
+    },
+    {
+      "id": "reverse_reducer",
+      "values": {
+        "post_mm": "31.6",
+        "frame_mm": "30.9"
+      },
+      "expected_fields": [
+        "post_mm",
+        "frame_mm"
+      ]
+    },
+    {
+      "id": "post_missing",
+      "values": {
+        "frame_mm": "30.9"
+      },
+      "expected_fields": []
+    },
+    {
+      "id": "frame_missing",
+      "values": {
+        "post_mm": "27.2"
+      },
+      "expected_fields": []
+    },
+    {
+      "id": "unmeasured",
+      "values": {},
+      "expected_fields": []
+    },
+    {
+      "id": "decimal_precision_above_double",
+      "values": {
+        "post_mm": "9007199254740992",
+        "frame_mm": "9007199254740993"
+      },
+      "expected_fields": []
+    },
+    {
+      "id": "reverse_above_double",
+      "values": {
+        "post_mm": "9007199254740993",
+        "frame_mm": "9007199254740992"
+      },
+      "expected_fields": [
+        "post_mm",
+        "frame_mm"
+      ]
+    },
+    {
+      "id": "thin_positive_wall",
+      "values": {
+        "post_mm": "27.200000000000000001",
+        "frame_mm": "27.200000000000000002"
+      },
+      "expected_fields": []
+    },
+    {
+      "id": "same_precise_wall",
+      "values": {
+        "post_mm": "27.200000000000000001",
+        "frame_mm": "27.200000000000000001"
+      },
+      "expected_fields": [
+        "post_mm",
+        "frame_mm"
+      ]
+    }
+  ],
+  "invalid_contracts": [
+    {
+      "id": "unknown_operator",
+      "contract": {
+        "rules_version": 2,
+        "scalar_ordered_pairs": [
+          [
+            "post_mm",
+            "frame_mm",
+            "lte"
+          ]
+        ]
+      }
+    },
+    {
+      "id": "boolean_mode",
+      "contract": {
+        "rules_version": 2,
+        "scalar_ordered_pairs": [
+          [
+            "post_mm",
+            "frame_mm",
+            true
+          ]
+        ]
+      }
+    },
+    {
+      "id": "null_mode",
+      "contract": {
+        "rules_version": 2,
+        "scalar_ordered_pairs": [
+          [
+            "post_mm",
+            "frame_mm",
+            null
+          ]
+        ]
+      }
+    },
+    {
+      "id": "missing_endpoint",
+      "contract": {
+        "rules_version": 2,
+        "scalar_ordered_pairs": [
+          [
+            "post_mm"
+          ]
+        ]
+      }
+    },
+    {
+      "id": "extra_mode",
+      "contract": {
+        "rules_version": 2,
+        "scalar_ordered_pairs": [
+          [
+            "post_mm",
+            "frame_mm",
+            "lt",
+            "lt"
+          ]
+        ]
+      }
+    },
+    {
+      "id": "same_endpoint",
+      "contract": {
+        "rules_version": 2,
+        "scalar_ordered_pairs": [
+          [
+            "post_mm",
+            "post_mm",
+            "lt"
+          ]
+        ]
+      }
+    },
+    {
+      "id": "foreign_endpoint",
+      "contract": {
+        "rules_version": 2,
+        "scalar_ordered_pairs": [
+          [
+            "post_mm",
+            "foreign",
+            "lt"
+          ]
+        ]
+      }
+    },
+    {
+      "id": "duplicate_pair",
+      "contract": {
+        "rules_version": 2,
+        "scalar_ordered_pairs": [
+          [
+            "post_mm",
+            "frame_mm",
+            "lt"
+          ],
+          [
+            "post_mm",
+            "frame_mm",
+            "lt"
+          ]
+        ]
+      }
+    },
+    {
+      "id": "duplicate_mixed_mode",
+      "contract": {
+        "rules_version": 2,
+        "scalar_ordered_pairs": [
+          [
+            "post_mm",
+            "frame_mm"
+          ],
+          [
+            "post_mm",
+            "frame_mm",
+            "lt"
+          ]
+        ]
+      }
+    },
+    {
+      "id": "cycle_mixed_mode",
+      "contract": {
+        "rules_version": 2,
+        "scalar_ordered_pairs": [
+          [
+            "post_mm",
+            "frame_mm",
+            "lt"
+          ],
+          [
+            "frame_mm",
+            "post_mm"
+          ]
+        ]
+      }
+    },
+    {
+      "id": "cycle_three_fields",
+      "contract": {
+        "rules_version": 2,
+        "scalar_ordered_pairs": [
+          [
+            "post_mm",
+            "frame_mm",
+            "lt"
+          ],
+          [
+            "frame_mm",
+            "other_mm"
+          ],
+          [
+            "other_mm",
+            "post_mm"
+          ]
+        ]
+      }
+    }
+  ]
+}

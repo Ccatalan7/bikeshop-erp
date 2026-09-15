@@ -19,6 +19,40 @@ class SupplierAvailabilityTarget {
   final String supplierCode;
 }
 
+/// El servidor **rechazó** el recibo de una búsqueda: la respuesta es
+/// definitiva y volver a mandarlo sólo repite el rechazo.
+///
+/// Clase 22/23 y `P0001` son respuestas del negocio —una estampa que ya no
+/// calza con la necesidad, una clave de operación ajena, una cobertura
+/// inválida—, no fallas de transporte. Medido el 2026-09-15: el guardián de
+/// alcance rechazaba con `40001` y un cliente lo reintentó ~900 veces por
+/// segundo durante 16 días (1.14 mil millones de transacciones abortadas,
+/// la base sobre el 80 % de CPU). Hoy rechaza con `23514`, y este tipo es lo
+/// que impide que un cliente lo vuelva a tratar como «reintenta».
+class SupplierNeedSearchRejected implements Exception {
+  SupplierNeedSearchRejected(PostgrestException cause)
+      : code = (cause.code ?? '').trim(),
+        message = cause.message,
+        details = cause.details?.toString(),
+        hint = cause.hint;
+
+  final String code;
+
+  /// Escrito por el servidor para el negocio; se puede mostrar tal cual.
+  final String message;
+  final String? details;
+
+  /// Qué recargar. El guardián lo manda con el `23514`.
+  final String? hint;
+
+  /// La necesidad ya no es la que se consultó: la lectura no la responde y
+  /// la única salida es volver a leerla y buscar de nuevo.
+  bool get needChanged => code == '23514';
+
+  @override
+  String toString() => 'SupplierNeedSearchRejected($code: $message)';
+}
+
 /// Lee la configuración del portal, qué preguntar, y anota lo que contestó.
 ///
 /// Guarda **siempre**, también cuando la respuesta fue una sesión caída o una
@@ -336,6 +370,17 @@ class SupplierAvailabilityService {
       // a los pocos ms es un proxy que rechaza; a los 60 s es una espera.
       debugPrint('📮 recibo falló tras ${reloj.elapsedMilliseconds} ms '
           '($bytes bytes) — ${error.code}: ${error.message}');
+      // **Un rechazo es una respuesta, y se contesta antes de pensar en
+      // reintentar.** Clase 22/23 y `P0001` dicen que el servidor leyó el
+      // recibo y lo negó: la estampa ya no calza con la necesidad, la clave
+      // pertenece a otra corrida, la cobertura no vale. Mandarlo de nuevo
+      // —ahora, con espera, o con la firma vieja— repite exactamente el mismo
+      // rechazo, y eso fue lo que sostuvo la base sobre el 80 % de CPU 16
+      // días. Sale con tipo propio para que ningún llamador lo confunda con
+      // un transporte caído.
+      if (_isDefinitiveRejection(error)) {
+        throw SupplierNeedSearchRejected(error);
+      }
       // **Un transporte caído deja el resultado DESCONOCIDO.** Un 502/503/504
       // del gateway no dice si la escritura entró: puede haber quedado
       // guardada y la respuesta perdida. Medido el 2026-08-30, cuatro corridas
@@ -353,10 +398,7 @@ class SupplierAvailabilityService {
         // Acá el resultado sí es desconocido —la sentencia pudo haber
         // corrido—, así que se resuelve por clave antes de escribir de nuevo.
         if (await needSearchWasRecorded(operationKey)) return;
-        await _client.rpc(
-          'record_supplier_need_portal_search_v1',
-          params: current,
-        );
+        await _recordOrReject(current);
         return;
       }
       // **El reintento es sólo para una firma que todavía no existe.** Si el
@@ -364,10 +406,26 @@ class SupplierAvailabilityService {
       // demostró, por ejemplo—, reintentar sin ella guardaría la fila igual y
       // taparía justo el defecto que esa validación existe para encontrar.
       if (!_isMissingFunctionSignature(error)) rethrow;
+      await _recordOrReject(base);
+    }
+  }
+
+  /// El segundo intento tampoco puede convertir un rechazo en transporte.
+  ///
+  /// La primera llamada clasifica antes de reintentar; ésta es la única otra
+  /// puerta por la que sale el recibo, y un `23514` acá tiene que salir con el
+  /// mismo tipo que en la primera, o el llamador lo encolaría para otra ronda.
+  Future<void> _recordOrReject(Map<String, dynamic> params) async {
+    try {
       await _client.rpc(
         'record_supplier_need_portal_search_v1',
-        params: base,
+        params: params,
       );
+    } on PostgrestException catch (error) {
+      if (_isDefinitiveRejection(error)) {
+        throw SupplierNeedSearchRejected(error);
+      }
+      rethrow;
     }
   }
 
@@ -405,8 +463,26 @@ class SupplierAvailabilityService {
   static bool isUnknownOutcome(PostgrestException error) =>
       _isUnknownOutcome(error);
 
+  @visibleForTesting
+  static bool isDefinitiveRejection(PostgrestException error) =>
+      _isDefinitiveRejection(error);
+
   static bool _connectionNeverAcquired(PostgrestException error) =>
       (error.code ?? '').trim() == 'PGRST003';
+
+  /// El servidor leyó el recibo y lo negó: no hay nada que reintentar.
+  ///
+  /// Misma lectura que `classifyStoreFailure` en nómina: clase 22 (dato
+  /// inválido) y 23 (integridad: `23514` estampa que ya no calza o sin
+  /// categoría, `23505` clave de operación ajena) son respuestas; `P0001` es
+  /// el `raise exception` sin código propio. Se decide por el código y no por
+  /// el texto, porque el texto lo escribe cada disparador para el operador.
+  static bool _isDefinitiveRejection(PostgrestException error) {
+    final code = (error.code ?? '').trim().toUpperCase();
+    if (code == 'P0001') return true;
+    return code.length == 5 &&
+        (code.startsWith('22') || code.startsWith('23'));
+  }
 
   /// Códigos en los que el resultado de la escritura no se puede afirmar.
   ///

@@ -277,8 +277,67 @@ List<ProductDuplicateCandidate> aiOrderedManualReviewLeads({
   return List<ProductDuplicateCandidate>.unmodifiable(ordered);
 }
 
-/// Applies the grounded closest-first review order to an already cached
-/// candidate bucket, preserving every candidate the catalog search exposed.
+/// The products the grounded pass actually chose — the `same` product, or
+/// every component of a `composite` — carried to the front of a cached list
+/// with «Elegido por la IA» as their first reason.
+///
+/// Until 2026-09-05 a `composite` left the picker in deterministic score
+/// order: the saddle the model had just named (×2) sat seventeenth in a list
+/// of seventeen saddles, under sixteen it had not chosen.
+@visibleForTesting
+List<ProductDuplicateCandidate> aiPickedLeads({
+  required AIProductMatchDecision? decision,
+  required List<ProductDuplicateCandidate> candidates,
+}) {
+  if (decision == null || candidates.isEmpty) {
+    return const <ProductDuplicateCandidate>[];
+  }
+  final pickedIds = <String>[
+    if (decision.decision == AIProductMatchDecisionKind.same &&
+        decision.productId?.trim().isNotEmpty == true)
+      decision.productId!.trim(),
+    if (decision.decision == AIProductMatchDecisionKind.composite)
+      for (final component in decision.components)
+        if (component.productId.trim().isNotEmpty) component.productId.trim(),
+  ];
+  if (pickedIds.isEmpty) return const <ProductDuplicateCandidate>[];
+  final byId = <String, ProductDuplicateCandidate>{
+    for (final candidate in candidates)
+      if (candidate.product.id?.trim().isNotEmpty == true)
+        candidate.product.id!.trim(): candidate,
+  };
+  final ordered = <ProductDuplicateCandidate>[];
+  final seen = <String>{};
+  for (final id in pickedIds) {
+    final candidate = byId[id];
+    if (candidate == null || !seen.add(id)) continue;
+    const chosen = 'Elegido por la IA';
+    ordered.add(ProductDuplicateCandidate(
+      product: candidate.product,
+      matchTier: candidate.matchTier,
+      confidence: candidate.confidence,
+      reasons: List<String>.unmodifiable(<String>[
+        chosen,
+        for (final reason in candidate.reasons)
+          if (reason != chosen) reason,
+      ]),
+      objections: candidate.objections,
+      gates: candidate.gates,
+      variantMismatch: candidate.variantMismatch,
+      hasProductImage: candidate.hasProductImage,
+      matchedModelCodes: candidate.matchedModelCodes,
+      isReviewOnlyFamilyScope: candidate.isReviewOnlyFamilyScope,
+      lineConfidence: candidate.lineConfidence,
+      variantAgreement: candidate.variantAgreement,
+    ));
+  }
+  return List<ProductDuplicateCandidate>.unmodifiable(ordered);
+}
+
+/// Applies the grounded review order to an already cached candidate bucket,
+/// preserving every candidate the catalog search exposed: first what the AI
+/// chose (`same`/`composite`), then its closest-first rejections
+/// (`different`/`insufficient`), then everything else as retrieved.
 ///
 /// This is intentionally pure and performs no model call. It lets every row
 /// and picker consume the adjudication receipt already attached to the row,
@@ -287,10 +346,10 @@ List<ProductDuplicateCandidate> applyAIManualReviewOrder({
   required AIProductMatchDecision? decision,
   required List<ProductDuplicateCandidate> candidates,
 }) {
-  final leads = aiOrderedManualReviewLeads(
-    decision: decision,
-    candidates: candidates,
-  );
+  final leads = <ProductDuplicateCandidate>[
+    ...aiPickedLeads(decision: decision, candidates: candidates),
+    ...aiOrderedManualReviewLeads(decision: decision, candidates: candidates),
+  ];
   if (leads.isEmpty) return candidates;
   final promotedIds = leads
       .map((candidate) => candidate.product.id?.trim())
@@ -780,8 +839,7 @@ class ProductDuplicateMatcherService {
         return _AdjudicationOutcome(
           candidates: const <ProductDuplicateCandidate>[],
           state: ProductDuplicateAdjudicationState.abstained,
-          reason:
-              decision.reason ?? 'La IA propuso un conjunto para revisión.',
+          reason: decision.reason ?? 'La IA propuso un conjunto para revisión.',
           decision: decision,
         );
       }
@@ -1609,10 +1667,10 @@ class ProductDuplicateMatcherService {
                   candidates: fullAdjudicationPool,
                 );
         }
-        final globalDecided = globalOutcome.state ==
-                ProductDuplicateAdjudicationState.accepted ||
-            globalOutcome.decision?.decision ==
-                AIProductMatchDecisionKind.composite;
+        final globalDecided =
+            globalOutcome.state == ProductDuplicateAdjudicationState.accepted ||
+                globalOutcome.decision?.decision ==
+                    AIProductMatchDecisionKind.composite;
         if (leafComposite && !globalDecided) {
           // The wider pool did not find anything better: the leaf's pack
           // answer is still the most useful thing to show.

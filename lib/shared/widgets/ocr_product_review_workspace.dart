@@ -1,3 +1,4 @@
+import 'package:desktop_drop/desktop_drop.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -10,10 +11,17 @@ import '../services/ocr_purchase_review_flow.dart';
 import 'vb_notice.dart';
 import 'vb_money_text.dart';
 import 'ocr_review_evidence.dart';
+import 'vb_button.dart';
+import 'vb_surface_icon_button.dart';
 import 'vb_searchable_select.dart';
+import 'vb_segmented.dart' show VbDensity;
+import 'vb_skeleton.dart';
 import 'vb_status_badge.dart';
 
 part 'ocr_product_review_steps.dart';
+part 'ocr_new_products_table.dart';
+part 'ocr_identity_table.dart';
+part 'ocr_purchase_amounts_table.dart';
 
 enum OcrProductReviewStatus {
   needsSearch,
@@ -92,6 +100,7 @@ class OcrProductReviewLine {
     this.evidenceDegraded = false,
     this.isUploadingImage = false,
     this.isReservingSku = false,
+    this.queued = false,
     this.skuIsReadOnly = false,
     this.skuErrorMessage,
     this.errorMessage,
@@ -99,6 +108,8 @@ class OcrProductReviewLine {
     this.aiCompositeProposal,
     this.canConfirmCompositeProposal = false,
     this.hasRememberedSuggestion = false,
+    this.ruleRejected = false,
+    this.ruleAttribution,
     this.isPreparingNewProduct = false,
     this.canConfirmNewProduct = true,
     this.newProductUnitsController,
@@ -118,6 +129,11 @@ class OcrProductReviewLine {
     this.identityDecision = OcrProductIdentityDecision.undecided,
     this.inventoryProduct,
     this.inventoryOrigin,
+    this.bestEvidence,
+    this.categoryObjection,
+    this.sharedWithLineTitle,
+    this.aiCompositeProduct,
+    this.aiCompositeUnits,
     this.purchaseQuantityController,
     this.purchaseUnitCostController,
     this.purchaseTotalController,
@@ -136,6 +152,15 @@ class OcrProductReviewLine {
   final double? sourceLineTotal;
   final List<OcrReviewComponent> resolutionComponents;
   final bool hasRememberedSuggestion;
+
+  /// The operator chose to change the earlier-purchase rule for this row; the
+  /// link confirmed now is recorded as a correction of it.
+  final bool ruleRejected;
+
+  /// Who confirmed the rule this row is following and when, in the shop's
+  /// words («Confirmada por ti el 12/08/2026 · compra del 12/08/2026»). Null
+  /// when no rule applies.
+  final String? ruleAttribution;
   final bool isPreparingNewProduct;
   final bool canConfirmNewProduct;
   final TextEditingController? newProductUnitsController;
@@ -144,6 +169,13 @@ class OcrProductReviewLine {
   final Uint8List? imageBytes;
   final OcrProductDraftControllers controllers;
   final OcrProductReviewStatus status;
+
+  /// The automatic comparison holds this row: the catalog is still loading or
+  /// every worker slot is busy with another line. That is work in flight, so
+  /// the row draws its silhouette (`X-01`) and its decision stays inert. It is
+  /// never «pendiente»: that word is for a row nobody has queued, the one
+  /// «Reintentar pendientes» picks up.
+  final bool queued;
   final List<ProductDuplicateCandidate> candidates;
 
   /// Cached same-category products that survived the identity gates. This may
@@ -208,6 +240,24 @@ class OcrProductReviewLine {
   final OcrProductIdentityDecision identityDecision;
   final Product? inventoryProduct;
   final String? inventoryOrigin;
+
+  /// The evidence tier of [inventoryProduct], shown on the row so a «Podría
+  /// ser» is never one tap away from being linked.
+  final OcrCandidateEvidence? bestEvidence;
+
+  /// The recommended product lives in another catalog category; identity
+  /// stands, placement needs fixing.
+  final String? categoryObjection;
+
+  /// Another line of this same purchase already proposes or chose
+  /// [inventoryProduct]; two lines rarely buy the same product.
+  final String? sharedWithLineTitle;
+
+  /// When the AI read the line as a pack of ONE catalog product, that product
+  /// — with image, name and SKU — and how many of it per purchase. A pack
+  /// answer is still a product identity, never only a sentence.
+  final Product? aiCompositeProduct;
+  final int? aiCompositeUnits;
   final TextEditingController? purchaseQuantityController;
   final TextEditingController? purchaseUnitCostController;
   final TextEditingController? purchaseTotalController;
@@ -243,6 +293,7 @@ class OcrProductReviewCallbacks {
     this.onConfirmNewProduct,
     this.onPrepareNewProduct,
     this.onConfirmRememberedResolution,
+    this.onRejectRememberedResolution,
     this.onNewProductUnitsChanged,
     this.onConfirmCompositeProposal,
     this.onRetryLine,
@@ -258,6 +309,7 @@ class OcrProductReviewCallbacks {
     this.onSoldChanged,
     this.onCopySibling,
     this.onReplaceImage,
+    this.onDropImage,
     this.onRemoveImage,
     this.onChangeDecision,
     this.onCostIncludesVatChanged,
@@ -275,6 +327,9 @@ class OcrProductReviewCallbacks {
   final ValueChanged<String>? onConfirmNewProduct;
   final ValueChanged<String>? onPrepareNewProduct;
   final ValueChanged<String>? onConfirmRememberedResolution;
+
+  /// «Cambiar»: keep the operator's own choice instead of the remembered rule.
+  final ValueChanged<String>? onRejectRememberedResolution;
   final void Function(String lineId, String value)? onNewProductUnitsChanged;
   final ValueChanged<String>? onConfirmCompositeProposal;
   final ValueChanged<String>? onRetryLine;
@@ -298,6 +353,7 @@ class OcrProductReviewCallbacks {
   final void Function(String lineId, bool value)? onSoldChanged;
   final void Function(String lineId, String siblingLineId)? onCopySibling;
   final ValueChanged<String>? onReplaceImage;
+  final void Function(String lineId, List<DropItem> files)? onDropImage;
   final ValueChanged<String>? onRemoveImage;
   final ValueChanged<String>? onChangeDecision;
   final ValueChanged<bool>? onCostIncludesVatChanged;
@@ -311,6 +367,30 @@ class OcrProductReviewCallbacks {
 }
 
 @immutable
+
+/// What the batch is doing right now, the one live label the surface
+/// publishes while rows compare. The step header shows it with the `A-01`
+/// spinner («el spinner nunca reemplaza el label») and hides «Reintentar
+/// pendientes» meanwhile: there is nothing to retry while the pass runs.
+class OcrProductReviewActivity {
+  const OcrProductReviewActivity({
+    required this.label,
+    this.completed,
+    this.total,
+  });
+
+  /// Gerund, as the guide asks for a running state.
+  final String label;
+  final int? completed;
+  final int? total;
+
+  String get text {
+    final total = this.total;
+    if (total == null || total <= 0) return label;
+    return '$label · ${completed ?? 0} de $total';
+  }
+}
+
 class OcrProductReviewProgress {
   const OcrProductReviewProgress({
     required this.total,
@@ -385,6 +465,7 @@ class OcrProductReviewWorkspace extends StatefulWidget {
     this.readOnlyReason,
     this.step = OcrPurchaseReviewStep.identify,
     this.backLabel = 'Volver a la factura',
+    this.activity,
   });
 
   final List<OcrProductReviewLine> lines;
@@ -400,6 +481,10 @@ class OcrProductReviewWorkspace extends StatefulWidget {
   final OcrPurchaseReviewStep step;
   final String backLabel;
 
+  /// The comparison pass in flight, shown in the step-1 header. Null when
+  /// nothing runs.
+  final OcrProductReviewActivity? activity;
+
   /// Below this the shell itself is compact and every target is 48 px.
   static const double touchBreakpoint = 900;
 
@@ -412,7 +497,6 @@ class OcrProductReviewWorkspace extends StatefulWidget {
 }
 
 class _OcrProductReviewWorkspaceState extends State<OcrProductReviewWorkspace> {
-  static const double touchTarget = kMinInteractiveDimension;
   static const double hairline = 1;
   static const double space1 = 4;
   static const double space2 = 8;
@@ -449,6 +533,7 @@ class _OcrProductReviewWorkspaceState extends State<OcrProductReviewWorkspace> {
                           touch: touch,
                           dense: dense,
                           readOnly: widget.readOnly,
+                          activity: widget.activity,
                         ),
                 ),
                 _WorkspaceFooter(
@@ -504,11 +589,13 @@ class _SkuCell extends StatelessWidget {
     required this.line,
     required this.enabled,
     required this.callbacks,
+    this.touch,
   });
 
   final OcrProductReviewLine line;
   final bool enabled;
   final OcrProductReviewCallbacks callbacks;
+  final bool? touch;
 
   @override
   Widget build(BuildContext context) {
@@ -571,7 +658,7 @@ class _SkuCell extends StatelessWidget {
             : 'Se reserva al confirmar «Nuevo»',
         waitDuration: const Duration(milliseconds: 600),
         child: SizedBox(
-          height: MediaQuery.sizeOf(context).width < 900 ? 48 : 34,
+          height: (touch ?? (MediaQuery.sizeOf(context).width < 900)) ? 48 : 34,
           child: Align(
             alignment: Alignment.centerLeft,
             child: Text(
@@ -594,6 +681,7 @@ class _SkuCell extends StatelessWidget {
 
     return _CompactField(
       fieldKey: Key('ocr-review-sku-${line.id}'),
+      touch: touch,
       controller: line.controllers.sku,
       enabled: enabled,
       origin: line.skuOrigin,
@@ -613,6 +701,9 @@ class _CompactField extends StatelessWidget {
     required this.origin,
     required this.onChanged,
     this.numeric = false,
+    this.semanticLabel,
+    this.touch,
+    this.money = false,
   });
 
   final Key fieldKey;
@@ -621,37 +712,63 @@ class _CompactField extends StatelessWidget {
   final OcrProductFieldOrigin origin;
   final ValueChanged<String>? onChanged;
   final bool numeric;
+  final String? semanticLabel;
+  final bool? touch;
+  final bool money;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    return Tooltip(
-      message: _originLabel(origin),
-      waitDuration: const Duration(milliseconds: 600),
-      child: SizedBox(
-        height: MediaQuery.sizeOf(context).width < 900 ? 48 : 34,
-        child: TextField(
-          key: fieldKey,
-          controller: controller,
-          enabled: enabled,
-          textAlign: numeric ? TextAlign.right : TextAlign.start,
-          keyboardType: numeric
-              ? const TextInputType.numberWithOptions(decimal: true)
-              : TextInputType.text,
-          inputFormatters: numeric
-              ? <TextInputFormatter>[
-                  FilteringTextInputFormatter.allow(RegExp(r'[0-9.,]')),
-                ]
-              : null,
-          style: theme.textTheme.bodySmall,
-          decoration: const InputDecoration(
-            isDense: true,
-            contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-          ),
-          onChanged: onChanged,
-        ),
-      ),
+    final height =
+        (touch ?? (MediaQuery.sizeOf(context).width < 900)) ? 48.0 : 34.0;
+    final style = theme.textTheme.bodySmall?.copyWith(
+      fontFeatures: numeric ? const [FontFeature.tabularFigures()] : null,
+      fontWeight: numeric ? FontWeight.w600 : null,
     );
+    // InputDecorator sizes the painted border from its content, not the outer
+    // SizedBox. Centre the actual theme font inside the canonical field height;
+    // ambient compact visual density must not shrink only the text inputs.
+    final metrics = TextPainter(
+        text: TextSpan(text: '0', style: style),
+        textDirection: Directionality.of(context),
+        textScaler: MediaQuery.textScalerOf(context))
+      ..layout();
+    final verticalPadding = ((height - metrics.height) / 2).clamp(0.0, height);
+    metrics.dispose();
+    return Semantics(
+        label: semanticLabel,
+        child: Tooltip(
+          message: _originLabel(origin),
+          waitDuration: const Duration(milliseconds: 600),
+          child: SizedBox(
+            height: height,
+            child: TextField(
+              key: fieldKey,
+              controller: controller,
+              enabled: enabled,
+              textAlign: numeric ? TextAlign.right : TextAlign.start,
+              keyboardType: numeric
+                  ? const TextInputType.numberWithOptions(decimal: true)
+                  : TextInputType.text,
+              inputFormatters: numeric
+                  ? <TextInputFormatter>[
+                      FilteringTextInputFormatter.allow(RegExp(r'[0-9.,]')),
+                    ]
+                  : null,
+              textAlignVertical: TextAlignVertical.center,
+              style: style,
+              decoration: InputDecoration(
+                isDense: true,
+                visualDensity: VisualDensity.standard,
+                constraints: BoxConstraints.tightFor(height: height),
+                prefixText: money ? '\$ ' : null,
+                contentPadding: EdgeInsets.symmetric(
+                    horizontal: 11, vertical: verticalPadding),
+              ),
+              onChanged: onChanged,
+            ),
+          ),
+        ));
   }
 }
 
@@ -660,10 +777,14 @@ class _CategorySelector extends StatelessWidget {
     required this.line,
     required this.enabled,
     required this.onChanged,
+    this.showLabel = true,
+    this.touch,
   });
 
   final OcrProductReviewLine line;
   final bool enabled;
+  final bool showLabel;
+  final bool? touch;
   final ValueChanged<Category?>? onChanged;
 
   @override
@@ -685,15 +806,16 @@ class _CategorySelector extends StatelessWidget {
         selectedIsAmbiguous ? _parentPath(selected.fullPath) : null;
 
     return VbSearchableSelect<Category>(
+      useTouchLayout: touch,
       key: Key('ocr-review-category-${line.id}'),
       value: selected,
       label: 'Categoría',
-      showLabel: true,
+      showLabel: showLabel,
       sheetTitle: 'Elegir categoría',
-      placeholder: 'Elegir',
+      placeholder: 'Seleccionar',
       semanticLabel: selectedParent == null
-          ? 'Categoría del producto'
-          : 'Categoría del producto, en $selectedParent',
+          ? 'Categoría de ${line.originalTitle}'
+          : 'Categoría de ${line.originalTitle}, en $selectedParent',
       helperText: selectedParent == null ? null : 'en $selectedParent',
       errorText: line.categoryValidationMessage,
       onChanged: enabled ? onChanged : null,
@@ -727,22 +849,27 @@ class _BrandSelector extends StatelessWidget {
     required this.line,
     required this.enabled,
     required this.onChanged,
+    this.showLabel = true,
+    this.touch,
   });
 
   final OcrProductReviewLine line;
   final bool enabled;
+  final bool showLabel;
+  final bool? touch;
   final ValueChanged<ProductBrand?>? onChanged;
 
   @override
   Widget build(BuildContext context) {
     return VbSearchableSelect<ProductBrand>(
+      useTouchLayout: touch,
       key: Key('ocr-review-brand-${line.id}'),
       value: line.brand,
       label: 'Marca',
-      showLabel: true,
+      showLabel: showLabel,
       sheetTitle: 'Elegir marca',
       placeholder: 'Sin marca',
-      semanticLabel: 'Marca del producto',
+      semanticLabel: 'Marca de ${line.originalTitle}',
       allowClear: true,
       errorText: line.brandValidationMessage,
       helperText: line.brandWarning,
@@ -754,169 +881,6 @@ class _BrandSelector extends StatelessWidget {
             label: brand.name,
           ),
       ],
-    );
-  }
-}
-
-class _NewProductFields extends StatelessWidget {
-  const _NewProductFields(
-      {required this.line, required this.callbacks, required this.enabled});
-  final OcrProductReviewLine line;
-  final OcrProductReviewCallbacks callbacks;
-  final bool enabled;
-  @override
-  Widget build(BuildContext context) =>
-      Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-        if (line.newProductUnitsController != null) ...[
-          _CompactFieldPair(
-              first: TextField(
-                  key: Key('ocr-review-new-units-${line.id}'),
-                  controller: line.newProductUnitsController,
-                  enabled: enabled,
-                  keyboardType: TextInputType.number,
-                  inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                  decoration: const InputDecoration(
-                      labelText: 'Unidades de esta ficha por compra'),
-                  onChanged: callbacks.onNewProductUnitsChanged == null
-                      ? null
-                      : (value) =>
-                          callbacks.onNewProductUnitsChanged!(line.id, value)),
-              second: Text(
-                  line.newProductInventoryQuantity == null
-                      ? 'Cantidad de inventario por definir'
-                      : '${line.newProductInventoryQuantity! % 1 == 0 ? line.newProductInventoryQuantity!.toInt() : line.newProductInventoryQuantity} unidades al recibir',
-                  style: Theme.of(context).textTheme.bodyMedium)),
-          const SizedBox(height: 12),
-        ],
-        _CompactFieldPair(
-          first: _LabeledField(
-            label: 'SKU',
-            origin: line.skuOrigin,
-            child: _SkuCell(
-              line: line,
-              enabled: enabled,
-              callbacks: callbacks,
-            ),
-          ),
-          second: _LabeledField(
-            label: 'Nombre',
-            origin: line.nameOrigin,
-            child: _CompactField(
-              fieldKey: Key('ocr-review-name-${line.id}'),
-              controller: line.controllers.name,
-              enabled: enabled,
-              origin: line.nameOrigin,
-              onChanged: callbacks.onNameChanged == null
-                  ? null
-                  : (value) => callbacks.onNameChanged!(line.id, value),
-            ),
-          ),
-        ),
-        const SizedBox(height: _OcrProductReviewWorkspaceState.space2),
-        _CompactFieldPair(
-          first: _CategorySelector(
-            line: line,
-            enabled: enabled,
-            onChanged: callbacks.onCategoryChanged == null
-                ? null
-                : (value) => callbacks.onCategoryChanged!(line.id, value),
-          ),
-          second: _BrandSelector(
-            line: line,
-            enabled: enabled,
-            onChanged: callbacks.onBrandChanged == null
-                ? null
-                : (value) => callbacks.onBrandChanged!(line.id, value),
-          ),
-        ),
-        const SizedBox(height: _OcrProductReviewWorkspaceState.space2),
-        _CompactFieldPair(
-          first: _LabeledField(
-            label: 'Costo',
-            origin: line.costOrigin,
-            child: _CompactField(
-              fieldKey: Key('ocr-review-cost-${line.id}'),
-              controller: line.controllers.cost,
-              enabled: enabled,
-              numeric: true,
-              origin: line.costOrigin,
-              onChanged: callbacks.onCostChanged == null
-                  ? null
-                  : (value) => callbacks.onCostChanged!(line.id, value),
-            ),
-          ),
-          second: _LabeledField(
-            label: 'Precio',
-            origin: line.priceOrigin,
-            child: _CompactField(
-              fieldKey: Key('ocr-review-price-${line.id}'),
-              controller: line.controllers.price,
-              enabled: enabled,
-              numeric: true,
-              origin: line.priceOrigin,
-              onChanged: callbacks.onPriceChanged == null
-                  ? null
-                  : (value) => callbacks.onPriceChanged!(line.id, value),
-            ),
-          ),
-        ),
-        SwitchListTile(
-            contentPadding: EdgeInsets.zero,
-            title: const Text('Se vende'),
-            value: line.isSold,
-            onChanged: enabled && callbacks.onSoldChanged != null
-                ? (value) => callbacks.onSoldChanged!(line.id, value)
-                : null),
-        if (callbacks.onReplaceImage != null)
-          Row(children: [
-            _EditableSourceImage(
-                line: line, callbacks: callbacks, size: 48, enabled: enabled),
-            const SizedBox(width: 12),
-            const Text('Imagen del producto'),
-          ]),
-        if (line.siblingLineId != null && callbacks.onCopySibling != null)
-          TextButton(
-              onPressed: enabled
-                  ? () => callbacks.onCopySibling!(line.id, line.siblingLineId!)
-                  : null,
-              child: const Text(
-                  'Reutilizar categoría y marca de la otra variante')),
-      ]);
-}
-
-class _CompactFieldPair extends StatelessWidget {
-  const _CompactFieldPair({required this.first, required this.second});
-
-  final Widget first;
-  final Widget second;
-
-  /// Under this the two fields stack: a 160 px selector next to a 160 px field
-  /// is two unusable controls, not a compact row.
-  static const double pairBreakpoint = 460;
-
-  @override
-  Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        if (constraints.maxWidth < pairBreakpoint) {
-          return Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              first,
-              const SizedBox(height: _OcrProductReviewWorkspaceState.space2),
-              second,
-            ],
-          );
-        }
-        return Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Expanded(child: first),
-            const SizedBox(width: _OcrProductReviewWorkspaceState.space3),
-            Expanded(child: second),
-          ],
-        );
-      },
     );
   }
 }
@@ -1041,20 +1005,22 @@ class _WorkspaceFooter extends StatelessWidget {
           ])),
     );
 
+    final density = touch ? VbDensity.touch : VbDensity.comfortable;
     final buttons = <Widget>[
       if (onBack != null)
-        OutlinedButton(
+        VbButton(
           key: const Key('ocr-review-back'),
+          label: backLabel,
+          variant: VbButtonVariant.secondary,
+          density: density,
           onPressed: onBack,
-          style: _footerButtonStyle(touch),
-          child: Text(backLabel),
         ),
-      FilledButton.icon(
+      VbButton(
         key: const Key('ocr-review-primary'),
+        label: primaryLabel,
+        density: density,
+        icon: Icons.check,
         onPressed: primaryEnabled ? onPrimary : null,
-        icon: const Icon(Icons.check),
-        label: Text(primaryLabel),
-        style: _footerButtonStyle(touch),
       ),
     ];
 
@@ -1109,7 +1075,7 @@ class _WorkspaceFooter extends StatelessWidget {
               )
             : Row(
                 children: [
-                  Flexible(flex: 3, child: policy),
+                  policy,
                   const SizedBox(
                     width: _OcrProductReviewWorkspaceState.space4,
                   ),
@@ -1182,7 +1148,7 @@ class _NextStep extends StatelessWidget {
 // Shared bits
 // ───────────────────────────────────────────────────────────────────────────
 
-class _EditableSourceImage extends StatelessWidget {
+class _EditableSourceImage extends StatefulWidget {
   const _EditableSourceImage({
     required this.line,
     required this.callbacks,
@@ -1196,25 +1162,41 @@ class _EditableSourceImage extends StatelessWidget {
   final bool enabled;
 
   @override
+  State<_EditableSourceImage> createState() => _EditableSourceImageState();
+}
+
+class _EditableSourceImageState extends State<_EditableSourceImage> {
+  bool _dragging = false;
+  bool _hovering = false;
+  bool _focused = false;
+
+  @override
   Widget build(BuildContext context) {
+    final line = widget.line;
+    final callbacks = widget.callbacks;
+    final size = widget.size;
+    final enabled = widget.enabled && !line.isUploadingImage;
+    final canDrop = enabled && callbacks.onDropImage != null;
     final canReplace = enabled && callbacks.onReplaceImage != null;
     final canRemove = enabled &&
-        line.imageUrl?.trim().isNotEmpty == true &&
+        (line.imageBytes != null || line.imageUrl?.trim().isNotEmpty == true) &&
         callbacks.onRemoveImage != null;
 
-    if (!canReplace && !canRemove) {
+    if (!canReplace && !canRemove && !canDrop) {
       return _ProductImage(
         imageUrl: line.imageUrl,
         imageBytes: line.imageBytes,
         size: size,
+        busy: line.isUploadingImage,
       );
     }
 
-    return PopupMenuButton<_SourceImageAction>(
+    final picker = PopupMenuButton<_SourceImageAction>(
       key: Key('ocr-review-image-${line.id}'),
-      tooltip: line.imageUrl?.trim().isNotEmpty == true
-          ? 'Cambiar imagen del producto'
-          : 'Agregar imagen al producto',
+      tooltip:
+          line.imageBytes != null || line.imageUrl?.trim().isNotEmpty == true
+              ? 'Cambiar imagen del producto'
+              : 'Agregar imagen al producto',
       enabled: !line.isUploadingImage,
       onSelected: (action) {
         switch (action) {
@@ -1252,6 +1234,59 @@ class _EditableSourceImage extends StatelessWidget {
         imageBytes: line.imageBytes,
         size: size,
         busy: line.isUploadingImage,
+        dropHover: _dragging,
+      ),
+    );
+    return DropTarget(
+      key: Key('ocr-review-image-drop-${line.id}'),
+      enable: canDrop &&
+          TickerMode.of(context) &&
+          (ModalRoute.of(context)?.isCurrent ?? true),
+      onDragEntered: (_) => setState(() => _dragging = true),
+      onDragExited: (_) => setState(() => _dragging = false),
+      onDragDone: (details) {
+        setState(() => _dragging = false);
+        if (canDrop) callbacks.onDropImage!(line.id, details.files);
+      },
+      child: Focus(
+        canRequestFocus: false,
+        onFocusChange: (value) => setState(() => _focused = value),
+        child: MouseRegion(
+          onEnter: (_) => setState(() => _hovering = true),
+          onExit: (_) => setState(() => _hovering = false),
+          child: Stack(children: [
+            TooltipVisibility(
+              visible: !canRemove || !(_hovering || _focused),
+              child: picker,
+            ),
+            if (canRemove && (_hovering || _focused) && !_dragging)
+              Positioned(
+                top: 0,
+                right: 0,
+                // F-04's 16 px footprint keeps this secondary overlay inside
+                // the corner of a 34 px thumbnail. Its hit area scales too:
+                // the remaining image must still open the image picker.
+                child: SizedBox.square(
+                  key: Key('ocr-review-clear-image-${line.id}'),
+                  dimension: 16,
+                  child: FittedBox(
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(
+                        color: Theme.of(context).colorScheme.surface,
+                        borderRadius:
+                            BorderRadius.circular(VbSurfaceIconButton.radius),
+                      ),
+                      child: VbSurfaceIconButton(
+                        icon: Icons.close,
+                        tooltip: 'Quitar imagen',
+                        onPressed: () => callbacks.onRemoveImage!(line.id),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+          ]),
+        ),
       ),
     );
   }
@@ -1265,12 +1300,14 @@ class _ProductImage extends StatelessWidget {
     required this.size,
     this.imageBytes,
     this.busy = false,
+    this.dropHover = false,
   });
 
   final String? imageUrl;
   final Uint8List? imageBytes;
   final double size;
   final bool busy;
+  final bool dropHover;
 
   @override
   Widget build(BuildContext context) {
@@ -1291,44 +1328,40 @@ class _ProductImage extends StatelessWidget {
         child: SizedBox(
           width: size,
           height: size,
-          child: busy
-              ? const Center(
-                  child: SizedBox(
-                    width: 16,
-                    height: 16,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  ),
+          child: dropHover
+              ? ColoredBox(
+                  color: theme.colorScheme.primaryContainer,
+                  child: Icon(Icons.add_photo_alternate_outlined,
+                      size: size * 0.5,
+                      color: theme.colorScheme.onPrimaryContainer),
                 )
-              : memoryBytes != null
-                  ? Image.memory(
-                      memoryBytes,
-                      width: size,
-                      height: size,
-                      fit: BoxFit.cover,
-                      errorBuilder: (_, __, ___) => fallback,
+              : busy
+                  ? const Center(
+                      child: SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      ),
                     )
-                  : url == null || url.isEmpty
-                      ? fallback
-                      : Image.network(
-                          url,
+                  : memoryBytes != null
+                      ? Image.memory(
+                          memoryBytes,
+                          width: size,
+                          height: size,
                           fit: BoxFit.cover,
                           errorBuilder: (_, __, ___) => fallback,
-                        ),
+                        )
+                      : url == null || url.isEmpty
+                          ? fallback
+                          : Image.network(
+                              url,
+                              fit: BoxFit.cover,
+                              errorBuilder: (_, __, ___) => fallback,
+                            ),
         ),
       ),
     );
   }
-}
-
-ButtonStyle _footerButtonStyle(bool touch) {
-  return ButtonStyle(
-    minimumSize: WidgetStatePropertyAll(
-      Size(
-        _OcrProductReviewWorkspaceState.touchTarget,
-        touch ? _OcrProductReviewWorkspaceState.touchTarget : 40,
-      ),
-    ),
-  );
 }
 
 String _originLabel(OcrProductFieldOrigin origin) {

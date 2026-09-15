@@ -17,6 +17,9 @@ void main() {
         'lib/shared/widgets/ocr_product_review_workspace.dart',
       ).readAsStringSync() +
       File('lib/shared/widgets/ocr_product_review_steps.dart')
+          .readAsStringSync() +
+      File('lib/shared/widgets/ocr_identity_table.dart').readAsStringSync() +
+      File('lib/shared/widgets/ocr_purchase_amounts_table.dart')
           .readAsStringSync();
   final purchaseForm = File(
     'lib/modules/purchases/pages/purchase_invoice_form_page.dart',
@@ -184,7 +187,7 @@ void main() {
     expect(
       source,
       contains(
-        'else\n'
+        'else ...[\n'
         '                    for (var index = 0;',
       ),
     );
@@ -312,7 +315,7 @@ void main() {
     expect(
       source,
       contains(
-        "'Revisar \$unresolved producto\${unresolved == 1 ? '' : 's'}'",
+        "'Revisar productos · \$unresolved por decidir'",
       ),
     );
   });
@@ -492,7 +495,7 @@ void main() {
     );
     expect(
       workspace,
-      contains("child: const Text('Reintentar pendientes')"),
+      contains("label: 'Reintentar pendientes'"),
       reason: 'la acción de lote sigue disponible en el encabezado',
     );
     expect(
@@ -549,6 +552,67 @@ void main() {
     expect(advance, contains('OcrPurchaseReviewFlow.amountsComplete'));
     expect(advance, contains('OcrPurchaseReviewStep.newProducts'));
     expect(source, contains("'Confirmar y continuar a la factura'"));
+  });
+
+  test('la regla de compras anteriores se ve, se aplica sola y deja regla', () {
+    // (a) Entering step 2 applies a rule that names the chosen product.
+    final advance = _section(source, 'void _advanceProductReviewStep()',
+        'Future<void> _applyRememberedRulesOnAmountsEntry()');
+    expect(advance, contains('_applyRememberedRulesOnAmountsEntry()'));
+    expect(advance, contains('_leaveAmountsStep()'));
+    final autoApply = _section(
+        source,
+        'Future<void> _applyRememberedRulesOnAmountsEntry()',
+        'void _rejectRememberedResolution(');
+    expect(autoApply, contains('entry.supplierRulePending'));
+    expect(autoApply,
+        contains('rule.edges.any((edge) => edge.productId == productId)'),
+        reason: 'a rule naming another product is never applied silently');
+    expect(autoApply, contains('await _acceptRememberedResolution(entry)'));
+
+    // (b) The batch button waits for every rule to be applied or changed.
+    final guard = _section(source, 'bool _canAdvanceProductReview()',
+        'String get _productReviewPrimaryLabel');
+    expect(guard, contains('OcrPurchaseReviewFlow.rulesSettled'));
+    final reason = _section(source, 'String? get _productReviewBlockingReason',
+        'void _backProductReviewStep()');
+    expect(reason, contains('OcrPurchaseReviewFlow.pendingRuleCount'));
+    expect(reason, contains('regla de compras anteriores'));
+    final decisions = _section(
+        source,
+        'Iterable<OcrPurchaseReviewDecision> get _reviewDecisions',
+        'bool _canAdvanceProductReview()');
+    expect(decisions, contains('rulePending: entry.supplierRulePending'));
+
+    // (c) Leaving step 2 writes one rule per confirmed link, sequentially,
+    // never from the manual link itself, and never blocking the purchase.
+    final remember = _section(source,
+        'Future<void> _rememberLinkedProductRules()', 'bool _ruleSaysExactly(');
+    expect(RegExp(r'_rememberAliExpressResolution\(').allMatches(remember),
+        hasLength(1));
+    expect(remember, contains('purchaseConversion: amounts.conversion'));
+    expect(remember, contains("'purchase_invoice_ocr_amounts_review'"));
+    expect(remember, contains('entry.supplierResolutionAccepted'),
+        reason: 'an applied composition already is the rule');
+    expect(remember, contains('entry.supplierRuleRejected'),
+        reason: 'a changed rule is superseded, an equal one is left alone');
+    expect(remember, isNot(contains('unawaited(')),
+        reason: 'rules are written one after another, never stacked');
+    expect(remember, contains('no se guardó la regla'));
+    final manualLink = _section(
+        source,
+        'Future<bool> _useExistingProductForEntry',
+        'void _changeProductDecision');
+    expect(manualLink, isNot(contains('_rememberAliExpressResolution(')));
+
+    // The row says whose decision the rule is.
+    final attribution = _section(
+        source,
+        'String? _ruleAttributionFor(_NewProductEntry entry)',
+        'String? get _currentOperatorId');
+    expect(attribution, contains("'confirmada por ti'"));
+    expect(attribution, contains("'migrada de las compras anteriores'"));
+    expect(attribution, contains("'guardada ahora"));
   });
 
   test('marcar nuevo es local y crear reserva el SKU por fila', () {

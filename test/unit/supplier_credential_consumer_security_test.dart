@@ -34,7 +34,7 @@ void main() {
     expect(
       ocr,
       contains(
-        "dbService.select( 'suppliers', selectColumns: "
+        "DatabaseService() .select( 'suppliers', selectColumns: "
         "shared_supplier.Supplier.secretFreeSelect, orderBy: 'id', "
         'fetchAll: true',
       ),

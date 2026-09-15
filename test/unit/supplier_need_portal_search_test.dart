@@ -491,6 +491,34 @@ void main() {
       expect(match.observedFacts['valve_length_mm'], 60);
     });
 
+    test('numeric rotor successor preserves the diameter discriminator', () {
+      final request = _request(
+        needId: 'successor-rotor',
+        description: 'Disco 180 mm',
+        technicalFamily: 'rotor',
+        fields: const [
+          SupplierNeedSearchField(
+            key: 'rotor_diameter_mm_value',
+            label: 'Diámetro del rotor',
+            dataType: 'number',
+            unit: 'mm',
+          )
+        ],
+        predicates: const [
+          SupplierNeedSearchPredicate(
+            field: 'rotor_diameter_mm_value',
+            operator: 'eq',
+            values: [180],
+          )
+        ],
+      );
+      final match = matchSupplierNeedCandidates(_plan(request), [
+        _candidate('DISCO DE FRENO CENTERLOCK 180MM PARA EJE 12MM'),
+      ]).single;
+      expect(match.state, SupplierNeedMatchState.exact);
+      expect(match.observedFacts['rotor_diameter_mm_value'], '180');
+    });
+
     test('rotor, cadena y maza reutilizan el extractor canónico', () {
       final rotor = _request(
         needId: 'need-rotor',

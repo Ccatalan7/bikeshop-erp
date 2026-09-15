@@ -1,0 +1,770 @@
+{
+  "provenance": "Synthetic local SQL fixtures; no production products or OEM compatibility claims.",
+  "active": {
+    "values": {
+      "member_test_collection": {
+        "rows": [
+          {
+            "id": "r1",
+            "values": {
+              "family": "member_part_test",
+              "position": "front",
+              "quantity": "1",
+              "member_role": "caliper",
+              "identity_brand": "Fixture",
+              "identity_model": "Model A"
+            },
+            "sources": [
+              "https://example.test/pack"
+            ]
+          },
+          {
+            "id": "r2",
+            "values": {
+              "family": "member_part_test",
+              "position": "rear",
+              "quantity": "1",
+              "member_role": "caliper",
+              "identity_brand": "Fixture"
+            },
+            "sources": [
+              "https://example.test/pack"
+            ]
+          }
+        ],
+        "schema_version": 1
+      }
+    },
+    "revision": 7,
+    "template": {
+      "id": "99e10000-0000-4000-8000-000000000050",
+      "key": "member_root_test",
+      "name": "Test kit",
+      "fields": [
+        {
+          "sort_order": 1,
+          "helper_text": null,
+          "is_required": false,
+          "section_key": "contents",
+          "option_rules": [],
+          "constraint_rules": [],
+          "spec_definitions": {
+            "id": "99e10000-0000-4000-8000-000000000051",
+            "key": "member_test_collection",
+            "unit": null,
+            "label": "Included parts",
+            "data_type": "json",
+            "sort_order": 0,
+            "description": null,
+            "allowed_values": [],
+            "validation_rules": {
+              "rows_schema": {
+                "columns": [
+                  {
+                    "key": "family",
+                    "type": "token",
+                    "label": "Family",
+                    "required": true,
+                    "allowed_values": [
+                      "member_part_test",
+                      "member_other_test"
+                    ]
+                  },
+                  {
+                    "key": "member_role",
+                    "type": "text",
+                    "label": "Role"
+                  },
+                  {
+                    "key": "position",
+                    "type": "text",
+                    "label": "Position"
+                  },
+                  {
+                    "key": "identity_brand",
+                    "type": "text",
+                    "label": "Brand"
+                  },
+                  {
+                    "key": "identity_model",
+                    "type": "text",
+                    "label": "Model"
+                  },
+                  {
+                    "key": "quantity",
+                    "type": "integer",
+                    "label": "Quantity",
+                    "validation": {
+                      "positive": true
+                    }
+                  }
+                ],
+                "version": 1
+              }
+            },
+            "spec_definition_values": []
+          },
+          "visibility_rules": [],
+          "default_value_json": null,
+          "spec_definition_id": "99e10000-0000-4000-8000-000000000051"
+        }
+      ],
+      "tenant_id": null,
+      "form_contract": {
+        "roles": {
+          "member_test_collection": "contents"
+        },
+        "allowed_when": {},
+        "prerequisites": {},
+        "required_when": {},
+        "rules_version": 2,
+        "allowed_options": {},
+        "member_profiles": {
+          "version": 1,
+          "collections": [
+            {
+              "field": "member_test_collection",
+              "family_column": "family",
+              "identity_columns": [
+                "member_role",
+                "position",
+                "identity_brand",
+                "identity_model"
+              ]
+            }
+          ]
+        }
+      },
+      "contract_version": 3,
+      "technical_family": "drivetrain_kit"
+    },
+    "product_id": "99e10000-0000-4000-8000-000000000020",
+    "category_id": "99e10000-0000-4000-8000-000000000010",
+    "template_id": "99e10000-0000-4000-8000-000000000050",
+    "catalog_keys": [],
+    "reference_id": null,
+    "template_key": "member_root_test",
+    "binding_source": "explicit",
+    "member_profiles": {
+      "profiles": [
+        {
+          "id": "99e10000-0000-4000-8000-000000000081",
+          "scope": "member:99e10000-0000-4000-8000-000000000081",
+          "issues": [],
+          "values": {
+            "member_test_length": "7.1",
+            "member_test_included": true
+          },
+          "template": {
+            "id": "99e10000-0000-4000-8000-000000000060",
+            "key": "member_part_test",
+            "name": "Test component",
+            "fields": [
+              {
+                "sort_order": 1,
+                "helper_text": null,
+                "is_required": false,
+                "section_key": "measurement",
+                "option_rules": [],
+                "constraint_rules": [],
+                "spec_definitions": {
+                  "id": "99e10000-0000-4000-8000-000000000052",
+                  "key": "member_test_length",
+                  "unit": "mm",
+                  "label": "Length",
+                  "data_type": "number",
+                  "sort_order": 0,
+                  "description": null,
+                  "allowed_values": [],
+                  "validation_rules": {
+                    "positive": true
+                  },
+                  "spec_definition_values": []
+                },
+                "visibility_rules": [],
+                "default_value_json": null,
+                "spec_definition_id": "99e10000-0000-4000-8000-000000000052"
+              },
+              {
+                "sort_order": 2,
+                "helper_text": null,
+                "is_required": false,
+                "section_key": "contents",
+                "option_rules": [],
+                "constraint_rules": [],
+                "spec_definitions": {
+                  "id": "99e10000-0000-4000-8000-000000000053",
+                  "key": "member_test_included",
+                  "unit": null,
+                  "label": "Included axle",
+                  "data_type": "boolean",
+                  "sort_order": 0,
+                  "description": null,
+                  "allowed_values": [],
+                  "validation_rules": {},
+                  "spec_definition_values": []
+                },
+                "visibility_rules": [],
+                "default_value_json": null,
+                "spec_definition_id": "99e10000-0000-4000-8000-000000000053"
+              },
+              {
+                "sort_order": 3,
+                "helper_text": null,
+                "is_required": false,
+                "section_key": "contents",
+                "option_rules": [],
+                "constraint_rules": [],
+                "spec_definitions": {
+                  "id": "99e10000-0000-4000-8000-000000000054",
+                  "key": "member_test_details",
+                  "unit": null,
+                  "label": "Intrinsic rows",
+                  "data_type": "json",
+                  "sort_order": 0,
+                  "description": null,
+                  "allowed_values": [],
+                  "validation_rules": {
+                    "rows_schema": {
+                      "columns": [
+                        {
+                          "key": "inner",
+                          "type": "decimal",
+                          "unit": "mm",
+                          "label": "Inner"
+                        },
+                        {
+                          "key": "outer",
+                          "type": "decimal",
+                          "unit": "mm",
+                          "label": "Outer"
+                        }
+                      ],
+                      "version": 2,
+                      "strict_ordered_pairs": [
+                        [
+                          "inner",
+                          "outer"
+                        ]
+                      ]
+                    }
+                  },
+                  "spec_definition_values": []
+                },
+                "visibility_rules": [],
+                "default_value_json": null,
+                "spec_definition_id": "99e10000-0000-4000-8000-000000000054"
+              }
+            ],
+            "tenant_id": null,
+            "form_contract": {
+              "roles": {
+                "member_test_length": "measurement",
+                "member_test_details": "contents",
+                "member_test_included": "contents"
+              },
+              "allowed_when": {
+                "member_test_length": {
+                  "kind": "when",
+                  "rows": [
+                    [
+                      {
+                        "field": "member_test_included",
+                        "value": true,
+                        "operator": "eq",
+                        "value_type": "boolean"
+                      }
+                    ]
+                  ]
+                }
+              },
+              "prerequisites": {},
+              "required_when": {
+                "member_test_length": {
+                  "kind": "when",
+                  "rows": [
+                    [
+                      {
+                        "field": "member_test_included",
+                        "value": true,
+                        "operator": "eq",
+                        "value_type": "boolean"
+                      }
+                    ]
+                  ]
+                }
+              },
+              "rules_version": 2,
+              "allowed_options": {}
+            },
+            "contract_version": 5,
+            "technical_family": "complete_brake"
+          },
+          "reference": null,
+          "tenant_id": "99e10000-0000-4000-8000-000000000001",
+          "created_at": "2026-09-14T20:06:39.677132+00:00",
+          "product_id": "99e10000-0000-4000-8000-000000000020",
+          "updated_at": "2026-09-14T20:06:39.677132+00:00",
+          "archived_at": null,
+          "template_id": "99e10000-0000-4000-8000-000000000060",
+          "catalog_keys": [],
+          "fact_payload": {
+            "99e10000-0000-4000-8000-000000000052": {
+              "number": "7.1"
+            },
+            "99e10000-0000-4000-8000-000000000053": {
+              "boolean": true
+            }
+          },
+          "reference_id": null,
+          "member_row_id": "r1",
+          "member_identity": {
+            "family": "member_part_test",
+            "position": "front",
+            "member_role": "caliper",
+            "identity_brand": "Fixture",
+            "identity_model": "Model A"
+          },
+          "identity_sources": [
+            "https://example.test/pack"
+          ],
+          "manufacturer_sku": null,
+          "active_template_guard": true,
+          "saved_contract_version": 5,
+          "collection_definition_id": "99e10000-0000-4000-8000-000000000051"
+        },
+        {
+          "id": "99e10000-0000-4000-8000-000000000082",
+          "scope": "member:99e10000-0000-4000-8000-000000000082",
+          "issues": [],
+          "values": {
+            "member_test_length": "9007199254740993.2",
+            "member_test_included": true
+          },
+          "template": {
+            "id": "99e10000-0000-4000-8000-000000000060",
+            "key": "member_part_test",
+            "name": "Test component",
+            "fields": [
+              {
+                "sort_order": 1,
+                "helper_text": null,
+                "is_required": false,
+                "section_key": "measurement",
+                "option_rules": [],
+                "constraint_rules": [],
+                "spec_definitions": {
+                  "id": "99e10000-0000-4000-8000-000000000052",
+                  "key": "member_test_length",
+                  "unit": "mm",
+                  "label": "Length",
+                  "data_type": "number",
+                  "sort_order": 0,
+                  "description": null,
+                  "allowed_values": [],
+                  "validation_rules": {
+                    "positive": true
+                  },
+                  "spec_definition_values": []
+                },
+                "visibility_rules": [],
+                "default_value_json": null,
+                "spec_definition_id": "99e10000-0000-4000-8000-000000000052"
+              },
+              {
+                "sort_order": 2,
+                "helper_text": null,
+                "is_required": false,
+                "section_key": "contents",
+                "option_rules": [],
+                "constraint_rules": [],
+                "spec_definitions": {
+                  "id": "99e10000-0000-4000-8000-000000000053",
+                  "key": "member_test_included",
+                  "unit": null,
+                  "label": "Included axle",
+                  "data_type": "boolean",
+                  "sort_order": 0,
+                  "description": null,
+                  "allowed_values": [],
+                  "validation_rules": {},
+                  "spec_definition_values": []
+                },
+                "visibility_rules": [],
+                "default_value_json": null,
+                "spec_definition_id": "99e10000-0000-4000-8000-000000000053"
+              },
+              {
+                "sort_order": 3,
+                "helper_text": null,
+                "is_required": false,
+                "section_key": "contents",
+                "option_rules": [],
+                "constraint_rules": [],
+                "spec_definitions": {
+                  "id": "99e10000-0000-4000-8000-000000000054",
+                  "key": "member_test_details",
+                  "unit": null,
+                  "label": "Intrinsic rows",
+                  "data_type": "json",
+                  "sort_order": 0,
+                  "description": null,
+                  "allowed_values": [],
+                  "validation_rules": {
+                    "rows_schema": {
+                      "columns": [
+                        {
+                          "key": "inner",
+                          "type": "decimal",
+                          "unit": "mm",
+                          "label": "Inner"
+                        },
+                        {
+                          "key": "outer",
+                          "type": "decimal",
+                          "unit": "mm",
+                          "label": "Outer"
+                        }
+                      ],
+                      "version": 2,
+                      "strict_ordered_pairs": [
+                        [
+                          "inner",
+                          "outer"
+                        ]
+                      ]
+                    }
+                  },
+                  "spec_definition_values": []
+                },
+                "visibility_rules": [],
+                "default_value_json": null,
+                "spec_definition_id": "99e10000-0000-4000-8000-000000000054"
+              }
+            ],
+            "tenant_id": null,
+            "form_contract": {
+              "roles": {
+                "member_test_length": "measurement",
+                "member_test_details": "contents",
+                "member_test_included": "contents"
+              },
+              "allowed_when": {
+                "member_test_length": {
+                  "kind": "when",
+                  "rows": [
+                    [
+                      {
+                        "field": "member_test_included",
+                        "value": true,
+                        "operator": "eq",
+                        "value_type": "boolean"
+                      }
+                    ]
+                  ]
+                }
+              },
+              "prerequisites": {},
+              "required_when": {
+                "member_test_length": {
+                  "kind": "when",
+                  "rows": [
+                    [
+                      {
+                        "field": "member_test_included",
+                        "value": true,
+                        "operator": "eq",
+                        "value_type": "boolean"
+                      }
+                    ]
+                  ]
+                }
+              },
+              "rules_version": 2,
+              "allowed_options": {}
+            },
+            "contract_version": 5,
+            "technical_family": "complete_brake"
+          },
+          "reference": null,
+          "tenant_id": "99e10000-0000-4000-8000-000000000001",
+          "created_at": "2026-09-14T20:06:39.677132+00:00",
+          "product_id": "99e10000-0000-4000-8000-000000000020",
+          "updated_at": "2026-09-14T20:06:39.677132+00:00",
+          "archived_at": null,
+          "template_id": "99e10000-0000-4000-8000-000000000060",
+          "catalog_keys": [],
+          "fact_payload": {
+            "99e10000-0000-4000-8000-000000000052": {
+              "number": "9007199254740993.2"
+            },
+            "99e10000-0000-4000-8000-000000000053": {
+              "boolean": true
+            }
+          },
+          "reference_id": null,
+          "member_row_id": "r2",
+          "member_identity": {
+            "family": "member_part_test",
+            "position": "rear",
+            "member_role": "caliper",
+            "identity_brand": "Fixture"
+          },
+          "identity_sources": [
+            "https://example.test/pack"
+          ],
+          "manufacturer_sku": null,
+          "active_template_guard": true,
+          "saved_contract_version": 5,
+          "collection_definition_id": "99e10000-0000-4000-8000-000000000051"
+        }
+      ],
+      "revision": 7,
+      "product_id": "99e10000-0000-4000-8000-000000000020",
+      "archived_profiles": [],
+      "product_updated_at": "2026-09-14T20:06:39.890085+00:00",
+      "read_schema_version": 1
+    },
+    "contract_version": 3,
+    "technical_family": "drivetrain_kit",
+    "unassigned_facts": [],
+    "draft_category_id": null,
+    "read_schema_version": 2,
+    "explicit_template_id": "99e10000-0000-4000-8000-000000000050",
+    "product_updated_at": "2026-09-14T20:06:39.890085+00:00",
+    "member_parent_context": null
+  },
+  "archived": {
+    "values": {},
+    "revision": 21,
+    "template": {
+      "id": "99e10000-0000-4000-8000-000000000050",
+      "key": "member_root_test",
+      "name": "Test kit",
+      "fields": [
+        {
+          "sort_order": 1,
+          "helper_text": null,
+          "is_required": false,
+          "section_key": "contents",
+          "option_rules": [],
+          "constraint_rules": [],
+          "spec_definitions": {
+            "id": "99e10000-0000-4000-8000-000000000051",
+            "key": "member_test_collection",
+            "unit": null,
+            "label": "Included parts",
+            "data_type": "json",
+            "sort_order": 0,
+            "description": null,
+            "allowed_values": [],
+            "validation_rules": {
+              "rows_schema": {
+                "columns": [
+                  {
+                    "key": "family",
+                    "type": "token",
+                    "label": "Family",
+                    "required": true,
+                    "allowed_values": [
+                      "member_part_test",
+                      "member_other_test"
+                    ]
+                  },
+                  {
+                    "key": "member_role",
+                    "type": "text",
+                    "label": "Role"
+                  },
+                  {
+                    "key": "position",
+                    "type": "text",
+                    "label": "Position"
+                  },
+                  {
+                    "key": "identity_brand",
+                    "type": "text",
+                    "label": "Brand"
+                  },
+                  {
+                    "key": "identity_model",
+                    "type": "text",
+                    "label": "Model"
+                  },
+                  {
+                    "key": "quantity",
+                    "type": "integer",
+                    "label": "Quantity",
+                    "validation": {
+                      "positive": true
+                    }
+                  }
+                ],
+                "version": 1
+              }
+            },
+            "spec_definition_values": []
+          },
+          "visibility_rules": [],
+          "default_value_json": null,
+          "spec_definition_id": "99e10000-0000-4000-8000-000000000051"
+        }
+      ],
+      "tenant_id": null,
+      "form_contract": {
+        "roles": {
+          "member_test_collection": "contents"
+        },
+        "allowed_when": {},
+        "prerequisites": {},
+        "required_when": {},
+        "rules_version": 2,
+        "allowed_options": {},
+        "member_profiles": {
+          "version": 1,
+          "collections": [
+            {
+              "field": "member_test_collection",
+              "family_column": "family",
+              "identity_columns": [
+                "member_role",
+                "position",
+                "identity_brand",
+                "identity_model"
+              ]
+            }
+          ]
+        }
+      },
+      "contract_version": 3,
+      "technical_family": "drivetrain_kit"
+    },
+    "product_id": "99e10000-0000-4000-8000-000000000020",
+    "category_id": "99e10000-0000-4000-8000-000000000010",
+    "template_id": "99e10000-0000-4000-8000-000000000050",
+    "catalog_keys": [],
+    "reference_id": null,
+    "template_key": "member_root_test",
+    "binding_source": "explicit",
+    "member_profiles": {
+      "profiles": [],
+      "revision": 21,
+      "product_id": "99e10000-0000-4000-8000-000000000020",
+      "archived_profiles": [
+        {
+          "id": "99e10000-0000-4000-8000-000000000081",
+          "scope": "member:99e10000-0000-4000-8000-000000000081",
+          "issues": [],
+          "values": {
+            "member_test_length": "7.1",
+            "member_test_included": true
+          },
+          "reference": {
+            "id": "member-test-reference",
+            "brand": "Fixture",
+            "facts": {
+              "member_test_length": "7.1",
+              "member_test_included": true
+            },
+            "label": "Synthetic component reference",
+            "model": "Model A",
+            "claims": [],
+            "sources": [
+              "https://example.test/member-manual"
+            ],
+            "created_at": "2026-09-14T20:06:39.677132+00:00",
+            "reviewed_on": "2026-09-14",
+            "manufacturer_sku": null,
+            "technical_family": "complete_brake",
+            "read_schema_version": 2
+          },
+          "tenant_id": "99e10000-0000-4000-8000-000000000001",
+          "created_at": "2026-09-14T20:06:39.677132+00:00",
+          "product_id": "99e10000-0000-4000-8000-000000000020",
+          "updated_at": "2026-09-14T20:06:39.677132+00:00",
+          "archived_at": "2026-09-14T20:06:39.677132+00:00",
+          "template_id": "99e10000-0000-4000-8000-000000000060",
+          "catalog_keys": [
+            "member_test_included",
+            "member_test_length"
+          ],
+          "fact_payload": {
+            "99e10000-0000-4000-8000-000000000052": {
+              "number": "7.1"
+            },
+            "99e10000-0000-4000-8000-000000000053": {
+              "boolean": true
+            }
+          },
+          "reference_id": "member-test-reference",
+          "member_row_id": "r1",
+          "member_identity": {
+            "family": "member_part_test",
+            "position": "front",
+            "member_role": "caliper",
+            "identity_brand": "Fixture",
+            "identity_model": "Model A"
+          },
+          "identity_sources": [
+            "https://example.test/pack"
+          ],
+          "manufacturer_sku": null,
+          "active_template_guard": null,
+          "saved_contract_version": 5,
+          "collection_definition_id": "99e10000-0000-4000-8000-000000000051"
+        },
+        {
+          "id": "99e10000-0000-4000-8000-000000000082",
+          "scope": "member:99e10000-0000-4000-8000-000000000082",
+          "issues": [],
+          "values": {
+            "member_test_length": "9007199254740993.2",
+            "member_test_included": true
+          },
+          "reference": null,
+          "tenant_id": "99e10000-0000-4000-8000-000000000001",
+          "created_at": "2026-09-14T20:06:39.677132+00:00",
+          "product_id": "99e10000-0000-4000-8000-000000000020",
+          "updated_at": "2026-09-14T20:06:39.677132+00:00",
+          "archived_at": "2026-09-14T20:06:39.677132+00:00",
+          "template_id": "99e10000-0000-4000-8000-000000000060",
+          "catalog_keys": [],
+          "fact_payload": {
+            "99e10000-0000-4000-8000-000000000052": {
+              "number": "9007199254740993.2"
+            },
+            "99e10000-0000-4000-8000-000000000053": {
+              "boolean": true
+            }
+          },
+          "reference_id": null,
+          "member_row_id": "r3",
+          "member_identity": {
+            "family": "member_part_test",
+            "position": "rear",
+            "member_role": "caliper",
+            "identity_brand": "Fixture",
+            "identity_model": "Model B"
+          },
+          "identity_sources": [
+            "https://example.test/pack"
+          ],
+          "manufacturer_sku": null,
+          "active_template_guard": null,
+          "saved_contract_version": 5,
+          "collection_definition_id": "99e10000-0000-4000-8000-000000000051"
+        }
+      ],
+      "product_updated_at": "2026-09-14T20:06:40.205943+00:00",
+      "read_schema_version": 1
+    },
+    "contract_version": 3,
+    "technical_family": "drivetrain_kit",
+    "unassigned_facts": [],
+    "draft_category_id": null,
+    "read_schema_version": 2,
+    "explicit_template_id": "99e10000-0000-4000-8000-000000000050",
+    "product_updated_at": "2026-09-14T20:06:40.205943+00:00",
+    "member_parent_context": null
+  }
+}

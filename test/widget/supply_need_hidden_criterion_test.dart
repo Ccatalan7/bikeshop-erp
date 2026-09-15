@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:vinabike_erp/modules/inventory/services/spec_engine_service.dart';
 import 'package:vinabike_erp/modules/purchases/models/intelligent_purchasing_models.dart';
+import 'package:vinabike_erp/modules/purchases/services/supply_need_effective_criteria.dart';
 import 'package:vinabike_erp/modules/purchases/widgets/purchase_visual_language.dart';
 import 'package:vinabike_erp/modules/purchases/widgets/supply_need_refinement_editor.dart';
 import 'package:vinabike_erp/shared/themes/app_theme.dart';
@@ -91,7 +92,8 @@ const _criteria = SupplyNeedCriteria(
 List<SupplyNeedPredicate>? _guardado;
 int _previewCalls = 0;
 
-Future<void> _pump(WidgetTester tester) async {
+Future<void> _pump(WidgetTester tester,
+    {SpecTemplate? template, SupplyNeedCriteria criteria = _criteria}) async {
   _guardado = null;
   _previewCalls = 0;
   tester.view.devicePixelRatio = 1;
@@ -106,10 +108,10 @@ Future<void> _pump(WidgetTester tester) async {
       home: Scaffold(
         body: SingleChildScrollView(
           child: SupplyNeedRefinementEditor(
-            template: _motorTemplate(),
+            template: template ?? _motorTemplate(),
             title: 'Criterios de Motor de centro',
             categoryLabel: 'motores',
-            criteria: _criteria,
+            criteria: criteria,
             busy: false,
             onSave: (predicates) => _guardado = predicates,
             onCancel: () {},
@@ -130,6 +132,85 @@ Future<void> _pump(WidgetTester tester) async {
 }
 
 void main() {
+  testWidgets(
+      'retired and row fields are not scalar criteria; stored values survive',
+      (tester) async {
+    final original = _motorTemplate();
+    final template = SpecTemplate(
+      id: 'retired-and-structured',
+      key: original.key,
+      name: original.name,
+      technicalFamily: original.technicalFamily,
+      fields: [
+        ...original.fields,
+        _field('retired', 'Retirado', dataType: 'text'),
+        _field('never', 'No aplicable', dataType: 'text'),
+        _field('members', 'Miembros con alcance', dataType: 'json'),
+        _field('conditional', 'Depende de respuesta', dataType: 'text'),
+      ],
+      formContract: const {
+        'roles': {'retired': 'legacy'},
+        'allowed_when': {
+          'never': {'kind': 'never'},
+          'conditional': {
+            'kind': 'when',
+            'rows': [
+              [
+                {
+                  'field': 'includes_spindle',
+                  'operator': 'eq',
+                  'value_type': 'boolean',
+                  'value': true,
+                }
+              ]
+            ]
+          },
+        },
+      },
+    );
+    const preserved = <SupplyNeedPredicate>[
+      SupplyNeedPredicate(
+          field: 'retired', operator: 'eq', values: ['original']),
+      SupplyNeedPredicate(field: 'never', operator: 'eq', values: ['original']),
+      SupplyNeedPredicate(
+          field: 'members', operator: 'eq', values: ['original']),
+    ];
+    final criteria = SupplyNeedCriteria(predicates: [
+      ..._criteria.predicates,
+      ...preserved,
+    ]);
+    final searchKeys = supplyNeedSearchFieldsOf(template).map((f) => f.key);
+    expect(searchKeys, containsAll(['bb_shell_standard', 'conditional']));
+    expect(searchKeys, isNot(contains('retired')));
+    expect(searchKeys, isNot(contains('never')));
+    expect(searchKeys, isNot(contains('members')));
+
+    await _pump(tester, template: template, criteria: criteria);
+    for (final label in ['Retirado', 'No aplicable', 'Miembros con alcance']) {
+      expect(find.text(label), findsNothing);
+    }
+    expect(find.text('Depende de respuesta'), findsOneWidget);
+    expect(
+        tester
+            .widget<PurchasePrimaryButton>(
+                find.byKey(const ValueKey('need-criteria-save')))
+            .onPressed,
+        isNull);
+    await tester.tap(find.text('Sin especificar').first);
+    await tester.pump(const Duration(milliseconds: 400));
+    await tester.tap(find.text('BSA').last);
+    await tester.pump(const Duration(milliseconds: 400));
+    await tester
+        .ensureVisible(find.byKey(const ValueKey('need-criteria-save')));
+    await tester.tap(find.byKey(const ValueKey('need-criteria-save')));
+    await tester.pump();
+    final saved = {for (final p in _guardado!) p.field: p.values};
+    expect(saved['bb_shell_standard'], ['BSA']);
+    for (final p in preserved) {
+      expect(saved[p.field], p.values);
+    }
+  });
+
   testWidgets('abrir sin tocar nada no habilita Guardar ni previsualiza',
       (tester) async {
     await _pump(tester);

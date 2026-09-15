@@ -15,12 +15,18 @@ class OcrPurchaseReviewDecision {
     required this.selected,
     this.productId,
     this.amountsConfirmed = false,
+    this.rulePending = false,
   });
 
   final OcrProductIdentityDecision identity;
   final bool selected;
   final String? productId;
   final bool amountsConfirmed;
+
+  /// A rule from an earlier purchase of this listing variant exists and the
+  /// operator has neither applied it nor changed it. The batch cannot confirm
+  /// amounts over a decision it is silently overriding.
+  final bool rulePending;
 
   bool get identified => switch (identity) {
         OcrProductIdentityDecision.existing => productId?.isNotEmpty == true,
@@ -42,6 +48,23 @@ class OcrPurchaseReviewFlow {
       lines.where((line) => line.selected).every((line) =>
           line.identity != OcrProductIdentityDecision.existing ||
           line.amountsConfirmed);
+
+  /// Rows linked to an existing product whose earlier-purchase rule is still
+  /// waiting for the operator to apply or change it.
+  static int pendingRuleCount(Iterable<OcrPurchaseReviewDecision> lines) =>
+      lines
+          .where((line) =>
+              line.selected &&
+              line.identity == OcrProductIdentityDecision.existing &&
+              line.rulePending)
+          .length;
+
+  /// The earlier decision is visible and either kept or changed on purpose;
+  /// only then may the batch confirm amounts. This is what makes «la regla de
+  /// compras anteriores» a decision the operator can see and revise, never one
+  /// the batch button skips.
+  static bool rulesSettled(Iterable<OcrPurchaseReviewDecision> lines) =>
+      pendingRuleCount(lines) == 0;
 }
 
 /// Purchase economics reviewed after selecting a real catalog product.

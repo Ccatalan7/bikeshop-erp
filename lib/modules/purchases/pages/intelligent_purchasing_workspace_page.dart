@@ -6442,13 +6442,26 @@ class _IntelligentPurchasingWorkspacePageState
       }
       return snapshot.status;
     } on SupplierNeedSearchNotPersisted catch (error) {
-      // **La lectura existe aunque no se haya guardado.** Se muestra igual y
-      // se dice qué pasó: tirarla obligaba a repetir minutos de navegación
-      // real por un fallo de transporte que no es del proveedor.
       if (kDebugMode) {
         debugPrint('🛒 Lectura de $supplierName sin registrar: ${error.cause}');
       }
       if (!mounted) return null;
+      final rejection = error.rejection;
+      if (rejection != null) {
+        // **Un rechazo no se reintenta: se recarga la necesidad.** El servidor
+        // leyó el recibo y lo negó —con `23514`, la necesidad cambió mientras
+        // el portal se recorría y esa lectura ya no responde lo que se está
+        // preguntando—. Encolarlo en la cadena de reintento repetiría la misma
+        // negativa cada vez; el 2026-09-15 esa repetición sostuvo la base 16
+        // días sobre el 80 % de CPU. La lectura se suelta (es el resultado
+        // correcto: fue leída contra otra ficha) y lo que se refresca es la
+        // pregunta, para que la próxima búsqueda salga contra la vigente.
+        await _reloadNeedAfterRejection(supplierId, supplierName, rejection);
+        return null;
+      }
+      // **La lectura existe aunque no se haya guardado.** Se muestra igual y
+      // se dice qué pasó: tirarla obligaba a repetir minutos de navegación
+      // real por un fallo de transporte que no es del proveedor.
       setState(() {
         _needPortalSearches[supplierId] = error.snapshot;
         _needPortalSearchesNeedId = need.id;
@@ -6564,6 +6577,16 @@ class _IntelligentPurchasingWorkspacePageState
           );
           _finishReceiptRetry(key, operationKey, supplierName);
           return;
+        } on SupplierNeedSearchRejected catch (rejection) {
+          // **La cadena termina acá.** El servidor negó el recibo: la
+          // necesidad cambió mientras esperábamos, o la clave ya es de otra
+          // corrida. Seguir con las esperas que quedan repetiría el mismo
+          // rechazo, y el pendiente quedaría en pie para que un traspaso lo
+          // vuelva a intentar. Se suelta, se recarga la necesidad y se dice.
+          _dropReceiptRetry(key, operationKey);
+          if (!mounted || _selectedNeed?.id != needId) return;
+          await _reloadNeedAfterRejection(supplierId, supplierName, rejection);
+          return;
         } catch (error) {
           // Sigue sin poder guardarse. La lectura no se pierde: está en
           // pantalla y su clave impide que un reintento la duplique.
@@ -6611,6 +6634,41 @@ class _IntelligentPurchasingWorkspacePageState
     }
     _unsavedReceipts.remove(key);
     return true;
+  }
+
+  /// El servidor negó el recibo de [supplierName]: se suelta esa lectura, se
+  /// vuelve a leer la necesidad y se le dice al operador con las palabras del
+  /// servidor, que ya están escritas para el negocio.
+  ///
+  /// **Recargar, no reintentar.** Un `23514` dice que la necesidad cambió
+  /// mientras el portal se recorría; ninguna espera lo arregla. Lo que puede
+  /// estar viejo acá es la ficha en pantalla —otra sesión precisó o editó—,
+  /// así que se relee la necesidad entera (versión, revisión y criterios), y
+  /// la próxima búsqueda sale estampada contra la interpretación vigente.
+  Future<void> _reloadNeedAfterRejection(
+    String supplierId,
+    String supplierName,
+    SupplierNeedSearchRejected rejection,
+  ) async {
+    final need = _selectedNeed;
+    if (!mounted || need == null) return;
+    setState(() {
+      // La lectura respondía otra ficha: dejarla en pantalla presentaría
+      // filas leídas contra una interpretación como respuesta de otra.
+      _needPortalSearches.remove(supplierId);
+      if (_expandedNeedPortalSupplierId == supplierId) {
+        _expandedNeedPortalSupplierId = null;
+      }
+    });
+    final hint = rejection.hint?.trim() ?? '';
+    _showCheckMessage(
+      rejection.needChanged
+          ? 'La necesidad cambió mientras se consultaba a $supplierName; '
+              'esa lectura no se guardó. Se recargó la necesidad: '
+              '${hint.isEmpty ? 'vuelve a buscar con la ficha vigente.' : hint}'
+          : '$supplierName: ${rejection.message} Se recargó la necesidad.',
+    );
+    await _loadNeeds(selectId: need.id);
   }
 
   /// Una sesión vencida intenta primero el recuperador seguro. Sólo cuando

@@ -157,34 +157,22 @@ class BulkProductEditService {
 
     final buffer = <String, List<String>>{};
 
-    for (final chunk in _chunk(ids, 200)) {
-      // Lee el registro: la etiqueta se resuelve al consultar, así que la
-      // superficie de búsqueda de la edición masiva refleja un renombre sin
-      // reindexar nada.
-      final rows = await _db.supabase
-          .from('spec_facts')
-          .select('subject_id, value_number, value_boolean, value_text, '
-              'spec_definitions!inner(key), '
-              'spec_fact_values(position, spec_definition_values!inner(label))')
-          .eq('subject_type', 'product')
-          .isFilter('subject_scope', null)
-          .inFilter('subject_id', chunk);
-
-      for (final rawRow in rows) {
-        final row = Map<String, dynamic>.from(rawRow as Map);
-        final productId = row['subject_id']?.toString();
-        if (productId == null || productId.isEmpty) continue;
-        final def = row['spec_definitions'] as Map<String, dynamic>?;
-        final key = def?['key']?.toString();
-        final value = _factSearchValue(row);
-        if ((key ?? '').trim().isEmpty && (value ?? '').trim().isEmpty) {
-          continue;
+    for (final chunk in _chunk(ids, 50)) {
+      // The shared reader applies the product binding and retires legacy
+      // criteria. Preserved observations and diagnostics are not search facts.
+      final contexts = await _db.supabase.rpc('get_product_spec_contexts_v1',
+          params: {'p_product_ids': chunk});
+      for (final product in (contexts as Map).entries) {
+        for (final fact in (product.value as Map).entries) {
+          final key = fact.key.toString();
+          if (key.startsWith('__') || fact.value == null) continue;
+          final value = fact.value is List
+              ? (fact.value as List).join(', ')
+              : fact.value.toString();
+          buffer
+              .putIfAbsent(product.key.toString(), () => <String>[])
+              .add('$key $value');
         }
-        final parts = <String>[];
-        if ((key ?? '').trim().isNotEmpty) parts.add(_normalizeText(key!));
-        if ((value ?? '').trim().isNotEmpty) parts.add(_normalizeText(value!));
-        if (parts.isEmpty) continue;
-        buffer.putIfAbsent(productId, () => <String>[]).add(parts.join(' '));
       }
     }
 
@@ -2204,25 +2192,6 @@ class BulkProductEditService {
       }
       return searchableText.contains(token);
     });
-  }
-
-  /// El texto buscable de un hecho: las etiquetas de lista si es de lista, o
-  /// el escalar en su columna tipada.
-  String? _factSearchValue(Map<String, dynamic> row) {
-    final raw = row['spec_fact_values'];
-    if (raw is List && raw.isNotEmpty) {
-      final entries = raw.whereType<Map>().toList()
-        ..sort((a, b) => ((a['position'] as num?)?.toInt() ?? 0)
-            .compareTo((b['position'] as num?)?.toInt() ?? 0));
-      final labels = entries
-          .map((entry) =>
-              (entry['spec_definition_values'] as Map?)?['label'] as String?)
-          .whereType<String>()
-          .toList(growable: false);
-      if (labels.isNotEmpty) return labels.join(', ');
-    }
-    return (row['value_number'] ?? row['value_boolean'] ?? row['value_text'])
-        ?.toString();
   }
 
   String _normalizeText(String text) {

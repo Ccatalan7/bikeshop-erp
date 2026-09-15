@@ -2606,6 +2606,7 @@ double? _uniqueNumberWithUnit(String text, String unit) {
 const Map<String, PartSpecKind> _identityKindByField = <String, PartSpecKind>{
   'spoke_holes': PartSpecKind.spokeCount,
   'rotor_diameter_mm': PartSpecKind.rotorDiameterMm,
+  'rotor_diameter_mm_value': PartSpecKind.rotorDiameterMm,
   'clamp_diameter_mm': PartSpecKind.clampDiameterMm,
   'seatpost_diameter_mm': PartSpecKind.postDiameterMm,
   'crank_length_mm': PartSpecKind.crankLengthMm,

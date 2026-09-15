@@ -212,7 +212,10 @@ void main() {
       ),
       findsOneWidget,
     );
-    expect(find.text('Revisar composición'), findsOneWidget);
+    expect(find.text('Definir contenido de la compra'), findsOneWidget);
+    expect(find.text('COMPRADO · contenido por definir'), findsOneWidget);
+    expect(find.text('Aplicar y guardar regla'), findsNothing,
+        reason: 'la regla se guarda una sola vez, en «Confirmar contenido»');
     expect(find.text('Añadir al contenido'), findsWidgets);
     expect(find.byKey(const Key('ocr-candidate-create-new')), findsOneWidget);
     expect(manualQueries, isEmpty,

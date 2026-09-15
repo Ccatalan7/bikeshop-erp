@@ -87,6 +87,18 @@ void main() {
       expect(window.endsAt, DateTime.utc(2026, 7, 25, 4));
     });
 
+    test('yesterday preserves the complete 23-hour Chile transition day', () {
+      final window = NotificationDigestWindow.resolve(
+        period: NotificationDigestPeriod.yesterday,
+        now: DateTime.utc(2026, 9, 7, 16),
+      );
+      _expectDates(window, DateTime(2026, 9, 6), DateTime(2026, 9, 6));
+      expect(window.startsAt, DateTime.utc(2026, 9, 6, 4));
+      expect(window.endsAt, DateTime.utc(2026, 9, 7, 3));
+      expect(window.endsAt.difference(window.startsAt),
+          const Duration(hours: 23));
+    });
+
     test('yesterday crosses the month boundary', () {
       final window = NotificationDigestWindow.resolve(
         period: NotificationDigestPeriod.yesterday,

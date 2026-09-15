@@ -5,6 +5,7 @@ import '../../../shared/widgets/vb_searchable_select.dart';
 import '../../../shared/widgets/vb_short_select.dart';
 import '../../inventory/services/spec_engine_service.dart';
 import '../models/intelligent_purchasing_models.dart';
+import '../services/supply_need_effective_criteria.dart';
 import 'purchase_visual_language.dart';
 
 /// Qué comando resuelve lo que el operador acaba de escribir.
@@ -266,21 +267,28 @@ class _SupplyNeedRefinementEditorState
   void _seed() {
     final template = widget.template;
     if (template == null) return;
-    final byField = <String, SupplyNeedPredicate>{
-      for (final predicate in widget.criteria.predicates)
-        predicate.field: predicate,
-    };
-    for (final field in template.fields) {
+    for (final field in supplyNeedCriterionFieldsOf(template)) {
       final definition = field.definition;
       if (definition == null) continue;
-      final existing = byField[definition.key];
+      _draftFor(definition);
+    }
+  }
+
+  // A refreshed contract may add fields while keeping its template ID. Seed
+  // each new draft once, without replacing edits already in progress.
+  _CriterionDraft _draftFor(SpecDefinition definition) {
+    return _drafts.putIfAbsent(definition.key, () {
+      SupplyNeedPredicate? existing;
+      for (final predicate in widget.criteria.predicates) {
+        if (predicate.field == definition.key) existing = predicate;
+      }
       final draft = _CriterionDraft(
         operator: existing?.operator ?? _defaultOperator(definition.dataType),
         values: List<Object>.from(existing?.values ?? const <Object>[]),
       );
-      _drafts[definition.key] = draft;
       _syncTextControllers(definition, draft);
-    }
+      return draft;
+    });
   }
 
   String _defaultOperator(String dataType) =>
@@ -307,17 +315,20 @@ class _SupplyNeedRefinementEditorState
   Map<String, dynamic> get _currentValues {
     final template = widget.template;
     if (template == null) return <String, dynamic>{};
-    final values = <String, dynamic>{};
-    for (final field in template.fields) {
+    final predicates = <SupplyNeedPredicate>[];
+    for (final field in supplyNeedCriterionFieldsOf(template)) {
       final definition = field.definition;
       if (definition == null) continue;
-      final draft = _drafts[definition.key];
-      if (draft == null) continue;
+      final draft = _draftFor(definition);
       final current = _draftValues(definition, draft, tolerateInvalid: true);
       if (current.isEmpty) continue;
-      values[definition.key] = current.length == 1 ? current.first : current;
+      predicates.add(SupplyNeedPredicate(
+        field: definition.key,
+        operator: draft.operator,
+        values: current,
+      ));
     }
-    return values;
+    return supplyNeedExactPrerequisiteValues(template, predicates);
   }
 
   List<Object> _draftValues(
@@ -422,10 +433,7 @@ class _SupplyNeedRefinementEditorState
     final template = widget.template;
     final visible = template == null
         ? const <SpecTemplateField>[]
-        : template.fields
-            .where((field) =>
-                field.definition != null && field.isVisible(_currentValues))
-            .toList(growable: false);
+        : supplyNeedCriterionFieldsOf(template, exactValues: _currentValues);
     final draft = _draftPreview();
     final consequence = draft.drafted ? _consequenceFor(draft.preview) : null;
     return Column(
@@ -677,7 +685,7 @@ class _SupplyNeedRefinementEditorState
     required bool compact,
   }) {
     final definition = field.definition!;
-    final draft = _drafts[definition.key]!;
+    final draft = _draftFor(definition);
     final characteristic = Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: <Widget>[
@@ -1022,12 +1030,8 @@ class _SupplyNeedRefinementEditorState
     final field = widget.template!.fields.firstWhere(
       (field) => field.definition?.key == definition.key,
     );
-    final narrowed = field.allowedOptionsFor(_currentValues);
-    return definition.options
-        .where((option) =>
-            narrowed == null ||
-            narrowed.contains(SpecTemplateField.normalizeRuleValue(option)))
-        .toList(growable: false);
+    return supplyNeedCriterionOptionsOf(
+        widget.template!, field, _currentValues);
   }
 
   List<String> _operatorsFor(String dataType) => switch (dataType) {
@@ -1071,10 +1075,12 @@ class _SupplyNeedRefinementEditorState
     if (template == null) return const <SupplyNeedPredicate>[];
     final currentValues = _currentValues;
     final predicates = <SupplyNeedPredicate>[];
-    for (final field in template.fields) {
+    final expressible =
+        supplyNeedCriterionFieldsOf(template, exactValues: currentValues);
+    for (final field in expressible) {
       final definition = field.definition;
-      if (definition == null || !field.isVisible(currentValues)) continue;
-      final draft = _drafts[definition.key]!;
+      if (definition == null) continue;
+      final draft = _draftFor(definition);
       final values = _draftValues(
         definition,
         draft,
@@ -1110,9 +1116,7 @@ class _SupplyNeedRefinementEditorState
       drafted: predicates,
       current: widget.criteria.predicates,
       expressibleFields: <String>{
-        for (final field in template.fields)
-          if (field.definition != null && field.isVisible(currentValues))
-            field.definition!.key,
+        for (final field in expressible) field.definition!.key,
       },
     );
   }

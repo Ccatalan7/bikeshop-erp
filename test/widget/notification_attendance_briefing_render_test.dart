@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:timezone/timezone.dart' as tz;
 
 import 'package:vinabike_erp/modules/hr/models/hr_models.dart';
 import 'package:vinabike_erp/modules/hr/services/hr_service.dart';
@@ -110,9 +111,14 @@ void main() {
 
     // The service was asked for yesterday's business day, not today's.
     final requested = service.lastWindow!;
-    final today = DateTime.now();
-    expect(
-        requested.end.difference(requested.start), const Duration(hours: 24));
+    final chile = tz.getLocation('America/Santiago');
+    final today = tz.TZDateTime.now(chile);
+    // A civil day can span 23 or 25 hours at a DST transition. Assert the
+    // actual business-date boundaries instead of a fixed elapsed duration.
+    expect(requested.start,
+        tz.TZDateTime(chile, today.year, today.month, today.day - 1).toUtc());
+    expect(requested.end,
+        tz.TZDateTime(chile, today.year, today.month, today.day).toUtc());
     expect(requested.end.isBefore(today), isTrue);
 
     expect(find.text('Asistencia de ayer'), findsOneWidget);

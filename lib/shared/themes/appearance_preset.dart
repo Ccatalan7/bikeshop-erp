@@ -177,15 +177,19 @@ abstract final class AppearancePresets {
       attention: Color(0xFFF2637A),
       onAttention: Color(0xFF08222F),
     ),
+    // `F-01` accent #1668BD: «acción y selección». The Material blue
+    // (#1976D2) that sat here until 2026-09-05 was the legacy AppBar blue the
+    // guide names as the thing to remove; every FilledButton, link and
+    // selection in the ERP content was painting it.
     light: AppearanceContentSeed(
-      primary: Color(0xFF1976D2),
+      primary: Color(0xFF1668BD),
       onPrimary: Color(0xFFFFFFFF),
-      surfaceTint: Color(0xFF1976D2),
+      surfaceTint: Color(0xFF1668BD),
     ),
     dark: AppearanceContentSeed(
       primary: Color(0xFF6FD1F6),
       onPrimary: Color(0xFF08222F),
-      surfaceTint: Color(0xFF1976D2),
+      surfaceTint: Color(0xFF1668BD),
     ),
   );
 
