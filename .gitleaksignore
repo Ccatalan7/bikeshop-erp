@@ -12,3 +12,13 @@ web/firebase-messaging-sw.js:gcp-api-key:9
 # Historical test-only HMAC fixture from the first guarded Prepare attempt.
 # The next canonical Prepare replaces it; only this exact immutable finding is allowed.
 da71f1b2ad4505ef4b46a14c51ff1eac0fe79c80:supabase/functions/_shared/ai_agent/runtime_test.ts:generic-api-key:27
+
+# 2026-09-15 · findings surfaced by the smartpegas1.0 → main promotion (PR #29),
+# all in immutable history on the working branch. None is a credential:
+# two synthetic operation keys in test fixtures (pgTAP and Dart) and two
+# auth user UUIDs compared as identifiers in a production read-back script.
+# Exact fingerprints only; the same literal elsewhere is reviewed again.
+ee0692fedf57196d79d7586f6e22aa1bce3d21c9:supabase/tests/supply_need_family_resolution_b1.sql:generic-api-key:515
+edc67935b9c8fc390edc46ba8acb42304ff95ee0:test/unit/supplier_need_portal_evidence_test.dart:generic-api-key:907
+6b61e71f7bc7d862e74c06bbf93692c083b8bdef:supabase/manual_checks/verification/20260827173500_separate_company_owner_from_employee.sql:generic-api-key:28
+6b61e71f7bc7d862e74c06bbf93692c083b8bdef:supabase/manual_checks/verification/20260827173500_separate_company_owner_from_employee.sql:generic-api-key:48
