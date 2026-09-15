@@ -56,7 +56,12 @@ cerrado porque `origin/main` todavía no es `F`.
 main smartpegas1.0` estable entre dos lecturas. Se sigue 9.1 y 9.2 tal cual.
 
 **Paso 2 · Respaldo.** Los dos tags de 10.4 (`cutover-backup/main-before-…` y
-`cutover-backup/smart-before-…`) con push atómico.
+`cutover-backup/smart-before-…`) con push atómico. Si el entorno no puede
+empujar tags (el proxy de las sesiones en la nube devuelve 403 para
+`refs/tags/*`), se crean con la API de GitHub como **ramas** del mismo nombre
+apuntando a `N` y `F`; cumplen la misma función forense y no se mueven.
+Hecho el 2026-09-15: `cutover-backup/main-before-20260915` → `75cb391f…` y
+`cutover-backup/smart-before-20260915` → `f51f3777…`.
 
 **Paso 3 · PR `smartpegas1.0 → main`.** Título «Promote smartpegas1.0 to
 canonical main (fast-forward tree)». Esperar `PR Integrity` (cuatro partes de
