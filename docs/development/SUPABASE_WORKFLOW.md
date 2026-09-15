@@ -249,6 +249,22 @@ measurement found it in minutes:
   (class 23, «rejected, do not retry») stopped it within the minute.
   `supabase/migrations/20260915190000_reject_stale_need_portal_search_definitively.sql`
   is the exact deployed body.
+  Stamped as APPLIED on 2026-09-15 20:00 UTC through
+  `scripts/db/deploy_migration.sh` (idempotent re-apply, read-back file
+  `supabase/manual_checks/verification/20260915190000_reject_stale_need_portal_search_definitively.sql`,
+  then `migration repair`); the MCP deploy alone leaves no stamp. The same
+  day the ERP client stopped treating any class 22/23 or `P0001` answer from
+  `record_supplier_need_portal_search_v1` as transport: it surfaces
+  `SupplierNeedSearchRejected`, drops the reading, reloads the need and never
+  enqueues a retry chain (`lib/shared/services/supplier_availability_service.dart`,
+  `intelligent_purchasing_workspace_page.dart`).
+- **The debug build was not the runaway client.** The canonical macOS debug
+  session (`screen -x payroll`, 12 days of `run.log`, 33 MB) contains zero
+  `40001` or «recibo falló» lines, and its bounded receipt retry waits 5–120 s
+  between five attempts. A hot restart was done anyway on 2026-09-15; the
+  storm had already stopped with the errcode change. The ~900/s caller was a
+  Flutter build on the owner's network with a bearer issued 2026-08-30: look
+  at an installed Release app or another device before blaming this session.
 - **A failing-request storm is invisible in `pg_stat_statements`.** It only
   records statements that complete, so §2–§4 of the profile showed Realtime
   as 66% of tracked time while the real burner was untracked. The tells are
