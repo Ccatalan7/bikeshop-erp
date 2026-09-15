@@ -1,0 +1,177 @@
+{
+  "schema_version": 1,
+  "artifact_kind": "source_grounded_review_cases_not_executable_engine_fixtures",
+  "review_date": "2026-09-06",
+  "blueprint_sha256": "250a32e47592aec332d39bb7672197510848f1c9ce78ba53580a4888aedac1a3",
+  "numeric_encoding": "decimal magnitudes are strings; counts and review metadata may be JSON integers",
+  "disclaimer": "These cases constrain a future implementation. No case certifies a complete physical installation, and no product catalogue was changed. OEM facts are distinguished from constructed configurations. Unknown inputs cannot be filled from another variant or endpoint.",
+  "sources": {
+    "continental_hookless": "https://www.continental-tires.com/us/en/tire-knowledge/hookless-vs-hooked-rims/",
+    "zipp_hookless_tube": "https://support.zipp.com/hc/en-us/articles/7868244824731-Can-you-run-a-tube-in-a-Zipp-hookless-rim-with-a-tubeless-tire",
+    "rockshox_shock_fitment": "https://www.sram.com/en/service/articles/RockShox-fitment-article",
+    "enduro_help": "https://cycling.endurobearings.com/en-ca/apps/help-center",
+    "cane_creek_forty": "https://www.canecreek.com/products/40",
+    "cane_creek_shis": "https://support.canecreek.com/support/solutions/articles/62000202657-full-article-everything-you-need-to-know-about-headsets-",
+    "park_headsets": "https://www.parktool.com/en-us/blog/repair-help/headset-standards",
+    "fox_40_2013": "https://tech.ridefox.com/fox_tech_center/owners_manuals/013/Content/Forks/40/40withDMS_Installation.html",
+    "surly_pack_rat": "https://surlybikes.com/products/pack-rat",
+    "surly_pack_rat_sheet": "https://surlybikes.com/uploads/downloads/surly-pack-rat-framesheet-85-000633_INST.pdf",
+    "park_thru_axle_threads": "https://www.parktool.com/en-us/product/thru-axle-tap-set-tap-ta-set",
+    "robert_axle_lig601": "https://robertaxleproject.com/product/lightning-bolt-on-axle-rear-12-mm-x-174-mm-x-1-75-thread/",
+    "sapim_thread_2018": "https://www.sapim.be/sites/default/files/Sapim%20brochure%202018%20def%20A5%202018-Taiwanese%20LR.pdf",
+    "sheldon_spoke_geometry": "https://www.sheldonbrown.com/spoke-length.html"
+  },
+  "cases": [
+    {
+      "id": "W01_TIRE_RIM_BOTH_MANUFACTURERS",
+      "finding": "W01",
+      "blueprint_interfaces": ["tire_to_rim", "rim_to_tire", "wheel_to_tire"],
+      "evidence_kind": "constructed_configuration_using_explicit_OEM_limits",
+      "scope": {"tire_model": "Continental Grand Prix 5000 S TR", "tire_variant": "700 x 28c", "rim_profile": "hookless"},
+      "given": {"rim_internal_width_mm": "25", "tire_oem_max_rim_internal_width_mm": "23", "rim_side_accepts_tire": true, "bsd_matches": true},
+      "expected_assertions": ["must_not_mark_compatible", "must_apply_tire_side_exclusion_even_when_rim_side_matches"],
+      "must_not_infer": ["approval_from_700x30c_row"],
+      "source_ids": ["continental_hookless"]
+    },
+    {
+      "id": "W01_PRESSURE_IS_VARIANT_AND_MOUNT_SCOPED",
+      "finding": "W01",
+      "blueprint_interfaces": ["tire_to_rim"],
+      "evidence_kind": "constructed_configuration_using_explicit_OEM_limit",
+      "scope": {"tire_model": "Continental Grand Prix 5000 S TR", "tire_variant": "700 x 30c", "rim_profile": "hookless"},
+      "given": {"inflation_pressure_bar": "4.6", "tire_oem_max_pressure_bar": "4.5"},
+      "expected_assertions": ["must_reject_this_pressure_configuration"],
+      "must_not_infer": ["five_bar_limit_from_700x28c_row", "tire_is_unusable_at_every_pressure"],
+      "source_ids": ["continental_hookless"]
+    },
+    {
+      "id": "W01_TUBE_DOES_NOT_OVERRIDE_TIRE_BEAD_REQUIREMENT",
+      "finding": "W01",
+      "blueprint_interfaces": ["tire_to_rim", "wheel_to_tire"],
+      "evidence_kind": "OEM_rule_with_constructed_tire",
+      "scope": {"rim_brand": "Zipp", "rim_profile": "hookless"},
+      "given": {"tube_installed": true, "tire_tubeless_compatible": false, "bsd_matches": true},
+      "expected_assertions": ["must_not_mark_compatible"],
+      "source_ids": ["zipp_hookless_tube"]
+    },
+    {
+      "id": "W02_SHOCK_GEOMETRY_MATCH_DOES_NOT_RESOLVE_RESERVOIR",
+      "finding": "W02",
+      "blueprint_interfaces": ["shock_to_frame"],
+      "evidence_kind": "OEM_fitment_warning_with_assumed_matching_dimensions",
+      "scope": {"frame_model": "Specialized Demo", "frame_year_scope": "2020+ as stated by source", "shock_reservoir_generation": "RC2T"},
+      "given": {"eye_to_eye_matches": true, "stroke_matches": true, "mount_kind_matches": true, "full_travel_clearance_verified": null},
+      "expected_assertions": ["must_not_mark_compatible_from_three_dimensions", "must_preserve_model_scoped_fitment_warning"],
+      "must_not_infer": ["all_RockShox_shocks_are_incompatible", "may_contact_means_every_size_definitely_contacts"],
+      "source_ids": ["rockshox_shock_fitment"]
+    },
+    {
+      "id": "W03_BEARING_ENVELOPE_IS_NOT_FUNCTIONAL_APPROVAL",
+      "finding": "W03",
+      "blueprint_interfaces": ["bearing_cartridge_fit"],
+      "evidence_kind": "OEM_functional_warning_with_constructed_equal_envelope",
+      "scope": {"bearing_brand": "Enduro", "bearing_design": "MAX suspension pivot", "destination": "wheel hub"},
+      "given": {"inner_diameter_matches": true, "outer_diameter_matches": true, "width_matches": true},
+      "expected_assertions": ["must_not_mark_functionally_compatible_from_envelope", "must_preserve_OEM_usage_warning"],
+      "must_not_infer": ["geometrically_impossible_to_insert"],
+      "source_ids": ["enduro_help"]
+    },
+    {
+      "id": "W04_HEADSET_ANGLE_PAIR_MUST_NOT_COLLAPSE",
+      "finding": "W04",
+      "blueprint_interfaces": ["bearing_cartridge_fit"],
+      "evidence_kind": "OEM_angle_designations_used_as_representation_case",
+      "given": {"angle_pair_marking_a": "36x45", "angle_pair_marking_b": "45x45"},
+      "expected_assertions": ["must_preserve_two_ordered_components", "must_not_normalize_both_to_45", "must_not_approve_with_missing_required_angle"],
+      "must_not_infer": ["these_two_bearings_have_equal_envelopes", "orientation_of_marking_without_documented_convention"],
+      "source_ids": ["cane_creek_forty"]
+    },
+    {
+      "id": "W05_HEADTUBE_HAS_ALTERNATIVE_HEADSET_ASSEMBLIES",
+      "finding": "W05",
+      "blueprint_interfaces": ["headset_to_frame_and_fork", "fork_to_headset_and_frame"],
+      "evidence_kind": "explicit_OEM_example",
+      "given": {"frame_pressfit_upper_bore_nominal_mm": "44", "frame_pressfit_lower_bore_nominal_mm": "44", "upper_steerer_nominal_mm": "28.6", "crown_race_nominal_mm": "30", "original_upper_shis": "ZS44/28.6", "original_lower_shis": "EC44/30", "candidate_upper_shis": "ZS44/28.6", "candidate_lower_shis": "ZS44/30"},
+      "expected_assertions": ["must_not_reject_for_different_original_lower_SHIS_only"],
+      "residual_unknowns": ["stack_and_remaining_steerer_length", "all_other_installation_requirements"],
+      "source_ids": ["cane_creek_shis"]
+    },
+    {
+      "id": "W06_PARTIAL_HEADSET_DOES_NOT_INVENT_OPPOSITE_END",
+      "finding": "W06",
+      "blueprint_keys": ["headset.headset_upper_shis", "headset.headset_lower_shis"],
+      "evidence_kind": "OEM_product_scope_with_constructed_form_input",
+      "given": {"assembly_scope": "lower_only", "lower_shis": "EC44/40", "upper_shis": null},
+      "expected_assertions": ["must_not_require_upper_SHIS_for_lower_only_product"],
+      "must_not_infer": ["compatible_complete_headset_for_every_frame"],
+      "source_ids": ["cane_creek_forty"]
+    },
+    {
+      "id": "W06_SHIS_PATTERN_MUST_ALLOW_DOCUMENTED_EXTENSION",
+      "finding": "W06",
+      "blueprint_keys": ["shared_vocabularies.headset_shis_code.pattern"],
+      "evidence_kind": "representation_regression_for_OEM_offered_sizes",
+      "given": {"candidate_codes": ["ZS62/40", "EC49/38.1"]},
+      "blueprint_pattern_observation": {"ZS62/40": false, "EC49/38.1": false},
+      "expected_assertions": ["must_preserve_literal_and_allow_documented_registry_extension", "must_not_treat_unsupported_pattern_as_physical_impossibility"],
+      "must_not_infer": ["every_EC_ZS_IS_and_dimension_cartesian_product_is_valid", "MPN_from_position_in_flattened_HTML_selectors"],
+      "source_ids": ["cane_creek_forty"]
+    },
+    {
+      "id": "W07_FORK_TIRE_PEAK_DIAMETER_LIMIT",
+      "finding": "W07",
+      "blueprint_interfaces": ["fork_to_tire"],
+      "evidence_kind": "constructed_boundary_case_using_OEM_table",
+      "scope": {"fork_model": "FOX 40 mm, 26 inch", "manual_year": 2013},
+      "given": {"nominal_wheel_matches": true, "inflated_tire_width_mm": "70", "oem_max_width_mm": "71", "inflated_tire_peak_diameter_mm": "695", "oem_max_peak_diameter_mm": "694"},
+      "expected_assertions": ["must_not_mark_compatible_when_only_width_and_nominal_pass"],
+      "must_not_infer": ["existence_of_a_specific_commercial_tire_with_constructed_dimensions", "same_limits_for_other_FOX_generations"],
+      "source_ids": ["fox_40_2013"]
+    },
+    {
+      "id": "W08_DECIMAL_FRAME_SPACING_AND_DISCRETE_ACCEPTED_HUBS",
+      "finding": "W08",
+      "blueprint_interfaces": ["hub_to_frame_dropout", "wheel_to_frame_or_fork"],
+      "blueprint_keys": ["frame.rear_hub_old_mm", "shared_vocabularies.hub_old_mm"],
+      "evidence_kind": "explicit_OEM_specification",
+      "scope": {"frame_model": "Surly Pack Rat", "frame_spacing_design": "Gnot-rite"},
+      "given": {"frame_spacing_mm": "132.5", "oem_accepted_hub_widths_mm": ["130", "135"]},
+      "expected_assertions": ["must_preserve_132_5_exactly", "must_not_reject_130_or_135_from_spacing_inequality_only"],
+      "must_not_infer": ["continuous_acceptance_interval_130_to_135", "all_frames_allow_spacing_changes", "complete_bike_fitment_from_spacing_only"],
+      "source_ids": ["surly_pack_rat", "surly_pack_rat_sheet"]
+    },
+    {
+      "id": "W09_LIG601_THREAD_IS_REPRESENTABLE",
+      "finding": "W09",
+      "blueprint_interfaces": ["retention_to_hub_and_frame"],
+      "blueprint_keys": ["shared_vocabularies.thru_axle_thread"],
+      "evidence_kind": "explicit_OEM_product_specification",
+      "scope": {"manufacturer": "The Robert Axle Project", "part_number": "LIG601"},
+      "given": {"diameter_mm": "12", "shaft_length_mm": "174", "thread_pitch_mm": "1.75"},
+      "expected_assertions": ["must_represent_M12x1_75_without_false_unknown"],
+      "must_not_infer": ["hub_OLD_is_174_mm", "compatibility_with_a_bike_from_axle_dimensions_only"],
+      "source_ids": ["robert_axle_lig601", "park_thru_axle_threads"]
+    },
+    {
+      "id": "W10_WIRE_GAUGE_AND_THREAD_DESIGNATION_ARE_DISTINCT",
+      "finding": "W10",
+      "blueprint_keys": ["spoke.spoke_thread_diameter_mm", "spoke.spoke_gauge"],
+      "evidence_kind": "explicit_OEM_designation",
+      "scope": {"manufacturer": "Sapim", "document": "2018 Taiwanese brochure", "page": 8},
+      "given": {"wire_diameter_mm": "2", "thread_designation": "FG 2.3 mm"},
+      "expected_assertions": ["must_preserve_wire_and_thread_as_distinct_properties", "must_not_copy_wire_diameter_into_measured_thread_diameter"],
+      "must_not_infer": ["exact_thread_measurement_tolerance", "universal_rule_for_every_brand_and_proprietary_spoke"],
+      "source_ids": ["sapim_thread_2018"]
+    },
+    {
+      "id": "W11_SPOKE_CALCULATOR_MARGIN_REQUIRES_RECIPE",
+      "finding": "W11",
+      "blueprint_interfaces": ["spoke_to_wheel_geometry"],
+      "evidence_kind": "constructed_missing_prerequisite_case",
+      "given": {"calculator_result_mm": "290", "available_spoke_length_mm": "291.5", "tension_compensation_included": null, "nipple_thread_engagement_limits": null},
+      "expected_assertions": ["must_not_assert_definitive_incompatibility_from_universal_plus_minus_one_mm", "must_not_assert_compatibility_from_a_substitute_universal_margin"],
+      "residual_unknowns": ["calculator_method", "validated_assembly_recipe", "engagement_and_tension_conditions"],
+      "source_ids": ["sheldon_spoke_geometry"]
+    }
+  ]
+}

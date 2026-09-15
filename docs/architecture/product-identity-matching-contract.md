@@ -1103,3 +1103,22 @@ Regresiones: `test/unit/ai_first_product_identity_coordinator_test.dart`
 («composite of one product repeated as the purchased quantity is same»,
 «composite ×2 keeps abstaining when the option itself is a pack», y los dos
 casos de `misfiled` actualizados a recomendación con objeción).
+
+### Un `composite` de hoja no cierra la búsqueda (2026-09-05, misma tarde)
+
+Segunda corrida sobre la misma compra, ya con las dos reglas anteriores: 9 de
+10 líneas correctas a la primera y la décima —«10/30/50 Uds. Pegatinas de Los
+Simpson»— abstenida como `composite {Stickers NNV172 ×50}`. El «Set de
+Pegatinas Los Simpson (50 Uds.)» (`AE0318`), comprado y facturado en abril,
+estaba en «Accesorios»; la hoja propuesta era «Souvenirs», y un `composite`
+de hoja saltaba la pantalla global, así que nunca se ofreció.
+
+Regla: sólo un `same` aceptado (o un `same` con pack que exige contenido)
+resuelve la hoja. Un `composite` de hoja corre la pantalla global; si ésta no
+agrega candidatos fuera de la hoja, se conserva la respuesta de la hoja sin
+segunda adjudicación (`catalog_match.leaf_composite_kept`). Costo: una
+llamada de pantalla por línea con pack, y sólo entonces una adjudicación más.
+
+La hoja tenía dos candidatos —un porta-termo y un «Stickers» genérico— y
+ninguno era el set: el modelo no se equivocó entre opciones, no le ofrecieron
+la correcta. Por eso la corrección es de recorrido, no de prompt.

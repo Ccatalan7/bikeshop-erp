@@ -1,0 +1,81 @@
+{
+  "schema_version": 1,
+  "approval_scope": "field_representation",
+  "base_sha256": "6ed9cdf73ae5d9fc0aa2284bb4691f4f1eca958c2762c5ea1e7076c5f9358b18",
+  "proposal_sha256": "f6f48614dcab8411569a19013124f14101c15d3c7983af0930db9ee718567b66",
+  "source_base_sha256": "c12204e42f86423fc3bf3eba345a9f07568b4849d9c8d9b8ace4d44430ddcf9a",
+  "patch_adjudications": [
+    {
+      "patch_id": "CPC01",
+      "decision": "aceptar",
+      "reason": "La cantidad comercial unidad no permite inferir lado ni mano de rosca."
+    },
+    {
+      "patch_id": "CPC02",
+      "decision": "aceptar",
+      "reason": "Otro requiere su declaración literal; no se convierte automáticamente en estándar compatible."
+    },
+    {
+      "patch_id": "CPC03",
+      "decision": "aceptar",
+      "reason": "Una única propiedad del largo por lado; el genérico conserva la unidad cuyo lado falta."
+    },
+    {
+      "patch_id": "CPC04",
+      "decision": "aceptar",
+      "reason": "La longitud libre necesaria en cada lado no se deduce de una medida única."
+    },
+    {
+      "patch_id": "CPC05",
+      "decision": "aceptar",
+      "reason": "El rótulo explicita que la medida conservada carece de lado."
+    },
+    {
+      "patch_id": "CPC06",
+      "decision": "aceptar",
+      "reason": "El manual Ergon GP1 06/2014 declara mínimos asimétricos; no se extrapolan a otras variantes."
+    },
+    {
+      "patch_id": "CPC07",
+      "decision": "aceptar",
+      "reason": "El mínimo derecho tiene su propia medida y fuente, sin copiar el izquierdo."
+    },
+    {
+      "patch_id": "CPC08",
+      "decision": "aceptar",
+      "reason": "Propietario u Otro no identifican una interfaz completa sin su modelo/sistema."
+    },
+    {
+      "patch_id": "CPC09",
+      "decision": "aceptar",
+      "reason": "El rótulo distingue sistema de anclaje de una supuesta compatibilidad de marca."
+    },
+    {
+      "patch_id": "CPC10",
+      "decision": "aceptar",
+      "reason": "Cada configuración de tija conserva su sistema de anclaje por separado."
+    },
+    {
+      "patch_id": "CPC11",
+      "decision": "aceptar",
+      "reason": "Un dato de otra fila no completa la identidad del anclaje propietario."
+    },
+    {
+      "patch_id": "CPC12",
+      "decision": "aceptar",
+      "reason": "Relación funcional de mandos por modelo/generación, separada de contenido y sin identidad por nombre."
+    },
+    {
+      "patch_id": "CPC13",
+      "decision": "aceptar",
+      "reason": "Mando declarado incluido pide su modelo; ausencia queda pendiente, no inferida."
+    },
+    {
+      "patch_id": "CPC14",
+      "decision": "aceptar",
+      "reason": "El largo total comparte el documento de cotas OEM; no reemplaza observaciones de cuadro/ciclista."
+    }
+  ],
+  "mechanical_coverage_complete": false,
+  "automatic_fill_authorized": false
+}

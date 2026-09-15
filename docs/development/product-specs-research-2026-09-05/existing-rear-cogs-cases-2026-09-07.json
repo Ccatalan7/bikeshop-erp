@@ -1,0 +1,4468 @@
+{
+  "schema_version": 1,
+  "title": "All-family physical-port cardinality",
+  "catalogue_sha256": "21b3b278bbee57c32d93b0a599196582db815be4117363121bf552d2329fd15b",
+  "independent_review_hashes": [
+    "4cbd9cd4e1ccb2f41ab3249cbaed83fe419689aa6ba1dbb24a5b9dd856bd66d1",
+    "a1c6bfc5fae5c11b3b7f804b240ea36b2a36db2f6e4ba2ff868c061802856820"
+  ],
+  "mechanical_coverage_complete": false,
+  "automatic_fill_authorized": false,
+  "cases": [
+    {
+      "id": "rcx_a_cassette_sequence_matches_its_declared_total",
+      "template": "cassette",
+      "values": {
+        "sprocket_count": "8",
+        "cog_sequence": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "position": "1",
+                "teeth": "11"
+              },
+              "sources": []
+            },
+            {
+              "id": "r2",
+              "values": {
+                "position": "2",
+                "teeth": "13"
+              },
+              "sources": []
+            },
+            {
+              "id": "r3",
+              "values": {
+                "position": "3",
+                "teeth": "15"
+              },
+              "sources": []
+            },
+            {
+              "id": "r4",
+              "values": {
+                "position": "4",
+                "teeth": "17"
+              },
+              "sources": []
+            },
+            {
+              "id": "r5",
+              "values": {
+                "position": "5",
+                "teeth": "20"
+              },
+              "sources": []
+            },
+            {
+              "id": "r6",
+              "values": {
+                "position": "6",
+                "teeth": "23"
+              },
+              "sources": []
+            },
+            {
+              "id": "r7",
+              "values": {
+                "position": "7",
+                "teeth": "26"
+              },
+              "sources": []
+            },
+            {
+              "id": "r8",
+              "values": {
+                "position": "8",
+                "teeth": "30"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "cassette_spline_standard": "Shimano HG spline M (8/9/10v y MTB 11v; ROAD 11v y 7v sólo según filas C-731; LINKGLIDE según C-649)",
+        "freehub_bodies_accepted": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "rear_drive_interface": "Shimano HG spline M (8/9/10v y MTB 11v; ROAD 11v y 7v sólo según filas C-731; LINKGLIDE según C-649)",
+                "spacer_requirement": "Sin separador",
+                "status": "Compatible declarado",
+                "source_scope": "Apartado sintético",
+                "source_url": "https://example.invalid/synthetic"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [
+        "https://bike.shimano.com/en-NA/products/components/pdp.P-CS-HG50-8.html"
+      ],
+      "forbidden_issue_fields": [
+        "cog_sequence"
+      ]
+    },
+    {
+      "id": "rcx_more_cogs_than_the_declared_total_blocks",
+      "template": "cassette",
+      "values": {
+        "sprocket_count": "8",
+        "cog_sequence": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "position": "1",
+                "teeth": "11"
+              },
+              "sources": []
+            },
+            {
+              "id": "r2",
+              "values": {
+                "position": "2",
+                "teeth": "13"
+              },
+              "sources": []
+            },
+            {
+              "id": "r3",
+              "values": {
+                "position": "3",
+                "teeth": "15"
+              },
+              "sources": []
+            },
+            {
+              "id": "r4",
+              "values": {
+                "position": "4",
+                "teeth": "17"
+              },
+              "sources": []
+            },
+            {
+              "id": "r5",
+              "values": {
+                "position": "5",
+                "teeth": "20"
+              },
+              "sources": []
+            },
+            {
+              "id": "r6",
+              "values": {
+                "position": "6",
+                "teeth": "23"
+              },
+              "sources": []
+            },
+            {
+              "id": "r7",
+              "values": {
+                "position": "7",
+                "teeth": "26"
+              },
+              "sources": []
+            },
+            {
+              "id": "r8",
+              "values": {
+                "position": "8",
+                "teeth": "30"
+              },
+              "sources": []
+            },
+            {
+              "id": "r9",
+              "values": {
+                "position": "9",
+                "teeth": "34"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "cassette_spline_standard": "Shimano HG spline M (8/9/10v y MTB 11v; ROAD 11v y 7v sólo según filas C-731; LINKGLIDE según C-649)",
+        "freehub_bodies_accepted": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "rear_drive_interface": "Shimano HG spline M (8/9/10v y MTB 11v; ROAD 11v y 7v sólo según filas C-731; LINKGLIDE según C-649)",
+                "spacer_requirement": "Sin separador",
+                "status": "Compatible declarado",
+                "source_scope": "Apartado sintético",
+                "source_url": "https://example.invalid/synthetic"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [
+        {
+          "code": "row_cardinality_conflict",
+          "field": "cog_sequence"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "rcx_fewer_cogs_than_the_total_stay_pending",
+      "template": "cassette",
+      "values": {
+        "sprocket_count": "8",
+        "cog_sequence": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "position": "1",
+                "teeth": "11"
+              },
+              "sources": []
+            },
+            {
+              "id": "r2",
+              "values": {
+                "position": "2",
+                "teeth": "13"
+              },
+              "sources": []
+            },
+            {
+              "id": "r3",
+              "values": {
+                "position": "3",
+                "teeth": "15"
+              },
+              "sources": []
+            },
+            {
+              "id": "r4",
+              "values": {
+                "position": "4",
+                "teeth": "17"
+              },
+              "sources": []
+            },
+            {
+              "id": "r5",
+              "values": {
+                "position": "5",
+                "teeth": "20"
+              },
+              "sources": []
+            },
+            {
+              "id": "r6",
+              "values": {
+                "position": "6",
+                "teeth": "23"
+              },
+              "sources": []
+            },
+            {
+              "id": "r7",
+              "values": {
+                "position": "7",
+                "teeth": "26"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "cassette_spline_standard": "Shimano HG spline M (8/9/10v y MTB 11v; ROAD 11v y 7v sólo según filas C-731; LINKGLIDE según C-649)",
+        "freehub_bodies_accepted": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "rear_drive_interface": "Shimano HG spline M (8/9/10v y MTB 11v; ROAD 11v y 7v sólo según filas C-731; LINKGLIDE según C-649)",
+                "spacer_requirement": "Sin separador",
+                "status": "Compatible declarado",
+                "source_scope": "Apartado sintético",
+                "source_url": "https://example.invalid/synthetic"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "expected_issue_subset": [
+        {
+          "code": "row_cardinality_pending",
+          "field": "cog_sequence",
+          "blocking": false
+        }
+      ],
+      "expected_sql_issue_subset": [
+        {
+          "code": "row_cardinality_pending",
+          "field": "cog_sequence",
+          "blocking": false
+        }
+      ]
+    },
+    {
+      "id": "rcx_a_total_without_its_sequence_is_pending",
+      "template": "cassette",
+      "values": {
+        "sprocket_count": "8",
+        "cassette_spline_standard": "Shimano HG spline M (8/9/10v y MTB 11v; ROAD 11v y 7v sólo según filas C-731; LINKGLIDE según C-649)",
+        "freehub_bodies_accepted": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "rear_drive_interface": "Shimano HG spline M (8/9/10v y MTB 11v; ROAD 11v y 7v sólo según filas C-731; LINKGLIDE según C-649)",
+                "spacer_requirement": "Sin separador",
+                "status": "Compatible declarado",
+                "source_scope": "Apartado sintético",
+                "source_url": "https://example.invalid/synthetic"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "expected_issue_subset": [
+        {
+          "code": "row_cardinality_pending",
+          "field": "cog_sequence",
+          "blocking": false
+        },
+        {
+          "code": "required_missing",
+          "field": "cog_sequence",
+          "blocking": false
+        }
+      ],
+      "expected_sql_issue_subset": [
+        {
+          "code": "row_cardinality_pending",
+          "field": "cog_sequence",
+          "blocking": false
+        },
+        {
+          "code": "required_missing",
+          "field": "cog_sequence",
+          "blocking": false
+        }
+      ]
+    },
+    {
+      "id": "rcx_a_sequence_without_its_total_is_pending",
+      "template": "cassette",
+      "values": {
+        "cog_sequence": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "position": "1",
+                "teeth": "11"
+              },
+              "sources": []
+            },
+            {
+              "id": "r2",
+              "values": {
+                "position": "2",
+                "teeth": "13"
+              },
+              "sources": []
+            },
+            {
+              "id": "r3",
+              "values": {
+                "position": "3",
+                "teeth": "15"
+              },
+              "sources": []
+            },
+            {
+              "id": "r4",
+              "values": {
+                "position": "4",
+                "teeth": "17"
+              },
+              "sources": []
+            },
+            {
+              "id": "r5",
+              "values": {
+                "position": "5",
+                "teeth": "20"
+              },
+              "sources": []
+            },
+            {
+              "id": "r6",
+              "values": {
+                "position": "6",
+                "teeth": "23"
+              },
+              "sources": []
+            },
+            {
+              "id": "r7",
+              "values": {
+                "position": "7",
+                "teeth": "26"
+              },
+              "sources": []
+            },
+            {
+              "id": "r8",
+              "values": {
+                "position": "8",
+                "teeth": "30"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "cassette_spline_standard": "Shimano HG spline M (8/9/10v y MTB 11v; ROAD 11v y 7v sólo según filas C-731; LINKGLIDE según C-649)",
+        "freehub_bodies_accepted": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "rear_drive_interface": "Shimano HG spline M (8/9/10v y MTB 11v; ROAD 11v y 7v sólo según filas C-731; LINKGLIDE según C-649)",
+                "spacer_requirement": "Sin separador",
+                "status": "Compatible declarado",
+                "source_scope": "Apartado sintético",
+                "source_url": "https://example.invalid/synthetic"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "expected_issue_subset": [
+        {
+          "code": "row_cardinality_pending",
+          "field": "cog_sequence",
+          "blocking": false
+        },
+        {
+          "code": "required_missing",
+          "field": "sprocket_count",
+          "blocking": false
+        }
+      ],
+      "expected_sql_issue_subset": [
+        {
+          "code": "row_cardinality_pending",
+          "field": "cog_sequence",
+          "blocking": false
+        },
+        {
+          "code": "required_missing",
+          "field": "sprocket_count",
+          "blocking": false
+        }
+      ]
+    },
+    {
+      "id": "rcx_a_freewheel_counts_its_own_cogs_too",
+      "template": "freewheel",
+      "values": {
+        "sprocket_count": "5",
+        "freewheel_thread_standard": "1.37\" x 24 tpi (ISO)",
+        "remover_tool_standard": "Shimano 12 estrías",
+        "spec_evidence_source": "Ficha sintética",
+        "cog_sequence": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "position": "1",
+                "teeth": "14"
+              },
+              "sources": []
+            },
+            {
+              "id": "r2",
+              "values": {
+                "position": "2",
+                "teeth": "16"
+              },
+              "sources": []
+            },
+            {
+              "id": "r3",
+              "values": {
+                "position": "3",
+                "teeth": "18"
+              },
+              "sources": []
+            },
+            {
+              "id": "r4",
+              "values": {
+                "position": "4",
+                "teeth": "21"
+              },
+              "sources": []
+            },
+            {
+              "id": "r5",
+              "values": {
+                "position": "5",
+                "teeth": "24"
+              },
+              "sources": []
+            },
+            {
+              "id": "r6",
+              "values": {
+                "position": "6",
+                "teeth": "28"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [
+        {
+          "code": "row_cardinality_conflict",
+          "field": "cog_sequence"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [
+        "https://www.parktool.com/en-us/blog/repair-help/determining-cassette-freewheel-type"
+      ]
+    },
+    {
+      "id": "rcx_the_same_cog_position_twice_blocks",
+      "template": "cassette",
+      "values": {
+        "sprocket_count": "2",
+        "cog_sequence": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "position": "1",
+                "teeth": "11"
+              },
+              "sources": []
+            },
+            {
+              "id": "r2",
+              "values": {
+                "position": "1",
+                "teeth": "13"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "cassette_spline_standard": "Shimano HG spline M (8/9/10v y MTB 11v; ROAD 11v y 7v sólo según filas C-731; LINKGLIDE según C-649)",
+        "freehub_bodies_accepted": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "rear_drive_interface": "Shimano HG spline M (8/9/10v y MTB 11v; ROAD 11v y 7v sólo según filas C-731; LINKGLIDE según C-649)",
+                "spacer_requirement": "Sin separador",
+                "status": "Compatible declarado",
+                "source_scope": "Apartado sintético",
+                "source_url": "https://example.invalid/synthetic"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [
+        {
+          "code": "row_shape",
+          "field": "cog_sequence"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [
+        "https://www.parktool.com/en-us/blog/repair-help/cassette-removal-and-installation"
+      ]
+    },
+    {
+      "id": "rcx_the_resolved_variant_belongs_to_the_unit",
+      "template": "cassette",
+      "values": {
+        "sprocket_count": "8",
+        "cog_sequence": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "position": "1",
+                "teeth": "11"
+              },
+              "sources": []
+            },
+            {
+              "id": "r2",
+              "values": {
+                "position": "2",
+                "teeth": "13"
+              },
+              "sources": []
+            },
+            {
+              "id": "r3",
+              "values": {
+                "position": "3",
+                "teeth": "15"
+              },
+              "sources": []
+            },
+            {
+              "id": "r4",
+              "values": {
+                "position": "4",
+                "teeth": "17"
+              },
+              "sources": []
+            },
+            {
+              "id": "r5",
+              "values": {
+                "position": "5",
+                "teeth": "20"
+              },
+              "sources": []
+            },
+            {
+              "id": "r6",
+              "values": {
+                "position": "6",
+                "teeth": "23"
+              },
+              "sources": []
+            },
+            {
+              "id": "r7",
+              "values": {
+                "position": "7",
+                "teeth": "26"
+              },
+              "sources": []
+            },
+            {
+              "id": "r8",
+              "values": {
+                "position": "8",
+                "teeth": "30"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "cassette_spline_standard": "Shimano HG spline M (8/9/10v y MTB 11v; ROAD 11v y 7v sólo según filas C-731; LINKGLIDE según C-649)",
+        "freehub_bodies_accepted": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "rear_drive_interface": "Shimano HG spline M (8/9/10v y MTB 11v; ROAD 11v y 7v sólo según filas C-731; LINKGLIDE según C-649)",
+                "spacer_requirement": "Sin separador",
+                "status": "Compatible declarado",
+                "source_scope": "Apartado sintético",
+                "source_url": "https://example.invalid/synthetic"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "published_variant_label": "11-30T (an)",
+        "spec_evidence_source": "Ficha de producto Shimano CS-HG50-8"
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [
+        "https://bike.shimano.com/en-NA/products/components/pdp.P-CS-HG50-8.html"
+      ],
+      "forbidden_issue_fields": [
+        "published_variant_label",
+        "sprocket_count",
+        "cog_sequence"
+      ]
+    },
+    {
+      "id": "rcx_a_resolved_variant_without_its_source_is_pending",
+      "template": "cassette",
+      "values": {
+        "sprocket_count": "8",
+        "cog_sequence": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "position": "1",
+                "teeth": "11"
+              },
+              "sources": []
+            },
+            {
+              "id": "r2",
+              "values": {
+                "position": "2",
+                "teeth": "13"
+              },
+              "sources": []
+            },
+            {
+              "id": "r3",
+              "values": {
+                "position": "3",
+                "teeth": "15"
+              },
+              "sources": []
+            },
+            {
+              "id": "r4",
+              "values": {
+                "position": "4",
+                "teeth": "17"
+              },
+              "sources": []
+            },
+            {
+              "id": "r5",
+              "values": {
+                "position": "5",
+                "teeth": "20"
+              },
+              "sources": []
+            },
+            {
+              "id": "r6",
+              "values": {
+                "position": "6",
+                "teeth": "23"
+              },
+              "sources": []
+            },
+            {
+              "id": "r7",
+              "values": {
+                "position": "7",
+                "teeth": "26"
+              },
+              "sources": []
+            },
+            {
+              "id": "r8",
+              "values": {
+                "position": "8",
+                "teeth": "30"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "cassette_spline_standard": "Shimano HG spline M (8/9/10v y MTB 11v; ROAD 11v y 7v sólo según filas C-731; LINKGLIDE según C-649)",
+        "freehub_bodies_accepted": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "rear_drive_interface": "Shimano HG spline M (8/9/10v y MTB 11v; ROAD 11v y 7v sólo según filas C-731; LINKGLIDE según C-649)",
+                "spacer_requirement": "Sin separador",
+                "status": "Compatible declarado",
+                "source_scope": "Apartado sintético",
+                "source_url": "https://example.invalid/synthetic"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "published_variant_label": "11-30T (an)"
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [
+        "https://bike.shimano.com/en-NA/products/components/pdp.P-CS-HG50-8.html"
+      ],
+      "expected_issue_subset": [
+        {
+          "code": "prerequisite",
+          "field": "published_variant_label",
+          "blocking": false
+        }
+      ],
+      "expected_sql_issue_subset": [
+        {
+          "code": "prerequisite",
+          "field": "published_variant_label",
+          "blocking": false
+        }
+      ]
+    },
+    {
+      "id": "rcx_a_smallest_cog_above_the_largest_blocks",
+      "template": "cassette",
+      "values": {
+        "sprocket_count": "8",
+        "cog_sequence": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "position": "1",
+                "teeth": "11"
+              },
+              "sources": []
+            },
+            {
+              "id": "r2",
+              "values": {
+                "position": "2",
+                "teeth": "13"
+              },
+              "sources": []
+            },
+            {
+              "id": "r3",
+              "values": {
+                "position": "3",
+                "teeth": "15"
+              },
+              "sources": []
+            },
+            {
+              "id": "r4",
+              "values": {
+                "position": "4",
+                "teeth": "17"
+              },
+              "sources": []
+            },
+            {
+              "id": "r5",
+              "values": {
+                "position": "5",
+                "teeth": "20"
+              },
+              "sources": []
+            },
+            {
+              "id": "r6",
+              "values": {
+                "position": "6",
+                "teeth": "23"
+              },
+              "sources": []
+            },
+            {
+              "id": "r7",
+              "values": {
+                "position": "7",
+                "teeth": "26"
+              },
+              "sources": []
+            },
+            {
+              "id": "r8",
+              "values": {
+                "position": "8",
+                "teeth": "30"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "cassette_spline_standard": "Shimano HG spline M (8/9/10v y MTB 11v; ROAD 11v y 7v sólo según filas C-731; LINKGLIDE según C-649)",
+        "freehub_bodies_accepted": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "rear_drive_interface": "Shimano HG spline M (8/9/10v y MTB 11v; ROAD 11v y 7v sólo según filas C-731; LINKGLIDE según C-649)",
+                "spacer_requirement": "Sin separador",
+                "status": "Compatible declarado",
+                "source_scope": "Apartado sintético",
+                "source_url": "https://example.invalid/synthetic"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "smallest_cog_teeth": "16",
+        "largest_cog_teeth": "14"
+      },
+      "expected_blocking": [
+        {
+          "code": "range_order",
+          "field": "smallest_cog_teeth"
+        },
+        {
+          "code": "range_order",
+          "field": "largest_cog_teeth"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "rcx_an_ordered_cog_range_passes",
+      "template": "cassette",
+      "values": {
+        "sprocket_count": "8",
+        "cog_sequence": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "position": "1",
+                "teeth": "11"
+              },
+              "sources": []
+            },
+            {
+              "id": "r2",
+              "values": {
+                "position": "2",
+                "teeth": "13"
+              },
+              "sources": []
+            },
+            {
+              "id": "r3",
+              "values": {
+                "position": "3",
+                "teeth": "15"
+              },
+              "sources": []
+            },
+            {
+              "id": "r4",
+              "values": {
+                "position": "4",
+                "teeth": "17"
+              },
+              "sources": []
+            },
+            {
+              "id": "r5",
+              "values": {
+                "position": "5",
+                "teeth": "20"
+              },
+              "sources": []
+            },
+            {
+              "id": "r6",
+              "values": {
+                "position": "6",
+                "teeth": "23"
+              },
+              "sources": []
+            },
+            {
+              "id": "r7",
+              "values": {
+                "position": "7",
+                "teeth": "26"
+              },
+              "sources": []
+            },
+            {
+              "id": "r8",
+              "values": {
+                "position": "8",
+                "teeth": "30"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "cassette_spline_standard": "Shimano HG spline M (8/9/10v y MTB 11v; ROAD 11v y 7v sólo según filas C-731; LINKGLIDE según C-649)",
+        "freehub_bodies_accepted": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "rear_drive_interface": "Shimano HG spline M (8/9/10v y MTB 11v; ROAD 11v y 7v sólo según filas C-731; LINKGLIDE según C-649)",
+                "spacer_requirement": "Sin separador",
+                "status": "Compatible declarado",
+                "source_scope": "Apartado sintético",
+                "source_url": "https://example.invalid/synthetic"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "smallest_cog_teeth": "11",
+        "largest_cog_teeth": "30"
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [
+        "https://bike.shimano.com/en-NA/products/components/pdp.P-CS-HG50-8.html"
+      ],
+      "forbidden_issue_fields": [
+        "smallest_cog_teeth",
+        "largest_cog_teeth"
+      ]
+    },
+    {
+      "id": "rcx_a_declared_spline_opens_the_accepted_bodies",
+      "template": "cassette",
+      "values": {
+        "sprocket_count": "8",
+        "cog_sequence": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "position": "1",
+                "teeth": "11"
+              },
+              "sources": []
+            },
+            {
+              "id": "r2",
+              "values": {
+                "position": "2",
+                "teeth": "13"
+              },
+              "sources": []
+            },
+            {
+              "id": "r3",
+              "values": {
+                "position": "3",
+                "teeth": "15"
+              },
+              "sources": []
+            },
+            {
+              "id": "r4",
+              "values": {
+                "position": "4",
+                "teeth": "17"
+              },
+              "sources": []
+            },
+            {
+              "id": "r5",
+              "values": {
+                "position": "5",
+                "teeth": "20"
+              },
+              "sources": []
+            },
+            {
+              "id": "r6",
+              "values": {
+                "position": "6",
+                "teeth": "23"
+              },
+              "sources": []
+            },
+            {
+              "id": "r7",
+              "values": {
+                "position": "7",
+                "teeth": "26"
+              },
+              "sources": []
+            },
+            {
+              "id": "r8",
+              "values": {
+                "position": "8",
+                "teeth": "30"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "cassette_spline_standard": "Shimano HG spline M (8/9/10v y MTB 11v; ROAD 11v y 7v sólo según filas C-731; LINKGLIDE según C-649)",
+        "freehub_bodies_accepted": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "rear_drive_interface": "Shimano HG spline M (8/9/10v y MTB 11v; ROAD 11v y 7v sólo según filas C-731; LINKGLIDE según C-649)",
+                "spacer_requirement": "Sin separador",
+                "status": "Compatible declarado",
+                "source_scope": "Apartado sintético",
+                "source_url": "https://example.invalid/synthetic"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [
+        "https://www.sheldonbrown.com/free-k7.html"
+      ],
+      "forbidden_issue_fields": [
+        "freehub_bodies_accepted"
+      ]
+    },
+    {
+      "id": "rcx_an_unknown_spline_leaves_the_accepted_bodies_pending",
+      "template": "cassette",
+      "values": {
+        "sprocket_count": "8",
+        "cog_sequence": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "position": "1",
+                "teeth": "11"
+              },
+              "sources": []
+            },
+            {
+              "id": "r2",
+              "values": {
+                "position": "2",
+                "teeth": "13"
+              },
+              "sources": []
+            },
+            {
+              "id": "r3",
+              "values": {
+                "position": "3",
+                "teeth": "15"
+              },
+              "sources": []
+            },
+            {
+              "id": "r4",
+              "values": {
+                "position": "4",
+                "teeth": "17"
+              },
+              "sources": []
+            },
+            {
+              "id": "r5",
+              "values": {
+                "position": "5",
+                "teeth": "20"
+              },
+              "sources": []
+            },
+            {
+              "id": "r6",
+              "values": {
+                "position": "6",
+                "teeth": "23"
+              },
+              "sources": []
+            },
+            {
+              "id": "r7",
+              "values": {
+                "position": "7",
+                "teeth": "26"
+              },
+              "sources": []
+            },
+            {
+              "id": "r8",
+              "values": {
+                "position": "8",
+                "teeth": "30"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "cassette_spline_standard": "Desconocido / sin confirmar",
+        "freehub_bodies_accepted": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "rear_drive_interface": "Shimano HG spline M (8/9/10v y MTB 11v; ROAD 11v y 7v sólo según filas C-731; LINKGLIDE según C-649)",
+                "spacer_requirement": "Sin separador",
+                "status": "Compatible declarado",
+                "source_scope": "Apartado sintético",
+                "source_url": "https://example.invalid/synthetic"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "expected_issue_subset": [
+        {
+          "code": "prerequisite",
+          "field": "freehub_bodies_accepted",
+          "blocking": false
+        }
+      ],
+      "expected_sql_issue_subset": [
+        {
+          "code": "prerequisite",
+          "field": "freehub_bodies_accepted",
+          "blocking": false
+        }
+      ]
+    },
+    {
+      "id": "rcx_a_missing_spline_leaves_the_bodies_pending",
+      "template": "cassette",
+      "values": {
+        "sprocket_count": "8",
+        "cog_sequence": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "position": "1",
+                "teeth": "11"
+              },
+              "sources": []
+            },
+            {
+              "id": "r2",
+              "values": {
+                "position": "2",
+                "teeth": "13"
+              },
+              "sources": []
+            },
+            {
+              "id": "r3",
+              "values": {
+                "position": "3",
+                "teeth": "15"
+              },
+              "sources": []
+            },
+            {
+              "id": "r4",
+              "values": {
+                "position": "4",
+                "teeth": "17"
+              },
+              "sources": []
+            },
+            {
+              "id": "r5",
+              "values": {
+                "position": "5",
+                "teeth": "20"
+              },
+              "sources": []
+            },
+            {
+              "id": "r6",
+              "values": {
+                "position": "6",
+                "teeth": "23"
+              },
+              "sources": []
+            },
+            {
+              "id": "r7",
+              "values": {
+                "position": "7",
+                "teeth": "26"
+              },
+              "sources": []
+            },
+            {
+              "id": "r8",
+              "values": {
+                "position": "8",
+                "teeth": "30"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "freehub_bodies_accepted": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "rear_drive_interface": "Shimano HG spline M (8/9/10v y MTB 11v; ROAD 11v y 7v sólo según filas C-731; LINKGLIDE según C-649)",
+                "spacer_requirement": "Sin separador",
+                "status": "Compatible declarado",
+                "source_scope": "Apartado sintético",
+                "source_url": "https://example.invalid/synthetic"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "expected_issue_subset": [
+        {
+          "code": "prerequisite",
+          "field": "freehub_bodies_accepted",
+          "blocking": false
+        },
+        {
+          "code": "required_missing",
+          "field": "cassette_spline_standard",
+          "blocking": false
+        }
+      ],
+      "expected_sql_issue_subset": [
+        {
+          "code": "prerequisite",
+          "field": "freehub_bodies_accepted",
+          "blocking": false
+        },
+        {
+          "code": "required_missing",
+          "field": "cassette_spline_standard",
+          "blocking": false
+        }
+      ]
+    },
+    {
+      "id": "rcx_an_unknown_spline_leaves_the_shift_technology_pending",
+      "template": "cassette",
+      "values": {
+        "sprocket_count": "8",
+        "cog_sequence": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "position": "1",
+                "teeth": "11"
+              },
+              "sources": []
+            },
+            {
+              "id": "r2",
+              "values": {
+                "position": "2",
+                "teeth": "13"
+              },
+              "sources": []
+            },
+            {
+              "id": "r3",
+              "values": {
+                "position": "3",
+                "teeth": "15"
+              },
+              "sources": []
+            },
+            {
+              "id": "r4",
+              "values": {
+                "position": "4",
+                "teeth": "17"
+              },
+              "sources": []
+            },
+            {
+              "id": "r5",
+              "values": {
+                "position": "5",
+                "teeth": "20"
+              },
+              "sources": []
+            },
+            {
+              "id": "r6",
+              "values": {
+                "position": "6",
+                "teeth": "23"
+              },
+              "sources": []
+            },
+            {
+              "id": "r7",
+              "values": {
+                "position": "7",
+                "teeth": "26"
+              },
+              "sources": []
+            },
+            {
+              "id": "r8",
+              "values": {
+                "position": "8",
+                "teeth": "30"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "cassette_spline_standard": "Desconocido / sin confirmar",
+        "freehub_bodies_accepted": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "rear_drive_interface": "Shimano HG spline M (8/9/10v y MTB 11v; ROAD 11v y 7v sólo según filas C-731; LINKGLIDE según C-649)",
+                "spacer_requirement": "Sin separador",
+                "status": "Compatible declarado",
+                "source_scope": "Apartado sintético",
+                "source_url": "https://example.invalid/synthetic"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "shift_technology": "HYPERGLIDE",
+        "spec_evidence_source": "Ficha sintética"
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "expected_issue_subset": [
+        {
+          "code": "prerequisite",
+          "field": "shift_technology",
+          "blocking": false
+        }
+      ],
+      "expected_sql_issue_subset": [
+        {
+          "code": "prerequisite",
+          "field": "shift_technology",
+          "blocking": false
+        }
+      ]
+    },
+    {
+      "id": "rcx_a_cassette_cannot_accept_a_threaded_freewheel_seat",
+      "template": "cassette",
+      "values": {
+        "sprocket_count": "8",
+        "cog_sequence": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "position": "1",
+                "teeth": "11"
+              },
+              "sources": []
+            },
+            {
+              "id": "r2",
+              "values": {
+                "position": "2",
+                "teeth": "13"
+              },
+              "sources": []
+            },
+            {
+              "id": "r3",
+              "values": {
+                "position": "3",
+                "teeth": "15"
+              },
+              "sources": []
+            },
+            {
+              "id": "r4",
+              "values": {
+                "position": "4",
+                "teeth": "17"
+              },
+              "sources": []
+            },
+            {
+              "id": "r5",
+              "values": {
+                "position": "5",
+                "teeth": "20"
+              },
+              "sources": []
+            },
+            {
+              "id": "r6",
+              "values": {
+                "position": "6",
+                "teeth": "23"
+              },
+              "sources": []
+            },
+            {
+              "id": "r7",
+              "values": {
+                "position": "7",
+                "teeth": "26"
+              },
+              "sources": []
+            },
+            {
+              "id": "r8",
+              "values": {
+                "position": "8",
+                "teeth": "30"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "cassette_spline_standard": "Shimano HG spline M (8/9/10v y MTB 11v; ROAD 11v y 7v sólo según filas C-731; LINKGLIDE según C-649)",
+        "freehub_bodies_accepted": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "rear_drive_interface": "Rueda libre roscada 1.37\" x 24 tpi",
+                "spacer_requirement": "Sin separador",
+                "status": "Compatible declarado",
+                "source_scope": "Apartado sintético",
+                "source_url": "https://example.invalid/synthetic"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [
+        {
+          "code": "row_shape",
+          "field": "freehub_bodies_accepted"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [
+        "https://www.parktool.com/en-us/blog/repair-help/determining-cassette-freewheel-type"
+      ]
+    },
+    {
+      "id": "rcx_a_cassette_cannot_accept_a_coaster_hub",
+      "template": "cassette",
+      "values": {
+        "sprocket_count": "8",
+        "cog_sequence": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "position": "1",
+                "teeth": "11"
+              },
+              "sources": []
+            },
+            {
+              "id": "r2",
+              "values": {
+                "position": "2",
+                "teeth": "13"
+              },
+              "sources": []
+            },
+            {
+              "id": "r3",
+              "values": {
+                "position": "3",
+                "teeth": "15"
+              },
+              "sources": []
+            },
+            {
+              "id": "r4",
+              "values": {
+                "position": "4",
+                "teeth": "17"
+              },
+              "sources": []
+            },
+            {
+              "id": "r5",
+              "values": {
+                "position": "5",
+                "teeth": "20"
+              },
+              "sources": []
+            },
+            {
+              "id": "r6",
+              "values": {
+                "position": "6",
+                "teeth": "23"
+              },
+              "sources": []
+            },
+            {
+              "id": "r7",
+              "values": {
+                "position": "7",
+                "teeth": "26"
+              },
+              "sources": []
+            },
+            {
+              "id": "r8",
+              "values": {
+                "position": "8",
+                "teeth": "30"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "cassette_spline_standard": "Shimano HG spline M (8/9/10v y MTB 11v; ROAD 11v y 7v sólo según filas C-731; LINKGLIDE según C-649)",
+        "freehub_bodies_accepted": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "rear_drive_interface": "Contrapedal",
+                "spacer_requirement": "Sin separador",
+                "status": "Compatible declarado",
+                "source_scope": "Apartado sintético",
+                "source_url": "https://example.invalid/synthetic"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [
+        {
+          "code": "row_shape",
+          "field": "freehub_bodies_accepted"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [
+        "https://www.parktool.com/en-us/blog/repair-help/determining-cassette-freewheel-type"
+      ]
+    },
+    {
+      "id": "rcx_xd_slim_is_its_own_body_and_not_xd",
+      "template": "cassette",
+      "values": {
+        "sprocket_count": "8",
+        "cog_sequence": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "position": "1",
+                "teeth": "11"
+              },
+              "sources": []
+            },
+            {
+              "id": "r2",
+              "values": {
+                "position": "2",
+                "teeth": "13"
+              },
+              "sources": []
+            },
+            {
+              "id": "r3",
+              "values": {
+                "position": "3",
+                "teeth": "15"
+              },
+              "sources": []
+            },
+            {
+              "id": "r4",
+              "values": {
+                "position": "4",
+                "teeth": "17"
+              },
+              "sources": []
+            },
+            {
+              "id": "r5",
+              "values": {
+                "position": "5",
+                "teeth": "20"
+              },
+              "sources": []
+            },
+            {
+              "id": "r6",
+              "values": {
+                "position": "6",
+                "teeth": "23"
+              },
+              "sources": []
+            },
+            {
+              "id": "r7",
+              "values": {
+                "position": "7",
+                "teeth": "26"
+              },
+              "sources": []
+            },
+            {
+              "id": "r8",
+              "values": {
+                "position": "8",
+                "teeth": "30"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "cassette_spline_standard": "SRAM XD SLIM",
+        "freehub_bodies_accepted": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "rear_drive_interface": "SRAM XD SLIM",
+                "spacer_requirement": "Sin separador",
+                "status": "Compatible declarado",
+                "source_scope": "Apartado sintético",
+                "source_url": "https://example.invalid/synthetic"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [
+        "https://support.sram.com/hc/en-us/articles/46508211430043-What-is-the-new-XD-SLIM-driver-body-standard-How-is-it-similar-to-the-HG-SLIM-standard"
+      ],
+      "forbidden_issue_fields": [
+        "freehub_bodies_accepted"
+      ]
+    },
+    {
+      "id": "rcx_a_pairing_without_a_separator_has_no_thickness",
+      "template": "cassette",
+      "values": {
+        "sprocket_count": "8",
+        "cog_sequence": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "position": "1",
+                "teeth": "11"
+              },
+              "sources": []
+            },
+            {
+              "id": "r2",
+              "values": {
+                "position": "2",
+                "teeth": "13"
+              },
+              "sources": []
+            },
+            {
+              "id": "r3",
+              "values": {
+                "position": "3",
+                "teeth": "15"
+              },
+              "sources": []
+            },
+            {
+              "id": "r4",
+              "values": {
+                "position": "4",
+                "teeth": "17"
+              },
+              "sources": []
+            },
+            {
+              "id": "r5",
+              "values": {
+                "position": "5",
+                "teeth": "20"
+              },
+              "sources": []
+            },
+            {
+              "id": "r6",
+              "values": {
+                "position": "6",
+                "teeth": "23"
+              },
+              "sources": []
+            },
+            {
+              "id": "r7",
+              "values": {
+                "position": "7",
+                "teeth": "26"
+              },
+              "sources": []
+            },
+            {
+              "id": "r8",
+              "values": {
+                "position": "8",
+                "teeth": "30"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "cassette_spline_standard": "Shimano HG spline M (8/9/10v y MTB 11v; ROAD 11v y 7v sólo según filas C-731; LINKGLIDE según C-649)",
+        "freehub_bodies_accepted": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "rear_drive_interface": "Shimano HG spline M (8/9/10v y MTB 11v; ROAD 11v y 7v sólo según filas C-731; LINKGLIDE según C-649)",
+                "spacer_requirement": "Sin separador",
+                "status": "Compatible declarado",
+                "source_scope": "Apartado sintético",
+                "source_url": "https://example.invalid/synthetic",
+                "spacer_mm": "4.5"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [
+        {
+          "code": "row_field_applicability",
+          "field": "freehub_bodies_accepted"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [
+        "https://www.sheldonbrown.com/k7.html"
+      ]
+    },
+    {
+      "id": "rcx_an_unpublished_separator_leaves_the_thickness_out",
+      "template": "cassette",
+      "values": {
+        "sprocket_count": "8",
+        "cog_sequence": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "position": "1",
+                "teeth": "11"
+              },
+              "sources": []
+            },
+            {
+              "id": "r2",
+              "values": {
+                "position": "2",
+                "teeth": "13"
+              },
+              "sources": []
+            },
+            {
+              "id": "r3",
+              "values": {
+                "position": "3",
+                "teeth": "15"
+              },
+              "sources": []
+            },
+            {
+              "id": "r4",
+              "values": {
+                "position": "4",
+                "teeth": "17"
+              },
+              "sources": []
+            },
+            {
+              "id": "r5",
+              "values": {
+                "position": "5",
+                "teeth": "20"
+              },
+              "sources": []
+            },
+            {
+              "id": "r6",
+              "values": {
+                "position": "6",
+                "teeth": "23"
+              },
+              "sources": []
+            },
+            {
+              "id": "r7",
+              "values": {
+                "position": "7",
+                "teeth": "26"
+              },
+              "sources": []
+            },
+            {
+              "id": "r8",
+              "values": {
+                "position": "8",
+                "teeth": "30"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "cassette_spline_standard": "Shimano HG spline M (8/9/10v y MTB 11v; ROAD 11v y 7v sólo según filas C-731; LINKGLIDE según C-649)",
+        "freehub_bodies_accepted": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "rear_drive_interface": "Shimano HG spline M (8/9/10v y MTB 11v; ROAD 11v y 7v sólo según filas C-731; LINKGLIDE según C-649)",
+                "spacer_requirement": "No publicado",
+                "status": "Compatible declarado",
+                "source_scope": "Apartado sintético",
+                "source_url": "https://example.invalid/synthetic",
+                "spacer_mm": "1"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [
+        {
+          "code": "row_field_applicability",
+          "field": "freehub_bodies_accepted"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "rcx_a_required_separator_owes_its_thickness",
+      "template": "cassette",
+      "values": {
+        "sprocket_count": "8",
+        "cog_sequence": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "position": "1",
+                "teeth": "11"
+              },
+              "sources": []
+            },
+            {
+              "id": "r2",
+              "values": {
+                "position": "2",
+                "teeth": "13"
+              },
+              "sources": []
+            },
+            {
+              "id": "r3",
+              "values": {
+                "position": "3",
+                "teeth": "15"
+              },
+              "sources": []
+            },
+            {
+              "id": "r4",
+              "values": {
+                "position": "4",
+                "teeth": "17"
+              },
+              "sources": []
+            },
+            {
+              "id": "r5",
+              "values": {
+                "position": "5",
+                "teeth": "20"
+              },
+              "sources": []
+            },
+            {
+              "id": "r6",
+              "values": {
+                "position": "6",
+                "teeth": "23"
+              },
+              "sources": []
+            },
+            {
+              "id": "r7",
+              "values": {
+                "position": "7",
+                "teeth": "26"
+              },
+              "sources": []
+            },
+            {
+              "id": "r8",
+              "values": {
+                "position": "8",
+                "teeth": "30"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "cassette_spline_standard": "Shimano HG spline M (8/9/10v y MTB 11v; ROAD 11v y 7v sólo según filas C-731; LINKGLIDE según C-649)",
+        "freehub_bodies_accepted": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "rear_drive_interface": "Shimano HG spline M (8/9/10v y MTB 11v; ROAD 11v y 7v sólo según filas C-731; LINKGLIDE según C-649)",
+                "spacer_requirement": "Separador requerido",
+                "status": "Compatible declarado",
+                "source_scope": "Apartado sintético",
+                "source_url": "https://example.invalid/synthetic"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "expected_issue_subset": [
+        {
+          "code": "row_required_missing",
+          "field": "freehub_bodies_accepted",
+          "blocking": false
+        }
+      ],
+      "expected_sql_issue_subset": [
+        {
+          "code": "row_required_missing",
+          "field": "freehub_bodies_accepted",
+          "blocking": false
+        }
+      ]
+    },
+    {
+      "id": "rcx_a_required_separator_with_its_thickness_passes",
+      "template": "cassette",
+      "values": {
+        "sprocket_count": "8",
+        "cog_sequence": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "position": "1",
+                "teeth": "11"
+              },
+              "sources": []
+            },
+            {
+              "id": "r2",
+              "values": {
+                "position": "2",
+                "teeth": "13"
+              },
+              "sources": []
+            },
+            {
+              "id": "r3",
+              "values": {
+                "position": "3",
+                "teeth": "15"
+              },
+              "sources": []
+            },
+            {
+              "id": "r4",
+              "values": {
+                "position": "4",
+                "teeth": "17"
+              },
+              "sources": []
+            },
+            {
+              "id": "r5",
+              "values": {
+                "position": "5",
+                "teeth": "20"
+              },
+              "sources": []
+            },
+            {
+              "id": "r6",
+              "values": {
+                "position": "6",
+                "teeth": "23"
+              },
+              "sources": []
+            },
+            {
+              "id": "r7",
+              "values": {
+                "position": "7",
+                "teeth": "26"
+              },
+              "sources": []
+            },
+            {
+              "id": "r8",
+              "values": {
+                "position": "8",
+                "teeth": "30"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "cassette_spline_standard": "Shimano HG spline M (8/9/10v y MTB 11v; ROAD 11v y 7v sólo según filas C-731; LINKGLIDE según C-649)",
+        "freehub_bodies_accepted": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "rear_drive_interface": "Shimano HG spline M (8/9/10v y MTB 11v; ROAD 11v y 7v sólo según filas C-731; LINKGLIDE según C-649)",
+                "spacer_requirement": "Separador requerido",
+                "status": "Compatible declarado",
+                "source_scope": "Apartado sintético",
+                "source_url": "https://example.invalid/synthetic",
+                "spacer_mm": "4.5"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [
+        "https://www.sheldonbrown.com/k7.html"
+      ],
+      "forbidden_issue_fields": [
+        "freehub_bodies_accepted"
+      ]
+    },
+    {
+      "id": "rcx_a_conditional_verdict_owes_its_condition",
+      "template": "cassette",
+      "values": {
+        "sprocket_count": "8",
+        "cog_sequence": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "position": "1",
+                "teeth": "11"
+              },
+              "sources": []
+            },
+            {
+              "id": "r2",
+              "values": {
+                "position": "2",
+                "teeth": "13"
+              },
+              "sources": []
+            },
+            {
+              "id": "r3",
+              "values": {
+                "position": "3",
+                "teeth": "15"
+              },
+              "sources": []
+            },
+            {
+              "id": "r4",
+              "values": {
+                "position": "4",
+                "teeth": "17"
+              },
+              "sources": []
+            },
+            {
+              "id": "r5",
+              "values": {
+                "position": "5",
+                "teeth": "20"
+              },
+              "sources": []
+            },
+            {
+              "id": "r6",
+              "values": {
+                "position": "6",
+                "teeth": "23"
+              },
+              "sources": []
+            },
+            {
+              "id": "r7",
+              "values": {
+                "position": "7",
+                "teeth": "26"
+              },
+              "sources": []
+            },
+            {
+              "id": "r8",
+              "values": {
+                "position": "8",
+                "teeth": "30"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "cassette_spline_standard": "Shimano HG spline M (8/9/10v y MTB 11v; ROAD 11v y 7v sólo según filas C-731; LINKGLIDE según C-649)",
+        "freehub_bodies_accepted": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "rear_drive_interface": "Shimano HG spline M (8/9/10v y MTB 11v; ROAD 11v y 7v sólo según filas C-731; LINKGLIDE según C-649)",
+                "spacer_requirement": "Sin separador",
+                "status": "Condicionado",
+                "source_scope": "Apartado sintético",
+                "source_url": "https://example.invalid/synthetic"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "expected_issue_subset": [
+        {
+          "code": "row_required_missing",
+          "field": "freehub_bodies_accepted",
+          "blocking": false
+        }
+      ],
+      "expected_sql_issue_subset": [
+        {
+          "code": "row_required_missing",
+          "field": "freehub_bodies_accepted",
+          "blocking": false
+        }
+      ]
+    },
+    {
+      "id": "rcx_a_plain_verdict_may_still_carry_its_condition",
+      "template": "cassette",
+      "values": {
+        "sprocket_count": "8",
+        "cog_sequence": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "position": "1",
+                "teeth": "11"
+              },
+              "sources": []
+            },
+            {
+              "id": "r2",
+              "values": {
+                "position": "2",
+                "teeth": "13"
+              },
+              "sources": []
+            },
+            {
+              "id": "r3",
+              "values": {
+                "position": "3",
+                "teeth": "15"
+              },
+              "sources": []
+            },
+            {
+              "id": "r4",
+              "values": {
+                "position": "4",
+                "teeth": "17"
+              },
+              "sources": []
+            },
+            {
+              "id": "r5",
+              "values": {
+                "position": "5",
+                "teeth": "20"
+              },
+              "sources": []
+            },
+            {
+              "id": "r6",
+              "values": {
+                "position": "6",
+                "teeth": "23"
+              },
+              "sources": []
+            },
+            {
+              "id": "r7",
+              "values": {
+                "position": "7",
+                "teeth": "26"
+              },
+              "sources": []
+            },
+            {
+              "id": "r8",
+              "values": {
+                "position": "8",
+                "teeth": "30"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "cassette_spline_standard": "Shimano HG spline M (8/9/10v y MTB 11v; ROAD 11v y 7v sólo según filas C-731; LINKGLIDE según C-649)",
+        "freehub_bodies_accepted": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "rear_drive_interface": "Shimano HG spline M (8/9/10v y MTB 11v; ROAD 11v y 7v sólo según filas C-731; LINKGLIDE según C-649)",
+                "spacer_requirement": "Sin separador",
+                "status": "Compatible declarado",
+                "source_scope": "Apartado sintético",
+                "source_url": "https://example.invalid/synthetic",
+                "conditions": "Sólo con el separador de fábrica"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "forbidden_issue_fields": [
+        "freehub_bodies_accepted"
+      ]
+    },
+    {
+      "id": "rcx_the_same_body_from_the_same_source_twice_blocks",
+      "template": "cassette",
+      "values": {
+        "sprocket_count": "8",
+        "cog_sequence": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "position": "1",
+                "teeth": "11"
+              },
+              "sources": []
+            },
+            {
+              "id": "r2",
+              "values": {
+                "position": "2",
+                "teeth": "13"
+              },
+              "sources": []
+            },
+            {
+              "id": "r3",
+              "values": {
+                "position": "3",
+                "teeth": "15"
+              },
+              "sources": []
+            },
+            {
+              "id": "r4",
+              "values": {
+                "position": "4",
+                "teeth": "17"
+              },
+              "sources": []
+            },
+            {
+              "id": "r5",
+              "values": {
+                "position": "5",
+                "teeth": "20"
+              },
+              "sources": []
+            },
+            {
+              "id": "r6",
+              "values": {
+                "position": "6",
+                "teeth": "23"
+              },
+              "sources": []
+            },
+            {
+              "id": "r7",
+              "values": {
+                "position": "7",
+                "teeth": "26"
+              },
+              "sources": []
+            },
+            {
+              "id": "r8",
+              "values": {
+                "position": "8",
+                "teeth": "30"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "cassette_spline_standard": "Shimano HG spline M (8/9/10v y MTB 11v; ROAD 11v y 7v sólo según filas C-731; LINKGLIDE según C-649)",
+        "freehub_bodies_accepted": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "rear_drive_interface": "Shimano HG spline M (8/9/10v y MTB 11v; ROAD 11v y 7v sólo según filas C-731; LINKGLIDE según C-649)",
+                "spacer_requirement": "Sin separador",
+                "status": "Compatible declarado",
+                "source_scope": "Apartado sintético",
+                "source_url": "https://example.invalid/synthetic"
+              },
+              "sources": []
+            },
+            {
+              "id": "r2",
+              "values": {
+                "rear_drive_interface": "Shimano HG spline M (8/9/10v y MTB 11v; ROAD 11v y 7v sólo según filas C-731; LINKGLIDE según C-649)",
+                "spacer_requirement": "Sin separador",
+                "status": "Incompatible declarado",
+                "source_scope": "Apartado sintético",
+                "source_url": "https://example.invalid/synthetic"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [
+        {
+          "code": "row_shape",
+          "field": "freehub_bodies_accepted"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "rcx_the_same_body_from_two_sources_is_two_readings",
+      "template": "cassette",
+      "values": {
+        "sprocket_count": "8",
+        "cog_sequence": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "position": "1",
+                "teeth": "11"
+              },
+              "sources": []
+            },
+            {
+              "id": "r2",
+              "values": {
+                "position": "2",
+                "teeth": "13"
+              },
+              "sources": []
+            },
+            {
+              "id": "r3",
+              "values": {
+                "position": "3",
+                "teeth": "15"
+              },
+              "sources": []
+            },
+            {
+              "id": "r4",
+              "values": {
+                "position": "4",
+                "teeth": "17"
+              },
+              "sources": []
+            },
+            {
+              "id": "r5",
+              "values": {
+                "position": "5",
+                "teeth": "20"
+              },
+              "sources": []
+            },
+            {
+              "id": "r6",
+              "values": {
+                "position": "6",
+                "teeth": "23"
+              },
+              "sources": []
+            },
+            {
+              "id": "r7",
+              "values": {
+                "position": "7",
+                "teeth": "26"
+              },
+              "sources": []
+            },
+            {
+              "id": "r8",
+              "values": {
+                "position": "8",
+                "teeth": "30"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "cassette_spline_standard": "Shimano HG spline M (8/9/10v y MTB 11v; ROAD 11v y 7v sólo según filas C-731; LINKGLIDE según C-649)",
+        "freehub_bodies_accepted": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "rear_drive_interface": "Shimano HG spline M (8/9/10v y MTB 11v; ROAD 11v y 7v sólo según filas C-731; LINKGLIDE según C-649)",
+                "spacer_requirement": "Sin separador",
+                "status": "Compatible declarado",
+                "source_scope": "Manual OEM",
+                "source_url": "https://example.invalid/synthetic"
+              },
+              "sources": []
+            },
+            {
+              "id": "r2",
+              "values": {
+                "rear_drive_interface": "Shimano HG spline M (8/9/10v y MTB 11v; ROAD 11v y 7v sólo según filas C-731; LINKGLIDE según C-649)",
+                "spacer_requirement": "Sin separador",
+                "status": "Incompatible declarado",
+                "source_scope": "Tabla de compatibilidad OEM",
+                "source_url": "https://example.invalid/synthetic"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "forbidden_issue_fields": [
+        "freehub_bodies_accepted"
+      ]
+    },
+    {
+      "id": "rcx_a_declared_thread_opens_the_extractor",
+      "template": "freewheel",
+      "values": {
+        "sprocket_count": "5",
+        "freewheel_thread_standard": "1.37\" x 24 tpi (ISO)",
+        "remover_tool_standard": "Shimano 12 estrías",
+        "spec_evidence_source": "Ficha sintética",
+        "cog_sequence": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "position": "1",
+                "teeth": "14"
+              },
+              "sources": []
+            },
+            {
+              "id": "r2",
+              "values": {
+                "position": "2",
+                "teeth": "16"
+              },
+              "sources": []
+            },
+            {
+              "id": "r3",
+              "values": {
+                "position": "3",
+                "teeth": "18"
+              },
+              "sources": []
+            },
+            {
+              "id": "r4",
+              "values": {
+                "position": "4",
+                "teeth": "21"
+              },
+              "sources": []
+            },
+            {
+              "id": "r5",
+              "values": {
+                "position": "5",
+                "teeth": "24"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [
+        "https://www.parktool.com/en-us/blog/repair-help/determining-cassette-freewheel-type"
+      ],
+      "forbidden_issue_fields": [
+        "remover_tool_standard"
+      ]
+    },
+    {
+      "id": "rcx_an_unknown_thread_leaves_the_extractor_pending",
+      "template": "freewheel",
+      "values": {
+        "sprocket_count": "5",
+        "freewheel_thread_standard": "Desconocido / sin confirmar",
+        "remover_tool_standard": "Shimano 12 estrías",
+        "spec_evidence_source": "Ficha sintética",
+        "cog_sequence": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "position": "1",
+                "teeth": "14"
+              },
+              "sources": []
+            },
+            {
+              "id": "r2",
+              "values": {
+                "position": "2",
+                "teeth": "16"
+              },
+              "sources": []
+            },
+            {
+              "id": "r3",
+              "values": {
+                "position": "3",
+                "teeth": "18"
+              },
+              "sources": []
+            },
+            {
+              "id": "r4",
+              "values": {
+                "position": "4",
+                "teeth": "21"
+              },
+              "sources": []
+            },
+            {
+              "id": "r5",
+              "values": {
+                "position": "5",
+                "teeth": "24"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [
+        "https://www.parktool.com/en-us/blog/repair-help/determining-cassette-freewheel-type"
+      ],
+      "expected_issue_subset": [
+        {
+          "code": "prerequisite",
+          "field": "remover_tool_standard",
+          "blocking": false
+        }
+      ],
+      "expected_sql_issue_subset": [
+        {
+          "code": "prerequisite",
+          "field": "remover_tool_standard",
+          "blocking": false
+        }
+      ]
+    },
+    {
+      "id": "rcx_a_missing_thread_leaves_the_extractor_pending",
+      "template": "freewheel",
+      "values": {
+        "sprocket_count": "5",
+        "remover_tool_standard": "Shimano 12 estrías",
+        "spec_evidence_source": "Ficha sintética",
+        "cog_sequence": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "position": "1",
+                "teeth": "14"
+              },
+              "sources": []
+            },
+            {
+              "id": "r2",
+              "values": {
+                "position": "2",
+                "teeth": "16"
+              },
+              "sources": []
+            },
+            {
+              "id": "r3",
+              "values": {
+                "position": "3",
+                "teeth": "18"
+              },
+              "sources": []
+            },
+            {
+              "id": "r4",
+              "values": {
+                "position": "4",
+                "teeth": "21"
+              },
+              "sources": []
+            },
+            {
+              "id": "r5",
+              "values": {
+                "position": "5",
+                "teeth": "24"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "expected_issue_subset": [
+        {
+          "code": "prerequisite",
+          "field": "remover_tool_standard",
+          "blocking": false
+        },
+        {
+          "code": "required_missing",
+          "field": "freewheel_thread_standard",
+          "blocking": false
+        }
+      ],
+      "expected_sql_issue_subset": [
+        {
+          "code": "prerequisite",
+          "field": "remover_tool_standard",
+          "blocking": false
+        },
+        {
+          "code": "required_missing",
+          "field": "freewheel_thread_standard",
+          "blocking": false
+        }
+      ]
+    },
+    {
+      "id": "rcx_a_declared_cog_thread_opens_the_lockring_thread",
+      "template": "fixed_cog",
+      "values": {
+        "single_cog_teeth": "16",
+        "cog_thread_standard": "1.37\" x 24 tpi (ISO)",
+        "chain_width_family": "1/8",
+        "cog_lockring_thread": "1.29\" x 24 tpi izquierda (inglés)"
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [
+        "https://www.sheldonbrown.com/gloss_l.html"
+      ],
+      "forbidden_issue_fields": [
+        "cog_lockring_thread"
+      ]
+    },
+    {
+      "id": "rcx_an_unknown_cog_thread_leaves_the_lockring_pending",
+      "template": "fixed_cog",
+      "values": {
+        "single_cog_teeth": "16",
+        "cog_thread_standard": "Desconocido / sin confirmar",
+        "chain_width_family": "1/8",
+        "cog_lockring_thread": "1.29\" x 24 tpi izquierda (inglés)"
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "expected_issue_subset": [
+        {
+          "code": "prerequisite",
+          "field": "cog_lockring_thread",
+          "blocking": false
+        }
+      ],
+      "expected_sql_issue_subset": [
+        {
+          "code": "prerequisite",
+          "field": "cog_lockring_thread",
+          "blocking": false
+        }
+      ]
+    },
+    {
+      "id": "rcx_a_missing_cog_thread_leaves_the_lockring_pending",
+      "template": "fixed_cog",
+      "values": {
+        "single_cog_teeth": "16",
+        "chain_width_family": "1/8",
+        "cog_lockring_thread": "1.29\" x 24 tpi izquierda (inglés)"
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "expected_issue_subset": [
+        {
+          "code": "prerequisite",
+          "field": "cog_lockring_thread",
+          "blocking": false
+        },
+        {
+          "code": "required_missing",
+          "field": "cog_thread_standard",
+          "blocking": false
+        }
+      ],
+      "expected_sql_issue_subset": [
+        {
+          "code": "prerequisite",
+          "field": "cog_lockring_thread",
+          "blocking": false
+        },
+        {
+          "code": "required_missing",
+          "field": "cog_thread_standard",
+          "blocking": false
+        }
+      ]
+    },
+    {
+      "id": "rcx_a_hub_without_a_second_thread_is_a_value",
+      "template": "fixed_cog",
+      "values": {
+        "single_cog_teeth": "16",
+        "cog_thread_standard": "1.37\" x 24 tpi (ISO)",
+        "chain_width_family": "1/8",
+        "cog_lockring_thread": "Sin contratuerca (maza sin segunda rosca)"
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [
+        "https://www.sheldonbrown.com/fixed-conversion.html"
+      ],
+      "forbidden_issue_fields": [
+        "cog_lockring_thread"
+      ]
+    },
+    {
+      "id": "rcx_a_declared_target_demands_the_thickness",
+      "template": "cassette_spacer",
+      "values": {
+        "target_rear_drive_interface": "SRAM XD"
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "expected_issue_subset": [
+        {
+          "code": "required_missing",
+          "field": "spacer_thickness_mm",
+          "blocking": false
+        }
+      ],
+      "expected_sql_issue_subset": [
+        {
+          "code": "required_missing",
+          "field": "spacer_thickness_mm",
+          "blocking": false
+        }
+      ]
+    },
+    {
+      "id": "rcx_an_unknown_target_does_not_demand_a_thickness",
+      "template": "cassette_spacer",
+      "values": {
+        "target_rear_drive_interface": "Desconocido / sin confirmar"
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "forbidden_issue_fields": [
+        "spacer_thickness_mm"
+      ]
+    },
+    {
+      "id": "rcx_a_published_thickness_survives_a_missing_target",
+      "template": "cassette_spacer",
+      "values": {
+        "spacer_thickness_mm": "1.85"
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [
+        "https://www.sram.com/en/service/articles/sram-xd-and-xdr-driver-body-explained"
+      ],
+      "forbidden_issue_fields": [
+        "spacer_thickness_mm"
+      ]
+    }
+  ],
+  "root_nd_case_overrides": [
+    {
+      "id": "helmet_smith_mainline_certifications_by_row",
+      "reason": "Integral pertenece al eje de construcción, no al uso."
+    },
+    {
+      "id": "helmet_inventory_best_enduro_certificado_sin_norma",
+      "reason": "Se conserva Enduro sin inferir cobertura desde el título."
+    },
+    {
+      "id": "RCF25",
+      "reason": "Una variante distinta del soporte no es montaje de este SKU; se rechaza el token retirado."
+    }
+  ],
+  "root_row_value_case_overrides": [
+    "RCF08",
+    "CPC_GAP_INCLUDED_CLAMP_FALSE"
+  ],
+  "deferred_pressure_fixture_ids": [],
+  "superseded_pressure_fixtures": [
+    "wrfp_hookless_row_maximum_is_not_the_headline",
+    "wrfp_schwalbe_general_maximum_in_bar",
+    "wrfp_unit_without_value_is_pending",
+    "wrfp_value_without_unit_stays_pending"
+  ],
+  "required_server_migration": "20260907025000",
+  "proposed_cases": [
+    {
+      "proposal": "P-1",
+      "id": "rcp_one_published_variant_is_short",
+      "surface": "oem_reference_fixture",
+      "runnable_against_templates": false,
+      "values": {
+        "schema_version": 1,
+        "kind": "oem_model_variant_catalogue",
+        "is_product_fact": false,
+        "ownership": "referencia OEM del modelo (contrato canónico §4.1); no es inventario del tenant ni hecho de un SKU",
+        "model": "Shimano CS-HG50-8",
+        "source_url": "https://bike.shimano.com/en-NA/products/components/pdp.P-CS-HG50-8.html",
+        "speeds": 8,
+        "variants": [
+          {
+            "configuration_label": "11-28T",
+            "configuration_code": "bf",
+            "sprocket_count_declared": 8,
+            "teeth": [
+              {
+                "position": 1,
+                "teeth": 11
+              },
+              {
+                "position": 2,
+                "teeth": 13
+              },
+              {
+                "position": 3,
+                "teeth": 15
+              },
+              {
+                "position": 4,
+                "teeth": 17
+              },
+              {
+                "position": 5,
+                "teeth": 19
+              },
+              {
+                "position": 6,
+                "teeth": 21
+              },
+              {
+                "position": 7,
+                "teeth": 24
+              },
+              {
+                "position": 8,
+                "teeth": 28
+              }
+            ]
+          },
+          {
+            "configuration_label": "11-30T",
+            "configuration_code": "an",
+            "sprocket_count_declared": 8,
+            "teeth": [
+              {
+                "position": 1,
+                "teeth": 11
+              },
+              {
+                "position": 2,
+                "teeth": 13
+              },
+              {
+                "position": 3,
+                "teeth": 15
+              },
+              {
+                "position": 4,
+                "teeth": 17
+              },
+              {
+                "position": 5,
+                "teeth": 20
+              },
+              {
+                "position": 6,
+                "teeth": 23
+              },
+              {
+                "position": 7,
+                "teeth": 26
+              }
+            ]
+          },
+          {
+            "configuration_label": "11-32T",
+            "configuration_code": "aw",
+            "sprocket_count_declared": 8,
+            "teeth": [
+              {
+                "position": 1,
+                "teeth": 11
+              },
+              {
+                "position": 2,
+                "teeth": 13
+              },
+              {
+                "position": 3,
+                "teeth": 15
+              },
+              {
+                "position": 4,
+                "teeth": 18
+              },
+              {
+                "position": 5,
+                "teeth": 21
+              },
+              {
+                "position": 6,
+                "teeth": 24
+              },
+              {
+                "position": 7,
+                "teeth": 28
+              },
+              {
+                "position": 8,
+                "teeth": 32
+              }
+            ]
+          },
+          {
+            "configuration_label": "11-34T",
+            "configuration_code": "Ca",
+            "sprocket_count_declared": 8,
+            "teeth": [
+              {
+                "position": 1,
+                "teeth": 11
+              },
+              {
+                "position": 2,
+                "teeth": 13
+              },
+              {
+                "position": 3,
+                "teeth": 15
+              },
+              {
+                "position": 4,
+                "teeth": 18
+              },
+              {
+                "position": 5,
+                "teeth": 21
+              },
+              {
+                "position": 6,
+                "teeth": 24
+              },
+              {
+                "position": 7,
+                "teeth": 28
+              },
+              {
+                "position": 8,
+                "teeth": 34
+              }
+            ]
+          },
+          {
+            "configuration_label": "12-23T",
+            "configuration_code": "U",
+            "sprocket_count_declared": 8,
+            "teeth": [
+              {
+                "position": 1,
+                "teeth": 12
+              },
+              {
+                "position": 2,
+                "teeth": 13
+              },
+              {
+                "position": 3,
+                "teeth": 14
+              },
+              {
+                "position": 4,
+                "teeth": 15
+              },
+              {
+                "position": 5,
+                "teeth": 17
+              },
+              {
+                "position": 6,
+                "teeth": 19
+              },
+              {
+                "position": 7,
+                "teeth": 21
+              },
+              {
+                "position": 8,
+                "teeth": 23
+              }
+            ]
+          },
+          {
+            "configuration_label": "12-25T",
+            "configuration_code": "W",
+            "sprocket_count_declared": 8,
+            "teeth": [
+              {
+                "position": 1,
+                "teeth": 12
+              },
+              {
+                "position": 2,
+                "teeth": 13
+              },
+              {
+                "position": 3,
+                "teeth": 15
+              },
+              {
+                "position": 4,
+                "teeth": 17
+              },
+              {
+                "position": 5,
+                "teeth": 19
+              },
+              {
+                "position": 6,
+                "teeth": 21
+              },
+              {
+                "position": 7,
+                "teeth": 23
+              },
+              {
+                "position": 8,
+                "teeth": 25
+              }
+            ]
+          },
+          {
+            "configuration_label": "13-26T",
+            "configuration_code": "V",
+            "sprocket_count_declared": 8,
+            "teeth": [
+              {
+                "position": 1,
+                "teeth": 13
+              },
+              {
+                "position": 2,
+                "teeth": 14
+              },
+              {
+                "position": 3,
+                "teeth": 15
+              },
+              {
+                "position": 4,
+                "teeth": 17
+              },
+              {
+                "position": 5,
+                "teeth": 19
+              },
+              {
+                "position": 6,
+                "teeth": 21
+              },
+              {
+                "position": 7,
+                "teeth": 23
+              },
+              {
+                "position": 8,
+                "teeth": 26
+              }
+            ]
+          }
+        ]
+      },
+      "today": [],
+      "expected_with_capability": [
+        {
+          "code": "row_cardinality_pending",
+          "group": "11-30T"
+        }
+      ],
+      "reason": "La (an) declara ocho piñones y trae siete. Es una fixture de referencia del motor agrupado: ni el SKU ni sus ocho velocidades cambian, y este catálogo no es un hecho suyo.",
+      "source_urls": [
+        "https://bike.shimano.com/en-NA/products/components/pdp.P-CS-HG50-8.html"
+      ]
+    },
+    {
+      "proposal": "P-1",
+      "id": "rcp_every_published_variant_is_complete",
+      "surface": "oem_reference_fixture",
+      "runnable_against_templates": false,
+      "values": {
+        "schema_version": 1,
+        "kind": "oem_model_variant_catalogue",
+        "is_product_fact": false,
+        "ownership": "referencia OEM del modelo (contrato canónico §4.1); no es inventario del tenant ni hecho de un SKU",
+        "model": "Shimano CS-HG50-8",
+        "source_url": "https://bike.shimano.com/en-NA/products/components/pdp.P-CS-HG50-8.html",
+        "speeds": 8,
+        "variants": [
+          {
+            "configuration_label": "11-28T",
+            "configuration_code": "bf",
+            "sprocket_count_declared": 8,
+            "teeth": [
+              {
+                "position": 1,
+                "teeth": 11
+              },
+              {
+                "position": 2,
+                "teeth": 13
+              },
+              {
+                "position": 3,
+                "teeth": 15
+              },
+              {
+                "position": 4,
+                "teeth": 17
+              },
+              {
+                "position": 5,
+                "teeth": 19
+              },
+              {
+                "position": 6,
+                "teeth": 21
+              },
+              {
+                "position": 7,
+                "teeth": 24
+              },
+              {
+                "position": 8,
+                "teeth": 28
+              }
+            ]
+          },
+          {
+            "configuration_label": "11-30T",
+            "configuration_code": "an",
+            "sprocket_count_declared": 8,
+            "teeth": [
+              {
+                "position": 1,
+                "teeth": 11
+              },
+              {
+                "position": 2,
+                "teeth": 13
+              },
+              {
+                "position": 3,
+                "teeth": 15
+              },
+              {
+                "position": 4,
+                "teeth": 17
+              },
+              {
+                "position": 5,
+                "teeth": 20
+              },
+              {
+                "position": 6,
+                "teeth": 23
+              },
+              {
+                "position": 7,
+                "teeth": 26
+              },
+              {
+                "position": 8,
+                "teeth": 30
+              }
+            ]
+          },
+          {
+            "configuration_label": "11-32T",
+            "configuration_code": "aw",
+            "sprocket_count_declared": 8,
+            "teeth": [
+              {
+                "position": 1,
+                "teeth": 11
+              },
+              {
+                "position": 2,
+                "teeth": 13
+              },
+              {
+                "position": 3,
+                "teeth": 15
+              },
+              {
+                "position": 4,
+                "teeth": 18
+              },
+              {
+                "position": 5,
+                "teeth": 21
+              },
+              {
+                "position": 6,
+                "teeth": 24
+              },
+              {
+                "position": 7,
+                "teeth": 28
+              },
+              {
+                "position": 8,
+                "teeth": 32
+              }
+            ]
+          },
+          {
+            "configuration_label": "11-34T",
+            "configuration_code": "Ca",
+            "sprocket_count_declared": 8,
+            "teeth": [
+              {
+                "position": 1,
+                "teeth": 11
+              },
+              {
+                "position": 2,
+                "teeth": 13
+              },
+              {
+                "position": 3,
+                "teeth": 15
+              },
+              {
+                "position": 4,
+                "teeth": 18
+              },
+              {
+                "position": 5,
+                "teeth": 21
+              },
+              {
+                "position": 6,
+                "teeth": 24
+              },
+              {
+                "position": 7,
+                "teeth": 28
+              },
+              {
+                "position": 8,
+                "teeth": 34
+              }
+            ]
+          },
+          {
+            "configuration_label": "12-23T",
+            "configuration_code": "U",
+            "sprocket_count_declared": 8,
+            "teeth": [
+              {
+                "position": 1,
+                "teeth": 12
+              },
+              {
+                "position": 2,
+                "teeth": 13
+              },
+              {
+                "position": 3,
+                "teeth": 14
+              },
+              {
+                "position": 4,
+                "teeth": 15
+              },
+              {
+                "position": 5,
+                "teeth": 17
+              },
+              {
+                "position": 6,
+                "teeth": 19
+              },
+              {
+                "position": 7,
+                "teeth": 21
+              },
+              {
+                "position": 8,
+                "teeth": 23
+              }
+            ]
+          },
+          {
+            "configuration_label": "12-25T",
+            "configuration_code": "W",
+            "sprocket_count_declared": 8,
+            "teeth": [
+              {
+                "position": 1,
+                "teeth": 12
+              },
+              {
+                "position": 2,
+                "teeth": 13
+              },
+              {
+                "position": 3,
+                "teeth": 15
+              },
+              {
+                "position": 4,
+                "teeth": 17
+              },
+              {
+                "position": 5,
+                "teeth": 19
+              },
+              {
+                "position": 6,
+                "teeth": 21
+              },
+              {
+                "position": 7,
+                "teeth": 23
+              },
+              {
+                "position": 8,
+                "teeth": 25
+              }
+            ]
+          },
+          {
+            "configuration_label": "13-26T",
+            "configuration_code": "V",
+            "sprocket_count_declared": 8,
+            "teeth": [
+              {
+                "position": 1,
+                "teeth": 13
+              },
+              {
+                "position": 2,
+                "teeth": 14
+              },
+              {
+                "position": 3,
+                "teeth": 15
+              },
+              {
+                "position": 4,
+                "teeth": 17
+              },
+              {
+                "position": 5,
+                "teeth": 19
+              },
+              {
+                "position": 6,
+                "teeth": 21
+              },
+              {
+                "position": 7,
+                "teeth": 23
+              },
+              {
+                "position": 8,
+                "teeth": 26
+              }
+            ]
+          }
+        ]
+      },
+      "today": [],
+      "expected_with_capability": [],
+      "reason": "Siete combinaciones de ocho contra ocho: la capacidad no debe inventar una incidencia donde cada variante está completa.",
+      "source_urls": [
+        "https://bike.shimano.com/en-NA/products/components/pdp.P-CS-HG50-8.html"
+      ]
+    },
+    {
+      "proposal": "P-2-prima",
+      "id": "rcp_a_note_cannot_authorise_an_excluded_body",
+      "template": "cassette",
+      "kind": "capability_gap",
+      "values": {
+        "sprocket_count": "8",
+        "cog_sequence": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "position": "1",
+                "teeth": "11"
+              },
+              "sources": []
+            },
+            {
+              "id": "r2",
+              "values": {
+                "position": "2",
+                "teeth": "13"
+              },
+              "sources": []
+            },
+            {
+              "id": "r3",
+              "values": {
+                "position": "3",
+                "teeth": "15"
+              },
+              "sources": []
+            },
+            {
+              "id": "r4",
+              "values": {
+                "position": "4",
+                "teeth": "17"
+              },
+              "sources": []
+            },
+            {
+              "id": "r5",
+              "values": {
+                "position": "5",
+                "teeth": "20"
+              },
+              "sources": []
+            },
+            {
+              "id": "r6",
+              "values": {
+                "position": "6",
+                "teeth": "23"
+              },
+              "sources": []
+            },
+            {
+              "id": "r7",
+              "values": {
+                "position": "7",
+                "teeth": "26"
+              },
+              "sources": []
+            },
+            {
+              "id": "r8",
+              "values": {
+                "position": "8",
+                "teeth": "30"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "cassette_spline_standard": "SRAM XD",
+        "freehub_bodies_accepted": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "rear_drive_interface": "SRAM XD SLIM",
+                "spacer_requirement": "Sin separador",
+                "status": "Condicionado",
+                "source_scope": "Manual OEM",
+                "source_url": "https://example.invalid/synthetic",
+                "conditions": "El taller afirma que entra igual."
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "today": [],
+      "expected_with_capability": [
+        {
+          "code": "row_relation_excluded",
+          "field": "freehub_bodies_accepted",
+          "row_id": "r1",
+          "column": "rear_drive_interface"
+        }
+      ],
+      "reason": "SRAM niega el cruce XD / XD SLIM. Una frase en `conditions` no puede levantarlo.",
+      "source_urls": [
+        "https://support.sram.com/hc/en-us/articles/46508211430043-What-is-the-new-XD-SLIM-driver-body-standard-How-is-it-similar-to-the-HG-SLIM-standard"
+      ]
+    },
+    {
+      "proposal": "P-2-prima",
+      "id": "rcp_an_absent_spacer_is_pending_not_a_contradiction",
+      "template": "cassette",
+      "kind": "capability_gap",
+      "values": {
+        "sprocket_count": "8",
+        "cog_sequence": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "position": "1",
+                "teeth": "11"
+              },
+              "sources": []
+            },
+            {
+              "id": "r2",
+              "values": {
+                "position": "2",
+                "teeth": "13"
+              },
+              "sources": []
+            },
+            {
+              "id": "r3",
+              "values": {
+                "position": "3",
+                "teeth": "15"
+              },
+              "sources": []
+            },
+            {
+              "id": "r4",
+              "values": {
+                "position": "4",
+                "teeth": "17"
+              },
+              "sources": []
+            },
+            {
+              "id": "r5",
+              "values": {
+                "position": "5",
+                "teeth": "20"
+              },
+              "sources": []
+            },
+            {
+              "id": "r6",
+              "values": {
+                "position": "6",
+                "teeth": "23"
+              },
+              "sources": []
+            },
+            {
+              "id": "r7",
+              "values": {
+                "position": "7",
+                "teeth": "26"
+              },
+              "sources": []
+            },
+            {
+              "id": "r8",
+              "values": {
+                "position": "8",
+                "teeth": "30"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "cassette_spline_standard": "SRAM XD",
+        "freehub_bodies_accepted": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "rear_drive_interface": "SRAM XDR",
+                "spacer_requirement": "Separador requerido",
+                "status": "Condicionado",
+                "source_scope": "Manual OEM",
+                "source_url": "https://example.invalid/synthetic",
+                "conditions": "XDR admite cassettes XD con separador (SRAM)."
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "today": [],
+      "expected_with_capability": [
+        {
+          "code": "row_relation_parameter_pending",
+          "field": "freehub_bodies_accepted",
+          "row_id": "r1",
+          "column": "spacer_mm",
+          "blocking": false
+        }
+      ],
+      "reason": "El separador que la relación exige no está declarado. No saber no es contradecir: queda pendiente, no bloquea.",
+      "source_urls": [
+        "https://www.sram.com/en/service/articles/sram-xd-and-xdr-driver-body-explained"
+      ]
+    },
+    {
+      "proposal": "P-2-prima",
+      "id": "rcp_a_contradicted_spacer_is_not_the_same_as_an_absent_one",
+      "template": "cassette",
+      "kind": "capability_gap",
+      "values": {
+        "sprocket_count": "8",
+        "cog_sequence": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "position": "1",
+                "teeth": "11"
+              },
+              "sources": []
+            },
+            {
+              "id": "r2",
+              "values": {
+                "position": "2",
+                "teeth": "13"
+              },
+              "sources": []
+            },
+            {
+              "id": "r3",
+              "values": {
+                "position": "3",
+                "teeth": "15"
+              },
+              "sources": []
+            },
+            {
+              "id": "r4",
+              "values": {
+                "position": "4",
+                "teeth": "17"
+              },
+              "sources": []
+            },
+            {
+              "id": "r5",
+              "values": {
+                "position": "5",
+                "teeth": "20"
+              },
+              "sources": []
+            },
+            {
+              "id": "r6",
+              "values": {
+                "position": "6",
+                "teeth": "23"
+              },
+              "sources": []
+            },
+            {
+              "id": "r7",
+              "values": {
+                "position": "7",
+                "teeth": "26"
+              },
+              "sources": []
+            },
+            {
+              "id": "r8",
+              "values": {
+                "position": "8",
+                "teeth": "30"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "cassette_spline_standard": "SRAM XD",
+        "freehub_bodies_accepted": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "rear_drive_interface": "SRAM XDR",
+                "spacer_requirement": "Separador requerido",
+                "status": "Condicionado",
+                "source_scope": "Manual OEM",
+                "source_url": "https://example.invalid/synthetic",
+                "spacer_mm": "1",
+                "conditions": "Se montó con el separador que había."
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "today": [],
+      "expected_with_capability": [
+        {
+          "code": "row_relation_parameter_conflict",
+          "field": "freehub_bodies_accepted",
+          "row_id": "r1",
+          "column": "spacer_mm"
+        }
+      ],
+      "reason": "SRAM publica 1,85 mm y la fila declara 1 mm. Eso no es un dato que falta: es un dato que contradice la relación.",
+      "source_urls": [
+        "https://www.sram.com/en/service/articles/sram-xd-and-xdr-driver-body-explained"
+      ]
+    },
+    {
+      "proposal": "P-2-prima",
+      "id": "rcp_the_published_spacer_satisfies_the_relation",
+      "template": "cassette",
+      "kind": "capability_gap_positive",
+      "values": {
+        "sprocket_count": "8",
+        "cog_sequence": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "position": "1",
+                "teeth": "11"
+              },
+              "sources": []
+            },
+            {
+              "id": "r2",
+              "values": {
+                "position": "2",
+                "teeth": "13"
+              },
+              "sources": []
+            },
+            {
+              "id": "r3",
+              "values": {
+                "position": "3",
+                "teeth": "15"
+              },
+              "sources": []
+            },
+            {
+              "id": "r4",
+              "values": {
+                "position": "4",
+                "teeth": "17"
+              },
+              "sources": []
+            },
+            {
+              "id": "r5",
+              "values": {
+                "position": "5",
+                "teeth": "20"
+              },
+              "sources": []
+            },
+            {
+              "id": "r6",
+              "values": {
+                "position": "6",
+                "teeth": "23"
+              },
+              "sources": []
+            },
+            {
+              "id": "r7",
+              "values": {
+                "position": "7",
+                "teeth": "26"
+              },
+              "sources": []
+            },
+            {
+              "id": "r8",
+              "values": {
+                "position": "8",
+                "teeth": "30"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "cassette_spline_standard": "SRAM XD",
+        "freehub_bodies_accepted": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "rear_drive_interface": "SRAM XDR",
+                "spacer_requirement": "Separador requerido",
+                "status": "Condicionado",
+                "source_scope": "Manual OEM",
+                "source_url": "https://example.invalid/synthetic",
+                "spacer_mm": "1.85",
+                "conditions": "XDR admite cassettes XD con separador de 1,85 mm detrás (SRAM)."
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "today": [],
+      "expected_with_capability": [],
+      "reason": "El parámetro publicado está declarado y es igual: la relación se cumple por su medida, no por el texto.",
+      "source_urls": [
+        "https://www.sram.com/en/service/articles/sram-xd-and-xdr-driver-body-explained"
+      ]
+    },
+    {
+      "proposal": "P-2-prima",
+      "id": "rcp_an_unlisted_pair_is_not_a_verdict",
+      "template": "cassette",
+      "kind": "capability_gap",
+      "values": {
+        "sprocket_count": "8",
+        "cog_sequence": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "position": "1",
+                "teeth": "11"
+              },
+              "sources": []
+            },
+            {
+              "id": "r2",
+              "values": {
+                "position": "2",
+                "teeth": "13"
+              },
+              "sources": []
+            },
+            {
+              "id": "r3",
+              "values": {
+                "position": "3",
+                "teeth": "15"
+              },
+              "sources": []
+            },
+            {
+              "id": "r4",
+              "values": {
+                "position": "4",
+                "teeth": "17"
+              },
+              "sources": []
+            },
+            {
+              "id": "r5",
+              "values": {
+                "position": "5",
+                "teeth": "20"
+              },
+              "sources": []
+            },
+            {
+              "id": "r6",
+              "values": {
+                "position": "6",
+                "teeth": "23"
+              },
+              "sources": []
+            },
+            {
+              "id": "r7",
+              "values": {
+                "position": "7",
+                "teeth": "26"
+              },
+              "sources": []
+            },
+            {
+              "id": "r8",
+              "values": {
+                "position": "8",
+                "teeth": "30"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "cassette_spline_standard": "SRAM XD",
+        "freehub_bodies_accepted": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "rear_drive_interface": "Campagnolo",
+                "spacer_requirement": "Sin separador",
+                "status": "Compatible declarado",
+                "source_scope": "Apartado sintético",
+                "source_url": "https://example.invalid/synthetic"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "today": [],
+      "expected_with_capability": [
+        {
+          "code": "row_relation_unlisted",
+          "field": "freehub_bodies_accepted",
+          "row_id": "r1",
+          "column": "rear_drive_interface",
+          "blocking": false
+        }
+      ],
+      "reason": "Ese par no está ni en alternativas ni en exclusiones. No se permite por omisión ni se niega por omisión.",
+      "source_urls": []
+    },
+    {
+      "proposal": "P-2-prima",
+      "id": "rcp_equal_labels_still_need_an_alternative_row",
+      "template": "cassette",
+      "kind": "capability_gap",
+      "values": {
+        "sprocket_count": "8",
+        "cog_sequence": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "position": "1",
+                "teeth": "11"
+              },
+              "sources": []
+            },
+            {
+              "id": "r2",
+              "values": {
+                "position": "2",
+                "teeth": "13"
+              },
+              "sources": []
+            },
+            {
+              "id": "r3",
+              "values": {
+                "position": "3",
+                "teeth": "15"
+              },
+              "sources": []
+            },
+            {
+              "id": "r4",
+              "values": {
+                "position": "4",
+                "teeth": "17"
+              },
+              "sources": []
+            },
+            {
+              "id": "r5",
+              "values": {
+                "position": "5",
+                "teeth": "20"
+              },
+              "sources": []
+            },
+            {
+              "id": "r6",
+              "values": {
+                "position": "6",
+                "teeth": "23"
+              },
+              "sources": []
+            },
+            {
+              "id": "r7",
+              "values": {
+                "position": "7",
+                "teeth": "26"
+              },
+              "sources": []
+            },
+            {
+              "id": "r8",
+              "values": {
+                "position": "8",
+                "teeth": "30"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "cassette_spline_standard": "SRAM XD",
+        "freehub_bodies_accepted": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "rear_drive_interface": "SRAM XD",
+                "spacer_requirement": "Sin separador",
+                "status": "Compatible declarado",
+                "source_scope": "Apartado sintético",
+                "source_url": "https://example.invalid/synthetic"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "today": [],
+      "expected_with_capability": [
+        {
+          "code": "row_relation_unlisted",
+          "field": "freehub_bodies_accepted",
+          "row_id": "r1",
+          "column": "rear_drive_interface",
+          "blocking": false
+        }
+      ],
+      "reason": "Dos etiquetas iguales no demuestran el montaje: sin una fila de `alternatives` que lo nombre, el par queda sin listar.",
+      "source_urls": [
+        "https://www.sram.com/en/service/articles/sram-xd-and-xdr-driver-body-explained"
+      ]
+    },
+    {
+      "proposal": "P-2-prima",
+      "id": "rcp_an_unknown_own_interface_is_never_a_conflict",
+      "template": "cassette",
+      "kind": "capability_gap_unknown",
+      "values": {
+        "sprocket_count": "8",
+        "cog_sequence": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "position": "1",
+                "teeth": "11"
+              },
+              "sources": []
+            },
+            {
+              "id": "r2",
+              "values": {
+                "position": "2",
+                "teeth": "13"
+              },
+              "sources": []
+            },
+            {
+              "id": "r3",
+              "values": {
+                "position": "3",
+                "teeth": "15"
+              },
+              "sources": []
+            },
+            {
+              "id": "r4",
+              "values": {
+                "position": "4",
+                "teeth": "17"
+              },
+              "sources": []
+            },
+            {
+              "id": "r5",
+              "values": {
+                "position": "5",
+                "teeth": "20"
+              },
+              "sources": []
+            },
+            {
+              "id": "r6",
+              "values": {
+                "position": "6",
+                "teeth": "23"
+              },
+              "sources": []
+            },
+            {
+              "id": "r7",
+              "values": {
+                "position": "7",
+                "teeth": "26"
+              },
+              "sources": []
+            },
+            {
+              "id": "r8",
+              "values": {
+                "position": "8",
+                "teeth": "30"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "cassette_spline_standard": "Desconocido / sin confirmar",
+        "freehub_bodies_accepted": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "rear_drive_interface": "SRAM XD",
+                "spacer_requirement": "Sin separador",
+                "status": "Compatible declarado",
+                "source_scope": "Apartado sintético",
+                "source_url": "https://example.invalid/synthetic"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "today": [],
+      "expected_with_capability": [
+        {
+          "code": "row_relation_pending",
+          "field": "freehub_bodies_accepted",
+          "row_id": "r1",
+          "column": "rear_drive_interface",
+          "blocking": false
+        }
+      ],
+      "reason": "Sin interfaz propia conocida no hay relación que evaluar.",
+      "source_urls": []
+    }
+  ]
+}

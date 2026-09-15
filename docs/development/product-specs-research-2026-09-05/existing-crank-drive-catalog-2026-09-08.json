@@ -1,0 +1,5269 @@
+{
+  "schema_version": 1,
+  "title": "Crankset, crank arm and chainring pieces, seats and pairings",
+  "source_sha256": "785cd11a39011b643e4bcb1422ab805c242f8a7aae0108b399c6aff0c0d78175",
+  "accepted_claude_patch_ids": [
+    "MC-01-shar0",
+    "MC-01-defi1",
+    "MC-01-defi2",
+    "MC-01-defi3",
+    "MC-02-4",
+    "MC-02-5",
+    "MC-02-6",
+    "MC-02-7",
+    "MC-13-22",
+    "MC-13-23",
+    "MC-13-fixtures-192-product-lever_pull_required",
+    "MC-13-fixtures-192-counterpart-lever_cable_pull",
+    "MC-13-fixtures-193-product-lever_pull_required",
+    "MC-13-fixtures-194-product-lever_pull_required",
+    "MC-15a",
+    "MC-15b",
+    "MC-23"
+  ],
+  "input_sha256": {
+    "catalog": "16459826fee4c589cce37243afe4e159317212ddf1d47d6d6f1d76f9b3fadf15",
+    "cases": "329ad3e5543048121775fd7fc3d5c5b4acd90d7446cd3deacc999b4dce3716d7",
+    "preimage": "3b947d4d0598e8707062999ad9b03617ee75e951ee64286a9339cef204424578"
+  },
+  "codex_corrections": [
+    {
+      "id": "C01",
+      "change": "Un par de ángulos conserva 36×45 y 45×45 como configuraciones distintas; ninguno aprueba el rodamiento completo.",
+      "source_refs": [
+        "W04"
+      ]
+    },
+    {
+      "id": "C02",
+      "change": "Neumático y cámara incluidos son dos observaciones independientes del contenido.",
+      "source_refs": []
+    },
+    {
+      "id": "C03",
+      "change": "Registrar presencia declarada y nombre exacto del sistema; no crear una clase de equivalencia entre marcas.",
+      "source_refs": []
+    },
+    {
+      "id": "C04",
+      "change": "Una cámara describe cada BSD y rango de ancho en la misma fila; se elimina el escalar que impedía varios BSD.",
+      "source_refs": [
+        "W01",
+        "S01"
+      ]
+    },
+    {
+      "id": "C05",
+      "change": "Ángulos y elevaciones admiten signo; cantidades de elementos opcionales admiten cero. Los límites no se inventan a partir de tamaños frecuentes.",
+      "source_refs": []
+    },
+    {
+      "id": "C06",
+      "change": "Puntos de portabidón se cuentan individualmente; lentes adicionales no confunden cero accesorios con ausencia de lente principal.",
+      "source_refs": []
+    },
+    {
+      "id": "C07",
+      "change": "Se incluyen pasos de rosca reales que faltaban; diámetro, longitud del eje y OLD siguen separados.",
+      "source_refs": [
+        "W09"
+      ]
+    },
+    {
+      "id": "C08",
+      "change": "Una dirección superior, inferior o completa solicita únicamente sus códigos SHIS correspondientes. El código no impone un diámetro medido literal.",
+      "source_refs": [
+        "W05",
+        "W06"
+      ]
+    },
+    {
+      "id": "C09",
+      "change": "Un juego de ruedas almacena filas por posición y no comparte ficticiamente OLD, diámetro o interfaz de transmisión entre ambas ruedas.",
+      "source_refs": []
+    },
+    {
+      "id": "C10",
+      "change": "Las relaciones por modelo conservan generación y condiciones de la fuente; ausencia de fila permanece desconocida.",
+      "source_refs": [
+        "A05",
+        "A21",
+        "A22"
+      ]
+    },
+    {
+      "id": "C11",
+      "change": "Una bicicleta puede llevar tamaños distintos por posición; el cuadro describe la rueda trasera y no impone un tamaño al tren delantero.",
+      "source_refs": [
+        "https://www.trekbikes.com/us/en_US/FAQ/Slash-Gen6/"
+      ]
+    },
+    {
+      "id": "C13",
+      "change": "Los pines no dependen de ser plataforma; apoyos de distinta construcción permanecen en filas independientes y las calas incluidas requieren una observación del contenido.",
+      "source_refs": [
+        "ND01",
+        "ND02",
+        "https://www.crankbrothers.com/products/mallet-e"
+      ]
+    },
+    {
+      "id": "C14",
+      "change": "La potencia ahead describe el diámetro exterior en su zona de abrazadera. La espiga quill conserva su diámetro de inserción y el adaptador tiene una salida independiente, sin abrazadera de manubrio ficticia.",
+      "source_refs": [
+        "ND05",
+        "https://www.parktool.com/en-us/blog/repair-help/stem-removal-installation-threadless",
+        "https://www.parktool.com/en-us/blog/repair-help/stem-removal-installation-quill-stems"
+      ]
+    },
+    {
+      "id": "C15",
+      "change": "La geometría del riel no implica material ni piezas incluidas. La cobertura 7x9/7x9.6/7x10 se registra por configuración y kit documentado; un suplemento no tiene anclaje de sillín ni offset de tija.",
+      "source_refs": [
+        "ND06",
+        "ND07",
+        "https://ritcheylogic.com/bike/seatposts/wcs-carbon-1-bolt-seatpost-complete-clampset"
+      ]
+    },
+    {
+      "id": "C16",
+      "change": "El kit U más cable permite las dimensiones de ambos componentes. La longitud de cadena ya no se registra como cable; la clasificación de seguridad sigue siendo una declaración pendiente de alcance.",
+      "source_refs": [
+        "ND11",
+        "https://www.kryptonitelock.com/en/products/product-information/current-key/002079.html?type=bicycle"
+      ]
+    },
+    {
+      "id": "C17",
+      "change": "Fotocromía, polarización y recubrimiento pueden coexistir; cada lente conserva sus propiedades y estado de contenido en la misma fila, sin mezclarlas entre variantes.",
+      "source_refs": [
+        "ND19",
+        "https://www.julbo.com/en_gb/sunglasses/photochromic-2-4-polarized-sunglasses"
+      ]
+    },
+    {
+      "id": "C18",
+      "change": "Las chaquetas pueden declarar manga. Vestuario y protección conservan la talla OEM exacta y su guía sin equiparar rótulos de distintas marcas.",
+      "source_refs": [
+        "ND18",
+        "ND20"
+      ]
+    },
+    {
+      "id": "C12",
+      "change": "Se conservan también los campos anteriores omitidos del borrador: hydraulic_disc_brake/piston_count, brake_caliper/piston_count",
+      "source_refs": []
+    }
+  ],
+  "definitions": {
+    "chainring_count": {
+      "id": "d39723a3-f186-54c1-a3f2-c88ebd61285c",
+      "key": "chainring_count",
+      "label": "Cantidad de platos",
+      "data_type": "number",
+      "unit": null,
+      "allowed_values": [],
+      "validation_rules": {
+        "integer": true,
+        "positive": true
+      },
+      "origin": "existing",
+      "used_by": [
+        "crankset"
+      ]
+    },
+    "front_chainring_count": {
+      "id": "72f38b2f-ec08-408e-88b5-bf48307dc713",
+      "key": "front_chainring_count",
+      "label": "Cantidad de platos",
+      "data_type": "multi_select",
+      "unit": null,
+      "allowed_values": [
+        "1",
+        "2",
+        "3"
+      ],
+      "validation_rules": {},
+      "origin": "existing",
+      "used_by": [
+        "crankset"
+      ]
+    },
+    "chainring_teeth_rows": {
+      "id": "39e5dab9-b2b8-5a28-97d2-b595908e71f2",
+      "key": "chainring_teeth_rows",
+      "origin": "new",
+      "label": "Platos que trae el envase",
+      "data_type": "json",
+      "unit": "T",
+      "allowed_values": [],
+      "validation_rules": {
+        "rows_schema": {
+          "version": 1,
+          "unique_by": [
+            [
+              "ring_identity"
+            ],
+            [
+              "position"
+            ]
+          ],
+          "columns": [
+            {
+              "key": "ring_identity",
+              "label": "Identificación de este plato",
+              "type": "text",
+              "required": true
+            },
+            {
+              "key": "position",
+              "label": "Posición de este plato",
+              "type": "token",
+              "required": true,
+              "allowed_values": [
+                "Exterior",
+                "Medio",
+                "Interior",
+                "Único"
+              ]
+            },
+            {
+              "key": "teeth",
+              "label": "Dientes",
+              "type": "integer",
+              "required": true,
+              "unit": "T",
+              "validation": {
+                "positive": true
+              }
+            },
+            {
+              "key": "bcd_mm",
+              "label": "Círculo de pernos de este plato",
+              "type": "decimal",
+              "unit": "mm",
+              "validation": {
+                "positive": true
+              }
+            },
+            {
+              "key": "bolt_count",
+              "label": "Pernos de este plato",
+              "type": "integer",
+              "validation": {
+                "positive": true
+              }
+            },
+            {
+              "key": "removable",
+              "label": "Se puede desmontar",
+              "type": "boolean"
+            },
+            {
+              "key": "member_designation",
+              "label": "Designación del plato en el documento",
+              "type": "text"
+            },
+            {
+              "key": "source_document",
+              "label": "Documento o envase identificado",
+              "type": "text",
+              "required": true
+            },
+            {
+              "key": "source_url",
+              "label": "URL del documento, si existe",
+              "type": "url"
+            }
+          ]
+        }
+      },
+      "used_by": [
+        "crankset"
+      ]
+    },
+    "chainring_teeth": {
+      "id": "7547914f-7bb0-4a45-b088-1a3b50c3aa22",
+      "key": "chainring_teeth",
+      "label": "Dientes plato/corona",
+      "data_type": "text",
+      "unit": "T",
+      "allowed_values": [],
+      "validation_rules": {},
+      "origin": "existing",
+      "used_by": [
+        "crankset",
+        "chainring"
+      ]
+    },
+    "spindle_interface": {
+      "id": "660b0e90-180d-44a1-938c-f304a9358094",
+      "key": "spindle_interface",
+      "label": "Punta del eje",
+      "data_type": "single_select",
+      "unit": null,
+      "allowed_values": [
+        "Cuadrado JIS",
+        "Cuadrado ISO",
+        "Hollowtech / 24mm",
+        "SRAM GXP 24/22",
+        "SRAM DUB 28.99mm",
+        "BB30 30mm",
+        "ISIS",
+        "Octalink",
+        "Con chaveta",
+        "BMX 19mm",
+        "BMX 22mm",
+        "BMX 24mm",
+        "One-piece / americano",
+        "Powerspline"
+      ],
+      "validation_rules": {},
+      "origin": "existing",
+      "used_by": [
+        "crankset",
+        "crank_arm"
+      ]
+    },
+    "spindle_included": {
+      "id": "88bab7be-f846-5d9f-be42-e5d36437e618",
+      "key": "spindle_included",
+      "origin": "new",
+      "label": "Incluye eje",
+      "data_type": "boolean",
+      "unit": null,
+      "allowed_values": [],
+      "validation_rules": {},
+      "used_by": [
+        "crankset"
+      ]
+    },
+    "spindle_taper_standard": {
+      "id": "0497d84a-a127-58bb-a713-d04c768b3f40",
+      "key": "spindle_taper_standard",
+      "origin": "new",
+      "label": "Estándar del cono del eje",
+      "data_type": "single_select",
+      "unit": null,
+      "allowed_values": [
+        "JIS",
+        "ISO",
+        "Desconocido / sin confirmar"
+      ],
+      "validation_rules": {},
+      "used_by": [
+        "bottom_bracket",
+        "bottom_bracket_axle",
+        "crank_arm",
+        "crankset"
+      ]
+    },
+    "bottom_bracket_required": {
+      "id": "17316f7f-c02c-5eed-b443-72491fdb2877",
+      "key": "bottom_bracket_required",
+      "origin": "new",
+      "label": "Pedalier requerido, combinación por combinación",
+      "data_type": "json",
+      "unit": null,
+      "allowed_values": [],
+      "validation_rules": {
+        "rows_schema": {
+          "version": 1,
+          "unique_by": [
+            [
+              "requirement_identity"
+            ]
+          ],
+          "columns": [
+            {
+              "key": "requirement_identity",
+              "label": "Identificación de esta combinación",
+              "type": "text",
+              "required": true
+            },
+            {
+              "key": "bb_shell_interface",
+              "label": "Caja del cuadro",
+              "type": "token",
+              "required": true,
+              "allowed_values": [
+                "BSA roscado",
+                "Pressfit",
+                "BB30 / PF30",
+                "Mid / BMX",
+                "Americano / one-piece",
+                "Cuadrado cartucho",
+                "Hollowtech / 24mm externo",
+                "Otro",
+                "Desconocido / sin confirmar"
+              ]
+            },
+            {
+              "key": "bb_shell_width_mm",
+              "label": "Ancho de caja",
+              "type": "decimal",
+              "unit": "mm",
+              "validation": {
+                "positive": true
+              }
+            },
+            {
+              "key": "bb_model_code",
+              "label": "Pedalier documentado para esta combinación",
+              "type": "text"
+            },
+            {
+              "key": "spindle_length_mm",
+              "label": "Largo de eje",
+              "type": "decimal",
+              "unit": "mm",
+              "validation": {
+                "positive": true
+              }
+            },
+            {
+              "key": "resulting_chainline_mm",
+              "label": "Línea de cadena de esta combinación",
+              "type": "decimal",
+              "unit": "mm",
+              "validation": {
+                "positive": true
+              }
+            },
+            {
+              "key": "configuration_code",
+              "label": "Código de la configuración",
+              "type": "text"
+            },
+            {
+              "key": "conditions",
+              "label": "Condiciones de la fuente",
+              "type": "text"
+            },
+            {
+              "key": "source_document",
+              "label": "Documento o envase identificado",
+              "type": "text",
+              "required": true
+            },
+            {
+              "key": "source_url",
+              "label": "URL del documento, si existe",
+              "type": "url"
+            }
+          ]
+        }
+      },
+      "used_by": [
+        "crankset"
+      ]
+    },
+    "bottom_bracket_family": {
+      "id": "16b4f701-478d-41c4-9fe0-5f9c215c3345",
+      "key": "bottom_bracket_family",
+      "label": "Familia pedalier / motor",
+      "data_type": "single_select",
+      "unit": null,
+      "allowed_values": [
+        "BSA roscado",
+        "Pressfit",
+        "BB30 / PF30",
+        "Mid / BMX",
+        "Americano / one-piece",
+        "Cuadrado cartucho",
+        "Hollowtech / 24mm externo",
+        "Otro",
+        "Desconocido / sin confirmar"
+      ],
+      "validation_rules": {},
+      "origin": "existing",
+      "used_by": [
+        "crankset"
+      ]
+    },
+    "crank_arm_length_mm": {
+      "id": "4b2b3bb0-6f53-46d6-8136-8a6b791bfd64",
+      "key": "crank_arm_length_mm",
+      "label": "Largo biela",
+      "data_type": "number",
+      "unit": "mm",
+      "allowed_values": [],
+      "validation_rules": {
+        "positive": true
+      },
+      "origin": "existing",
+      "used_by": [
+        "crankset",
+        "crank_arm"
+      ]
+    },
+    "chainline_mm": {
+      "id": "28854686-ee6c-440a-ac42-9aa1da65e718",
+      "key": "chainline_mm",
+      "label": "Línea de cadena",
+      "data_type": "number",
+      "unit": "mm",
+      "allowed_values": [],
+      "validation_rules": {
+        "positive": true
+      },
+      "origin": "existing",
+      "used_by": [
+        "crankset"
+      ]
+    },
+    "pedal_thread": {
+      "id": "e45fdb4a-65b0-4713-8cb1-5e78832a8a39",
+      "key": "pedal_thread",
+      "label": "Rosca pedal",
+      "data_type": "single_select",
+      "unit": null,
+      "allowed_values": [
+        "9/16",
+        "1/2",
+        "Otro",
+        "Desconocido / sin confirmar"
+      ],
+      "validation_rules": {},
+      "origin": "existing",
+      "used_by": [
+        "crankset",
+        "crank_arm"
+      ]
+    },
+    "chainring_mount_type": {
+      "id": "d6850e3a-07bf-4f96-8119-6bb99b183a1d",
+      "key": "chainring_mount_type",
+      "label": "Montaje corona",
+      "data_type": "single_select",
+      "unit": null,
+      "allowed_values": [
+        "BCD 4 pernos",
+        "BCD 5 pernos",
+        "Direct mount Shimano",
+        "Direct mount SRAM",
+        "Direct mount Cinch",
+        "Rosca BMX",
+        "Otro",
+        "Desconocido / sin confirmar"
+      ],
+      "validation_rules": {},
+      "origin": "existing",
+      "used_by": [
+        "crankset",
+        "chainring"
+      ]
+    },
+    "chainring_bcd_mm": {
+      "id": "50322b08-5151-42c0-aa2c-a43afa2ccc45",
+      "key": "chainring_bcd_mm",
+      "label": "BCD corona",
+      "data_type": "number",
+      "unit": "mm",
+      "allowed_values": [],
+      "validation_rules": {
+        "positive": true
+      },
+      "origin": "existing",
+      "used_by": [
+        "crankset",
+        "chainring"
+      ]
+    },
+    "compatible_rear_speeds": {
+      "id": "f7ae5010-c5fc-5c02-b3d6-609003192028",
+      "key": "compatible_rear_speeds",
+      "origin": "new",
+      "label": "Velocidades traseras declaradas",
+      "data_type": "multi_select",
+      "unit": null,
+      "allowed_values": [
+        "1",
+        "5",
+        "6",
+        "7",
+        "8",
+        "9",
+        "10",
+        "11",
+        "12",
+        "13"
+      ],
+      "validation_rules": {},
+      "used_by": [
+        "chainring",
+        "crankset",
+        "front_derailleur",
+        "rear_derailleur"
+      ]
+    },
+    "drivetrain_speeds": {
+      "id": "4314802c-4b65-47d4-9778-be3423d8d02f",
+      "key": "drivetrain_speeds",
+      "label": "Velocidades transmisión",
+      "data_type": "multi_select",
+      "unit": null,
+      "allowed_values": [
+        "1",
+        "5",
+        "6",
+        "7",
+        "8",
+        "9",
+        "10",
+        "11",
+        "12",
+        "13"
+      ],
+      "validation_rules": {},
+      "origin": "existing",
+      "used_by": [
+        "crankset",
+        "chainring"
+      ]
+    },
+    "drivetrain_platform": {
+      "id": "2255c928-f47f-4fab-8f75-2c35e845e995",
+      "key": "drivetrain_platform",
+      "label": "Plataforma transmision",
+      "data_type": "single_select",
+      "unit": null,
+      "allowed_values": [
+        "Shimano HG / SIS",
+        "Shimano Hyperglide+",
+        "Shimano Linkglide / CUES",
+        "SRAM Eagle",
+        "SRAM FlatTop / AXS road",
+        "SRAM T-Type Transmission",
+        "Campagnolo",
+        "Microshift Advent / Acolyte",
+        "Friccion / universal",
+        "Single speed / BMX",
+        "Generico compatible",
+        "Desconocido / sin confirmar"
+      ],
+      "validation_rules": {},
+      "origin": "existing",
+      "used_by": [
+        "crankset",
+        "chainring"
+      ]
+    },
+    "chain_profile_family": {
+      "id": "88dd47b6-9ed4-4406-8576-d9f611c2c3f2",
+      "key": "chain_profile_family",
+      "label": "Perfil cadena",
+      "data_type": "multi_select",
+      "unit": null,
+      "allowed_values": [
+        "Universal 5-8v",
+        "Universal 9-11v",
+        "Shimano HG+",
+        "Shimano Linkglide / CUES",
+        "SRAM Eagle",
+        "SRAM FlatTop",
+        "SRAM T-Type",
+        "Campagnolo",
+        "KMC compatible",
+        "Single speed / BMX",
+        "Otro",
+        "Desconocido / sin confirmar"
+      ],
+      "validation_rules": {},
+      "origin": "existing",
+      "used_by": [
+        "crankset",
+        "chainring"
+      ]
+    },
+    "kit_members": {
+      "id": "d0cfc800-78a6-5bba-945b-ccbff6fa88e1",
+      "key": "kit_members",
+      "label": "Componentes incluidos",
+      "data_type": "json",
+      "unit": null,
+      "allowed_values": [],
+      "validation_rules": {
+        "rows_schema": {
+          "columns": [
+            {
+              "key": "member_role",
+              "type": "token",
+              "label": "Componente",
+              "required": true,
+              "allowed_values": [
+                "maneta",
+                "cáliper",
+                "manguera",
+                "rotor",
+                "adaptador",
+                "cassette",
+                "cadena",
+                "biela",
+                "pedalier",
+                "copas",
+                "rodamientos",
+                "eje",
+                "plato",
+                "mando",
+                "cambio trasero",
+                "desviador",
+                "pastilla",
+                "parche",
+                "pegamento",
+                "válvula",
+                "cinta",
+                "sellante",
+                "rueda delantera",
+                "rueda trasera",
+                "llanta",
+                "maza",
+                "rayos",
+                "cubierta",
+                "tapa",
+                "araña",
+                "oliva",
+                "inserto",
+                "otro",
+                "cable",
+                "soporte",
+                "correa",
+                "espaciador"
+              ]
+            },
+            {
+              "key": "family",
+              "type": "token",
+              "label": "Familia técnica",
+              "required": true,
+              "allowed_values": [
+                "accessory_mount",
+                "audible_signal",
+                "bearing",
+                "bicycle",
+                "bike_bag",
+                "bike_protection",
+                "bmx_cable_detangler",
+                "bottle",
+                "bottle_cage",
+                "bottom_bracket",
+                "bottom_bracket_axle",
+                "bottom_bracket_bearing",
+                "bottom_bracket_cup",
+                "brake_caliper",
+                "brake_fluid",
+                "brake_lever",
+                "brake_mount_adapter",
+                "brake_pad",
+                "brake_shift_combined_control",
+                "brake_small_part",
+                "cassette",
+                "cassette_lockring",
+                "cassette_spacer",
+                "chain",
+                "chain_guide",
+                "chain_link",
+                "chainring",
+                "chainring_guard",
+                "consumer_electronics",
+                "control_cable",
+                "control_housing",
+                "control_small_part",
+                "crank_arm",
+                "crankset",
+                "cycle_computer",
+                "derailleur_hanger",
+                "derailleur_hanger_extender",
+                "derailleur_pulley",
+                "drivetrain_kit",
+                "eyewear",
+                "fastener",
+                "fender",
+                "fixed_cog",
+                "food_beverage",
+                "fork",
+                "frame",
+                "freewheel",
+                "front_derailleur",
+                "grip",
+                "handlebar",
+                "handlebar_covering",
+                "headset",
+                "headset_small_part",
+                "helmet",
+                "hub",
+                "hub_axle",
+                "hub_brake",
+                "hub_small_part",
+                "hydraulic_disc_brake",
+                "hydraulic_fitting",
+                "hydraulic_hose",
+                "kickstand",
+                "light",
+                "lock",
+                "mechanical_disc_brake",
+                "pedal",
+                "pedal_peg",
+                "pump",
+                "rack_basket",
+                "rear_derailleur",
+                "rear_shock",
+                "reflector",
+                "rider_apparel",
+                "rider_bag",
+                "rider_glove",
+                "rider_protection",
+                "rim",
+                "rim_brake",
+                "rim_strip",
+                "rotor",
+                "rotor_mount_adapter",
+                "saddle",
+                "saddle_cover",
+                "seat_clamp",
+                "seatpost",
+                "shifter",
+                "souvenir",
+                "spacer",
+                "spoke",
+                "spoke_nipple",
+                "stem",
+                "tire",
+                "tire_liner",
+                "training_wheel",
+                "tube",
+                "tube_repair",
+                "tubeless_consumable",
+                "tubeless_repair",
+                "tubeless_tape",
+                "tubeless_valve",
+                "valve_small_part",
+                "wheel",
+                "wheel_retention",
+                "workshop_chemical",
+                "workshop_tool"
+              ]
+            },
+            {
+              "key": "quantity",
+              "type": "integer",
+              "label": "Cantidad",
+              "required": true,
+              "validation": {
+                "positive": true
+              }
+            },
+            {
+              "key": "position",
+              "type": "token",
+              "label": "Posición",
+              "required": true,
+              "allowed_values": [
+                "Delantero",
+                "Trasero",
+                "Izquierdo",
+                "Derecho",
+                "Sin posición"
+              ]
+            },
+            {
+              "key": "identity_brand",
+              "type": "text",
+              "label": "Marca",
+              "required": false
+            },
+            {
+              "key": "identity_model",
+              "type": "text",
+              "label": "Modelo",
+              "required": false
+            }
+          ],
+          "version": 1
+        }
+      },
+      "origin": "existing",
+      "used_by": [
+        "crankset"
+      ]
+    },
+    "spec_evidence_source": {
+      "id": "4f055961-6c16-430b-a4e2-e6b09dc1cccc",
+      "key": "spec_evidence_source",
+      "label": "Fuente de la declaración",
+      "data_type": "text",
+      "unit": null,
+      "allowed_values": [],
+      "validation_rules": {},
+      "origin": "existing",
+      "used_by": [
+        "crankset",
+        "crank_arm",
+        "chainring"
+      ]
+    },
+    "included_chainring_count": {
+      "id": "b49a8d89-5683-53fb-ba7f-e28a273b63a8",
+      "key": "included_chainring_count",
+      "origin": "new",
+      "label": "Cantidad de platos incluidos",
+      "data_type": "number",
+      "unit": null,
+      "allowed_values": [],
+      "validation_rules": {
+        "min": "0",
+        "integer": true
+      },
+      "used_by": [
+        "crankset",
+        "drivetrain_kit"
+      ]
+    },
+    "crank_side": {
+      "id": "5cc2441b-a741-48ff-a917-b76b10a6a9d0",
+      "key": "crank_side",
+      "label": "Lado biela",
+      "data_type": "single_select",
+      "unit": null,
+      "allowed_values": [
+        "Izquierda",
+        "Derecha",
+        "Par"
+      ],
+      "validation_rules": {},
+      "origin": "existing",
+      "used_by": [
+        "crank_arm"
+      ]
+    },
+    "crank_bolt_thread": {
+      "id": "ae365ebe-2558-5b66-8f5f-1b949294ff89",
+      "key": "crank_bolt_thread",
+      "origin": "new",
+      "label": "Rosca del perno de biela",
+      "data_type": "single_select",
+      "unit": null,
+      "allowed_values": [
+        "M8",
+        "M12",
+        "M14",
+        "3/8\"",
+        "Desconocido / sin confirmar"
+      ],
+      "validation_rules": {},
+      "used_by": [
+        "bottom_bracket_axle",
+        "crank_arm"
+      ]
+    },
+    "teeth_count": {
+      "id": "be06a4aa-5434-517c-a7ef-5630d6434e8c",
+      "key": "teeth_count",
+      "origin": "new",
+      "label": "Cantidad de dientes",
+      "data_type": "number",
+      "unit": "T",
+      "allowed_values": [],
+      "validation_rules": {
+        "positive": true,
+        "integer": true
+      },
+      "used_by": [
+        "chainring"
+      ]
+    },
+    "chainring_bolt_count": {
+      "id": "b552b4dc-fcd9-4ca0-a1d3-95362a8b12e8",
+      "key": "chainring_bolt_count",
+      "label": "Pernos corona",
+      "data_type": "single_select",
+      "unit": null,
+      "allowed_values": [
+        "3",
+        "4",
+        "5",
+        "Direct mount",
+        "Otro"
+      ],
+      "validation_rules": {},
+      "origin": "existing",
+      "used_by": [
+        "chainring"
+      ]
+    },
+    "chainring_bolt_pattern_symmetric": {
+      "id": "5387bbda-734b-58dc-8124-d628d894b204",
+      "key": "chainring_bolt_pattern_symmetric",
+      "origin": "new",
+      "label": "Patrón de pernos simétrico",
+      "data_type": "boolean",
+      "unit": null,
+      "allowed_values": [],
+      "validation_rules": {},
+      "used_by": [
+        "chainring"
+      ]
+    },
+    "chainring_offset_mm": {
+      "id": "7ff0fd82-2da6-4435-8265-d250e8e8c5ae",
+      "key": "chainring_offset_mm",
+      "label": "Offset corona",
+      "data_type": "number",
+      "unit": "mm",
+      "allowed_values": [],
+      "validation_rules": {},
+      "origin": "existing",
+      "used_by": [
+        "chainring"
+      ]
+    },
+    "narrow_wide": {
+      "id": "3f272397-c6f3-4e26-baf9-27c6df9cb75c",
+      "key": "narrow_wide",
+      "label": "Narrow-wide",
+      "data_type": "boolean",
+      "unit": null,
+      "allowed_values": [],
+      "validation_rules": {},
+      "origin": "existing",
+      "used_by": [
+        "chainring"
+      ]
+    },
+    "chainring_position": {
+      "id": "d42fc32d-6d97-5f68-aa0e-351e83f630f0",
+      "key": "chainring_position",
+      "origin": "new",
+      "label": "Posición del plato",
+      "data_type": "single_select",
+      "unit": null,
+      "allowed_values": [
+        "Exterior",
+        "Medio",
+        "Interior",
+        "Único",
+        "Desconocido / sin confirmar"
+      ],
+      "validation_rules": {},
+      "used_by": [
+        "chainring"
+      ]
+    },
+    "chain_width_family": {
+      "id": "bb9b622f-9a2d-43f6-abdc-9c1dbd67f29c",
+      "key": "chain_width_family",
+      "label": "Familia ancho cadena",
+      "data_type": "single_select",
+      "unit": null,
+      "allowed_values": [
+        "1/8",
+        "3/32",
+        "11/128",
+        "Otro",
+        "Desconocido / sin confirmar"
+      ],
+      "validation_rules": {},
+      "origin": "existing",
+      "used_by": [
+        "chainring"
+      ]
+    },
+    "crankset_construction": {
+      "key": "crankset_construction",
+      "id": "2b01e54e-3bbf-5875-81b6-12f2196720d9",
+      "origin": "new",
+      "label": "Construcción de este conjunto",
+      "data_type": "single_select",
+      "unit": null,
+      "allowed_values": [
+        "Una pieza (americana / Ashtabula)",
+        "Dos piezas (eje solidario al brazo derecho)",
+        "Tres piezas (eje independiente)",
+        "Otra construcción documentada"
+      ],
+      "validation_rules": {},
+      "used_by": [
+        "crankset"
+      ]
+    },
+    "bottom_bracket_included": {
+      "key": "bottom_bracket_included",
+      "id": "0a2cf77a-4b6b-53f2-bc25-8acef844d7aa",
+      "origin": "new",
+      "label": "El envase trae el pedalier",
+      "data_type": "boolean",
+      "unit": null,
+      "allowed_values": [],
+      "validation_rules": {},
+      "used_by": [
+        "crankset"
+      ]
+    },
+    "crankset_bottom_bracket_supplied": {
+      "key": "crankset_bottom_bracket_supplied",
+      "id": "97c2f60d-cfd5-5be9-8c3a-a35887e7b582",
+      "origin": "new",
+      "label": "Pedalier que viene en el envase",
+      "data_type": "json",
+      "unit": null,
+      "allowed_values": [],
+      "validation_rules": {
+        "rows_schema": {
+          "version": 1,
+          "unique_by": [
+            [
+              "supplied_identity"
+            ]
+          ],
+          "columns": [
+            {
+              "key": "supplied_identity",
+              "label": "Identificación de esta pieza",
+              "type": "text",
+              "required": true
+            },
+            {
+              "key": "bb_model_code",
+              "label": "Pedalier documentado",
+              "type": "text"
+            },
+            {
+              "key": "shell_interface",
+              "label": "Caja para la que sirve",
+              "type": "token",
+              "allowed_values": [
+                "BSA roscado",
+                "Pressfit",
+                "BB30 / PF30",
+                "Mid / BMX",
+                "Americano / one-piece",
+                "Cuadrado cartucho",
+                "Hollowtech / 24mm externo",
+                "Otro",
+                "Desconocido / sin confirmar"
+              ]
+            },
+            {
+              "key": "shell_width_mm",
+              "label": "Ancho de caja",
+              "type": "decimal",
+              "unit": "mm",
+              "validation": {
+                "positive": true
+              }
+            },
+            {
+              "key": "spindle_length_mm",
+              "label": "Largo de eje",
+              "type": "decimal",
+              "unit": "mm",
+              "validation": {
+                "positive": true
+              }
+            },
+            {
+              "key": "source_document",
+              "label": "Documento o envase identificado",
+              "type": "text",
+              "required": true
+            },
+            {
+              "key": "source_url",
+              "label": "URL del documento, si existe",
+              "type": "url"
+            }
+          ]
+        }
+      },
+      "used_by": [
+        "crankset"
+      ]
+    },
+    "chainring_mounting": {
+      "key": "chainring_mounting",
+      "id": "51b0f71b-c2cf-58e6-95db-5ed5b3bd4825",
+      "origin": "new",
+      "label": "Cómo van montados los platos",
+      "data_type": "single_select",
+      "unit": null,
+      "allowed_values": [
+        "Platos desmontables por pernos",
+        "Platos remachados no desmontables",
+        "Plato direct mount al brazo",
+        "Otro montaje documentado"
+      ],
+      "validation_rules": {},
+      "used_by": [
+        "crankset"
+      ]
+    },
+    "crankset_chain_guard_included": {
+      "key": "crankset_chain_guard_included",
+      "id": "dbeba3fc-1788-5be8-bee4-0bab4ee43f45",
+      "origin": "new",
+      "label": "El envase trae cubrecadena",
+      "data_type": "boolean",
+      "unit": null,
+      "allowed_values": [],
+      "validation_rules": {},
+      "used_by": [
+        "crankset"
+      ]
+    },
+    "crank_fixing_bolt_included": {
+      "key": "crank_fixing_bolt_included",
+      "id": "c31e83b1-5a8b-5ede-b04b-aee90f8b0b16",
+      "origin": "new",
+      "label": "El envase trae el perno de fijación",
+      "data_type": "boolean",
+      "unit": null,
+      "allowed_values": [],
+      "validation_rules": {},
+      "used_by": [
+        "crankset"
+      ]
+    },
+    "crankset_compatibility_claims": {
+      "key": "crankset_compatibility_claims",
+      "id": "4586026a-87c6-5d07-af49-f331d3a56b8d",
+      "origin": "new",
+      "label": "Pedalieres, transmisiones o piezas declaradas",
+      "data_type": "json",
+      "unit": null,
+      "allowed_values": [],
+      "validation_rules": {
+        "rows_schema": {
+          "version": 1,
+          "unique_by": [
+            [
+              "claim_identity"
+            ]
+          ],
+          "columns": [
+            {
+              "key": "claim_identity",
+              "label": "Identificación de esta declaración",
+              "type": "text",
+              "required": true
+            },
+            {
+              "key": "scope_kind",
+              "label": "Alcance de la declaración",
+              "type": "token",
+              "required": true,
+              "allowed_values": [
+                "Modelo documentado",
+                "Interfaz o estándar documentado"
+              ]
+            },
+            {
+              "key": "brand",
+              "label": "Marca del destino",
+              "type": "text"
+            },
+            {
+              "key": "model",
+              "label": "Modelo del destino",
+              "type": "text"
+            },
+            {
+              "key": "generation",
+              "label": "Generación o edición",
+              "type": "text"
+            },
+            {
+              "key": "years",
+              "label": "Años documentados",
+              "type": "text"
+            },
+            {
+              "key": "declared_interface",
+              "label": "Interfaz o estándar declarado",
+              "type": "text"
+            },
+            {
+              "key": "declared_grade",
+              "label": "Grado declarado por la fuente",
+              "type": "token",
+              "allowed_values": [
+                "Misma pieza declarada",
+                "Usable con diferencias declaradas",
+                "No intercambiable declarado"
+              ]
+            },
+            {
+              "key": "conditions",
+              "label": "Condiciones de la declaración",
+              "type": "text"
+            },
+            {
+              "key": "source_document",
+              "label": "Documento o envase identificado",
+              "type": "text",
+              "required": true
+            },
+            {
+              "key": "source_url",
+              "label": "URL del documento, si existe",
+              "type": "url"
+            }
+          ]
+        }
+      },
+      "used_by": [
+        "crankset"
+      ]
+    },
+    "crank_arm_carries_chainring_mount": {
+      "key": "crank_arm_carries_chainring_mount",
+      "id": "47a2232c-5326-5230-92a9-5b499f5371d8",
+      "origin": "new",
+      "label": "Este brazo lleva el asiento de los platos",
+      "data_type": "boolean",
+      "unit": null,
+      "allowed_values": [],
+      "validation_rules": {},
+      "used_by": [
+        "crank_arm"
+      ]
+    },
+    "crank_arm_unit_count": {
+      "key": "crank_arm_unit_count",
+      "id": "8c497da1-5cc1-587b-b6be-b696d3323d10",
+      "origin": "new",
+      "label": "Cuántos brazos trae el envase",
+      "data_type": "number",
+      "unit": null,
+      "allowed_values": [],
+      "validation_rules": {
+        "integer": true,
+        "min": 2
+      },
+      "used_by": [
+        "crank_arm"
+      ]
+    },
+    "crank_arm_units": {
+      "key": "crank_arm_units",
+      "id": "3b5d4505-11a9-5976-b688-23fa37efa06c",
+      "origin": "new",
+      "label": "Brazos que trae el envase",
+      "data_type": "json",
+      "unit": null,
+      "allowed_values": [],
+      "validation_rules": {
+        "rows_schema": {
+          "version": 1,
+          "unique_by": [
+            [
+              "unit_side"
+            ]
+          ],
+          "columns": [
+            {
+              "key": "unit_identity",
+              "label": "Identificación de este brazo",
+              "type": "text",
+              "required": true
+            },
+            {
+              "key": "unit_side",
+              "label": "Lado",
+              "type": "token",
+              "required": true,
+              "allowed_values": [
+                "Izquierda",
+                "Derecha"
+              ]
+            },
+            {
+              "key": "length_mm",
+              "label": "Largo",
+              "type": "decimal",
+              "unit": "mm",
+              "validation": {
+                "positive": true
+              }
+            },
+            {
+              "key": "pedal_thread",
+              "label": "Rosca de pedal de este brazo",
+              "type": "text"
+            },
+            {
+              "key": "carries_chainring_mount",
+              "label": "Lleva el asiento de los platos",
+              "type": "boolean"
+            },
+            {
+              "key": "source_document",
+              "label": "Documento o envase identificado",
+              "type": "text",
+              "required": true
+            },
+            {
+              "key": "source_url",
+              "label": "URL del documento, si existe",
+              "type": "url"
+            }
+          ]
+        }
+      },
+      "used_by": [
+        "crank_arm"
+      ]
+    },
+    "crank_arm_spindle_designation": {
+      "key": "crank_arm_spindle_designation",
+      "id": "258e351c-c846-5954-8df3-627c07f1a141",
+      "origin": "new",
+      "label": "Designación del eje según el documento",
+      "data_type": "text",
+      "unit": null,
+      "allowed_values": [],
+      "validation_rules": {},
+      "used_by": [
+        "crank_arm"
+      ]
+    },
+    "crank_arm_system_construction": {
+      "key": "crank_arm_system_construction",
+      "id": "db3c6c89-c099-58c4-a5a3-1ac69762dbe0",
+      "origin": "new",
+      "label": "Construcción del sistema al que pertenece",
+      "data_type": "single_select",
+      "unit": null,
+      "allowed_values": [
+        "Una pieza (americana / Ashtabula)",
+        "Dos piezas (eje solidario al brazo derecho)",
+        "Tres piezas (eje independiente)",
+        "Otra construcción documentada"
+      ],
+      "validation_rules": {},
+      "used_by": [
+        "crank_arm"
+      ]
+    },
+    "crank_arm_compatibility_claims": {
+      "key": "crank_arm_compatibility_claims",
+      "id": "46769069-c64f-5e14-b1f3-3be2b884b544",
+      "origin": "new",
+      "label": "Ejes, sistemas o piezas declaradas",
+      "data_type": "json",
+      "unit": null,
+      "allowed_values": [],
+      "validation_rules": {
+        "rows_schema": {
+          "version": 1,
+          "unique_by": [
+            [
+              "claim_identity"
+            ]
+          ],
+          "columns": [
+            {
+              "key": "claim_identity",
+              "label": "Identificación de esta declaración",
+              "type": "text",
+              "required": true
+            },
+            {
+              "key": "scope_kind",
+              "label": "Alcance de la declaración",
+              "type": "token",
+              "required": true,
+              "allowed_values": [
+                "Modelo documentado",
+                "Interfaz o estándar documentado"
+              ]
+            },
+            {
+              "key": "brand",
+              "label": "Marca del destino",
+              "type": "text"
+            },
+            {
+              "key": "model",
+              "label": "Modelo del destino",
+              "type": "text"
+            },
+            {
+              "key": "generation",
+              "label": "Generación o edición",
+              "type": "text"
+            },
+            {
+              "key": "years",
+              "label": "Años documentados",
+              "type": "text"
+            },
+            {
+              "key": "declared_interface",
+              "label": "Interfaz o estándar declarado",
+              "type": "text"
+            },
+            {
+              "key": "declared_grade",
+              "label": "Grado declarado por la fuente",
+              "type": "token",
+              "allowed_values": [
+                "Misma pieza declarada",
+                "Usable con diferencias declaradas",
+                "No intercambiable declarado"
+              ]
+            },
+            {
+              "key": "conditions",
+              "label": "Condiciones de la declaración",
+              "type": "text"
+            },
+            {
+              "key": "source_document",
+              "label": "Documento o envase identificado",
+              "type": "text",
+              "required": true
+            },
+            {
+              "key": "source_url",
+              "label": "URL del documento, si existe",
+              "type": "url"
+            }
+          ]
+        }
+      },
+      "used_by": [
+        "crank_arm"
+      ]
+    },
+    "chainring_package_kind": {
+      "key": "chainring_package_kind",
+      "id": "020f74cd-b616-5228-80ae-09a45b69322a",
+      "origin": "new",
+      "label": "Qué trae este envase",
+      "data_type": "single_select",
+      "unit": null,
+      "allowed_values": [
+        "Plato individual",
+        "Juego de platos en el mismo envase"
+      ],
+      "validation_rules": {},
+      "used_by": [
+        "chainring"
+      ]
+    },
+    "chainring_set_member_count": {
+      "key": "chainring_set_member_count",
+      "id": "8a0cb55c-b93a-5e5a-ad37-e2da4f8aff23",
+      "origin": "new",
+      "label": "Cuántos platos trae el envase",
+      "data_type": "number",
+      "unit": null,
+      "allowed_values": [],
+      "validation_rules": {
+        "integer": true,
+        "min": 2
+      },
+      "used_by": [
+        "chainring"
+      ]
+    },
+    "chainring_set_members": {
+      "key": "chainring_set_members",
+      "id": "abde5140-4465-5445-8cdb-0e7b117ef226",
+      "origin": "new",
+      "label": "Platos que trae el juego",
+      "data_type": "json",
+      "unit": null,
+      "allowed_values": [],
+      "validation_rules": {
+        "rows_schema": {
+          "version": 1,
+          "unique_by": [
+            [
+              "member_identity"
+            ],
+            [
+              "position"
+            ]
+          ],
+          "columns": [
+            {
+              "key": "member_identity",
+              "label": "Identificación de este plato",
+              "type": "text",
+              "required": true
+            },
+            {
+              "key": "position",
+              "label": "Posición",
+              "type": "token",
+              "required": true,
+              "allowed_values": [
+                "Exterior",
+                "Medio",
+                "Interior",
+                "Único"
+              ]
+            },
+            {
+              "key": "teeth",
+              "label": "Dientes",
+              "type": "integer",
+              "required": true,
+              "unit": "T",
+              "validation": {
+                "positive": true
+              }
+            },
+            {
+              "key": "bcd_mm",
+              "label": "Círculo de pernos",
+              "type": "decimal",
+              "unit": "mm",
+              "validation": {
+                "positive": true
+              }
+            },
+            {
+              "key": "bolt_count",
+              "label": "Pernos",
+              "type": "integer",
+              "validation": {
+                "positive": true
+              }
+            },
+            {
+              "key": "pattern_symmetric",
+              "label": "Reparto simétrico",
+              "type": "boolean"
+            },
+            {
+              "key": "member_designation",
+              "label": "Designación en el documento",
+              "type": "text"
+            },
+            {
+              "key": "source_document",
+              "label": "Documento o envase identificado",
+              "type": "text",
+              "required": true
+            },
+            {
+              "key": "source_url",
+              "label": "URL del documento, si existe",
+              "type": "url"
+            }
+          ]
+        }
+      },
+      "used_by": [
+        "chainring"
+      ]
+    },
+    "chainring_direct_mount_generation": {
+      "key": "chainring_direct_mount_generation",
+      "id": "a7f70a60-38c9-5df2-9a27-78bdaf03ecea",
+      "origin": "new",
+      "label": "Direct mount documentado",
+      "data_type": "text",
+      "unit": null,
+      "allowed_values": [],
+      "validation_rules": {},
+      "used_by": [
+        "chainring"
+      ]
+    },
+    "chainring_offset_declarations": {
+      "key": "chainring_offset_declarations",
+      "id": "e82d5c9e-f718-5b49-bab1-ce2d2bf7b121",
+      "origin": "new",
+      "label": "Desplazamiento declarado, con su referencia",
+      "data_type": "json",
+      "unit": null,
+      "allowed_values": [],
+      "validation_rules": {
+        "rows_schema": {
+          "version": 1,
+          "unique_by": [
+            [
+              "measurement_identity"
+            ]
+          ],
+          "columns": [
+            {
+              "key": "measurement_identity",
+              "label": "Identificación de esta cota",
+              "type": "text",
+              "required": true
+            },
+            {
+              "key": "offset_mm",
+              "label": "Desplazamiento",
+              "type": "decimal",
+              "required": true,
+              "unit": "mm"
+            },
+            {
+              "key": "datum",
+              "label": "Desde dónde se mide",
+              "type": "text",
+              "required": true
+            },
+            {
+              "key": "declared_for",
+              "label": "Plato al que corresponde",
+              "type": "text"
+            },
+            {
+              "key": "source_document",
+              "label": "Documento o envase identificado",
+              "type": "text",
+              "required": true
+            },
+            {
+              "key": "source_url",
+              "label": "URL del documento, si existe",
+              "type": "url"
+            }
+          ]
+        }
+      },
+      "used_by": [
+        "chainring"
+      ]
+    },
+    "chainring_oem_pairing_declarations": {
+      "key": "chainring_oem_pairing_declarations",
+      "id": "9e255db1-97ef-518d-a386-7f832055e883",
+      "origin": "new",
+      "label": "Emparejado documentado por el fabricante",
+      "data_type": "json",
+      "unit": null,
+      "allowed_values": [],
+      "validation_rules": {
+        "rows_schema": {
+          "version": 1,
+          "unique_by": [
+            [
+              "pairing_identity"
+            ]
+          ],
+          "columns": [
+            {
+              "key": "pairing_identity",
+              "label": "Identificación de este emparejado",
+              "type": "text",
+              "required": true
+            },
+            {
+              "key": "declared_combination",
+              "label": "Combinación documentada",
+              "type": "text",
+              "required": true
+            },
+            {
+              "key": "member_designation",
+              "label": "Designación de este plato",
+              "type": "text"
+            },
+            {
+              "key": "fixing_bolt_designation",
+              "label": "Pernos documentados",
+              "type": "text"
+            },
+            {
+              "key": "conditions",
+              "label": "Condiciones de la fuente",
+              "type": "text"
+            },
+            {
+              "key": "source_document",
+              "label": "Documento o envase identificado",
+              "type": "text",
+              "required": true
+            },
+            {
+              "key": "source_url",
+              "label": "URL del documento, si existe",
+              "type": "url"
+            }
+          ]
+        }
+      },
+      "used_by": [
+        "chainring"
+      ]
+    },
+    "chainring_compatibility_claims": {
+      "key": "chainring_compatibility_claims",
+      "id": "d9ab4fec-59b0-5b38-b682-0f86c50b8a88",
+      "origin": "new",
+      "label": "Pedivelas o transmisiones declaradas",
+      "data_type": "json",
+      "unit": null,
+      "allowed_values": [],
+      "validation_rules": {
+        "rows_schema": {
+          "version": 1,
+          "unique_by": [
+            [
+              "claim_identity"
+            ]
+          ],
+          "columns": [
+            {
+              "key": "claim_identity",
+              "label": "Identificación de esta declaración",
+              "type": "text",
+              "required": true
+            },
+            {
+              "key": "scope_kind",
+              "label": "Alcance de la declaración",
+              "type": "token",
+              "required": true,
+              "allowed_values": [
+                "Modelo documentado",
+                "Interfaz o estándar documentado"
+              ]
+            },
+            {
+              "key": "brand",
+              "label": "Marca del destino",
+              "type": "text"
+            },
+            {
+              "key": "model",
+              "label": "Modelo del destino",
+              "type": "text"
+            },
+            {
+              "key": "generation",
+              "label": "Generación o edición",
+              "type": "text"
+            },
+            {
+              "key": "years",
+              "label": "Años documentados",
+              "type": "text"
+            },
+            {
+              "key": "declared_interface",
+              "label": "Interfaz o estándar declarado",
+              "type": "text"
+            },
+            {
+              "key": "declared_grade",
+              "label": "Grado declarado por la fuente",
+              "type": "token",
+              "allowed_values": [
+                "Misma pieza declarada",
+                "Usable con diferencias declaradas",
+                "No intercambiable declarado"
+              ]
+            },
+            {
+              "key": "conditions",
+              "label": "Condiciones de la declaración",
+              "type": "text"
+            },
+            {
+              "key": "source_document",
+              "label": "Documento o envase identificado",
+              "type": "text",
+              "required": true
+            },
+            {
+              "key": "source_url",
+              "label": "URL del documento, si existe",
+              "type": "url"
+            }
+          ]
+        }
+      },
+      "used_by": [
+        "chainring"
+      ]
+    }
+  },
+  "templates": [
+    {
+      "key": "crankset",
+      "name": "Volante / Pedivela",
+      "id": "91a0c6d5-9c0a-443f-b2e9-2e0ab5f431ce",
+      "technical_family": "crankset",
+      "origin": "existing",
+      "form_contract": {
+        "rules_version": 2,
+        "roles": {
+          "chainring_count": "legacy",
+          "front_chainring_count": "legacy",
+          "chainring_teeth_rows": "contents",
+          "chainring_teeth": "legacy",
+          "spindle_interface": "measurement",
+          "spindle_included": "contents",
+          "spindle_taper_standard": "measurement",
+          "bottom_bracket_required": "measurement",
+          "bottom_bracket_family": "legacy",
+          "crank_arm_length_mm": "measurement",
+          "chainline_mm": "measurement",
+          "pedal_thread": "measurement",
+          "chainring_mount_type": "measurement",
+          "chainring_bcd_mm": "legacy",
+          "compatible_rear_speeds": "measurement",
+          "drivetrain_speeds": "legacy",
+          "drivetrain_platform": "declaration",
+          "chain_profile_family": "legacy",
+          "kit_members": "legacy",
+          "spec_evidence_source": "declaration",
+          "included_chainring_count": "contents",
+          "crankset_construction": "primary",
+          "bottom_bracket_included": "primary",
+          "crankset_bottom_bracket_supplied": "primary",
+          "chainring_mounting": "primary",
+          "crankset_chain_guard_included": "measurement",
+          "crank_fixing_bolt_included": "measurement",
+          "crankset_compatibility_claims": "declaration"
+        },
+        "semantic_roles": {
+          "chainring_count": "legacy",
+          "front_chainring_count": "legacy",
+          "chainring_teeth_rows": "contents",
+          "chainring_teeth": "legacy",
+          "spindle_interface": "compatibility",
+          "spindle_included": "contents",
+          "spindle_taper_standard": "compatibility",
+          "bottom_bracket_required": "compatibility",
+          "bottom_bracket_family": "legacy",
+          "crank_arm_length_mm": "measurement",
+          "chainline_mm": "measurement",
+          "pedal_thread": "compatibility",
+          "chainring_mount_type": "compatibility",
+          "chainring_bcd_mm": "legacy",
+          "compatible_rear_speeds": "compatibility",
+          "drivetrain_speeds": "legacy",
+          "drivetrain_platform": "declaration",
+          "chain_profile_family": "legacy",
+          "kit_members": "legacy",
+          "spec_evidence_source": "evidence",
+          "included_chainring_count": "contents",
+          "crankset_construction": "intrinsic",
+          "bottom_bracket_included": "contents",
+          "crankset_bottom_bracket_supplied": "contents",
+          "chainring_mounting": "intrinsic",
+          "crankset_chain_guard_included": "contents",
+          "crank_fixing_bolt_included": "contents",
+          "crankset_compatibility_claims": "compatibility"
+        },
+        "labels": {
+          "chainring_teeth_rows": "Dientes de los platos incluidos"
+        },
+        "allowed_when": {
+          "chainring_count": {
+            "kind": "never"
+          },
+          "front_chainring_count": {
+            "kind": "never"
+          },
+          "chainring_teeth_rows": {
+            "kind": "when",
+            "rows": [
+              [
+                {
+                  "field": "included_chainring_count",
+                  "operator": "gt",
+                  "value_type": "decimal",
+                  "value": "0"
+                }
+              ]
+            ]
+          },
+          "chainring_teeth": {
+            "kind": "never"
+          },
+          "spindle_interface": {
+            "kind": "always"
+          },
+          "spindle_included": {
+            "kind": "always"
+          },
+          "spindle_taper_standard": {
+            "kind": "when",
+            "rows": [
+              [
+                {
+                  "field": "spindle_interface",
+                  "operator": "in",
+                  "value_type": "token",
+                  "value": [
+                    "Cuadrado JIS",
+                    "Cuadrado ISO"
+                  ]
+                }
+              ]
+            ]
+          },
+          "bottom_bracket_required": {
+            "kind": "always"
+          },
+          "bottom_bracket_family": {
+            "kind": "never"
+          },
+          "crank_arm_length_mm": {
+            "kind": "always"
+          },
+          "chainline_mm": {
+            "kind": "when",
+            "rows": [
+              [
+                {
+                  "field": "spindle_included",
+                  "operator": "eq",
+                  "value_type": "boolean",
+                  "value": true
+                }
+              ]
+            ]
+          },
+          "pedal_thread": {
+            "kind": "always"
+          },
+          "chainring_mount_type": {
+            "kind": "always"
+          },
+          "chainring_bcd_mm": {
+            "kind": "never"
+          },
+          "compatible_rear_speeds": {
+            "kind": "always"
+          },
+          "drivetrain_speeds": {
+            "kind": "never"
+          },
+          "drivetrain_platform": {
+            "kind": "always"
+          },
+          "chain_profile_family": {
+            "kind": "never"
+          },
+          "kit_members": {
+            "kind": "never"
+          },
+          "spec_evidence_source": {
+            "kind": "always"
+          },
+          "included_chainring_count": {
+            "kind": "always"
+          },
+          "crankset_construction": {
+            "kind": "always"
+          },
+          "bottom_bracket_included": {
+            "kind": "always"
+          },
+          "crankset_bottom_bracket_supplied": {
+            "kind": "when",
+            "rows": [
+              [
+                {
+                  "field": "bottom_bracket_included",
+                  "operator": "eq",
+                  "value_type": "boolean",
+                  "value": true
+                }
+              ]
+            ]
+          },
+          "chainring_mounting": {
+            "kind": "when",
+            "rows": [
+              [
+                {
+                  "field": "included_chainring_count",
+                  "operator": "gt",
+                  "value_type": "decimal",
+                  "value": "0"
+                }
+              ]
+            ]
+          },
+          "crankset_chain_guard_included": {
+            "kind": "always"
+          },
+          "crank_fixing_bolt_included": {
+            "kind": "always"
+          },
+          "crankset_compatibility_claims": {
+            "kind": "always"
+          }
+        },
+        "required_when": {
+          "chainring_count": {
+            "kind": "never"
+          },
+          "front_chainring_count": {
+            "kind": "never"
+          },
+          "chainring_teeth_rows": {
+            "kind": "when",
+            "rows": [
+              [
+                {
+                  "field": "included_chainring_count",
+                  "operator": "gt",
+                  "value_type": "decimal",
+                  "value": "0"
+                }
+              ]
+            ]
+          },
+          "chainring_teeth": {
+            "kind": "never"
+          },
+          "spindle_interface": {
+            "kind": "always"
+          },
+          "spindle_included": {
+            "kind": "always"
+          },
+          "spindle_taper_standard": {
+            "kind": "when",
+            "rows": [
+              [
+                {
+                  "field": "spindle_interface",
+                  "operator": "in",
+                  "value_type": "token",
+                  "value": [
+                    "Cuadrado JIS",
+                    "Cuadrado ISO"
+                  ]
+                }
+              ]
+            ]
+          },
+          "bottom_bracket_required": {
+            "kind": "never"
+          },
+          "bottom_bracket_family": {
+            "kind": "never"
+          },
+          "crank_arm_length_mm": {
+            "kind": "never"
+          },
+          "chainline_mm": {
+            "kind": "never"
+          },
+          "pedal_thread": {
+            "kind": "never"
+          },
+          "chainring_mount_type": {
+            "kind": "never"
+          },
+          "chainring_bcd_mm": {
+            "kind": "never"
+          },
+          "compatible_rear_speeds": {
+            "kind": "never"
+          },
+          "drivetrain_speeds": {
+            "kind": "never"
+          },
+          "drivetrain_platform": {
+            "kind": "never"
+          },
+          "chain_profile_family": {
+            "kind": "never"
+          },
+          "kit_members": {
+            "kind": "never"
+          },
+          "spec_evidence_source": {
+            "kind": "never"
+          },
+          "included_chainring_count": {
+            "kind": "always"
+          },
+          "crankset_construction": {
+            "kind": "always"
+          },
+          "bottom_bracket_included": {
+            "kind": "always"
+          },
+          "crankset_bottom_bracket_supplied": {
+            "kind": "when",
+            "rows": [
+              [
+                {
+                  "field": "bottom_bracket_included",
+                  "operator": "eq",
+                  "value_type": "boolean",
+                  "value": true
+                }
+              ]
+            ]
+          },
+          "chainring_mounting": {
+            "kind": "when",
+            "rows": [
+              [
+                {
+                  "field": "included_chainring_count",
+                  "operator": "gt",
+                  "value_type": "decimal",
+                  "value": "0"
+                }
+              ]
+            ]
+          },
+          "crankset_chain_guard_included": {
+            "kind": "never"
+          },
+          "crank_fixing_bolt_included": {
+            "kind": "never"
+          },
+          "crankset_compatibility_claims": {
+            "kind": "never"
+          }
+        },
+        "allowed_options": {
+          "pedal_thread": [
+            "9/16",
+            "1/2",
+            "Desconocido / sin confirmar"
+          ]
+        },
+        "prerequisites": {
+          "drivetrain_platform": [
+            "spec_evidence_source"
+          ],
+          "bottom_bracket_required": [
+            "spec_evidence_source"
+          ],
+          "chainring_teeth_rows": [
+            "spec_evidence_source"
+          ],
+          "crankset_compatibility_claims": [
+            "spec_evidence_source"
+          ],
+          "crank_arm_length_mm": [
+            "spec_evidence_source"
+          ],
+          "pedal_thread": [
+            "spec_evidence_source"
+          ],
+          "chainring_mount_type": [
+            "spec_evidence_source"
+          ],
+          "spindle_interface": [
+            "spec_evidence_source"
+          ],
+          "spindle_taper_standard": [
+            "spec_evidence_source"
+          ],
+          "chainline_mm": [
+            "spec_evidence_source"
+          ],
+          "compatible_rear_speeds": [
+            "spec_evidence_source"
+          ],
+          "chainring_mounting": [
+            "spec_evidence_source"
+          ]
+        },
+        "helpers": {
+          "chainring_count": "Cantidad antigua sin distinguir contenido y configuración. Se conserva; no se copia al contenido ni acredita capacidad de montaje.",
+          "included_chainring_count": "Número de platos o coronas dentadas suministrados con esta variante. Dos coronas integradas en una pieza cuentan como dos platos; no es cantidad de unidades comerciales ni de posiciones simultáneas. Cero requiere exclusión documentada. Sin confirmación queda Sin dato; no se deriva de opciones, fotografías incompletas ni condiciones de pesaje.",
+          "chainring_teeth_rows": "Un plato por fila, con su posición y su propio círculo de pernos. Un triple puede llevar dos círculos distintos en el mismo conjunto: el exterior y el medio en uno, el interior en otro.",
+          "crankset_construction": "Cuántas piezas forman el conjunto. Una pieza es la biela americana que atraviesa la caja; dos piezas lleva el eje solidario al brazo derecho; tres piezas usa un eje independiente. No se confunde con cuántos platos trae.",
+          "spindle_interface": "Qué recibe el eje en este conjunto, o qué eje trae. En una biela de una pieza el eje es la propia biela.",
+          "spindle_taper_standard": "Cuál de los dos cuadrados declara el documento. JIS e ISO comparten el ángulo de 2°; el ISO es más largo y termina más fino, así que la misma biela se asienta unos 4,5 mm más afuera sobre un eje JIS. Eso mueve la línea de cadena, y no es una incompatibilidad física universal: la fuente habla de elegir el largo de eje que da la línea buscada. No se deduce de la marca.",
+          "chainline_mm": "Línea de cadena que publica el fabricante para este conjunto con su propio eje. Si el eje va aparte, la línea depende del pedalier y del largo de eje elegidos y se declara en cada combinación.",
+          "bottom_bracket_required": "Una fila por combinación documentada: caja, pedalier, largo de eje, línea de cadena resultante y su condición. Un mismo conjunto admite varios pedalieres con líneas distintas; una cifra de una fila no vale para las demás ni para otros modelos.",
+          "bottom_bracket_included": "Que el conjunto necesite una caja determinada y que el envase traiga el pedalier son dos respuestas distintas.",
+          "crankset_bottom_bracket_supplied": "Lo que trae la caja, identificado. Sin pedalier incluido no hay contenido que declarar.",
+          "chainring_mounting": "Si los platos se sacan con pernos, si van remachados y no se desmontan, o si el plato va direct mount al brazo. Un conjunto sin platos incluidos no responde esto.",
+          "crankset_chain_guard_included": "Contenido del envase, no una compatibilidad.",
+          "crank_fixing_bolt_included": "Contenido del envase. Su presencia no dice qué eje recibe.",
+          "crankset_compatibility_claims": "Declaraciones documentadas, una por fila, con su alcance y su fuente. El grado lo pone el documento: un fabricante puede declarar la misma pieza, una pieza usable con diferencias, o ninguna equivalencia. La ausencia de una declaración no es una equivalencia, y una marca compartida tampoco."
+        },
+        "evidence_requirements": {
+          "chainring_count": "name_reading_hint_only",
+          "front_chainring_count": "name_reading_hint_only",
+          "chainring_teeth_rows": "package_or_label",
+          "chainring_teeth": "name_reading_hint_only",
+          "spindle_interface": "oem_or_package",
+          "spindle_included": "package_or_label",
+          "spindle_taper_standard": "oem_spec",
+          "bottom_bracket_required": "oem_spec",
+          "bottom_bracket_family": "name_reading_hint_only",
+          "crank_arm_length_mm": "oem_or_package",
+          "chainline_mm": "oem_spec",
+          "pedal_thread": "package_or_label",
+          "chainring_mount_type": "oem_or_package",
+          "chainring_bcd_mm": "oem_or_package",
+          "compatible_rear_speeds": "oem_spec",
+          "drivetrain_speeds": "name_reading_hint_only",
+          "drivetrain_platform": "oem_spec",
+          "chain_profile_family": "name_reading_hint_only",
+          "kit_members": "package_or_label",
+          "spec_evidence_source": "oem_or_package",
+          "included_chainring_count": "package_or_label",
+          "crankset_construction": "oem_or_package",
+          "bottom_bracket_included": "oem_or_package",
+          "crankset_bottom_bracket_supplied": "oem_or_package",
+          "chainring_mounting": "oem_or_package",
+          "crankset_chain_guard_included": "oem_or_package",
+          "crank_fixing_bolt_included": "oem_or_package",
+          "crankset_compatibility_claims": "oem_or_package"
+        },
+        "row_coherence": {
+          "version": 2,
+          "links": [],
+          "cardinalities": [
+            {
+              "id": "included_crown_occurrences",
+              "field": "chainring_teeth_rows",
+              "total_field": "included_chainring_count"
+            }
+          ]
+        },
+        "row_conditions": {
+          "version": 1,
+          "fields": {
+            "crankset_compatibility_claims": {
+              "allowed_when": {
+                "brand": {
+                  "kind": "when",
+                  "rows": [
+                    [
+                      {
+                        "field": "scope_kind",
+                        "operator": "eq",
+                        "value_type": "token",
+                        "value": "Modelo documentado"
+                      }
+                    ]
+                  ]
+                },
+                "model": {
+                  "kind": "when",
+                  "rows": [
+                    [
+                      {
+                        "field": "scope_kind",
+                        "operator": "eq",
+                        "value_type": "token",
+                        "value": "Modelo documentado"
+                      }
+                    ]
+                  ]
+                },
+                "declared_interface": {
+                  "kind": "when",
+                  "rows": [
+                    [
+                      {
+                        "field": "scope_kind",
+                        "operator": "eq",
+                        "value_type": "token",
+                        "value": "Interfaz o estándar documentado"
+                      }
+                    ]
+                  ]
+                }
+              },
+              "required_when": {
+                "brand": {
+                  "kind": "when",
+                  "rows": [
+                    [
+                      {
+                        "field": "scope_kind",
+                        "operator": "eq",
+                        "value_type": "token",
+                        "value": "Modelo documentado"
+                      }
+                    ]
+                  ]
+                },
+                "model": {
+                  "kind": "when",
+                  "rows": [
+                    [
+                      {
+                        "field": "scope_kind",
+                        "operator": "eq",
+                        "value_type": "token",
+                        "value": "Modelo documentado"
+                      }
+                    ]
+                  ]
+                },
+                "declared_interface": {
+                  "kind": "when",
+                  "rows": [
+                    [
+                      {
+                        "field": "scope_kind",
+                        "operator": "eq",
+                        "value_type": "token",
+                        "value": "Interfaz o estándar documentado"
+                      }
+                    ]
+                  ]
+                }
+              }
+            }
+          }
+        }
+      },
+      "fields": [
+        {
+          "key": "chainring_count",
+          "section_key": "legacy",
+          "sort_order": 0,
+          "is_required": false,
+          "visibility_rules": [],
+          "option_rules": [],
+          "constraint_rules": []
+        },
+        {
+          "key": "front_chainring_count",
+          "section_key": "legacy",
+          "sort_order": 10,
+          "is_required": false,
+          "visibility_rules": [],
+          "option_rules": [],
+          "constraint_rules": []
+        },
+        {
+          "key": "chainring_teeth_rows",
+          "section_key": "contents",
+          "sort_order": 20,
+          "is_required": false,
+          "visibility_rules": [],
+          "option_rules": [],
+          "constraint_rules": []
+        },
+        {
+          "key": "chainring_teeth",
+          "section_key": "legacy",
+          "sort_order": 30,
+          "is_required": false,
+          "visibility_rules": [],
+          "option_rules": [],
+          "constraint_rules": []
+        },
+        {
+          "key": "spindle_interface",
+          "section_key": "measurement",
+          "sort_order": 40,
+          "is_required": false,
+          "visibility_rules": [],
+          "option_rules": [],
+          "constraint_rules": []
+        },
+        {
+          "key": "spindle_included",
+          "section_key": "contents",
+          "sort_order": 50,
+          "is_required": false,
+          "visibility_rules": [],
+          "option_rules": [],
+          "constraint_rules": []
+        },
+        {
+          "key": "spindle_taper_standard",
+          "section_key": "measurement",
+          "sort_order": 60,
+          "is_required": false,
+          "visibility_rules": [],
+          "option_rules": [],
+          "constraint_rules": []
+        },
+        {
+          "key": "bottom_bracket_required",
+          "section_key": "measurement",
+          "sort_order": 70,
+          "is_required": false,
+          "visibility_rules": [],
+          "option_rules": [],
+          "constraint_rules": []
+        },
+        {
+          "key": "bottom_bracket_family",
+          "section_key": "legacy",
+          "sort_order": 80,
+          "is_required": false,
+          "visibility_rules": [],
+          "option_rules": [],
+          "constraint_rules": []
+        },
+        {
+          "key": "crank_arm_length_mm",
+          "section_key": "measurement",
+          "sort_order": 90,
+          "is_required": false,
+          "visibility_rules": [],
+          "option_rules": [],
+          "constraint_rules": []
+        },
+        {
+          "key": "chainline_mm",
+          "section_key": "measurement",
+          "sort_order": 100,
+          "is_required": false,
+          "visibility_rules": [],
+          "option_rules": [],
+          "constraint_rules": []
+        },
+        {
+          "key": "pedal_thread",
+          "section_key": "measurement",
+          "sort_order": 110,
+          "is_required": false,
+          "visibility_rules": [],
+          "option_rules": [],
+          "constraint_rules": []
+        },
+        {
+          "key": "chainring_mount_type",
+          "section_key": "measurement",
+          "sort_order": 120,
+          "is_required": false,
+          "visibility_rules": [],
+          "option_rules": [],
+          "constraint_rules": []
+        },
+        {
+          "key": "chainring_bcd_mm",
+          "section_key": "legacy",
+          "sort_order": 130,
+          "is_required": false,
+          "visibility_rules": [],
+          "option_rules": [],
+          "constraint_rules": []
+        },
+        {
+          "key": "compatible_rear_speeds",
+          "section_key": "measurement",
+          "sort_order": 140,
+          "is_required": false,
+          "visibility_rules": [],
+          "option_rules": [],
+          "constraint_rules": []
+        },
+        {
+          "key": "drivetrain_speeds",
+          "section_key": "legacy",
+          "sort_order": 150,
+          "is_required": false,
+          "visibility_rules": [],
+          "option_rules": [],
+          "constraint_rules": []
+        },
+        {
+          "key": "drivetrain_platform",
+          "section_key": "declaration",
+          "sort_order": 160,
+          "is_required": false,
+          "visibility_rules": [],
+          "option_rules": [],
+          "constraint_rules": []
+        },
+        {
+          "key": "chain_profile_family",
+          "section_key": "legacy",
+          "sort_order": 170,
+          "is_required": false,
+          "visibility_rules": [],
+          "option_rules": [],
+          "constraint_rules": []
+        },
+        {
+          "key": "kit_members",
+          "section_key": "legacy",
+          "sort_order": 180,
+          "is_required": false,
+          "visibility_rules": [],
+          "option_rules": [],
+          "constraint_rules": []
+        },
+        {
+          "key": "spec_evidence_source",
+          "section_key": "declaration",
+          "sort_order": 190,
+          "is_required": false,
+          "visibility_rules": [],
+          "option_rules": [],
+          "constraint_rules": []
+        },
+        {
+          "key": "included_chainring_count",
+          "section_key": "contents",
+          "sort_order": 200,
+          "is_required": false,
+          "visibility_rules": [],
+          "option_rules": [],
+          "constraint_rules": []
+        },
+        {
+          "key": "crankset_construction",
+          "section_key": "primary",
+          "sort_order": 210,
+          "is_required": false,
+          "visibility_rules": [],
+          "option_rules": [],
+          "constraint_rules": []
+        },
+        {
+          "key": "bottom_bracket_included",
+          "section_key": "primary",
+          "sort_order": 220,
+          "is_required": false,
+          "visibility_rules": [],
+          "option_rules": [],
+          "constraint_rules": []
+        },
+        {
+          "key": "crankset_bottom_bracket_supplied",
+          "section_key": "primary",
+          "sort_order": 230,
+          "is_required": false,
+          "visibility_rules": [],
+          "option_rules": [],
+          "constraint_rules": []
+        },
+        {
+          "key": "chainring_mounting",
+          "section_key": "primary",
+          "sort_order": 240,
+          "is_required": false,
+          "visibility_rules": [],
+          "option_rules": [],
+          "constraint_rules": []
+        },
+        {
+          "key": "crankset_chain_guard_included",
+          "section_key": "measurement",
+          "sort_order": 250,
+          "is_required": false,
+          "visibility_rules": [],
+          "option_rules": [],
+          "constraint_rules": []
+        },
+        {
+          "key": "crank_fixing_bolt_included",
+          "section_key": "measurement",
+          "sort_order": 260,
+          "is_required": false,
+          "visibility_rules": [],
+          "option_rules": [],
+          "constraint_rules": []
+        },
+        {
+          "key": "crankset_compatibility_claims",
+          "section_key": "declaration",
+          "sort_order": 270,
+          "is_required": false,
+          "visibility_rules": [],
+          "option_rules": [],
+          "constraint_rules": []
+        }
+      ]
+    },
+    {
+      "key": "crank_arm",
+      "name": "Biela / Pedivela Suelta",
+      "id": "1a4ff9ad-d0c1-4f6d-a0d6-13848828ea8b",
+      "technical_family": "crank_arm",
+      "origin": "existing",
+      "form_contract": {
+        "rules_version": 2,
+        "roles": {
+          "crank_side": "primary",
+          "spindle_interface": "measurement",
+          "spindle_taper_standard": "measurement",
+          "crank_arm_length_mm": "measurement",
+          "pedal_thread": "measurement",
+          "crank_bolt_thread": "primary",
+          "spec_evidence_source": "declaration",
+          "crank_arm_carries_chainring_mount": "primary",
+          "crank_arm_unit_count": "primary",
+          "crank_arm_units": "primary",
+          "crank_arm_spindle_designation": "declaration",
+          "crank_arm_system_construction": "declaration",
+          "crank_arm_compatibility_claims": "declaration"
+        },
+        "semantic_roles": {
+          "crank_side": "intrinsic",
+          "spindle_interface": "compatibility",
+          "spindle_taper_standard": "compatibility",
+          "crank_arm_length_mm": "measurement",
+          "pedal_thread": "compatibility",
+          "crank_bolt_thread": "intrinsic",
+          "spec_evidence_source": "evidence",
+          "crank_arm_carries_chainring_mount": "intrinsic",
+          "crank_arm_unit_count": "contents",
+          "crank_arm_units": "contents",
+          "crank_arm_spindle_designation": "declaration",
+          "crank_arm_system_construction": "compatibility",
+          "crank_arm_compatibility_claims": "compatibility"
+        },
+        "labels": {},
+        "allowed_when": {
+          "crank_side": {
+            "kind": "always"
+          },
+          "spindle_interface": {
+            "kind": "always"
+          },
+          "spindle_taper_standard": {
+            "kind": "when",
+            "rows": [
+              [
+                {
+                  "field": "spindle_interface",
+                  "operator": "in",
+                  "value_type": "token",
+                  "value": [
+                    "Cuadrado JIS",
+                    "Cuadrado ISO"
+                  ]
+                }
+              ]
+            ]
+          },
+          "crank_arm_length_mm": {
+            "kind": "when",
+            "rows": [
+              [
+                {
+                  "field": "crank_side",
+                  "operator": "in",
+                  "value_type": "token",
+                  "value": [
+                    "Izquierda",
+                    "Derecha"
+                  ]
+                }
+              ]
+            ]
+          },
+          "pedal_thread": {
+            "kind": "when",
+            "rows": [
+              [
+                {
+                  "field": "crank_side",
+                  "operator": "in",
+                  "value_type": "token",
+                  "value": [
+                    "Izquierda",
+                    "Derecha"
+                  ]
+                }
+              ]
+            ]
+          },
+          "crank_bolt_thread": {
+            "kind": "when",
+            "rows": [
+              [
+                {
+                  "field": "crank_side",
+                  "operator": "in",
+                  "value_type": "token",
+                  "value": [
+                    "Izquierda",
+                    "Derecha"
+                  ]
+                }
+              ]
+            ]
+          },
+          "spec_evidence_source": {
+            "kind": "always"
+          },
+          "crank_arm_carries_chainring_mount": {
+            "kind": "when",
+            "rows": [
+              [
+                {
+                  "field": "crank_side",
+                  "operator": "in",
+                  "value_type": "token",
+                  "value": [
+                    "Izquierda",
+                    "Derecha"
+                  ]
+                }
+              ]
+            ]
+          },
+          "crank_arm_unit_count": {
+            "kind": "when",
+            "rows": [
+              [
+                {
+                  "field": "crank_side",
+                  "operator": "eq",
+                  "value_type": "token",
+                  "value": "Par"
+                }
+              ]
+            ]
+          },
+          "crank_arm_units": {
+            "kind": "when",
+            "rows": [
+              [
+                {
+                  "field": "crank_side",
+                  "operator": "eq",
+                  "value_type": "token",
+                  "value": "Par"
+                }
+              ]
+            ]
+          },
+          "crank_arm_spindle_designation": {
+            "kind": "always"
+          },
+          "crank_arm_system_construction": {
+            "kind": "always"
+          },
+          "crank_arm_compatibility_claims": {
+            "kind": "always"
+          }
+        },
+        "required_when": {
+          "crank_side": {
+            "kind": "always"
+          },
+          "spindle_interface": {
+            "kind": "always"
+          },
+          "spindle_taper_standard": {
+            "kind": "when",
+            "rows": [
+              [
+                {
+                  "field": "spindle_interface",
+                  "operator": "in",
+                  "value_type": "token",
+                  "value": [
+                    "Cuadrado JIS",
+                    "Cuadrado ISO"
+                  ]
+                }
+              ]
+            ]
+          },
+          "crank_arm_length_mm": {
+            "kind": "when",
+            "rows": [
+              [
+                {
+                  "field": "crank_side",
+                  "operator": "in",
+                  "value_type": "token",
+                  "value": [
+                    "Izquierda",
+                    "Derecha"
+                  ]
+                }
+              ]
+            ]
+          },
+          "pedal_thread": {
+            "kind": "never"
+          },
+          "crank_bolt_thread": {
+            "kind": "never"
+          },
+          "spec_evidence_source": {
+            "kind": "never"
+          },
+          "crank_arm_carries_chainring_mount": {
+            "kind": "never"
+          },
+          "crank_arm_unit_count": {
+            "kind": "when",
+            "rows": [
+              [
+                {
+                  "field": "crank_side",
+                  "operator": "eq",
+                  "value_type": "token",
+                  "value": "Par"
+                }
+              ]
+            ]
+          },
+          "crank_arm_units": {
+            "kind": "when",
+            "rows": [
+              [
+                {
+                  "field": "crank_side",
+                  "operator": "eq",
+                  "value_type": "token",
+                  "value": "Par"
+                }
+              ]
+            ]
+          },
+          "crank_arm_spindle_designation": {
+            "kind": "never"
+          },
+          "crank_arm_system_construction": {
+            "kind": "never"
+          },
+          "crank_arm_compatibility_claims": {
+            "kind": "never"
+          }
+        },
+        "allowed_options": {
+          "pedal_thread": [
+            "9/16",
+            "1/2",
+            "Desconocido / sin confirmar"
+          ],
+          "crank_bolt_thread": [
+            "M8",
+            "M12",
+            "M14",
+            "Desconocido / sin confirmar"
+          ]
+        },
+        "prerequisites": {
+          "crank_arm_compatibility_claims": [
+            "spec_evidence_source"
+          ],
+          "crank_arm_length_mm": [
+            "spec_evidence_source"
+          ],
+          "pedal_thread": [
+            "spec_evidence_source"
+          ],
+          "crank_bolt_thread": [
+            "spec_evidence_source"
+          ],
+          "spindle_interface": [
+            "spec_evidence_source"
+          ],
+          "spindle_taper_standard": [
+            "spec_evidence_source"
+          ],
+          "crank_arm_units": [
+            "spec_evidence_source"
+          ],
+          "crank_arm_spindle_designation": [
+            "spec_evidence_source"
+          ],
+          "crank_arm_system_construction": [
+            "spec_evidence_source"
+          ],
+          "crank_arm_carries_chainring_mount": [
+            "spec_evidence_source"
+          ]
+        },
+        "helpers": {
+          "crank_side": "Qué trae este envase: un brazo de un lado o el par completo. Con el par, cada brazo declara lo suyo en su fila, porque el izquierdo y el derecho no comparten rosca de pedal ni llevan lo mismo.",
+          "crank_arm_carries_chainring_mount": "La araña o el asiento direct mount va en un solo brazo. Que lo lleve no dice qué plato recibe.",
+          "crank_arm_unit_count": "Se cuenta lo que trae el envase.",
+          "crank_arm_units": "Un brazo por fila. La rosca del pedal izquierdo no es la del derecho y sólo uno de los dos lleva el asiento de los platos, así que un escalar no puede responder por los dos.",
+          "crank_arm_spindle_designation": "Cómo nombra el fabricante el eje que recibe este brazo. Se usa cuando el dominio publicado no tiene un término para esa interfaz; no reemplaza a la interfaz ni la deduce.",
+          "crank_arm_system_construction": "Un brazo izquierdo de un sistema de dos piezas no sirve en uno de tres piezas aunque comparta largo y rosca de pedal.",
+          "spindle_taper_standard": "Cuál de los dos cuadrados declara el documento. El ISO es más largo y más fino en la punta, así que la misma biela se asienta unos 4,5 mm más afuera sobre un eje JIS: cambia la línea de cadena. No se deduce de la marca ni se declara incompatibilidad física por ello.",
+          "crank_arm_compatibility_claims": "Declaraciones documentadas, una por fila, con su alcance y su fuente. El grado lo pone el documento: un fabricante puede declarar la misma pieza, una pieza usable con diferencias, o ninguna equivalencia. La ausencia de una declaración no es una equivalencia, y una marca compartida tampoco."
+        },
+        "evidence_requirements": {
+          "crank_side": "package_or_label",
+          "spindle_interface": "oem_or_package",
+          "spindle_taper_standard": "oem_spec",
+          "crank_arm_length_mm": "oem_or_package",
+          "pedal_thread": "package_or_label",
+          "crank_bolt_thread": "package_or_label",
+          "spec_evidence_source": "oem_or_package",
+          "crank_arm_carries_chainring_mount": "oem_or_package",
+          "crank_arm_unit_count": "oem_or_package",
+          "crank_arm_units": "oem_or_package",
+          "crank_arm_spindle_designation": "oem_or_package",
+          "crank_arm_system_construction": "oem_or_package",
+          "crank_arm_compatibility_claims": "oem_or_package"
+        },
+        "row_coherence": {
+          "version": 2,
+          "links": [],
+          "cardinalities": [
+            {
+              "id": "documented_arms_in_the_package",
+              "field": "crank_arm_units",
+              "total_field": "crank_arm_unit_count"
+            }
+          ]
+        },
+        "row_conditions": {
+          "version": 1,
+          "fields": {
+            "crank_arm_compatibility_claims": {
+              "allowed_when": {
+                "brand": {
+                  "kind": "when",
+                  "rows": [
+                    [
+                      {
+                        "field": "scope_kind",
+                        "operator": "eq",
+                        "value_type": "token",
+                        "value": "Modelo documentado"
+                      }
+                    ]
+                  ]
+                },
+                "model": {
+                  "kind": "when",
+                  "rows": [
+                    [
+                      {
+                        "field": "scope_kind",
+                        "operator": "eq",
+                        "value_type": "token",
+                        "value": "Modelo documentado"
+                      }
+                    ]
+                  ]
+                },
+                "declared_interface": {
+                  "kind": "when",
+                  "rows": [
+                    [
+                      {
+                        "field": "scope_kind",
+                        "operator": "eq",
+                        "value_type": "token",
+                        "value": "Interfaz o estándar documentado"
+                      }
+                    ]
+                  ]
+                }
+              },
+              "required_when": {
+                "brand": {
+                  "kind": "when",
+                  "rows": [
+                    [
+                      {
+                        "field": "scope_kind",
+                        "operator": "eq",
+                        "value_type": "token",
+                        "value": "Modelo documentado"
+                      }
+                    ]
+                  ]
+                },
+                "model": {
+                  "kind": "when",
+                  "rows": [
+                    [
+                      {
+                        "field": "scope_kind",
+                        "operator": "eq",
+                        "value_type": "token",
+                        "value": "Modelo documentado"
+                      }
+                    ]
+                  ]
+                },
+                "declared_interface": {
+                  "kind": "when",
+                  "rows": [
+                    [
+                      {
+                        "field": "scope_kind",
+                        "operator": "eq",
+                        "value_type": "token",
+                        "value": "Interfaz o estándar documentado"
+                      }
+                    ]
+                  ]
+                }
+              }
+            }
+          }
+        }
+      },
+      "fields": [
+        {
+          "key": "crank_side",
+          "section_key": "primary",
+          "sort_order": 0,
+          "is_required": false,
+          "visibility_rules": [],
+          "option_rules": [],
+          "constraint_rules": []
+        },
+        {
+          "key": "spindle_interface",
+          "section_key": "measurement",
+          "sort_order": 10,
+          "is_required": false,
+          "visibility_rules": [],
+          "option_rules": [],
+          "constraint_rules": []
+        },
+        {
+          "key": "spindle_taper_standard",
+          "section_key": "measurement",
+          "sort_order": 20,
+          "is_required": false,
+          "visibility_rules": [],
+          "option_rules": [],
+          "constraint_rules": []
+        },
+        {
+          "key": "crank_arm_length_mm",
+          "section_key": "measurement",
+          "sort_order": 30,
+          "is_required": false,
+          "visibility_rules": [],
+          "option_rules": [],
+          "constraint_rules": []
+        },
+        {
+          "key": "pedal_thread",
+          "section_key": "measurement",
+          "sort_order": 40,
+          "is_required": false,
+          "visibility_rules": [],
+          "option_rules": [],
+          "constraint_rules": []
+        },
+        {
+          "key": "crank_bolt_thread",
+          "section_key": "primary",
+          "sort_order": 50,
+          "is_required": false,
+          "visibility_rules": [],
+          "option_rules": [],
+          "constraint_rules": []
+        },
+        {
+          "key": "spec_evidence_source",
+          "section_key": "declaration",
+          "sort_order": 60,
+          "is_required": false,
+          "visibility_rules": [],
+          "option_rules": [],
+          "constraint_rules": []
+        },
+        {
+          "key": "crank_arm_carries_chainring_mount",
+          "section_key": "primary",
+          "sort_order": 70,
+          "is_required": false,
+          "visibility_rules": [],
+          "option_rules": [],
+          "constraint_rules": []
+        },
+        {
+          "key": "crank_arm_unit_count",
+          "section_key": "primary",
+          "sort_order": 80,
+          "is_required": false,
+          "visibility_rules": [],
+          "option_rules": [],
+          "constraint_rules": []
+        },
+        {
+          "key": "crank_arm_units",
+          "section_key": "primary",
+          "sort_order": 90,
+          "is_required": false,
+          "visibility_rules": [],
+          "option_rules": [],
+          "constraint_rules": []
+        },
+        {
+          "key": "crank_arm_spindle_designation",
+          "section_key": "declaration",
+          "sort_order": 100,
+          "is_required": false,
+          "visibility_rules": [],
+          "option_rules": [],
+          "constraint_rules": []
+        },
+        {
+          "key": "crank_arm_system_construction",
+          "section_key": "declaration",
+          "sort_order": 110,
+          "is_required": false,
+          "visibility_rules": [],
+          "option_rules": [],
+          "constraint_rules": []
+        },
+        {
+          "key": "crank_arm_compatibility_claims",
+          "section_key": "declaration",
+          "sort_order": 120,
+          "is_required": false,
+          "visibility_rules": [],
+          "option_rules": [],
+          "constraint_rules": []
+        }
+      ]
+    },
+    {
+      "key": "chainring",
+      "name": "Corona / Catalina / Plato",
+      "id": "11aa1aa7-9589-4f19-ac74-df7fd35a3028",
+      "technical_family": "chainring",
+      "origin": "existing",
+      "form_contract": {
+        "rules_version": 2,
+        "roles": {
+          "teeth_count": "primary",
+          "chainring_teeth": "legacy",
+          "chainring_mount_type": "measurement",
+          "chainring_bolt_count": "legacy",
+          "chainring_bcd_mm": "measurement",
+          "chainring_bolt_pattern_symmetric": "measurement",
+          "chainring_offset_mm": "legacy",
+          "narrow_wide": "primary",
+          "chainring_position": "primary",
+          "compatible_rear_speeds": "measurement",
+          "drivetrain_speeds": "legacy",
+          "chain_width_family": "measurement",
+          "drivetrain_platform": "declaration",
+          "chain_profile_family": "legacy",
+          "spec_evidence_source": "declaration",
+          "chainring_package_kind": "primary",
+          "chainring_set_member_count": "primary",
+          "chainring_set_members": "primary",
+          "chainring_direct_mount_generation": "primary",
+          "chainring_offset_declarations": "measurement",
+          "chainring_oem_pairing_declarations": "declaration",
+          "chainring_compatibility_claims": "declaration"
+        },
+        "semantic_roles": {
+          "teeth_count": "intrinsic",
+          "chainring_teeth": "legacy",
+          "chainring_mount_type": "compatibility",
+          "chainring_bolt_count": "legacy",
+          "chainring_bcd_mm": "compatibility",
+          "chainring_bolt_pattern_symmetric": "compatibility",
+          "chainring_offset_mm": "legacy",
+          "narrow_wide": "intrinsic",
+          "chainring_position": "intrinsic",
+          "compatible_rear_speeds": "compatibility",
+          "drivetrain_speeds": "legacy",
+          "chain_width_family": "measurement",
+          "drivetrain_platform": "declaration",
+          "chain_profile_family": "legacy",
+          "spec_evidence_source": "evidence",
+          "chainring_package_kind": "intrinsic",
+          "chainring_set_member_count": "contents",
+          "chainring_set_members": "contents",
+          "chainring_direct_mount_generation": "compatibility",
+          "chainring_offset_declarations": "measurement",
+          "chainring_oem_pairing_declarations": "compatibility",
+          "chainring_compatibility_claims": "compatibility"
+        },
+        "labels": {},
+        "allowed_when": {
+          "teeth_count": {
+            "kind": "when",
+            "rows": [
+              [
+                {
+                  "field": "chainring_package_kind",
+                  "operator": "eq",
+                  "value_type": "token",
+                  "value": "Plato individual"
+                }
+              ]
+            ]
+          },
+          "chainring_teeth": {
+            "kind": "never"
+          },
+          "chainring_mount_type": {
+            "kind": "always"
+          },
+          "chainring_bolt_count": {
+            "kind": "never"
+          },
+          "chainring_bcd_mm": {
+            "kind": "when",
+            "rows": [
+              [
+                {
+                  "field": "chainring_package_kind",
+                  "operator": "eq",
+                  "value_type": "token",
+                  "value": "Plato individual"
+                },
+                {
+                  "field": "chainring_mount_type",
+                  "operator": "in",
+                  "value_type": "token",
+                  "value": [
+                    "BCD 4 pernos",
+                    "BCD 5 pernos"
+                  ]
+                }
+              ]
+            ]
+          },
+          "chainring_bolt_pattern_symmetric": {
+            "kind": "when",
+            "rows": [
+              [
+                {
+                  "field": "chainring_package_kind",
+                  "operator": "eq",
+                  "value_type": "token",
+                  "value": "Plato individual"
+                },
+                {
+                  "field": "chainring_mount_type",
+                  "operator": "in",
+                  "value_type": "token",
+                  "value": [
+                    "BCD 4 pernos",
+                    "BCD 5 pernos"
+                  ]
+                }
+              ]
+            ]
+          },
+          "chainring_offset_mm": {
+            "kind": "never"
+          },
+          "narrow_wide": {
+            "kind": "when",
+            "rows": [
+              [
+                {
+                  "field": "chainring_package_kind",
+                  "operator": "eq",
+                  "value_type": "token",
+                  "value": "Plato individual"
+                }
+              ]
+            ]
+          },
+          "chainring_position": {
+            "kind": "when",
+            "rows": [
+              [
+                {
+                  "field": "chainring_package_kind",
+                  "operator": "eq",
+                  "value_type": "token",
+                  "value": "Plato individual"
+                }
+              ]
+            ]
+          },
+          "compatible_rear_speeds": {
+            "kind": "always"
+          },
+          "drivetrain_speeds": {
+            "kind": "never"
+          },
+          "chain_width_family": {
+            "kind": "always"
+          },
+          "drivetrain_platform": {
+            "kind": "always"
+          },
+          "chain_profile_family": {
+            "kind": "never"
+          },
+          "spec_evidence_source": {
+            "kind": "always"
+          },
+          "chainring_package_kind": {
+            "kind": "always"
+          },
+          "chainring_set_member_count": {
+            "kind": "when",
+            "rows": [
+              [
+                {
+                  "field": "chainring_package_kind",
+                  "operator": "eq",
+                  "value_type": "token",
+                  "value": "Juego de platos en el mismo envase"
+                }
+              ]
+            ]
+          },
+          "chainring_set_members": {
+            "kind": "when",
+            "rows": [
+              [
+                {
+                  "field": "chainring_package_kind",
+                  "operator": "eq",
+                  "value_type": "token",
+                  "value": "Juego de platos en el mismo envase"
+                }
+              ]
+            ]
+          },
+          "chainring_direct_mount_generation": {
+            "kind": "when",
+            "rows": [
+              [
+                {
+                  "field": "chainring_mount_type",
+                  "operator": "in",
+                  "value_type": "token",
+                  "value": [
+                    "Direct mount Shimano",
+                    "Direct mount SRAM",
+                    "Direct mount Cinch"
+                  ]
+                }
+              ]
+            ]
+          },
+          "chainring_offset_declarations": {
+            "kind": "always"
+          },
+          "chainring_oem_pairing_declarations": {
+            "kind": "always"
+          },
+          "chainring_compatibility_claims": {
+            "kind": "always"
+          }
+        },
+        "required_when": {
+          "teeth_count": {
+            "kind": "when",
+            "rows": [
+              [
+                {
+                  "field": "chainring_package_kind",
+                  "operator": "eq",
+                  "value_type": "token",
+                  "value": "Plato individual"
+                }
+              ]
+            ]
+          },
+          "chainring_teeth": {
+            "kind": "never"
+          },
+          "chainring_mount_type": {
+            "kind": "always"
+          },
+          "chainring_bolt_count": {
+            "kind": "never"
+          },
+          "chainring_bcd_mm": {
+            "kind": "when",
+            "rows": [
+              [
+                {
+                  "field": "chainring_package_kind",
+                  "operator": "eq",
+                  "value_type": "token",
+                  "value": "Plato individual"
+                },
+                {
+                  "field": "chainring_mount_type",
+                  "operator": "in",
+                  "value_type": "token",
+                  "value": [
+                    "BCD 4 pernos",
+                    "BCD 5 pernos"
+                  ]
+                }
+              ]
+            ]
+          },
+          "chainring_bolt_pattern_symmetric": {
+            "kind": "never"
+          },
+          "chainring_offset_mm": {
+            "kind": "never"
+          },
+          "narrow_wide": {
+            "kind": "never"
+          },
+          "chainring_position": {
+            "kind": "never"
+          },
+          "compatible_rear_speeds": {
+            "kind": "never"
+          },
+          "drivetrain_speeds": {
+            "kind": "never"
+          },
+          "chain_width_family": {
+            "kind": "never"
+          },
+          "drivetrain_platform": {
+            "kind": "never"
+          },
+          "chain_profile_family": {
+            "kind": "never"
+          },
+          "spec_evidence_source": {
+            "kind": "never"
+          },
+          "chainring_package_kind": {
+            "kind": "always"
+          },
+          "chainring_set_member_count": {
+            "kind": "when",
+            "rows": [
+              [
+                {
+                  "field": "chainring_package_kind",
+                  "operator": "eq",
+                  "value_type": "token",
+                  "value": "Juego de platos en el mismo envase"
+                }
+              ]
+            ]
+          },
+          "chainring_set_members": {
+            "kind": "when",
+            "rows": [
+              [
+                {
+                  "field": "chainring_package_kind",
+                  "operator": "eq",
+                  "value_type": "token",
+                  "value": "Juego de platos en el mismo envase"
+                }
+              ]
+            ]
+          },
+          "chainring_direct_mount_generation": {
+            "kind": "when",
+            "rows": [
+              [
+                {
+                  "field": "chainring_mount_type",
+                  "operator": "in",
+                  "value_type": "token",
+                  "value": [
+                    "Direct mount Shimano",
+                    "Direct mount SRAM",
+                    "Direct mount Cinch"
+                  ]
+                }
+              ]
+            ]
+          },
+          "chainring_offset_declarations": {
+            "kind": "never"
+          },
+          "chainring_oem_pairing_declarations": {
+            "kind": "never"
+          },
+          "chainring_compatibility_claims": {
+            "kind": "never"
+          }
+        },
+        "allowed_options": {},
+        "prerequisites": {
+          "drivetrain_platform": [
+            "spec_evidence_source"
+          ],
+          "chainring_offset_declarations": [
+            "spec_evidence_source"
+          ],
+          "chainring_oem_pairing_declarations": [
+            "spec_evidence_source"
+          ],
+          "chainring_compatibility_claims": [
+            "spec_evidence_source"
+          ],
+          "teeth_count": [
+            "spec_evidence_source"
+          ],
+          "chainring_mount_type": [
+            "spec_evidence_source"
+          ],
+          "chainring_bcd_mm": [
+            "spec_evidence_source"
+          ],
+          "chainring_bolt_pattern_symmetric": [
+            "spec_evidence_source"
+          ],
+          "chainring_position": [
+            "spec_evidence_source"
+          ],
+          "narrow_wide": [
+            "spec_evidence_source"
+          ],
+          "chain_width_family": [
+            "spec_evidence_source"
+          ],
+          "compatible_rear_speeds": [
+            "spec_evidence_source"
+          ],
+          "chainring_set_members": [
+            "spec_evidence_source"
+          ],
+          "chainring_direct_mount_generation": [
+            "spec_evidence_source"
+          ]
+        },
+        "helpers": {
+          "chainring_package_kind": "Un plato suelto o un juego de platos en el mismo envase. Un juego doble o triple no es un plato con varias medidas: cada plato tiene sus dientes, su posición y su propio círculo de pernos.",
+          "chainring_bolt_pattern_symmetric": "Si los pernos están repartidos en ángulos iguales. Dos platos del mismo diámetro de círculo pueden tener repartos distintos, así que un BCD igual no prueba que el plato calce.",
+          "chainring_bcd_mm": "Diámetro del círculo de pernos de este plato. No dice cuántos pernos hay ni cómo están repartidos, y un conjunto puede llevar dos círculos.",
+          "chainring_set_member_count": "Se cuenta lo que trae el envase, no los dientes.",
+          "chainring_set_members": "Un plato por fila, con su posición, sus dientes y su propio círculo de pernos. Un juego triple documentado lleva dos círculos distintos, así que el juego no responde con una sola medida.",
+          "chainring_direct_mount_generation": "Qué asiento direct mount exacto declara el documento, con su generación. Decir «direct mount» no basta: el mismo fabricante publica asientos distintos que no se intercambian.",
+          "chainring_offset_declarations": "Un desplazamiento sin decir desde dónde se mide no es una cota. Esto no es la línea de cadena del conjunto armado, que pertenece a la ficha del volante.",
+          "chainring_oem_pairing_declarations": "El fabricante publica el plato dentro de una combinación y le da su propia designación y sus propios pernos. Los mismos dientes en otra combinación son otra pieza, así que un número de dientes no identifica el plato.",
+          "chainring_compatibility_claims": "Declaraciones documentadas, una por fila, con su alcance y su fuente. El grado lo pone el documento: un fabricante puede declarar la misma pieza, una pieza usable con diferencias, o ninguna equivalencia. La ausencia de una declaración no es una equivalencia, y una marca compartida tampoco."
+        },
+        "evidence_requirements": {
+          "teeth_count": "oem_or_package",
+          "chainring_teeth": "name_reading_hint_only",
+          "chainring_mount_type": "oem_or_package",
+          "chainring_bolt_count": "name_reading_hint_only",
+          "chainring_bcd_mm": "oem_or_package",
+          "chainring_bolt_pattern_symmetric": "oem_spec",
+          "chainring_offset_mm": "oem_spec",
+          "narrow_wide": "oem_or_package",
+          "chainring_position": "oem_or_package",
+          "compatible_rear_speeds": "oem_spec",
+          "drivetrain_speeds": "name_reading_hint_only",
+          "chain_width_family": "oem_or_package",
+          "drivetrain_platform": "oem_spec",
+          "chain_profile_family": "name_reading_hint_only",
+          "spec_evidence_source": "oem_or_package",
+          "chainring_package_kind": "oem_or_package",
+          "chainring_set_member_count": "oem_or_package",
+          "chainring_set_members": "oem_or_package",
+          "chainring_direct_mount_generation": "oem_or_package",
+          "chainring_offset_declarations": "oem_or_package",
+          "chainring_oem_pairing_declarations": "oem_or_package",
+          "chainring_compatibility_claims": "oem_or_package"
+        },
+        "row_coherence": {
+          "version": 2,
+          "links": [],
+          "cardinalities": [
+            {
+              "id": "documented_rings_in_the_package",
+              "field": "chainring_set_members",
+              "total_field": "chainring_set_member_count"
+            }
+          ]
+        },
+        "row_conditions": {
+          "version": 1,
+          "fields": {
+            "chainring_compatibility_claims": {
+              "allowed_when": {
+                "brand": {
+                  "kind": "when",
+                  "rows": [
+                    [
+                      {
+                        "field": "scope_kind",
+                        "operator": "eq",
+                        "value_type": "token",
+                        "value": "Modelo documentado"
+                      }
+                    ]
+                  ]
+                },
+                "model": {
+                  "kind": "when",
+                  "rows": [
+                    [
+                      {
+                        "field": "scope_kind",
+                        "operator": "eq",
+                        "value_type": "token",
+                        "value": "Modelo documentado"
+                      }
+                    ]
+                  ]
+                },
+                "declared_interface": {
+                  "kind": "when",
+                  "rows": [
+                    [
+                      {
+                        "field": "scope_kind",
+                        "operator": "eq",
+                        "value_type": "token",
+                        "value": "Interfaz o estándar documentado"
+                      }
+                    ]
+                  ]
+                }
+              },
+              "required_when": {
+                "brand": {
+                  "kind": "when",
+                  "rows": [
+                    [
+                      {
+                        "field": "scope_kind",
+                        "operator": "eq",
+                        "value_type": "token",
+                        "value": "Modelo documentado"
+                      }
+                    ]
+                  ]
+                },
+                "model": {
+                  "kind": "when",
+                  "rows": [
+                    [
+                      {
+                        "field": "scope_kind",
+                        "operator": "eq",
+                        "value_type": "token",
+                        "value": "Modelo documentado"
+                      }
+                    ]
+                  ]
+                },
+                "declared_interface": {
+                  "kind": "when",
+                  "rows": [
+                    [
+                      {
+                        "field": "scope_kind",
+                        "operator": "eq",
+                        "value_type": "token",
+                        "value": "Interfaz o estándar documentado"
+                      }
+                    ]
+                  ]
+                }
+              }
+            }
+          }
+        }
+      },
+      "fields": [
+        {
+          "key": "teeth_count",
+          "section_key": "primary",
+          "sort_order": 0,
+          "is_required": false,
+          "visibility_rules": [],
+          "option_rules": [],
+          "constraint_rules": []
+        },
+        {
+          "key": "chainring_teeth",
+          "section_key": "legacy",
+          "sort_order": 10,
+          "is_required": false,
+          "visibility_rules": [],
+          "option_rules": [],
+          "constraint_rules": []
+        },
+        {
+          "key": "chainring_mount_type",
+          "section_key": "measurement",
+          "sort_order": 20,
+          "is_required": false,
+          "visibility_rules": [],
+          "option_rules": [],
+          "constraint_rules": []
+        },
+        {
+          "key": "chainring_bolt_count",
+          "section_key": "legacy",
+          "sort_order": 30,
+          "is_required": false,
+          "visibility_rules": [],
+          "option_rules": [],
+          "constraint_rules": []
+        },
+        {
+          "key": "chainring_bcd_mm",
+          "section_key": "measurement",
+          "sort_order": 40,
+          "is_required": false,
+          "visibility_rules": [],
+          "option_rules": [],
+          "constraint_rules": []
+        },
+        {
+          "key": "chainring_bolt_pattern_symmetric",
+          "section_key": "measurement",
+          "sort_order": 50,
+          "is_required": false,
+          "visibility_rules": [],
+          "option_rules": [],
+          "constraint_rules": []
+        },
+        {
+          "key": "chainring_offset_mm",
+          "section_key": "legacy",
+          "sort_order": 60,
+          "is_required": false,
+          "visibility_rules": [],
+          "option_rules": [],
+          "constraint_rules": []
+        },
+        {
+          "key": "narrow_wide",
+          "section_key": "primary",
+          "sort_order": 70,
+          "is_required": false,
+          "visibility_rules": [],
+          "option_rules": [],
+          "constraint_rules": []
+        },
+        {
+          "key": "chainring_position",
+          "section_key": "primary",
+          "sort_order": 80,
+          "is_required": false,
+          "visibility_rules": [],
+          "option_rules": [],
+          "constraint_rules": []
+        },
+        {
+          "key": "compatible_rear_speeds",
+          "section_key": "measurement",
+          "sort_order": 90,
+          "is_required": false,
+          "visibility_rules": [],
+          "option_rules": [],
+          "constraint_rules": []
+        },
+        {
+          "key": "drivetrain_speeds",
+          "section_key": "legacy",
+          "sort_order": 100,
+          "is_required": false,
+          "visibility_rules": [],
+          "option_rules": [],
+          "constraint_rules": []
+        },
+        {
+          "key": "chain_width_family",
+          "section_key": "measurement",
+          "sort_order": 110,
+          "is_required": false,
+          "visibility_rules": [],
+          "option_rules": [],
+          "constraint_rules": []
+        },
+        {
+          "key": "drivetrain_platform",
+          "section_key": "declaration",
+          "sort_order": 120,
+          "is_required": false,
+          "visibility_rules": [],
+          "option_rules": [],
+          "constraint_rules": []
+        },
+        {
+          "key": "chain_profile_family",
+          "section_key": "legacy",
+          "sort_order": 130,
+          "is_required": false,
+          "visibility_rules": [],
+          "option_rules": [],
+          "constraint_rules": []
+        },
+        {
+          "key": "spec_evidence_source",
+          "section_key": "declaration",
+          "sort_order": 140,
+          "is_required": false,
+          "visibility_rules": [],
+          "option_rules": [],
+          "constraint_rules": []
+        },
+        {
+          "key": "chainring_package_kind",
+          "section_key": "primary",
+          "sort_order": 150,
+          "is_required": false,
+          "visibility_rules": [],
+          "option_rules": [],
+          "constraint_rules": []
+        },
+        {
+          "key": "chainring_set_member_count",
+          "section_key": "primary",
+          "sort_order": 160,
+          "is_required": false,
+          "visibility_rules": [],
+          "option_rules": [],
+          "constraint_rules": []
+        },
+        {
+          "key": "chainring_set_members",
+          "section_key": "primary",
+          "sort_order": 170,
+          "is_required": false,
+          "visibility_rules": [],
+          "option_rules": [],
+          "constraint_rules": []
+        },
+        {
+          "key": "chainring_direct_mount_generation",
+          "section_key": "primary",
+          "sort_order": 180,
+          "is_required": false,
+          "visibility_rules": [],
+          "option_rules": [],
+          "constraint_rules": []
+        },
+        {
+          "key": "chainring_offset_declarations",
+          "section_key": "measurement",
+          "sort_order": 190,
+          "is_required": false,
+          "visibility_rules": [],
+          "option_rules": [],
+          "constraint_rules": []
+        },
+        {
+          "key": "chainring_oem_pairing_declarations",
+          "section_key": "declaration",
+          "sort_order": 200,
+          "is_required": false,
+          "visibility_rules": [],
+          "option_rules": [],
+          "constraint_rules": []
+        },
+        {
+          "key": "chainring_compatibility_claims",
+          "section_key": "declaration",
+          "sort_order": 210,
+          "is_required": false,
+          "visibility_rules": [],
+          "option_rules": [],
+          "constraint_rules": []
+        }
+      ]
+    }
+  ],
+  "publication_gates": {
+    "all_family_domain_review_complete": false,
+    "all_product_assignment_review_complete": false,
+    "compatibility_rules_integrated": false,
+    "fill_allowed": false
+  },
+  "mechanical_rule_policy": "No importar reglas ni verified del borrador. Los dictámenes A01-A29 y W01-W11 requieren cierre por interfaz, evidencia OEM y pruebas del consumidor real.",
+  "unresolved_adjudications": [
+    {
+      "patch_id": "MC-03",
+      "path": "/shared_vocabularies/rear_drive_interface/c731_rows",
+      "proposed_op": "add",
+      "preimage_validation": "absent_key",
+      "decision": "corregir",
+      "finding_id": "A03",
+      "severity_if_applied_as_written": "P1",
+      "bounded_change": "Dar ámbito Shimano/edición a todas las filas. Excluir CS-HG800/700/RS400 de L+ROAD11 sin suplemento; excluir CS-7900/7800/6700/6600/5700/5600 de las filas genéricas 10/9/8 en L y M. Mantener suplementos correlacionados dentro de cada fila. Modelo desconocido no resuelve una excepción. No extrapolar celdas ausentes fuera del ámbito C-731.",
+      "source_ids": [
+        "SH-C731"
+      ]
+    },
+    {
+      "patch_id": "MC-04-9",
+      "path": "/row_schemas/freehub_bodies_accepted/columns/-",
+      "proposed_op": "add",
+      "preimage_validation": "append_parent_exists",
+      "decision": "corregir",
+      "finding_id": "A04",
+      "severity_if_applied_as_written": "P1",
+      "bounded_change": "Traducir a filas por marca+modelo+generación/variante, o a una relación de conjuntos soportada. En 190 las columnas admiten text/token/decimal/integer/boolean/url; no insertar text_list ni metadata desconocida.",
+      "source_ids": [
+        "SH-C731"
+      ]
+    },
+    {
+      "patch_id": "MC-04-10",
+      "path": "/definitions/freehub_bodies_accepted/row_schema/columns/-",
+      "proposed_op": "add",
+      "preimage_validation": "append_parent_exists",
+      "decision": "corregir",
+      "finding_id": "A04",
+      "severity_if_applied_as_written": "P1",
+      "bounded_change": "Traducir a filas por marca+modelo+generación/variante, o a una relación de conjuntos soportada. En 190 las columnas admiten text/token/decimal/integer/boolean/url; no insertar text_list ni metadata desconocida.",
+      "source_ids": [
+        "SH-C731"
+      ]
+    },
+    {
+      "patch_id": "MC-05-cassette",
+      "path": "/templates/8/interfaces/0/rules/0/row_semantics",
+      "proposed_op": "add",
+      "preimage_validation": "absent_key",
+      "decision": "rechazar",
+      "finding_id": "A05",
+      "severity_if_applied_as_written": "P1",
+      "bounded_change": "Mantener unknown/outside_declared_scope para ausencias. Emitir incompatible sólo por una exclusión explícita de la pareja/configuración o una tabla cerrada con ambos sujetos identificados dentro de su ámbito y edición. Separador exigido significa requisito pendiente, nunca permiso de uso sin él.",
+      "source_ids": [
+        "SH-C731",
+        "WT-GOAT11"
+      ]
+    },
+    {
+      "patch_id": "MC-05-hub",
+      "path": "/templates/25/interfaces/1/rules/0/row_semantics",
+      "proposed_op": "add",
+      "preimage_validation": "absent_key",
+      "decision": "rechazar",
+      "finding_id": "A05",
+      "severity_if_applied_as_written": "P1",
+      "bounded_change": "Mantener unknown/outside_declared_scope para ausencias. Emitir incompatible sólo por una exclusión explícita de la pareja/configuración o una tabla cerrada con ambos sujetos identificados dentro de su ámbito y edición. Separador exigido significa requisito pendiente, nunca permiso de uso sin él.",
+      "source_ids": [
+        "SH-C731",
+        "WT-GOAT11"
+      ]
+    },
+    {
+      "patch_id": "MC-05-wheel",
+      "path": "/templates/103/interfaces/2/rules/0/row_semantics",
+      "proposed_op": "add",
+      "preimage_validation": "absent_key",
+      "decision": "rechazar",
+      "finding_id": "A05",
+      "severity_if_applied_as_written": "P1",
+      "bounded_change": "Mantener unknown/outside_declared_scope para ausencias. Emitir incompatible sólo por una exclusión explícita de la pareja/configuración o una tabla cerrada con ambos sujetos identificados dentro de su ámbito y edición. Separador exigido significa requisito pendiente, nunca permiso de uso sin él.",
+      "source_ids": [
+        "SH-C731",
+        "WT-GOAT11"
+      ]
+    },
+    {
+      "patch_id": "MC-06",
+      "path": "/templates/26/interfaces/2/rules/0",
+      "proposed_op": "replace",
+      "preimage_validation": "before_matches",
+      "decision": "corregir",
+      "finding_id": "A06",
+      "severity_if_applied_as_written": "P1",
+      "bounded_change": "Modelar frame_port UDH por separado de hanger_installed. Añadir Full Mount sin T-Type; evaluar plataforma y restricciones de cuadro por modelo. Mantener conversión de bracket sólo para modelos revisados y con la pieza requerida. Pares sin fila quedan unknown; claw necesita puntera/retención confirmadas.",
+      "source_ids": [
+        "SR-FULLMOUNT",
+        "SR-XPLR-CHAIN",
+        "SR-XPLR-FRAME",
+        "SH-RD0004"
+      ]
+    },
+    {
+      "patch_id": "MC-07",
+      "path": "/definitions/rear_derailleur_mount_type/vocabulary/-",
+      "proposed_op": "add",
+      "preimage_validation": "append_parent_exists",
+      "decision": "corregir",
+      "finding_id": "A07",
+      "severity_if_applied_as_written": "P1",
+      "bounded_change": "Usar Full Mount (sin patilla) como código de montaje, conservar T-Type/Eagle Transmission y XPLR 13 como plataformas distintas y fuentes por pareja.",
+      "source_ids": [
+        "SR-FULLMOUNT",
+        "SR-XPLR-CHAIN"
+      ]
+    },
+    {
+      "patch_id": "MC-07b",
+      "path": "/definitions/rear_derailleur_mount_type/option_additions_proposed",
+      "proposed_op": "add",
+      "preimage_validation": "absent_key",
+      "decision": "corregir",
+      "finding_id": "A07",
+      "severity_if_applied_as_written": "P1",
+      "bounded_change": "Usar Full Mount (sin patilla) como código de montaje, conservar T-Type/Eagle Transmission y XPLR 13 como plataformas distintas y fuentes por pareja.",
+      "source_ids": [
+        "SR-FULLMOUNT",
+        "SR-XPLR-CHAIN"
+      ]
+    },
+    {
+      "patch_id": "MC-08",
+      "path": "/templates/23/interfaces/0/rules/0",
+      "proposed_op": "replace",
+      "preimage_validation": "before_matches",
+      "decision": "corregir",
+      "finding_id": "A08",
+      "severity_if_applied_as_written": "P1",
+      "bounded_change": "Separar puerto físico y configuración. Distinguir E-type con/sin placa de pedalier y direct mount por modelo. Aceptar sólo la dirección braze-on a abrazadera respaldada por el adaptador exacto. Unknown para tokens fusionados, otros adaptadores o pares no investigados.",
+      "source_ids": [
+        "SH-FD0003",
+        "SH-AD91"
+      ]
+    },
+    {
+      "patch_id": "MC-09",
+      "path": "/templates/23/interfaces/0/rules/1",
+      "proposed_op": "replace",
+      "preimage_validation": "before_matches",
+      "decision": "corregir",
+      "finding_id": "A09",
+      "severity_if_applied_as_written": "P1",
+      "bounded_change": "Proyectar sólo tokens numéricos conocidos a decimal. Separar diámetro base, diámetro objetivo, adaptador homologado e incluido. Clamp menor que tubo mayor falla encaje directo; clamp mayor sólo tiene ruta condicional si el suplemento exacto está documentado. Otro=unknown y No aplica=not_applicable explícito.",
+      "source_ids": [
+        "SH-FD0003",
+        "SH-AD91"
+      ]
+    },
+    {
+      "patch_id": "MC-10",
+      "path": "/templates/22/interfaces/0/rules/0",
+      "proposed_op": "replace",
+      "preimage_validation": "before_matches",
+      "decision": "corregir",
+      "finding_id": "A10",
+      "severity_if_applied_as_written": "P2",
+      "bounded_change": "Reasignar fuente a Sheldon freewheels. Mantener código de estándar separado de medida y tolerancia; tokens legacy 1.37 ISO deben normalizarse como código confirmado, no como medición exacta. Conservar francés/italiano unknown si falta puerto preciso. Limitar exclusión ISO↔M30 al encaje directo conocido.",
+      "source_ids": [
+        "SB-FREEWHEEL"
+      ]
+    },
+    {
+      "patch_id": "MC-11",
+      "path": "/templates/21/interfaces/0/rules/0",
+      "proposed_op": "replace",
+      "preimage_validation": "before_matches",
+      "decision": "rechazar",
+      "finding_id": "A11",
+      "severity_if_applied_as_written": "P1",
+      "bounded_change": "Separar rosca derecha del piñón, rosca izquierda de maza, estándar y presencia de contratuerca. La pareja puede pasar el subchequeo de rosca del piñón, pero la ausencia confirmada de retención requerida impide aprobar el montaje fijo; desconocido deja requisitos pendientes. No codificar una adaptación histórica como permiso universal.",
+      "source_ids": [
+        "SB-FIXED"
+      ]
+    },
+    {
+      "patch_id": "MC-12",
+      "path": "/templates/28/interfaces/0/rules/0",
+      "proposed_op": "replace",
+      "preimage_validation": "before_matches",
+      "decision": "corregir",
+      "finding_id": "A12",
+      "severity_if_applied_as_written": "P1",
+      "bounded_change": "Resolver un endpoint por posición elegida. Comparar el código exacto del montaje directo; desconocido para vocabulario incompleto. Evaluar alcance de zapata, posición de pivotes, llanta y tiro en interfaces adicionales.",
+      "source_ids": [
+        "SB-BRAZED"
+      ]
+    },
+    {
+      "patch_id": "MC-14-brake_caliper",
+      "path": "/templates/5/interfaces/2/rules/0",
+      "proposed_op": "replace",
+      "preimage_validation": "before_matches",
+      "decision": "corregir",
+      "finding_id": "A14C",
+      "severity_if_applied_as_written": "P1",
+      "bounded_change": "Conservar la proyección como compatibilidad del puerto de accionamiento solamente. Conectar las reglas de tiro para cable y matriz de modelos/latiguillo/fluido para hidráulico. No traducir un par no modelado en exclusión global.",
+      "source_ids": [
+        "TRP-HYRD",
+        "SR-HYDRAULIC-MATRIX"
+      ]
+    },
+    {
+      "patch_id": "MC-14-brake_lever",
+      "path": "/templates/6/interfaces/0/rules/0",
+      "proposed_op": "replace",
+      "preimage_validation": "before_matches",
+      "decision": "rechazar",
+      "finding_id": "A14L",
+      "severity_if_applied_as_written": "P1",
+      "bounded_change": "Invertir endpoints: maneta Mechanical puede satisfacer entrada de cáliper Mechanical o Hybrid, sujeto al tiro/modelo; Hydraulic sólo abre evaluación hidráulica específica. Mantener dirección explícita y pruebas recíprocas.",
+      "source_ids": [
+        "TRP-HYRD"
+      ]
+    },
+    {
+      "patch_id": "MC-16",
+      "path": "/definitions/hanger_interface/vocabulary/5",
+      "proposed_op": "remove",
+      "preimage_validation": "before_matches",
+      "decision": "corregir",
+      "finding_id": "A16",
+      "severity_if_applied_as_written": "P2",
+      "bounded_change": "Retirar el alias ambiguo de opciones nuevas y conservar legacy. Resolver por fuente a Shimano Direct mount o unknown, actualizar allowed_options y fixtures. No equipararlo a Full Mount ni afirmar que todos los extensores sirven para cuadros direct mount.",
+      "source_ids": [
+        "WT-GOAT11",
+        "SH-RD0004",
+        "SR-FULLMOUNT"
+      ]
+    },
+    {
+      "patch_id": "MC-17a",
+      "path": "/templates/60/interfaces/0/rules/0",
+      "proposed_op": "replace",
+      "preimage_validation": "before_matches",
+      "decision": "rechazar",
+      "finding_id": "A17A",
+      "severity_if_applied_as_written": "P1",
+      "bounded_change": "Crear puertos por función en el modelo de producto: brake_cable_input y shift_cable_input, cada uno con cabeza y requisitos. Seleccionar el puerto real; conservar ambas funciones en manetas integradas.",
+      "source_ids": [
+        "SH-ST8000"
+      ]
+    },
+    {
+      "patch_id": "MC-17b",
+      "path": "/templates/60/interfaces/0/rules/1",
+      "proposed_op": "replace",
+      "preimage_validation": "before_matches",
+      "decision": "corregir",
+      "finding_id": "A17B",
+      "severity_if_applied_as_written": "P2",
+      "bounded_change": "Mantener la regla deshabilitada con motivo de campo ausente y resultado unknown. Añadir luego requisito por puerto de freno y de cambio, con cabeza canónica/medidas del modelo. No confundir maneta con sólo freno.",
+      "source_ids": [
+        "SH-ST8000"
+      ]
+    },
+    {
+      "patch_id": "MC-18-brake_caliper",
+      "path": "/templates/5/interfaces/2/rules/1",
+      "proposed_op": "replace",
+      "preimage_validation": "before_matches",
+      "decision": "corregir",
+      "finding_id": "A18",
+      "severity_if_applied_as_written": "P1",
+      "bounded_change": "Eliminar equivalence_classes globales. Guardar accepted_fluids por modelo/generación y fluido exacto; distinguir DOT5 siliconado. Mismatch documentado de fluidos se bloquea, dato insuficiente queda unknown. Comparar maneta/cáliper mediante matriz propia, no sólo fluido.",
+      "source_ids": [
+        "SR-DOT",
+        "SR-MAVEN-OIL",
+        "SR-HYDRAULIC-MATRIX",
+        "SR-MAVEN-MOTIVE"
+      ]
+    },
+    {
+      "patch_id": "MC-18-brake_lever",
+      "path": "/templates/6/interfaces/0/rules/2",
+      "proposed_op": "replace",
+      "preimage_validation": "before_matches",
+      "decision": "corregir",
+      "finding_id": "A18",
+      "severity_if_applied_as_written": "P1",
+      "bounded_change": "Eliminar equivalence_classes globales. Guardar accepted_fluids por modelo/generación y fluido exacto; distinguir DOT5 siliconado. Mismatch documentado de fluidos se bloquea, dato insuficiente queda unknown. Comparar maneta/cáliper mediante matriz propia, no sólo fluido.",
+      "source_ids": [
+        "SR-DOT",
+        "SR-MAVEN-OIL",
+        "SR-HYDRAULIC-MATRIX",
+        "SR-MAVEN-MOTIVE"
+      ]
+    },
+    {
+      "patch_id": "MC-18-brake_fluid",
+      "path": "/templates/65/interfaces/0/rules/0",
+      "proposed_op": "replace",
+      "preimage_validation": "before_matches",
+      "decision": "corregir",
+      "finding_id": "A18",
+      "severity_if_applied_as_written": "P1",
+      "bounded_change": "Eliminar equivalence_classes globales. Guardar accepted_fluids por modelo/generación y fluido exacto; distinguir DOT5 siliconado. Mismatch documentado de fluidos se bloquea, dato insuficiente queda unknown. Comparar maneta/cáliper mediante matriz propia, no sólo fluido.",
+      "source_ids": [
+        "SR-DOT",
+        "SR-MAVEN-OIL",
+        "SR-HYDRAULIC-MATRIX",
+        "SR-MAVEN-MOTIVE"
+      ]
+    },
+    {
+      "patch_id": "MC-19-hub",
+      "path": "/templates/25/interfaces/2/rules/0",
+      "proposed_op": "replace",
+      "preimage_validation": "before_matches",
+      "decision": "corregir",
+      "finding_id": "A19",
+      "severity_if_applied_as_written": "P1",
+      "bounded_change": "Separar direct_fit de adapter_path. Usar SM-RTAD05 sólo para rotor seis pernos→maza Center Lock; mantener max 203 mm y exclusión RT86/RT76. No inventar mínimo 160. En ruta inversa, direct_fit=false y adapter_path=unknown, sin aprobación de ensamblaje. Exigir las demás condiciones del kit.",
+      "source_ids": [
+        "PK-ROTOR",
+        "SH-RTAD05"
+      ]
+    },
+    {
+      "patch_id": "MC-19-rotor",
+      "path": "/templates/30/interfaces/0/rules/0",
+      "proposed_op": "replace",
+      "preimage_validation": "before_matches",
+      "decision": "corregir",
+      "finding_id": "A19",
+      "severity_if_applied_as_written": "P1",
+      "bounded_change": "Separar direct_fit de adapter_path. Usar SM-RTAD05 sólo para rotor seis pernos→maza Center Lock; mantener max 203 mm y exclusión RT86/RT76. No inventar mínimo 160. En ruta inversa, direct_fit=false y adapter_path=unknown, sin aprobación de ensamblaje. Exigir las demás condiciones del kit.",
+      "source_ids": [
+        "PK-ROTOR",
+        "SH-RTAD05"
+      ]
+    },
+    {
+      "patch_id": "MC-19-wheel",
+      "path": "/templates/103/interfaces/3/rules/0",
+      "proposed_op": "replace",
+      "preimage_validation": "before_matches",
+      "decision": "corregir",
+      "finding_id": "A19",
+      "severity_if_applied_as_written": "P1",
+      "bounded_change": "Separar direct_fit de adapter_path. Usar SM-RTAD05 sólo para rotor seis pernos→maza Center Lock; mantener max 203 mm y exclusión RT86/RT76. No inventar mínimo 160. En ruta inversa, direct_fit=false y adapter_path=unknown, sin aprobación de ensamblaje. Exigir las demás condiciones del kit.",
+      "source_ids": [
+        "PK-ROTOR",
+        "SH-RTAD05"
+      ]
+    },
+    {
+      "patch_id": "MC-20-brake_caliper",
+      "path": "/templates/5/interfaces/1/rules/0",
+      "proposed_op": "replace",
+      "preimage_validation": "before_matches",
+      "decision": "corregir",
+      "finding_id": "A20",
+      "severity_if_applied_as_written": "P1",
+      "bounded_change": "Desactivar comparación mecánica por texto libre; usar unknown hasta normalizar familia/modelo de pastilla y relación con cáliper. Si se conserva una comparación textual, que sea sólo estructural y no apruebe ni bloquee. Eliminar referencia a exhaustive=true como cierre global.",
+      "source_ids": [
+        "TRP-HYRD"
+      ]
+    },
+    {
+      "patch_id": "MC-20-brake_pad",
+      "path": "/templates/7/interfaces/0/rules/0",
+      "proposed_op": "replace",
+      "preimage_validation": "before_matches",
+      "decision": "corregir",
+      "finding_id": "A20",
+      "severity_if_applied_as_written": "P1",
+      "bounded_change": "Desactivar comparación mecánica por texto libre; usar unknown hasta normalizar familia/modelo de pastilla y relación con cáliper. Si se conserva una comparación textual, que sea sólo estructural y no apruebe ni bloquee. Eliminar referencia a exhaustive=true como cierre global.",
+      "source_ids": [
+        "TRP-HYRD"
+      ]
+    },
+    {
+      "patch_id": "MC-21-compatible_caliper_models-43",
+      "path": "/row_schemas/compatible_caliper_models/columns/-",
+      "proposed_op": "add",
+      "preimage_validation": "append_parent_exists",
+      "decision": "rechazar",
+      "finding_id": "A21",
+      "severity_if_applied_as_written": "P1",
+      "bounded_change": "No añadir exhaustive como permiso de negación. Si hace falta tabla cerrada, definir coverage_scope a nivel de relación: fabricante, familias/modelos/generaciones, interfaz/posición, edición, condiciones y regla OEM explícita sobre ausencias. Aplicarla sólo cuando ambas identidades estén dentro de ese ámbito; preferir exclusiones explícitas.",
+      "source_ids": [
+        "WT-GOAT11",
+        "SR-HYDRAULIC-MATRIX"
+      ]
+    },
+    {
+      "patch_id": "MC-21-compatible_caliper_models-44",
+      "path": "/definitions/compatible_caliper_models/row_schema/columns/-",
+      "proposed_op": "add",
+      "preimage_validation": "append_parent_exists",
+      "decision": "rechazar",
+      "finding_id": "A21",
+      "severity_if_applied_as_written": "P1",
+      "bounded_change": "No añadir exhaustive como permiso de negación. Si hace falta tabla cerrada, definir coverage_scope a nivel de relación: fabricante, familias/modelos/generaciones, interfaz/posición, edición, condiciones y regla OEM explícita sobre ausencias. Aplicarla sólo cuando ambas identidades estén dentro de ese ámbito; preferir exclusiones explícitas.",
+      "source_ids": [
+        "WT-GOAT11",
+        "SR-HYDRAULIC-MATRIX"
+      ]
+    },
+    {
+      "patch_id": "MC-21-shifter_models_compatible-45",
+      "path": "/row_schemas/shifter_models_compatible/columns/-",
+      "proposed_op": "add",
+      "preimage_validation": "append_parent_exists",
+      "decision": "rechazar",
+      "finding_id": "A21",
+      "severity_if_applied_as_written": "P1",
+      "bounded_change": "No añadir exhaustive como permiso de negación. Si hace falta tabla cerrada, definir coverage_scope a nivel de relación: fabricante, familias/modelos/generaciones, interfaz/posición, edición, condiciones y regla OEM explícita sobre ausencias. Aplicarla sólo cuando ambas identidades estén dentro de ese ámbito; preferir exclusiones explícitas.",
+      "source_ids": [
+        "WT-GOAT11",
+        "SR-HYDRAULIC-MATRIX"
+      ]
+    },
+    {
+      "patch_id": "MC-21-shifter_models_compatible-46",
+      "path": "/definitions/shifter_models_compatible/row_schema/columns/-",
+      "proposed_op": "add",
+      "preimage_validation": "append_parent_exists",
+      "decision": "rechazar",
+      "finding_id": "A21",
+      "severity_if_applied_as_written": "P1",
+      "bounded_change": "No añadir exhaustive como permiso de negación. Si hace falta tabla cerrada, definir coverage_scope a nivel de relación: fabricante, familias/modelos/generaciones, interfaz/posición, edición, condiciones y regla OEM explícita sobre ausencias. Aplicarla sólo cuando ambas identidades estén dentro de ese ámbito; preferir exclusiones explícitas.",
+      "source_ids": [
+        "WT-GOAT11",
+        "SR-HYDRAULIC-MATRIX"
+      ]
+    },
+    {
+      "patch_id": "MC-21-derailleur_models_compatible-47",
+      "path": "/row_schemas/derailleur_models_compatible/columns/-",
+      "proposed_op": "add",
+      "preimage_validation": "append_parent_exists",
+      "decision": "rechazar",
+      "finding_id": "A21",
+      "severity_if_applied_as_written": "P1",
+      "bounded_change": "No añadir exhaustive como permiso de negación. Si hace falta tabla cerrada, definir coverage_scope a nivel de relación: fabricante, familias/modelos/generaciones, interfaz/posición, edición, condiciones y regla OEM explícita sobre ausencias. Aplicarla sólo cuando ambas identidades estén dentro de ese ámbito; preferir exclusiones explícitas.",
+      "source_ids": [
+        "WT-GOAT11",
+        "SR-HYDRAULIC-MATRIX"
+      ]
+    },
+    {
+      "patch_id": "MC-21-derailleur_models_compatible-48",
+      "path": "/definitions/derailleur_models_compatible/row_schema/columns/-",
+      "proposed_op": "add",
+      "preimage_validation": "append_parent_exists",
+      "decision": "rechazar",
+      "finding_id": "A21",
+      "severity_if_applied_as_written": "P1",
+      "bounded_change": "No añadir exhaustive como permiso de negación. Si hace falta tabla cerrada, definir coverage_scope a nivel de relación: fabricante, familias/modelos/generaciones, interfaz/posición, edición, condiciones y regla OEM explícita sobre ausencias. Aplicarla sólo cuando ambas identidades estén dentro de ese ámbito; preferir exclusiones explícitas.",
+      "source_ids": [
+        "WT-GOAT11",
+        "SR-HYDRAULIC-MATRIX"
+      ]
+    },
+    {
+      "patch_id": "MC-21-compatible_brake_models-49",
+      "path": "/row_schemas/compatible_brake_models/columns/-",
+      "proposed_op": "add",
+      "preimage_validation": "append_parent_exists",
+      "decision": "rechazar",
+      "finding_id": "A21",
+      "severity_if_applied_as_written": "P1",
+      "bounded_change": "No añadir exhaustive como permiso de negación. Si hace falta tabla cerrada, definir coverage_scope a nivel de relación: fabricante, familias/modelos/generaciones, interfaz/posición, edición, condiciones y regla OEM explícita sobre ausencias. Aplicarla sólo cuando ambas identidades estén dentro de ese ámbito; preferir exclusiones explícitas.",
+      "source_ids": [
+        "WT-GOAT11",
+        "SR-HYDRAULIC-MATRIX"
+      ]
+    },
+    {
+      "patch_id": "MC-21-compatible_brake_models-50",
+      "path": "/definitions/compatible_brake_models/row_schema/columns/-",
+      "proposed_op": "add",
+      "preimage_validation": "append_parent_exists",
+      "decision": "rechazar",
+      "finding_id": "A21",
+      "severity_if_applied_as_written": "P1",
+      "bounded_change": "No añadir exhaustive como permiso de negación. Si hace falta tabla cerrada, definir coverage_scope a nivel de relación: fabricante, familias/modelos/generaciones, interfaz/posición, edición, condiciones y regla OEM explícita sobre ausencias. Aplicarla sólo cuando ambas identidades estén dentro de ese ámbito; preferir exclusiones explícitas.",
+      "source_ids": [
+        "WT-GOAT11",
+        "SR-HYDRAULIC-MATRIX"
+      ]
+    },
+    {
+      "patch_id": "MC-21-compatible_derailleur_models-51",
+      "path": "/row_schemas/compatible_derailleur_models/columns/-",
+      "proposed_op": "add",
+      "preimage_validation": "append_parent_exists",
+      "decision": "rechazar",
+      "finding_id": "A21",
+      "severity_if_applied_as_written": "P1",
+      "bounded_change": "No añadir exhaustive como permiso de negación. Si hace falta tabla cerrada, definir coverage_scope a nivel de relación: fabricante, familias/modelos/generaciones, interfaz/posición, edición, condiciones y regla OEM explícita sobre ausencias. Aplicarla sólo cuando ambas identidades estén dentro de ese ámbito; preferir exclusiones explícitas.",
+      "source_ids": [
+        "WT-GOAT11",
+        "SR-HYDRAULIC-MATRIX"
+      ]
+    },
+    {
+      "patch_id": "MC-21-compatible_derailleur_models-52",
+      "path": "/definitions/compatible_derailleur_models/row_schema/columns/-",
+      "proposed_op": "add",
+      "preimage_validation": "append_parent_exists",
+      "decision": "rechazar",
+      "finding_id": "A21",
+      "severity_if_applied_as_written": "P1",
+      "bounded_change": "No añadir exhaustive como permiso de negación. Si hace falta tabla cerrada, definir coverage_scope a nivel de relación: fabricante, familias/modelos/generaciones, interfaz/posición, edición, condiciones y regla OEM explícita sobre ausencias. Aplicarla sólo cuando ambas identidades estén dentro de ese ámbito; preferir exclusiones explícitas.",
+      "source_ids": [
+        "WT-GOAT11",
+        "SR-HYDRAULIC-MATRIX"
+      ]
+    },
+    {
+      "patch_id": "MC-21-compatible_frames-53",
+      "path": "/row_schemas/compatible_frames/columns/-",
+      "proposed_op": "add",
+      "preimage_validation": "append_parent_exists",
+      "decision": "rechazar",
+      "finding_id": "A21",
+      "severity_if_applied_as_written": "P1",
+      "bounded_change": "No añadir exhaustive como permiso de negación. Si hace falta tabla cerrada, definir coverage_scope a nivel de relación: fabricante, familias/modelos/generaciones, interfaz/posición, edición, condiciones y regla OEM explícita sobre ausencias. Aplicarla sólo cuando ambas identidades estén dentro de ese ámbito; preferir exclusiones explícitas.",
+      "source_ids": [
+        "WT-GOAT11",
+        "SR-HYDRAULIC-MATRIX"
+      ]
+    },
+    {
+      "patch_id": "MC-21-compatible_frames-54",
+      "path": "/definitions/compatible_frames/row_schema/columns/-",
+      "proposed_op": "add",
+      "preimage_validation": "append_parent_exists",
+      "decision": "rechazar",
+      "finding_id": "A21",
+      "severity_if_applied_as_written": "P1",
+      "bounded_change": "No añadir exhaustive como permiso de negación. Si hace falta tabla cerrada, definir coverage_scope a nivel de relación: fabricante, familias/modelos/generaciones, interfaz/posición, edición, condiciones y regla OEM explícita sobre ausencias. Aplicarla sólo cuando ambas identidades estén dentro de ese ámbito; preferir exclusiones explícitas.",
+      "source_ids": [
+        "WT-GOAT11",
+        "SR-HYDRAULIC-MATRIX"
+      ]
+    },
+    {
+      "patch_id": "MC-22-rear_derailleur",
+      "path": "/templates/26/interfaces/1/rules/0",
+      "proposed_op": "replace",
+      "preimage_validation": "before_matches",
+      "decision": "corregir",
+      "finding_id": "A22",
+      "severity_if_applied_as_written": "P1",
+      "bounded_change": "Aceptar no listado=unknown y quitar la excepción some_row.exhaustive + source_url. Consumir sólo exclusiones expresas o cobertura cerrada validada y acotada a la configuración seleccionada.",
+      "source_ids": [
+        "WT-GOAT11",
+        "SR-HYDRAULIC-MATRIX"
+      ]
+    },
+    {
+      "patch_id": "MC-22-shifter",
+      "path": "/templates/31/interfaces/0/rules/0",
+      "proposed_op": "replace",
+      "preimage_validation": "before_matches",
+      "decision": "corregir",
+      "finding_id": "A22",
+      "severity_if_applied_as_written": "P1",
+      "bounded_change": "Aceptar no listado=unknown y quitar la excepción some_row.exhaustive + source_url. Consumir sólo exclusiones expresas o cobertura cerrada validada y acotada a la configuración seleccionada.",
+      "source_ids": [
+        "WT-GOAT11",
+        "SR-HYDRAULIC-MATRIX"
+      ]
+    },
+    {
+      "patch_id": "MC-22-brake_small_part",
+      "path": "/templates/68/interfaces/0/rules/0",
+      "proposed_op": "replace",
+      "preimage_validation": "before_matches",
+      "decision": "corregir",
+      "finding_id": "A22",
+      "severity_if_applied_as_written": "P1",
+      "bounded_change": "Aceptar no listado=unknown y quitar la excepción some_row.exhaustive + source_url. Consumir sólo exclusiones expresas o cobertura cerrada validada y acotada a la configuración seleccionada.",
+      "source_ids": [
+        "WT-GOAT11",
+        "SR-HYDRAULIC-MATRIX"
+      ]
+    },
+    {
+      "patch_id": "MC-22-derailleur_pulley",
+      "path": "/templates/19/interfaces/0/rules/0",
+      "proposed_op": "replace",
+      "preimage_validation": "before_matches",
+      "decision": "corregir",
+      "finding_id": "A22",
+      "severity_if_applied_as_written": "P1",
+      "bounded_change": "Aceptar no listado=unknown y quitar la excepción some_row.exhaustive + source_url. Consumir sólo exclusiones expresas o cobertura cerrada validada y acotada a la configuración seleccionada.",
+      "source_ids": [
+        "WT-GOAT11",
+        "SR-HYDRAULIC-MATRIX"
+      ]
+    },
+    {
+      "patch_id": "MC-22-derailleur_hanger",
+      "path": "/templates/18/interfaces/0/rules/0",
+      "proposed_op": "replace",
+      "preimage_validation": "before_matches",
+      "decision": "corregir",
+      "finding_id": "A22",
+      "severity_if_applied_as_written": "P1",
+      "bounded_change": "Aceptar no listado=unknown y quitar la excepción some_row.exhaustive + source_url. Consumir sólo exclusiones expresas o cobertura cerrada validada y acotada a la configuración seleccionada.",
+      "source_ids": [
+        "WT-GOAT11",
+        "SR-HYDRAULIC-MATRIX"
+      ]
+    },
+    {
+      "patch_id": "MC-24",
+      "path": "/legacy_value_maps/freehub_type→rear_drive_interface (hub) ~1 cassette_spline_standard (cassette) ~1 freewheel_thread_standard (freewheel)/map",
+      "proposed_op": "replace",
+      "preimage_validation": "before_matches",
+      "decision": "corregir",
+      "finding_id": "A24",
+      "severity_if_applied_as_written": "P1",
+      "bounded_change": "Mapear sólo códigos inequívocos del campo/plantilla original. Dejar rosca fija genérica y HG genérico en unknown; resolver HG Road11 por modelo/fuente y conservar relación de cuerpos aceptados aparte. Emitir tokens válidos con provenance, nunca frases con salvo o un cassette XD también entra.",
+      "source_ids": [
+        "SB-FIXED",
+        "SB-FREEWHEEL",
+        "SH-C731"
+      ]
+    },
+    {
+      "patch_id": "MC-25",
+      "path": "/templates/10/interfaces/0/rules/0",
+      "proposed_op": "replace",
+      "preimage_validation": "before_matches",
+      "decision": "corregir",
+      "finding_id": "A25",
+      "severity_if_applied_as_written": "P1",
+      "bounded_change": "Evaluar bike.rear_speeds ∈ chain.declared_supported_speeds tras proyección exacta. Coincidencia es sólo ese requisito. Si una fuente excluye el modelo/perfil, bloquear por esa exclusión aunque el número coincida; si sólo falta declaración, unknown/outside_declared_scope y sin aprobación global.",
+      "source_ids": [
+        "KMC-X8",
+        "SR-XPLR-CHAIN"
+      ]
+    },
+    {
+      "patch_id": "MC-26",
+      "path": "/templates/12/interfaces/0/rules/1",
+      "proposed_op": "replace",
+      "preimage_validation": "before_matches",
+      "decision": "corregir",
+      "finding_id": "A26",
+      "severity_if_applied_as_written": "P1",
+      "bounded_change": "Usar relación conector→cadena por modelo/perfil y condiciones de reutilización. Velocidad y medidas son filtros parciales; coincidencia de 11/128 o de ancho exterior no basta. Exclusión OEM expresa bloquea; ausencia de evidencia mantiene unknown.",
+      "source_ids": [
+        "KMC-FLATNR",
+        "KMC-78",
+        "PK-CHAIN",
+        "SR-XPLR-CHAIN"
+      ]
+    },
+    {
+      "patch_id": "MC-27",
+      "path": "/assembly_policy/verification_semantics",
+      "proposed_op": "add",
+      "preimage_validation": "absent_key",
+      "decision": "corregir",
+      "finding_id": "A27",
+      "severity_if_applied_as_written": "P1",
+      "bounded_change": "Separar source_registered, contract_validated y domain_assertion_verified por afirmación/pareja/alcance. Incluir manual OEM leído y locator. Un contraste estructural prueba consistencia de datos, no incompatibilidad mecánica universal; política de unknown y adapter_path explícita.",
+      "source_ids": [
+        "SR-HYDRAULIC-MATRIX"
+      ]
+    },
+    {
+      "patch_id": "MC-28",
+      "path": "/fixtures_policy",
+      "proposed_op": "add",
+      "preimage_validation": "absent_key",
+      "decision": "corregir",
+      "finding_id": "A28",
+      "severity_if_applied_as_written": "P2",
+      "bounded_change": "Registrar origin=synthetic_compiled, source_grounded_oem, catalogue_observed y runtime_verified como ejes separados. Un caso OEM documentado puede ser válido sin estar en stock; una fixture que copia la regla no demuestra dominio.",
+      "source_ids": [
+        "TRP-HYRD"
+      ]
+    },
+    {
+      "patch_id": "MC-29",
+      "path": "/stats/verified_rules",
+      "proposed_op": "replace",
+      "preimage_validation": "before_matches",
+      "decision": "corregir",
+      "finding_id": "A29",
+      "severity_if_applied_as_written": "P2",
+      "bounded_change": "Separar conteos de reglas compiladas, fuentes registradas y afirmaciones OEM verificadas. Calcularlos desde los registros después de migrar grading; cero sólo si el conjunto realmente está vacío.",
+      "source_ids": [
+        "SR-HYDRAULIC-MATRIX"
+      ]
+    }
+  ],
+  "stats": {
+    "templates": 3,
+    "definitions": 50,
+    "field_uses": 63
+  },
+  "field_addenda": [
+    {
+      "base_sha256": "7ebf2b5b5e69784e3d146b81ad2bec8b7581113565cef022e8da70ba4c7a66fa",
+      "proposal_sha256": "86c7f7d6b7360d01a771f1aaf63ddba0e63352999d65dc4ea78038da58d25440",
+      "decisions_sha256": "60843956f55eac5f44b971a108cf4528f1c7e9bbc222254a9c846d14aa869b07",
+      "applied": [
+        "AD-ND09-label-thread",
+        "AD-ND09-def-thread",
+        "AD-ND09-def-head_drive",
+        "AD-ND09-fastener-thread",
+        "AD-ND09-fastener-length_mm",
+        "AD-ND09-fastener-thread_pitch_mm",
+        "AD-ND09-fastener-thread_tpi",
+        "AD-ND09-fastener-thread_hand",
+        "AD-ND09-fastener-length_datum",
+        "AD-ND09-fastener-head_drive_size_mm",
+        "AD-ND09-fastener-torx_size",
+        "AD-ND09-fastener-strength_class_claim",
+        "AD-ND09-fastener-fastener_kit_members",
+        "AD-ND09-seat_clamp-clamp_thread_pitch_mm",
+        "AD-ND09-seat_clamp-clamp_bolt_length_mm",
+        "AD-ND09-seat_clamp-length_datum",
+        "AD-ND10-def-tool_kind",
+        "AD-ND10-workshop_tool-chain_tool_speeds",
+        "AD-ND10-workshop_tool-tool_interface",
+        "AD-ND10-workshop_tool-tool_capabilities",
+        "AD-ND10-workshop_tool-tool_bits_included",
+        "AD-ND12-def-power_source",
+        "AD-ND12-light-lumens_claimed",
+        "AD-ND12-light-battery_capacity_mah",
+        "AD-ND12-light-charge_connector",
+        "AD-ND12-light-mount_diameter_min_mm",
+        "AD-ND12-light-mount_diameter_max_mm",
+        "AD-ND12-light-ip_rating",
+        "AD-ND12-light-modes_count",
+        "AD-ND12-light-runtime_claim_h",
+        "AD-ND12-light-light_member_configurations",
+        "AD-ND12-light-light_mode_configurations",
+        "AD-ND13-accessory_mount-bike_attachment_kind",
+        "AD-ND13-accessory_mount-bar_fit_representation",
+        "AD-ND13-accessory_mount-bar_diameter_min_mm",
+        "AD-ND13-accessory_mount-bar_diameter_max_mm",
+        "AD-ND13-accessory_mount-bar_clamp_configurations",
+        "AD-ND13-accessory_mount-device_attachment_kind",
+        "AD-ND13-accessory_mount-device_system",
+        "AD-ND13-accessory_mount-device_width_min_mm",
+        "AD-ND13-accessory_mount-device_width_max_mm",
+        "AD-ND21-cycle_computer-connection",
+        "AD-ND21-cycle_computer-positioning_source",
+        "AD-ND21-cycle_computer-speed_source",
+        "AD-ND21-cycle_computer-phone_link",
+        "AD-ND21-cycle_computer-sensor_support_configurations",
+        "AD-ND21-cycle_computer-wheel_setting",
+        "AD-ND21-cycle_computer-computer_contents",
+        "AD-ND22-label-rated_power_w",
+        "AD-ND22-consumer_electronics-connector_a",
+        "AD-ND22-consumer_electronics-power_port_configurations",
+        "AD-ND22-consumer_electronics-power_budget_configurations",
+        "AD-ND22-consumer_electronics-cable_power_capacity_w",
+        "AD-ND22-consumer_electronics-cable_data_capability",
+        "AD-ND22-consumer_electronics-storage_capacity_label",
+        "AD-ND22-consumer_electronics-card_format",
+        "AD-ND22-consumer_electronics-speed_class_claim",
+        "AD-ND23-def-food_item_kind",
+        "AD-ND23-label-serving_size",
+        "AD-ND23-food_beverage-preparation_kind",
+        "AD-ND23-food_beverage-spec_evidence_source",
+        "AD-ND23-food_beverage-serving_size",
+        "AD-ND23-food_beverage-serving_volume_ml",
+        "AD-ND23-food_beverage-temperature",
+        "AD-ND23-food_beverage-milk",
+        "AD-ND23-food_beverage-allergen_note",
+        "AD-ND23-food_beverage-milk_in_recipe",
+        "AD-ND23-food_beverage-milk_substitution_offered",
+        "AD-ND23-food_beverage-recipe_reference",
+        "AD-ND23-food_beverage-net_mass_g",
+        "AD-ND23-food_beverage-net_volume_ml",
+        "AD-ND23-food_beverage-units_per_pack",
+        "AD-ND23-food_beverage-unit_mass_g",
+        "AD-ND23-food_beverage-nutrition_facts",
+        "AD-ND23-food_beverage-ingredients_text",
+        "AD-ND23-food_beverage-allergen_statement_source",
+        "AD-ND23-food_beverage-caffeine_mg",
+        "AD-ND23-food_beverage-caffeine_basis"
+      ],
+      "rejected": [
+        "AD-ND21-cycle_computer-sensor_link_ant_plus",
+        "AD-ND21-cycle_computer-sensor_link_bluetooth",
+        "AD-ND21-cycle_computer-sensor_link_wired",
+        "AD-ND23-food_beverage-allergens_declared_none"
+      ],
+      "scope": "field_representation"
+    },
+    {
+      "base_sha256": "1b7c6aca8d2219804c6d9052bae95adee674273b7705fd87733bb759ee95b3c0",
+      "proposal_sha256": "b43aa4798dab2be7029660efb08dd3836ecfb350ccfb80b97549f53bf7b56b8d",
+      "decisions_sha256": "16d3e9bf780aa3d52a13e3e21dbcd25817653172a7b2fcfa35b933c21265d3af",
+      "applied": [
+        "AD-ND03-pedal-pedal_thread",
+        "AD-ND03-pedal-pedal_thread_standard",
+        "AD-ND03-pedal-pedal_wrench_interface",
+        "AD-ND04-label-grip_inner_diameter_mm",
+        "AD-ND04-label-grip_length_mm",
+        "AD-ND04-grip-grip_inner_diameter_mm",
+        "AD-ND04-grip-grip_length_mm",
+        "AD-ND04-grip-grip_bar_nominal_diameter_mm",
+        "AD-ND04-grip-grip_length_left_mm",
+        "AD-ND04-grip-grip_length_right_mm",
+        "AD-ND04-grip-grip_straight_length_required_mm",
+        "AD-ND04-grip-grip_clamp_torque_nm",
+        "AD-ND05-label-stem_steerer_clamp_diameter_mm",
+        "AD-ND05-stem-quill_min_insertion_mm",
+        "AD-ND06-rows-seatpost_saddle_configurations",
+        "AD-ND06-label-saddle_mount_model",
+        "AD-ND07-seatpost-dropper_actuation",
+        "AD-ND07-seatpost-dropper_control_kind",
+        "AD-ND07-seatpost-dropper_cable_routing",
+        "AD-ND07-seatpost-dropper_remote_included",
+        "AD-ND07-seatpost-dropper_remote_model",
+        "AD-ND07-seatpost-seatpost_min_insertion_mm",
+        "AD-ND07-seatpost-seatpost_min_exposed_mm",
+        "AD-ND07-seatpost-seatpost_bottom_clearance_mm",
+        "AD-ND07-seatpost-seatpost_dimension_document",
+        "AD-ND07-label-seatpost_length_mm",
+        "AD-ND08-handlebar-bar_construction",
+        "AD-ND08-handlebar-bar_clamp_diameter_mm",
+        "AD-ND08-handlebar-bar_width_mm",
+        "AD-ND08-handlebar-bar_width_reference",
+        "AD-ND08-handlebar-bar_width_hoods_mm",
+        "AD-ND08-handlebar-bar_width_drops_mm",
+        "AD-ND08-handlebar-bar_reach_mm",
+        "AD-ND08-handlebar-bar_drop_mm",
+        "AD-ND08-handlebar-integrated_stem_length_mm",
+        "AD-ND08-handlebar-integrated_stem_angle_deg",
+        "AD-ND08-handlebar-integrated_steerer_clamp_mm",
+        "AD-ND08-handlebar-cable_routing",
+        "AD-ND08-handlebar-accessory_mount_ports_text",
+        "AD-ND08-handlebar-conflicting_claims",
+        "AD-ND11-lock-security_rating_claim",
+        "AD-ND11-lock-security_rating_configurations",
+        "AD-ND11-lock-cable_diameter_mm",
+        "AD-ND14-def-carrier_mount_kind",
+        "AD-ND14-rack_basket-rack_top_interface",
+        "AD-ND14-rack_basket-rack_eyelets_required",
+        "AD-ND14-rack_basket-rack_mount_configurations",
+        "AD-ND14-rack_basket-load_reference",
+        "AD-ND14-def-attachment",
+        "AD-ND14-bike_bag-bag_rack_interface",
+        "AD-ND14-bike_bag-auxiliary_part_requirements",
+        "AD-ND14-bike_bag-bag_member_configurations",
+        "AD-ND14-bike_bag-conflicting_claims",
+        "AD-ND15-kickstand-kickstand_mount_standard",
+        "AD-ND15-kickstand-mount_hole_spacing_mm",
+        "AD-ND15-kickstand-mount_bolt_count",
+        "AD-ND15-kickstand-thread",
+        "AD-ND15-kickstand-kickstand_length_reference",
+        "AD-ND15-kickstand-installed_height_min_mm",
+        "AD-ND15-kickstand-installed_height_max_mm",
+        "AD-ND15-kickstand-max_bike_weight_kg",
+        "AD-ND15-kickstand-frame_requirement_text",
+        "AD-ND15-kickstand-length_min_mm",
+        "AD-ND15-kickstand-length_max_mm",
+        "AD-ND16-bottle-bottle_retention_system",
+        "AD-ND16-bottle-bottle_diameter_mm",
+        "AD-ND16-bottle-base_included",
+        "AD-ND16-bottle-included_base_model",
+        "AD-ND16-def-cage_mount",
+        "AD-ND16-bottle_cage-cage_retention_system",
+        "AD-ND16-bottle_cage-bottle_diameter_mm",
+        "AD-ND16-bottle_cage-frame_tube_width_min_mm",
+        "AD-ND16-bottle_cage-frame_tube_width_max_mm",
+        "AD-ND16-bottle_cage-boss_spacing_mm",
+        "AD-ND16-bottle_cage-boss_count",
+        "AD-ND16-bottle_cage-side_entry_side",
+        "AD-ND17-def-pump_kind",
+        "AD-ND17-pump-co2_cartridge_configurations",
+        "AD-ND17-pump-pack_quantity",
+        "AD-ND17-pump-inflation_target_note",
+        "AD-ND17-pump-valve_heads_supported",
+        "AD-ND18-helmet-certification_claim",
+        "AD-ND18-helmet-label_evidence_state",
+        "AD-ND18-helmet-certification_configurations",
+        "AD-ND18-helmet-helmet_construction",
+        "AD-ND18-helmet-intended_audience",
+        "AD-ND18-rider_protection-certification_configurations",
+        "AD-ND18-rider_protection-intended_audience",
+        "AD-ND19-rows-eyewear_lens_configurations",
+        "AD-ND19-rows-eyewear_lens_configurations-ordered",
+        "AD-ND20-rider_apparel-intended_audience",
+        "AD-ND20-rider_apparel-fit_cut",
+        "AD-ND20-rider_apparel-fabric_composition_text",
+        "AD-ND20-rider_glove-intended_audience",
+        "AD-ND20-rider_glove-fit_cut",
+        "AD-ND20-rider_glove-fabric_composition_text",
+        "AD-ND20-label-gender_fit",
+        "AD-ND24-label-volume_l"
+      ],
+      "rejected": [
+        "AD-ND14-bike_bag-bag_interface_generation",
+        "AD-ND17-pump-co2_cartridge_interface"
+      ],
+      "scope": "field_representation"
+    },
+    {
+      "base_sha256": "381847b47595d841288224021ae38a8d5dc399e53555a60ae1d65dd1889ddff3",
+      "proposal_sha256": "c49d9b24a75536896aaffbf53e7e7ebfe12e3656be426950f3afd72499d528a5",
+      "decisions_sha256": "25f9bb6de66247492b6a42fa0ac0e21bd2675a0f18d7f421ba3ac23d1229ca69",
+      "applied": [
+        "ROOT-grip-sold_as",
+        "ROOT-light-power_source",
+        "ROOT-light-light_mount_kind",
+        "ROOT-consumer_electronics-rated_power_w",
+        "ROOT-head-drive-single-owner",
+        "ROOT-light-row_coherence",
+        "ROOT-consumer_electronics-row_coherence",
+        "ROOT-chain_guide-scalar_ordered_pairs",
+        "ROOT-rear_derailleur-scalar_ordered_pairs",
+        "ROOT-rim_brake-scalar_ordered_pairs",
+        "ROOT-saddle_cover-scalar_ordered_pairs",
+        "ROOT-tire_liner-scalar_ordered_pairs",
+        "ROOT-chainring_guard-scalar_ordered_pairs",
+        "ROOT-light-scalar_ordered_pairs",
+        "ROOT-audible_signal-scalar_ordered_pairs",
+        "ROOT-accessory_mount-scalar_ordered_pairs",
+        "ROOT-bottle_cage-scalar_ordered_pairs",
+        "ROOT-kickstand-scalar_ordered_pairs",
+        "ROOT-rider_bag-scalar_ordered_pairs",
+        "ROOT-helmet-scalar_ordered_pairs",
+        "ROOT-bicycle-scalar_ordered_pairs"
+      ],
+      "rejected": [],
+      "scope": "field_representation"
+    },
+    {
+      "base_sha256": "cf8ebeb1e4e7dd32853b8618657a3f25e3f5428158702ef2e0adeb5b89978577",
+      "proposal_sha256": "3599369a1b1841ff407981b22dbbd5ce533e833d5d490ec0e8961134fefaddee",
+      "decisions_sha256": "8b774b789a98efc78c23d7df46a0c6fa0c2636f60957ca5d113bafb7bcd5c4f5",
+      "applied": [
+        "BP-options-fluid_type",
+        "BP-options-compound_type",
+        "BP-options-rim_brake_style",
+        "BP-options-rim_brake_frame_mount",
+        "BP-add-brake_caliper-brake_external_hose_connection",
+        "BP-add-brake_caliper-brake_fluid_approvals",
+        "BP-add-brake_caliper-brake_hydraulic_connections",
+        "BP-change-brake_caliper-fluid_type",
+        "BP-change-brake_caliper-hose_system_code",
+        "BP-change-brake_caliper-hose_fitting_type",
+        "BP-change-brake_caliper-bleed_port",
+        "BP-add-brake_caliper-brake_bleed_ports",
+        "BP-change-brake_caliper-piston_count_value",
+        "BP-add-brake_caliper-rim_brake_mount_fitments",
+        "BP-add-brake_caliper-caliper_rotor_nominal_thickness_mm",
+        "BP-add-brake_lever-brake_external_hose_connection",
+        "BP-add-brake_lever-brake_fluid_approvals",
+        "BP-add-brake_lever-brake_hydraulic_connections",
+        "BP-change-brake_lever-fluid_type",
+        "BP-change-brake_lever-hose_system_code",
+        "BP-add-hydraulic_disc_brake-brake_assembly_configurations",
+        "BP-add-hydraulic_disc_brake-brake_fluid_approvals",
+        "BP-add-hydraulic_disc_brake-brake_hydraulic_connections",
+        "BP-add-hydraulic_disc_brake-brake_bleed_ports",
+        "BP-change-hydraulic_disc_brake-fluid_type",
+        "BP-change-hydraulic_disc_brake-hose_fitting_type",
+        "BP-change-hydraulic_disc_brake-bleed_port",
+        "BP-add-mechanical_disc_brake-brake_assembly_configurations",
+        "BP-add-rim_brake-brake_assembly_configurations",
+        "BP-add-rim_brake-brake_actuation",
+        "BP-add-rim_brake-brake_external_hose_connection",
+        "BP-add-rim_brake-brake_fluid_approvals",
+        "BP-add-rim_brake-brake_hydraulic_connections",
+        "BP-add-rim_brake-rim_brake_mount_fitments",
+        "BP-change-rim_brake-lever_pull_required",
+        "BP-change-rim_brake-rim_pad_stud_type",
+        "BP-add-rim_brake-rim_pad_interface_model",
+        "BP-add-brake_shift_combined_control-brake_actuation",
+        "BP-change-brake_shift_combined_control-lever_cable_pull",
+        "BP-add-brake_shift_combined_control-brake_external_hose_connection",
+        "BP-add-brake_shift_combined_control-brake_fluid_approvals",
+        "BP-add-brake_shift_combined_control-brake_hydraulic_connections",
+        "BP-add-brake_pad-brake_pad_retainer_model",
+        "BP-add-brake_caliper-brake_pad_retainer_model",
+        "BP-add-hydraulic_disc_brake-brake_pad_retainer_model",
+        "BP-add-mechanical_disc_brake-brake_pad_retainer_model",
+        "BP-add-brake_pad-brake_pad_oem_compound",
+        "BP-add-brake_pad-rim_pad_interface_model",
+        "BP-change-brake_pad-pad_shape_code",
+        "BP-change-brake_pad-pad_retention",
+        "BP-columns-compatible_caliper_models",
+        "BP-columns-compatible_brake_models",
+        "BP-columns-rotor_size_recipe",
+        "BP-change-brake_mount_adapter-caliper_mount",
+        "BP-change-brake_mount_adapter-frame_mount",
+        "BP-change-brake_mount_adapter-position",
+        "BP-change-brake_mount_adapter-rotor_from_mm",
+        "BP-change-brake_mount_adapter-rotor_to_mm",
+        "BP-add-brake_mount_adapter-brake_adapter_fitments",
+        "BP-change-rotor_mount_adapter-hub_interface",
+        "BP-change-rotor_mount_adapter-rotor_mount_out",
+        "BP-add-rotor_mount_adapter-rotor_adapter_fitments",
+        "BP-change-rotor-rotor_thickness_mm",
+        "BP-change-rotor-rotor_min_thickness_mm",
+        "BP-change-rotor-rotor_floating",
+        "BP-add-hydraulic_hose-brake_hydraulic_connections",
+        "BP-change-hydraulic_hose-hose_system_code",
+        "BP-add-hydraulic_fitting-brake_hydraulic_connections",
+        "BP-change-hydraulic_fitting-hose_system_code",
+        "BP-add-hydraulic_fitting-brake_fitting_oem_code",
+        "BP-add-hydraulic_fitting-brake_fitting_insert_length_mm",
+        "BP-add-hydraulic_fitting-compatible_brake_models",
+        "BP-change-brake_fluid-fluid_type",
+        "BP-add-brake_fluid-compatible_brake_models",
+        "BP-change-brake_fluid-oem_brand_specific",
+        "BP-change-control_housing-housing_kind",
+        "BP-add-control_housing-housing_application",
+        "BP-add-control_housing-housing_construction",
+        "BP-add-control_cable-control_cable_end_options",
+        "BP-change-control_cable-cable_head",
+        "BP-add-control_small_part-compatible_brake_models",
+        "BP-add-bmx_cable_detangler-compatible_brake_models",
+        "BP-change-brake_small_part-compatible_brake_models",
+        "BP-change-hub_brake-brake_actuation",
+        "BP-coherence-hydraulic_disc_brake",
+        "BP-coherence-rim_brake"
+      ],
+      "rejected": [
+        "BP-order-rim-brake-reach"
+      ],
+      "scope": "field_representation"
+    },
+    {
+      "base_sha256": "9f2d93b830a5118fbe2757e36d36756389b4b4630cf82d97ca99b7cc55d3feaa",
+      "proposal_sha256": "199366f6a937df6c3886583efbff97acfd47f22a30462b129999228c755c5a5d",
+      "decisions_sha256": "f302e522911e97ebbaa5c2c1b98c0107c59c0690b542239bbebdeea9256f4c20",
+      "applied": [
+        "LPS-L-retire-power_source",
+        "LPS-L-retire-charge_connector",
+        "LPS-L-retire-battery_capacity_mah",
+        "LPS-L-retire-light_mount_kind",
+        "LPS-L-retire-mount_diameter_min_mm",
+        "LPS-L-retire-mount_diameter_max_mm",
+        "LPS-L-retire-ip_rating",
+        "LPS-L-declared-total-modes_count",
+        "LPS-L-label-modes_count",
+        "LPS-C-declared-total-ports_count",
+        "LPS-C-label-ports_count",
+        "LPS-E-storage-label-owner",
+        "LPS-E-storage-label-text",
+        "LPS-L-drop-mount-pair",
+        "LPS-L-members-required",
+        "LPS-L-modes-required",
+        "LPS-L-members-schema",
+        "LPS-L-modes-schema",
+        "LPS-L-link-labels",
+        "LPS-L-kit-roles",
+        "LPS-C-sensor-schema",
+        "LPS-C-retire-sensor_mount",
+        "LPS-E-protocol-scope",
+        "LPS-E-link-labels",
+        "LPS-E-port-profiles",
+        "LPS-E-port-profiles-link"
+      ],
+      "rejected": [],
+      "scope": "field_representation"
+    },
+    {
+      "base_sha256": "f3178bd3c860c421d2365961fe3ff057581d2d038bb999bc59f5f0f959937072",
+      "proposal_sha256": "94faca196c4572e2faeb8cf748dd9b8843c9c63e531c1f021803a4146bb4f5d0",
+      "decisions_sha256": "dba14f68330080b9ddf15551d5f16f79a7516f490fbabcef02be32a77fdfdb7e",
+      "applied": [
+        "RCF-brake_caliper",
+        "RCF-brake_lever",
+        "RCF-hydraulic_disc_brake",
+        "RCF-mechanical_disc_brake",
+        "RCF-rim_brake",
+        "RCF-seatpost",
+        "RCF-rotor_mount_adapter",
+        "RCF-workshop_tool",
+        "RCF-light",
+        "RCF-consumer_electronics",
+        "RCF-accessory_mount",
+        "RCF-food_beverage",
+        "RCF-pump",
+        "RCF-brake_shift_combined_control"
+      ],
+      "rejected": [],
+      "scope": "field_representation"
+    },
+    {
+      "base_sha256": "c12204e42f86423fc3bf3eba345a9f07568b4849d9c8d9b8ace4d44430ddcf9a",
+      "proposal_sha256": "f825e68f72fd84e31506f2eb1cbc97dbcf11d0f5079ec9e9e086be768e1cb8aa",
+      "decisions_sha256": "9afde6ed983b76e0eea953461d71a10c5a8125e2f5b4a5bcc7957b0d3c297799",
+      "applied": [
+        "WSS-W01-rim-rim_bead_profile",
+        "WSS-W01-wheel-rim_bead_profile",
+        "WSS-W01-tire-configurations",
+        "WSS-W01-tire-max_pressure-label",
+        "WSS-W02-shock-ends",
+        "WSS-W02-hardware-label",
+        "WSS-W03-size_code-label",
+        "WSS-W03-dimensional_code",
+        "WSS-W03-internal_construction",
+        "WSS-W03-seal_kind",
+        "WSS-W03-application-label",
+        "WSS-W04-headset-bearings",
+        "WSS-W04-bearing-require-bearing_inner_contact_angle_deg",
+        "WSS-W04-bearing-require-bearing_outer_contact_angle_deg",
+        "WSS-W05-frame-ports",
+        "WSS-W05-frame-upper_shis-optional",
+        "WSS-W05-frame-lower_shis-optional",
+        "WSS-W05-label-headset_upper_shis",
+        "WSS-W05-label-headset_lower_shis",
+        "WSS-W07-fork-clearance",
+        "WSS-W07-fork-axle_to_crown",
+        "WSS-W07-fork-crown_stack_min_mm",
+        "WSS-W07-fork-crown_stack_max_mm",
+        "WSS-W07-fork-stack-pair",
+        "WSS-W07-fork-max_tire_width-label",
+        "WSS-W08-frame-dropout",
+        "WSS-W10-spoke-thread_standard",
+        "WSS-W10-nipple-thread_standard",
+        "WSS-W10-nipple-thread-label",
+        "ROOT-WSS-cartridge-constructions",
+        "ROOT-WSS-cartridge-domain-bearing-bearing_size_code",
+        "ROOT-WSS-cartridge-domain-bearing-bearing_inner_diameter_mm",
+        "ROOT-WSS-cartridge-domain-bearing-bearing_outer_diameter_mm",
+        "ROOT-WSS-cartridge-domain-bearing-bearing_width_mm",
+        "ROOT-WSS-cartridge-domain-bottom_bracket_bearing-bearing_inner_diameter_mm",
+        "ROOT-WSS-cartridge-domain-bottom_bracket_bearing-bearing_outer_diameter_mm",
+        "ROOT-WSS-cartridge-domain-bottom_bracket_bearing-bb_bearing_width_mm",
+        "ROOT-WSS-cartridge-domain-bottom_bracket_bearing-bearing_size_code",
+        "ROOT-WSS-bearing-bearing_seat_geometry",
+        "ROOT-WSS-bearing-bearing_element_retention",
+        "ROOT-WSS-bevel-label-inner",
+        "ROOT-WSS-bevel-domain-inner",
+        "ROOT-WSS-bevel-label-outer",
+        "ROOT-WSS-bevel-domain-outer",
+        "ROOT-WSS-retire-shock-mount-scalar",
+        "ROOT-WSS-fork-fork_crown_layout",
+        "ROOT-WSS-conditions-tire",
+        "ROOT-WSS-conditions-headset"
+      ],
+      "rejected": [
+        "WSS-W10-spoke-thread-label"
+      ],
+      "scope": "field_representation"
+    },
+    {
+      "base_sha256": "6ed9cdf73ae5d9fc0aa2284bb4691f4f1eca958c2762c5ea1e7076c5f9358b18",
+      "proposal_sha256": "f6f48614dcab8411569a19013124f14101c15d3c7983af0930db9ee718567b66",
+      "decisions_sha256": "c24eecffb085c70cb66fd6b79fbffc0db141e55bb9ca34effc33f46534e66ee2",
+      "applied": [
+        "CPC01",
+        "CPC02",
+        "CPC03",
+        "CPC04",
+        "CPC05",
+        "CPC06",
+        "CPC07",
+        "CPC08",
+        "CPC09",
+        "CPC10",
+        "CPC11",
+        "CPC12",
+        "CPC13",
+        "CPC14"
+      ],
+      "rejected": [],
+      "scope": "field_representation"
+    },
+    {
+      "base_sha256": "d7f8510ca112da4430f485720243ddde899daa097f39fb00aec49fe35027b7ca",
+      "proposal_sha256": "96f65c22acd5167216978e0b856944f89c2229f29acf48a2f0fb41fb3bcb5d97",
+      "decisions_sha256": "28576287c068bcd7260a99cf867c231025e455ef2d478d06c16ce0c9eb5e1e7c",
+      "applied": [
+        "RND-ND09-thread_pitch_system",
+        "RND-ND09-thread_pitch_mm-gate",
+        "RND-ND09-thread_tpi-gate",
+        "RND-ND16-bottle_diameter-gate",
+        "RND-ND17-max_pressure-gate",
+        "RND-ND18-helmet_kind-options",
+        "ROOT-RND-label-bottle_diameter_mm",
+        "ROOT-RND-add-bottle_body_dimensions",
+        "ROOT-RND-add-pump_pressure_specifications",
+        "ROOT-RND-conditions-pump",
+        "ROOT-RND-schema-co2_cartridge_configurations",
+        "ROOT-RND-schema-security_rating_configurations",
+        "ROOT-RND-conditions-lock",
+        "ROOT-RND-schema-bar_clamp_configurations",
+        "ROOT-RND-conditions-accessory_mount",
+        "ROOT-RND-label-helmet_kind"
+      ],
+      "rejected": [
+        "RND-ND10-tool_capabilities-unique_by",
+        "RND-ND11-security_rating_configurations-unique_by",
+        "RND-ND13-bar_clamp_configurations-unique_by",
+        "RND-ND14-bag_member_configurations-unique_by",
+        "RND-ND17-co2_cartridge_configurations-unique_by",
+        "RND-ND19-eyewear_lens_configurations-unique_by",
+        "RND-ND23-nutrition_facts-unique_by"
+      ],
+      "scope": "field_representation"
+    },
+    {
+      "base_sha256": "f1826a9a782a200754b21ba6c5420af0f9c39b89482503cab77f96779fc739b1",
+      "proposal_sha256": "d3da2ee618574366e2f515e7fad463e744800d7d753feb7b4f2ee32ad53a7d99",
+      "decisions_sha256": "8b9f1ea969439bffad39772a4b3ca5d0885f1151be02260ae5089833089be73f",
+      "applied": [
+        "RV-seatpost",
+        "RV-accessory_mount"
+      ],
+      "rejected": [],
+      "scope": "field_representation"
+    },
+    {
+      "base_sha256": "58e68f0c4f0d7b8e824a84a3931cf9f7bd03767f8a65aaa55020bc6af7465f03",
+      "proposal_sha256": "8428447ff39b385d29da28faa5d2997bffca34ee252308359b910dc13fcbaac8",
+      "decisions_sha256": "2a988ed6bc65fda4ad0d1c5b59d7313d0eca965b424520cfd9c1533e06950d65",
+      "applied": [
+        "CONT-01",
+        "CONT-02",
+        "CONT-03",
+        "CONT-04",
+        "CONT-05",
+        "CONT-06",
+        "CONT-07"
+      ],
+      "rejected": [],
+      "scope": "field_representation"
+    },
+    {
+      "base_sha256": "20a9c1eabdf84dd5e3e9cb5a4a922a695c6e91deff53bebdb2e0c584b5e8edee",
+      "proposal_sha256": "239ab6607e25f4211f88d5c4998cec25af52d07278d75d983c98f0cfa8b05087",
+      "decisions_sha256": "a6e48a280bc2019237e02fce0e6fbae26a6ca0c0747d933e71cea6e022e35645",
+      "applied": [
+        "WRFP-R2-bearing_seal_kind-open-cartridge",
+        "WRFP-R1-inner-bevel-helper",
+        "WRFP-R1-outer-bevel-helper",
+        "WRFP-R1-race-contact-angle",
+        "WRFP-R1-row-count",
+        "WRFP-R1-regreasable",
+        "WRFP-R3-retire-max-pressure-psi",
+        "WRFP-R6-hookless-pending-completeness"
+      ],
+      "rejected": [
+        "WRFP-R3-max-pressure-unit",
+        "WRFP-R3-max-pressure-value"
+      ],
+      "scope": "field_representation"
+    },
+    {
+      "base_sha256": "00041bb82cbddec1278a4d310d26747601518356abce5af4138da9bab7aa4b06",
+      "proposal_sha256": "29176d32164746a87b2a3178180baca350c24c9e8c18bf22e9827b978ae45f8c",
+      "decisions_sha256": "b7e30ff04b8d1830cafc4c9f03f9efaf543cdda3140c40b118f7e9a52570d5d6",
+      "applied": [
+        "PCB-P01",
+        "PCB-P02",
+        "PCB-P03",
+        "PCB-P04",
+        "TPDU-01-general-max-pressures-table",
+        "TPDU-02-row-conditions-unit-gates-value"
+      ],
+      "rejected": [
+        "TPDU-03-retire-max-pressure-psi"
+      ],
+      "scope": "field_representation"
+    },
+    {
+      "base_sha256": "e709158d0ac49603ab01dfde19326d1f9f2fd0d0ce50723cb5d0076390226d9d",
+      "proposal_sha256": "049060e8daf62c2411980819ff4e568c92b081e13da0612f91916c4b278f5a6f",
+      "decisions_sha256": "262218685caba233ba58cde025160ec7ca8a5bafdcba92fe9acc3914c73b41a1",
+      "applied": [
+        "CARD-01"
+      ],
+      "rejected": [],
+      "scope": "field_representation"
+    },
+    {
+      "base_sha256": "934ce172a6f3eaf8fa8dc616a912d161c965840b97b647fbee23870ccc154562",
+      "proposal_sha256": "0dbc1d2309f75a12cf90e49c5dd893bf4b89f791603cdae1e8865e3b176e2400",
+      "decisions_sha256": "97765fa7fde9bfcf3c684ef4e8f831c7ad55fdd878fd9139ade539fbd0c98b9d",
+      "applied": [
+        "PORT-01",
+        "PORT-02"
+      ],
+      "rejected": [],
+      "scope": "field_representation"
+    }
+  ],
+  "mechanical_coverage_complete": false,
+  "automatic_fill_authorized": false,
+  "source_urls": [
+    "https://www.sheldonbrown.com/bbtaper.html",
+    "https://www.parktool.com/en-us/blog/repair-help/how-to-remove-and-install-a-crank",
+    "https://productinfo.shimano.com/en/compatibility/C-449",
+    "https://dassets.shimano.com/content/dam/global/cg1SHICCycling/final/ev/ev/EV-FC-M8000-3849B.pdf"
+  ]
+}

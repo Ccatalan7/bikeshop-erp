@@ -1,0 +1,14 @@
+{
+  "md5": "e20342ed1ea076059d9325382b58798d",
+  "owner": "postgres",
+  "proacl": [
+    "postgres=X/postgres",
+    "service_role=X/postgres"
+  ],
+  "proconfig": [
+    "search_path=pg_catalog, public, pg_temp"
+  ],
+  "prosecdef": false,
+  "definition": "CREATE OR REPLACE FUNCTION public.spec_validate_product_member_profiles_internal_v1(p_product_id uuid)\n RETURNS void\n LANGUAGE plpgsql\n STABLE\n SET search_path TO 'pg_catalog', 'public', 'pg_temp'\nAS $function$\ndeclare profile public.product_spec_member_profiles%rowtype; binding jsonb; issues jsonb;\nbegin\n if exists(select 1 from public.spec_facts f where f.subject_type='product' and f.subject_id=p_product_id\n   and f.subject_scope is not null and not exists(select 1 from public.product_spec_member_profiles p\n     where p.product_id=f.subject_id and p.tenant_id=f.tenant_id and p.scope=f.subject_scope)) then\n   raise exception 'Hecho de componente sin perfil dueño' using errcode='23514';\n end if;\n for profile in select * from public.product_spec_member_profiles\n   where product_id=p_product_id and archived_at is null loop\n   binding:=public.spec_member_binding_internal_v1(p_product_id,profile.collection_definition_id,profile.member_row_id,profile.template_id);\n   if binding->'identity' is distinct from profile.member_identity or\n     (binding->>'template_id')::uuid is distinct from profile.template_id then\n     raise exception 'El componente cambió: archiva explícitamente su ficha anterior' using errcode='23514';\n   end if;\n   if exists(select 1 from public.spec_facts f where f.subject_type='product' and f.subject_id=p_product_id\n     and f.subject_scope=profile.scope and not exists(select 1 from public.spec_template_fields tf\n       where tf.template_id=profile.template_id and tf.spec_definition_id=f.spec_definition_id)) then\n     raise exception 'El hecho no pertenece a la ficha del componente' using errcode='23514';\n   end if;\n   issues:=public.spec_member_profile_issues_internal_v1(profile.id);\n   if exists(select 1 from jsonb_array_elements(issues) i where coalesce((i->>'blocking')::boolean,true)) then\n     raise exception 'Ficha de componente contradictoria: %',issues using errcode='23514';\n   end if;\n end loop;\nend $function$\n",
+  "provolatile": "s"
+}

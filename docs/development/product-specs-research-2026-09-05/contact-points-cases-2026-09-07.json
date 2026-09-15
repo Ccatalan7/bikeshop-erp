@@ -1,0 +1,2577 @@
+{
+  "schema_version": 1,
+  "title": "All-family physical-port cardinality",
+  "catalogue_sha256": "1a10d6e52e4b50ae2da80dc2590cd0c510a639884edb8e46d0c7c81b1c0dc40a",
+  "independent_review_hashes": [
+    "4cbd9cd4e1ccb2f41ab3249cbaed83fe419689aa6ba1dbb24a5b9dd856bd66d1",
+    "a1c6bfc5fae5c11b3b7f804b240ea36b2a36db2f6e4ba2ff868c061802856820"
+  ],
+  "mechanical_coverage_complete": false,
+  "automatic_fill_authorized": false,
+  "cases": [
+    {
+      "id": "mallet_clipless_pins_and_mixed_bearings",
+      "template": "pedal",
+      "values": {
+        "pedal_type": "Automático (clipless)",
+        "replaceable_pins": true,
+        "pedal_bearing_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "a22b9884-d111-5e3f-a557-bb0ba4a10dc6",
+              "values": {
+                "position": "Interior",
+                "construction": "Casquillo",
+                "model": "Igus LL-glide"
+              },
+              "sources": [
+                "https://www.crankbrothers.com/products/mallet-e"
+              ]
+            },
+            {
+              "id": "1c86f95c-36f2-5185-bd83-29825a9ebd7f",
+              "values": {
+                "position": "Exterior",
+                "construction": "Cartucho",
+                "model": "Enduro MAX"
+              },
+              "sources": [
+                "https://www.crankbrothers.com/products/mallet-e"
+              ]
+            }
+          ]
+        },
+        "cleats_included": true,
+        "included_cleat_model": "Standard Release 15° / 20°, 6° float"
+      },
+      "kind": "source_scoped_representation",
+      "source_urls": [
+        "https://www.crankbrothers.com/products/mallet-e"
+      ],
+      "expected_blocking": []
+    },
+    {
+      "id": "absent_cleats_cannot_name_included_model",
+      "template": "pedal",
+      "values": {
+        "cleats_included": false,
+        "included_cleat_model": "Cala sintética"
+      },
+      "kind": "synthetic_negative",
+      "source_urls": [
+        "https://www.crankbrothers.com/products/mallet-e"
+      ],
+      "expected_blocking": [
+        {
+          "code": "field_applicability",
+          "field": "included_cleat_model"
+        }
+      ]
+    },
+    {
+      "id": "quill_adapter_has_two_diameters",
+      "template": "stem",
+      "values": {
+        "stem_kind": "Adaptador quill → ahead",
+        "quill_diameter_mm": "22.2",
+        "quill_adapter_output_diameter_mm": "28.6"
+      },
+      "kind": "synthetic_geometry_not_oem_fitment",
+      "source_urls": [
+        "https://www.parktool.com/en-us/blog/repair-help/stem-removal-installation-quill-stems"
+      ],
+      "expected_blocking": []
+    },
+    {
+      "id": "quill_adapter_has_no_handlebar_clamp",
+      "template": "stem",
+      "values": {
+        "stem_kind": "Adaptador quill → ahead",
+        "bar_clamp_diameter_mm": "31.8"
+      },
+      "kind": "synthetic_negative",
+      "source_urls": [
+        "https://www.parktool.com/en-us/blog/repair-help/stem-removal-installation-quill-stems"
+      ],
+      "expected_blocking": [
+        {
+          "code": "field_applicability",
+          "field": "bar_clamp_diameter_mm"
+        }
+      ]
+    },
+    {
+      "id": "quill_insertion_is_not_ahead_clamp",
+      "template": "stem",
+      "values": {
+        "stem_kind": "Tee de espiga (quill)",
+        "stem_steerer_clamp_diameter_mm": "28.6"
+      },
+      "kind": "synthetic_negative",
+      "source_urls": [
+        "https://www.parktool.com/en-us/blog/repair-help/stem-removal-installation-quill-stems"
+      ],
+      "expected_blocking": [
+        {
+          "code": "field_applicability",
+          "field": "stem_steerer_clamp_diameter_mm"
+        }
+      ]
+    },
+    {
+      "id": "ritchey_rail_coverage_stays_per_optional_kit",
+      "template": "seatpost",
+      "values": {
+        "seatpost_kind": "Rígida",
+        "seatpost_saddle_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "00f0315b-c3d8-5786-b898-e8225417834e",
+              "values": {
+                "rail_geometry": "Oval 7x9 mm",
+                "configuration_state": "Con kit opcional",
+                "model": "WCS Carbon 1-Bolt clampset 7x10",
+                "conditions": "Rieles de carbono; únicamente postes Superlogic y WCS Carbon 1-bolt indicados por OEM."
+              },
+              "sources": [
+                "https://ritcheylogic.com/bike/seatposts/wcs-carbon-1-bolt-seatpost-complete-clampset"
+              ]
+            },
+            {
+              "id": "72c2031f-0bbe-5306-9288-7a776e1f647b",
+              "values": {
+                "rail_geometry": "Oval 7x9.6 mm",
+                "configuration_state": "Con kit opcional",
+                "model": "WCS Carbon 1-Bolt clampset 7x10",
+                "conditions": "Rieles de carbono; únicamente postes Superlogic y WCS Carbon 1-bolt indicados por OEM."
+              },
+              "sources": [
+                "https://ritcheylogic.com/bike/seatposts/wcs-carbon-1-bolt-seatpost-complete-clampset"
+              ]
+            },
+            {
+              "id": "c6bf82d0-4171-5cf7-af9b-2984f703ae22",
+              "values": {
+                "rail_geometry": "Oval 7x10 mm",
+                "configuration_state": "Con kit opcional",
+                "model": "WCS Carbon 1-Bolt clampset 7x10",
+                "conditions": "Rieles de carbono; únicamente postes Superlogic y WCS Carbon 1-bolt indicados por OEM."
+              },
+              "sources": [
+                "https://ritcheylogic.com/bike/seatposts/wcs-carbon-1-bolt-seatpost-complete-clampset"
+              ]
+            }
+          ]
+        }
+      },
+      "kind": "source_scoped_representation",
+      "source_urls": [
+        "https://ritcheylogic.com/bike/seatposts/wcs-carbon-1-bolt-seatpost-complete-clampset"
+      ],
+      "expected_blocking": []
+    },
+    {
+      "id": "shim_cannot_have_seatpost_offset",
+      "template": "seatpost",
+      "values": {
+        "seatpost_kind": "Suplemento (shim)",
+        "seatpost_offset_mm": "20"
+      },
+      "kind": "synthetic_negative",
+      "source_urls": [
+        "https://ritcheylogic.com/bike/seatposts/wcs-carbon-1-bolt-seatpost-complete-clampset"
+      ],
+      "expected_blocking": [
+        {
+          "code": "field_applicability",
+          "field": "seatpost_offset_mm"
+        }
+      ]
+    },
+    {
+      "id": "pedal_french_m14_vs_9_16_not_equivalent",
+      "template": "pedal",
+      "values": {
+        "pedal_type": "Plataforma",
+        "pedal_thread_standard": "M14 x 1.25",
+        "sold_as": "Par"
+      },
+      "kind": "synthetic_geometry_from_primary_source",
+      "source_ids": [
+        "S-PEDALS",
+        "S-PEDAL-TOOL"
+      ],
+      "source_urls": [
+        "https://www.sheldonbrown.com/pedals.html",
+        "https://www.parktool.com/en-us/blog/repair-help/pedal-installation-and-removal"
+      ],
+      "expected_blocking": [],
+      "inventory_product": null,
+      "note": "Fixture mecánica sintética: geometría francesa no equivalente a9/16x20. No afirma accionamiento de herramienta ni identifica un SKU.",
+      "eligible_for_product_fill": false,
+      "review_findings": [
+        "FB01"
+      ],
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false,
+      "root_reconciliation": []
+    },
+    {
+      "id": "pedal_inventory_best_kp198_alias_unconfirmed",
+      "template": "pedal",
+      "values": {
+        "pedal_type": "Plataforma",
+        "pedal_thread_standard": "Desconocido / sin confirmar",
+        "sold_as": "Par"
+      },
+      "kind": "inventory_title_only_candidate",
+      "source_ids": [
+        "E-INVENTARIO"
+      ],
+      "source_urls": [],
+      "expected_blocking": [],
+      "inventory_product": "PEDAL BEST (PAR) KP-198 NEGRO EJE 9/16\" CAJA",
+      "note": "El9/16 del título se conserva en inventory_product como candidato nominal; no se escribe un hecho nuevo en clave legacy ni se infiere paso.",
+      "eligible_for_product_fill": false,
+      "review_findings": [
+        "FB01"
+      ],
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false,
+      "root_reconciliation": []
+    },
+    {
+      "id": "grip_ergon_gp1_rohloff_nexus_asymmetric_pair",
+      "template": "grip",
+      "values": {
+        "grip_attachment": "Lock-on (una abrazadera)",
+        "sold_as": "Par",
+        "grip_bar_nominal_diameter_mm": "22.2",
+        "grip_length_left_mm": "128",
+        "grip_length_right_mm": "93",
+        "spec_evidence_source": "Ergon manual_gp1.pdf",
+        "grip_straight_length_required_left_mm": "128",
+        "grip_straight_length_required_right_mm": "93",
+        "grip_clamp_torque_specifications": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "quantity_kind": "Par nominal",
+                "value": "5",
+                "unit": "Nm",
+                "configuration": "GP1, abrazaderas, manual ERG_MAN_GP1_06_2014",
+                "conditions": "No sobreapretar; seguir los requisitos de manubrio y montaje.",
+                "source_url": "https://www.ergonbike.com/infocenter/downloads/manual_gp1.pdf"
+              },
+              "sources": []
+            },
+            {
+              "id": "r2",
+              "values": {
+                "quantity_kind": "Par nominal",
+                "value": "3.7",
+                "unit": "ft-lb",
+                "configuration": "GP1, abrazaderas, manual ERG_MAN_GP1_06_2014",
+                "conditions": "No sobreapretar; seguir los requisitos de manubrio y montaje.",
+                "source_url": "https://www.ergonbike.com/infocenter/downloads/manual_gp1.pdf"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "kind": "source_scoped_representation",
+      "source_ids": [
+        "S-GP1"
+      ],
+      "source_urls": [
+        "https://www.ergonbike.com/infocenter/downloads/manual_gp1.pdf"
+      ],
+      "expected_blocking": [],
+      "inventory_product": null,
+      "note": "GP1 Rohloff/Nexus del manual 06/2014: largos y zona recta mínima 128/93 por lado. No generalizar a otros modelos/SKU ni deducir espacio disponible en el manubrio.",
+      "eligible_for_product_fill": false,
+      "review_findings": [
+        "FB02"
+      ],
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false,
+      "root_reconciliation": [
+        "Torque fixture moved from retired scalar after re-reading OEM page 2; 5 Nm and 3.7 ft-lb remain separate printed declarations."
+      ]
+    },
+    {
+      "id": "grip_inventory_ozono_132_22_ambiguous",
+      "template": "grip",
+      "values": {
+        "grip_attachment": "Desconocido / sin confirmar",
+        "sold_as": "Par"
+      },
+      "kind": "inventory_title_only_candidate",
+      "source_ids": [
+        "E-INVENTARIO"
+      ],
+      "source_urls": [],
+      "expected_blocking": [],
+      "inventory_product": "PUÑOS OZONO NEGROS 132mm 22mm",
+      "note": "132 y22 permanecen en el título de investigación: no hay lado/diámetro de interfaz confirmado. No escribir132 a un campo retirado ni duplicarlo en ambos lados.",
+      "eligible_for_product_fill": false,
+      "review_findings": [],
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false,
+      "root_reconciliation": []
+    },
+    {
+      "id": "stem_ahead_28_6_vs_tapered_fork_top",
+      "template": "stem",
+      "values": {
+        "stem_kind": "Tee sin rosca (ahead)",
+        "bar_clamp_diameter_mm": "31.8",
+        "stem_length_mm": "45"
+      },
+      "kind": "inventory_title_only_candidate",
+      "source_ids": [
+        "E-INVENTARIO"
+      ],
+      "source_urls": [
+        "https://www.parktool.com/en-us/blog/repair-help/stem-removal-installation-threadless"
+      ],
+      "expected_blocking": [],
+      "inventory_product": "Tee Alum Eclipse 31.8MM x 45MM Black AS-263",
+      "note": "31.8x45 son candidatos del título Eclipse. Park explica el extremo superior de ahead, pero no demuestra28.6 en ese SKU; se omite. La comparación de una horquilla cónica requiere ambas identidades y datos.",
+      "eligible_for_product_fill": false,
+      "review_findings": [],
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false,
+      "root_reconciliation": []
+    },
+    {
+      "id": "seatpost_ritchey_wcs_1bolt_clampset_7x10",
+      "template": "seatpost",
+      "values": {
+        "seatpost_kind": "Rígida",
+        "seatpost_saddle_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r01",
+              "values": {
+                "rail_geometry": "Redondo 7 mm",
+                "configuration_state": "Con kit opcional",
+                "model": "WCS Carbon 1-Bolt",
+                "clamp_part": "Clampset 7x7"
+              },
+              "sources": [
+                "https://ritcheylogic.com/bike/seatposts/wcs-carbon-1-bolt-seatpost-complete-clampset"
+              ]
+            },
+            {
+              "id": "r02",
+              "values": {
+                "rail_geometry": "Oval 7x9 mm",
+                "configuration_state": "Con kit opcional",
+                "model": "WCS Carbon 1-Bolt",
+                "clamp_part": "Clampset 7x10",
+                "conditions": "el clampset 7x10 acepta 7x9, 7x9.6 y 7x10"
+              },
+              "sources": [
+                "https://ritcheylogic.com/bike/seatposts/wcs-carbon-1-bolt-seatpost-complete-clampset"
+              ]
+            },
+            {
+              "id": "r03",
+              "values": {
+                "rail_geometry": "Oval 7x9.6 mm",
+                "configuration_state": "Con kit opcional",
+                "model": "WCS Carbon 1-Bolt",
+                "clamp_part": "Clampset 7x10"
+              },
+              "sources": [
+                "https://ritcheylogic.com/bike/seatposts/wcs-carbon-1-bolt-seatpost-complete-clampset"
+              ]
+            },
+            {
+              "id": "r04",
+              "values": {
+                "rail_geometry": "Oval 7x10 mm",
+                "configuration_state": "Con kit opcional",
+                "model": "WCS Carbon 1-Bolt",
+                "clamp_part": "Clampset 7x10"
+              },
+              "sources": [
+                "https://ritcheylogic.com/bike/seatposts/wcs-carbon-1-bolt-seatpost-complete-clampset"
+              ]
+            },
+            {
+              "id": "r05",
+              "values": {
+                "rail_geometry": "Oval 8x8.5 mm",
+                "configuration_state": "Con kit opcional",
+                "model": "WCS Carbon 1-Bolt",
+                "clamp_part": "Clampset 8x8.5"
+              },
+              "sources": [
+                "https://ritcheylogic.com/bike/seatposts/wcs-carbon-1-bolt-seatpost-complete-clampset"
+              ]
+            }
+          ]
+        }
+      },
+      "kind": "source_scoped_configuration_example_not_seatpost_sku",
+      "source_ids": [
+        "S-RITCHEY"
+      ],
+      "source_urls": [
+        "https://ritcheylogic.com/bike/seatposts/wcs-carbon-1-bolt-seatpost-complete-clampset"
+      ],
+      "expected_blocking": [],
+      "inventory_product": null,
+      "note": "La fuente es el clampset: filas muestran alternativas con ese kit/modelo, sin afirmar contenido de una tija ni diámetro. Con kit opcional significa configuración posible con kit, no prueba de ausencia en la caja. El kit vendido tampoco se clasifica como cuerpo de tija para llenar inventario.",
+      "eligible_for_product_fill": false,
+      "review_findings": [
+        "FB03"
+      ],
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false,
+      "root_reconciliation": []
+    },
+    {
+      "id": "seatpost_reverb_axs_150_rev_a_dimensions",
+      "template": "seatpost",
+      "values": {
+        "seatpost_kind": "Telescópica (dropper)",
+        "dropper_travel_mm": "150",
+        "seatpost_length_mm": "440",
+        "seatpost_min_exposed_mm": "215",
+        "seatpost_min_insertion_mm": "80",
+        "seatpost_bottom_clearance_mm": "23",
+        "seatpost_dimension_document": "GEN.0000000006250 Rev A (2020)",
+        "dropper_control_kind": "Electrónico inalámbrico"
+      },
+      "kind": "source_scoped_representation",
+      "source_ids": [
+        "S-REVERB"
+      ],
+      "source_urls": [
+        "https://www.sram.com/globalassets/document-hierarchy/frame-fit-specifications/rockshox/gen0000000006250-rev-a-reverb-axs-seatpost-specifications.pdf"
+      ],
+      "expected_blocking": [],
+      "inventory_product": null,
+      "note": "RevA2020, carrera150: C440,D215,inserción mínima80,E23 como proyección de válvula adicional a C. Diámetro SKU, A/B del cuadro y demás configuración desconocidos; no emitir ajuste. Routing ausente por inalámbrico.",
+      "eligible_for_product_fill": false,
+      "review_findings": [
+        "FB05"
+      ],
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false,
+      "root_reconciliation": []
+    },
+    {
+      "id": "seatpost_inventory_zoom_27_2_rigid",
+      "template": "seatpost",
+      "values": {
+        "seatpost_kind": "Rígida",
+        "seatpost_diameter_mm": "27.2",
+        "seatpost_length_mm": "400"
+      },
+      "kind": "inventory_title_only_candidate",
+      "source_ids": [
+        "E-INVENTARIO"
+      ],
+      "source_urls": [],
+      "expected_blocking": [],
+      "inventory_product": "TUBO SILLIN ZOOM SP-C255(ISO-M) 27.2X400 BED/BED/LABK",
+      "note": "27.2x400 son candidatos del título. Abrazadera desconocida produce pendiente no bloqueante, no compatibilidad presunta.",
+      "eligible_for_product_fill": false,
+      "review_findings": [
+        "FB05"
+      ],
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false,
+      "root_reconciliation": []
+    },
+    {
+      "id": "handlebar_inventory_ruta_440_25_4",
+      "template": "handlebar",
+      "values": {
+        "bar_construction": "Manubrio separado",
+        "bar_style": "Ruta (drop)",
+        "bar_clamp_diameter_mm": "25.4",
+        "bar_width_reference": "Desconocido / sin confirmar",
+        "bar_width_mm": "440"
+      },
+      "kind": "inventory_title_only_candidate",
+      "source_ids": [
+        "E-INVENTARIO"
+      ],
+      "source_urls": [],
+      "expected_blocking": [],
+      "inventory_product": "MANUBRIO RUTA AL. 440mm. 25.4 DR-AL-48B/E NEGRO",
+      "note": "440 del título es una medición candidata sin datum; el prerrequisito sigue pendiente no bloqueante. No compararlo a un ancho centre-to-centre confirmado.",
+      "eligible_for_product_fill": false,
+      "review_findings": [
+        "FB06"
+      ],
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false,
+      "root_reconciliation": []
+    },
+    {
+      "id": "RCF06",
+      "template": "seatpost",
+      "field": "seatpost_saddle_configurations",
+      "kind": "synthetic_regression",
+      "values": {
+        "seatpost_kind": "Rígida",
+        "seatpost_saddle_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "rail_geometry": "Oval 7x9 mm",
+                "configuration_state": "Con kit opcional"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_row_condition_issues": [
+        {
+          "code": "row_required_missing",
+          "field": "seatpost_saddle_configurations",
+          "row_id": "r1",
+          "column": "clamp_part",
+          "blocking": false
+        }
+      ],
+      "expected_blocking": [],
+      "source_ids": [
+        "RITCHEY_1BOLT",
+        "CATALOG"
+      ],
+      "purpose": "Kit declarado sin pieza: incompleto.",
+      "gap_ids": [],
+      "not_a_mechanical_verdict": true,
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false
+    },
+    {
+      "id": "RCF07",
+      "template": "seatpost",
+      "field": "seatpost_saddle_configurations",
+      "kind": "oem_representation_example",
+      "values": {
+        "seatpost_kind": "Rígida",
+        "seatpost_saddle_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "rail_geometry": "Oval 7x9 mm",
+                "configuration_state": "Con kit opcional",
+                "clamp_part": "WCS Carbon 1-Bolt complete clampset 7x10",
+                "model": "WCS Carbon 1-Bolt"
+              },
+              "sources": [
+                "https://ritcheylogic.com/bike/seatposts/wcs-carbon-1-bolt-seatpost-complete-clampset"
+              ]
+            }
+          ]
+        }
+      },
+      "expected_row_condition_issues": [],
+      "expected_blocking": [],
+      "source_ids": [
+        "RITCHEY_1BOLT"
+      ],
+      "purpose": "Kit y riel 7x9 de la página específica; no establece inclusión ni identidad de stock.",
+      "gap_ids": [],
+      "not_a_mechanical_verdict": true,
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false
+    },
+    {
+      "id": "RCF08",
+      "template": "seatpost",
+      "field": "seatpost_saddle_configurations",
+      "kind": "closed_engine_gap_regression",
+      "values": {
+        "seatpost_kind": "Rígida",
+        "seatpost_saddle_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "rail_geometry": "Oval 7x9 mm",
+                "configuration_state": "Con kit incluido",
+                "clamp_part": "Pieza de prueba",
+                "clamp_included": false
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_row_condition_issues": [
+        {
+          "code": "row_value_conflict",
+          "field": "seatpost_saddle_configurations",
+          "row_id": "r1",
+          "column": "clamp_included",
+          "blocking": true
+        }
+      ],
+      "expected_blocking": [
+        {
+          "code": "row_value_conflict",
+          "field": "seatpost_saddle_configurations"
+        }
+      ],
+      "source_ids": [
+        "CATALOG",
+        "ENGINE2200"
+      ],
+      "purpose": "Con kit incluido y abrazadera no incluida contradicen la misma configuración; 2400 lo bloquea.",
+      "not_a_mechanical_verdict": true,
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "closed_gap_ids": [
+        "G02"
+      ]
+    },
+    {
+      "id": "RCF09",
+      "template": "seatpost",
+      "field": "seatpost_saddle_configurations",
+      "kind": "synthetic_regression",
+      "values": {
+        "seatpost_kind": "Rígida",
+        "seatpost_saddle_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "rail_geometry": "Oval 7x9 mm",
+                "configuration_state": "De fábrica",
+                "clamp_part": "Pieza original de prueba"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_row_condition_issues": [],
+      "expected_blocking": [],
+      "source_ids": [
+        "CATALOG",
+        "ENGINE2200"
+      ],
+      "purpose": "De fábrica conserva detalles de abrazadera.",
+      "gap_ids": [],
+      "not_a_mechanical_verdict": true,
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false
+    },
+    {
+      "id": "CPC_PEDAL_MIXED_PINS",
+      "template": "pedal",
+      "values": {
+        "pedal_type": "Mixto",
+        "cleat_system": "SPD",
+        "replaceable_pins": true
+      },
+      "kind": "oem_representation_example",
+      "purpose": "PD-EH500 puede conservar pines y retención mixta. El despiece no rellena calas incluidas.",
+      "source_ids": [
+        "SHIMANO_EH500"
+      ],
+      "source_urls": [
+        "https://dassets.shimano.com/content/dam/global/cg1SHICCycling/final/ev/ev/EV-PD-EH500-4362B.pdf"
+      ],
+      "expected_blocking": [],
+      "expected_pending_contains": [],
+      "gap_ids": [],
+      "not_a_mechanical_verdict": true,
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false,
+      "eligible_for_product_fill": false
+    },
+    {
+      "id": "CPC_PEDAL_BEARING_POSITIONS",
+      "template": "pedal",
+      "values": {
+        "pedal_type": "Automático (clipless)",
+        "cleat_system": "Crankbrothers",
+        "pedal_bearing_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "inside",
+              "values": {
+                "position": "Interior",
+                "construction": "Casquillo",
+                "model": "Igus LL-glide"
+              },
+              "sources": [
+                "https://www.crankbrothers.com/products/mallet-e"
+              ]
+            },
+            {
+              "id": "outside",
+              "values": {
+                "position": "Exterior",
+                "construction": "Cartucho",
+                "model": "Enduro MAX"
+              },
+              "sources": [
+                "https://www.crankbrothers.com/products/mallet-e"
+              ]
+            }
+          ]
+        }
+      },
+      "kind": "oem_representation_example",
+      "purpose": "ND02 ya representa apoyos distintos del mismo producto.",
+      "source_ids": [
+        "CB_MALLET"
+      ],
+      "source_urls": [
+        "https://www.crankbrothers.com/products/mallet-e"
+      ],
+      "expected_blocking": [],
+      "expected_pending_contains": [],
+      "gap_ids": [],
+      "not_a_mechanical_verdict": true,
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false,
+      "eligible_for_product_fill": false
+    },
+    {
+      "id": "CPC_PEDAL_LEGACY_IGNORED",
+      "template": "pedal",
+      "values": {
+        "pedal_thread": "1/2",
+        "pedal_thread_standard": "M14 x 1.25",
+        "pedal_type": "Plataforma",
+        "sold_as": "Par"
+      },
+      "kind": "legacy_boundary_regression",
+      "purpose": "La respuesta retirada no compite con el estándar activo; no es una instrucción para escribir el dato legacy.",
+      "source_ids": [
+        "SB_PEDALS"
+      ],
+      "source_urls": [
+        "https://www.sheldonbrown.com/pedals.html"
+      ],
+      "expected_blocking": [],
+      "expected_pending_contains": [],
+      "gap_ids": [],
+      "not_a_mechanical_verdict": true,
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false,
+      "eligible_for_product_fill": false
+    },
+    {
+      "id": "CPC_PEDAL_UNIT_SIDE_UNKNOWN",
+      "template": "pedal",
+      "values": {
+        "sold_as": "Unidad",
+        "pedal_thread_standard": "M14 x 1.25",
+        "pedal_type": "Plataforma"
+      },
+      "kind": "synthetic_unknown",
+      "purpose": "Cantidad comercial conocida, extremo no confirmado: representación válida, ajuste aún desconocido.",
+      "source_ids": [
+        "PARK_PEDALS"
+      ],
+      "source_urls": [
+        "https://www.parktool.com/en-us/blog/repair-help/pedal-installation-and-removal"
+      ],
+      "expected_blocking": [],
+      "expected_pending_contains": [],
+      "gap_ids": [
+        "CPC-G04"
+      ],
+      "not_a_mechanical_verdict": true,
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false,
+      "eligible_for_product_fill": false
+    },
+    {
+      "id": "CPC_PEDAL_OTHER_PENDING",
+      "template": "pedal",
+      "values": {
+        "pedal_thread_standard": "Otro"
+      },
+      "kind": "synthetic_unknown",
+      "purpose": "Otro sin designación no completa la interfaz.",
+      "source_ids": [
+        "SB_PEDALS"
+      ],
+      "source_urls": [
+        "https://www.sheldonbrown.com/pedals.html"
+      ],
+      "expected_blocking": [],
+      "expected_pending_contains": [
+        {
+          "code": "required_missing",
+          "field": "pedal_thread_other_declaration"
+        }
+      ],
+      "gap_ids": [],
+      "not_a_mechanical_verdict": true,
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false,
+      "eligible_for_product_fill": false,
+      "expected_issue_subset": [
+        {
+          "code": "required_missing",
+          "field": "pedal_thread_other_declaration",
+          "blocking": false
+        }
+      ]
+    },
+    {
+      "id": "CPC_PEDAL_OTHER_DECLARED",
+      "template": "pedal",
+      "values": {
+        "pedal_thread_standard": "Otro",
+        "pedal_thread_other_declaration": "Designación OEM de prueba, paso y mano pendientes"
+      },
+      "kind": "synthetic_representation",
+      "purpose": "Texto libre conserva una declaración; no se normaliza como estándar ni cuenta como evidencia verificada.",
+      "source_ids": [
+        "SB_PEDALS"
+      ],
+      "source_urls": [
+        "https://www.sheldonbrown.com/pedals.html"
+      ],
+      "expected_blocking": [],
+      "expected_pending_contains": [],
+      "gap_ids": [
+        "CPC-G04"
+      ],
+      "not_a_mechanical_verdict": true,
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false,
+      "eligible_for_product_fill": false
+    },
+    {
+      "id": "CPC_PEDAL_OTHER_DETAIL_WRONG_BRANCH",
+      "template": "pedal",
+      "values": {
+        "pedal_thread_standard": "9/16\" x 20 TPI",
+        "pedal_thread_other_declaration": "Otra rosca de prueba"
+      },
+      "kind": "synthetic_contradiction",
+      "purpose": "El detalle de Otro no corresponde a un estándar canónico seleccionado.",
+      "source_ids": [
+        "SB_PEDALS"
+      ],
+      "source_urls": [
+        "https://www.sheldonbrown.com/pedals.html"
+      ],
+      "expected_blocking": [
+        {
+          "code": "field_applicability",
+          "field": "pedal_thread_other_declaration"
+        }
+      ],
+      "expected_pending_contains": [],
+      "gap_ids": [],
+      "not_a_mechanical_verdict": true,
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false,
+      "eligible_for_product_fill": false
+    },
+    {
+      "id": "CPC_GRIP_ASYMMETRIC_SPACE",
+      "template": "grip",
+      "values": {
+        "sold_as": "Par",
+        "grip_attachment": "Lock-on (una abrazadera)",
+        "grip_bar_nominal_diameter_mm": "22.2",
+        "grip_length_left_mm": "128",
+        "grip_length_right_mm": "93",
+        "grip_straight_length_required_left_mm": "128",
+        "grip_straight_length_required_right_mm": "93"
+      },
+      "kind": "oem_representation_example",
+      "purpose": "GP1 Rohloff/Nexus 06/2014 mantiene largos y mínimos por lado, sin norma global.",
+      "source_ids": [
+        "ERGON_GP1"
+      ],
+      "source_urls": [
+        "https://www.ergonbike.com/infocenter/downloads/manual_gp1.pdf"
+      ],
+      "expected_blocking": [],
+      "expected_pending_contains": [],
+      "gap_ids": [],
+      "not_a_mechanical_verdict": true,
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false,
+      "eligible_for_product_fill": false
+    },
+    {
+      "id": "CPC_GRIP_GENERIC_UNKNOWN_SIDE",
+      "template": "grip",
+      "values": {
+        "sold_as": "Unidad",
+        "grip_length_mm": "100.25",
+        "grip_straight_length_required_mm": "101.5"
+      },
+      "kind": "synthetic_valid",
+      "purpose": "Una unidad sin lado conserva magnitudes decimales sin copiarlas a izquierda/derecha.",
+      "source_ids": [
+        "ERGON_GP1"
+      ],
+      "source_urls": [
+        "https://www.ergonbike.com/infocenter/downloads/manual_gp1.pdf"
+      ],
+      "expected_blocking": [],
+      "expected_pending_contains": [],
+      "gap_ids": [],
+      "not_a_mechanical_verdict": true,
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false,
+      "eligible_for_product_fill": false
+    },
+    {
+      "id": "CPC_GRIP_KNOWN_LEFT",
+      "template": "grip",
+      "values": {
+        "sold_as": "Unidad izquierda",
+        "grip_length_left_mm": "128",
+        "grip_straight_length_required_left_mm": "128"
+      },
+      "kind": "synthetic_valid",
+      "purpose": "Una unidad de lado conocido usa su campo canónico.",
+      "source_ids": [
+        "ERGON_GP1"
+      ],
+      "source_urls": [
+        "https://www.ergonbike.com/infocenter/downloads/manual_gp1.pdf"
+      ],
+      "expected_blocking": [],
+      "expected_pending_contains": [],
+      "gap_ids": [],
+      "not_a_mechanical_verdict": true,
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false,
+      "eligible_for_product_fill": false
+    },
+    {
+      "id": "CPC_GRIP_DUPLICATE_ASSIGNED_LENGTH",
+      "template": "grip",
+      "values": {
+        "sold_as": "Unidad izquierda",
+        "grip_length_mm": "93",
+        "grip_length_left_mm": "128"
+      },
+      "kind": "synthetic_contradiction",
+      "purpose": "Dos valores diferentes para la misma unidad no se vuelven medidas independientes.",
+      "source_ids": [
+        "ERGON_GP1"
+      ],
+      "source_urls": [
+        "https://www.ergonbike.com/infocenter/downloads/manual_gp1.pdf"
+      ],
+      "expected_blocking": [
+        {
+          "code": "field_applicability",
+          "field": "grip_length_mm"
+        }
+      ],
+      "expected_pending_contains": [],
+      "gap_ids": [],
+      "not_a_mechanical_verdict": true,
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false,
+      "eligible_for_product_fill": false
+    },
+    {
+      "id": "CPC_GRIP_GENERIC_PAIR_SPACE",
+      "template": "grip",
+      "values": {
+        "sold_as": "Par",
+        "grip_straight_length_required_mm": "128"
+      },
+      "kind": "synthetic_contradiction",
+      "purpose": "Un máximo genérico no sustituye dos requisitos OEM de lado.",
+      "source_ids": [
+        "ERGON_GP1"
+      ],
+      "source_urls": [
+        "https://www.ergonbike.com/infocenter/downloads/manual_gp1.pdf"
+      ],
+      "expected_blocking": [
+        {
+          "code": "field_applicability",
+          "field": "grip_straight_length_required_mm"
+        }
+      ],
+      "expected_pending_contains": [],
+      "gap_ids": [],
+      "not_a_mechanical_verdict": true,
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false,
+      "eligible_for_product_fill": false
+    },
+    {
+      "id": "CPC_GRIP_WRONG_SIDE",
+      "template": "grip",
+      "values": {
+        "sold_as": "Unidad izquierda",
+        "grip_straight_length_required_right_mm": "93"
+      },
+      "kind": "synthetic_contradiction",
+      "purpose": "El lado derecho no pertenece a una única unidad izquierda.",
+      "source_ids": [
+        "ERGON_GP1"
+      ],
+      "source_urls": [
+        "https://www.ergonbike.com/infocenter/downloads/manual_gp1.pdf"
+      ],
+      "expected_blocking": [
+        {
+          "code": "field_applicability",
+          "field": "grip_straight_length_required_right_mm"
+        }
+      ],
+      "expected_pending_contains": [],
+      "gap_ids": [],
+      "not_a_mechanical_verdict": true,
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false,
+      "eligible_for_product_fill": false
+    },
+    {
+      "id": "CPC_GRIP_SIDE_NOT_CONFIRMED",
+      "template": "grip",
+      "values": {
+        "grip_straight_length_required_left_mm": "128"
+      },
+      "kind": "synthetic_unknown",
+      "purpose": "Al faltar presentación, conserva el dato dependiente pendiente sin aprobar el lado.",
+      "source_ids": [
+        "ERGON_GP1"
+      ],
+      "source_urls": [
+        "https://www.ergonbike.com/infocenter/downloads/manual_gp1.pdf"
+      ],
+      "expected_blocking": [],
+      "expected_pending_contains": [
+        {
+          "code": "prerequisite",
+          "field": "grip_straight_length_required_left_mm"
+        }
+      ],
+      "gap_ids": [],
+      "not_a_mechanical_verdict": true,
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false,
+      "eligible_for_product_fill": false,
+      "expected_issue_subset": [
+        {
+          "code": "prerequisite",
+          "field": "grip_straight_length_required_left_mm",
+          "blocking": false
+        }
+      ],
+      "expected_sql_issue_subset": [
+        {
+          "code": "field_applicability",
+          "field": "grip_straight_length_required_left_mm",
+          "blocking": false
+        }
+      ],
+      "diagnostic_transport_note": "SQL field_applicability y Dart prerequisite: mismo requisito desconocido y no bloqueante."
+    },
+    {
+      "id": "CPC_GRIP_INVALID_SPACE",
+      "template": "grip",
+      "values": {
+        "sold_as": "Par",
+        "grip_straight_length_required_left_mm": "0"
+      },
+      "kind": "synthetic_contradiction",
+      "purpose": "Longitud requerida de cero incumple dominio de medida, no una tolerancia OEM.",
+      "source_ids": [
+        "ERGON_GP1"
+      ],
+      "source_urls": [
+        "https://www.ergonbike.com/infocenter/downloads/manual_gp1.pdf"
+      ],
+      "expected_blocking": [
+        {
+          "code": "range",
+          "field": "grip_straight_length_required_left_mm"
+        }
+      ],
+      "expected_pending_contains": [],
+      "gap_ids": [],
+      "not_a_mechanical_verdict": true,
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false,
+      "eligible_for_product_fill": false,
+      "expected_sql_blocking": [
+        {
+          "code": "field_constraint",
+          "field": "grip_straight_length_required_left_mm"
+        }
+      ],
+      "diagnostic_transport_note": "SQL field_constraint y Dart range: mismo valor explícito fuera del dominio, bloqueante."
+    },
+    {
+      "id": "CPC_SADDLE_PROPRIETARY_UNKNOWN",
+      "template": "saddle",
+      "values": {
+        "saddle_rail_geometry": "Sistema propietario"
+      },
+      "kind": "synthetic_unknown",
+      "purpose": "Sistema propietario sin designación queda incompleto.",
+      "source_ids": [
+        "SDG_IFLY"
+      ],
+      "source_urls": [
+        "https://sdgcomponents.com/products/i-fly-2-0-competition-saddle-solid-i-beam"
+      ],
+      "expected_blocking": [],
+      "expected_pending_contains": [
+        {
+          "code": "required_missing",
+          "field": "saddle_mount_model"
+        }
+      ],
+      "gap_ids": [],
+      "not_a_mechanical_verdict": true,
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false,
+      "eligible_for_product_fill": false,
+      "expected_issue_subset": [
+        {
+          "code": "required_missing",
+          "field": "saddle_mount_model",
+          "blocking": false
+        }
+      ]
+    },
+    {
+      "id": "CPC_SADDLE_IBEAM",
+      "template": "saddle",
+      "values": {
+        "saddle_rail_geometry": "Sistema propietario",
+        "saddle_mount_model": "SDG I-Beam"
+      },
+      "kind": "oem_representation_example",
+      "purpose": "I-FLY 2.0 tiene una designación explícita. No demuestra que cualquier tija propietaria encaje.",
+      "source_ids": [
+        "SDG_IFLY"
+      ],
+      "source_urls": [
+        "https://sdgcomponents.com/products/i-fly-2-0-competition-saddle-solid-i-beam"
+      ],
+      "expected_blocking": [],
+      "expected_pending_contains": [],
+      "gap_ids": [],
+      "not_a_mechanical_verdict": true,
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false,
+      "eligible_for_product_fill": false
+    },
+    {
+      "id": "CPC_SADDLE_OTHER_UNKNOWN",
+      "template": "saddle",
+      "values": {
+        "saddle_rail_geometry": "Otro"
+      },
+      "kind": "synthetic_unknown",
+      "purpose": "Otro mantiene una vía abierta y solicita detalle, sin inventar un nombre.",
+      "source_ids": [
+        "SDG_IFLY"
+      ],
+      "source_urls": [
+        "https://sdgcomponents.com/products/i-fly-2-0-competition-saddle-solid-i-beam"
+      ],
+      "expected_blocking": [],
+      "expected_pending_contains": [
+        {
+          "code": "required_missing",
+          "field": "saddle_mount_model"
+        }
+      ],
+      "gap_ids": [],
+      "not_a_mechanical_verdict": true,
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false,
+      "eligible_for_product_fill": false,
+      "expected_issue_subset": [
+        {
+          "code": "required_missing",
+          "field": "saddle_mount_model",
+          "blocking": false
+        }
+      ]
+    },
+    {
+      "id": "CPC_SADDLE_OTHER_LITERAL",
+      "template": "saddle",
+      "values": {
+        "saddle_rail_geometry": "Otro",
+        "saddle_mount_model": "Geometría OEM de prueba X-01"
+      },
+      "kind": "synthetic_valid",
+      "purpose": "Una designación literal ajena al enum puede conservarse; no es aprobación mecánica.",
+      "source_ids": [],
+      "source_urls": [],
+      "expected_blocking": [],
+      "expected_pending_contains": [],
+      "gap_ids": [],
+      "not_a_mechanical_verdict": true,
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false,
+      "eligible_for_product_fill": false
+    },
+    {
+      "id": "CPC_POST_PROPRIETARY_ROW_PENDING",
+      "template": "seatpost",
+      "values": {
+        "seatpost_kind": "Rígida",
+        "seatpost_saddle_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "p1",
+              "values": {
+                "rail_geometry": "Sistema propietario",
+                "configuration_state": "De fábrica"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "kind": "synthetic_unknown",
+      "purpose": "El modelo del anclaje debe confirmarse en la fila propietaria.",
+      "source_ids": [
+        "SDG_MICRO"
+      ],
+      "source_urls": [
+        "https://sdgcomponents.com/products/micro-alloy-i-beam"
+      ],
+      "expected_blocking": [],
+      "expected_pending_contains": [
+        {
+          "code": "row_required_missing",
+          "field": "seatpost_saddle_configurations"
+        }
+      ],
+      "gap_ids": [],
+      "not_a_mechanical_verdict": true,
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false,
+      "eligible_for_product_fill": false,
+      "expected_issue_subset": [
+        {
+          "code": "row_required_missing",
+          "field": "seatpost_saddle_configurations",
+          "blocking": false
+        }
+      ]
+    },
+    {
+      "id": "CPC_POST_IBEAM_ROW",
+      "template": "seatpost",
+      "values": {
+        "seatpost_kind": "Rígida",
+        "seatpost_saddle_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "micro-ibeam",
+              "values": {
+                "rail_geometry": "Sistema propietario",
+                "configuration_state": "De fábrica",
+                "model": "Micro Alloy I-Beam",
+                "mount_system": "SDG I-Beam",
+                "conditions": "Sólo sillines I-Beam; no acepta abrazaderas Tellis V2."
+              },
+              "sources": [
+                "https://sdgcomponents.com/products/micro-alloy-i-beam"
+              ]
+            }
+          ]
+        }
+      },
+      "kind": "oem_representation_example",
+      "purpose": "Conserva el alcance exacto del anclaje del modelo, incluyendo la exclusión declarada. No lo rellena en stock.",
+      "source_ids": [
+        "SDG_MICRO"
+      ],
+      "source_urls": [
+        "https://sdgcomponents.com/products/micro-alloy-i-beam"
+      ],
+      "expected_blocking": [],
+      "expected_pending_contains": [],
+      "gap_ids": [],
+      "not_a_mechanical_verdict": true,
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false,
+      "eligible_for_product_fill": false
+    },
+    {
+      "id": "CPC_POST_OTHER_ROW_PENDING",
+      "template": "seatpost",
+      "values": {
+        "seatpost_kind": "Rígida",
+        "seatpost_saddle_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "p1",
+              "values": {
+                "rail_geometry": "Otro",
+                "configuration_state": "De fábrica"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "kind": "synthetic_unknown",
+      "purpose": "Otro también necesita designación.",
+      "source_ids": [
+        "SDG_MICRO"
+      ],
+      "source_urls": [
+        "https://sdgcomponents.com/products/micro-alloy-i-beam"
+      ],
+      "expected_blocking": [],
+      "expected_pending_contains": [
+        {
+          "code": "row_required_missing",
+          "field": "seatpost_saddle_configurations"
+        }
+      ],
+      "gap_ids": [],
+      "not_a_mechanical_verdict": true,
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false,
+      "eligible_for_product_fill": false,
+      "expected_issue_subset": [
+        {
+          "code": "row_required_missing",
+          "field": "seatpost_saddle_configurations",
+          "blocking": false
+        }
+      ]
+    },
+    {
+      "id": "CPC_POST_NO_CROSS_ROW_COMPLETION",
+      "template": "seatpost",
+      "values": {
+        "seatpost_kind": "Rígida",
+        "seatpost_saddle_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "p1",
+              "values": {
+                "rail_geometry": "Sistema propietario",
+                "configuration_state": "De fábrica"
+              },
+              "sources": []
+            },
+            {
+              "id": "p2",
+              "values": {
+                "rail_geometry": "Otro",
+                "configuration_state": "De fábrica",
+                "mount_system": "Sistema de prueba B"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "kind": "synthetic_unknown",
+      "purpose": "El detalle de p2 no completa p1.",
+      "source_ids": [
+        "SDG_MICRO"
+      ],
+      "source_urls": [
+        "https://sdgcomponents.com/products/micro-alloy-i-beam"
+      ],
+      "expected_blocking": [],
+      "expected_pending_contains": [
+        {
+          "code": "row_required_missing",
+          "field": "seatpost_saddle_configurations"
+        }
+      ],
+      "gap_ids": [],
+      "not_a_mechanical_verdict": true,
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false,
+      "eligible_for_product_fill": false,
+      "expected_issue_subset": [
+        {
+          "code": "row_required_missing",
+          "field": "seatpost_saddle_configurations",
+          "blocking": false
+        }
+      ]
+    },
+    {
+      "id": "CPC_POST_GEOMETRY_UNKNOWN",
+      "template": "seatpost",
+      "values": {
+        "seatpost_kind": "Rígida",
+        "seatpost_saddle_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "p1",
+              "values": {
+                "configuration_state": "De fábrica"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "kind": "synthetic_unknown",
+      "purpose": "Falta geometría y no se sabe aún si el detalle propietario es requerido.",
+      "source_ids": [
+        "SDG_MICRO"
+      ],
+      "source_urls": [
+        "https://sdgcomponents.com/products/micro-alloy-i-beam"
+      ],
+      "expected_blocking": [],
+      "expected_pending_contains": [
+        {
+          "code": "row_prerequisite",
+          "field": "seatpost_saddle_configurations"
+        }
+      ],
+      "gap_ids": [],
+      "not_a_mechanical_verdict": true,
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false,
+      "eligible_for_product_fill": false,
+      "expected_issue_subset": [
+        {
+          "code": "row_prerequisite",
+          "field": "seatpost_saddle_configurations",
+          "blocking": false
+        }
+      ]
+    },
+    {
+      "id": "CPC_POST_OPTIONAL_CLAMP_STAYS_OPTIONAL",
+      "template": "seatpost",
+      "values": {
+        "seatpost_kind": "Rígida",
+        "seatpost_saddle_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "wcs-kit",
+              "values": {
+                "rail_geometry": "Oval 7x9.6 mm",
+                "configuration_state": "Con kit opcional",
+                "clamp_part": "WCS Carbon 1-Bolt complete clampset 7x10",
+                "model": "WCS Carbon 1-Bolt"
+              },
+              "sources": [
+                "https://ritcheylogic.com/bike/seatposts/wcs-carbon-1-bolt-seatpost-complete-clampset"
+              ]
+            }
+          ]
+        }
+      },
+      "kind": "oem_representation_example",
+      "purpose": "Cobertura por kit conservada; opcional no significa prueba de ausencia en la caja.",
+      "source_ids": [
+        "RITCHEY_1BOLT"
+      ],
+      "source_urls": [
+        "https://ritcheylogic.com/bike/seatposts/wcs-carbon-1-bolt-seatpost-complete-clampset"
+      ],
+      "expected_blocking": [],
+      "expected_pending_contains": [],
+      "gap_ids": [],
+      "not_a_mechanical_verdict": true,
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false,
+      "eligible_for_product_fill": false
+    },
+    {
+      "id": "CPC_DROPPER_COMPATIBLE_NOT_INCLUDED",
+      "template": "seatpost",
+      "values": {
+        "seatpost_kind": "Telescópica (dropper)",
+        "dropper_control_kind": "Electrónico inalámbrico",
+        "dropper_remote_included": false,
+        "dropper_control_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "axs-control",
+              "values": {
+                "control_model": "EC-AXS-RKSX-A1",
+                "seatpost_scope": "Reverb AXS según el manual enlazado; generación concreta de la unidad pendiente",
+                "control_interface": "AXS",
+                "conditions": "Requiere emparejamiento; declaración no prueba inclusión ni el SKU de tija."
+              },
+              "sources": [
+                "https://www.sram.com/en/rockshox/models/ec-axs-rksx-a1",
+                "https://www.sram.com/globalassets/document-hierarchy/user-manuals/rockshox/seatposts/reverb-axs-and-reverb-axs-xplr-user-manual-eeu.pdf"
+              ]
+            }
+          ]
+        }
+      },
+      "kind": "oem_model_declaration_with_scope_pending",
+      "purpose": "Puede registrar mando candidato documentado aunque no venga incluido. La ausencia de la caja es sintética; el enlace no la afirma.",
+      "source_ids": [
+        "RS_AXS_CONTROL",
+        "RS_AXS_PAIR"
+      ],
+      "source_urls": [
+        "https://www.sram.com/en/rockshox/models/ec-axs-rksx-a1",
+        "https://www.sram.com/globalassets/document-hierarchy/user-manuals/rockshox/seatposts/reverb-axs-and-reverb-axs-xplr-user-manual-eeu.pdf"
+      ],
+      "expected_blocking": [],
+      "expected_pending_contains": [],
+      "gap_ids": [
+        "CPC-G04"
+      ],
+      "not_a_mechanical_verdict": true,
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false,
+      "eligible_for_product_fill": false
+    },
+    {
+      "id": "CPC_DROPPER_CONTROL_SCOPE_UNKNOWN",
+      "template": "seatpost",
+      "values": {
+        "seatpost_kind": "Telescópica (dropper)",
+        "dropper_control_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "control",
+              "values": {
+                "control_model": "EC-AXS-RKSX-A1"
+              },
+              "sources": [
+                "https://www.sram.com/en/rockshox/models/ec-axs-rksx-a1"
+              ]
+            }
+          ]
+        }
+      },
+      "kind": "synthetic_unknown",
+      "purpose": "El nombre de mando no completa alcance de tija.",
+      "source_ids": [
+        "RS_AXS_CONTROL"
+      ],
+      "source_urls": [
+        "https://www.sram.com/en/rockshox/models/ec-axs-rksx-a1"
+      ],
+      "expected_blocking": [],
+      "expected_pending_contains": [
+        {
+          "code": "row_incomplete",
+          "field": "dropper_control_configurations"
+        }
+      ],
+      "gap_ids": [],
+      "not_a_mechanical_verdict": true,
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false,
+      "eligible_for_product_fill": false,
+      "expected_issue_subset": [
+        {
+          "code": "row_incomplete",
+          "field": "dropper_control_configurations",
+          "blocking": false
+        }
+      ]
+    },
+    {
+      "id": "CPC_DROPPER_CONTROL_ON_SHIM",
+      "template": "seatpost",
+      "values": {
+        "seatpost_kind": "Suplemento (shim)",
+        "dropper_control_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "control",
+              "values": {
+                "control_model": "EC-AXS-RKSX-A1",
+                "seatpost_scope": "Reverb AXS según el manual enlazado; generación concreta de la unidad pendiente",
+                "control_interface": "AXS",
+                "conditions": "Requiere emparejamiento; declaración no prueba inclusión ni el SKU de tija."
+              },
+              "sources": [
+                "https://www.sram.com/en/rockshox/models/ec-axs-rksx-a1"
+              ]
+            }
+          ]
+        }
+      },
+      "kind": "synthetic_contradiction",
+      "purpose": "Un suplemento no incorpora interfaz de mando de telescópica.",
+      "source_ids": [
+        "RS_AXS_CONTROL"
+      ],
+      "source_urls": [
+        "https://www.sram.com/en/rockshox/models/ec-axs-rksx-a1"
+      ],
+      "expected_blocking": [
+        {
+          "code": "field_applicability",
+          "field": "dropper_control_configurations"
+        }
+      ],
+      "expected_pending_contains": [],
+      "gap_ids": [],
+      "not_a_mechanical_verdict": true,
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false,
+      "eligible_for_product_fill": false
+    },
+    {
+      "id": "CPC_DROPPER_CONTROL_KIND_UNKNOWN",
+      "template": "seatpost",
+      "values": {
+        "dropper_control_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "control",
+              "values": {
+                "control_model": "EC-AXS-RKSX-A1",
+                "seatpost_scope": "Reverb AXS según el manual enlazado; generación concreta de la unidad pendiente",
+                "control_interface": "AXS",
+                "conditions": "Requiere emparejamiento; declaración no prueba inclusión ni el SKU de tija."
+              },
+              "sources": [
+                "https://www.sram.com/en/rockshox/models/ec-axs-rksx-a1"
+              ]
+            }
+          ]
+        }
+      },
+      "kind": "synthetic_unknown",
+      "purpose": "Sin tipo de tija la tabla dependiente queda pendiente.",
+      "source_ids": [
+        "RS_AXS_CONTROL"
+      ],
+      "source_urls": [
+        "https://www.sram.com/en/rockshox/models/ec-axs-rksx-a1"
+      ],
+      "expected_blocking": [],
+      "expected_pending_contains": [
+        {
+          "code": "prerequisite",
+          "field": "dropper_control_configurations"
+        }
+      ],
+      "gap_ids": [],
+      "not_a_mechanical_verdict": true,
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false,
+      "eligible_for_product_fill": false,
+      "expected_issue_subset": [
+        {
+          "code": "prerequisite",
+          "field": "dropper_control_configurations",
+          "blocking": false
+        }
+      ],
+      "expected_sql_issue_subset": [
+        {
+          "code": "field_applicability",
+          "field": "dropper_control_configurations",
+          "blocking": false
+        }
+      ],
+      "diagnostic_transport_note": "SQL field_applicability y Dart prerequisite: mismo requisito desconocido y no bloqueante."
+    },
+    {
+      "id": "CPC_DROPPER_CONTROL_MODELS_NOT_COLLAPSED",
+      "template": "seatpost",
+      "values": {
+        "seatpost_kind": "Telescópica (dropper)",
+        "dropper_control_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "condition-a",
+              "values": {
+                "control_model": "Modelo de prueba",
+                "seatpost_scope": "Tija X revisión A",
+                "conditions": "Condición A"
+              },
+              "sources": []
+            },
+            {
+              "id": "condition-b",
+              "values": {
+                "control_model": "Modelo de prueba",
+                "seatpost_scope": "Tija X revisión B",
+                "conditions": "Condición B"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "kind": "synthetic_valid",
+      "purpose": "Un nombre repetido no elimina dos configuraciones con alcance diferente.",
+      "source_ids": [],
+      "source_urls": [],
+      "expected_blocking": [],
+      "expected_pending_contains": [],
+      "gap_ids": [],
+      "not_a_mechanical_verdict": true,
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false,
+      "eligible_for_product_fill": false
+    },
+    {
+      "id": "CPC_DROPPER_INCLUDED_MODEL_PENDING",
+      "template": "seatpost",
+      "values": {
+        "seatpost_kind": "Telescópica (dropper)",
+        "dropper_remote_included": true
+      },
+      "kind": "synthetic_unknown",
+      "purpose": "Contenido declarado sin modelo de mando queda incompleto.",
+      "source_ids": [
+        "RS_AXS_CONTROL"
+      ],
+      "source_urls": [
+        "https://www.sram.com/en/rockshox/models/ec-axs-rksx-a1"
+      ],
+      "expected_blocking": [],
+      "expected_pending_contains": [
+        {
+          "code": "required_missing",
+          "field": "dropper_remote_model"
+        }
+      ],
+      "gap_ids": [],
+      "not_a_mechanical_verdict": true,
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false,
+      "eligible_for_product_fill": false,
+      "expected_issue_subset": [
+        {
+          "code": "required_missing",
+          "field": "dropper_remote_model",
+          "blocking": false
+        }
+      ]
+    },
+    {
+      "id": "CPC_DROPPER_INCLUDED_MODEL_CONTRADICTION",
+      "template": "seatpost",
+      "values": {
+        "seatpost_kind": "Telescópica (dropper)",
+        "dropper_remote_included": false,
+        "dropper_remote_model": "Mando de prueba"
+      },
+      "kind": "synthetic_contradiction",
+      "purpose": "Mando compatible se registra en otra tabla; éste afirma contenido y contradice No.",
+      "source_ids": [
+        "RS_AXS_CONTROL"
+      ],
+      "source_urls": [
+        "https://www.sram.com/en/rockshox/models/ec-axs-rksx-a1"
+      ],
+      "expected_blocking": [
+        {
+          "code": "field_applicability",
+          "field": "dropper_remote_model"
+        }
+      ],
+      "expected_pending_contains": [],
+      "gap_ids": [],
+      "not_a_mechanical_verdict": true,
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false,
+      "eligible_for_product_fill": false
+    },
+    {
+      "id": "CPC_POST_TOTAL_DATUM_PENDING",
+      "template": "seatpost",
+      "values": {
+        "seatpost_kind": "Telescópica (dropper)",
+        "seatpost_length_mm": "440"
+      },
+      "kind": "synthetic_unknown",
+      "purpose": "La cifra no declara qué extremos se midieron sin documento.",
+      "source_ids": [
+        "RS_REVERB_FIT"
+      ],
+      "source_urls": [
+        "https://www.sram.com/globalassets/document-hierarchy/frame-fit-specifications/rockshox/gen0000000006250-rev-a-reverb-axs-seatpost-specifications.pdf"
+      ],
+      "expected_blocking": [],
+      "expected_pending_contains": [
+        {
+          "code": "prerequisite",
+          "field": "seatpost_length_mm"
+        }
+      ],
+      "gap_ids": [],
+      "not_a_mechanical_verdict": true,
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false,
+      "eligible_for_product_fill": false,
+      "expected_issue_subset": [
+        {
+          "code": "prerequisite",
+          "field": "seatpost_length_mm",
+          "blocking": false
+        }
+      ],
+      "expected_sql_issue_subset": [
+        {
+          "code": "prerequisite_missing",
+          "field": "seatpost_length_mm",
+          "blocking": false
+        }
+      ],
+      "diagnostic_transport_note": "SQL prerequisite_missing y Dart prerequisite: mismo requisito desconocido y no bloqueante."
+    },
+    {
+      "id": "CPC_POST_REVERB_DECLARED_DATUM",
+      "template": "seatpost",
+      "values": {
+        "seatpost_kind": "Telescópica (dropper)",
+        "dropper_control_kind": "Electrónico inalámbrico",
+        "dropper_travel_mm": "150",
+        "seatpost_length_mm": "440",
+        "seatpost_min_exposed_mm": "215",
+        "seatpost_min_insertion_mm": "80",
+        "seatpost_bottom_clearance_mm": "23",
+        "seatpost_dimension_document": "GEN.0000000006250 Rev A (2020)"
+      },
+      "kind": "oem_representation_example",
+      "purpose": "C/D/E de la revisión citada; A/B de cuadro y ciclista no están presentes, por lo que ajuste sigue desconocido.",
+      "source_ids": [
+        "RS_REVERB_FIT"
+      ],
+      "source_urls": [
+        "https://www.sram.com/globalassets/document-hierarchy/frame-fit-specifications/rockshox/gen0000000006250-rev-a-reverb-axs-seatpost-specifications.pdf"
+      ],
+      "expected_blocking": [],
+      "expected_pending_contains": [],
+      "gap_ids": [
+        "CPC-G03"
+      ],
+      "not_a_mechanical_verdict": true,
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false,
+      "eligible_for_product_fill": false
+    },
+    {
+      "id": "CPC_STEM_ADAPTER_ENDPOINTS",
+      "template": "stem",
+      "values": {
+        "stem_kind": "Adaptador quill → ahead",
+        "quill_diameter_mm": "22.2",
+        "quill_adapter_output_diameter_mm": "28.6"
+      },
+      "kind": "synthetic_valid",
+      "purpose": "ND05 ya separa entrada/salida. Números sintéticos, sin SKU/OEM que apruebe instalación.",
+      "source_ids": [
+        "PARK_AHEAD",
+        "PARK_QUILL"
+      ],
+      "source_urls": [
+        "https://www.parktool.com/en-us/blog/repair-help/stem-removal-installation-threadless",
+        "https://www.parktool.com/en-us/blog/repair-help/stem-removal-installation-quill-stems"
+      ],
+      "expected_blocking": [],
+      "expected_pending_contains": [],
+      "gap_ids": [],
+      "not_a_mechanical_verdict": true,
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false,
+      "eligible_for_product_fill": false
+    },
+    {
+      "id": "CPC_STEM_ADAPTER_FALSE_BAR_CLAMP",
+      "template": "stem",
+      "values": {
+        "stem_kind": "Adaptador quill → ahead",
+        "bar_clamp_diameter_mm": "31.8"
+      },
+      "kind": "synthetic_contradiction",
+      "purpose": "La rama adaptador no expone una abrazadera de manubrio inexistente.",
+      "source_ids": [
+        "PARK_AHEAD",
+        "PARK_QUILL"
+      ],
+      "source_urls": [
+        "https://www.parktool.com/en-us/blog/repair-help/stem-removal-installation-threadless",
+        "https://www.parktool.com/en-us/blog/repair-help/stem-removal-installation-quill-stems"
+      ],
+      "expected_blocking": [
+        {
+          "code": "field_applicability",
+          "field": "bar_clamp_diameter_mm"
+        }
+      ],
+      "expected_pending_contains": [],
+      "gap_ids": [],
+      "not_a_mechanical_verdict": true,
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false,
+      "eligible_for_product_fill": false
+    },
+    {
+      "id": "CPC_HANDLEBAR_INTEGRATED",
+      "template": "handlebar",
+      "values": {
+        "bar_construction": "Integrado manubrio + potencia",
+        "bar_style": "Ruta (drop)",
+        "bar_width_reference": "Centro a centro en manetas (hoods)",
+        "bar_width_mm": "400",
+        "bar_width_hoods_mm": "400",
+        "bar_width_drops_mm": "410",
+        "integrated_stem_length_mm": "100",
+        "integrated_steerer_clamp_mm": "28.6"
+      },
+      "kind": "synthetic_shape_from_oem_fields",
+      "purpose": "Las dimensiones son una fixture de forma: no reconstruyen una variante/SKU a partir de listas OEM. No existe campo obligatorio de abrazadera central.",
+      "source_ids": [
+        "ROVAL_RAPIDE"
+      ],
+      "source_urls": [
+        "https://www.specialized.com/us/en/roval-rapide-cockpit/p/218323?color=352960-218323&searchText=21023-0647"
+      ],
+      "expected_blocking": [],
+      "expected_pending_contains": [],
+      "gap_ids": [],
+      "not_a_mechanical_verdict": true,
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false,
+      "eligible_for_product_fill": false
+    },
+    {
+      "id": "CPC_HANDLEBAR_INTEGRATED_FALSE_CLAMP",
+      "template": "handlebar",
+      "values": {
+        "bar_construction": "Integrado manubrio + potencia",
+        "bar_clamp_diameter_mm": "31.8"
+      },
+      "kind": "synthetic_contradiction",
+      "purpose": "ND08 ya bloquea una abrazadera central no aplicable.",
+      "source_ids": [
+        "ROVAL_RAPIDE"
+      ],
+      "source_urls": [
+        "https://www.specialized.com/us/en/roval-rapide-cockpit/p/218323?color=352960-218323&searchText=21023-0647"
+      ],
+      "expected_blocking": [
+        {
+          "code": "field_applicability",
+          "field": "bar_clamp_diameter_mm"
+        }
+      ],
+      "expected_pending_contains": [],
+      "gap_ids": [],
+      "not_a_mechanical_verdict": true,
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false,
+      "eligible_for_product_fill": false
+    },
+    {
+      "id": "CPC_GAP_INCLUDED_CLAMP_FALSE",
+      "template": "seatpost",
+      "values": {
+        "seatpost_kind": "Rígida",
+        "seatpost_saddle_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "kit",
+              "values": {
+                "rail_geometry": "Oval 7x9 mm",
+                "configuration_state": "Con kit incluido",
+                "clamp_part": "Pieza de prueba",
+                "clamp_included": false
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "kind": "closed_engine_gap_regression",
+      "purpose": "Con kit incluido y abrazadera no incluida contradicen la misma configuración; 2400 lo bloquea.",
+      "source_ids": [],
+      "source_urls": [],
+      "expected_blocking": [
+        {
+          "code": "row_value_conflict",
+          "field": "seatpost_saddle_configurations"
+        }
+      ],
+      "expected_pending_contains": [],
+      "not_a_mechanical_verdict": true,
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false,
+      "eligible_for_product_fill": false,
+      "closed_gap_ids": [
+        "CPC-G01"
+      ]
+    },
+    {
+      "id": "CPC_GAP_WIDTH_SAME_DATUM_CONFLICT",
+      "template": "handlebar",
+      "values": {
+        "bar_construction": "Manubrio separado",
+        "bar_style": "Ruta (drop)",
+        "bar_clamp_diameter_mm": "31.8",
+        "bar_width_reference": "Centro a centro en manetas (hoods)",
+        "bar_width_mm": "400",
+        "bar_width_hoods_mm": "420"
+      },
+      "kind": "engine_gap_regression",
+      "purpose": "Mismo objeto/datum con dos anchos distintos pasa forma; falta igualdad condicional entre campos. No son dos variantes válidas del SKU.",
+      "source_ids": [
+        "ROVAL_RAPIDE"
+      ],
+      "source_urls": [
+        "https://www.specialized.com/us/en/roval-rapide-cockpit/p/218323?color=352960-218323&searchText=21023-0647"
+      ],
+      "expected_blocking": [],
+      "expected_pending_contains": [],
+      "gap_ids": [
+        "CPC-G02"
+      ],
+      "not_a_mechanical_verdict": true,
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false,
+      "eligible_for_product_fill": false
+    },
+    {
+      "id": "rv_seatpost_included_true",
+      "template": "seatpost",
+      "values": {
+        "seatpost_kind": "Rígida",
+        "seatpost_saddle_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "first",
+              "values": {
+                "rail_geometry": "Oval 7x9 mm",
+                "clamp_part": "Pieza sintética",
+                "configuration_state": "Con kit incluido",
+                "clamp_included": true
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "kind": "synthetic_representation",
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false
+    },
+    {
+      "id": "rv_seatpost_included_false",
+      "template": "seatpost",
+      "values": {
+        "seatpost_kind": "Rígida",
+        "seatpost_saddle_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "first",
+              "values": {
+                "rail_geometry": "Oval 7x9 mm",
+                "clamp_part": "Pieza sintética",
+                "configuration_state": "Con kit incluido",
+                "clamp_included": false
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "kind": "synthetic_representation",
+      "expected_blocking": [
+        {
+          "code": "row_value_conflict",
+          "field": "seatpost_saddle_configurations"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "expected_issue_subset": [
+        {
+          "code": "row_value_conflict",
+          "field": "seatpost_saddle_configurations",
+          "blocking": true
+        }
+      ]
+    },
+    {
+      "id": "rv_seatpost_included_unknown",
+      "template": "seatpost",
+      "values": {
+        "seatpost_kind": "Rígida",
+        "seatpost_saddle_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "first",
+              "values": {
+                "rail_geometry": "Oval 7x9 mm",
+                "clamp_part": "Pieza sintética",
+                "configuration_state": "Con kit incluido"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "kind": "synthetic_representation",
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "expected_issue_subset": [
+        {
+          "code": "row_value_pending",
+          "field": "seatpost_saddle_configurations",
+          "blocking": false
+        }
+      ]
+    },
+    {
+      "id": "rv_seatpost_optional_true",
+      "template": "seatpost",
+      "values": {
+        "seatpost_kind": "Rígida",
+        "seatpost_saddle_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "first",
+              "values": {
+                "rail_geometry": "Oval 7x9 mm",
+                "clamp_part": "Pieza sintética",
+                "configuration_state": "Con kit opcional",
+                "clamp_included": true
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "kind": "synthetic_representation",
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false
+    },
+    {
+      "id": "rv_seatpost_optional_false",
+      "template": "seatpost",
+      "values": {
+        "seatpost_kind": "Rígida",
+        "seatpost_saddle_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "first",
+              "values": {
+                "rail_geometry": "Oval 7x9 mm",
+                "clamp_part": "Pieza sintética",
+                "configuration_state": "Con kit opcional",
+                "clamp_included": false
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "kind": "synthetic_representation",
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false
+    },
+    {
+      "id": "rv_seatpost_optional_unknown",
+      "template": "seatpost",
+      "values": {
+        "seatpost_kind": "Rígida",
+        "seatpost_saddle_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "first",
+              "values": {
+                "rail_geometry": "Oval 7x9 mm",
+                "clamp_part": "Pieza sintética",
+                "configuration_state": "Con kit opcional"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "kind": "synthetic_representation",
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false
+    },
+    {
+      "id": "rv_seatpost_selector_unknown",
+      "template": "seatpost",
+      "values": {
+        "seatpost_kind": "Rígida",
+        "seatpost_saddle_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "first",
+              "values": {
+                "rail_geometry": "Oval 7x9 mm",
+                "clamp_part": "Pieza sintética",
+                "clamp_included": false
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "kind": "synthetic_representation",
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "expected_issue_subset": [
+        {
+          "code": "row_value_pending",
+          "field": "seatpost_saddle_configurations",
+          "blocking": false
+        }
+      ]
+    },
+    {
+      "id": "rv_seatpost_other_row_does_not_complete",
+      "template": "seatpost",
+      "values": {
+        "seatpost_kind": "Rígida",
+        "seatpost_saddle_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "first",
+              "values": {
+                "rail_geometry": "Oval 7x9 mm",
+                "clamp_part": "Pieza sintética",
+                "configuration_state": "Con kit incluido"
+              },
+              "sources": []
+            },
+            {
+              "id": "second",
+              "values": {
+                "rail_geometry": "Oval 7x9 mm",
+                "clamp_part": "Pieza sintética",
+                "configuration_state": "Con kit opcional",
+                "clamp_included": true
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "kind": "synthetic_representation",
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "expected_issue_subset": [
+        {
+          "code": "row_value_pending",
+          "field": "seatpost_saddle_configurations",
+          "blocking": false
+        }
+      ]
+    },
+    {
+      "id": "cp_grip_different_measured_and_nominal",
+      "template": "grip",
+      "values": {
+        "grip_bar_nominal_diameter_mm": "22.2",
+        "grip_inner_diameter_mm": "21.9",
+        "grip_measurement_reference": "Medición sintética de pieza libre; no confirma ajuste"
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "cp_grip_unscoped_measurement",
+      "template": "grip",
+      "values": {
+        "grip_inner_diameter_mm": "31.8"
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "expected_issue_subset": [
+        {
+          "code": "prerequisite",
+          "field": "grip_inner_diameter_mm",
+          "blocking": false
+        }
+      ],
+      "expected_sql_issue_subset": [
+        {
+          "code": "prerequisite_missing",
+          "field": "grip_inner_diameter_mm",
+          "blocking": false
+        }
+      ]
+    },
+    {
+      "id": "cp_odi_printed_torque_ranges",
+      "template": "grip",
+      "values": {
+        "grip_attachment": "Lock-on (una abrazadera)",
+        "grip_clamp_torque_specifications": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "quantity_kind": "Rango de apriete",
+                "minimum": "4.5",
+                "maximum": "5.0",
+                "unit": "Nm",
+                "configuration": "ODI Lock Jaw v2.1"
+              },
+              "sources": []
+            },
+            {
+              "id": "r2",
+              "values": {
+                "quantity_kind": "Rango de apriete",
+                "minimum": "40",
+                "maximum": "45",
+                "unit": "in-lb",
+                "configuration": "ODI Lock Jaw v2.1"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [
+        "https://www.odigrips.com/pages/install"
+      ]
+    },
+    {
+      "id": "cp_grip_reversed_torque_range",
+      "template": "grip",
+      "values": {
+        "grip_attachment": "Lock-on (una abrazadera)",
+        "grip_clamp_torque_specifications": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "quantity_kind": "Rango de apriete",
+                "minimum": "5",
+                "maximum": "4.5",
+                "unit": "Nm",
+                "configuration": "Synthetic clamp"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [
+        {
+          "code": "row_shape",
+          "field": "grip_clamp_torque_specifications"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "cp_grip_torque_unit_missing",
+      "template": "grip",
+      "values": {
+        "grip_attachment": "Lock-on (una abrazadera)",
+        "grip_clamp_torque_specifications": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "quantity_kind": "Máximo de apriete",
+                "value": "5",
+                "configuration": "Synthetic clamp"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "expected_issue_subset": [
+        {
+          "code": "row_incomplete",
+          "field": "grip_clamp_torque_specifications",
+          "blocking": false
+        }
+      ],
+      "expected_sql_issue_subset": [
+        {
+          "code": "row_incomplete",
+          "field": "grip_clamp_torque_specifications",
+          "blocking": false
+        }
+      ]
+    },
+    {
+      "id": "cp_grip_single_is_not_range",
+      "template": "grip",
+      "values": {
+        "grip_attachment": "Lock-on (una abrazadera)",
+        "grip_clamp_torque_specifications": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "quantity_kind": "Par nominal",
+                "value": "5",
+                "minimum": "4.5",
+                "unit": "Nm",
+                "configuration": "Synthetic clamp"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [
+        {
+          "code": "row_field_applicability",
+          "field": "grip_clamp_torque_specifications"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "cp_grip_attachment_unknown",
+      "template": "grip",
+      "values": {
+        "grip_clamp_torque_specifications": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "quantity_kind": "Máximo de apriete",
+                "value": "5",
+                "unit": "Nm",
+                "configuration": "Synthetic clamp"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "expected_issue_subset": [
+        {
+          "code": "prerequisite",
+          "field": "grip_clamp_torque_specifications",
+          "blocking": false
+        }
+      ],
+      "expected_sql_issue_subset": [
+        {
+          "code": "field_applicability",
+          "field": "grip_clamp_torque_specifications",
+          "blocking": false
+        }
+      ]
+    }
+  ],
+  "root_nd_case_overrides": [
+    {
+      "id": "helmet_smith_mainline_certifications_by_row",
+      "reason": "Integral pertenece al eje de construcción, no al uso."
+    },
+    {
+      "id": "helmet_inventory_best_enduro_certificado_sin_norma",
+      "reason": "Se conserva Enduro sin inferir cobertura desde el título."
+    },
+    {
+      "id": "RCF25",
+      "reason": "Una variante distinta del soporte no es montaje de este SKU; se rechaza el token retirado."
+    }
+  ],
+  "root_row_value_case_overrides": [
+    "RCF08",
+    "CPC_GAP_INCLUDED_CLAMP_FALSE"
+  ],
+  "deferred_pressure_fixture_ids": [],
+  "superseded_pressure_fixtures": [
+    "wrfp_hookless_row_maximum_is_not_the_headline",
+    "wrfp_schwalbe_general_maximum_in_bar",
+    "wrfp_unit_without_value_is_pending",
+    "wrfp_value_without_unit_stays_pending"
+  ],
+  "required_server_migration": "20260907025000"
+}

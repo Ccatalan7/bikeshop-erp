@@ -1,0 +1,629 @@
+{
+  "schema_version": 1,
+  "catalogue_sha256": "c92456b25dd5a692bef312f069b77209b5cda93b1a9b22b5cceb376fe5ec1f5a",
+  "cases": [
+    {
+      "id": "seatpost_shim_empty",
+      "template": "seatpost_shim",
+      "values": {},
+      "expected_blocking": [],
+      "expected_issue_subset": [
+        {
+          "code": "required_missing",
+          "field": "spec_evidence_source",
+          "blocking": false
+        },
+        {
+          "code": "required_missing",
+          "field": "seatpost_shim_shape",
+          "blocking": false
+        }
+      ],
+      "expected_sql_blocking": [],
+      "expected_sql_issue_subset": [
+        {
+          "code": "required_missing",
+          "field": "spec_evidence_source",
+          "blocking": false
+        },
+        {
+          "code": "required_missing",
+          "field": "seatpost_shim_shape",
+          "blocking": false
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false
+    },
+    {
+      "id": "seatpost_shim_no_published_length",
+      "template": "seatpost_shim",
+      "values": {
+        "spec_evidence_source": "Synthetic fixture; no inventory claim.",
+        "seatpost_shim_shape": "Circular",
+        "shim_inner_diameter_mm": "27.2",
+        "shim_outer_diameter_mm": "30.9"
+      },
+      "expected_blocking": [],
+      "expected_issue_subset": [],
+      "expected_sql_blocking": [],
+      "expected_sql_issue_subset": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false
+    },
+    {
+      "id": "seatpost_shim_circular_valid",
+      "template": "seatpost_shim",
+      "values": {
+        "spec_evidence_source": "Synthetic fixture; no inventory claim.",
+        "seatpost_shim_shape": "Circular",
+        "shim_inner_diameter_mm": "27.2",
+        "shim_outer_diameter_mm": "30.9",
+        "seatpost_shim_length_mm": "100"
+      },
+      "expected_blocking": [],
+      "expected_issue_subset": [],
+      "expected_sql_blocking": [],
+      "expected_sql_issue_subset": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false
+    },
+    {
+      "id": "seatpost_shim_other_discrete_nominal",
+      "template": "seatpost_shim",
+      "values": {
+        "spec_evidence_source": "Synthetic fixture; no inventory claim.",
+        "seatpost_shim_shape": "Circular",
+        "shim_inner_diameter_mm": "27.2",
+        "shim_outer_diameter_mm": "31.6",
+        "seatpost_shim_length_mm": "100"
+      },
+      "expected_blocking": [],
+      "expected_issue_subset": [],
+      "expected_sql_blocking": [],
+      "expected_sql_issue_subset": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false
+    },
+    {
+      "id": "seatpost_shim_documented_material",
+      "template": "seatpost_shim",
+      "values": {
+        "spec_evidence_source": "Synthetic fixture; no inventory claim.",
+        "seatpost_shim_shape": "Circular",
+        "shim_inner_diameter_mm": "27.2",
+        "shim_outer_diameter_mm": "30.9",
+        "seatpost_shim_length_mm": "100",
+        "material": "Aluminio"
+      },
+      "expected_blocking": [],
+      "expected_issue_subset": [],
+      "expected_sql_blocking": [],
+      "expected_sql_issue_subset": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false
+    },
+    {
+      "id": "seatpost_shim_apparel_material_not_a_shim_option",
+      "template": "seatpost_shim",
+      "values": {
+        "spec_evidence_source": "Synthetic fixture; no inventory claim.",
+        "seatpost_shim_shape": "Circular",
+        "shim_inner_diameter_mm": "27.2",
+        "shim_outer_diameter_mm": "30.9",
+        "seatpost_shim_length_mm": "100",
+        "material": "Algodón"
+      },
+      "expected_blocking": [
+        {
+          "code": "constraint",
+          "field": "material"
+        }
+      ],
+      "expected_issue_subset": [],
+      "expected_sql_blocking": [
+        {
+          "code": "field_constraint",
+          "field": "material"
+        }
+      ],
+      "expected_sql_issue_subset": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false
+    },
+    {
+      "id": "seatpost_shim_title_30_stays_30",
+      "template": "seatpost_shim",
+      "values": {
+        "spec_evidence_source": "Synthetic fixture; no inventory claim.",
+        "seatpost_shim_shape": "Circular",
+        "shim_inner_diameter_mm": "27.2",
+        "shim_outer_diameter_mm": "30",
+        "seatpost_shim_length_mm": "100"
+      },
+      "expected_blocking": [],
+      "expected_issue_subset": [],
+      "expected_sql_blocking": [],
+      "expected_sql_issue_subset": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false
+    },
+    {
+      "id": "seatpost_shim_equal_nominal_diameters",
+      "template": "seatpost_shim",
+      "values": {
+        "spec_evidence_source": "Synthetic fixture; no inventory claim.",
+        "seatpost_shim_shape": "Circular",
+        "shim_inner_diameter_mm": "27.2",
+        "shim_outer_diameter_mm": "27.2",
+        "seatpost_shim_length_mm": "100"
+      },
+      "expected_blocking": [
+        {
+          "code": "range_order",
+          "field": "shim_inner_diameter_mm"
+        },
+        {
+          "code": "range_order",
+          "field": "shim_outer_diameter_mm"
+        }
+      ],
+      "expected_issue_subset": [],
+      "expected_sql_blocking": [
+        {
+          "code": "range_order",
+          "field": "shim_inner_diameter_mm"
+        },
+        {
+          "code": "range_order",
+          "field": "shim_outer_diameter_mm"
+        }
+      ],
+      "expected_sql_issue_subset": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false
+    },
+    {
+      "id": "seatpost_shim_reversed_nominal_diameters",
+      "template": "seatpost_shim",
+      "values": {
+        "spec_evidence_source": "Synthetic fixture; no inventory claim.",
+        "seatpost_shim_shape": "Circular",
+        "shim_inner_diameter_mm": "31.6",
+        "shim_outer_diameter_mm": "30.9",
+        "seatpost_shim_length_mm": "100"
+      },
+      "expected_blocking": [
+        {
+          "code": "range_order",
+          "field": "shim_inner_diameter_mm"
+        },
+        {
+          "code": "range_order",
+          "field": "shim_outer_diameter_mm"
+        }
+      ],
+      "expected_issue_subset": [],
+      "expected_sql_blocking": [
+        {
+          "code": "range_order",
+          "field": "shim_inner_diameter_mm"
+        },
+        {
+          "code": "range_order",
+          "field": "shim_outer_diameter_mm"
+        }
+      ],
+      "expected_sql_issue_subset": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false
+    },
+    {
+      "id": "seatpost_shim_positive_small_difference",
+      "template": "seatpost_shim",
+      "values": {
+        "spec_evidence_source": "Synthetic fixture; no inventory claim.",
+        "seatpost_shim_shape": "Circular",
+        "shim_inner_diameter_mm": "27.200000000000000001",
+        "shim_outer_diameter_mm": "27.200000000000000002",
+        "seatpost_shim_length_mm": "100"
+      },
+      "expected_blocking": [],
+      "expected_issue_subset": [],
+      "expected_sql_blocking": [],
+      "expected_sql_issue_subset": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false
+    },
+    {
+      "id": "seatpost_shim_missing_post",
+      "template": "seatpost_shim",
+      "values": {
+        "spec_evidence_source": "Synthetic fixture; no inventory claim.",
+        "seatpost_shim_shape": "Circular",
+        "shim_outer_diameter_mm": "30.9",
+        "seatpost_shim_length_mm": "100"
+      },
+      "expected_blocking": [],
+      "expected_issue_subset": [
+        {
+          "code": "required_missing",
+          "field": "shim_inner_diameter_mm",
+          "blocking": false
+        }
+      ],
+      "expected_sql_blocking": [],
+      "expected_sql_issue_subset": [
+        {
+          "code": "required_missing",
+          "field": "shim_inner_diameter_mm",
+          "blocking": false
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false
+    },
+    {
+      "id": "seatpost_shim_missing_frame",
+      "template": "seatpost_shim",
+      "values": {
+        "spec_evidence_source": "Synthetic fixture; no inventory claim.",
+        "seatpost_shim_shape": "Circular",
+        "shim_inner_diameter_mm": "27.2",
+        "seatpost_shim_length_mm": "100"
+      },
+      "expected_blocking": [],
+      "expected_issue_subset": [
+        {
+          "code": "required_missing",
+          "field": "shim_outer_diameter_mm",
+          "blocking": false
+        }
+      ],
+      "expected_sql_blocking": [],
+      "expected_sql_issue_subset": [
+        {
+          "code": "required_missing",
+          "field": "shim_outer_diameter_mm",
+          "blocking": false
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false
+    },
+    {
+      "id": "seatpost_shim_unknown_geometry",
+      "template": "seatpost_shim",
+      "values": {
+        "spec_evidence_source": "Synthetic fixture; no inventory claim.",
+        "seatpost_shim_shape": "Desconocido / sin confirmar",
+        "seatpost_shim_length_mm": "100"
+      },
+      "expected_blocking": [],
+      "expected_issue_subset": [],
+      "expected_sql_blocking": [],
+      "expected_sql_issue_subset": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false
+    },
+    {
+      "id": "seatpost_shim_specific_geometry",
+      "template": "seatpost_shim",
+      "values": {
+        "spec_evidence_source": "Synthetic fixture; no inventory claim.",
+        "seatpost_shim_shape": "Perfil específico del fabricante",
+        "seatpost_shim_oem_interface": "Synthetic profile drawing S1",
+        "seatpost_shim_length_mm": "100"
+      },
+      "expected_blocking": [],
+      "expected_issue_subset": [],
+      "expected_sql_blocking": [],
+      "expected_sql_issue_subset": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false
+    },
+    {
+      "id": "seatpost_shim_specific_needs_interface",
+      "template": "seatpost_shim",
+      "values": {
+        "spec_evidence_source": "Synthetic fixture; no inventory claim.",
+        "seatpost_shim_shape": "Perfil específico del fabricante",
+        "seatpost_shim_length_mm": "100"
+      },
+      "expected_blocking": [],
+      "expected_issue_subset": [
+        {
+          "code": "required_missing",
+          "field": "seatpost_shim_oem_interface",
+          "blocking": false
+        }
+      ],
+      "expected_sql_blocking": [],
+      "expected_sql_issue_subset": [
+        {
+          "code": "required_missing",
+          "field": "seatpost_shim_oem_interface",
+          "blocking": false
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false
+    },
+    {
+      "id": "seatpost_shim_circular_cannot_keep_specific_code",
+      "template": "seatpost_shim",
+      "values": {
+        "spec_evidence_source": "Synthetic fixture; no inventory claim.",
+        "seatpost_shim_shape": "Circular",
+        "shim_inner_diameter_mm": "27.2",
+        "shim_outer_diameter_mm": "30.9",
+        "seatpost_shim_length_mm": "100",
+        "seatpost_shim_oem_interface": "S1"
+      },
+      "expected_blocking": [
+        {
+          "code": "field_applicability",
+          "field": "seatpost_shim_oem_interface"
+        }
+      ],
+      "expected_issue_subset": [],
+      "expected_sql_blocking": [
+        {
+          "code": "field_applicability",
+          "field": "seatpost_shim_oem_interface"
+        }
+      ],
+      "expected_sql_issue_subset": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false
+    },
+    {
+      "id": "seatpost_shim_specific_cannot_keep_round_diameters",
+      "template": "seatpost_shim",
+      "values": {
+        "spec_evidence_source": "Synthetic fixture; no inventory claim.",
+        "seatpost_shim_shape": "Perfil específico del fabricante",
+        "shim_inner_diameter_mm": "27.2",
+        "shim_outer_diameter_mm": "30.9",
+        "seatpost_shim_length_mm": "100",
+        "seatpost_shim_oem_interface": "S1"
+      },
+      "expected_blocking": [
+        {
+          "code": "field_applicability",
+          "field": "shim_inner_diameter_mm"
+        },
+        {
+          "code": "field_applicability",
+          "field": "shim_outer_diameter_mm"
+        }
+      ],
+      "expected_issue_subset": [],
+      "expected_sql_blocking": [
+        {
+          "code": "field_applicability",
+          "field": "shim_inner_diameter_mm"
+        },
+        {
+          "code": "field_applicability",
+          "field": "shim_outer_diameter_mm"
+        }
+      ],
+      "expected_sql_issue_subset": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false
+    },
+    {
+      "id": "seatpost_shim_support_within_length",
+      "template": "seatpost_shim",
+      "values": {
+        "spec_evidence_source": "Synthetic fixture; no inventory claim.",
+        "seatpost_shim_shape": "Circular",
+        "shim_inner_diameter_mm": "27.2",
+        "shim_outer_diameter_mm": "30.9",
+        "seatpost_shim_length_mm": "100",
+        "seatpost_shim_support_length_mm": "90"
+      },
+      "expected_blocking": [],
+      "expected_issue_subset": [],
+      "expected_sql_blocking": [],
+      "expected_sql_issue_subset": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false
+    },
+    {
+      "id": "seatpost_shim_support_equals_length",
+      "template": "seatpost_shim",
+      "values": {
+        "spec_evidence_source": "Synthetic fixture; no inventory claim.",
+        "seatpost_shim_shape": "Circular",
+        "shim_inner_diameter_mm": "27.2",
+        "shim_outer_diameter_mm": "30.9",
+        "seatpost_shim_length_mm": "100",
+        "seatpost_shim_support_length_mm": "100"
+      },
+      "expected_blocking": [],
+      "expected_issue_subset": [],
+      "expected_sql_blocking": [],
+      "expected_sql_issue_subset": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false
+    },
+    {
+      "id": "seatpost_shim_support_exceeds_length",
+      "template": "seatpost_shim",
+      "values": {
+        "spec_evidence_source": "Synthetic fixture; no inventory claim.",
+        "seatpost_shim_shape": "Circular",
+        "shim_inner_diameter_mm": "27.2",
+        "shim_outer_diameter_mm": "30.9",
+        "seatpost_shim_length_mm": "100",
+        "seatpost_shim_support_length_mm": "101"
+      },
+      "expected_blocking": [
+        {
+          "code": "range_order",
+          "field": "seatpost_shim_support_length_mm"
+        },
+        {
+          "code": "range_order",
+          "field": "seatpost_shim_length_mm"
+        }
+      ],
+      "expected_issue_subset": [],
+      "expected_sql_blocking": [
+        {
+          "code": "range_order",
+          "field": "seatpost_shim_length_mm"
+        },
+        {
+          "code": "range_order",
+          "field": "seatpost_shim_support_length_mm"
+        }
+      ],
+      "expected_sql_issue_subset": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false
+    },
+    {
+      "id": "seatpost_shim_support_needs_length",
+      "template": "seatpost_shim",
+      "values": {
+        "spec_evidence_source": "Synthetic fixture; no inventory claim.",
+        "seatpost_shim_shape": "Circular",
+        "shim_inner_diameter_mm": "27.2",
+        "shim_outer_diameter_mm": "30.9",
+        "seatpost_shim_support_length_mm": "90"
+      },
+      "expected_blocking": [],
+      "expected_issue_subset": [
+        {
+          "code": "prerequisite",
+          "field": "seatpost_shim_support_length_mm",
+          "blocking": false
+        }
+      ],
+      "expected_sql_blocking": [],
+      "expected_sql_issue_subset": [
+        {
+          "code": "prerequisite_missing",
+          "field": "seatpost_shim_support_length_mm",
+          "blocking": false
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false
+    },
+    {
+      "id": "seatpost_shim_zero_post",
+      "template": "seatpost_shim",
+      "values": {
+        "spec_evidence_source": "Synthetic fixture; no inventory claim.",
+        "seatpost_shim_shape": "Circular",
+        "shim_inner_diameter_mm": "0",
+        "shim_outer_diameter_mm": "30.9",
+        "seatpost_shim_length_mm": "100"
+      },
+      "expected_blocking": [
+        {
+          "code": "range",
+          "field": "shim_inner_diameter_mm"
+        }
+      ],
+      "expected_issue_subset": [],
+      "expected_sql_blocking": [
+        {
+          "code": "field_constraint",
+          "field": "shim_inner_diameter_mm"
+        }
+      ],
+      "expected_sql_issue_subset": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false
+    },
+    {
+      "id": "seatpost_shim_zero_length",
+      "template": "seatpost_shim",
+      "values": {
+        "spec_evidence_source": "Synthetic fixture; no inventory claim.",
+        "seatpost_shim_shape": "Circular",
+        "shim_inner_diameter_mm": "27.2",
+        "shim_outer_diameter_mm": "30.9",
+        "seatpost_shim_length_mm": "0"
+      },
+      "expected_blocking": [
+        {
+          "code": "range",
+          "field": "seatpost_shim_length_mm"
+        }
+      ],
+      "expected_issue_subset": [],
+      "expected_sql_blocking": [
+        {
+          "code": "field_constraint",
+          "field": "seatpost_shim_length_mm"
+        }
+      ],
+      "expected_sql_issue_subset": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false
+    },
+    {
+      "id": "seatpost_shim_no_multivariant_range",
+      "template": "seatpost_shim",
+      "values": {
+        "spec_evidence_source": "Synthetic fixture; no inventory claim.",
+        "seatpost_shim_shape": "Circular",
+        "shim_inner_diameter_mm": "27.2",
+        "shim_outer_diameter_mm": "30.9-31.6",
+        "seatpost_shim_length_mm": "100"
+      },
+      "expected_blocking": [
+        {
+          "code": "type",
+          "field": "shim_outer_diameter_mm"
+        }
+      ],
+      "expected_issue_subset": [],
+      "expected_sql_blocking": [
+        {
+          "code": "field_constraint",
+          "field": "shim_outer_diameter_mm"
+        }
+      ],
+      "expected_sql_issue_subset": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false
+    },
+    {
+      "id": "seatpost_shim_no_cartesian_array",
+      "template": "seatpost_shim",
+      "values": {
+        "spec_evidence_source": "Synthetic fixture; no inventory claim.",
+        "seatpost_shim_shape": "Circular",
+        "shim_inner_diameter_mm": [
+          "27.2",
+          "30.9"
+        ],
+        "shim_outer_diameter_mm": "30.9",
+        "seatpost_shim_length_mm": "100"
+      },
+      "expected_blocking": [
+        {
+          "code": "type",
+          "field": "shim_inner_diameter_mm"
+        }
+      ],
+      "expected_issue_subset": [],
+      "expected_sql_blocking": [
+        {
+          "code": "field_constraint",
+          "field": "shim_inner_diameter_mm"
+        }
+      ],
+      "expected_sql_issue_subset": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false
+    }
+  ]
+}

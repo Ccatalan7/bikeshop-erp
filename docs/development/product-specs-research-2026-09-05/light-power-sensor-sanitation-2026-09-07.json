@@ -1,0 +1,2197 @@
+{
+ "schema_version": 1,
+ "title": "Saneamiento de luz, electrónica y sensores: doble autoridad entre escalares y filas",
+ "author": "Claude (Fable 5.1); root decide e integra",
+ "prepared_on": "2026-09-07",
+ "status": "propuesta; nada aplicado; todas las compuertas cerradas; llenado 0",
+ "target": {
+  "catalog": "all-family-reviewed-fields-2026-09-07.json",
+  "sha256": "cf8ebeb1e4e7dd32853b8618657a3f25e3f5428158702ef2e0adeb5b89978577",
+  "template_indexes": {
+   "light": 78,
+   "cycle_computer": 80,
+   "consumer_electronics": 81
+  }
+ },
+ "rules": [
+  "Un hecho, un dueño: si un escalar y una columna de filas dicen el mismo hecho físico de la luz, gana la fila y el escalar se retira de la plantilla (rol legacy + allowed never), nunca se borra. Un total declarado por el OEM (puertos, modos, lúmenes de portada) es otro hecho: no es count(filas) ni max(filas), y el detalle parcial no lo deriva ni lo niega.",
+  "Juego y luz única son distintos por light_position; la cantidad de filas nunca decide si es juego.",
+  "Un miembro se identifica por row.id; member_id y member_revision son texto para la persona y para el rótulo.",
+  "Sin regla suma(max por puerto) ≤ total ni asignación ≤ máximo individual: tres hechos distintos con su fuente.",
+  "Sensores: perfil + transporte + supported por fila; ningún booleano escalar nuevo.",
+  "Fuentes que se contradicen se conservan como fichas alternativas con identidad y fecha sobre el mismo miembro físico; una fuente genérica («USB») no contradice a una precisa («Micro-USB»), la precisa gana."
+ ],
+ "sources": {
+  "S-CATEYE-WEB": {
+   "title": "Cateye — AMPP800 (HL-EL088RC) + ViZ300 (TL-LD810), página de producto",
+   "url": "https://www.cateye.com/intl/products/headlights/HL-EL088RC_TL-LD810/",
+   "grade": "oem_page",
+   "read": "lectura web 2026-09-07 (registrada en el addendum A como E-CATEYE)",
+   "states": [
+    "AMPP800: High 800 lm 1,5 h; Middle 400 lm 2 h; Low 200 lm 4 h; Daytime HyperConstant 800/200 lm 5 h; Flashing 200 lm 30 h. Li-ion 3,7 V 2500 mAh, Micro-USB 3–7 h, manubrio φ22,0–35,0 mm, IPX4.",
+    "ViZ300: Constant 30 lm 5 h; Flashing 30 lm 45 h; Group Ride 100→15 lm 8→10 h con nota «Spec change» (anterior → vigente); Daytime Hyperflash 300 lm 10 h. Li-ion sin capacidad publicada, «USB» 3 h (0,5 A), φ21,5–32,0 mm, soporte SP-15 hasta 130 mm de perímetro, IPX4.",
+    "Incluye cable Micro-USB (AMPP800)."
+   ]
+  },
+  "S-CATEYE-MANUAL-LD810": {
+   "title": "Cateye — manual TL-LD810/820 (TL-LD810_820_HP_ENG_v1.pdf)",
+   "url": "https://www.cateye.com/intl/support/manual/data/doc/TL-LD810_820_HP_ENG_v1.pdf",
+   "grade": "oem_manual",
+   "read": "PDF descargado y leído localmente (PDFKit) 2026-09-07",
+   "states": [
+    "Viz300 (TL-LD810): batería Li-ion 3,7 V 800 mAh; autonomía Constant ≈5 h, Flashing ≈45 h, Group Ride ≈8 h, Daytime HyperFlash ≈10 h; carga 0,5 A ≈3 h por «Charging port» con «USB cable (MICRO USB)»; IPX4; 75,5 × 25 × 34 mm, 47 g; «specifications subject to change without notice».",
+    "La tabla del manual v1 no publica lúmenes por modo."
+   ],
+   "conflict": "«USB» de la web y «Micro-USB» del manual no se contradicen: el manual precisa el puerto. La contradicción documental real es Group Ride: manual v1 ≈8 h (sin lúmenes) y web anterior 100 lm / 8 h frente a web vigente 15 lm / 10 h con nota «Spec change». Son dos fichas del mismo producto físico, no dos miembros."
+  },
+  "S-GARMIN-540": {
+   "title": "Garmin — Edge 540 Owner’s Manual (Wireless Sensors; Specifications) y página de producto",
+   "url": "https://www8.garmin.com/manuals/webhelp/GUID-17DE938E-466A-4746-BDBF-7A6FC1B3A32C/EN-US/GUID-62D44DE6-9C4D-4834-8267-8B23F891A9F3.html",
+   "grade": "oem_page",
+   "read": "lectura web 2026-09-07 (E-GARMIN-540)",
+   "states": [
+    "Sensores por «ANT+ o Bluetooth»: eBike, Edge Remote, Extended Display, Heart Rate, inReach Remote, Lights, Power, Radar, Shifting, Shimano Di2, Smart Trainer, Speed/Cadence, Tempe, VIRB. La lista no dice qué transporte admite cada tipo.",
+    "Especificaciones: batería Li-ion integrada; hasta 26 h; IEC 60529 IPX7. Página de producto: GNSS multibanda; Wi-Fi."
+   ]
+  },
+  "S-ANKER-A2667": {
+   "title": "Anker — 735 Charger (Nano II 65W) A2667, ficha de soporte",
+   "url": "https://service.anker.com/product-description/a085g000004x2BVAAY?recordId=a085g000004x2BVAAY",
+   "grade": "oem_page",
+   "read": "lectura web 2026-09-07 (E-ANKER-A2667)",
+   "states": [
+    "Puertos USB-C 1, USB-C 2, USB-A. Solo: C1 65 W; C2 65 W; A 22,5 W.",
+    "C1+C2: 45 + 20 W; C1+A: 40 + 22,5 W; C2+A: 12 + 12 W; C1+C2+A: 40 + 12 + 12 W. Total 65 W.",
+    "PPS, PowerIQ 3.0/2.0; no publica perfiles V/A por puerto; no documenta A2668."
+   ]
+  },
+  "S-INVENTARIO": {
+   "title": "Inventario Viñabike: títulos de productos reales sin OEM identificado",
+   "url": null,
+   "grade": "inventory",
+   "read": "catálogo interno (addendum A, 2026-09-07)",
+   "states": [
+    "«Juego de luces delantera + trasera AE», «Cargador 65W Baseus», «CICLOCOMPUTADOR BICICLETA VELOCIMETRO CON CABLE 11 FUNCIONES»: nada se deduce del título."
+   ]
+  },
+  "S-ENGINE": {
+   "title": "Motor real: product_spec_rows.dart, product_spec_template_rules.dart, product_spec_coherence.dart, 20260907020000",
+   "url": null,
+   "grade": "structural",
+   "read": "lectura de código 2026-09-07",
+   "states": [
+    "Condiciones sólo sobre escalares; celdas sin condiciones; unique_by omite filas a las que les falta una clave del grupo; un par escalar con extremo legacy es rechazado por el guard de metadatos; vínculos entre filas por row.id."
+   ]
+  }
+ },
+ "double_authority": [
+  {
+   "id": "DA-L1",
+   "template": "light",
+   "fact": "alimentación / batería de una luz",
+   "owners_today": [
+    "power_source (escalar, sólo luz única)",
+    "battery_capacity_mah (escalar)",
+    "light_member_configurations.battery_kind / battery_capacity_mah / battery_voltage_v / power_input_connector (fila, allowed always)"
+   ],
+   "why_double": "Para una luz única aplican los escalares y además las filas están permitidas siempre: «Pilas AA/AAA» en el escalar y «Li-ion integrada» en la fila conviven sin que nada lo detecte (el motor no compara fila con escalar).",
+   "single_owner": "light_member_configurations, para toda luz (una fila para la luz única)."
+  },
+  {
+   "id": "DA-L2",
+   "template": "light",
+   "fact": "conector de carga",
+   "owners_today": [
+    "charge_connector (escalar)",
+    "light_member_configurations.charge_connector (fila)"
+   ],
+   "why_double": "Igual que DA-L1; además el escalar no distingue puerto del dispositivo de extremo del cable, la fila sí (power_input_connector aparte). Un «USB» genérico de la web no contradice el «Micro-USB» del manual: lo precisa; el token más preciso con fuente gana, el genérico no se registra como alternativa.",
+   "single_owner": "fila"
+  },
+  {
+   "id": "DA-L3",
+   "template": "light",
+   "fact": "fijación y diámetros de montaje",
+   "owners_today": [
+    "light_mount_kind, mount_diameter_min_mm, mount_diameter_max_mm (escalares + scalar_ordered_pairs)",
+    "light_member_configurations.mount_kind / mount_diameter_* / mount_circumference_max_mm / mount_zone (fila + ordered_pairs)"
+   ],
+   "why_double": "Dos rangos de diámetro para la misma pieza; el par escalar y el par de fila se validan por separado.",
+   "single_owner": "fila"
+  },
+  {
+   "id": "DA-L4",
+   "template": "light",
+   "fact": "grado IP",
+   "owners_today": [
+    "ip_rating (escalar text)",
+    "light_member_configurations.ip_rating (fila text)"
+   ],
+   "why_double": "Dos textos libres para el mismo hecho.",
+   "single_owner": "fila, como token IEC 60529"
+  },
+  {
+   "id": "DA-L5",
+   "template": "light",
+   "fact": "lúmenes declarados y cantidad de modos frente a filas de modos",
+   "owners_today": [
+    "lumens_claimed, modes_count (escalares)",
+    "light_mode_configurations (una fila por modo conocido)"
+   ],
+   "why_double": "NO es doble autoridad. Las filas son el detalle conocido y pueden estar incompletas; modes_count es el total que el OEM declara; lumens_claimed es la cifra OEM de portada, que no equivale a max(filas) sin el mismo método y condiciones de medida. Ni el total ni la ausencia se derivan del detalle parcial.",
+   "single_owner": "tres hechos: total declarado (escalar, declaration con evidencia), detalle conocido (filas), completitud (desconocida salvo que la fuente lo diga)"
+  },
+  {
+   "id": "DA-L6",
+   "template": "light",
+   "fact": "posición de una luz única",
+   "owners_today": [
+    "light_position (escalar: Delantera/Trasera/Casco)",
+    "light_member_configurations.position (fila requerida)"
+   ],
+   "why_double": "Con una fila por luz única, la posición se escribe dos veces y el motor no puede exigir que coincidan.",
+   "single_owner": "No resoluble sin motor (G2) o sin migrar el vocabulario de light_position a «Luz individual / Juego»; ver decisión D-L6."
+  },
+  {
+   "id": "DA-L7",
+   "template": "light",
+   "fact": "composición del juego",
+   "owners_today": [
+    "kit_members (contents, allowed always)",
+    "light_member_configurations (contents)"
+   ],
+   "why_double": "La luz delantera de un juego cabe como fila de kit_members (family=light) y como miembro.",
+   "single_owner": "light_member_configurations para las luces; kit_members sólo para lo que no es luz (cable, soporte, correa). El motor no puede prohibir family=light dentro de la plantilla light (G3): queda como regla de captura y fixture."
+  },
+  {
+   "id": "DA-C1",
+   "template": "cycle_computer",
+   "fact": "montaje del sensor incluido",
+   "owners_today": [
+    "sensor_mount (escalar text, measurement)",
+    "computer_contents.mount_interface (fila por ítem)"
+   ],
+   "why_double": "El soporte del sensor es una propiedad del ítem incluido, no del ciclocomputador.",
+   "single_owner": "computer_contents.mount_interface"
+  },
+  {
+   "id": "DA-C2",
+   "template": "cycle_computer",
+   "fact": "fuente de velocidad frente a sensores admitidos",
+   "owners_today": [
+    "speed_source (escalar)",
+    "sensor_support_configurations (Velocidad × transporte)"
+   ],
+   "why_double": "No es duplicado: speed_source dice cómo mide velocidad el equipo; las filas dicen qué parejas admite. La consistencia (speed_source por sensor ⇒ existe fila Velocidad admitida) no es expresable hoy (G2). Se conservan ambos.",
+   "single_owner": "ambos, con significado distinto; consistencia pendiente de motor"
+  },
+  {
+   "id": "DA-C3",
+   "template": "cycle_computer",
+   "fact": "pareja sensor admitida / excluida",
+   "owners_today": [
+    "sensor_support_configurations.supported (boolean por fila)"
+   ],
+   "why_double": "No hay escalar duplicado (root rechazó sensor_link_*). Lo que falta es unique_by: (Velocidad, ANT+, true) y (Velocidad, ANT+, false) pueden convivir.",
+   "single_owner": "la fila, con unique_by [sensor_type, transport]"
+  },
+  {
+   "id": "DA-E1",
+   "template": "consumer_electronics",
+   "fact": "cantidad de puertos frente a filas de puertos",
+   "owners_today": [
+    "ports_count (escalar)",
+    "power_port_configurations (una fila por puerto conocido)"
+   ],
+   "why_double": "NO es doble autoridad: ports_count es el total declarado por el OEM y las filas son el detalle conocido, que puede estar incompleto. count(filas) < ports_count es completitud pendiente, no contradicción; count(filas) > ports_count sí lo sería y hoy no se detecta (G2).",
+   "single_owner": "total declarado (escalar, declaration con evidencia) y detalle (filas)"
+  },
+  {
+   "id": "DA-E2",
+   "template": "consumer_electronics",
+   "fact": "protocolos de carga",
+   "owners_today": [
+    "charging_protocol_claim (escalar, allowed always)",
+    "power_port_configurations.protocols (por puerto)"
+   ],
+   "why_double": "Para un cargador el protocolo es por puerto; el escalar queda para cable y «Otro».",
+   "single_owner": "por puerto en cargadores; escalar sólo cable/otro"
+  },
+  {
+   "id": "DA-E3",
+   "template": "consumer_electronics",
+   "fact": "capacidad de una tarjeta",
+   "owners_today": [
+    "storage_capacity_gb (number, unidad GB entera)",
+    "storage_capacity_label (text literal)"
+   ],
+   "why_double": "NO se retira: el literal conserva la unidad y la convención impresas (GB, TB, GiB). «1TB» no se convierte a 1000 ni a 1024 GB por intuición; storage_capacity_gb sólo se escribe cuando la fuente fija la convención. Dos hechos: literal declarado y valor normalizado conocido.",
+   "single_owner": "literal → storage_capacity_label (declaration con evidencia); número → storage_capacity_gb sólo con convención conocida"
+  },
+  {
+   "id": "DA-E4",
+   "template": "consumer_electronics",
+   "fact": "potencia total / máxima por puerto / reparto",
+   "owners_today": [
+    "rated_power_w (total del cargador)",
+    "power_port_configurations.max_power_w (máximo individual)",
+    "power_budget_configurations.power_w (asignación en una combinación)"
+   ],
+   "why_double": "No es duplicado: tres significados (AG05). En un cargador de un puerto coinciden numéricamente y siguen siendo dos afirmaciones OEM distintas. Sin regla suma(max) ≤ total ni power_w ≤ max.",
+   "single_owner": "tres dueños, tres hechos"
+  }
+ ],
+ "patches": [
+  {
+   "id": "LPS-L-retire-power_source",
+   "template": "light",
+   "template_index": 78,
+   "key": "power_source",
+   "op": "replace_field_contract",
+   "path": "/templates/78/form_contract/{roles,allowed_when,required_when,prerequisites}/power_source",
+   "before": {
+    "roles": "primary",
+    "allowed_when": {
+     "kind": "when",
+     "rows": [
+      [
+       {
+        "field": "light_position",
+        "operator": "in",
+        "value_type": "token",
+        "value": [
+         "Delantera",
+         "Trasera",
+         "Casco / otra"
+        ]
+       }
+      ]
+     ]
+    },
+    "required_when": {
+     "kind": "always"
+    },
+    "prerequisites": null
+   },
+   "after": {
+    "roles": "legacy",
+    "allowed_when": {
+     "kind": "never"
+    },
+    "required_when": {
+     "kind": "never"
+    },
+    "prerequisites": null
+   },
+   "source_ids": [
+    "S-CATEYE-WEB",
+    "S-ENGINE"
+   ],
+   "scope": "Sólo la plantilla light. power_source deja de editarse ahí; sus hechos existentes quedan inmutables como legacy (mecanismo 170). Otras plantillas que usen la definición no cambian.",
+   "counter_case": "Un valor legacy nuevo o cambiado se rechaza en la escritura («El campo retirado se conserva como legacy»).",
+   "needs": "schema_only; gate: consulta de sólo lectura de hechos existentes por definición antes de aplicar"
+  },
+  {
+   "id": "LPS-L-retire-charge_connector",
+   "template": "light",
+   "template_index": 78,
+   "key": "charge_connector",
+   "op": "replace_field_contract",
+   "path": "/templates/78/form_contract/{roles,allowed_when,required_when,prerequisites}/charge_connector",
+   "before": {
+    "roles": "primary",
+    "allowed_when": {
+     "kind": "when",
+     "rows": [
+      [
+       {
+        "field": "light_position",
+        "operator": "in",
+        "value_type": "token",
+        "value": [
+         "Delantera",
+         "Trasera",
+         "Casco / otra"
+        ]
+       },
+       {
+        "field": "power_source",
+        "operator": "in",
+        "value_type": "token",
+        "value": [
+         "Recargable USB",
+         "Recargable USB (batería extraíble)"
+        ]
+       }
+      ]
+     ]
+    },
+    "required_when": {
+     "kind": "never"
+    },
+    "prerequisites": null
+   },
+   "after": {
+    "roles": "legacy",
+    "allowed_when": {
+     "kind": "never"
+    },
+    "required_when": {
+     "kind": "never"
+    },
+    "prerequisites": null
+   },
+   "source_ids": [
+    "S-CATEYE-WEB",
+    "S-ENGINE"
+   ],
+   "scope": "Sólo la plantilla light. charge_connector deja de editarse ahí; sus hechos existentes quedan inmutables como legacy (mecanismo 170). Otras plantillas que usen la definición no cambian.",
+   "counter_case": "Un valor legacy nuevo o cambiado se rechaza en la escritura («El campo retirado se conserva como legacy»).",
+   "needs": "schema_only; gate: consulta de sólo lectura de hechos existentes por definición antes de aplicar"
+  },
+  {
+   "id": "LPS-L-retire-battery_capacity_mah",
+   "template": "light",
+   "template_index": 78,
+   "key": "battery_capacity_mah",
+   "op": "replace_field_contract",
+   "path": "/templates/78/form_contract/{roles,allowed_when,required_when,prerequisites}/battery_capacity_mah",
+   "before": {
+    "roles": "declaration",
+    "allowed_when": {
+     "kind": "when",
+     "rows": [
+      [
+       {
+        "field": "light_position",
+        "operator": "in",
+        "value_type": "token",
+        "value": [
+         "Delantera",
+         "Trasera",
+         "Casco / otra"
+        ]
+       }
+      ]
+     ]
+    },
+    "required_when": {
+     "kind": "never"
+    },
+    "prerequisites": [
+     "spec_evidence_source"
+    ]
+   },
+   "after": {
+    "roles": "legacy",
+    "allowed_when": {
+     "kind": "never"
+    },
+    "required_when": {
+     "kind": "never"
+    },
+    "prerequisites": null
+   },
+   "source_ids": [
+    "S-CATEYE-WEB",
+    "S-ENGINE"
+   ],
+   "scope": "Sólo la plantilla light. battery_capacity_mah deja de editarse ahí; sus hechos existentes quedan inmutables como legacy (mecanismo 170). Otras plantillas que usen la definición no cambian.",
+   "counter_case": "Un valor legacy nuevo o cambiado se rechaza en la escritura («El campo retirado se conserva como legacy»).",
+   "needs": "schema_only; gate: consulta de sólo lectura de hechos existentes por definición antes de aplicar"
+  },
+  {
+   "id": "LPS-L-retire-light_mount_kind",
+   "template": "light",
+   "template_index": 78,
+   "key": "light_mount_kind",
+   "op": "replace_field_contract",
+   "path": "/templates/78/form_contract/{roles,allowed_when,required_when,prerequisites}/light_mount_kind",
+   "before": {
+    "roles": "measurement",
+    "allowed_when": {
+     "kind": "when",
+     "rows": [
+      [
+       {
+        "field": "light_position",
+        "operator": "in",
+        "value_type": "token",
+        "value": [
+         "Delantera",
+         "Trasera",
+         "Casco / otra"
+        ]
+       }
+      ]
+     ]
+    },
+    "required_when": {
+     "kind": "never"
+    },
+    "prerequisites": null
+   },
+   "after": {
+    "roles": "legacy",
+    "allowed_when": {
+     "kind": "never"
+    },
+    "required_when": {
+     "kind": "never"
+    },
+    "prerequisites": null
+   },
+   "source_ids": [
+    "S-CATEYE-WEB",
+    "S-ENGINE"
+   ],
+   "scope": "Sólo la plantilla light. light_mount_kind deja de editarse ahí; sus hechos existentes quedan inmutables como legacy (mecanismo 170). Otras plantillas que usen la definición no cambian.",
+   "counter_case": "Un valor legacy nuevo o cambiado se rechaza en la escritura («El campo retirado se conserva como legacy»).",
+   "needs": "schema_only; gate: consulta de sólo lectura de hechos existentes por definición antes de aplicar"
+  },
+  {
+   "id": "LPS-L-retire-mount_diameter_min_mm",
+   "template": "light",
+   "template_index": 78,
+   "key": "mount_diameter_min_mm",
+   "op": "replace_field_contract",
+   "path": "/templates/78/form_contract/{roles,allowed_when,required_when,prerequisites}/mount_diameter_min_mm",
+   "before": {
+    "roles": "measurement",
+    "allowed_when": {
+     "kind": "when",
+     "rows": [
+      [
+       {
+        "field": "light_position",
+        "operator": "in",
+        "value_type": "token",
+        "value": [
+         "Delantera",
+         "Trasera",
+         "Casco / otra"
+        ]
+       }
+      ]
+     ]
+    },
+    "required_when": {
+     "kind": "never"
+    },
+    "prerequisites": null
+   },
+   "after": {
+    "roles": "legacy",
+    "allowed_when": {
+     "kind": "never"
+    },
+    "required_when": {
+     "kind": "never"
+    },
+    "prerequisites": null
+   },
+   "source_ids": [
+    "S-CATEYE-WEB",
+    "S-ENGINE"
+   ],
+   "scope": "Sólo la plantilla light. mount_diameter_min_mm deja de editarse ahí; sus hechos existentes quedan inmutables como legacy (mecanismo 170). Otras plantillas que usen la definición no cambian.",
+   "counter_case": "Un valor legacy nuevo o cambiado se rechaza en la escritura («El campo retirado se conserva como legacy»).",
+   "needs": "schema_only; gate: consulta de sólo lectura de hechos existentes por definición antes de aplicar"
+  },
+  {
+   "id": "LPS-L-retire-mount_diameter_max_mm",
+   "template": "light",
+   "template_index": 78,
+   "key": "mount_diameter_max_mm",
+   "op": "replace_field_contract",
+   "path": "/templates/78/form_contract/{roles,allowed_when,required_when,prerequisites}/mount_diameter_max_mm",
+   "before": {
+    "roles": "measurement",
+    "allowed_when": {
+     "kind": "when",
+     "rows": [
+      [
+       {
+        "field": "light_position",
+        "operator": "in",
+        "value_type": "token",
+        "value": [
+         "Delantera",
+         "Trasera",
+         "Casco / otra"
+        ]
+       }
+      ]
+     ]
+    },
+    "required_when": {
+     "kind": "never"
+    },
+    "prerequisites": null
+   },
+   "after": {
+    "roles": "legacy",
+    "allowed_when": {
+     "kind": "never"
+    },
+    "required_when": {
+     "kind": "never"
+    },
+    "prerequisites": null
+   },
+   "source_ids": [
+    "S-CATEYE-WEB",
+    "S-ENGINE"
+   ],
+   "scope": "Sólo la plantilla light. mount_diameter_max_mm deja de editarse ahí; sus hechos existentes quedan inmutables como legacy (mecanismo 170). Otras plantillas que usen la definición no cambian.",
+   "counter_case": "Un valor legacy nuevo o cambiado se rechaza en la escritura («El campo retirado se conserva como legacy»).",
+   "needs": "schema_only; gate: consulta de sólo lectura de hechos existentes por definición antes de aplicar"
+  },
+  {
+   "id": "LPS-L-retire-ip_rating",
+   "template": "light",
+   "template_index": 78,
+   "key": "ip_rating",
+   "op": "replace_field_contract",
+   "path": "/templates/78/form_contract/{roles,allowed_when,required_when,prerequisites}/ip_rating",
+   "before": {
+    "roles": "declaration",
+    "allowed_when": {
+     "kind": "when",
+     "rows": [
+      [
+       {
+        "field": "light_position",
+        "operator": "in",
+        "value_type": "token",
+        "value": [
+         "Delantera",
+         "Trasera",
+         "Casco / otra"
+        ]
+       }
+      ]
+     ]
+    },
+    "required_when": {
+     "kind": "never"
+    },
+    "prerequisites": [
+     "spec_evidence_source"
+    ]
+   },
+   "after": {
+    "roles": "legacy",
+    "allowed_when": {
+     "kind": "never"
+    },
+    "required_when": {
+     "kind": "never"
+    },
+    "prerequisites": null
+   },
+   "source_ids": [
+    "S-CATEYE-WEB",
+    "S-ENGINE"
+   ],
+   "scope": "Sólo la plantilla light. ip_rating deja de editarse ahí; sus hechos existentes quedan inmutables como legacy (mecanismo 170). Otras plantillas que usen la definición no cambian.",
+   "counter_case": "Un valor legacy nuevo o cambiado se rechaza en la escritura («El campo retirado se conserva como legacy»).",
+   "needs": "schema_only; gate: consulta de sólo lectura de hechos existentes por definición antes de aplicar"
+  },
+  {
+   "id": "LPS-L-declared-total-modes_count",
+   "template": "light",
+   "template_index": 78,
+   "key": "modes_count",
+   "op": "replace_field_contract",
+   "path": "/templates/78/form_contract/{roles,prerequisites}/modes_count",
+   "before": {
+    "roles": "primary",
+    "prerequisites": null
+   },
+   "after": {
+    "roles": "declaration",
+    "prerequisites": [
+     "spec_evidence_source"
+    ]
+   },
+   "source_ids": [
+    "S-ANKER-A2667",
+    "S-CATEYE-WEB"
+   ],
+   "scope": "Total declarado por el OEM, distinto del detalle conocido en filas; exige evidencia. No se deriva de count(filas) ni la ausencia de filas lo niega.",
+   "counter_case": "count(filas) menor que el total = detalle incompleto (pendiente); mayor = contradicción hoy no detectable (G2).",
+   "needs": "schema_only"
+  },
+  {
+   "id": "LPS-L-label-modes_count",
+   "template": "light",
+   "template_index": 78,
+   "key": "modes_count",
+   "op": "replace_definition_label",
+   "path": "/definitions/modes_count/label",
+   "before": "Cantidad de modos",
+   "after": "Cantidad de modos declarada por el fabricante",
+   "source_ids": [
+    "S-ENGINE"
+   ],
+   "scope": "Rótulo que dice de quién es el número.",
+   "counter_case": "—",
+   "needs": "schema_only"
+  },
+  {
+   "id": "LPS-C-declared-total-ports_count",
+   "template": "consumer_electronics",
+   "template_index": 81,
+   "key": "ports_count",
+   "op": "replace_field_contract",
+   "path": "/templates/81/form_contract/{roles,prerequisites}/ports_count",
+   "before": {
+    "roles": "primary",
+    "prerequisites": null
+   },
+   "after": {
+    "roles": "declaration",
+    "prerequisites": [
+     "spec_evidence_source"
+    ]
+   },
+   "source_ids": [
+    "S-ANKER-A2667",
+    "S-CATEYE-WEB"
+   ],
+   "scope": "Total declarado por el OEM, distinto del detalle conocido en filas; exige evidencia. No se deriva de count(filas) ni la ausencia de filas lo niega.",
+   "counter_case": "count(filas) menor que el total = detalle incompleto (pendiente); mayor = contradicción hoy no detectable (G2).",
+   "needs": "schema_only"
+  },
+  {
+   "id": "LPS-C-label-ports_count",
+   "template": "consumer_electronics",
+   "template_index": 81,
+   "key": "ports_count",
+   "op": "replace_definition_label",
+   "path": "/definitions/ports_count/label",
+   "before": "Cantidad de puertos",
+   "after": "Cantidad de puertos declarada por el fabricante",
+   "source_ids": [
+    "S-ENGINE"
+   ],
+   "scope": "Rótulo que dice de quién es el número.",
+   "counter_case": "—",
+   "needs": "schema_only"
+  },
+  {
+   "id": "LPS-E-storage-label-owner",
+   "template": "consumer_electronics",
+   "template_index": 81,
+   "key": "storage_capacity_label",
+   "op": "replace_field_contract",
+   "path": "/templates/81/form_contract/{roles,prerequisites}/storage_capacity_label",
+   "before": {
+    "roles": "primary",
+    "prerequisites": null
+   },
+   "after": {
+    "roles": "declaration",
+    "prerequisites": [
+     "spec_evidence_source"
+    ]
+   },
+   "source_ids": [
+    "S-ENGINE"
+   ],
+   "scope": "El literal impreso es el dueño de unidad y convención (GB/TB/GiB); storage_capacity_gb sólo se escribe cuando la fuente fija la convención. Sin conversión 1000/1024 por intuición.",
+   "counter_case": "«1TB» con storage_capacity_gb=1024 sin fuente que lo diga es invención, no dato.",
+   "needs": "schema_only"
+  },
+  {
+   "id": "LPS-E-storage-label-text",
+   "template": "consumer_electronics",
+   "template_index": 81,
+   "key": "storage_capacity_label",
+   "op": "replace_definition_label",
+   "path": "/definitions/storage_capacity_label/label",
+   "before": "Capacidad impresa",
+   "after": "Capacidad impresa (literal con su unidad: GB, TB o GiB)",
+   "source_ids": [
+    "S-ENGINE"
+   ],
+   "scope": "Rótulo que conserva la convención.",
+   "counter_case": "—",
+   "needs": "schema_only"
+  },
+  {
+   "id": "LPS-L-drop-mount-pair",
+   "template": "light",
+   "template_index": 78,
+   "key": null,
+   "op": "replace_scalar_ordered_pairs",
+   "path": "/templates/78/form_contract/scalar_ordered_pairs",
+   "before": [
+    [
+     "mount_diameter_min_mm",
+     "mount_diameter_max_mm"
+    ]
+   ],
+   "after": [],
+   "source_ids": [
+    "S-ENGINE"
+   ],
+   "scope": "Obligatorio junto a LPS-L-retire-mount_diameter_*: spec_coherence_metadata_internal_v1 rechaza un par cuyo extremo no sea number activo.",
+   "counter_case": "Aplicar los retiros sin este parche deja la plantilla inválida (23514) y el editor sin montar.",
+   "needs": "schema_only"
+  },
+  {
+   "id": "LPS-L-members-required",
+   "template": "light",
+   "template_index": 78,
+   "key": "light_member_configurations",
+   "op": "replace_field_contract",
+   "path": "/templates/78/form_contract/{allowed_when,required_when}/light_member_configurations",
+   "before": {
+    "allowed_when": {
+     "kind": "always"
+    },
+    "required_when": {
+     "kind": "when",
+     "rows": [
+      [
+       {
+        "field": "light_position",
+        "operator": "eq",
+        "value_type": "token",
+        "value": "Juego delantera + trasera"
+       }
+      ]
+     ]
+    }
+   },
+   "after": {
+    "allowed_when": {
+     "kind": "always"
+    },
+    "required_when": {
+     "kind": "always"
+    }
+   },
+   "source_ids": [
+    "S-CATEYE-WEB",
+    "S-INVENTARIO"
+   ],
+   "scope": "Una luz única tiene exactamente una fila; un juego, una por luz. El juego se declara con light_position = «Juego delantera + trasera», nunca se deduce de la cantidad de filas.",
+   "counter_case": "Un juego con una sola fila o una luz única con dos filas es dato incompleto o error de captura; el motor no cuenta filas (G1/G2) y la fixture lo deja explícito.",
+   "needs": "schema_only"
+  },
+  {
+   "id": "LPS-L-modes-required",
+   "template": "light",
+   "template_index": 78,
+   "key": "light_mode_configurations",
+   "op": "replace_field_contract",
+   "path": "/templates/78/form_contract/{required_when}/light_mode_configurations",
+   "before": {
+    "required_when": {
+     "kind": "when",
+     "rows": [
+      [
+       {
+        "field": "light_position",
+        "operator": "eq",
+        "value_type": "token",
+        "value": "Juego delantera + trasera"
+       }
+      ]
+     ]
+    }
+   },
+   "after": {
+    "required_when": {
+     "kind": "always"
+    }
+   },
+   "source_ids": [
+    "S-CATEYE-WEB"
+   ],
+   "scope": "Con lumens_claimed y modes_count retirados, los modos son el único dueño de lúmenes y autonomía; la exigencia es no bloqueante (required_missing).",
+   "counter_case": "Un producto sin OEM queda pendiente, no contradictorio.",
+   "needs": "schema_only"
+  },
+  {
+   "id": "LPS-L-members-schema",
+   "template": "light",
+   "template_index": 78,
+   "key": "light_member_configurations",
+   "op": "replace_rows_schema_parts",
+   "path": "/definitions/light_member_configurations/validation_rules/rows_schema/{columns[ip_rating],unique_by}",
+   "before": {
+    "ip_rating": {
+     "key": "ip_rating",
+     "label": "Grado IP",
+     "type": "text"
+    },
+    "unique_by": [
+     [
+      "member_id"
+     ]
+    ]
+   },
+   "after": {
+    "ip_rating": {
+     "key": "ip_rating",
+     "label": "Grado IP (IEC 60529)",
+     "type": "token",
+     "allowed_values": [
+      "IPX4",
+      "IPX5",
+      "IPX6",
+      "IPX7",
+      "IPX8",
+      "IP54",
+      "IP55",
+      "IP65",
+      "IP66",
+      "IP67",
+      "IP68",
+      "Sin grado declarado",
+      "Otro",
+      "Desconocido / sin confirmar"
+     ]
+    },
+    "unique_by": [
+     [
+      "member_id"
+     ]
+    ]
+   },
+   "source_ids": [
+    "S-CATEYE-WEB",
+    "S-CATEYE-MANUAL-LD810",
+    "S-GARMIN-540",
+    "S-ENGINE"
+   ],
+   "scope": "Un miembro físico = una fila; su identidad es row.id. member_revision sigue opcional: no se inventa una revisión que el fabricante no publica. IP pasa a token IEC 60529 para filtrar.",
+   "counter_case": "Dos filas con el mismo member_id son contradicción (row_shape); una incertidumbre de revisión no se resuelve duplicando el miembro.",
+   "needs": "schema_only; la definición no tiene hechos (origin new); si los tuviera exige migración explícita (spec_rows_definition_guard)"
+  },
+  {
+   "id": "LPS-L-modes-schema",
+   "template": "light",
+   "template_index": 78,
+   "key": "light_mode_configurations",
+   "op": "replace_rows_schema_parts",
+   "path": "/definitions/light_mode_configurations/validation_rules/rows_schema/{columns[member_revision],unique_by}",
+   "before": {
+    "member_revision": {
+     "key": "member_revision",
+     "label": "Revisión del miembro / fuente",
+     "type": "text"
+    },
+    "unique_by": [
+     [
+      "member_id",
+      "mode"
+     ]
+    ]
+   },
+   "after": {
+    "member_revision": {
+     "key": "member_revision",
+     "label": "Revisión / fuente de la ficha OEM (sólo si el fabricante la publica)",
+     "type": "text"
+    },
+    "unique_by": [
+     [
+      "member_id",
+      "mode",
+      "member_revision"
+     ]
+    ]
+   },
+   "source_ids": [
+    "S-CATEYE-WEB",
+    "S-CATEYE-MANUAL-LD810",
+    "S-ENGINE"
+   ],
+   "scope": "Group Ride 100 lm/8 h (web anterior, manual v1 coincide en 8 h) y 15 lm/10 h (web vigente, Spec change) son dos fichas del mismo modo del mismo miembro: dos filas de modo con member_revision distinta, sobre UNA fila de miembro. member_revision sigue opcional. lumens_secondary y runtime_max_h quedan sólo para modos realmente dobles/rangos declarados.",
+   "counter_case": "Dos filas Group Ride con la misma revisión son contradicción; dos filas sin revisión no se deduplican hoy (G6): trade-off aceptado antes que inventar una revisión.",
+   "needs": "schema_only"
+  },
+  {
+   "id": "LPS-L-link-labels",
+   "template": "light",
+   "template_index": 78,
+   "key": null,
+   "op": "replace_link_label_columns",
+   "path": "/templates/78/form_contract/row_coherence/links[light_member_link]/label_columns",
+   "before": [
+    "member_id"
+   ],
+   "after": [
+    "member_id",
+    "member_revision"
+   ],
+   "source_ids": [
+    "S-ENGINE"
+   ],
+   "scope": "Presentación: el selector muestra miembro y revisión; no cambia identidad ni exige migración (guard corregido R3).",
+   "counter_case": "—",
+   "needs": "schema_only"
+  },
+  {
+   "id": "LPS-L-kit-roles",
+   "template": null,
+   "template_index": null,
+   "key": "kit_members",
+   "op": "append_row_column_values",
+   "path": "/definitions/kit_members/validation_rules/rows_schema/columns[member_role]/allowed_values",
+   "before": [
+    "maneta",
+    "cáliper",
+    "manguera",
+    "rotor",
+    "adaptador",
+    "cassette",
+    "cadena",
+    "biela",
+    "pedalier",
+    "copas",
+    "rodamientos",
+    "eje",
+    "plato",
+    "mando",
+    "cambio trasero",
+    "desviador",
+    "pastilla",
+    "parche",
+    "pegamento",
+    "válvula",
+    "cinta",
+    "sellante",
+    "rueda delantera",
+    "rueda trasera",
+    "llanta",
+    "maza",
+    "rayos",
+    "cubierta",
+    "tapa",
+    "araña",
+    "oliva",
+    "inserto",
+    "otro"
+   ],
+   "after": [
+    "maneta",
+    "cáliper",
+    "manguera",
+    "rotor",
+    "adaptador",
+    "cassette",
+    "cadena",
+    "biela",
+    "pedalier",
+    "copas",
+    "rodamientos",
+    "eje",
+    "plato",
+    "mando",
+    "cambio trasero",
+    "desviador",
+    "pastilla",
+    "parche",
+    "pegamento",
+    "válvula",
+    "cinta",
+    "sellante",
+    "rueda delantera",
+    "rueda trasera",
+    "llanta",
+    "maza",
+    "rayos",
+    "cubierta",
+    "tapa",
+    "araña",
+    "oliva",
+    "inserto",
+    "otro",
+    "cable",
+    "soporte",
+    "correa",
+    "espaciador"
+   ],
+   "source_ids": [
+    "S-CATEYE-WEB"
+   ],
+   "scope": "Lo que un juego de luces incluye y no es luz: el cable Micro-USB del AMPP800, el soporte SP-15. family: consumer_electronics para el cable, accessory_mount para soporte/correa/espaciador. Las luces nunca van en kit_members (regla de captura, G3).",
+   "counter_case": "Una fila kit_members con family=light dentro de la plantilla light es doble autoridad; hoy no se rechaza (G3) y la fixture lo marca como no detectable.",
+   "needs": "schema_only; kit_members se usa en 23 plantillas: gate de hechos existentes antes de tocar el esquema"
+  },
+  {
+   "id": "LPS-C-sensor-schema",
+   "template": "cycle_computer",
+   "template_index": 80,
+   "key": "sensor_support_configurations",
+   "op": "replace_rows_schema_parts",
+   "path": "/definitions/sensor_support_configurations/validation_rules/rows_schema/{columns[transport].allowed_values,unique_by}",
+   "before": {
+    "transport_allowed_values": [
+     "ANT+",
+     "Bluetooth",
+     "Cable",
+     "Propietario inalámbrico"
+    ],
+    "unique_by": null
+   },
+   "after": {
+    "transport_allowed_values": [
+     "ANT+",
+     "Bluetooth",
+     "Cable",
+     "Propietario inalámbrico",
+     "Desconocido / sin confirmar"
+    ],
+    "unique_by": [
+     [
+      "sensor_type",
+      "transport"
+     ]
+    ]
+   },
+   "source_ids": [
+    "S-GARMIN-540",
+    "S-ENGINE"
+   ],
+   "scope": "Perfil + transporte por fila, sin booleanos nuevos: supported ya es la exclusión explícita. «Desconocido / sin confirmar» permite registrar que Garmin admite Radar sin decir por qué transporte, en vez de inventar dos filas ANT+/Bluetooth. unique_by impide admitida y excluida a la vez.",
+   "counter_case": "(Velocidad, ANT+, supported=true) y (Velocidad, ANT+, supported=false) → contradicción; (Radar, Desconocido, true) → válido y honesto.",
+   "needs": "schema_only"
+  },
+  {
+   "id": "LPS-C-retire-sensor_mount",
+   "template": "cycle_computer",
+   "template_index": 80,
+   "key": "sensor_mount",
+   "op": "replace_field_contract",
+   "path": "/templates/80/form_contract/{roles,allowed_when,required_when}/sensor_mount",
+   "before": {
+    "roles": "measurement",
+    "allowed_when": {
+     "kind": "always"
+    },
+    "required_when": {
+     "kind": "never"
+    }
+   },
+   "after": {
+    "roles": "legacy",
+    "allowed_when": {
+     "kind": "never"
+    },
+    "required_when": {
+     "kind": "never"
+    }
+   },
+   "source_ids": [
+    "S-INVENTARIO",
+    "S-ENGINE"
+   ],
+   "scope": "El soporte del sensor pertenece al ítem incluido: computer_contents.mount_interface. La definición puede tener hechos de la plantilla anterior: legacy los conserva inmutables.",
+   "counter_case": "Un valor nuevo en sensor_mount se rechaza; el dato se captura en la fila del contenido.",
+   "needs": "schema_only; gate: hechos existentes"
+  },
+  {
+   "id": "LPS-E-protocol-scope",
+   "template": "consumer_electronics",
+   "template_index": 81,
+   "key": "charging_protocol_claim",
+   "op": "replace_field_contract",
+   "path": "/templates/81/form_contract/{allowed_when}/charging_protocol_claim",
+   "before": {
+    "allowed_when": {
+     "kind": "always"
+    }
+   },
+   "after": {
+    "allowed_when": {
+     "kind": "when",
+     "rows": [
+      [
+       {
+        "field": "device_kind",
+        "operator": "in",
+        "value_type": "token",
+        "value": [
+         "Cable de datos/carga",
+         "Otro"
+        ]
+       }
+      ]
+     ]
+    }
+   },
+   "source_ids": [
+    "S-ANKER-A2667"
+   ],
+   "scope": "En un cargador el protocolo se declara por puerto (power_port_configurations.protocols); el escalar queda para cable y otros.",
+   "counter_case": "Cargador con PPS en el escalar y PowerIQ en el puerto: dos dueños, ya no representable.",
+   "needs": "schema_only"
+  },
+  {
+   "id": "LPS-E-link-labels",
+   "template": "consumer_electronics",
+   "template_index": 81,
+   "key": null,
+   "op": "replace_link_label_columns",
+   "path": "/templates/81/form_contract/row_coherence/links[consumer_electronics_member_link]/label_columns",
+   "before": [
+    "port_id"
+   ],
+   "after": [
+    "port_id",
+    "connector",
+    "direction"
+   ],
+   "source_ids": [
+    "S-ENGINE"
+   ],
+   "scope": "Presentación: «USB-C 1 · USB-C · Salida» en el selector del reparto.",
+   "counter_case": "—",
+   "needs": "schema_only"
+  },
+  {
+   "id": "LPS-E-port-profiles",
+   "template": "consumer_electronics",
+   "template_index": 81,
+   "key": "power_port_profile_configurations",
+   "op": "add_field",
+   "path": "/definitions/power_port_profile_configurations y /templates/81/fields/- y /templates/81/form_contract/{roles,allowed_when,required_when,prerequisites,row_coherence.links[+]}",
+   "before": null,
+   "after": {
+    "definition": {
+     "key": "power_port_profile_configurations",
+     "origin": "new",
+     "label": "Perfiles eléctricos por puerto",
+     "data_type": "json",
+     "validation_rules": {
+      "row_label": "Perfil",
+      "rows_schema": {
+       "version": 1,
+       "columns": [
+        {
+         "key": "port_id",
+         "label": "Puerto",
+         "type": "text",
+         "required": true
+        },
+        {
+         "key": "protocol",
+         "label": "Protocolo",
+         "type": "token",
+         "required": true,
+         "allowed_values": [
+          "USB PD",
+          "USB PD PPS",
+          "USB BC 1.2",
+          "QC 2.0",
+          "QC 3.0",
+          "QC 4+",
+          "PowerIQ",
+          "Propietario",
+          "Otro"
+         ]
+        },
+        {
+         "key": "voltage_v",
+         "label": "Tensión",
+         "type": "decimal",
+         "unit": "V",
+         "validation": {
+          "positive": true
+         }
+        },
+        {
+         "key": "voltage_max_v",
+         "label": "Tensión máx. (PPS)",
+         "type": "decimal",
+         "unit": "V",
+         "validation": {
+          "positive": true
+         }
+        },
+        {
+         "key": "current_a",
+         "label": "Corriente",
+         "type": "decimal",
+         "unit": "A",
+         "validation": {
+          "positive": true
+         }
+        },
+        {
+         "key": "power_w",
+         "label": "Potencia del perfil",
+         "type": "decimal",
+         "unit": "W",
+         "validation": {
+          "positive": true
+         }
+        },
+        {
+         "key": "source_url",
+         "label": "Fuente",
+         "type": "url"
+        }
+       ],
+       "ordered_pairs": [
+        [
+         "voltage_v",
+         "voltage_max_v"
+        ]
+       ],
+       "unique_by": [
+        [
+         "port_id",
+         "protocol",
+         "voltage_v"
+        ]
+       ]
+      }
+     },
+     "used_by": [
+      "consumer_electronics"
+     ]
+    },
+    "field_entry": {
+     "key": "power_port_profile_configurations",
+     "section_key": "declaration",
+     "sort_order": 125,
+     "is_required": false,
+     "visibility_rules": [],
+     "option_rules": [],
+     "constraint_rules": []
+    },
+    "roles": "declaration",
+    "allowed_when": {
+     "kind": "when",
+     "rows": [
+      [
+       {
+        "field": "device_kind",
+        "operator": "eq",
+        "value_type": "token",
+        "value": "Cargador"
+       }
+      ]
+     ]
+    },
+    "required_when": {
+     "kind": "never"
+    },
+    "prerequisites": [
+     "spec_evidence_source"
+    ],
+    "row_coherence_link": {
+     "id": "consumer_electronics_profile_port_link",
+     "field": "power_port_profile_configurations",
+     "column": "port_id",
+     "target_field": "power_port_configurations",
+     "label_columns": [
+      "port_id",
+      "connector"
+     ]
+    }
+   },
+   "source_ids": [
+    "S-ANKER-A2667"
+   ],
+   "scope": "AG05/FA14: perfiles V/A/protocolo por puerto como filas vinculadas al puerto por row.id. Capacidad representable hoy; datos: ninguno, la ficha Anker no publica perfiles V/A (fixture unknown). Sin regla de sumas ni de tope.",
+   "counter_case": "Un perfil que nombra un puerto inexistente → row_reference_unresolved; un perfil sin fuente → pendiente.",
+   "needs": "schema_only; llenado 0"
+  }
+ ],
+ "engine_gaps": [
+  {
+   "id": "G1",
+   "gap": "Condiciones dentro de filas: aplicabilidad/obligatoriedad de una celda según un escalar o según otra celda de la misma fila.",
+   "cases": [
+    "light_mode_configurations.lumens_secondary sólo cuando pattern = «Constante + intermitente»",
+    "light_mode_configurations.runtime_max_h sólo cuando la fuente declara rango",
+    "light_member_configurations.position obligatoria sólo cuando light_position = Juego"
+   ],
+   "today": "Las celdas quedan opcionales; la fixture registra el exceso como no detectable."
+  },
+  {
+   "id": "G2",
+   "gap": "Consistencia fila ↔ escalar (exists_row / igualdad).",
+   "cases": [
+    "speed_source por sensor ⇒ existe fila (Velocidad, *, supported=true)",
+    "luz única: fila.position = light_position",
+    "juego: al menos una fila Delantera y una Trasera"
+   ],
+   "today": "No expresable; ver D-L6."
+  },
+  {
+   "id": "G3",
+   "gap": "Restricción de opciones de una columna de filas por plantilla (allowed_options existe sólo para escalares).",
+   "cases": [
+    "kit_members.family ≠ light dentro de la plantilla light"
+   ],
+   "today": "Regla de captura; fixture no detectable."
+  },
+  {
+   "id": "G4",
+   "gap": "Comparación numérica entre filas vinculadas.",
+   "cases": [
+    "power_budget.power_w frente a power_port.max_power_w",
+    "suma de asignaciones frente a rated_power_w"
+   ],
+   "today": "A propósito no se propone: son tres significados (AG05); un OEM puede publicar cifras que una regla llamaría contradictorias."
+  },
+  {
+   "id": "G5",
+   "gap": "Completitud de un grupo o de un detalle frente a un total declarado.",
+   "cases": [
+    "power_budget «C1+C2+A» con sólo dos filas",
+    "count(filas de puertos) > ports_count; count(filas de modos) > modes_count"
+   ],
+   "today": "Menor que el total = pendiente por convención; mayor = contradicción no detectable."
+  },
+  {
+   "id": "G6",
+   "gap": "unique_by omite las filas a las que les falta una clave del grupo; con una clave opcional (member_revision) dos filas sin revisión no se deduplican.",
+   "cases": [
+    "dos filas Group Ride sin member_revision"
+   ],
+   "today": "Se acepta antes que obligar a inventar una revisión; alternativa de motor: tratar la clave ausente como valor vacío al comparar."
+  },
+  {
+   "id": "G7",
+   "gap": "Consumidores (filtro técnico del asistente, facetas) aún no leen columnas de filas.",
+   "cases": [
+    "buscar luces por conector de carga o por grado IP tras retirar los escalares"
+   ],
+   "today": "Compuerta técnica previa al despliegue de estos parches; no es tarea manual del dueño."
+  }
+ ],
+ "decisions_for_root": [
+  {
+   "id": "D-L6",
+   "question": "Posición de la luz única: ¿escalar o fila?",
+   "recommendation": "Mantener light_position con su vocabulario actual y exigir una fila por luz; la igualdad posición-fila queda como G2 y la fixture la marca como no detectable. Alternativa completa: migrar light_position a «Luz individual / Juego delantera + trasera» y dejar la posición sólo en la fila; exige migración de hechos existentes del escalar (gate) y no la propongo como parche en este bloque."
+  },
+  {
+   "id": "D-FA07",
+   "question": "Root aceptó «escalares sólo para luz única»; esta propuesta retira los siete escalares físicos y conserva los totales declarados.",
+   "recommendation": "Retirar alimentación, conector, batería, fijación, diámetros e IP: con escalares para luz única, los modos (que necesitan member_id) no tendrían dueño y la alimentación seguiría con dos dueños según el tipo de producto. modes_count y lumens_claimed se quedan como declaraciones OEM con evidencia. Costo real: G7."
+  }
+ ],
+ "fixtures": [
+  {
+   "id": "light_single_ampp800_web_revision",
+   "template": "light",
+   "kind": "valid",
+   "source_ids": [
+    "S-CATEYE-WEB"
+   ],
+   "values": {
+    "light_position": "Delantera",
+    "lumens_claimed": "800",
+    "modes_count": "5",
+    "spec_evidence_source": "Página Cateye HL-EL088RC_TL-LD810, leída 2026-09-07",
+    "light_member_configurations": {
+     "schema_version": 1,
+     "rows": [
+      {
+       "id": "m-ampp800",
+       "values": {
+        "member_id": "AMPP800 (HL-EL088RC)",
+        "member_revision": "web 2026-09-07",
+        "position": "Delantera",
+        "battery_kind": "Li-ion integrada",
+        "battery_capacity_mah": "2500",
+        "battery_voltage_v": "3.7",
+        "charge_connector": "Micro-USB",
+        "mount_kind": "Abrazadera de manubrio",
+        "mount_diameter_min_mm": "22",
+        "mount_diameter_max_mm": "35",
+        "ip_rating": "IPX4"
+       },
+       "sources": [
+        "https://www.cateye.com/intl/products/headlights/HL-EL088RC_TL-LD810/"
+       ]
+      }
+     ]
+    },
+    "light_mode_configurations": {
+     "schema_version": 1,
+     "rows": [
+      {
+       "id": "mo-1",
+       "values": {
+        "member_id": "m-ampp800",
+        "member_revision": "web 2026-09-07",
+        "mode": "High",
+        "pattern": "Constante",
+        "lumens": "800",
+        "runtime_h": "1.5"
+       },
+       "sources": [
+        "https://www.cateye.com/intl/products/headlights/HL-EL088RC_TL-LD810/"
+       ]
+      },
+      {
+       "id": "mo-2",
+       "values": {
+        "member_id": "m-ampp800",
+        "member_revision": "web 2026-09-07",
+        "mode": "Daytime HyperConstant",
+        "pattern": "Constante + intermitente",
+        "lumens": "800",
+        "lumens_secondary": "200",
+        "runtime_h": "5"
+       },
+       "sources": [
+        "https://www.cateye.com/intl/products/headlights/HL-EL088RC_TL-LD810/"
+       ]
+      },
+      {
+       "id": "mo-3",
+       "values": {
+        "member_id": "m-ampp800",
+        "member_revision": "web 2026-09-07",
+        "mode": "Flashing",
+        "pattern": "Intermitente",
+        "lumens": "200",
+        "runtime_h": "30"
+       },
+       "sources": [
+        "https://www.cateye.com/intl/products/headlights/HL-EL088RC_TL-LD810/"
+       ]
+      }
+     ]
+    },
+    "kit_members": {
+     "schema_version": 1,
+     "rows": [
+      {
+       "id": "k-1",
+       "values": {
+        "member_role": "cable",
+        "family": "consumer_electronics",
+        "quantity": 1,
+        "position": "Sin posición",
+        "identity_model": "Cable Micro-USB"
+       },
+       "sources": [
+        "https://www.cateye.com/intl/products/headlights/HL-EL088RC_TL-LD810/"
+       ]
+      }
+     ]
+    }
+   },
+   "expected_issues": [],
+   "note": "Luz única = una fila de miembro; el cable incluido va en kit_members con rol nuevo «cable». Ningún escalar físico retirado aparece; lumens_claimed 800 y modes_count 5 son totales OEM con evidencia y conviven con tres filas de modos conocidas (detalle incompleto: faltan Middle y Low, y eso no es contradicción). El vínculo de modos usa row.id."
+  },
+  {
+   "id": "light_kit_cateye_group_ride_two_revisions",
+   "template": "light",
+   "kind": "valid",
+   "source_ids": [
+    "S-CATEYE-WEB",
+    "S-CATEYE-MANUAL-LD810"
+   ],
+   "values": {
+    "light_position": "Juego delantera + trasera",
+    "light_member_configurations": {
+     "schema_version": 1,
+     "rows": [
+      {
+       "id": "m-front",
+       "values": {
+        "member_id": "AMPP800 (HL-EL088RC)",
+        "member_revision": "web 2026-09-07",
+        "position": "Delantera",
+        "battery_kind": "Li-ion integrada",
+        "battery_capacity_mah": "2500",
+        "charge_connector": "Micro-USB",
+        "ip_rating": "IPX4"
+       },
+       "sources": [
+        "https://www.cateye.com/intl/products/headlights/HL-EL088RC_TL-LD810/"
+       ]
+      },
+      {
+       "id": "m-rear",
+       "values": {
+        "member_id": "ViZ300 (TL-LD810)",
+        "position": "Trasera",
+        "battery_kind": "Li-ion integrada",
+        "battery_capacity_mah": "800",
+        "battery_voltage_v": "3.7",
+        "charge_connector": "Micro-USB",
+        "mount_kind": "Abrazadera de tija",
+        "mount_diameter_min_mm": "21.5",
+        "mount_diameter_max_mm": "32",
+        "mount_circumference_max_mm": "130",
+        "ip_rating": "IPX4"
+       },
+       "sources": [
+        "https://www.cateye.com/intl/products/headlights/HL-EL088RC_TL-LD810/"
+       ]
+      }
+     ]
+    },
+    "light_mode_configurations": {
+     "schema_version": 1,
+     "rows": [
+      {
+       "id": "gr-before",
+       "values": {
+        "member_id": "m-rear",
+        "member_revision": "web 2026-09-07: anterior al Spec change (manual v1 coincide: ≈8 h, sin lúmenes)",
+        "mode": "Group Ride",
+        "pattern": "Otro",
+        "lumens": "100",
+        "runtime_h": "8"
+       },
+       "sources": [
+        "https://www.cateye.com/intl/products/headlights/HL-EL088RC_TL-LD810/"
+       ]
+      },
+      {
+       "id": "gr-current",
+       "values": {
+        "member_id": "m-rear",
+        "member_revision": "web 2026-09-07: vigente tras Spec change",
+        "mode": "Group Ride",
+        "pattern": "Otro",
+        "lumens": "15",
+        "runtime_h": "10"
+       },
+       "sources": [
+        "https://www.cateye.com/intl/products/headlights/HL-EL088RC_TL-LD810/"
+       ]
+      }
+     ]
+    }
+   },
+   "expected_issues": [],
+   "note": "Un solo ViZ300 físico (una fila de miembro; Micro-USB y 800 mAh del manual precisan el «USB» y «Li-ion» de la web). Group Ride conserva sus dos fichas OEM como dos filas de modo con revisión distinta sobre el mismo miembro: alternativas documentales, no dos luces. El SKU en stock no se atribuye a una hasta ver su envase."
+  },
+  {
+   "id": "light_kit_same_revision_twice",
+   "template": "light",
+   "kind": "contradictory",
+   "source_ids": [
+    "S-CATEYE-WEB"
+   ],
+   "values": {
+    "light_position": "Juego delantera + trasera",
+    "light_mode_configurations": {
+     "schema_version": 1,
+     "rows": [
+      {
+       "id": "a",
+       "values": {
+        "member_id": "m-rear",
+        "member_revision": "web 2026-09-07",
+        "mode": "Group Ride",
+        "lumens": "100",
+        "runtime_h": "8"
+       },
+       "sources": [
+        "https://www.cateye.com/intl/products/headlights/HL-EL088RC_TL-LD810/"
+       ]
+      },
+      {
+       "id": "b",
+       "values": {
+        "member_id": "m-rear",
+        "member_revision": "web 2026-09-07",
+        "mode": "Group Ride",
+        "lumens": "15",
+        "runtime_h": "10"
+       },
+       "sources": [
+        "https://www.cateye.com/intl/products/headlights/HL-EL088RC_TL-LD810/"
+       ]
+      }
+     ]
+    }
+   },
+   "expected_issues": [
+    {
+     "code": "row_shape",
+     "field": "light_mode_configurations",
+     "blocking": true
+    },
+    {
+     "code": "row_reference_pending",
+     "field": "light_mode_configurations",
+     "blocking": false
+    }
+   ],
+   "note": "Mismo miembro, misma revisión, mismo modo dos veces: unique_by [member_id, mode, member_revision] lo rechaza. El pendiente es porque no hay filas de miembros en esta fixture."
+  },
+  {
+   "id": "light_kit_group_ride_twice_without_revision_undetectable",
+   "template": "light",
+   "kind": "contradictory_undetectable",
+   "source_ids": [
+    "S-ENGINE"
+   ],
+   "values": {
+    "light_position": "Juego delantera + trasera",
+    "light_mode_configurations": {
+     "schema_version": 1,
+     "rows": [
+      {
+       "id": "a",
+       "values": {
+        "member_id": "m-rear",
+        "mode": "Group Ride",
+        "lumens": "100",
+        "runtime_h": "8"
+       },
+       "sources": []
+      },
+      {
+       "id": "b",
+       "values": {
+        "member_id": "m-rear",
+        "mode": "Group Ride",
+        "lumens": "15",
+        "runtime_h": "10"
+       },
+       "sources": []
+      }
+     ]
+    }
+   },
+   "expected_issues": [
+    {
+     "code": "row_reference_pending",
+     "field": "light_mode_configurations",
+     "blocking": false
+    }
+   ],
+   "note": "G6: sin member_revision en ninguna, unique_by omite ambas filas y el duplicado no se detecta. Se acepta antes que obligar a inventar una revisión."
+  },
+  {
+   "id": "light_single_position_mismatch_undetectable",
+   "template": "light",
+   "kind": "contradictory_undetectable",
+   "source_ids": [
+    "S-ENGINE"
+   ],
+   "values": {
+    "light_position": "Delantera",
+    "light_member_configurations": {
+     "schema_version": 1,
+     "rows": [
+      {
+       "id": "m",
+       "values": {
+        "member_id": "X",
+        "member_revision": "r1",
+        "position": "Trasera"
+       },
+       "sources": []
+      }
+     ]
+    }
+   },
+   "expected_issues": [],
+   "note": "G2: la fila dice Trasera y el escalar Delantera; hoy nada lo detecta. Se registra para que la carencia tenga caso, no para aceptarlo."
+  },
+  {
+   "id": "light_kit_member_inside_kit_members_undetectable",
+   "template": "light",
+   "kind": "contradictory_undetectable",
+   "source_ids": [
+    "S-ENGINE"
+   ],
+   "values": {
+    "light_position": "Juego delantera + trasera",
+    "kit_members": {
+     "schema_version": 1,
+     "rows": [
+      {
+       "id": "k",
+       "values": {
+        "member_role": "otro",
+        "family": "light",
+        "quantity": 1,
+        "position": "Delantero"
+       },
+       "sources": []
+      }
+     ]
+    },
+    "light_member_configurations": {
+     "schema_version": 1,
+     "rows": [
+      {
+       "id": "m",
+       "values": {
+        "member_id": "Delantera X",
+        "member_revision": "r1",
+        "position": "Delantera"
+       },
+       "sources": []
+      }
+     ]
+    }
+   },
+   "expected_issues": [],
+   "note": "G3: la luz delantera aparece como componente del kit y como miembro. Regla de captura hasta que exista restricción de opciones por plantilla en columnas."
+  },
+  {
+   "id": "light_inventory_ae_kit_pending",
+   "template": "light",
+   "kind": "unknown",
+   "source_ids": [
+    "S-INVENTARIO"
+   ],
+   "inventory_product": "Juego de luces delantera + trasera AE",
+   "values": {
+    "light_position": "Juego delantera + trasera"
+   },
+   "expected_issues": [
+    {
+     "code": "required_missing",
+     "field": "light_member_configurations",
+     "blocking": false
+    },
+    {
+     "code": "required_missing",
+     "field": "light_mode_configurations",
+     "blocking": false
+    }
+   ],
+   "note": "Sin OEM: pendiente, nunca se inventa desde el título."
+  },
+  {
+   "id": "computer_garmin_540_sensors_transport_unknown",
+   "template": "cycle_computer",
+   "kind": "valid",
+   "source_ids": [
+    "S-GARMIN-540"
+   ],
+   "values": {
+    "positioning_source": "GNSS multibanda",
+    "speed_source": "GNSS o sensor",
+    "phone_link": "Bluetooth + Wi-Fi",
+    "power_source": "Recargable USB",
+    "sensor_support_configurations": {
+     "schema_version": 1,
+     "rows": [
+      {
+       "id": "s-0",
+       "values": {
+        "sensor_type": "Velocidad / cadencia",
+        "transport": "Desconocido / sin confirmar",
+        "supported": true,
+        "models_note": "Manual: «ANT+ o Bluetooth» sin detalle por tipo"
+       },
+       "sources": [
+        "https://www8.garmin.com/manuals/webhelp/GUID-17DE938E-466A-4746-BDBF-7A6FC1B3A32C/EN-US/GUID-62D44DE6-9C4D-4834-8267-8B23F891A9F3.html"
+       ]
+      },
+      {
+       "id": "s-1",
+       "values": {
+        "sensor_type": "Frecuencia cardiaca",
+        "transport": "Desconocido / sin confirmar",
+        "supported": true,
+        "models_note": "Manual: «ANT+ o Bluetooth» sin detalle por tipo"
+       },
+       "sources": [
+        "https://www8.garmin.com/manuals/webhelp/GUID-17DE938E-466A-4746-BDBF-7A6FC1B3A32C/EN-US/GUID-62D44DE6-9C4D-4834-8267-8B23F891A9F3.html"
+       ]
+      },
+      {
+       "id": "s-2",
+       "values": {
+        "sensor_type": "Potencia",
+        "transport": "Desconocido / sin confirmar",
+        "supported": true,
+        "models_note": "Manual: «ANT+ o Bluetooth» sin detalle por tipo"
+       },
+       "sources": [
+        "https://www8.garmin.com/manuals/webhelp/GUID-17DE938E-466A-4746-BDBF-7A6FC1B3A32C/EN-US/GUID-62D44DE6-9C4D-4834-8267-8B23F891A9F3.html"
+       ]
+      },
+      {
+       "id": "s-3",
+       "values": {
+        "sensor_type": "Radar",
+        "transport": "Desconocido / sin confirmar",
+        "supported": true,
+        "models_note": "Manual: «ANT+ o Bluetooth» sin detalle por tipo"
+       },
+       "sources": [
+        "https://www8.garmin.com/manuals/webhelp/GUID-17DE938E-466A-4746-BDBF-7A6FC1B3A32C/EN-US/GUID-62D44DE6-9C4D-4834-8267-8B23F891A9F3.html"
+       ]
+      },
+      {
+       "id": "s-4",
+       "values": {
+        "sensor_type": "Luces",
+        "transport": "Desconocido / sin confirmar",
+        "supported": true,
+        "models_note": "Manual: «ANT+ o Bluetooth» sin detalle por tipo"
+       },
+       "sources": [
+        "https://www8.garmin.com/manuals/webhelp/GUID-17DE938E-466A-4746-BDBF-7A6FC1B3A32C/EN-US/GUID-62D44DE6-9C4D-4834-8267-8B23F891A9F3.html"
+       ]
+      },
+      {
+       "id": "s-5",
+       "values": {
+        "sensor_type": "Cambio electrónico",
+        "transport": "Desconocido / sin confirmar",
+        "supported": true,
+        "models_note": "Manual: «ANT+ o Bluetooth» sin detalle por tipo"
+       },
+       "sources": [
+        "https://www8.garmin.com/manuals/webhelp/GUID-17DE938E-466A-4746-BDBF-7A6FC1B3A32C/EN-US/GUID-62D44DE6-9C4D-4834-8267-8B23F891A9F3.html"
+       ]
+      },
+      {
+       "id": "s-6",
+       "values": {
+        "sensor_type": "eBike",
+        "transport": "Desconocido / sin confirmar",
+        "supported": true,
+        "models_note": "Manual: «ANT+ o Bluetooth» sin detalle por tipo"
+       },
+       "sources": [
+        "https://www8.garmin.com/manuals/webhelp/GUID-17DE938E-466A-4746-BDBF-7A6FC1B3A32C/EN-US/GUID-62D44DE6-9C4D-4834-8267-8B23F891A9F3.html"
+       ]
+      },
+      {
+       "id": "s-7",
+       "values": {
+        "sensor_type": "Control remoto",
+        "transport": "Desconocido / sin confirmar",
+        "supported": true,
+        "models_note": "Manual: «ANT+ o Bluetooth» sin detalle por tipo"
+       },
+       "sources": [
+        "https://www8.garmin.com/manuals/webhelp/GUID-17DE938E-466A-4746-BDBF-7A6FC1B3A32C/EN-US/GUID-62D44DE6-9C4D-4834-8267-8B23F891A9F3.html"
+       ]
+      },
+      {
+       "id": "s-8",
+       "values": {
+        "sensor_type": "Rodillo inteligente",
+        "transport": "Desconocido / sin confirmar",
+        "supported": true,
+        "models_note": "Manual: «ANT+ o Bluetooth» sin detalle por tipo"
+       },
+       "sources": [
+        "https://www8.garmin.com/manuals/webhelp/GUID-17DE938E-466A-4746-BDBF-7A6FC1B3A32C/EN-US/GUID-62D44DE6-9C4D-4834-8267-8B23F891A9F3.html"
+       ]
+      }
+     ]
+    }
+   },
+   "expected_issues": [],
+   "note": "La fuente admite el tipo sin decir el transporte: se registra tal cual, sin desdoblar en ANT+ y Bluetooth. IPX7 y 26 h del equipo no tienen campo en cycle_computer; no se agregan en este bloque."
+  },
+  {
+   "id": "computer_sensor_pair_admitted_and_excluded",
+   "template": "cycle_computer",
+   "kind": "contradictory",
+   "source_ids": [
+    "S-ENGINE"
+   ],
+   "values": {
+    "positioning_source": "GNSS",
+    "speed_source": "GNSS o sensor",
+    "sensor_support_configurations": {
+     "schema_version": 1,
+     "rows": [
+      {
+       "id": "a",
+       "values": {
+        "sensor_type": "Velocidad",
+        "transport": "ANT+",
+        "supported": true
+       },
+       "sources": []
+      },
+      {
+       "id": "b",
+       "values": {
+        "sensor_type": "Velocidad",
+        "transport": "ANT+",
+        "supported": false
+       },
+       "sources": []
+      }
+     ]
+    }
+   },
+   "expected_issues": [
+    {
+     "code": "row_shape",
+     "field": "sensor_support_configurations",
+     "blocking": true
+    }
+   ],
+   "note": "Admitida y excluida a la vez: contradicción por unique_by [sensor_type, transport] (hoy indetectable: unique_by es null)."
+  },
+  {
+   "id": "computer_wired_inventory_speed_source_without_rows_undetectable",
+   "template": "cycle_computer",
+   "kind": "contradictory_undetectable",
+   "source_ids": [
+    "S-INVENTARIO",
+    "S-ENGINE"
+   ],
+   "inventory_product": "CICLOCOMPUTADOR BICICLETA VELOCIMETRO CON CABLE 11 FUNCIONES",
+   "values": {
+    "positioning_source": "Sin posicionamiento",
+    "speed_source": "Sensor de rueda (imán / cable)",
+    "sensor_support_configurations": {
+     "schema_version": 1,
+     "rows": [
+      {
+       "id": "a",
+       "values": {
+        "sensor_type": "Velocidad",
+        "transport": "Cable",
+        "supported": false
+       },
+       "sources": []
+      }
+     ]
+    }
+   },
+   "expected_issues": [],
+   "note": "G2: mide velocidad por cable pero la única fila excluye Velocidad por cable. No detectable hoy."
+  },
+  {
+   "id": "charger_anker_a2667_ports_budget_profiles_unknown",
+   "template": "consumer_electronics",
+   "kind": "valid",
+   "source_ids": [
+    "S-ANKER-A2667"
+   ],
+   "values": {
+    "device_kind": "Cargador",
+    "rated_power_w": "65",
+    "ports_count": "3",
+    "spec_evidence_source": "Ficha de soporte Anker A2667, leída 2026-09-07",
+    "power_port_configurations": {
+     "schema_version": 1,
+     "rows": [
+      {
+       "id": "p-c1",
+       "values": {
+        "port_id": "USB-C 1",
+        "connector": "USB-C",
+        "direction": "Salida",
+        "max_power_w": "65",
+        "protocols": "PPS; PowerIQ 3.0"
+       },
+       "sources": [
+        "https://service.anker.com/product-description/a085g000004x2BVAAY?recordId=a085g000004x2BVAAY"
+       ]
+      },
+      {
+       "id": "p-c2",
+       "values": {
+        "port_id": "USB-C 2",
+        "connector": "USB-C",
+        "direction": "Salida",
+        "max_power_w": "65"
+       },
+       "sources": [
+        "https://service.anker.com/product-description/a085g000004x2BVAAY?recordId=a085g000004x2BVAAY"
+       ]
+      },
+      {
+       "id": "p-a",
+       "values": {
+        "port_id": "USB-A",
+        "connector": "USB-A",
+        "direction": "Salida",
+        "max_power_w": "22.5",
+        "protocols": "PowerIQ 2.0"
+       },
+       "sources": [
+        "https://service.anker.com/product-description/a085g000004x2BVAAY?recordId=a085g000004x2BVAAY"
+       ]
+      }
+     ]
+    },
+    "power_budget_configurations": {
+     "schema_version": 1,
+     "rows": [
+      {
+       "id": "b1",
+       "values": {
+        "configuration": "C1 + C2",
+        "port_id": "p-c1",
+        "power_w": "45"
+       },
+       "sources": [
+        "https://service.anker.com/product-description/a085g000004x2BVAAY?recordId=a085g000004x2BVAAY"
+       ]
+      },
+      {
+       "id": "b2",
+       "values": {
+        "configuration": "C1 + C2",
+        "port_id": "p-c2",
+        "power_w": "20"
+       },
+       "sources": [
+        "https://service.anker.com/product-description/a085g000004x2BVAAY?recordId=a085g000004x2BVAAY"
+       ]
+      },
+      {
+       "id": "b3",
+       "values": {
+        "configuration": "C2 + A",
+        "port_id": "p-c2",
+        "power_w": "12"
+       },
+       "sources": [
+        "https://service.anker.com/product-description/a085g000004x2BVAAY?recordId=a085g000004x2BVAAY"
+       ]
+      },
+      {
+       "id": "b4",
+       "values": {
+        "configuration": "C2 + A",
+        "port_id": "p-a",
+        "power_w": "12"
+       },
+       "sources": [
+        "https://service.anker.com/product-description/a085g000004x2BVAAY?recordId=a085g000004x2BVAAY"
+       ]
+      }
+     ]
+    }
+   },
+   "expected_issues": [],
+   "note": "ports_count 3 es el total declarado y las tres filas el detalle conocido; charging_protocol_claim ya no aplica al cargador. power_port_profile_configurations queda ausente: la ficha no publica V/A (unknown), y ausente es desconocido. C2+A = 12+12 con máximos individuales de 65 y 22,5: ninguna regla lo juzga."
+  },
+  {
+   "id": "charger_budget_names_ghost_port",
+   "template": "consumer_electronics",
+   "kind": "contradictory",
+   "source_ids": [
+    "S-ENGINE"
+   ],
+   "values": {
+    "device_kind": "Cargador",
+    "power_port_configurations": {
+     "schema_version": 1,
+     "rows": [
+      {
+       "id": "p-c1",
+       "values": {
+        "port_id": "USB-C 1",
+        "connector": "USB-C",
+        "direction": "Salida"
+       },
+       "sources": []
+      }
+     ]
+    },
+    "power_budget_configurations": {
+     "schema_version": 1,
+     "rows": [
+      {
+       "id": "b",
+       "values": {
+        "configuration": "C1 + C2",
+        "port_id": "p-c2",
+        "power_w": "20"
+       },
+       "sources": []
+      }
+     ]
+    }
+   },
+   "expected_issues": [
+    {
+     "code": "row_reference_unresolved",
+     "field": "power_budget_configurations",
+     "row_id": "b",
+     "blocking": true
+    }
+   ],
+   "note": "Ya implementado (vínculo por row.id)."
+  },
+  {
+   "id": "charger_baseus_65w_model_unknown",
+   "template": "consumer_electronics",
+   "kind": "unknown",
+   "source_ids": [
+    "S-INVENTARIO"
+   ],
+   "inventory_product": "Cargador 65W Baseus",
+   "values": {
+    "device_kind": "Cargador",
+    "rated_power_w": "65"
+   },
+   "expected_issues": [
+    {
+     "code": "required_missing",
+     "field": "power_port_configurations",
+     "blocking": false
+    },
+    {
+     "code": "prerequisite_missing",
+     "field": "rated_power_w",
+     "blocking": false
+    }
+   ],
+   "note": "65 W del título es declaración sin evidencia; los puertos faltan. Nada se copia de Anker."
+  },
+  {
+   "id": "card_literal_without_number",
+   "template": "consumer_electronics",
+   "kind": "unknown",
+   "source_ids": [
+    "S-ENGINE"
+   ],
+   "values": {
+    "device_kind": "Tarjeta de memoria",
+    "storage_capacity_label": "1TB",
+    "spec_evidence_source": "Envase: «1TB», leído en tienda"
+   },
+   "expected_issues": [],
+   "note": "El literal «1TB» conserva unidad y convención impresas; storage_capacity_gb queda desconocido porque nadie sabe si son 1000 o 1024 GB sin que la fuente lo diga. Nada se convierte por intuición."
+  }
+ ],
+ "gates_before_applying": [
+  "Lectura de sólo lectura en hosted: hechos por definición para power_source, charge_connector, battery_capacity_mah, light_mount_kind, mount_diameter_min_mm, mount_diameter_max_mm, ip_rating, modes_count, lumens_claimed (sólo productos de la plantilla light), sensor_mount, ports_count, storage_capacity_label y kit_members; un conteo > 0 en un campo de filas exige migración explícita (spec_rows_definition_guard), y en un escalar sólo confirma que legacy conserva datos.",
+  "LPS-L-drop-mount-pair se aplica en la misma migración que los retiros de mount_diameter_*.",
+  "Manual TL-LD810_820 v1 leído: Micro-USB confirmado, 800 mAh, Group Ride ≈8 h en esa revisión.",
+  "Las trece definiciones que se retiran o cambian son origin: new en el catálogo integrado (sin metadatos ni hechos en producción según all-family-existing-metadata): la lectura de hosted es confirmación, no migración.",
+  "Los consumidores que filtran por escalares (asistente, facetas) deben leer columnas de filas antes de retirar los escalares de luz: compuerta técnica, no trabajo manual del dueño (G7).",
+  "Ningún parche autoriza fill."
+ ],
+ "not_covered": [
+  "Autonomía y grado IP del ciclocomputador (Garmin 26 h, IPX7): sin campo; fuera de este bloque.",
+  "Facetas del asistente sobre columnas de filas: carencia aparte.",
+  "Migración del vocabulario de light_position (D-L6)."
+ ],
+ "stats": {
+  "patches": 25,
+  "double_authorities": 14,
+  "engine_gaps": 7,
+  "fixtures": 14,
+  "fixtures_by_kind": {
+   "valid": 4,
+   "contradictory": 3,
+   "contradictory_undetectable": 4,
+   "unknown": 3
+  }
+ }
+}

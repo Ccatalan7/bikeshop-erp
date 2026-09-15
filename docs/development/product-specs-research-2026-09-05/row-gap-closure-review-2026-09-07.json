@@ -1,0 +1,929 @@
+{
+  "schema_version": 1,
+  "title": "Cierre de carencias de row_conditions: los 18 campos marcados, revisados contra el motor de hoy",
+  "author": "Claude (revisor independiente)",
+  "prepared_on": "2026-09-07",
+  "scope": "Los 18 campos con disposition = gap de all-family-row-conditions-proposal-2026-09-07.json, contrastados contra el catálogo vigente y las capacidades hasta 2500. No propone arquitectura nueva ni diseños de neumático.",
+  "artifacts_sha256": {
+    "all-family-cardinality-integrated-2026-09-07.json": "934ce172a6f3eaf8fa8dc616a912d161c965840b97b647fbee23870ccc154562",
+    "all-family-row-conditions-proposal-2026-09-07.json": "94faca196c4572e2faeb8cf748dd9b8843c9c63e531c1f021803a4146bb4f5d0",
+    "all-family-row-conditions-root-decisions-2026-09-07.json": "dba14f68330080b9ddf15551d5f16f79a7516f490fbabcef02be32a77fdfdb7e",
+    "all-family-cardinality-cases-integrated-2026-09-07.json": "bede596b90cabbe070faf3d1df9505be50b2adf682334fa8e37287e24af6bae6"
+  },
+  "boundaries": "Sólo lecturas de código y artefactos y pruebas puras de validadores. Sin base de datos, sin runtime, sin cambios de catálogo o productos, sin subagentes. Los artefactos congelados no se tocan. Las compuertas de llenado siguen cerradas. Los dos defectos abiertos de la propuesta de neumáticos —la mitad de R6 que cruzaba de campo y la declaración sin cifras enlazadas— se conservan como estaban y no se reabren aquí.",
+  "engine_capabilities_reviewed": [
+    {
+      "capability": "row_conditions con allowed_when, required_when, allowed_options y value_when",
+      "state": "vigente",
+      "evidence": "product_spec_row_condition_metadata.py:151"
+    },
+    {
+      "capability": "value_when, aserción tipada condicional",
+      "state": "vigente y en uso",
+      "evidence": "Dos entradas integradas: seatpost/seatpost_saddle_configurations.clamp_included y accessory_mount/bar_clamp_configurations.included, las dos con expected booleano true. Cierra la laguna G02 de la propuesta, que no afecta a ninguno de los 18."
+    },
+    {
+      "capability": "cardinalidad de filas contra un total declarado",
+      "state": "vigente, activada en una plantilla",
+      "evidence": "row_coherence version 2 con cardinalities en crankset; row_cardinality_conflict bloquea y row_cardinality_pending no."
+    },
+    {
+      "capability": "enlaces row_coherence",
+      "state": "vigente",
+      "evidence": "Resuelven el id del destino; no proyectan sus columnas."
+    },
+    {
+      "capability": "predicado de presencia o al-menos-uno",
+      "state": "ausente",
+      "evidence": "OPERATORS = {eq, in, lt, lte, gt, gte}."
+    },
+    {
+      "capability": "predicado sobre una columna del miembro enlazado",
+      "state": "ausente",
+      "evidence": "Las condiciones de fila sólo leen columnas de su propia fila."
+    }
+  ],
+  "gap_status": {
+    "G01": "defecto_abierto",
+    "G04": "defecto_abierto",
+    "G03": "requisito_de_dato_oem",
+    "G05": "requisito_de_dato_oem",
+    "G06": "requisito_de_dato_oem, resuelto en 1 de 12 campos",
+    "G07": "requisito_de_dato_oem",
+    "G09": "requisito_de_dato_oem, cerrable ahora en 2 de 4 campos"
+  },
+  "records": [
+    {
+      "key": "bottom_bracket_required",
+      "definition_id": "17316f7f-c02c-5eed-b443-72491fdb2877",
+      "templates": [
+        "crankset"
+      ],
+      "proposal_finding": {
+        "disposition": "gap",
+        "gap_ids": [
+          "G03",
+          "G06"
+        ],
+        "reason": "Interfaz de caja y ancho no identifican eje/biela ni montaje. No se fuerza model_or_family mediante una heurística de la caja.",
+        "rows_schema_sha256": "cfdebb994662c1bc479f58b3846c88b63e4b17b12d01fa55eb7cdde3c8efd9e0"
+      },
+      "schema_changed_since_proposal": false,
+      "status_by_gap": [
+        "requisito_de_dato_oem"
+      ],
+      "has_resolved": false,
+      "has_closable_now": false,
+      "has_open_engine_defect": false,
+      "has_oem_data_requirement": true,
+      "per_gap": [
+        {
+          "gap_id": "G03",
+          "gap_title": "Compatibilidad por modelo, generación, instalación y fuente",
+          "status": "requisito_de_dato_oem",
+          "note": "Compatibilidad por modelo, generación, instalación y fuente. No es un defecto del motor: falta la matriz OEM con alcance, exclusiones y condiciones. Un documento de filas bien formado sigue sin probar compatibilidad."
+        },
+        {
+          "gap_id": "G06",
+          "gap_title": "Faltan discriminadores estructurados para exigir campos con seguridad",
+          "status": "requisito_de_dato_oem",
+          "note": "Faltan discriminadores estructurados. Texto libre no se interpreta como hecho. La corrección es proponer columnas con vocabulario, no una regla mecánica."
+        }
+      ]
+    },
+    {
+      "key": "wheel_configurations",
+      "definition_id": "af201908-b60f-5e02-a0c2-7f37fa6d4c1f",
+      "templates": [
+        "wheel"
+      ],
+      "proposal_finding": {
+        "disposition": "gap",
+        "gap_ids": [
+          "G03",
+          "G06"
+        ],
+        "reason": "Posición no permite una prohibición universal de interfaz de tracción en una rueda delantera. Modelos de montaje y alcance de medidas pertenecen a W01–W11/revisión OEM.",
+        "rows_schema_sha256": "1d7c46301b05207fe7809cf7c0b345247972daf486bcacdba9227fa201838908"
+      },
+      "schema_changed_since_proposal": false,
+      "status_by_gap": [
+        "requisito_de_dato_oem"
+      ],
+      "has_resolved": false,
+      "has_closable_now": false,
+      "has_open_engine_defect": false,
+      "has_oem_data_requirement": true,
+      "per_gap": [
+        {
+          "gap_id": "G03",
+          "gap_title": "Compatibilidad por modelo, generación, instalación y fuente",
+          "status": "requisito_de_dato_oem",
+          "note": "Compatibilidad por modelo, generación, instalación y fuente. No es un defecto del motor: falta la matriz OEM con alcance, exclusiones y condiciones. Un documento de filas bien formado sigue sin probar compatibilidad."
+        },
+        {
+          "gap_id": "G06",
+          "gap_title": "Faltan discriminadores estructurados para exigir campos con seguridad",
+          "status": "requisito_de_dato_oem",
+          "note": "Faltan discriminadores estructurados. Texto libre no se interpreta como hecho. La corrección es proponer columnas con vocabulario, no una regla mecánica."
+        }
+      ]
+    },
+    {
+      "key": "pedal_bearing_configurations",
+      "definition_id": "588a7a4d-bd99-5b6b-948b-f423cf53043d",
+      "templates": [
+        "pedal"
+      ],
+      "proposal_finding": {
+        "disposition": "gap",
+        "gap_ids": [
+          "G01",
+          "G06"
+        ],
+        "reason": "Cartucho no exige necesariamente código grabado; puede describirse por medidas o repuesto OEM. El esquema actual no tiene ese conjunto de interfaces/medidas alternativo.",
+        "rows_schema_sha256": "01df6a0a9b3151cb47ee145850c98e1fb6a5b153e1f37bf7de91e39f06f94872"
+      },
+      "schema_changed_since_proposal": false,
+      "status_by_gap": [
+        "defecto_abierto",
+        "requisito_de_dato_oem"
+      ],
+      "has_resolved": false,
+      "has_closable_now": false,
+      "has_open_engine_defect": true,
+      "has_oem_data_requirement": true,
+      "per_gap": [
+        {
+          "gap_id": "G01",
+          "gap_title": "Presencia y alternativas de columnas",
+          "status": "defecto_abierto",
+          "reproduction": "validate_row_conditions sobre rack_basket/rack_mount_configurations con un predicado {operator: 'exists'} devuelve «Foreign or mistyped row prerequisite». El conjunto de operadores del contrato sigue siendo {eq, in, lt, lte, gt, gte} en scripts/inventory/product_spec_row_condition_metadata.py:10.",
+          "minimal_fix": "Un predicado de presencia evaluado por hasKnownSpecValue, más un grupo «al menos una de estas columnas». Dos avisos que ya sé y que la corrección tiene que respetar: hasKnownSpecValue trata «Desconocido / sin confirmar» como ausencia, así que presencia significaría «hay un valor conocido»; y un al-menos-uno no puede escribirse como dos required_when mutuos, porque el validador de contrato rechaza el ciclo. No diseño aquí la regla.",
+          "representation_vs_certification": "Es un límite de expresión, no una certificación: hoy la ficha no puede decir «falta al menos uno de estos datos» y por eso el hueco queda invisible, no autorizado."
+        },
+        {
+          "gap_id": "G06",
+          "gap_title": "Faltan discriminadores estructurados para exigir campos con seguridad",
+          "status": "requisito_de_dato_oem",
+          "note": "Faltan discriminadores estructurados. Texto libre no se interpreta como hecho. La corrección es proponer columnas con vocabulario, no una regla mecánica."
+        }
+      ]
+    },
+    {
+      "key": "eyewear_lens_configurations",
+      "definition_id": "5adb00e1-e791-5bde-b953-750f9b7674ea",
+      "templates": [
+        "eyewear"
+      ],
+      "proposal_finding": {
+        "disposition": "gap",
+        "gap_ids": [
+          "G01",
+          "G03"
+        ],
+        "reason": "Ser fotocromática no obliga a publicar simultáneamente VLT y categoría ni permite convertirlas. Los pares opcionales ya ordenan extremos conocidos; completar un extremo desde presencia del otro necesita otro contrato.",
+        "rows_schema_sha256": "4320648e9c70fd64cb334da8b695ef691d485f115dcb3d2fb48654b03c73c289"
+      },
+      "schema_changed_since_proposal": false,
+      "status_by_gap": [
+        "defecto_abierto",
+        "requisito_de_dato_oem"
+      ],
+      "has_resolved": false,
+      "has_closable_now": false,
+      "has_open_engine_defect": true,
+      "has_oem_data_requirement": true,
+      "per_gap": [
+        {
+          "gap_id": "G01",
+          "gap_title": "Presencia y alternativas de columnas",
+          "status": "defecto_abierto",
+          "reproduction": "validate_row_conditions sobre rack_basket/rack_mount_configurations con un predicado {operator: 'exists'} devuelve «Foreign or mistyped row prerequisite». El conjunto de operadores del contrato sigue siendo {eq, in, lt, lte, gt, gte} en scripts/inventory/product_spec_row_condition_metadata.py:10.",
+          "minimal_fix": "Un predicado de presencia evaluado por hasKnownSpecValue, más un grupo «al menos una de estas columnas». Dos avisos que ya sé y que la corrección tiene que respetar: hasKnownSpecValue trata «Desconocido / sin confirmar» como ausencia, así que presencia significaría «hay un valor conocido»; y un al-menos-uno no puede escribirse como dos required_when mutuos, porque el validador de contrato rechaza el ciclo. No diseño aquí la regla.",
+          "representation_vs_certification": "Es un límite de expresión, no una certificación: hoy la ficha no puede decir «falta al menos uno de estos datos» y por eso el hueco queda invisible, no autorizado."
+        },
+        {
+          "gap_id": "G03",
+          "gap_title": "Compatibilidad por modelo, generación, instalación y fuente",
+          "status": "requisito_de_dato_oem",
+          "note": "Compatibilidad por modelo, generación, instalación y fuente. No es un defecto del motor: falta la matriz OEM con alcance, exclusiones y condiciones. Un documento de filas bien formado sigue sin probar compatibilidad."
+        }
+      ]
+    },
+    {
+      "key": "fastener_kit_members",
+      "definition_id": "26435d8f-5009-5600-8699-2f5cdf751b55",
+      "templates": [
+        "fastener"
+      ],
+      "proposal_finding": {
+        "disposition": "gap",
+        "gap_ids": [
+          "G01",
+          "G06"
+        ],
+        "reason": "No se condiciona TPI al dialecto fraccional ni pitch_mm a M. No adivina pieza roscada por member_role. Paso alternativo, referencia de largo y límites opcionales requieren presencia/discriminador.",
+        "rows_schema_sha256": "f51e9c6d6685dc90fa11e4efcec8db255092eaf2a59ae0bd6c6f7659e2ba24cc"
+      },
+      "schema_changed_since_proposal": false,
+      "status_by_gap": [
+        "defecto_abierto",
+        "requisito_de_dato_oem"
+      ],
+      "has_resolved": false,
+      "has_closable_now": false,
+      "has_open_engine_defect": true,
+      "has_oem_data_requirement": true,
+      "per_gap": [
+        {
+          "gap_id": "G01",
+          "gap_title": "Presencia y alternativas de columnas",
+          "status": "defecto_abierto",
+          "reproduction": "validate_row_conditions sobre rack_basket/rack_mount_configurations con un predicado {operator: 'exists'} devuelve «Foreign or mistyped row prerequisite». El conjunto de operadores del contrato sigue siendo {eq, in, lt, lte, gt, gte} en scripts/inventory/product_spec_row_condition_metadata.py:10.",
+          "minimal_fix": "Un predicado de presencia evaluado por hasKnownSpecValue, más un grupo «al menos una de estas columnas». Dos avisos que ya sé y que la corrección tiene que respetar: hasKnownSpecValue trata «Desconocido / sin confirmar» como ausencia, así que presencia significaría «hay un valor conocido»; y un al-menos-uno no puede escribirse como dos required_when mutuos, porque el validador de contrato rechaza el ciclo. No diseño aquí la regla.",
+          "representation_vs_certification": "Es un límite de expresión, no una certificación: hoy la ficha no puede decir «falta al menos uno de estos datos» y por eso el hueco queda invisible, no autorizado."
+        },
+        {
+          "gap_id": "G06",
+          "gap_title": "Faltan discriminadores estructurados para exigir campos con seguridad",
+          "status": "requisito_de_dato_oem",
+          "note": "Faltan discriminadores estructurados. Texto libre no se interpreta como hecho. La corrección es proponer columnas con vocabulario, no una regla mecánica."
+        }
+      ]
+    },
+    {
+      "key": "light_mode_configurations",
+      "definition_id": "4dbc2261-fbda-5a2e-8400-3611d3d7a78a",
+      "templates": [
+        "light"
+      ],
+      "proposal_finding": {
+        "disposition": "gap",
+        "gap_ids": [
+          "G01",
+          "G04",
+          "G05",
+          "G09"
+        ],
+        "reason": "Los modos enlazan una luz por ID, pero no pueden exigir autonomía en función de la alimentación de otra fila. No exige lumens_secondary por patrón ni crea identidad por nombre de modo.",
+        "rows_schema_sha256": "c2266d71c57bfd394f3aac560ba54e3120fdc1a8ea8d4c8738171aa1995da752"
+      },
+      "schema_changed_since_proposal": false,
+      "status_by_gap": [
+        "cerrable_ahora",
+        "defecto_abierto",
+        "requisito_de_dato_oem"
+      ],
+      "has_resolved": false,
+      "has_closable_now": true,
+      "has_open_engine_defect": true,
+      "has_oem_data_requirement": true,
+      "per_gap": [
+        {
+          "gap_id": "G01",
+          "gap_title": "Presencia y alternativas de columnas",
+          "status": "defecto_abierto",
+          "reproduction": "validate_row_conditions sobre rack_basket/rack_mount_configurations con un predicado {operator: 'exists'} devuelve «Foreign or mistyped row prerequisite». El conjunto de operadores del contrato sigue siendo {eq, in, lt, lte, gt, gte} en scripts/inventory/product_spec_row_condition_metadata.py:10.",
+          "minimal_fix": "Un predicado de presencia evaluado por hasKnownSpecValue, más un grupo «al menos una de estas columnas». Dos avisos que ya sé y que la corrección tiene que respetar: hasKnownSpecValue trata «Desconocido / sin confirmar» como ausencia, así que presencia significaría «hay un valor conocido»; y un al-menos-uno no puede escribirse como dos required_when mutuos, porque el validador de contrato rechaza el ciclo. No diseño aquí la regla.",
+          "representation_vs_certification": "Es un límite de expresión, no una certificación: hoy la ficha no puede decir «falta al menos uno de estos datos» y por eso el hueco queda invisible, no autorizado."
+        },
+        {
+          "gap_id": "G04",
+          "gap_title": "Predicados sobre un miembro enlazado",
+          "status": "defecto_abierto",
+          "reproduction": "validate_row_conditions sobre light/light_mode_configurations con un predicado sobre battery_kind —columna de light_member_configurations, el destino del enlace light_member_link— devuelve «Foreign or mistyped row prerequisite». El enlace existe en el catálogo 934 y resuelve el id, pero ninguna condición proyecta columnas del miembro.",
+          "minimal_fix": "Permitir que un predicado nombre una columna del destino a través del enlace ya declarado, evaluada contra la fila que ese enlace resuelve. No copiar hechos a filas hermanas ni usar nombres como join, que es lo que la laguna original ya prohibía.",
+          "representation_vs_certification": "El enlace certifica que el miembro existe; no proyecta sus datos. Sin esa proyección, una exigencia que dependa del miembro no se puede escribir y tampoco se puede dar por cumplida."
+        },
+        {
+          "gap_id": "G05",
+          "gap_title": "Un ID de fila no demuestra una identidad física o revisión OEM",
+          "status": "requisito_de_dato_oem",
+          "note": "Identidad y revisión por producto. El id de fila da identidad estable dentro de la ficha, no identidad física ni revisión OEM, y una fecha de consulta no es una revisión."
+        },
+        {
+          "gap_id": "G09",
+          "gap_title": "Completo para la fila no equivale a catálogo investigado",
+          "status": "cerrable_ahora",
+          "metadata_evidence": "La capacidad existe e está activada en crankset: row_coherence version 2 con cardinalities {chainring_teeth_rows, included_chainring_count}. light ya declara el total modes_count.",
+          "executable_case": "PCB-C03 espera row_cardinality_conflict bloqueante con más filas que el total; PCB-C04, PCB-C06, PCB-C07, PCB-C11 y PCB-C14 esperan row_cardinality_pending no bloqueante con menos. Ninguno deriva el total de las filas.",
+          "minimal_fix": "Dos cambios de metadatos y ningún cambio de motor, los dos verificados corriendo validate_row_cardinalities sobre el catálogo 934: (1) el bloque row_coherence de la plantilla tiene que declarar version 2, porque la 1 está cerrada a claves desconocidas y hoy esta plantilla sigue en 1; (2) el total necesita dominio entero con mínimo no negativo, y hoy tiene {positive: true, integer: true} sin min. Con {min: \"1\", integer: true} el validador acepta, y min \"1\" conserva el significado sin abrir el dominio al cero como haría min \"0\". Con eso, declarar la cardinalidad {field, total_field} cierra la carencia.",
+          "verified": "Corrido: con light en version 1 el validador devuelve «Invalid row coherence metadata»; en version 2 con las reglas actuales devuelve «Row total requires a nonnegative integer domain»; en version 2 con {min: \"1\", integer: true} acepta."
+        }
+      ]
+    },
+    {
+      "key": "sensor_support_configurations",
+      "definition_id": "c846a079-4d18-5b67-87f4-a076d7b8a2b7",
+      "templates": [
+        "cycle_computer"
+      ],
+      "proposal_finding": {
+        "disposition": "gap",
+        "gap_ids": [
+          "G03",
+          "G04",
+          "G05",
+          "G06"
+        ],
+        "reason": "supported y scope ya son requeridos; una declaración válida puede cubrir perfil o familia sin modelo individual. Tipo/transporte no bastan para identidad ni aprobación de todos los sensores.",
+        "rows_schema_sha256": "f4a27383ec7aaf0581ec2d3f8e9951ea5c13023df389514cdcd4170a0cb406fa"
+      },
+      "schema_changed_since_proposal": false,
+      "status_by_gap": [
+        "defecto_abierto",
+        "requisito_de_dato_oem"
+      ],
+      "has_resolved": false,
+      "has_closable_now": false,
+      "has_open_engine_defect": true,
+      "has_oem_data_requirement": true,
+      "per_gap": [
+        {
+          "gap_id": "G03",
+          "gap_title": "Compatibilidad por modelo, generación, instalación y fuente",
+          "status": "requisito_de_dato_oem",
+          "note": "Compatibilidad por modelo, generación, instalación y fuente. No es un defecto del motor: falta la matriz OEM con alcance, exclusiones y condiciones. Un documento de filas bien formado sigue sin probar compatibilidad."
+        },
+        {
+          "gap_id": "G04",
+          "gap_title": "Predicados sobre un miembro enlazado",
+          "status": "defecto_abierto",
+          "reproduction": "validate_row_conditions sobre light/light_mode_configurations con un predicado sobre battery_kind —columna de light_member_configurations, el destino del enlace light_member_link— devuelve «Foreign or mistyped row prerequisite». El enlace existe en el catálogo 934 y resuelve el id, pero ninguna condición proyecta columnas del miembro.",
+          "minimal_fix": "Permitir que un predicado nombre una columna del destino a través del enlace ya declarado, evaluada contra la fila que ese enlace resuelve. No copiar hechos a filas hermanas ni usar nombres como join, que es lo que la laguna original ya prohibía.",
+          "representation_vs_certification": "El enlace certifica que el miembro existe; no proyecta sus datos. Sin esa proyección, una exigencia que dependa del miembro no se puede escribir y tampoco se puede dar por cumplida."
+        },
+        {
+          "gap_id": "G05",
+          "gap_title": "Un ID de fila no demuestra una identidad física o revisión OEM",
+          "status": "requisito_de_dato_oem",
+          "note": "Identidad y revisión por producto. El id de fila da identidad estable dentro de la ficha, no identidad física ni revisión OEM, y una fecha de consulta no es una revisión."
+        },
+        {
+          "gap_id": "G06",
+          "gap_title": "Faltan discriminadores estructurados para exigir campos con seguridad",
+          "status": "requisito_de_dato_oem",
+          "note": "Faltan discriminadores estructurados. Texto libre no se interpreta como hecho. La corrección es proponer columnas con vocabulario, no una regla mecánica."
+        }
+      ]
+    },
+    {
+      "key": "power_port_configurations",
+      "definition_id": "b24cc664-f14c-53d1-a214-cd7f87a4c9bc",
+      "templates": [
+        "consumer_electronics"
+      ],
+      "proposal_finding": {
+        "disposition": "gap",
+        "gap_ids": [
+          "G04",
+          "G06",
+          "G09"
+        ],
+        "reason": "ID, conector y dirección ya son requeridos; bidireccional necesita alcance del perfil para no confundir entrada/salida. No deduce protocolo ni V/A/W desde USB-C.",
+        "rows_schema_sha256": "5adeee186a497621890f124dace86ec9c2700ef5643c4c0d8f9e3a56fb491afd"
+      },
+      "schema_changed_since_proposal": false,
+      "status_by_gap": [
+        "cerrable_ahora",
+        "defecto_abierto",
+        "requisito_de_dato_oem"
+      ],
+      "has_resolved": false,
+      "has_closable_now": true,
+      "has_open_engine_defect": true,
+      "has_oem_data_requirement": true,
+      "per_gap": [
+        {
+          "gap_id": "G04",
+          "gap_title": "Predicados sobre un miembro enlazado",
+          "status": "defecto_abierto",
+          "reproduction": "validate_row_conditions sobre light/light_mode_configurations con un predicado sobre battery_kind —columna de light_member_configurations, el destino del enlace light_member_link— devuelve «Foreign or mistyped row prerequisite». El enlace existe en el catálogo 934 y resuelve el id, pero ninguna condición proyecta columnas del miembro.",
+          "minimal_fix": "Permitir que un predicado nombre una columna del destino a través del enlace ya declarado, evaluada contra la fila que ese enlace resuelve. No copiar hechos a filas hermanas ni usar nombres como join, que es lo que la laguna original ya prohibía.",
+          "representation_vs_certification": "El enlace certifica que el miembro existe; no proyecta sus datos. Sin esa proyección, una exigencia que dependa del miembro no se puede escribir y tampoco se puede dar por cumplida."
+        },
+        {
+          "gap_id": "G06",
+          "gap_title": "Faltan discriminadores estructurados para exigir campos con seguridad",
+          "status": "requisito_de_dato_oem",
+          "note": "Faltan discriminadores estructurados. Texto libre no se interpreta como hecho. La corrección es proponer columnas con vocabulario, no una regla mecánica."
+        },
+        {
+          "gap_id": "G09",
+          "gap_title": "Completo para la fila no equivale a catálogo investigado",
+          "status": "cerrable_ahora",
+          "metadata_evidence": "La capacidad existe e está activada en crankset: row_coherence version 2 con cardinalities {chainring_teeth_rows, included_chainring_count}. consumer_electronics ya declara el total ports_count.",
+          "executable_case": "PCB-C03 espera row_cardinality_conflict bloqueante con más filas que el total; PCB-C04, PCB-C06, PCB-C07, PCB-C11 y PCB-C14 esperan row_cardinality_pending no bloqueante con menos. Ninguno deriva el total de las filas.",
+          "minimal_fix": "Dos cambios de metadatos y ningún cambio de motor, los dos verificados corriendo validate_row_cardinalities sobre el catálogo 934: (1) el bloque row_coherence de la plantilla tiene que declarar version 2, porque la 1 está cerrada a claves desconocidas y hoy esta plantilla sigue en 1; (2) el total necesita dominio entero con mínimo no negativo, y hoy tiene {positive: true, integer: true} sin min. Con {min: \"1\", integer: true} el validador acepta, y min \"1\" conserva el significado sin abrir el dominio al cero como haría min \"0\". Con eso, declarar la cardinalidad {field, total_field} cierra la carencia.",
+          "verified": "Corrido: con consumer_electronics en version 1 el validador devuelve «Invalid row coherence metadata»; en version 2 con las reglas actuales devuelve «Row total requires a nonnegative integer domain»; en version 2 con {min: \"1\", integer: true} acepta."
+        }
+      ]
+    },
+    {
+      "key": "security_rating_configurations",
+      "definition_id": "bbbde95f-7e1c-5489-a5e7-2e8fbf75970b",
+      "templates": [
+        "lock"
+      ],
+      "proposal_finding": {
+        "disposition": "gap",
+        "gap_ids": [
+          "G03",
+          "G06",
+          "G07"
+        ],
+        "reason": "Emisor y nivel ya son requeridos. Un score de fabricante no se convierte en certificación ni existe traducción universal entre escalas. Falta alcance estructurado de certificación para reglas más fuertes.",
+        "rows_schema_sha256": "9456d697df294df5e4bee5fe5c5595faf893fc0b3a2ac1b7d5f88189955797c6"
+      },
+      "schema_changed_since_proposal": true,
+      "status_by_gap": [
+        "requisito_de_dato_oem",
+        "resuelto"
+      ],
+      "has_resolved": true,
+      "has_closable_now": false,
+      "has_open_engine_defect": false,
+      "has_oem_data_requirement": true,
+      "per_gap": [
+        {
+          "gap_id": "G03",
+          "gap_title": "Compatibilidad por modelo, generación, instalación y fuente",
+          "status": "requisito_de_dato_oem",
+          "note": "Compatibilidad por modelo, generación, instalación y fuente. No es un defecto del motor: falta la matriz OEM con alcance, exclusiones y condiciones. Un documento de filas bien formado sigue sin probar compatibilidad."
+        },
+        {
+          "gap_id": "G06",
+          "gap_title": "Faltan discriminadores estructurados para exigir campos con seguridad",
+          "status": "resuelto",
+          "metadata_evidence": "El esquema ganó la columna rating_scheme respecto de la propuesta —8 columnas entonces, 9 en el catálogo 934— y la plantilla lock declara row_conditions.required_when sobre rating_scheme.",
+          "executable_case": "rnd_root_security_programme_missing en all-family-cardinality-cases-integrated-2026-09-07.json: una fila sin rating_scheme espera row_required_missing no bloqueante. rnd_root_two_security_programmes fija que dos programas del mismo componente conviven."
+        },
+        {
+          "gap_id": "G07",
+          "gap_title": "Fuentes y datos desconocidos no equivalen a aprobación",
+          "status": "requisito_de_dato_oem",
+          "note": "Fuente por afirmación, identidad de variante y cobertura. Un dato desconocido sigue pendiente y no se rellena desde el ejemplo OEM. Falta de evidencia no es incompatibilidad."
+        }
+      ]
+    },
+    {
+      "key": "rack_top_interface",
+      "definition_id": "e07ea256-12be-5927-8efb-5e56bcfa8bf3",
+      "templates": [
+        "rack_basket"
+      ],
+      "proposal_finding": {
+        "disposition": "gap",
+        "gap_ids": [
+          "G01",
+          "G03",
+          "G06"
+        ],
+        "reason": "Interfaz libre y condiciones no son discriminadores de required_part. No se identifica plataforma o generación por coincidencia de texto.",
+        "rows_schema_sha256": "f300d10a7a81018bf78b09626207b0e87b022b78b160d61ea52750585a568d28"
+      },
+      "schema_changed_since_proposal": false,
+      "status_by_gap": [
+        "defecto_abierto",
+        "requisito_de_dato_oem"
+      ],
+      "has_resolved": false,
+      "has_closable_now": false,
+      "has_open_engine_defect": true,
+      "has_oem_data_requirement": true,
+      "per_gap": [
+        {
+          "gap_id": "G01",
+          "gap_title": "Presencia y alternativas de columnas",
+          "status": "defecto_abierto",
+          "reproduction": "validate_row_conditions sobre rack_basket/rack_mount_configurations con un predicado {operator: 'exists'} devuelve «Foreign or mistyped row prerequisite». El conjunto de operadores del contrato sigue siendo {eq, in, lt, lte, gt, gte} en scripts/inventory/product_spec_row_condition_metadata.py:10.",
+          "minimal_fix": "Un predicado de presencia evaluado por hasKnownSpecValue, más un grupo «al menos una de estas columnas». Dos avisos que ya sé y que la corrección tiene que respetar: hasKnownSpecValue trata «Desconocido / sin confirmar» como ausencia, así que presencia significaría «hay un valor conocido»; y un al-menos-uno no puede escribirse como dos required_when mutuos, porque el validador de contrato rechaza el ciclo. No diseño aquí la regla.",
+          "representation_vs_certification": "Es un límite de expresión, no una certificación: hoy la ficha no puede decir «falta al menos uno de estos datos» y por eso el hueco queda invisible, no autorizado."
+        },
+        {
+          "gap_id": "G03",
+          "gap_title": "Compatibilidad por modelo, generación, instalación y fuente",
+          "status": "requisito_de_dato_oem",
+          "note": "Compatibilidad por modelo, generación, instalación y fuente. No es un defecto del motor: falta la matriz OEM con alcance, exclusiones y condiciones. Un documento de filas bien formado sigue sin probar compatibilidad."
+        },
+        {
+          "gap_id": "G06",
+          "gap_title": "Faltan discriminadores estructurados para exigir campos con seguridad",
+          "status": "requisito_de_dato_oem",
+          "note": "Faltan discriminadores estructurados. Texto libre no se interpreta como hecho. La corrección es proponer columnas con vocabulario, no una regla mecánica."
+        }
+      ]
+    },
+    {
+      "key": "rack_mount_configurations",
+      "definition_id": "29b3b9e5-5263-592c-9cbd-3e90a9bc9942",
+      "templates": [
+        "rack_basket"
+      ],
+      "proposal_finding": {
+        "disposition": "gap",
+        "gap_ids": [
+          "G01",
+          "G03",
+          "G06"
+        ],
+        "reason": "El punto de montaje no determina rangos universales. No reutiliza requirement como descripción obligatoria de Otro; extremos y método dependen del sistema.",
+        "rows_schema_sha256": "954d78d236511622a42878e6b0381bfc0046e01394e22ac477f99982115008f9"
+      },
+      "schema_changed_since_proposal": false,
+      "status_by_gap": [
+        "defecto_abierto",
+        "requisito_de_dato_oem"
+      ],
+      "has_resolved": false,
+      "has_closable_now": false,
+      "has_open_engine_defect": true,
+      "has_oem_data_requirement": true,
+      "per_gap": [
+        {
+          "gap_id": "G01",
+          "gap_title": "Presencia y alternativas de columnas",
+          "status": "defecto_abierto",
+          "reproduction": "validate_row_conditions sobre rack_basket/rack_mount_configurations con un predicado {operator: 'exists'} devuelve «Foreign or mistyped row prerequisite». El conjunto de operadores del contrato sigue siendo {eq, in, lt, lte, gt, gte} en scripts/inventory/product_spec_row_condition_metadata.py:10.",
+          "minimal_fix": "Un predicado de presencia evaluado por hasKnownSpecValue, más un grupo «al menos una de estas columnas». Dos avisos que ya sé y que la corrección tiene que respetar: hasKnownSpecValue trata «Desconocido / sin confirmar» como ausencia, así que presencia significaría «hay un valor conocido»; y un al-menos-uno no puede escribirse como dos required_when mutuos, porque el validador de contrato rechaza el ciclo. No diseño aquí la regla.",
+          "representation_vs_certification": "Es un límite de expresión, no una certificación: hoy la ficha no puede decir «falta al menos uno de estos datos» y por eso el hueco queda invisible, no autorizado."
+        },
+        {
+          "gap_id": "G03",
+          "gap_title": "Compatibilidad por modelo, generación, instalación y fuente",
+          "status": "requisito_de_dato_oem",
+          "note": "Compatibilidad por modelo, generación, instalación y fuente. No es un defecto del motor: falta la matriz OEM con alcance, exclusiones y condiciones. Un documento de filas bien formado sigue sin probar compatibilidad."
+        },
+        {
+          "gap_id": "G06",
+          "gap_title": "Faltan discriminadores estructurados para exigir campos con seguridad",
+          "status": "requisito_de_dato_oem",
+          "note": "Faltan discriminadores estructurados. Texto libre no se interpreta como hecho. La corrección es proponer columnas con vocabulario, no una regla mecánica."
+        }
+      ]
+    },
+    {
+      "key": "bag_rack_interface",
+      "definition_id": "e1a71a9a-30a6-5f53-93c6-a005d80a4f88",
+      "templates": [
+        "bike_bag"
+      ],
+      "proposal_finding": {
+        "disposition": "gap",
+        "gap_ids": [
+          "G01",
+          "G03",
+          "G06"
+        ],
+        "reason": "Interfaz libre, generación y parte requerida necesitan alcance estructurado; no se activa un requisito por nombre de plataforma.",
+        "rows_schema_sha256": "f300d10a7a81018bf78b09626207b0e87b022b78b160d61ea52750585a568d28"
+      },
+      "schema_changed_since_proposal": false,
+      "status_by_gap": [
+        "defecto_abierto",
+        "requisito_de_dato_oem"
+      ],
+      "has_resolved": false,
+      "has_closable_now": false,
+      "has_open_engine_defect": true,
+      "has_oem_data_requirement": true,
+      "per_gap": [
+        {
+          "gap_id": "G01",
+          "gap_title": "Presencia y alternativas de columnas",
+          "status": "defecto_abierto",
+          "reproduction": "validate_row_conditions sobre rack_basket/rack_mount_configurations con un predicado {operator: 'exists'} devuelve «Foreign or mistyped row prerequisite». El conjunto de operadores del contrato sigue siendo {eq, in, lt, lte, gt, gte} en scripts/inventory/product_spec_row_condition_metadata.py:10.",
+          "minimal_fix": "Un predicado de presencia evaluado por hasKnownSpecValue, más un grupo «al menos una de estas columnas». Dos avisos que ya sé y que la corrección tiene que respetar: hasKnownSpecValue trata «Desconocido / sin confirmar» como ausencia, así que presencia significaría «hay un valor conocido»; y un al-menos-uno no puede escribirse como dos required_when mutuos, porque el validador de contrato rechaza el ciclo. No diseño aquí la regla.",
+          "representation_vs_certification": "Es un límite de expresión, no una certificación: hoy la ficha no puede decir «falta al menos uno de estos datos» y por eso el hueco queda invisible, no autorizado."
+        },
+        {
+          "gap_id": "G03",
+          "gap_title": "Compatibilidad por modelo, generación, instalación y fuente",
+          "status": "requisito_de_dato_oem",
+          "note": "Compatibilidad por modelo, generación, instalación y fuente. No es un defecto del motor: falta la matriz OEM con alcance, exclusiones y condiciones. Un documento de filas bien formado sigue sin probar compatibilidad."
+        },
+        {
+          "gap_id": "G06",
+          "gap_title": "Faltan discriminadores estructurados para exigir campos con seguridad",
+          "status": "requisito_de_dato_oem",
+          "note": "Faltan discriminadores estructurados. Texto libre no se interpreta como hecho. La corrección es proponer columnas con vocabulario, no una regla mecánica."
+        }
+      ]
+    },
+    {
+      "key": "bag_member_configurations",
+      "definition_id": "104a6948-a864-5c61-a291-740088376e7f",
+      "templates": [
+        "bike_bag"
+      ],
+      "proposal_finding": {
+        "disposition": "gap",
+        "gap_ids": [
+          "G01",
+          "G05",
+          "G09"
+        ],
+        "reason": "Dimensiones, volumen y referencia de medición son observaciones independientes. Sin presence no se exige measurement_reference sólo cuando corresponde; no calcula volumen ni total de un kit.",
+        "rows_schema_sha256": "1a8088d3cc60a9723fbf3a87ea6edadb32cf7ada4770f2a6db91cd5ff254beb0"
+      },
+      "schema_changed_since_proposal": false,
+      "status_by_gap": [
+        "defecto_abierto",
+        "requisito_de_dato_oem"
+      ],
+      "has_resolved": false,
+      "has_closable_now": false,
+      "has_open_engine_defect": true,
+      "has_oem_data_requirement": true,
+      "per_gap": [
+        {
+          "gap_id": "G01",
+          "gap_title": "Presencia y alternativas de columnas",
+          "status": "defecto_abierto",
+          "reproduction": "validate_row_conditions sobre rack_basket/rack_mount_configurations con un predicado {operator: 'exists'} devuelve «Foreign or mistyped row prerequisite». El conjunto de operadores del contrato sigue siendo {eq, in, lt, lte, gt, gte} en scripts/inventory/product_spec_row_condition_metadata.py:10.",
+          "minimal_fix": "Un predicado de presencia evaluado por hasKnownSpecValue, más un grupo «al menos una de estas columnas». Dos avisos que ya sé y que la corrección tiene que respetar: hasKnownSpecValue trata «Desconocido / sin confirmar» como ausencia, así que presencia significaría «hay un valor conocido»; y un al-menos-uno no puede escribirse como dos required_when mutuos, porque el validador de contrato rechaza el ciclo. No diseño aquí la regla.",
+          "representation_vs_certification": "Es un límite de expresión, no una certificación: hoy la ficha no puede decir «falta al menos uno de estos datos» y por eso el hueco queda invisible, no autorizado."
+        },
+        {
+          "gap_id": "G05",
+          "gap_title": "Un ID de fila no demuestra una identidad física o revisión OEM",
+          "status": "requisito_de_dato_oem",
+          "note": "Identidad y revisión por producto. El id de fila da identidad estable dentro de la ficha, no identidad física ni revisión OEM, y una fecha de consulta no es una revisión."
+        },
+        {
+          "gap_id": "G09",
+          "gap_title": "Completo para la fila no equivale a catálogo investigado",
+          "status": "requisito_de_dato_oem",
+          "note": "No hay un total declarado que enlazar en bike_bag: la cardinalidad no aplica y la carencia es de dato, no de motor."
+        }
+      ]
+    },
+    {
+      "key": "certification_configurations",
+      "definition_id": "2a0f4fbd-c6b0-5f91-b3de-fde54a842634",
+      "templates": [
+        "helmet",
+        "rider_protection"
+      ],
+      "proposal_finding": {
+        "disposition": "gap",
+        "gap_ids": [
+          "G03",
+          "G06",
+          "G07"
+        ],
+        "reason": "Norma literal y tipo de evidencia ya son requeridos. No añade reglas de nivel/región por una shortlist de normas sin edición/modelo/certificado exactos; nunca transforma un claim en certificación válida.",
+        "rows_schema_sha256": "9ce2e9a5e43135158842a6e2181d5eee59d508a8b5dc986dd3fac4354d258be0"
+      },
+      "schema_changed_since_proposal": false,
+      "status_by_gap": [
+        "requisito_de_dato_oem"
+      ],
+      "has_resolved": false,
+      "has_closable_now": false,
+      "has_open_engine_defect": false,
+      "has_oem_data_requirement": true,
+      "per_gap": [
+        {
+          "gap_id": "G03",
+          "gap_title": "Compatibilidad por modelo, generación, instalación y fuente",
+          "status": "requisito_de_dato_oem",
+          "note": "Compatibilidad por modelo, generación, instalación y fuente. No es un defecto del motor: falta la matriz OEM con alcance, exclusiones y condiciones. Un documento de filas bien formado sigue sin probar compatibilidad."
+        },
+        {
+          "gap_id": "G06",
+          "gap_title": "Faltan discriminadores estructurados para exigir campos con seguridad",
+          "status": "requisito_de_dato_oem",
+          "note": "Faltan discriminadores estructurados. Texto libre no se interpreta como hecho. La corrección es proponer columnas con vocabulario, no una regla mecánica."
+        },
+        {
+          "gap_id": "G07",
+          "gap_title": "Fuentes y datos desconocidos no equivalen a aprobación",
+          "status": "requisito_de_dato_oem",
+          "note": "Fuente por afirmación, identidad de variante y cobertura. Un dato desconocido sigue pendiente y no se rellena desde el ejemplo OEM. Falta de evidencia no es incompatibilidad."
+        }
+      ]
+    },
+    {
+      "key": "brake_hydraulic_connections",
+      "definition_id": "3d0e43ef-5414-5814-9267-c6b20b77e41b",
+      "templates": [
+        "brake_caliper",
+        "brake_lever",
+        "hydraulic_disc_brake",
+        "rim_brake",
+        "hydraulic_fitting",
+        "hydraulic_hose",
+        "brake_shift_combined_control"
+      ],
+      "proposal_finding": {
+        "disposition": "gap",
+        "gap_ids": [
+          "G01",
+          "G03",
+          "G04"
+        ],
+        "reason": "Un extremo podría documentarse por fitting_model o connection_spec; exigir ambos sería excesivo. El enlace circuit_id puede usar row_coherence pero no está configurado aquí.",
+        "rows_schema_sha256": "664ab340662c44fe890f2195fe0299144419276a5710d4b38ddc61f4402fb03c"
+      },
+      "schema_changed_since_proposal": false,
+      "status_by_gap": [
+        "defecto_abierto",
+        "requisito_de_dato_oem"
+      ],
+      "has_resolved": false,
+      "has_closable_now": false,
+      "has_open_engine_defect": true,
+      "has_oem_data_requirement": true,
+      "per_gap": [
+        {
+          "gap_id": "G01",
+          "gap_title": "Presencia y alternativas de columnas",
+          "status": "defecto_abierto",
+          "reproduction": "validate_row_conditions sobre rack_basket/rack_mount_configurations con un predicado {operator: 'exists'} devuelve «Foreign or mistyped row prerequisite». El conjunto de operadores del contrato sigue siendo {eq, in, lt, lte, gt, gte} en scripts/inventory/product_spec_row_condition_metadata.py:10.",
+          "minimal_fix": "Un predicado de presencia evaluado por hasKnownSpecValue, más un grupo «al menos una de estas columnas». Dos avisos que ya sé y que la corrección tiene que respetar: hasKnownSpecValue trata «Desconocido / sin confirmar» como ausencia, así que presencia significaría «hay un valor conocido»; y un al-menos-uno no puede escribirse como dos required_when mutuos, porque el validador de contrato rechaza el ciclo. No diseño aquí la regla.",
+          "representation_vs_certification": "Es un límite de expresión, no una certificación: hoy la ficha no puede decir «falta al menos uno de estos datos» y por eso el hueco queda invisible, no autorizado."
+        },
+        {
+          "gap_id": "G03",
+          "gap_title": "Compatibilidad por modelo, generación, instalación y fuente",
+          "status": "requisito_de_dato_oem",
+          "note": "Compatibilidad por modelo, generación, instalación y fuente. No es un defecto del motor: falta la matriz OEM con alcance, exclusiones y condiciones. Un documento de filas bien formado sigue sin probar compatibilidad."
+        },
+        {
+          "gap_id": "G04",
+          "gap_title": "Predicados sobre un miembro enlazado",
+          "status": "defecto_abierto",
+          "reproduction": "validate_row_conditions sobre light/light_mode_configurations con un predicado sobre battery_kind —columna de light_member_configurations, el destino del enlace light_member_link— devuelve «Foreign or mistyped row prerequisite». El enlace existe en el catálogo 934 y resuelve el id, pero ninguna condición proyecta columnas del miembro.",
+          "minimal_fix": "Permitir que un predicado nombre una columna del destino a través del enlace ya declarado, evaluada contra la fila que ese enlace resuelve. No copiar hechos a filas hermanas ni usar nombres como join, que es lo que la laguna original ya prohibía.",
+          "representation_vs_certification": "El enlace certifica que el miembro existe; no proyecta sus datos. Sin esa proyección, una exigencia que dependa del miembro no se puede escribir y tampoco se puede dar por cumplida."
+        }
+      ]
+    },
+    {
+      "key": "brake_bleed_ports",
+      "definition_id": "2132bfb4-5e72-5826-9f5b-5b73039de39b",
+      "templates": [
+        "brake_caliper",
+        "hydraulic_disc_brake"
+      ],
+      "proposal_finding": {
+        "disposition": "gap",
+        "gap_ids": [
+          "G01",
+          "G03"
+        ],
+        "reason": "Necesita conservar las alternativas de interfaz de conexión, herramienta o procedimiento OEM. No inventa rosca de purga, adaptador ni fluido por marca.",
+        "rows_schema_sha256": "8e8fe3ac3d31fac7aa2b48a86c4bd3b665e366b0f608abff3a04e3ddcae0fcc5"
+      },
+      "schema_changed_since_proposal": false,
+      "status_by_gap": [
+        "defecto_abierto",
+        "requisito_de_dato_oem"
+      ],
+      "has_resolved": false,
+      "has_closable_now": false,
+      "has_open_engine_defect": true,
+      "has_oem_data_requirement": true,
+      "per_gap": [
+        {
+          "gap_id": "G01",
+          "gap_title": "Presencia y alternativas de columnas",
+          "status": "defecto_abierto",
+          "reproduction": "validate_row_conditions sobre rack_basket/rack_mount_configurations con un predicado {operator: 'exists'} devuelve «Foreign or mistyped row prerequisite». El conjunto de operadores del contrato sigue siendo {eq, in, lt, lte, gt, gte} en scripts/inventory/product_spec_row_condition_metadata.py:10.",
+          "minimal_fix": "Un predicado de presencia evaluado por hasKnownSpecValue, más un grupo «al menos una de estas columnas». Dos avisos que ya sé y que la corrección tiene que respetar: hasKnownSpecValue trata «Desconocido / sin confirmar» como ausencia, así que presencia significaría «hay un valor conocido»; y un al-menos-uno no puede escribirse como dos required_when mutuos, porque el validador de contrato rechaza el ciclo. No diseño aquí la regla.",
+          "representation_vs_certification": "Es un límite de expresión, no una certificación: hoy la ficha no puede decir «falta al menos uno de estos datos» y por eso el hueco queda invisible, no autorizado."
+        },
+        {
+          "gap_id": "G03",
+          "gap_title": "Compatibilidad por modelo, generación, instalación y fuente",
+          "status": "requisito_de_dato_oem",
+          "note": "Compatibilidad por modelo, generación, instalación y fuente. No es un defecto del motor: falta la matriz OEM con alcance, exclusiones y condiciones. Un documento de filas bien formado sigue sin probar compatibilidad."
+        }
+      ]
+    },
+    {
+      "key": "rim_brake_mount_fitments",
+      "definition_id": "8b59fe62-3508-59c0-a707-69ffeb3094ea",
+      "templates": [
+        "brake_caliper",
+        "rim_brake"
+      ],
+      "proposal_finding": {
+        "disposition": "gap",
+        "gap_ids": [
+          "G01",
+          "G03"
+        ],
+        "reason": "Montaje, modelo, posición y fuente son requeridos. Rangos opcionales ya ordenados; un extremo faltante y adaptación exacta siguen pendientes.",
+        "rows_schema_sha256": "a09669ff3a6001e322daa3440c69d0ca75e3b4ace6f3ee03981287fe72cf749e"
+      },
+      "schema_changed_since_proposal": false,
+      "status_by_gap": [
+        "defecto_abierto",
+        "requisito_de_dato_oem"
+      ],
+      "has_resolved": false,
+      "has_closable_now": false,
+      "has_open_engine_defect": true,
+      "has_oem_data_requirement": true,
+      "per_gap": [
+        {
+          "gap_id": "G01",
+          "gap_title": "Presencia y alternativas de columnas",
+          "status": "defecto_abierto",
+          "reproduction": "validate_row_conditions sobre rack_basket/rack_mount_configurations con un predicado {operator: 'exists'} devuelve «Foreign or mistyped row prerequisite». El conjunto de operadores del contrato sigue siendo {eq, in, lt, lte, gt, gte} en scripts/inventory/product_spec_row_condition_metadata.py:10.",
+          "minimal_fix": "Un predicado de presencia evaluado por hasKnownSpecValue, más un grupo «al menos una de estas columnas». Dos avisos que ya sé y que la corrección tiene que respetar: hasKnownSpecValue trata «Desconocido / sin confirmar» como ausencia, así que presencia significaría «hay un valor conocido»; y un al-menos-uno no puede escribirse como dos required_when mutuos, porque el validador de contrato rechaza el ciclo. No diseño aquí la regla.",
+          "representation_vs_certification": "Es un límite de expresión, no una certificación: hoy la ficha no puede decir «falta al menos uno de estos datos» y por eso el hueco queda invisible, no autorizado."
+        },
+        {
+          "gap_id": "G03",
+          "gap_title": "Compatibilidad por modelo, generación, instalación y fuente",
+          "status": "requisito_de_dato_oem",
+          "note": "Compatibilidad por modelo, generación, instalación y fuente. No es un defecto del motor: falta la matriz OEM con alcance, exclusiones y condiciones. Un documento de filas bien formado sigue sin probar compatibilidad."
+        }
+      ]
+    },
+    {
+      "key": "brake_assembly_configurations",
+      "definition_id": "a5753255-ac9d-5c52-a14a-3b9f57fe85a0",
+      "templates": [
+        "hydraulic_disc_brake",
+        "mechanical_disc_brake",
+        "rim_brake"
+      ],
+      "proposal_finding": {
+        "disposition": "gap",
+        "gap_ids": [
+          "G01",
+          "G03",
+          "G06",
+          "G09"
+        ],
+        "reason": "No obliga todas las piezas: hay presentaciones parciales y sistemas híbridos. Faltan discriminadores de contenido y presencia para requerir sólo identidades realmente incluidas.",
+        "rows_schema_sha256": "bd820f0b83719afaff5ddf3e3e3a5016404bbaac93d24a508433c9603cd4da65"
+      },
+      "schema_changed_since_proposal": false,
+      "status_by_gap": [
+        "defecto_abierto",
+        "requisito_de_dato_oem"
+      ],
+      "has_resolved": false,
+      "has_closable_now": false,
+      "has_open_engine_defect": true,
+      "has_oem_data_requirement": true,
+      "per_gap": [
+        {
+          "gap_id": "G01",
+          "gap_title": "Presencia y alternativas de columnas",
+          "status": "defecto_abierto",
+          "reproduction": "validate_row_conditions sobre rack_basket/rack_mount_configurations con un predicado {operator: 'exists'} devuelve «Foreign or mistyped row prerequisite». El conjunto de operadores del contrato sigue siendo {eq, in, lt, lte, gt, gte} en scripts/inventory/product_spec_row_condition_metadata.py:10.",
+          "minimal_fix": "Un predicado de presencia evaluado por hasKnownSpecValue, más un grupo «al menos una de estas columnas». Dos avisos que ya sé y que la corrección tiene que respetar: hasKnownSpecValue trata «Desconocido / sin confirmar» como ausencia, así que presencia significaría «hay un valor conocido»; y un al-menos-uno no puede escribirse como dos required_when mutuos, porque el validador de contrato rechaza el ciclo. No diseño aquí la regla.",
+          "representation_vs_certification": "Es un límite de expresión, no una certificación: hoy la ficha no puede decir «falta al menos uno de estos datos» y por eso el hueco queda invisible, no autorizado."
+        },
+        {
+          "gap_id": "G03",
+          "gap_title": "Compatibilidad por modelo, generación, instalación y fuente",
+          "status": "requisito_de_dato_oem",
+          "note": "Compatibilidad por modelo, generación, instalación y fuente. No es un defecto del motor: falta la matriz OEM con alcance, exclusiones y condiciones. Un documento de filas bien formado sigue sin probar compatibilidad."
+        },
+        {
+          "gap_id": "G06",
+          "gap_title": "Faltan discriminadores estructurados para exigir campos con seguridad",
+          "status": "requisito_de_dato_oem",
+          "note": "Faltan discriminadores estructurados. Texto libre no se interpreta como hecho. La corrección es proponer columnas con vocabulario, no una regla mecánica."
+        },
+        {
+          "gap_id": "G09",
+          "gap_title": "Completo para la fila no equivale a catálogo investigado",
+          "status": "requisito_de_dato_oem",
+          "note": "No hay un total declarado que enlazar en hydraulic_disc_brake, mechanical_disc_brake, rim_brake: la cardinalidad no aplica y la carencia es de dato, no de motor."
+        }
+      ]
+    }
+  ],
+  "counts": {
+    "fields_reviewed": 18,
+    "gap_instances": 50,
+    "gap_instances_by_status": {
+      "requisito_de_dato_oem": 31,
+      "defecto_abierto": 16,
+      "cerrable_ahora": 2,
+      "resuelto": 1
+    },
+    "fields_with_something_closed_or_closable": 3,
+    "fields_with_open_engine_defect": 14,
+    "fields_only_oem_data": 3,
+    "schema_changed_since_proposal": 1,
+    "open_engine_defects": 2,
+    "fields_citing_G01": 12,
+    "fields_citing_G04": 4
+  },
+  "gates": {
+    "publication": false,
+    "fill": false,
+    "assignment": false,
+    "mechanical_approval": false
+  }
+}

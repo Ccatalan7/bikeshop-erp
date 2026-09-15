@@ -1,0 +1,268 @@
+[
+  {
+    "id": "wss_tire_same_variant_profile_method_twice",
+    "before": {
+      "id": "wss_tire_same_variant_profile_method_twice",
+      "template": "tire",
+      "kind": "contradictory",
+      "values": {
+        "tire_rim_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "a",
+              "values": {
+                "rim_bead_profile": "Sin gancho (hookless)",
+                "mounting_method": "Tubeless",
+                "max_pressure": "5.0",
+                "pressure_unit": "bar"
+              },
+              "sources": [
+                "https://www.continental-tires.com/us/en/tire-knowledge/hookless-vs-hooked-rims/"
+              ]
+            },
+            {
+              "id": "b",
+              "values": {
+                "rim_bead_profile": "Sin gancho (hookless)",
+                "mounting_method": "Tubeless",
+                "max_pressure": "7.0",
+                "pressure_unit": "bar"
+              },
+              "sources": [
+                "https://www.continental-tires.com/us/en/tire-knowledge/hookless-vs-hooked-rims/"
+              ]
+            }
+          ]
+        },
+        "tire_width_mm": "28",
+        "bead_seat_diameter_mm": "622"
+      },
+      "source_urls": [],
+      "expected_blocking": [
+        {
+          "code": "row_shape",
+          "field": "tire_rim_configurations"
+        }
+      ],
+      "note": "unique_by [variante, perfil, método] rechaza dos presiones para la misma configuración.",
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false
+    },
+    "after": {
+      "id": "wss_tire_same_variant_profile_method_twice",
+      "template": "tire",
+      "kind": "contradictory",
+      "values": {
+        "tire_rim_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "a",
+              "values": {
+                "rim_bead_profile": "Sin gancho (hookless)",
+                "mounting_method": "Tubeless",
+                "max_pressure": "5.0",
+                "pressure_unit": "bar"
+              },
+              "sources": [
+                "https://www.continental-tires.com/us/en/tire-knowledge/hookless-vs-hooked-rims/"
+              ]
+            },
+            {
+              "id": "b",
+              "values": {
+                "rim_bead_profile": "Sin gancho (hookless)",
+                "mounting_method": "Tubeless",
+                "max_pressure": "7.0",
+                "pressure_unit": "bar"
+              },
+              "sources": [
+                "https://www.continental-tires.com/us/en/tire-knowledge/hookless-vs-hooked-rims/"
+              ]
+            }
+          ]
+        },
+        "tire_width_mm": "28",
+        "bead_seat_diameter_mm": "622"
+      },
+      "source_urls": [],
+      "expected_blocking": [
+        {
+          "code": "row_shape",
+          "field": "tire_rim_configurations"
+        }
+      ],
+      "note": "unique_by [variante, perfil, método] rechaza dos presiones para la misma configuración.",
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false,
+      "expected_row_condition_issues": []
+    }
+  },
+  {
+    "id": "wss_SF6",
+    "before": {
+      "id": "wss_SF6",
+      "template": "tire",
+      "kind": "contradictorio",
+      "values": {
+        "tire_rim_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "a",
+              "values": {
+                "rim_bead_profile": "Sin gancho (hookless)",
+                "mounting_method": "Tubeless",
+                "max_pressure": "5.0",
+                "pressure_unit": "bar"
+              },
+              "sources": []
+            },
+            {
+              "id": "b",
+              "values": {
+                "rim_bead_profile": "Sin gancho (hookless)",
+                "mounting_method": "Tubeless",
+                "max_pressure": "4.5",
+                "pressure_unit": "bar"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "source_urls": [],
+      "expected_blocking": [
+        {
+          "code": "row_shape",
+          "field": "tire_rim_configurations"
+        }
+      ],
+      "note": "Dos presiones para la misma configuración de este SKU. Antes de SR-Q2 esto se «resolvía» poniendo variantes distintas y quedaba válido.",
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false
+    },
+    "after": {
+      "id": "wss_SF6",
+      "template": "tire",
+      "kind": "contradictorio",
+      "values": {
+        "tire_rim_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "a",
+              "values": {
+                "rim_bead_profile": "Sin gancho (hookless)",
+                "mounting_method": "Tubeless",
+                "max_pressure": "5.0",
+                "pressure_unit": "bar"
+              },
+              "sources": []
+            },
+            {
+              "id": "b",
+              "values": {
+                "rim_bead_profile": "Sin gancho (hookless)",
+                "mounting_method": "Tubeless",
+                "max_pressure": "4.5",
+                "pressure_unit": "bar"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "source_urls": [],
+      "expected_blocking": [
+        {
+          "code": "row_shape",
+          "field": "tire_rim_configurations"
+        }
+      ],
+      "note": "Dos presiones para la misma configuración de este SKU. Antes de SR-Q2 esto se «resolvía» poniendo variantes distintas y quedaba válido.",
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false,
+      "expected_row_condition_issues": []
+    }
+  },
+  {
+    "id": "wss_root_pressure_unit_requires_its_value",
+    "before": {
+      "id": "wss_root_pressure_unit_requires_its_value",
+      "template": "tire",
+      "values": {
+        "tire_rim_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "hookless",
+              "values": {
+                "rim_bead_profile": "Sin gancho (hookless)",
+                "mounting_method": "Tubeless",
+                "pressure_unit": "bar"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "kind": "root_boundary",
+      "source_urls": [],
+      "expected_blocking": [],
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false,
+      "expected_row_condition_issues": [
+        {
+          "code": "row_required_missing",
+          "field": "tire_rim_configurations",
+          "row_id": "hookless",
+          "column": "max_pressure",
+          "blocking": false
+        }
+      ]
+    },
+    "after": {
+      "id": "wss_root_pressure_unit_requires_its_value",
+      "template": "tire",
+      "values": {
+        "tire_rim_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "hookless",
+              "values": {
+                "rim_bead_profile": "Sin gancho (hookless)",
+                "mounting_method": "Tubeless",
+                "pressure_unit": "bar"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "kind": "root_boundary",
+      "source_urls": [],
+      "expected_blocking": [],
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false,
+      "expected_row_condition_issues": [
+        {
+          "code": "row_required_missing",
+          "field": "tire_rim_configurations",
+          "row_id": "hookless",
+          "column": "rim_internal_width_max_mm",
+          "blocking": false
+        },
+        {
+          "code": "row_required_missing",
+          "field": "tire_rim_configurations",
+          "row_id": "hookless",
+          "column": "max_pressure",
+          "blocking": false
+        }
+      ]
+    }
+  }
+]

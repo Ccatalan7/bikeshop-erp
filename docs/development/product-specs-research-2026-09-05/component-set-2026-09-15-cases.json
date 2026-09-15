@@ -1,0 +1,591 @@
+{
+  "schema_version": 1,
+  "catalogue_sha256": "2e64c7ebebb44d28bb4751b24b99a6c4e05df870b9253a53e7f29ecedd431f69",
+  "cases": [
+    {
+      "id": "component_set_empty_pending",
+      "template": "component_set",
+      "values": {},
+      "expected_blocking": [],
+      "expected_issue_subset": [
+        {
+          "code": "required_missing",
+          "field": "kit_members",
+          "blocking": false
+        },
+        {
+          "code": "required_missing",
+          "field": "spec_evidence_source",
+          "blocking": false
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "expected_sql_blocking": [],
+      "expected_sql_issue_subset": [
+        {
+          "code": "required_missing",
+          "field": "kit_members",
+          "blocking": false
+        },
+        {
+          "code": "required_missing",
+          "field": "spec_evidence_source",
+          "blocking": false
+        }
+      ]
+    },
+    {
+      "id": "component_set_members_pending",
+      "template": "component_set",
+      "values": {
+        "spec_evidence_source": "Synthetic package, no inventory claim."
+      },
+      "expected_blocking": [],
+      "expected_issue_subset": [
+        {
+          "code": "required_missing",
+          "field": "kit_members",
+          "blocking": false
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "expected_sql_blocking": [],
+      "expected_sql_issue_subset": [
+        {
+          "code": "required_missing",
+          "field": "kit_members",
+          "blocking": false
+        }
+      ]
+    },
+    {
+      "id": "component_set_source_pending",
+      "template": "component_set",
+      "values": {
+        "kit_members": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "a",
+              "values": {
+                "member_role": "otro",
+                "family": "bearing",
+                "quantity": "1",
+                "position": "Sin posición"
+              },
+              "sources": [
+                "https://example.invalid/synthetic-package"
+              ]
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "expected_issue_subset": [
+        {
+          "code": "prerequisite",
+          "field": "kit_members",
+          "blocking": false
+        },
+        {
+          "code": "required_missing",
+          "field": "spec_evidence_source",
+          "blocking": false
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "expected_sql_blocking": [],
+      "expected_sql_issue_subset": [
+        {
+          "code": "prerequisite_missing",
+          "field": "kit_members",
+          "blocking": false
+        },
+        {
+          "code": "required_missing",
+          "field": "spec_evidence_source",
+          "blocking": false
+        }
+      ],
+      "expected_row_counts": {
+        "kit_members": 1
+      }
+    },
+    {
+      "id": "component_set_wheel_and_seat_retention",
+      "template": "component_set",
+      "values": {
+        "spec_evidence_source": "Synthetic package, no inventory claim.",
+        "kit_members": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "a",
+              "values": {
+                "member_role": "otro",
+                "family": "wheel_retention",
+                "quantity": "1",
+                "position": "Sin posición"
+              },
+              "sources": [
+                "https://example.invalid/synthetic-package"
+              ]
+            },
+            {
+              "id": "b",
+              "values": {
+                "member_role": "otro",
+                "family": "seat_clamp",
+                "quantity": "1",
+                "position": "Sin posición"
+              },
+              "sources": [
+                "https://example.invalid/synthetic-package"
+              ]
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "expected_issue_subset": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "expected_sql_blocking": [],
+      "expected_sql_issue_subset": [],
+      "expected_row_counts": {
+        "kit_members": 2
+      }
+    },
+    {
+      "id": "component_set_fastener_and_bearing",
+      "template": "component_set",
+      "values": {
+        "spec_evidence_source": "Synthetic package, no inventory claim.",
+        "kit_members": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "a",
+              "values": {
+                "member_role": "otro",
+                "family": "fastener",
+                "quantity": "1",
+                "position": "Sin posición"
+              },
+              "sources": [
+                "https://example.invalid/synthetic-package"
+              ]
+            },
+            {
+              "id": "b",
+              "values": {
+                "member_role": "otro",
+                "family": "bearing",
+                "quantity": "1",
+                "position": "Sin posición"
+              },
+              "sources": [
+                "https://example.invalid/synthetic-package"
+              ]
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "expected_issue_subset": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "expected_sql_blocking": [],
+      "expected_sql_issue_subset": [],
+      "expected_row_counts": {
+        "kit_members": 2
+      }
+    },
+    {
+      "id": "component_set_same_model_distinct_units",
+      "template": "component_set",
+      "values": {
+        "spec_evidence_source": "Synthetic package, no inventory claim.",
+        "kit_members": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "a",
+              "values": {
+                "member_role": "otro",
+                "family": "brake_lever",
+                "quantity": "1",
+                "position": "Izquierdo",
+                "identity_model": "Synthetic lever"
+              },
+              "sources": [
+                "https://example.invalid/synthetic-package"
+              ]
+            },
+            {
+              "id": "b",
+              "values": {
+                "member_role": "otro",
+                "family": "brake_lever",
+                "quantity": "1",
+                "position": "Derecho",
+                "identity_model": "Synthetic lever"
+              },
+              "sources": [
+                "https://example.invalid/synthetic-package"
+              ]
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "expected_issue_subset": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "expected_sql_blocking": [],
+      "expected_sql_issue_subset": [],
+      "expected_row_counts": {
+        "kit_members": 2
+      }
+    },
+    {
+      "id": "component_set_unknown_family_pending",
+      "template": "component_set",
+      "values": {
+        "spec_evidence_source": "Synthetic package, no inventory claim.",
+        "kit_members": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "a",
+              "values": {
+                "member_role": "otro",
+                "quantity": "1",
+                "position": "Sin posición"
+              },
+              "sources": [
+                "https://example.invalid/synthetic-package"
+              ]
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "expected_issue_subset": [
+        {
+          "code": "row_incomplete",
+          "field": "kit_members",
+          "blocking": false
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "expected_sql_blocking": [],
+      "expected_sql_issue_subset": [
+        {
+          "code": "row_incomplete",
+          "field": "kit_members",
+          "blocking": false
+        }
+      ],
+      "expected_row_counts": {
+        "kit_members": 1
+      }
+    },
+    {
+      "id": "component_set_unreviewed_family",
+      "template": "component_set",
+      "values": {
+        "spec_evidence_source": "Synthetic package, no inventory claim.",
+        "kit_members": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "a",
+              "values": {
+                "member_role": "otro",
+                "family": "chain",
+                "quantity": "1",
+                "position": "Sin posición"
+              },
+              "sources": [
+                "https://example.invalid/synthetic-package"
+              ]
+            }
+          ]
+        }
+      },
+      "expected_blocking": [
+        {
+          "code": "row_option",
+          "field": "kit_members"
+        }
+      ],
+      "expected_issue_subset": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "expected_sql_blocking": [
+        {
+          "code": "row_option",
+          "field": "kit_members"
+        }
+      ],
+      "expected_sql_issue_subset": []
+    },
+    {
+      "id": "component_set_assembly_cannot_be_member",
+      "template": "component_set",
+      "values": {
+        "spec_evidence_source": "Synthetic package, no inventory claim.",
+        "kit_members": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "a",
+              "values": {
+                "member_role": "otro",
+                "family": "drivetrain_kit",
+                "quantity": "1",
+                "position": "Sin posición"
+              },
+              "sources": [
+                "https://example.invalid/synthetic-package"
+              ]
+            }
+          ]
+        }
+      },
+      "expected_blocking": [
+        {
+          "code": "row_option",
+          "field": "kit_members"
+        }
+      ],
+      "expected_issue_subset": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "expected_sql_blocking": [
+        {
+          "code": "row_option",
+          "field": "kit_members"
+        }
+      ],
+      "expected_sql_issue_subset": []
+    },
+    {
+      "id": "component_set_unresolved_rim_brake_presentation",
+      "template": "component_set",
+      "values": {
+        "spec_evidence_source": "Synthetic package, no inventory claim.",
+        "kit_members": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "a",
+              "values": {
+                "member_role": "otro",
+                "family": "rim_brake",
+                "quantity": "1",
+                "position": "Sin posición"
+              },
+              "sources": [
+                "https://example.invalid/synthetic-package"
+              ]
+            }
+          ]
+        }
+      },
+      "expected_blocking": [
+        {
+          "code": "row_option",
+          "field": "kit_members"
+        }
+      ],
+      "expected_issue_subset": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "expected_sql_blocking": [
+        {
+          "code": "row_option",
+          "field": "kit_members"
+        }
+      ],
+      "expected_sql_issue_subset": []
+    },
+    {
+      "id": "component_set_cannot_contain_itself",
+      "template": "component_set",
+      "values": {
+        "spec_evidence_source": "Synthetic package, no inventory claim.",
+        "kit_members": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "a",
+              "values": {
+                "member_role": "otro",
+                "family": "component_set",
+                "quantity": "1",
+                "position": "Sin posición"
+              },
+              "sources": [
+                "https://example.invalid/synthetic-package"
+              ]
+            }
+          ]
+        }
+      },
+      "expected_blocking": [
+        {
+          "code": "row_shape",
+          "field": "kit_members"
+        }
+      ],
+      "expected_issue_subset": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "expected_sql_blocking": [
+        {
+          "code": "row_shape",
+          "field": "kit_members"
+        }
+      ],
+      "expected_sql_issue_subset": []
+    },
+    {
+      "id": "component_set_blank_family",
+      "template": "component_set",
+      "values": {
+        "spec_evidence_source": "Synthetic package, no inventory claim.",
+        "kit_members": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "a",
+              "values": {
+                "member_role": "otro",
+                "family": "",
+                "quantity": "1",
+                "position": "Sin posición"
+              },
+              "sources": [
+                "https://example.invalid/synthetic-package"
+              ]
+            }
+          ]
+        }
+      },
+      "expected_blocking": [
+        {
+          "code": "row_shape",
+          "field": "kit_members"
+        }
+      ],
+      "expected_issue_subset": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "expected_sql_blocking": [
+        {
+          "code": "row_shape",
+          "field": "kit_members"
+        }
+      ],
+      "expected_sql_issue_subset": []
+    },
+    {
+      "id": "component_set_zero_quantity",
+      "template": "component_set",
+      "values": {
+        "spec_evidence_source": "Synthetic package, no inventory claim.",
+        "kit_members": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "a",
+              "values": {
+                "member_role": "otro",
+                "family": "bearing",
+                "quantity": "0",
+                "position": "Sin posición"
+              },
+              "sources": [
+                "https://example.invalid/synthetic-package"
+              ]
+            }
+          ]
+        }
+      },
+      "expected_blocking": [
+        {
+          "code": "row_shape",
+          "field": "kit_members"
+        }
+      ],
+      "expected_issue_subset": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "expected_sql_blocking": [
+        {
+          "code": "row_shape",
+          "field": "kit_members"
+        }
+      ],
+      "expected_sql_issue_subset": []
+    },
+    {
+      "id": "component_set_duplicate_row_id",
+      "template": "component_set",
+      "values": {
+        "spec_evidence_source": "Synthetic package, no inventory claim.",
+        "kit_members": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "a",
+              "values": {
+                "member_role": "otro",
+                "family": "bearing",
+                "quantity": "1",
+                "position": "Sin posición"
+              },
+              "sources": [
+                "https://example.invalid/synthetic-package"
+              ]
+            },
+            {
+              "id": "a",
+              "values": {
+                "member_role": "otro",
+                "family": "fastener",
+                "quantity": "1",
+                "position": "Sin posición"
+              },
+              "sources": [
+                "https://example.invalid/synthetic-package"
+              ]
+            }
+          ]
+        }
+      },
+      "expected_blocking": [
+        {
+          "code": "row_shape",
+          "field": "kit_members"
+        }
+      ],
+      "expected_issue_subset": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "expected_sql_blocking": [
+        {
+          "code": "row_shape",
+          "field": "kit_members"
+        }
+      ],
+      "expected_sql_issue_subset": []
+    }
+  ]
+}

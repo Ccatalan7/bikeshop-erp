@@ -1,0 +1,1429 @@
+{
+  "schema_version": 1,
+  "title": "All-family physical-port cardinality",
+  "catalogue_sha256": "15a2f1d0aa97e6413cf79419f45a711e1c2cb4234dcd38ab87893bf6c83ba412",
+  "independent_review_hashes": [
+    "4cbd9cd4e1ccb2f41ab3249cbaed83fe419689aa6ba1dbb24a5b9dd856bd66d1",
+    "a1c6bfc5fae5c11b3b7f804b240ea36b2a36db2f6e4ba2ff868c061802856820"
+  ],
+  "mechanical_coverage_complete": false,
+  "automatic_fill_authorized": false,
+  "cases": [
+    {
+      "id": "cc_adjuster_metric_thread",
+      "template": "control_small_part",
+      "values": {
+        "control_part_kind": "Regulador de tensión (barril)",
+        "fits_housing_diameter_mm": "5",
+        "control_adjuster_threads": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "scope": "Cuerpo del regulador",
+                "interface_kind": "Rosca",
+                "diameter_unit": "mm",
+                "diameter_mm": "6",
+                "pitch_unit": "mm",
+                "pitch_mm": "1"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "cc_adjuster_metric_diameter_tpi_pitch",
+      "template": "control_small_part",
+      "values": {
+        "control_part_kind": "Regulador de tensión (barril)",
+        "fits_housing_diameter_mm": "5",
+        "control_adjuster_threads": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "scope": "Cuerpo del regulador",
+                "interface_kind": "Rosca",
+                "diameter_unit": "mm",
+                "diameter_mm": "10",
+                "pitch_unit": "tpi",
+                "pitch_tpi": "26"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [
+        "https://www.parktool.com/en-us/blog/repair-help/basic-thread-concepts"
+      ]
+    },
+    {
+      "id": "cc_adjuster_two_pitch_units",
+      "template": "control_small_part",
+      "values": {
+        "control_part_kind": "Regulador de tensión (barril)",
+        "fits_housing_diameter_mm": "5",
+        "control_adjuster_threads": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "scope": "Cuerpo del regulador",
+                "interface_kind": "Rosca",
+                "diameter_unit": "mm",
+                "diameter_mm": "6",
+                "pitch_unit": "mm",
+                "pitch_mm": "1",
+                "pitch_tpi": "26"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [
+        {
+          "code": "row_field_applicability",
+          "field": "control_adjuster_threads"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "cc_adjuster_literal_has_no_pitch",
+      "template": "control_small_part",
+      "values": {
+        "control_part_kind": "Regulador de tensión (barril)",
+        "fits_housing_diameter_mm": "5",
+        "control_adjuster_threads": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "scope": "Cuerpo del regulador",
+                "interface_kind": "Designación OEM",
+                "designation": "Designación sintética",
+                "pitch_unit": "mm"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [
+        {
+          "code": "row_field_applicability",
+          "field": "control_adjuster_threads"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "cc_adjuster_literal_cannot_carry_a_pitch_figure",
+      "template": "control_small_part",
+      "values": {
+        "control_part_kind": "Regulador de tensión (barril)",
+        "fits_housing_diameter_mm": "5",
+        "control_adjuster_threads": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "scope": "Cuerpo del regulador",
+                "interface_kind": "Designación OEM",
+                "designation": "Designación sintética",
+                "pitch_mm": "1"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [
+        {
+          "code": "row_field_applicability",
+          "field": "control_adjuster_threads"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "cc_adjuster_thread_absent",
+      "template": "control_small_part",
+      "values": {
+        "control_part_kind": "Regulador de tensión (barril)",
+        "fits_housing_diameter_mm": "5"
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "expected_issue_subset": [
+        {
+          "code": "required_missing",
+          "field": "control_adjuster_threads",
+          "blocking": false
+        }
+      ],
+      "expected_sql_issue_subset": [
+        {
+          "code": "required_missing",
+          "field": "control_adjuster_threads",
+          "blocking": false
+        }
+      ]
+    },
+    {
+      "id": "cc_boot_is_not_an_adjuster",
+      "template": "control_small_part",
+      "values": {
+        "control_part_kind": "Fuelle / goma protectora"
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "cc_double_ended_wire_is_one_run_two_ends",
+      "template": "control_cable",
+      "values": {
+        "control_cable_runs": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "member": "Cable único",
+                "length_form": "Declarado",
+                "length": "1700",
+                "length_unit": "mm",
+                "length_datum": "Cabeza a punta"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "control_cable_end_options": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "end_id": "e1",
+                "purpose": "Freno",
+                "run_row_id": "r1",
+                "head_profile": "Barril, maneta de manubrio plano",
+                "source_url": "https://www.sheldonbrown.com/cables.html",
+                "head_kind": "Designación OEM",
+                "alternative_group": "Cortar el extremo no usado"
+              },
+              "sources": []
+            },
+            {
+              "id": "r2",
+              "values": {
+                "end_id": "e2",
+                "purpose": "Freno",
+                "run_row_id": "r1",
+                "head_profile": "Pera, maneta de manubrio de ruta",
+                "source_url": "https://www.sheldonbrown.com/cables.html",
+                "head_kind": "Designación OEM",
+                "alternative_group": "Cortar el extremo no usado"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [
+        "https://www.sheldonbrown.com/cables.html"
+      ]
+    },
+    {
+      "id": "cc_kit_members_keep_their_own_lengths",
+      "template": "control_cable",
+      "values": {
+        "control_cable_runs": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "member": "Delantero",
+                "length_form": "Declarado",
+                "length": "800",
+                "length_unit": "mm",
+                "length_datum": "Cabeza a punta"
+              },
+              "sources": []
+            },
+            {
+              "id": "r2",
+              "values": {
+                "member": "Trasero",
+                "length_form": "Declarado",
+                "length": "1700",
+                "length_unit": "mm",
+                "length_datum": "Cabeza a punta"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "control_cable_end_options": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "end_id": "e1",
+                "purpose": "Freno",
+                "run_row_id": "r1",
+                "head_profile": "Barril",
+                "source_url": "https://www.sheldonbrown.com/cables.html",
+                "head_kind": "Designación OEM"
+              },
+              "sources": []
+            },
+            {
+              "id": "r2",
+              "values": {
+                "end_id": "e2",
+                "purpose": "Freno",
+                "run_row_id": "r2",
+                "head_profile": "Pera",
+                "source_url": "https://www.sheldonbrown.com/cables.html",
+                "head_kind": "Designación OEM"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "cc_end_cannot_point_at_an_absent_run",
+      "template": "control_cable",
+      "values": {
+        "control_cable_runs": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "member": "Cable único",
+                "length_form": "Declarado",
+                "length": "1700",
+                "length_unit": "mm"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "control_cable_end_options": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "end_id": "e1",
+                "purpose": "Freno",
+                "run_row_id": "r9",
+                "head_profile": "Barril",
+                "source_url": "https://www.sheldonbrown.com/cables.html",
+                "head_kind": "Designación OEM"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [
+        {
+          "code": "row_reference_unresolved",
+          "field": "control_cable_end_options"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "cc_universal_member_declares_no_length",
+      "template": "control_cable",
+      "values": {
+        "control_cable_runs": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "member": "Cable universal",
+                "length_form": "No publicado"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "control_cable_end_options": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "end_id": "e1",
+                "purpose": "Cambio",
+                "run_row_id": "r1",
+                "head_profile": "Cilíndrico pequeño, eje paralelo al alambre",
+                "source_url": "https://www.sheldonbrown.com/cables.html",
+                "head_kind": "Designación OEM"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [
+        "https://shop.odysseybmx.com/collections/odyssey-gyros"
+      ]
+    },
+    {
+      "id": "cc_declared_length_needs_its_unit",
+      "template": "control_cable",
+      "values": {
+        "control_cable_runs": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "member": "Cable único",
+                "length_form": "Declarado",
+                "length": "1700"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "expected_issue_subset": [
+        {
+          "code": "row_required_missing",
+          "field": "control_cable_runs",
+          "blocking": false
+        }
+      ],
+      "expected_sql_issue_subset": [
+        {
+          "code": "row_required_missing",
+          "field": "control_cable_runs",
+          "blocking": false
+        }
+      ]
+    },
+    {
+      "id": "cc_undeclared_member_cannot_carry_a_length",
+      "template": "control_cable",
+      "values": {
+        "control_cable_runs": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "member": "Cable universal",
+                "length_form": "No publicado",
+                "length": "1700",
+                "length_unit": "mm"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [
+        {
+          "code": "row_field_applicability",
+          "field": "control_cable_runs"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "expected_sql_blocking": [
+        {
+          "code": "row_field_applicability",
+          "field": "control_cable_runs"
+        },
+        {
+          "code": "row_field_applicability",
+          "field": "control_cable_runs"
+        }
+      ]
+    },
+    {
+      "id": "cc_shift_cable_cannot_use_cable_head",
+      "template": "control_cable",
+      "values": {
+        "control_cable_runs": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "member": "Cable único",
+                "length_form": "Declarado",
+                "length": "2100",
+                "length_unit": "mm"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "control_cable_end_options": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "end_id": "e1",
+                "purpose": "Cambio",
+                "run_row_id": "r1",
+                "head_profile": "Cilíndrico pequeño, eje paralelo al alambre",
+                "source_url": "https://www.sheldonbrown.com/cables.html",
+                "head_kind": "Freno: barril transversal"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [
+        {
+          "code": "row_value_conflict",
+          "field": "control_cable_end_options"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [
+        "https://www.sheldonbrown.com/cables.html"
+      ]
+    },
+    {
+      "id": "cc_reinforced_compressionless_brake_housing",
+      "template": "control_housing",
+      "values": {
+        "control_housing_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "member": "KEB Slick-Lube",
+                "configuration": "ZHB905",
+                "construction": "Hilos longitudinales con refuerzo",
+                "application": "Freno",
+                "status": "Compatible declarado",
+                "diameter_form": "Declarado",
+                "outer_diameter_mm": "5",
+                "length_form": "Declarado",
+                "length": "10000",
+                "length_unit": "mm",
+                "lined": true,
+                "source_url": "https://www.jagwire.com/en/article/154-585/brake-housing-5mm-keb-slick-lube"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [
+        "https://www.jagwire.com/en/article/154-585/brake-housing-5mm-keb-slick-lube"
+      ]
+    },
+    {
+      "id": "cc_gyro_upper_lengths_differ_by_kit",
+      "template": "bmx_cable_detangler",
+      "values": {
+        "detangler_kind": "Gyro completo con cables",
+        "steerer_fit": "1 1/8\" (28.6 mm)",
+        "detangler_cable_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "configuration": "Gyro G3 Kit",
+                "run_position": "Superior",
+                "member": "Superior",
+                "length_form": "Declarado",
+                "length": "425",
+                "length_unit": "mm",
+                "source_url": "https://shop.odysseybmx.com/collections/odyssey-gyros"
+              },
+              "sources": []
+            },
+            {
+              "id": "r2",
+              "values": {
+                "configuration": "Gyro G3 Kit",
+                "run_position": "Inferior",
+                "member": "Inferior",
+                "length_form": "Designación OEM",
+                "source_url": "https://shop.odysseybmx.com/collections/odyssey-gyros",
+                "length_designation": "Universal"
+              },
+              "sources": []
+            },
+            {
+              "id": "r3",
+              "values": {
+                "configuration": "Gyro GTX-S Pro Kit",
+                "run_position": "Superior",
+                "member": "Superior",
+                "length_form": "Declarado",
+                "length": "475",
+                "length_unit": "mm",
+                "source_url": "https://shop.odysseybmx.com/collections/odyssey-gyros"
+              },
+              "sources": []
+            },
+            {
+              "id": "r4",
+              "values": {
+                "configuration": "Gyro GTX-S Pro Kit",
+                "run_position": "Inferior",
+                "member": "Inferior",
+                "length_form": "Designación OEM",
+                "source_url": "https://shop.odysseybmx.com/collections/odyssey-gyros",
+                "length_designation": "Universal"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [
+        "https://shop.odysseybmx.com/collections/odyssey-gyros"
+      ]
+    },
+    {
+      "id": "cc_gyro_dual_upper_is_two_runs_same_position",
+      "template": "bmx_cable_detangler",
+      "values": {
+        "detangler_kind": "Gyro completo con cables",
+        "steerer_fit": "1 1/8\" (28.6 mm)",
+        "detangler_cable_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "configuration": "Conjunto con superior doble",
+                "run_position": "Superior",
+                "member": "Superior izquierdo",
+                "length_form": "No publicado",
+                "source_url": "https://shop.odysseybmx.com/collections/odyssey-gyros"
+              },
+              "sources": []
+            },
+            {
+              "id": "r2",
+              "values": {
+                "configuration": "Conjunto con superior doble",
+                "run_position": "Superior",
+                "member": "Superior derecho",
+                "length_form": "No publicado",
+                "source_url": "https://shop.odysseybmx.com/collections/odyssey-gyros"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [
+        "https://shop.odysseybmx.com/collections/odyssey-gyros"
+      ]
+    },
+    {
+      "id": "cc_gyro_run_without_position",
+      "template": "bmx_cable_detangler",
+      "values": {
+        "detangler_kind": "Gyro completo con cables",
+        "steerer_fit": "1 1/8\" (28.6 mm)",
+        "detangler_cable_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "configuration": "Conjunto sintético",
+                "member": "Superior",
+                "length_form": "No publicado"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "expected_issue_subset": [
+        {
+          "code": "row_incomplete",
+          "field": "detangler_cable_configurations",
+          "blocking": false
+        }
+      ],
+      "expected_sql_issue_subset": [
+        {
+          "code": "row_incomplete",
+          "field": "detangler_cable_configurations",
+          "blocking": false
+        }
+      ]
+    },
+    {
+      "id": "cc_gyro_runs_absent",
+      "template": "bmx_cable_detangler",
+      "values": {
+        "detangler_kind": "Gyro completo con cables",
+        "steerer_fit": "1 1/8\" (28.6 mm)"
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "expected_issue_subset": [
+        {
+          "code": "required_missing",
+          "field": "detangler_cable_configurations",
+          "blocking": false
+        }
+      ],
+      "expected_sql_issue_subset": [
+        {
+          "code": "required_missing",
+          "field": "detangler_cable_configurations",
+          "blocking": false
+        }
+      ]
+    },
+    {
+      "id": "cc_plate_has_no_runs",
+      "template": "bmx_cable_detangler",
+      "values": {
+        "detangler_kind": "Placa / tab",
+        "steerer_fit": "1 1/8\" (28.6 mm)"
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "cc_plate_cannot_declare_runs",
+      "template": "bmx_cable_detangler",
+      "values": {
+        "detangler_kind": "Placa / tab",
+        "steerer_fit": "1 1/8\" (28.6 mm)",
+        "detangler_cable_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "configuration": "Conjunto sintético",
+                "run_position": "Superior",
+                "member": "Superior",
+                "length_form": "No publicado"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [
+        {
+          "code": "field_applicability",
+          "field": "detangler_cable_configurations"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "cc_root_oem_uck800_member_lengths",
+      "template": "control_cable",
+      "values": {
+        "control_cable_runs": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "member": "Cable delantero",
+                "configuration": "UCK800",
+                "length_form": "Declarado",
+                "length": "2000",
+                "length_unit": "mm",
+                "quantity": "1",
+                "source_url": "https://jagwire.com/products/diy-cable-kits/universal-sport-xl-brake-kit"
+              },
+              "sources": []
+            },
+            {
+              "id": "r2",
+              "values": {
+                "member": "Cable trasero",
+                "configuration": "UCK800",
+                "length_form": "Declarado",
+                "length": "2500",
+                "length_unit": "mm",
+                "quantity": "1",
+                "source_url": "https://jagwire.com/products/diy-cable-kits/universal-sport-xl-brake-kit"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [
+        "https://jagwire.com/products/diy-cable-kits/universal-sport-xl-brake-kit"
+      ]
+    },
+    {
+      "id": "cc_root_legacy_head_cannot_override_end_conflict",
+      "template": "control_cable",
+      "values": {
+        "control_cable_runs": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "member": "Cable delantero",
+                "configuration": "UCK800",
+                "length_form": "Declarado",
+                "length": "2000",
+                "length_unit": "mm",
+                "quantity": "1",
+                "source_url": "https://jagwire.com/products/diy-cable-kits/universal-sport-xl-brake-kit"
+              },
+              "sources": []
+            },
+            {
+              "id": "r2",
+              "values": {
+                "member": "Cable trasero",
+                "configuration": "UCK800",
+                "length_form": "Declarado",
+                "length": "2500",
+                "length_unit": "mm",
+                "quantity": "1",
+                "source_url": "https://jagwire.com/products/diy-cable-kits/universal-sport-xl-brake-kit"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "cable_head": "Doble cabeza (universal)",
+        "control_cable_end_options": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "end_id": "Prueba",
+                "purpose": "Cambio",
+                "head_kind": "Freno: barril transversal",
+                "head_profile": "Barril",
+                "run_row_id": "r1",
+                "source_url": "https://www.sheldonbrown.com/cables.html"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [
+        {
+          "code": "row_value_conflict",
+          "field": "control_cable_end_options"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "cc_root_unreinforced_brake_cannot_be_approved",
+      "template": "control_housing",
+      "values": {
+        "control_housing_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "member": "Funda",
+                "configuration": "Caso de construcción",
+                "construction": "Hilos longitudinales sin refuerzo",
+                "application": "Freno",
+                "status": "Compatible declarado",
+                "diameter_form": "No publicado",
+                "length_form": "No publicado",
+                "source_url": "https://www.sheldonbrown.com/cables.html"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [
+        {
+          "code": "row_value_conflict",
+          "field": "control_housing_configurations"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [
+        "https://www.sheldonbrown.com/cables.html"
+      ]
+    },
+    {
+      "id": "cc_root_unreinforced_brake_cannot_be_conditional",
+      "template": "control_housing",
+      "values": {
+        "control_housing_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "member": "Funda",
+                "configuration": "Caso de construcción",
+                "construction": "Hilos longitudinales sin refuerzo",
+                "application": "Freno",
+                "status": "Condicional",
+                "diameter_form": "No publicado",
+                "length_form": "No publicado",
+                "source_url": "https://www.sheldonbrown.com/cables.html",
+                "conditions": "Declaración contradictoria"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [
+        {
+          "code": "row_value_conflict",
+          "field": "control_housing_configurations"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [
+        "https://www.sheldonbrown.com/cables.html"
+      ]
+    },
+    {
+      "id": "cc_root_unreinforced_brake_records_rejection",
+      "template": "control_housing",
+      "values": {
+        "control_housing_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "member": "Funda",
+                "configuration": "Caso de construcción",
+                "construction": "Hilos longitudinales sin refuerzo",
+                "application": "Freno",
+                "status": "Incompatible declarado",
+                "diameter_form": "No publicado",
+                "length_form": "No publicado",
+                "source_url": "https://www.sheldonbrown.com/cables.html"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [
+        "https://www.sheldonbrown.com/cables.html"
+      ]
+    },
+    {
+      "id": "cc_root_unreinforced_shift_not_prohibited",
+      "template": "control_housing",
+      "values": {
+        "control_housing_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "member": "Funda",
+                "configuration": "Caso de construcción",
+                "construction": "Hilos longitudinales sin refuerzo",
+                "application": "Cambio",
+                "status": "Compatible declarado",
+                "diameter_form": "No publicado",
+                "length_form": "No publicado",
+                "source_url": "https://www.sheldonbrown.com/cables.html"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [
+        "https://www.sheldonbrown.com/cables.html"
+      ]
+    },
+    {
+      "id": "cc_root_segmented_brake_liner_not_segment_length",
+      "template": "control_housing",
+      "values": {
+        "control_housing_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "member": "Funda",
+                "configuration": "Mountain Elite Link 2017",
+                "construction": "Segmentada",
+                "application": "Freno",
+                "status": "Compatible declarado",
+                "diameter_form": "Declarado",
+                "length_form": "Declarado",
+                "source_url": "https://jagwire.com/products/diy-cable-kits/2017mountain-elite-link-brake-kit",
+                "outer_diameter_mm": "5",
+                "length": "450",
+                "length_unit": "mm",
+                "lined": true,
+                "liner_length_mm": "2000"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [
+        "https://jagwire.com/products/diy-cable-kits/2017mountain-elite-link-brake-kit"
+      ]
+    },
+    {
+      "id": "cc_root_liner_length_needs_liner",
+      "template": "control_housing",
+      "values": {
+        "control_housing_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "member": "Funda",
+                "configuration": "Caso de construcción",
+                "construction": "Hilos longitudinales sin refuerzo",
+                "application": "Cambio",
+                "status": "Compatible declarado",
+                "diameter_form": "No publicado",
+                "length_form": "No publicado",
+                "source_url": "https://www.sheldonbrown.com/cables.html",
+                "lined": false,
+                "liner_length_mm": "2000"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [
+        {
+          "code": "row_field_applicability",
+          "field": "control_housing_configurations"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "cc_root_housing_inner_outer_order",
+      "template": "control_housing",
+      "values": {
+        "control_housing_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "member": "Funda",
+                "configuration": "Caso de construcción",
+                "construction": "Hilos longitudinales sin refuerzo",
+                "application": "Cambio",
+                "status": "Compatible declarado",
+                "diameter_form": "Declarado",
+                "length_form": "No publicado",
+                "source_url": "https://www.sheldonbrown.com/cables.html",
+                "outer_diameter_mm": "4",
+                "inner_diameter_mm": "5"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [
+        {
+          "code": "row_shape",
+          "field": "control_housing_configurations"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "cc_root_housing_measurement_unknown_stays_open",
+      "template": "control_housing",
+      "values": {
+        "control_housing_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "member": "Funda",
+                "configuration": "Caso de construcción",
+                "construction": "Hilos longitudinales sin refuerzo",
+                "application": "Cambio",
+                "status": "Compatible declarado",
+                "diameter_form": "Declarado",
+                "length_form": "No publicado",
+                "source_url": "https://www.sheldonbrown.com/cables.html"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "expected_issue_subset": [
+        {
+          "code": "row_required_missing",
+          "field": "control_housing_configurations",
+          "blocking": false
+        }
+      ],
+      "expected_sql_issue_subset": [
+        {
+          "code": "row_required_missing",
+          "field": "control_housing_configurations",
+          "blocking": false
+        }
+      ]
+    },
+    {
+      "id": "cc_root_unknown_housing_not_approved",
+      "template": "control_housing",
+      "values": {
+        "control_housing_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "member": "Funda",
+                "configuration": "Caso de construcción",
+                "construction": "Hilos longitudinales sin refuerzo",
+                "application": "Freno",
+                "diameter_form": "No publicado",
+                "length_form": "No publicado",
+                "source_url": "https://www.sheldonbrown.com/cables.html"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "expected_issue_subset": [
+        {
+          "code": "row_incomplete",
+          "field": "control_housing_configurations",
+          "blocking": false
+        }
+      ],
+      "expected_sql_issue_subset": [
+        {
+          "code": "row_incomplete",
+          "field": "control_housing_configurations",
+          "blocking": false
+        }
+      ]
+    },
+    {
+      "id": "cc_root_gyro_m2_ends_resolve_own_run",
+      "template": "bmx_cable_detangler",
+      "values": {
+        "detangler_kind": "Cables de gyro",
+        "detangler_cable_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "configuration": "M2",
+                "member": "Superior doble",
+                "run_position": "Superior",
+                "length_form": "Declarado",
+                "length": "440",
+                "length_unit": "mm",
+                "source_url": "https://shop.odysseybmx.com/collections/odyssey-gyros/products/odyssey-m2-dual-upper-cable-black"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "detangler_cable_ends": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "end_id": "Terminal",
+                "purpose": "Freno",
+                "head_kind": "Designación OEM",
+                "lever_model": "Odyssey M2",
+                "run_row_id": "r1",
+                "source_url": "https://shop.odysseybmx.com/collections/odyssey-gyros/products/odyssey-m2-dual-upper-cable-black"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [
+        "https://shop.odysseybmx.com/collections/odyssey-gyros/products/odyssey-m2-dual-upper-cable-black"
+      ]
+    },
+    {
+      "id": "cc_root_gyro_end_cannot_link_display_label",
+      "template": "bmx_cable_detangler",
+      "values": {
+        "detangler_kind": "Cables de gyro",
+        "detangler_cable_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "configuration": "M2",
+                "member": "Superior doble",
+                "run_position": "Superior",
+                "length_form": "Declarado",
+                "length": "440",
+                "length_unit": "mm",
+                "source_url": "https://shop.odysseybmx.com/collections/odyssey-gyros/products/odyssey-m2-dual-upper-cable-black"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "detangler_cable_ends": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "end_id": "Terminal",
+                "purpose": "Freno",
+                "head_kind": "Designación OEM",
+                "lever_model": "Odyssey M2",
+                "run_row_id": "Superior doble",
+                "source_url": "https://shop.odysseybmx.com/collections/odyssey-gyros/products/odyssey-m2-dual-upper-cable-black"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [
+        {
+          "code": "row_reference_unresolved",
+          "field": "detangler_cable_ends"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "cc_root_cable_spare_does_not_have_steerer_mount",
+      "template": "bmx_cable_detangler",
+      "values": {
+        "detangler_kind": "Cables de gyro",
+        "steerer_fit": "1 1/8\" (28.6 mm)"
+      },
+      "expected_blocking": [
+        {
+          "code": "field_applicability",
+          "field": "steerer_fit"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "cc_root_bare_rotor_has_no_cable_runs",
+      "template": "bmx_cable_detangler",
+      "values": {
+        "detangler_kind": "Rotor sin cables"
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    }
+  ],
+  "root_nd_case_overrides": [
+    {
+      "id": "helmet_smith_mainline_certifications_by_row",
+      "reason": "Integral pertenece al eje de construcción, no al uso."
+    },
+    {
+      "id": "helmet_inventory_best_enduro_certificado_sin_norma",
+      "reason": "Se conserva Enduro sin inferir cobertura desde el título."
+    },
+    {
+      "id": "RCF25",
+      "reason": "Una variante distinta del soporte no es montaje de este SKU; se rechaza el token retirado."
+    }
+  ],
+  "root_row_value_case_overrides": [
+    "RCF08",
+    "CPC_GAP_INCLUDED_CLAMP_FALSE"
+  ],
+  "deferred_pressure_fixture_ids": [],
+  "superseded_pressure_fixtures": [
+    "wrfp_hookless_row_maximum_is_not_the_headline",
+    "wrfp_schwalbe_general_maximum_in_bar",
+    "wrfp_unit_without_value_is_pending",
+    "wrfp_value_without_unit_stays_pending"
+  ],
+  "required_server_migration": "20260907025000"
+}

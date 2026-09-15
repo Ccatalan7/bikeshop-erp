@@ -1,0 +1,2471 @@
+{
+  "schema_version": 2,
+  "scope": "existing_global_metadata_forward_only",
+  "audited_tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+  "catalog_sha256": "f4b15f8d1d634228d6c780acd8f3688f6f238d7411bff3936a41cdb9eff320c8",
+  "cases_sha256": "6546c3a2ae7f47117d214b9dfaf22aa4628ad75b2d38dd16d7bd82fb05df1f2b",
+  "preimage_sha256": "ac5929bf2adf03b1d1c802414bcebeef8a24be7e06a65f89c50d9896c675bd1b",
+  "families": [
+    "drivetrain_kit"
+  ],
+  "reused_definitions": [
+    {
+      "id": "16b4f701-478d-41c4-9fe0-5f9c215c3345",
+      "key": "bottom_bracket_family",
+      "unit": null,
+      "label": "Familia pedalier / motor",
+      "options": [
+        {
+          "id": "2e6d26a1-8cb6-433b-aa03-4064b4c5bc57",
+          "code": "bsa_threaded",
+          "label": "BSA roscado",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-08-21T17:58:02.773721+00:00",
+          "sort_order": 1,
+          "updated_at": "2026-08-21T17:58:02.773721+00:00",
+          "spec_definition_id": "16b4f701-478d-41c4-9fe0-5f9c215c3345"
+        },
+        {
+          "id": "2edf5736-4e46-4f71-b3f2-fd7a30d0ffdb",
+          "code": "bb30_pf30",
+          "label": "BB30 / PF30",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-08-21T17:58:02.773721+00:00",
+          "sort_order": 3,
+          "updated_at": "2026-08-21T17:58:02.773721+00:00",
+          "spec_definition_id": "16b4f701-478d-41c4-9fe0-5f9c215c3345"
+        },
+        {
+          "id": "46237682-3941-460c-9ffd-e859bc667bfa",
+          "code": "mid",
+          "label": "Mid / BMX",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-08-21T17:58:02.773721+00:00",
+          "sort_order": 4,
+          "updated_at": "2026-08-21T17:58:02.773721+00:00",
+          "spec_definition_id": "16b4f701-478d-41c4-9fe0-5f9c215c3345"
+        },
+        {
+          "id": "6e0d25ea-b0af-4d75-9a6b-b85d9151d0bf",
+          "code": "pressfit",
+          "label": "Pressfit",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-08-21T17:58:02.773721+00:00",
+          "sort_order": 2,
+          "updated_at": "2026-08-21T17:58:02.773721+00:00",
+          "spec_definition_id": "16b4f701-478d-41c4-9fe0-5f9c215c3345"
+        },
+        {
+          "id": "6ffb2fa0-7fa9-4da6-8a15-ada1eadd4096",
+          "code": "cuadrado_cartucho",
+          "label": "Cuadrado cartucho",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-08-21T17:58:02.773721+00:00",
+          "sort_order": 6,
+          "updated_at": "2026-08-21T17:58:02.773721+00:00",
+          "spec_definition_id": "16b4f701-478d-41c4-9fe0-5f9c215c3345"
+        },
+        {
+          "id": "8c4e2796-45dc-4116-8ea4-04b2991ecc31",
+          "code": "other",
+          "label": "Otro",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-08-21T17:58:02.773721+00:00",
+          "sort_order": 8,
+          "updated_at": "2026-08-21T17:58:02.773721+00:00",
+          "spec_definition_id": "16b4f701-478d-41c4-9fe0-5f9c215c3345"
+        },
+        {
+          "id": "aa0912e8-30aa-4146-8b6b-082c84f6cd10",
+          "code": "hollowtech_24mm_externo",
+          "label": "Hollowtech / 24mm externo",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-08-21T17:58:02.773721+00:00",
+          "sort_order": 7,
+          "updated_at": "2026-08-21T17:58:02.773721+00:00",
+          "spec_definition_id": "16b4f701-478d-41c4-9fe0-5f9c215c3345"
+        },
+        {
+          "id": "ad429d53-32fe-43af-a9b7-e6679da772f4",
+          "code": "americano_one_piece",
+          "label": "Americano / one-piece",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-08-21T17:58:02.773721+00:00",
+          "sort_order": 5,
+          "updated_at": "2026-08-21T17:58:02.773721+00:00",
+          "spec_definition_id": "16b4f701-478d-41c4-9fe0-5f9c215c3345"
+        },
+        {
+          "id": "f646ddbf-bd60-42f9-8297-f23c4a260e30",
+          "code": "desconocido_sin_confirmar",
+          "label": "Desconocido / sin confirmar",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-08-21T17:58:02.773721+00:00",
+          "sort_order": 9,
+          "updated_at": "2026-08-21T17:58:02.773721+00:00",
+          "spec_definition_id": "16b4f701-478d-41c4-9fe0-5f9c215c3345"
+        }
+      ],
+      "data_type": "single_select",
+      "tenant_id": null,
+      "created_at": "2026-04-26T17:27:29.520986+00:00",
+      "group_name": "Pedalier",
+      "sort_order": 60,
+      "updated_at": "2026-04-26T17:30:29.032543+00:00",
+      "description": "Familia o estándar principal del eje de motor / bottom bracket.",
+      "is_filterable": true,
+      "allowed_values": [
+        "BSA roscado",
+        "Pressfit",
+        "BB30 / PF30",
+        "Mid / BMX",
+        "Americano / one-piece",
+        "Cuadrado cartucho",
+        "Hollowtech / 24mm externo",
+        "Otro",
+        "Desconocido / sin confirmar"
+      ],
+      "validation_rules": {},
+      "is_customer_visible": true,
+      "is_mechanic_visible": true,
+      "is_required_by_default": false,
+      "is_compatibility_relevant": true
+    },
+    {
+      "id": "9d2ee4a7-faa1-41d6-b353-9484d1455089",
+      "key": "chain_ebike_rated",
+      "unit": null,
+      "label": "Apta e-bike",
+      "options": [],
+      "data_type": "boolean",
+      "tenant_id": null,
+      "created_at": "2026-04-26T23:52:14.049527+00:00",
+      "group_name": "Caracteristicas",
+      "sort_order": 25,
+      "updated_at": "2026-04-26T23:52:14.049527+00:00",
+      "description": "Indica si la cadena o kit declara refuerzo para e-bike o alto torque.",
+      "is_filterable": true,
+      "allowed_values": [],
+      "validation_rules": {},
+      "is_customer_visible": true,
+      "is_mechanic_visible": true,
+      "is_required_by_default": false,
+      "is_compatibility_relevant": false
+    },
+    {
+      "id": "88dd47b6-9ed4-4406-8576-d9f611c2c3f2",
+      "key": "chain_profile_family",
+      "unit": null,
+      "label": "Perfil cadena",
+      "options": [
+        {
+          "id": "18edc16b-4d23-417e-ba12-2c7d690450fd",
+          "code": "campagnolo",
+          "label": "Campagnolo",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-08-21T17:58:02.773721+00:00",
+          "sort_order": 8,
+          "updated_at": "2026-08-21T17:58:02.773721+00:00",
+          "spec_definition_id": "88dd47b6-9ed4-4406-8576-d9f611c2c3f2"
+        },
+        {
+          "id": "238d0183-5e77-4372-9ce1-5ca98780ae04",
+          "code": "shimano_linkglide_cues",
+          "label": "Shimano Linkglide / CUES",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-08-21T17:58:02.773721+00:00",
+          "sort_order": 4,
+          "updated_at": "2026-08-21T17:58:02.773721+00:00",
+          "spec_definition_id": "88dd47b6-9ed4-4406-8576-d9f611c2c3f2"
+        },
+        {
+          "id": "25b68422-4052-4466-b6b0-3a98ea85f6a0",
+          "code": "universal_5_8v",
+          "label": "Universal 5-8v",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-08-21T17:58:02.773721+00:00",
+          "sort_order": 1,
+          "updated_at": "2026-08-21T17:58:02.773721+00:00",
+          "spec_definition_id": "88dd47b6-9ed4-4406-8576-d9f611c2c3f2"
+        },
+        {
+          "id": "6e2a8512-16b8-4f3f-a9e7-f210f4a9c707",
+          "code": "sram_eagle",
+          "label": "SRAM Eagle",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-08-21T17:58:02.773721+00:00",
+          "sort_order": 5,
+          "updated_at": "2026-08-21T17:58:02.773721+00:00",
+          "spec_definition_id": "88dd47b6-9ed4-4406-8576-d9f611c2c3f2"
+        },
+        {
+          "id": "88bc1965-7d74-4a1a-8d0e-98c28eaf51d2",
+          "code": "sram_flattop",
+          "label": "SRAM FlatTop",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-08-21T17:58:02.773721+00:00",
+          "sort_order": 6,
+          "updated_at": "2026-08-21T17:58:02.773721+00:00",
+          "spec_definition_id": "88dd47b6-9ed4-4406-8576-d9f611c2c3f2"
+        },
+        {
+          "id": "a9bf432f-3786-40c8-917e-ac278ebd71f9",
+          "code": "sram_t_type",
+          "label": "SRAM T-Type",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-08-21T17:58:02.773721+00:00",
+          "sort_order": 7,
+          "updated_at": "2026-08-21T17:58:02.773721+00:00",
+          "spec_definition_id": "88dd47b6-9ed4-4406-8576-d9f611c2c3f2"
+        },
+        {
+          "id": "cbd1c701-b3f1-401c-a7ae-4aeeb5f6e694",
+          "code": "universal_9_11v",
+          "label": "Universal 9-11v",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-08-21T17:58:02.773721+00:00",
+          "sort_order": 2,
+          "updated_at": "2026-08-21T17:58:02.773721+00:00",
+          "spec_definition_id": "88dd47b6-9ed4-4406-8576-d9f611c2c3f2"
+        },
+        {
+          "id": "d458c076-6f0a-4455-8f02-0261c7adf9b2",
+          "code": "kmc_compatible",
+          "label": "KMC compatible",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-08-21T17:58:02.773721+00:00",
+          "sort_order": 9,
+          "updated_at": "2026-08-21T17:58:02.773721+00:00",
+          "spec_definition_id": "88dd47b6-9ed4-4406-8576-d9f611c2c3f2"
+        },
+        {
+          "id": "d9bb50d0-c41b-4296-8e31-35558ca3f4f7",
+          "code": "shimano_hg",
+          "label": "Shimano HG+",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-08-21T17:58:02.773721+00:00",
+          "sort_order": 3,
+          "updated_at": "2026-08-21T17:58:02.773721+00:00",
+          "spec_definition_id": "88dd47b6-9ed4-4406-8576-d9f611c2c3f2"
+        },
+        {
+          "id": "e8569d29-597d-4724-abc7-f70553667043",
+          "code": "single_speed_bmx",
+          "label": "Single speed / BMX",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-08-21T17:58:02.773721+00:00",
+          "sort_order": 10,
+          "updated_at": "2026-08-21T17:58:02.773721+00:00",
+          "spec_definition_id": "88dd47b6-9ed4-4406-8576-d9f611c2c3f2"
+        },
+        {
+          "id": "ee740eba-9826-4dcf-b381-322c8ea84bbd",
+          "code": "desconocido_sin_confirmar",
+          "label": "Desconocido / sin confirmar",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-08-21T17:58:02.773721+00:00",
+          "sort_order": 12,
+          "updated_at": "2026-08-21T17:58:02.773721+00:00",
+          "spec_definition_id": "88dd47b6-9ed4-4406-8576-d9f611c2c3f2"
+        },
+        {
+          "id": "fc3ae70a-6cc6-431f-95c8-52c0c556d7a0",
+          "code": "otro",
+          "label": "Otro",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-08-21T17:58:02.773721+00:00",
+          "sort_order": 11,
+          "updated_at": "2026-08-21T17:58:02.773721+00:00",
+          "spec_definition_id": "88dd47b6-9ed4-4406-8576-d9f611c2c3f2"
+        }
+      ],
+      "data_type": "multi_select",
+      "tenant_id": null,
+      "created_at": "2026-04-26T23:52:14.049527+00:00",
+      "group_name": "Compatibilidad",
+      "sort_order": 16,
+      "updated_at": "2026-04-27T03:39:54.804843+00:00",
+      "description": "Perfil o familia de cadena compatible: universal, HG+, Linkglide, Eagle, FlatTop, BMX/single speed, etc.",
+      "is_filterable": true,
+      "allowed_values": [
+        "Universal 5-8v",
+        "Universal 9-11v",
+        "Shimano HG+",
+        "Shimano Linkglide / CUES",
+        "SRAM Eagle",
+        "SRAM FlatTop",
+        "SRAM T-Type",
+        "Campagnolo",
+        "KMC compatible",
+        "Single speed / BMX",
+        "Otro",
+        "Desconocido / sin confirmar"
+      ],
+      "validation_rules": {},
+      "is_customer_visible": true,
+      "is_mechanic_visible": true,
+      "is_required_by_default": false,
+      "is_compatibility_relevant": true
+    },
+    {
+      "id": "7547914f-7bb0-4a45-b088-1a3b50c3aa22",
+      "key": "chainring_teeth",
+      "unit": "T",
+      "label": "Dientes plato/corona",
+      "options": [],
+      "data_type": "text",
+      "tenant_id": null,
+      "created_at": "2026-04-26T17:27:29.520986+00:00",
+      "group_name": "Transmisión delantera",
+      "sort_order": 41,
+      "updated_at": "2026-04-26T17:30:29.032543+00:00",
+      "description": "Dientes del plato o corona; puede ser un valor simple o una combinación como 42/34/24.",
+      "is_filterable": true,
+      "allowed_values": [],
+      "validation_rules": {},
+      "is_customer_visible": true,
+      "is_mechanic_visible": true,
+      "is_required_by_default": false,
+      "is_compatibility_relevant": true
+    },
+    {
+      "id": "4b2b3bb0-6f53-46d6-8136-8a6b791bfd64",
+      "key": "crank_arm_length_mm",
+      "unit": "mm",
+      "label": "Largo biela",
+      "options": [],
+      "data_type": "number",
+      "tenant_id": null,
+      "created_at": "2026-04-26T17:27:29.520986+00:00",
+      "group_name": "Bielas",
+      "sort_order": 50,
+      "updated_at": "2026-04-26T17:30:29.032543+00:00",
+      "description": "Largo de biela/pedivela.",
+      "is_filterable": true,
+      "allowed_values": [],
+      "validation_rules": {
+        "positive": true
+      },
+      "is_customer_visible": true,
+      "is_mechanic_visible": true,
+      "is_required_by_default": false,
+      "is_compatibility_relevant": true
+    },
+    {
+      "id": "af56cbe6-307c-4606-acd3-6ee5d7d48735",
+      "key": "drivetrain_declared_compatible_ecosystems",
+      "unit": null,
+      "label": "Ecosistemas compatibles declarados",
+      "options": [
+        {
+          "id": "0ad345aa-fea9-4cc3-a181-0e516ee5d616",
+          "code": "desconocido_sin_confirmar",
+          "label": "Desconocido / sin confirmar",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-08-21T17:58:02.773721+00:00",
+          "sort_order": 8,
+          "updated_at": "2026-08-21T17:58:02.773721+00:00",
+          "spec_definition_id": "af56cbe6-307c-4606-acd3-6ee5d7d48735"
+        },
+        {
+          "id": "112f0bf7-56a8-469a-a4f6-48c5480ae938",
+          "code": "single_speed_bmx",
+          "label": "Single speed / BMX",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-08-21T17:58:02.773721+00:00",
+          "sort_order": 6,
+          "updated_at": "2026-08-21T17:58:02.773721+00:00",
+          "spec_definition_id": "af56cbe6-307c-4606-acd3-6ee5d7d48735"
+        },
+        {
+          "id": "23429d3a-e46a-41ab-b513-82988351e3d2",
+          "code": "universal_generico",
+          "label": "Universal / generico",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-08-21T17:58:02.773721+00:00",
+          "sort_order": 5,
+          "updated_at": "2026-08-21T17:58:02.773721+00:00",
+          "spec_definition_id": "af56cbe6-307c-4606-acd3-6ee5d7d48735"
+        },
+        {
+          "id": "9234ac59-5d9e-439d-a224-4bc72d00992f",
+          "code": "ecosistema_sram",
+          "label": "Ecosistema SRAM",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-08-21T17:58:02.773721+00:00",
+          "sort_order": 2,
+          "updated_at": "2026-08-21T17:58:02.773721+00:00",
+          "spec_definition_id": "af56cbe6-307c-4606-acd3-6ee5d7d48735"
+        },
+        {
+          "id": "b5f1d99e-e49c-4016-9e69-56b3efa91d04",
+          "code": "ecosistema_shimano",
+          "label": "Ecosistema Shimano",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-08-21T17:58:02.773721+00:00",
+          "sort_order": 1,
+          "updated_at": "2026-08-21T17:58:02.773721+00:00",
+          "spec_definition_id": "af56cbe6-307c-4606-acd3-6ee5d7d48735"
+        },
+        {
+          "id": "ba29278b-3f83-414e-b73e-777eb7dbb378",
+          "code": "otro",
+          "label": "Otro",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-08-21T17:58:02.773721+00:00",
+          "sort_order": 7,
+          "updated_at": "2026-08-21T17:58:02.773721+00:00",
+          "spec_definition_id": "af56cbe6-307c-4606-acd3-6ee5d7d48735"
+        },
+        {
+          "id": "be042954-7616-43af-ae3c-08ab45f782ef",
+          "code": "ecosistema_microshift",
+          "label": "Ecosistema Microshift",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-08-21T17:58:02.773721+00:00",
+          "sort_order": 4,
+          "updated_at": "2026-08-21T17:58:02.773721+00:00",
+          "spec_definition_id": "af56cbe6-307c-4606-acd3-6ee5d7d48735"
+        },
+        {
+          "id": "ef352db2-0a75-4c95-8bd0-d372c19eb991",
+          "code": "ecosistema_campagnolo",
+          "label": "Ecosistema Campagnolo",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-08-21T17:58:02.773721+00:00",
+          "sort_order": 3,
+          "updated_at": "2026-08-21T17:58:02.773721+00:00",
+          "spec_definition_id": "af56cbe6-307c-4606-acd3-6ee5d7d48735"
+        }
+      ],
+      "data_type": "multi_select",
+      "tenant_id": null,
+      "created_at": "2026-04-27T03:39:54.804843+00:00",
+      "group_name": "Compatibilidad",
+      "sort_order": 14,
+      "updated_at": "2026-04-27T03:39:54.804843+00:00",
+      "description": "Claims explicitos de compatibilidad cruzada impresos en la caja, por ejemplo Compatible Shimano. No usar para duplicar el ecosistema principal.",
+      "is_filterable": true,
+      "allowed_values": [
+        "Ecosistema Shimano",
+        "Ecosistema SRAM",
+        "Ecosistema Campagnolo",
+        "Ecosistema Microshift",
+        "Universal / generico",
+        "Single speed / BMX",
+        "Otro",
+        "Desconocido / sin confirmar"
+      ],
+      "validation_rules": {},
+      "is_customer_visible": true,
+      "is_mechanic_visible": true,
+      "is_required_by_default": false,
+      "is_compatibility_relevant": true
+    },
+    {
+      "id": "2255c928-f47f-4fab-8f75-2c35e845e995",
+      "key": "drivetrain_platform",
+      "unit": null,
+      "label": "Plataforma transmision",
+      "options": [
+        {
+          "id": "215c91c3-80b1-41fe-87db-6d9b038cdd33",
+          "code": "friccion_universal",
+          "label": "Friccion / universal",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-08-21T17:58:02.773721+00:00",
+          "sort_order": 9,
+          "updated_at": "2026-08-21T17:58:02.773721+00:00",
+          "spec_definition_id": "2255c928-f47f-4fab-8f75-2c35e845e995"
+        },
+        {
+          "id": "2d96d2c8-1edc-455a-a642-64411dba1f9f",
+          "code": "sram_flattop_axs_road",
+          "label": "SRAM FlatTop / AXS road",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-08-21T17:58:02.773721+00:00",
+          "sort_order": 5,
+          "updated_at": "2026-08-21T17:58:02.773721+00:00",
+          "spec_definition_id": "2255c928-f47f-4fab-8f75-2c35e845e995"
+        },
+        {
+          "id": "2f5d54ee-004f-4b28-8c01-cb24bfa5d3b6",
+          "code": "shimano_hyperglide",
+          "label": "Shimano Hyperglide+",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-08-21T17:58:02.773721+00:00",
+          "sort_order": 2,
+          "updated_at": "2026-08-21T17:58:02.773721+00:00",
+          "spec_definition_id": "2255c928-f47f-4fab-8f75-2c35e845e995"
+        },
+        {
+          "id": "314242b7-2b94-4528-9a66-0c86586392f4",
+          "code": "sram_t_type_transmission",
+          "label": "SRAM T-Type Transmission",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-08-21T17:58:02.773721+00:00",
+          "sort_order": 6,
+          "updated_at": "2026-08-21T17:58:02.773721+00:00",
+          "spec_definition_id": "2255c928-f47f-4fab-8f75-2c35e845e995"
+        },
+        {
+          "id": "3868939d-358b-4ac3-9ddb-546a107b0a8c",
+          "code": "sram_eagle",
+          "label": "SRAM Eagle",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-08-21T17:58:02.773721+00:00",
+          "sort_order": 4,
+          "updated_at": "2026-08-21T17:58:02.773721+00:00",
+          "spec_definition_id": "2255c928-f47f-4fab-8f75-2c35e845e995"
+        },
+        {
+          "id": "433247cc-f4bc-4c83-9bfe-b47bc6b63765",
+          "code": "microshift_advent_acolyte",
+          "label": "Microshift Advent / Acolyte",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-08-21T17:58:02.773721+00:00",
+          "sort_order": 8,
+          "updated_at": "2026-08-21T17:58:02.773721+00:00",
+          "spec_definition_id": "2255c928-f47f-4fab-8f75-2c35e845e995"
+        },
+        {
+          "id": "99aa9147-772c-4128-952a-a865fcd33fd7",
+          "code": "campagnolo",
+          "label": "Campagnolo",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-08-21T17:58:02.773721+00:00",
+          "sort_order": 7,
+          "updated_at": "2026-08-21T17:58:02.773721+00:00",
+          "spec_definition_id": "2255c928-f47f-4fab-8f75-2c35e845e995"
+        },
+        {
+          "id": "b60bad39-3c4c-43c8-9243-18ac4c705f18",
+          "code": "shimano_linkglide_cues",
+          "label": "Shimano Linkglide / CUES",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-08-21T17:58:02.773721+00:00",
+          "sort_order": 3,
+          "updated_at": "2026-08-21T17:58:02.773721+00:00",
+          "spec_definition_id": "2255c928-f47f-4fab-8f75-2c35e845e995"
+        },
+        {
+          "id": "ba7b6fa4-0a9b-4988-adef-53524a73043f",
+          "code": "desconocido_sin_confirmar",
+          "label": "Desconocido / sin confirmar",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-08-21T17:58:02.773721+00:00",
+          "sort_order": 12,
+          "updated_at": "2026-08-21T17:58:02.773721+00:00",
+          "spec_definition_id": "2255c928-f47f-4fab-8f75-2c35e845e995"
+        },
+        {
+          "id": "ca36949e-59f0-4754-9017-8e4d18c7002d",
+          "code": "shimano_hg_sis",
+          "label": "Shimano HG / SIS",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-08-21T17:58:02.773721+00:00",
+          "sort_order": 1,
+          "updated_at": "2026-08-21T17:58:02.773721+00:00",
+          "spec_definition_id": "2255c928-f47f-4fab-8f75-2c35e845e995"
+        },
+        {
+          "id": "d4767864-1ec5-4302-a7d0-d5ebf951bc0e",
+          "code": "generico_compatible",
+          "label": "Generico compatible",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-08-21T17:58:02.773721+00:00",
+          "sort_order": 11,
+          "updated_at": "2026-08-21T17:58:02.773721+00:00",
+          "spec_definition_id": "2255c928-f47f-4fab-8f75-2c35e845e995"
+        },
+        {
+          "id": "f71406db-b389-4305-9590-d2d7781a8077",
+          "code": "single_speed_bmx",
+          "label": "Single speed / BMX",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-08-21T17:58:02.773721+00:00",
+          "sort_order": 10,
+          "updated_at": "2026-08-21T17:58:02.773721+00:00",
+          "spec_definition_id": "2255c928-f47f-4fab-8f75-2c35e845e995"
+        }
+      ],
+      "data_type": "single_select",
+      "tenant_id": null,
+      "created_at": "2026-04-26T23:52:14.049527+00:00",
+      "group_name": "Compatibilidad",
+      "sort_order": 15,
+      "updated_at": "2026-04-27T03:39:54.804843+00:00",
+      "description": "Ecosistema de compatibilidad declarado por el fabricante cuando afecta cadena, cassette, cambio, shifter o plato.",
+      "is_filterable": true,
+      "allowed_values": [
+        "Shimano HG / SIS",
+        "Shimano Hyperglide+",
+        "Shimano Linkglide / CUES",
+        "SRAM Eagle",
+        "SRAM FlatTop / AXS road",
+        "SRAM T-Type Transmission",
+        "Campagnolo",
+        "Microshift Advent / Acolyte",
+        "Friccion / universal",
+        "Single speed / BMX",
+        "Generico compatible",
+        "Desconocido / sin confirmar"
+      ],
+      "validation_rules": {},
+      "is_customer_visible": true,
+      "is_mechanic_visible": true,
+      "is_required_by_default": false,
+      "is_compatibility_relevant": true
+    },
+    {
+      "id": "415e6b7f-d427-4e93-8df2-fd73feddbce9",
+      "key": "drivetrain_primary_ecosystem",
+      "unit": null,
+      "label": "Familia tecnica / ecosistema principal",
+      "options": [
+        {
+          "id": "02cf6941-a36f-41ac-bf2e-a1cc5c458767",
+          "code": "single_speed_bmx",
+          "label": "Single speed / BMX",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-08-21T17:58:02.773721+00:00",
+          "sort_order": 6,
+          "updated_at": "2026-08-21T17:58:02.773721+00:00",
+          "spec_definition_id": "415e6b7f-d427-4e93-8df2-fd73feddbce9"
+        },
+        {
+          "id": "29fcbf9c-6d93-4f1e-b995-dbc9236d8b40",
+          "code": "universal_generico",
+          "label": "Universal / generico",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-08-21T17:58:02.773721+00:00",
+          "sort_order": 5,
+          "updated_at": "2026-08-21T17:58:02.773721+00:00",
+          "spec_definition_id": "415e6b7f-d427-4e93-8df2-fd73feddbce9"
+        },
+        {
+          "id": "97c5ed78-0ed6-4604-9ee9-887b07d51340",
+          "code": "ecosistema_shimano",
+          "label": "Ecosistema Shimano",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-08-21T17:58:02.773721+00:00",
+          "sort_order": 1,
+          "updated_at": "2026-08-21T17:58:02.773721+00:00",
+          "spec_definition_id": "415e6b7f-d427-4e93-8df2-fd73feddbce9"
+        },
+        {
+          "id": "a65487ae-bc20-42bc-b040-b7e039579455",
+          "code": "ecosistema_microshift",
+          "label": "Ecosistema Microshift",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-08-21T17:58:02.773721+00:00",
+          "sort_order": 4,
+          "updated_at": "2026-08-21T17:58:02.773721+00:00",
+          "spec_definition_id": "415e6b7f-d427-4e93-8df2-fd73feddbce9"
+        },
+        {
+          "id": "c3c3af5c-6d67-4b8b-a474-3ac5419ef076",
+          "code": "desconocido_sin_confirmar",
+          "label": "Desconocido / sin confirmar",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-08-21T17:58:02.773721+00:00",
+          "sort_order": 8,
+          "updated_at": "2026-08-21T17:58:02.773721+00:00",
+          "spec_definition_id": "415e6b7f-d427-4e93-8df2-fd73feddbce9"
+        },
+        {
+          "id": "d4948ce6-e7e2-4087-9604-2f9442dec71b",
+          "code": "otro",
+          "label": "Otro",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-08-21T17:58:02.773721+00:00",
+          "sort_order": 7,
+          "updated_at": "2026-08-21T17:58:02.773721+00:00",
+          "spec_definition_id": "415e6b7f-d427-4e93-8df2-fd73feddbce9"
+        },
+        {
+          "id": "ddab2097-620a-4cc4-82fe-fafdda9a04c2",
+          "code": "ecosistema_campagnolo",
+          "label": "Ecosistema Campagnolo",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-08-21T17:58:02.773721+00:00",
+          "sort_order": 3,
+          "updated_at": "2026-08-21T17:58:02.773721+00:00",
+          "spec_definition_id": "415e6b7f-d427-4e93-8df2-fd73feddbce9"
+        },
+        {
+          "id": "f86272d7-5796-40c8-b966-4a8ffcbad7a4",
+          "code": "ecosistema_sram",
+          "label": "Ecosistema SRAM",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-08-21T17:58:02.773721+00:00",
+          "sort_order": 2,
+          "updated_at": "2026-08-21T17:58:02.773721+00:00",
+          "spec_definition_id": "415e6b7f-d427-4e93-8df2-fd73feddbce9"
+        }
+      ],
+      "data_type": "single_select",
+      "tenant_id": null,
+      "created_at": "2026-04-27T03:39:54.804843+00:00",
+      "group_name": "Compatibilidad",
+      "sort_order": 13,
+      "updated_at": "2026-04-27T03:39:54.804843+00:00",
+      "description": "Ecosistema tecnico principal declarado por el fabricante. No confundir con la marca comercial del producto.",
+      "is_filterable": true,
+      "allowed_values": [
+        "Ecosistema Shimano",
+        "Ecosistema SRAM",
+        "Ecosistema Campagnolo",
+        "Ecosistema Microshift",
+        "Universal / generico",
+        "Single speed / BMX",
+        "Otro",
+        "Desconocido / sin confirmar"
+      ],
+      "validation_rules": {},
+      "is_customer_visible": true,
+      "is_mechanic_visible": true,
+      "is_required_by_default": false,
+      "is_compatibility_relevant": true
+    },
+    {
+      "id": "72f38b2f-ec08-408e-88b5-bf48307dc713",
+      "key": "front_chainring_count",
+      "unit": null,
+      "label": "Cantidad de platos",
+      "options": [
+        {
+          "id": "1021093b-c30f-4641-ad07-0cfbc51933b2",
+          "code": "v_1",
+          "label": "1",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-08-21T17:58:02.773721+00:00",
+          "sort_order": 1,
+          "updated_at": "2026-08-21T17:58:02.773721+00:00",
+          "spec_definition_id": "72f38b2f-ec08-408e-88b5-bf48307dc713"
+        },
+        {
+          "id": "33d7b5d5-9851-410e-9f6b-d6db26015436",
+          "code": "v_2",
+          "label": "2",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-08-21T17:58:02.773721+00:00",
+          "sort_order": 2,
+          "updated_at": "2026-08-21T17:58:02.773721+00:00",
+          "spec_definition_id": "72f38b2f-ec08-408e-88b5-bf48307dc713"
+        },
+        {
+          "id": "8ba70574-cf18-406d-bee1-45a965cde870",
+          "code": "v_3",
+          "label": "3",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-08-21T17:58:02.773721+00:00",
+          "sort_order": 3,
+          "updated_at": "2026-08-21T17:58:02.773721+00:00",
+          "spec_definition_id": "72f38b2f-ec08-408e-88b5-bf48307dc713"
+        }
+      ],
+      "data_type": "multi_select",
+      "tenant_id": null,
+      "created_at": "2026-04-26T17:27:29.520986+00:00",
+      "group_name": "Compatibilidad",
+      "sort_order": 40,
+      "updated_at": "2026-04-26T17:30:29.032543+00:00",
+      "description": "Cantidad de platos delanteros que el componente soporta o incluye.",
+      "is_filterable": true,
+      "allowed_values": [
+        "1",
+        "2",
+        "3"
+      ],
+      "validation_rules": {},
+      "is_customer_visible": true,
+      "is_mechanic_visible": true,
+      "is_required_by_default": false,
+      "is_compatibility_relevant": true
+    },
+    {
+      "id": "2e95f3fb-815b-4ab0-86f9-7532114d79a2",
+      "key": "kit_contents",
+      "unit": null,
+      "label": "Contenido kit",
+      "options": [],
+      "data_type": "text",
+      "tenant_id": null,
+      "created_at": "2026-04-26T17:27:29.520986+00:00",
+      "group_name": "Kit",
+      "sort_order": 85,
+      "updated_at": "2026-04-26T17:30:29.032543+00:00",
+      "description": "Resumen estructurado/manual del contenido del kit.",
+      "is_filterable": false,
+      "allowed_values": [],
+      "validation_rules": {},
+      "is_customer_visible": true,
+      "is_mechanic_visible": true,
+      "is_required_by_default": false,
+      "is_compatibility_relevant": false
+    },
+    {
+      "id": "d0cfc800-78a6-5bba-945b-ccbff6fa88e1",
+      "key": "kit_members",
+      "unit": null,
+      "label": "Componentes incluidos",
+      "options": [],
+      "data_type": "json",
+      "tenant_id": null,
+      "created_at": "2026-09-07T22:33:40.381707+00:00",
+      "group_name": null,
+      "sort_order": 0,
+      "updated_at": "2026-09-07T22:33:40.381707+00:00",
+      "description": null,
+      "is_filterable": false,
+      "allowed_values": [],
+      "validation_rules": {
+        "rows_schema": {
+          "columns": [
+            {
+              "key": "member_role",
+              "type": "token",
+              "label": "Componente",
+              "required": true,
+              "allowed_values": [
+                "maneta",
+                "cáliper",
+                "manguera",
+                "rotor",
+                "adaptador",
+                "cassette",
+                "cadena",
+                "biela",
+                "pedalier",
+                "copas",
+                "rodamientos",
+                "eje",
+                "plato",
+                "mando",
+                "cambio trasero",
+                "desviador",
+                "pastilla",
+                "parche",
+                "pegamento",
+                "válvula",
+                "cinta",
+                "sellante",
+                "rueda delantera",
+                "rueda trasera",
+                "llanta",
+                "maza",
+                "rayos",
+                "cubierta",
+                "tapa",
+                "araña",
+                "oliva",
+                "inserto",
+                "otro",
+                "cable",
+                "soporte",
+                "correa",
+                "espaciador"
+              ]
+            },
+            {
+              "key": "family",
+              "type": "token",
+              "label": "Familia técnica",
+              "required": true,
+              "allowed_values": [
+                "accessory_mount",
+                "audible_signal",
+                "bearing",
+                "bicycle",
+                "bike_bag",
+                "bike_protection",
+                "bmx_cable_detangler",
+                "bottle",
+                "bottle_cage",
+                "bottom_bracket",
+                "bottom_bracket_axle",
+                "bottom_bracket_bearing",
+                "bottom_bracket_cup",
+                "brake_caliper",
+                "brake_fluid",
+                "brake_lever",
+                "brake_mount_adapter",
+                "brake_pad",
+                "brake_shift_combined_control",
+                "brake_small_part",
+                "cassette",
+                "cassette_lockring",
+                "cassette_spacer",
+                "chain",
+                "chain_guide",
+                "chain_link",
+                "chainring",
+                "chainring_guard",
+                "consumer_electronics",
+                "control_cable",
+                "control_housing",
+                "control_small_part",
+                "crank_arm",
+                "crankset",
+                "cycle_computer",
+                "derailleur_hanger",
+                "derailleur_hanger_extender",
+                "derailleur_pulley",
+                "drivetrain_kit",
+                "eyewear",
+                "fastener",
+                "fender",
+                "fixed_cog",
+                "food_beverage",
+                "fork",
+                "frame",
+                "freewheel",
+                "front_derailleur",
+                "grip",
+                "handlebar",
+                "handlebar_covering",
+                "headset",
+                "headset_small_part",
+                "helmet",
+                "hub",
+                "hub_axle",
+                "hub_brake",
+                "hub_small_part",
+                "hydraulic_disc_brake",
+                "hydraulic_fitting",
+                "hydraulic_hose",
+                "kickstand",
+                "light",
+                "lock",
+                "mechanical_disc_brake",
+                "pedal",
+                "pedal_peg",
+                "pump",
+                "rack_basket",
+                "rear_derailleur",
+                "rear_shock",
+                "reflector",
+                "rider_apparel",
+                "rider_bag",
+                "rider_glove",
+                "rider_protection",
+                "rim",
+                "rim_brake",
+                "rim_strip",
+                "rotor",
+                "rotor_mount_adapter",
+                "saddle",
+                "saddle_cover",
+                "seat_clamp",
+                "seatpost",
+                "shifter",
+                "souvenir",
+                "spacer",
+                "spoke",
+                "spoke_nipple",
+                "stem",
+                "tire",
+                "tire_liner",
+                "training_wheel",
+                "tube",
+                "tube_repair",
+                "tubeless_consumable",
+                "tubeless_repair",
+                "tubeless_tape",
+                "tubeless_valve",
+                "valve_small_part",
+                "wheel",
+                "wheel_retention",
+                "workshop_chemical",
+                "workshop_tool"
+              ]
+            },
+            {
+              "key": "quantity",
+              "type": "integer",
+              "label": "Cantidad",
+              "required": true,
+              "validation": {
+                "positive": true
+              }
+            },
+            {
+              "key": "position",
+              "type": "token",
+              "label": "Posición",
+              "required": true,
+              "allowed_values": [
+                "Delantero",
+                "Trasero",
+                "Izquierdo",
+                "Derecho",
+                "Sin posición"
+              ]
+            },
+            {
+              "key": "identity_brand",
+              "type": "text",
+              "label": "Marca",
+              "required": false
+            },
+            {
+              "key": "identity_model",
+              "type": "text",
+              "label": "Modelo",
+              "required": false
+            }
+          ],
+          "version": 1
+        }
+      },
+      "is_customer_visible": false,
+      "is_mechanic_visible": true,
+      "is_required_by_default": false,
+      "is_compatibility_relevant": false
+    },
+    {
+      "id": "4f055961-6c16-430b-a4e2-e6b09dc1cccc",
+      "key": "spec_evidence_source",
+      "unit": null,
+      "label": "Fuente de la declaración",
+      "options": [],
+      "data_type": "text",
+      "tenant_id": null,
+      "created_at": "2026-09-06T06:58:57.745728+00:00",
+      "group_name": null,
+      "sort_order": 900,
+      "updated_at": "2026-09-06T06:58:57.745728+00:00",
+      "description": "URL del fabricante, manual o identificación del envase que respalda la declaración.",
+      "is_filterable": false,
+      "allowed_values": [],
+      "validation_rules": {},
+      "is_customer_visible": false,
+      "is_mechanic_visible": true,
+      "is_required_by_default": false,
+      "is_compatibility_relevant": false
+    },
+    {
+      "id": "660b0e90-180d-44a1-938c-f304a9358094",
+      "key": "spindle_interface",
+      "unit": null,
+      "label": "Punta del eje",
+      "options": [
+        {
+          "id": "00e64080-7dfe-4f5e-9582-00525d29a3b5",
+          "code": "bb30_30",
+          "label": "BB30 30mm",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-08-21T17:58:02.773721+00:00",
+          "sort_order": 6,
+          "updated_at": "2026-08-21T17:58:02.773721+00:00",
+          "spec_definition_id": "660b0e90-180d-44a1-938c-f304a9358094"
+        },
+        {
+          "id": "08e0888d-07f2-45ee-8afa-bcca1c9e3446",
+          "code": "isis",
+          "label": "ISIS",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-08-21T17:58:02.773721+00:00",
+          "sort_order": 7,
+          "updated_at": "2026-08-21T17:58:02.773721+00:00",
+          "spec_definition_id": "660b0e90-180d-44a1-938c-f304a9358094"
+        },
+        {
+          "id": "1bc7f139-de81-493c-a9ba-e184602df16a",
+          "code": "hollowtech_24",
+          "label": "Hollowtech / 24mm",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-08-21T17:58:02.773721+00:00",
+          "sort_order": 3,
+          "updated_at": "2026-08-21T17:58:02.773721+00:00",
+          "spec_definition_id": "660b0e90-180d-44a1-938c-f304a9358094"
+        },
+        {
+          "id": "329473af-4e20-4f43-b870-9eceec0d4ec1",
+          "code": "sram_dub",
+          "label": "SRAM DUB 28.99mm",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-08-21T17:58:02.773721+00:00",
+          "sort_order": 5,
+          "updated_at": "2026-08-21T17:58:02.773721+00:00",
+          "spec_definition_id": "660b0e90-180d-44a1-938c-f304a9358094"
+        },
+        {
+          "id": "40d75b1b-265f-4b53-9874-2bc8aad98f2b",
+          "code": "bmx_22",
+          "label": "BMX 22mm",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-08-21T17:58:02.773721+00:00",
+          "sort_order": 11,
+          "updated_at": "2026-08-21T17:58:02.773721+00:00",
+          "spec_definition_id": "660b0e90-180d-44a1-938c-f304a9358094"
+        },
+        {
+          "id": "50159a68-76ac-4443-9abf-3dfa3a3ddfd8",
+          "code": "one_piece",
+          "label": "One-piece / americano",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-08-21T17:58:02.773721+00:00",
+          "sort_order": 13,
+          "updated_at": "2026-08-21T17:58:02.773721+00:00",
+          "spec_definition_id": "660b0e90-180d-44a1-938c-f304a9358094"
+        },
+        {
+          "id": "69815048-1f62-4941-9585-2e43aab5e311",
+          "code": "powerspline",
+          "label": "Powerspline",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-08-21T17:58:02.773721+00:00",
+          "sort_order": 14,
+          "updated_at": "2026-08-21T17:58:02.773721+00:00",
+          "spec_definition_id": "660b0e90-180d-44a1-938c-f304a9358094"
+        },
+        {
+          "id": "6d2911e3-d1bb-4b63-af9b-236aa71fb057",
+          "code": "cottered",
+          "label": "Con chaveta",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-08-21T17:58:02.773721+00:00",
+          "sort_order": 9,
+          "updated_at": "2026-08-21T17:58:02.773721+00:00",
+          "spec_definition_id": "660b0e90-180d-44a1-938c-f304a9358094"
+        },
+        {
+          "id": "780054cb-0f4d-4966-a00b-af66e0c59fd4",
+          "code": "sram_gxp",
+          "label": "SRAM GXP 24/22",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-08-21T17:58:02.773721+00:00",
+          "sort_order": 4,
+          "updated_at": "2026-08-21T17:58:02.773721+00:00",
+          "spec_definition_id": "660b0e90-180d-44a1-938c-f304a9358094"
+        },
+        {
+          "id": "a7b79629-f772-4e61-aab0-e0e18a35a415",
+          "code": "bmx_24",
+          "label": "BMX 24mm",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-08-21T17:58:02.773721+00:00",
+          "sort_order": 12,
+          "updated_at": "2026-08-21T17:58:02.773721+00:00",
+          "spec_definition_id": "660b0e90-180d-44a1-938c-f304a9358094"
+        },
+        {
+          "id": "a973480a-f2bf-4b9b-8908-835e1c9d17a2",
+          "code": "bmx_19",
+          "label": "BMX 19mm",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-08-21T17:58:02.773721+00:00",
+          "sort_order": 10,
+          "updated_at": "2026-08-21T17:58:02.773721+00:00",
+          "spec_definition_id": "660b0e90-180d-44a1-938c-f304a9358094"
+        },
+        {
+          "id": "b4ccccf2-fd0e-4270-881e-c8a4bcc80e8d",
+          "code": "square_iso",
+          "label": "Cuadrado ISO",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-08-21T17:58:02.773721+00:00",
+          "sort_order": 2,
+          "updated_at": "2026-08-21T17:58:02.773721+00:00",
+          "spec_definition_id": "660b0e90-180d-44a1-938c-f304a9358094"
+        },
+        {
+          "id": "d6082dc2-ab24-46f2-a2c5-d22ef39a17f9",
+          "code": "square_jis",
+          "label": "Cuadrado JIS",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-08-21T17:58:02.773721+00:00",
+          "sort_order": 1,
+          "updated_at": "2026-08-21T17:58:02.773721+00:00",
+          "spec_definition_id": "660b0e90-180d-44a1-938c-f304a9358094"
+        },
+        {
+          "id": "df7493ea-6504-43c1-ad36-eeed932c7d1e",
+          "code": "octalink",
+          "label": "Octalink",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-08-21T17:58:02.773721+00:00",
+          "sort_order": 8,
+          "updated_at": "2026-08-21T17:58:02.773721+00:00",
+          "spec_definition_id": "660b0e90-180d-44a1-938c-f304a9358094"
+        }
+      ],
+      "data_type": "single_select",
+      "tenant_id": null,
+      "created_at": "2026-04-26T17:27:29.520986+00:00",
+      "group_name": "Pedalier",
+      "sort_order": 63,
+      "updated_at": "2026-08-21T16:23:07.121342+00:00",
+      "description": "Cómo entra el volante en el eje. El cuadrado viene en JIS (12,63 mm, Shimano) e ISO (12,5 mm, europeo); Octalink e ISIS son estriados.",
+      "is_filterable": true,
+      "allowed_values": [
+        "Cuadrado JIS",
+        "Cuadrado ISO",
+        "Hollowtech / 24mm",
+        "SRAM GXP 24/22",
+        "SRAM DUB 28.99mm",
+        "BB30 30mm",
+        "ISIS",
+        "Octalink",
+        "Con chaveta",
+        "BMX 19mm",
+        "BMX 22mm",
+        "BMX 24mm",
+        "One-piece / americano",
+        "Powerspline"
+      ],
+      "validation_rules": {},
+      "is_customer_visible": true,
+      "is_mechanic_visible": true,
+      "is_required_by_default": false,
+      "is_compatibility_relevant": true
+    }
+  ],
+  "records": {
+    "spec_definitions": [],
+    "spec_definition_values": [],
+    "spec_templates": [
+      {
+        "id": "6d80cd0c-81ac-41c1-af17-7a59a2b04b61",
+        "key": "drivetrain_kit",
+        "name": "Kit Transmisión",
+        "is_active": true,
+        "tenant_id": null,
+        "created_at": "2026-04-26T17:27:33.100573+00:00",
+        "description": "Kit mixto de transmisión; ficha resume contenido y compatibilidades principales.",
+        "default_tags": [
+          "drivetrain",
+          "kit"
+        ],
+        "form_contract": {
+          "rules_version": 2,
+          "roles": {
+            "bottom_bracket_family": "legacy",
+            "chain_ebike_rated": "legacy",
+            "chain_profile_family": "legacy",
+            "chainring_teeth": "legacy",
+            "crank_arm_length_mm": "legacy",
+            "drivetrain_declared_compatible_ecosystems": "legacy",
+            "drivetrain_platform": "legacy",
+            "drivetrain_primary_ecosystem": "legacy",
+            "front_chainring_count": "legacy",
+            "kit_contents": "legacy",
+            "spindle_interface": "legacy",
+            "kit_members": "contents",
+            "spec_evidence_source": "declaration"
+          },
+          "semantic_roles": {
+            "bottom_bracket_family": "legacy",
+            "chain_ebike_rated": "legacy",
+            "chain_profile_family": "legacy",
+            "chainring_teeth": "legacy",
+            "crank_arm_length_mm": "legacy",
+            "drivetrain_declared_compatible_ecosystems": "legacy",
+            "drivetrain_platform": "legacy",
+            "drivetrain_primary_ecosystem": "legacy",
+            "front_chainring_count": "legacy",
+            "kit_contents": "legacy",
+            "spindle_interface": "legacy",
+            "kit_members": "contents",
+            "spec_evidence_source": "evidence"
+          },
+          "labels": {},
+          "allowed_options": {},
+          "allowed_when": {
+            "bottom_bracket_family": {
+              "kind": "never"
+            },
+            "chain_ebike_rated": {
+              "kind": "never"
+            },
+            "chain_profile_family": {
+              "kind": "never"
+            },
+            "chainring_teeth": {
+              "kind": "never"
+            },
+            "crank_arm_length_mm": {
+              "kind": "never"
+            },
+            "drivetrain_declared_compatible_ecosystems": {
+              "kind": "never"
+            },
+            "drivetrain_platform": {
+              "kind": "never"
+            },
+            "drivetrain_primary_ecosystem": {
+              "kind": "never"
+            },
+            "front_chainring_count": {
+              "kind": "never"
+            },
+            "kit_contents": {
+              "kind": "never"
+            },
+            "spindle_interface": {
+              "kind": "never"
+            },
+            "kit_members": {
+              "kind": "always"
+            },
+            "spec_evidence_source": {
+              "kind": "always"
+            }
+          },
+          "required_when": {
+            "bottom_bracket_family": {
+              "kind": "never"
+            },
+            "chain_ebike_rated": {
+              "kind": "never"
+            },
+            "chain_profile_family": {
+              "kind": "never"
+            },
+            "chainring_teeth": {
+              "kind": "never"
+            },
+            "crank_arm_length_mm": {
+              "kind": "never"
+            },
+            "drivetrain_declared_compatible_ecosystems": {
+              "kind": "never"
+            },
+            "drivetrain_platform": {
+              "kind": "never"
+            },
+            "drivetrain_primary_ecosystem": {
+              "kind": "never"
+            },
+            "front_chainring_count": {
+              "kind": "never"
+            },
+            "kit_contents": {
+              "kind": "never"
+            },
+            "spindle_interface": {
+              "kind": "never"
+            },
+            "kit_members": {
+              "kind": "always"
+            },
+            "spec_evidence_source": {
+              "kind": "never"
+            }
+          },
+          "prerequisites": {
+            "kit_members": [
+              "spec_evidence_source"
+            ]
+          },
+          "helpers": {
+            "kit_members": "Registra las piezas incluidas en esta presentación y sus fuentes. Cada pieza conserva su propia identificación y ficha técnica. El contenido del envase no acredita que las piezas sean compatibles entre sí."
+          },
+          "evidence_requirements": {
+            "kit_members": "package_or_label",
+            "spec_evidence_source": "oem_or_package"
+          },
+          "member_profiles": {
+            "version": 1,
+            "collections": [
+              {
+                "field": "kit_members",
+                "family_column": "family",
+                "identity_columns": [
+                  "member_role",
+                  "position",
+                  "identity_brand",
+                  "identity_model"
+                ]
+              }
+            ]
+          }
+        },
+        "contract_version": 16,
+        "technical_family": "drivetrain_kit"
+      }
+    ],
+    "spec_template_fields": [
+      {
+        "id": "094b7920-34cd-43c2-ab78-96ede55c4142",
+        "tenant_id": null,
+        "created_at": "2026-04-26T23:52:25.17615+00:00",
+        "sort_order": 60,
+        "helper_text": null,
+        "is_required": false,
+        "section_key": "legacy",
+        "template_id": "6d80cd0c-81ac-41c1-af17-7a59a2b04b61",
+        "option_rules": [],
+        "constraint_rules": [],
+        "visibility_rules": [],
+        "default_value_json": null,
+        "spec_definition_id": "88dd47b6-9ed4-4406-8576-d9f611c2c3f2"
+      },
+      {
+        "id": "12100dbe-4fa3-4d23-b424-8639a5803f30",
+        "tenant_id": null,
+        "created_at": "2026-09-06T06:58:57.745728+00:00",
+        "sort_order": 5,
+        "helper_text": null,
+        "is_required": false,
+        "section_key": "declaration",
+        "template_id": "6d80cd0c-81ac-41c1-af17-7a59a2b04b61",
+        "option_rules": [],
+        "constraint_rules": [],
+        "visibility_rules": [],
+        "default_value_json": null,
+        "spec_definition_id": "4f055961-6c16-430b-a4e2-e6b09dc1cccc"
+      },
+      {
+        "id": "57bf66a5-9a84-4b90-ad77-638605a6834d",
+        "tenant_id": null,
+        "created_at": "2026-04-27T03:39:54.804843+00:00",
+        "sort_order": 45,
+        "helper_text": "Solo para claims explícitos de compatibilidad cruzada.",
+        "is_required": false,
+        "section_key": "legacy",
+        "template_id": "6d80cd0c-81ac-41c1-af17-7a59a2b04b61",
+        "option_rules": [],
+        "constraint_rules": [],
+        "visibility_rules": [],
+        "default_value_json": null,
+        "spec_definition_id": "af56cbe6-307c-4606-acd3-6ee5d7d48735"
+      },
+      {
+        "id": "60a75a0d-c31c-4186-b116-499d0606388a",
+        "tenant_id": null,
+        "created_at": "2026-04-26T17:27:53.621862+00:00",
+        "sort_order": 10,
+        "helper_text": null,
+        "is_required": false,
+        "section_key": "legacy",
+        "template_id": "6d80cd0c-81ac-41c1-af17-7a59a2b04b61",
+        "option_rules": [],
+        "constraint_rules": [],
+        "visibility_rules": [],
+        "default_value_json": null,
+        "spec_definition_id": "4b2b3bb0-6f53-46d6-8136-8a6b791bfd64"
+      },
+      {
+        "id": "708b35ac-328d-4868-aebd-969105e443df",
+        "tenant_id": null,
+        "created_at": "2026-04-26T17:27:53.621862+00:00",
+        "sort_order": 30,
+        "helper_text": null,
+        "is_required": false,
+        "section_key": "legacy",
+        "template_id": "6d80cd0c-81ac-41c1-af17-7a59a2b04b61",
+        "option_rules": [],
+        "constraint_rules": [],
+        "visibility_rules": [],
+        "default_value_json": null,
+        "spec_definition_id": "16b4f701-478d-41c4-9fe0-5f9c215c3345"
+      },
+      {
+        "id": "7323f4c6-e794-4467-8279-fea134e80bed",
+        "tenant_id": null,
+        "created_at": "2026-04-26T17:27:53.621862+00:00",
+        "sort_order": 10,
+        "helper_text": null,
+        "is_required": false,
+        "section_key": "legacy",
+        "template_id": "6d80cd0c-81ac-41c1-af17-7a59a2b04b61",
+        "option_rules": [],
+        "constraint_rules": [],
+        "visibility_rules": [],
+        "default_value_json": null,
+        "spec_definition_id": "2e95f3fb-815b-4ab0-86f9-7532114d79a2"
+      },
+      {
+        "id": "76208bee-9843-4fd7-a6ea-3e3eb4307254",
+        "tenant_id": null,
+        "created_at": "2026-04-26T23:52:25.17615+00:00",
+        "sort_order": 10,
+        "helper_text": null,
+        "is_required": false,
+        "section_key": "legacy",
+        "template_id": "6d80cd0c-81ac-41c1-af17-7a59a2b04b61",
+        "option_rules": [],
+        "constraint_rules": [],
+        "visibility_rules": [],
+        "default_value_json": null,
+        "spec_definition_id": "9d2ee4a7-faa1-41d6-b353-9484d1455089"
+      },
+      {
+        "id": "811239fe-64c5-41dc-b35f-25481bec53dc",
+        "tenant_id": null,
+        "created_at": "2026-04-26T17:27:53.621862+00:00",
+        "sort_order": 20,
+        "helper_text": null,
+        "is_required": false,
+        "section_key": "legacy",
+        "template_id": "6d80cd0c-81ac-41c1-af17-7a59a2b04b61",
+        "option_rules": [],
+        "constraint_rules": [],
+        "visibility_rules": [],
+        "default_value_json": null,
+        "spec_definition_id": "7547914f-7bb0-4a45-b088-1a3b50c3aa22"
+      },
+      {
+        "id": "a54afe8f-abe3-421d-948a-eb1dd254f6ef",
+        "tenant_id": null,
+        "created_at": "2026-04-26T17:27:53.621862+00:00",
+        "sort_order": 10,
+        "helper_text": null,
+        "is_required": false,
+        "section_key": "legacy",
+        "template_id": "6d80cd0c-81ac-41c1-af17-7a59a2b04b61",
+        "option_rules": [],
+        "constraint_rules": [],
+        "visibility_rules": [],
+        "default_value_json": null,
+        "spec_definition_id": "72f38b2f-ec08-408e-88b5-bf48307dc713"
+      },
+      {
+        "id": "b7f0e439-e5ff-48ac-b707-a8cf52e9c2e0",
+        "tenant_id": null,
+        "created_at": "2026-04-26T17:27:53.621862+00:00",
+        "sort_order": 40,
+        "helper_text": null,
+        "is_required": false,
+        "section_key": "legacy",
+        "template_id": "6d80cd0c-81ac-41c1-af17-7a59a2b04b61",
+        "option_rules": [],
+        "constraint_rules": [],
+        "visibility_rules": [],
+        "default_value_json": null,
+        "spec_definition_id": "660b0e90-180d-44a1-938c-f304a9358094"
+      },
+      {
+        "id": "b9816b5c-7410-4b85-b53d-e6faff567eec",
+        "tenant_id": null,
+        "created_at": "2026-04-27T03:39:54.804843+00:00",
+        "sort_order": 40,
+        "helper_text": "Ecosistema principal del kit; plataforma, perfil e indexado refinan despues.",
+        "is_required": false,
+        "section_key": "legacy",
+        "template_id": "6d80cd0c-81ac-41c1-af17-7a59a2b04b61",
+        "option_rules": [],
+        "constraint_rules": [],
+        "visibility_rules": [],
+        "default_value_json": null,
+        "spec_definition_id": "415e6b7f-d427-4e93-8df2-fd73feddbce9"
+      },
+      {
+        "id": "e7ade1d7-a3e5-4895-b0ad-fadd84f5eea7",
+        "tenant_id": null,
+        "created_at": "2026-04-26T23:52:25.17615+00:00",
+        "sort_order": 50,
+        "helper_text": null,
+        "is_required": false,
+        "section_key": "legacy",
+        "template_id": "6d80cd0c-81ac-41c1-af17-7a59a2b04b61",
+        "option_rules": [],
+        "constraint_rules": [],
+        "visibility_rules": [],
+        "default_value_json": null,
+        "spec_definition_id": "2255c928-f47f-4fab-8f75-2c35e845e995"
+      },
+      {
+        "section_key": "contents",
+        "sort_order": 0,
+        "is_required": false,
+        "visibility_rules": [],
+        "option_rules": [],
+        "constraint_rules": [],
+        "default_value_json": null,
+        "helper_text": null,
+        "id": "7300145b-8bcc-505b-a3e9-4d5283d77ae8",
+        "tenant_id": null,
+        "template_id": "6d80cd0c-81ac-41c1-af17-7a59a2b04b61",
+        "spec_definition_id": "d0cfc800-78a6-5bba-945b-ccbff6fa88e1"
+      }
+    ]
+  },
+  "before": {
+    "spec_templates": [
+      {
+        "id": "6d80cd0c-81ac-41c1-af17-7a59a2b04b61",
+        "key": "drivetrain_kit",
+        "name": "Kit Transmisión",
+        "is_active": true,
+        "tenant_id": null,
+        "created_at": "2026-04-26T17:27:33.100573+00:00",
+        "updated_at": "2026-04-26T17:27:33.100573+00:00",
+        "description": "Kit mixto de transmisión; ficha resume contenido y compatibilidades principales.",
+        "default_tags": [
+          "drivetrain",
+          "kit"
+        ],
+        "form_contract": {
+          "roles": {
+            "kit_contents": "contents",
+            "chainring_teeth": "primary",
+            "chain_ebike_rated": "measurement",
+            "spindle_interface": "primary",
+            "crank_arm_length_mm": "measurement",
+            "drivetrain_platform": "primary",
+            "chain_profile_family": "primary",
+            "spec_evidence_source": "declaration",
+            "bottom_bracket_family": "primary",
+            "front_chainring_count": "primary",
+            "drivetrain_primary_ecosystem": "primary",
+            "drivetrain_declared_compatible_ecosystems": "declaration"
+          },
+          "labels": {},
+          "helpers": {},
+          "version": 1,
+          "coverage": "template",
+          "prerequisites": {}
+        },
+        "contract_version": 3,
+        "technical_family": "drivetrain_kit"
+      }
+    ],
+    "spec_template_fields": [
+      {
+        "id": "094b7920-34cd-43c2-ab78-96ede55c4142",
+        "tenant_id": null,
+        "created_at": "2026-04-26T23:52:25.17615+00:00",
+        "sort_order": 60,
+        "updated_at": "2026-04-27T03:39:54.804843+00:00",
+        "helper_text": null,
+        "is_required": false,
+        "section_key": "compatibility",
+        "template_id": "6d80cd0c-81ac-41c1-af17-7a59a2b04b61",
+        "option_rules": [],
+        "constraint_rules": [],
+        "visibility_rules": [],
+        "default_value_json": null,
+        "spec_definition_id": "88dd47b6-9ed4-4406-8576-d9f611c2c3f2"
+      },
+      {
+        "id": "12100dbe-4fa3-4d23-b424-8639a5803f30",
+        "tenant_id": null,
+        "created_at": "2026-09-06T06:58:57.745728+00:00",
+        "sort_order": 5,
+        "updated_at": "2026-09-06T06:58:57.745728+00:00",
+        "helper_text": null,
+        "is_required": false,
+        "section_key": "declaration",
+        "template_id": "6d80cd0c-81ac-41c1-af17-7a59a2b04b61",
+        "option_rules": [],
+        "constraint_rules": [],
+        "visibility_rules": [],
+        "default_value_json": null,
+        "spec_definition_id": "4f055961-6c16-430b-a4e2-e6b09dc1cccc"
+      },
+      {
+        "id": "57bf66a5-9a84-4b90-ad77-638605a6834d",
+        "tenant_id": null,
+        "created_at": "2026-04-27T03:39:54.804843+00:00",
+        "sort_order": 45,
+        "updated_at": "2026-04-27T03:39:54.804843+00:00",
+        "helper_text": "Solo para claims explícitos de compatibilidad cruzada.",
+        "is_required": false,
+        "section_key": "compatibility",
+        "template_id": "6d80cd0c-81ac-41c1-af17-7a59a2b04b61",
+        "option_rules": [],
+        "constraint_rules": [],
+        "visibility_rules": [],
+        "default_value_json": null,
+        "spec_definition_id": "af56cbe6-307c-4606-acd3-6ee5d7d48735"
+      },
+      {
+        "id": "60a75a0d-c31c-4186-b116-499d0606388a",
+        "tenant_id": null,
+        "created_at": "2026-04-26T17:27:53.621862+00:00",
+        "sort_order": 10,
+        "updated_at": "2026-04-26T17:27:53.621862+00:00",
+        "helper_text": null,
+        "is_required": false,
+        "section_key": "dimensions",
+        "template_id": "6d80cd0c-81ac-41c1-af17-7a59a2b04b61",
+        "option_rules": [],
+        "constraint_rules": [],
+        "visibility_rules": [],
+        "default_value_json": null,
+        "spec_definition_id": "4b2b3bb0-6f53-46d6-8136-8a6b791bfd64"
+      },
+      {
+        "id": "708b35ac-328d-4868-aebd-969105e443df",
+        "tenant_id": null,
+        "created_at": "2026-04-26T17:27:53.621862+00:00",
+        "sort_order": 30,
+        "updated_at": "2026-04-26T17:27:53.621862+00:00",
+        "helper_text": null,
+        "is_required": false,
+        "section_key": "compatibility",
+        "template_id": "6d80cd0c-81ac-41c1-af17-7a59a2b04b61",
+        "option_rules": [],
+        "constraint_rules": [],
+        "visibility_rules": [],
+        "default_value_json": null,
+        "spec_definition_id": "16b4f701-478d-41c4-9fe0-5f9c215c3345"
+      },
+      {
+        "id": "7323f4c6-e794-4467-8279-fea134e80bed",
+        "tenant_id": null,
+        "created_at": "2026-04-26T17:27:53.621862+00:00",
+        "sort_order": 10,
+        "updated_at": "2026-04-26T17:27:53.621862+00:00",
+        "helper_text": null,
+        "is_required": false,
+        "section_key": "contents",
+        "template_id": "6d80cd0c-81ac-41c1-af17-7a59a2b04b61",
+        "option_rules": [],
+        "constraint_rules": [],
+        "visibility_rules": [],
+        "default_value_json": null,
+        "spec_definition_id": "2e95f3fb-815b-4ab0-86f9-7532114d79a2"
+      },
+      {
+        "id": "76208bee-9843-4fd7-a6ea-3e3eb4307254",
+        "tenant_id": null,
+        "created_at": "2026-04-26T23:52:25.17615+00:00",
+        "sort_order": 10,
+        "updated_at": "2026-04-26T23:52:25.17615+00:00",
+        "helper_text": null,
+        "is_required": false,
+        "section_key": "features",
+        "template_id": "6d80cd0c-81ac-41c1-af17-7a59a2b04b61",
+        "option_rules": [],
+        "constraint_rules": [],
+        "visibility_rules": [],
+        "default_value_json": null,
+        "spec_definition_id": "9d2ee4a7-faa1-41d6-b353-9484d1455089"
+      },
+      {
+        "id": "811239fe-64c5-41dc-b35f-25481bec53dc",
+        "tenant_id": null,
+        "created_at": "2026-04-26T17:27:53.621862+00:00",
+        "sort_order": 20,
+        "updated_at": "2026-04-26T17:27:53.621862+00:00",
+        "helper_text": null,
+        "is_required": false,
+        "section_key": "compatibility",
+        "template_id": "6d80cd0c-81ac-41c1-af17-7a59a2b04b61",
+        "option_rules": [],
+        "constraint_rules": [],
+        "visibility_rules": [],
+        "default_value_json": null,
+        "spec_definition_id": "7547914f-7bb0-4a45-b088-1a3b50c3aa22"
+      },
+      {
+        "id": "a54afe8f-abe3-421d-948a-eb1dd254f6ef",
+        "tenant_id": null,
+        "created_at": "2026-04-26T17:27:53.621862+00:00",
+        "sort_order": 10,
+        "updated_at": "2026-04-26T17:27:53.621862+00:00",
+        "helper_text": null,
+        "is_required": false,
+        "section_key": "compatibility",
+        "template_id": "6d80cd0c-81ac-41c1-af17-7a59a2b04b61",
+        "option_rules": [],
+        "constraint_rules": [],
+        "visibility_rules": [],
+        "default_value_json": null,
+        "spec_definition_id": "72f38b2f-ec08-408e-88b5-bf48307dc713"
+      },
+      {
+        "id": "b7f0e439-e5ff-48ac-b707-a8cf52e9c2e0",
+        "tenant_id": null,
+        "created_at": "2026-04-26T17:27:53.621862+00:00",
+        "sort_order": 40,
+        "updated_at": "2026-04-26T17:27:53.621862+00:00",
+        "helper_text": null,
+        "is_required": false,
+        "section_key": "compatibility",
+        "template_id": "6d80cd0c-81ac-41c1-af17-7a59a2b04b61",
+        "option_rules": [],
+        "constraint_rules": [],
+        "visibility_rules": [],
+        "default_value_json": null,
+        "spec_definition_id": "660b0e90-180d-44a1-938c-f304a9358094"
+      },
+      {
+        "id": "b9816b5c-7410-4b85-b53d-e6faff567eec",
+        "tenant_id": null,
+        "created_at": "2026-04-27T03:39:54.804843+00:00",
+        "sort_order": 40,
+        "updated_at": "2026-04-27T03:39:54.804843+00:00",
+        "helper_text": "Ecosistema principal del kit; plataforma, perfil e indexado refinan despues.",
+        "is_required": false,
+        "section_key": "compatibility",
+        "template_id": "6d80cd0c-81ac-41c1-af17-7a59a2b04b61",
+        "option_rules": [],
+        "constraint_rules": [],
+        "visibility_rules": [],
+        "default_value_json": null,
+        "spec_definition_id": "415e6b7f-d427-4e93-8df2-fd73feddbce9"
+      },
+      {
+        "id": "e7ade1d7-a3e5-4895-b0ad-fadd84f5eea7",
+        "tenant_id": null,
+        "created_at": "2026-04-26T23:52:25.17615+00:00",
+        "sort_order": 50,
+        "updated_at": "2026-04-27T03:39:54.804843+00:00",
+        "helper_text": null,
+        "is_required": false,
+        "section_key": "compatibility",
+        "template_id": "6d80cd0c-81ac-41c1-af17-7a59a2b04b61",
+        "option_rules": [],
+        "constraint_rules": [],
+        "visibility_rules": [],
+        "default_value_json": null,
+        "spec_definition_id": "2255c928-f47f-4fab-8f75-2c35e845e995"
+      }
+    ]
+  },
+  "patches": [
+    {
+      "table": "spec_template_fields",
+      "before": {
+        "id": "094b7920-34cd-43c2-ab78-96ede55c4142",
+        "tenant_id": null,
+        "created_at": "2026-04-26T23:52:25.17615+00:00",
+        "sort_order": 60,
+        "updated_at": "2026-04-27T03:39:54.804843+00:00",
+        "helper_text": null,
+        "is_required": false,
+        "section_key": "compatibility",
+        "template_id": "6d80cd0c-81ac-41c1-af17-7a59a2b04b61",
+        "option_rules": [],
+        "constraint_rules": [],
+        "visibility_rules": [],
+        "default_value_json": null,
+        "spec_definition_id": "88dd47b6-9ed4-4406-8576-d9f611c2c3f2"
+      },
+      "after": {
+        "id": "094b7920-34cd-43c2-ab78-96ede55c4142",
+        "tenant_id": null,
+        "created_at": "2026-04-26T23:52:25.17615+00:00",
+        "sort_order": 60,
+        "helper_text": null,
+        "is_required": false,
+        "section_key": "legacy",
+        "template_id": "6d80cd0c-81ac-41c1-af17-7a59a2b04b61",
+        "option_rules": [],
+        "constraint_rules": [],
+        "visibility_rules": [],
+        "default_value_json": null,
+        "spec_definition_id": "88dd47b6-9ed4-4406-8576-d9f611c2c3f2"
+      }
+    },
+    {
+      "table": "spec_template_fields",
+      "before": {
+        "id": "57bf66a5-9a84-4b90-ad77-638605a6834d",
+        "tenant_id": null,
+        "created_at": "2026-04-27T03:39:54.804843+00:00",
+        "sort_order": 45,
+        "updated_at": "2026-04-27T03:39:54.804843+00:00",
+        "helper_text": "Solo para claims explícitos de compatibilidad cruzada.",
+        "is_required": false,
+        "section_key": "compatibility",
+        "template_id": "6d80cd0c-81ac-41c1-af17-7a59a2b04b61",
+        "option_rules": [],
+        "constraint_rules": [],
+        "visibility_rules": [],
+        "default_value_json": null,
+        "spec_definition_id": "af56cbe6-307c-4606-acd3-6ee5d7d48735"
+      },
+      "after": {
+        "id": "57bf66a5-9a84-4b90-ad77-638605a6834d",
+        "tenant_id": null,
+        "created_at": "2026-04-27T03:39:54.804843+00:00",
+        "sort_order": 45,
+        "helper_text": "Solo para claims explícitos de compatibilidad cruzada.",
+        "is_required": false,
+        "section_key": "legacy",
+        "template_id": "6d80cd0c-81ac-41c1-af17-7a59a2b04b61",
+        "option_rules": [],
+        "constraint_rules": [],
+        "visibility_rules": [],
+        "default_value_json": null,
+        "spec_definition_id": "af56cbe6-307c-4606-acd3-6ee5d7d48735"
+      }
+    },
+    {
+      "table": "spec_template_fields",
+      "before": {
+        "id": "60a75a0d-c31c-4186-b116-499d0606388a",
+        "tenant_id": null,
+        "created_at": "2026-04-26T17:27:53.621862+00:00",
+        "sort_order": 10,
+        "updated_at": "2026-04-26T17:27:53.621862+00:00",
+        "helper_text": null,
+        "is_required": false,
+        "section_key": "dimensions",
+        "template_id": "6d80cd0c-81ac-41c1-af17-7a59a2b04b61",
+        "option_rules": [],
+        "constraint_rules": [],
+        "visibility_rules": [],
+        "default_value_json": null,
+        "spec_definition_id": "4b2b3bb0-6f53-46d6-8136-8a6b791bfd64"
+      },
+      "after": {
+        "id": "60a75a0d-c31c-4186-b116-499d0606388a",
+        "tenant_id": null,
+        "created_at": "2026-04-26T17:27:53.621862+00:00",
+        "sort_order": 10,
+        "helper_text": null,
+        "is_required": false,
+        "section_key": "legacy",
+        "template_id": "6d80cd0c-81ac-41c1-af17-7a59a2b04b61",
+        "option_rules": [],
+        "constraint_rules": [],
+        "visibility_rules": [],
+        "default_value_json": null,
+        "spec_definition_id": "4b2b3bb0-6f53-46d6-8136-8a6b791bfd64"
+      }
+    },
+    {
+      "table": "spec_template_fields",
+      "before": {
+        "id": "708b35ac-328d-4868-aebd-969105e443df",
+        "tenant_id": null,
+        "created_at": "2026-04-26T17:27:53.621862+00:00",
+        "sort_order": 30,
+        "updated_at": "2026-04-26T17:27:53.621862+00:00",
+        "helper_text": null,
+        "is_required": false,
+        "section_key": "compatibility",
+        "template_id": "6d80cd0c-81ac-41c1-af17-7a59a2b04b61",
+        "option_rules": [],
+        "constraint_rules": [],
+        "visibility_rules": [],
+        "default_value_json": null,
+        "spec_definition_id": "16b4f701-478d-41c4-9fe0-5f9c215c3345"
+      },
+      "after": {
+        "id": "708b35ac-328d-4868-aebd-969105e443df",
+        "tenant_id": null,
+        "created_at": "2026-04-26T17:27:53.621862+00:00",
+        "sort_order": 30,
+        "helper_text": null,
+        "is_required": false,
+        "section_key": "legacy",
+        "template_id": "6d80cd0c-81ac-41c1-af17-7a59a2b04b61",
+        "option_rules": [],
+        "constraint_rules": [],
+        "visibility_rules": [],
+        "default_value_json": null,
+        "spec_definition_id": "16b4f701-478d-41c4-9fe0-5f9c215c3345"
+      }
+    },
+    {
+      "table": "spec_template_fields",
+      "before": {
+        "id": "7323f4c6-e794-4467-8279-fea134e80bed",
+        "tenant_id": null,
+        "created_at": "2026-04-26T17:27:53.621862+00:00",
+        "sort_order": 10,
+        "updated_at": "2026-04-26T17:27:53.621862+00:00",
+        "helper_text": null,
+        "is_required": false,
+        "section_key": "contents",
+        "template_id": "6d80cd0c-81ac-41c1-af17-7a59a2b04b61",
+        "option_rules": [],
+        "constraint_rules": [],
+        "visibility_rules": [],
+        "default_value_json": null,
+        "spec_definition_id": "2e95f3fb-815b-4ab0-86f9-7532114d79a2"
+      },
+      "after": {
+        "id": "7323f4c6-e794-4467-8279-fea134e80bed",
+        "tenant_id": null,
+        "created_at": "2026-04-26T17:27:53.621862+00:00",
+        "sort_order": 10,
+        "helper_text": null,
+        "is_required": false,
+        "section_key": "legacy",
+        "template_id": "6d80cd0c-81ac-41c1-af17-7a59a2b04b61",
+        "option_rules": [],
+        "constraint_rules": [],
+        "visibility_rules": [],
+        "default_value_json": null,
+        "spec_definition_id": "2e95f3fb-815b-4ab0-86f9-7532114d79a2"
+      }
+    },
+    {
+      "table": "spec_template_fields",
+      "before": {
+        "id": "76208bee-9843-4fd7-a6ea-3e3eb4307254",
+        "tenant_id": null,
+        "created_at": "2026-04-26T23:52:25.17615+00:00",
+        "sort_order": 10,
+        "updated_at": "2026-04-26T23:52:25.17615+00:00",
+        "helper_text": null,
+        "is_required": false,
+        "section_key": "features",
+        "template_id": "6d80cd0c-81ac-41c1-af17-7a59a2b04b61",
+        "option_rules": [],
+        "constraint_rules": [],
+        "visibility_rules": [],
+        "default_value_json": null,
+        "spec_definition_id": "9d2ee4a7-faa1-41d6-b353-9484d1455089"
+      },
+      "after": {
+        "id": "76208bee-9843-4fd7-a6ea-3e3eb4307254",
+        "tenant_id": null,
+        "created_at": "2026-04-26T23:52:25.17615+00:00",
+        "sort_order": 10,
+        "helper_text": null,
+        "is_required": false,
+        "section_key": "legacy",
+        "template_id": "6d80cd0c-81ac-41c1-af17-7a59a2b04b61",
+        "option_rules": [],
+        "constraint_rules": [],
+        "visibility_rules": [],
+        "default_value_json": null,
+        "spec_definition_id": "9d2ee4a7-faa1-41d6-b353-9484d1455089"
+      }
+    },
+    {
+      "table": "spec_template_fields",
+      "before": {
+        "id": "811239fe-64c5-41dc-b35f-25481bec53dc",
+        "tenant_id": null,
+        "created_at": "2026-04-26T17:27:53.621862+00:00",
+        "sort_order": 20,
+        "updated_at": "2026-04-26T17:27:53.621862+00:00",
+        "helper_text": null,
+        "is_required": false,
+        "section_key": "compatibility",
+        "template_id": "6d80cd0c-81ac-41c1-af17-7a59a2b04b61",
+        "option_rules": [],
+        "constraint_rules": [],
+        "visibility_rules": [],
+        "default_value_json": null,
+        "spec_definition_id": "7547914f-7bb0-4a45-b088-1a3b50c3aa22"
+      },
+      "after": {
+        "id": "811239fe-64c5-41dc-b35f-25481bec53dc",
+        "tenant_id": null,
+        "created_at": "2026-04-26T17:27:53.621862+00:00",
+        "sort_order": 20,
+        "helper_text": null,
+        "is_required": false,
+        "section_key": "legacy",
+        "template_id": "6d80cd0c-81ac-41c1-af17-7a59a2b04b61",
+        "option_rules": [],
+        "constraint_rules": [],
+        "visibility_rules": [],
+        "default_value_json": null,
+        "spec_definition_id": "7547914f-7bb0-4a45-b088-1a3b50c3aa22"
+      }
+    },
+    {
+      "table": "spec_template_fields",
+      "before": {
+        "id": "a54afe8f-abe3-421d-948a-eb1dd254f6ef",
+        "tenant_id": null,
+        "created_at": "2026-04-26T17:27:53.621862+00:00",
+        "sort_order": 10,
+        "updated_at": "2026-04-26T17:27:53.621862+00:00",
+        "helper_text": null,
+        "is_required": false,
+        "section_key": "compatibility",
+        "template_id": "6d80cd0c-81ac-41c1-af17-7a59a2b04b61",
+        "option_rules": [],
+        "constraint_rules": [],
+        "visibility_rules": [],
+        "default_value_json": null,
+        "spec_definition_id": "72f38b2f-ec08-408e-88b5-bf48307dc713"
+      },
+      "after": {
+        "id": "a54afe8f-abe3-421d-948a-eb1dd254f6ef",
+        "tenant_id": null,
+        "created_at": "2026-04-26T17:27:53.621862+00:00",
+        "sort_order": 10,
+        "helper_text": null,
+        "is_required": false,
+        "section_key": "legacy",
+        "template_id": "6d80cd0c-81ac-41c1-af17-7a59a2b04b61",
+        "option_rules": [],
+        "constraint_rules": [],
+        "visibility_rules": [],
+        "default_value_json": null,
+        "spec_definition_id": "72f38b2f-ec08-408e-88b5-bf48307dc713"
+      }
+    },
+    {
+      "table": "spec_template_fields",
+      "before": {
+        "id": "b7f0e439-e5ff-48ac-b707-a8cf52e9c2e0",
+        "tenant_id": null,
+        "created_at": "2026-04-26T17:27:53.621862+00:00",
+        "sort_order": 40,
+        "updated_at": "2026-04-26T17:27:53.621862+00:00",
+        "helper_text": null,
+        "is_required": false,
+        "section_key": "compatibility",
+        "template_id": "6d80cd0c-81ac-41c1-af17-7a59a2b04b61",
+        "option_rules": [],
+        "constraint_rules": [],
+        "visibility_rules": [],
+        "default_value_json": null,
+        "spec_definition_id": "660b0e90-180d-44a1-938c-f304a9358094"
+      },
+      "after": {
+        "id": "b7f0e439-e5ff-48ac-b707-a8cf52e9c2e0",
+        "tenant_id": null,
+        "created_at": "2026-04-26T17:27:53.621862+00:00",
+        "sort_order": 40,
+        "helper_text": null,
+        "is_required": false,
+        "section_key": "legacy",
+        "template_id": "6d80cd0c-81ac-41c1-af17-7a59a2b04b61",
+        "option_rules": [],
+        "constraint_rules": [],
+        "visibility_rules": [],
+        "default_value_json": null,
+        "spec_definition_id": "660b0e90-180d-44a1-938c-f304a9358094"
+      }
+    },
+    {
+      "table": "spec_template_fields",
+      "before": {
+        "id": "b9816b5c-7410-4b85-b53d-e6faff567eec",
+        "tenant_id": null,
+        "created_at": "2026-04-27T03:39:54.804843+00:00",
+        "sort_order": 40,
+        "updated_at": "2026-04-27T03:39:54.804843+00:00",
+        "helper_text": "Ecosistema principal del kit; plataforma, perfil e indexado refinan despues.",
+        "is_required": false,
+        "section_key": "compatibility",
+        "template_id": "6d80cd0c-81ac-41c1-af17-7a59a2b04b61",
+        "option_rules": [],
+        "constraint_rules": [],
+        "visibility_rules": [],
+        "default_value_json": null,
+        "spec_definition_id": "415e6b7f-d427-4e93-8df2-fd73feddbce9"
+      },
+      "after": {
+        "id": "b9816b5c-7410-4b85-b53d-e6faff567eec",
+        "tenant_id": null,
+        "created_at": "2026-04-27T03:39:54.804843+00:00",
+        "sort_order": 40,
+        "helper_text": "Ecosistema principal del kit; plataforma, perfil e indexado refinan despues.",
+        "is_required": false,
+        "section_key": "legacy",
+        "template_id": "6d80cd0c-81ac-41c1-af17-7a59a2b04b61",
+        "option_rules": [],
+        "constraint_rules": [],
+        "visibility_rules": [],
+        "default_value_json": null,
+        "spec_definition_id": "415e6b7f-d427-4e93-8df2-fd73feddbce9"
+      }
+    },
+    {
+      "table": "spec_template_fields",
+      "before": {
+        "id": "e7ade1d7-a3e5-4895-b0ad-fadd84f5eea7",
+        "tenant_id": null,
+        "created_at": "2026-04-26T23:52:25.17615+00:00",
+        "sort_order": 50,
+        "updated_at": "2026-04-27T03:39:54.804843+00:00",
+        "helper_text": null,
+        "is_required": false,
+        "section_key": "compatibility",
+        "template_id": "6d80cd0c-81ac-41c1-af17-7a59a2b04b61",
+        "option_rules": [],
+        "constraint_rules": [],
+        "visibility_rules": [],
+        "default_value_json": null,
+        "spec_definition_id": "2255c928-f47f-4fab-8f75-2c35e845e995"
+      },
+      "after": {
+        "id": "e7ade1d7-a3e5-4895-b0ad-fadd84f5eea7",
+        "tenant_id": null,
+        "created_at": "2026-04-26T23:52:25.17615+00:00",
+        "sort_order": 50,
+        "helper_text": null,
+        "is_required": false,
+        "section_key": "legacy",
+        "template_id": "6d80cd0c-81ac-41c1-af17-7a59a2b04b61",
+        "option_rules": [],
+        "constraint_rules": [],
+        "visibility_rules": [],
+        "default_value_json": null,
+        "spec_definition_id": "2255c928-f47f-4fab-8f75-2c35e845e995"
+      }
+    },
+    {
+      "table": "spec_templates",
+      "before": {
+        "id": "6d80cd0c-81ac-41c1-af17-7a59a2b04b61",
+        "key": "drivetrain_kit",
+        "name": "Kit Transmisión",
+        "is_active": true,
+        "tenant_id": null,
+        "created_at": "2026-04-26T17:27:33.100573+00:00",
+        "updated_at": "2026-04-26T17:27:33.100573+00:00",
+        "description": "Kit mixto de transmisión; ficha resume contenido y compatibilidades principales.",
+        "default_tags": [
+          "drivetrain",
+          "kit"
+        ],
+        "form_contract": {
+          "roles": {
+            "kit_contents": "contents",
+            "chainring_teeth": "primary",
+            "chain_ebike_rated": "measurement",
+            "spindle_interface": "primary",
+            "crank_arm_length_mm": "measurement",
+            "drivetrain_platform": "primary",
+            "chain_profile_family": "primary",
+            "spec_evidence_source": "declaration",
+            "bottom_bracket_family": "primary",
+            "front_chainring_count": "primary",
+            "drivetrain_primary_ecosystem": "primary",
+            "drivetrain_declared_compatible_ecosystems": "declaration"
+          },
+          "labels": {},
+          "helpers": {},
+          "version": 1,
+          "coverage": "template",
+          "prerequisites": {}
+        },
+        "contract_version": 3,
+        "technical_family": "drivetrain_kit"
+      },
+      "after": {
+        "id": "6d80cd0c-81ac-41c1-af17-7a59a2b04b61",
+        "key": "drivetrain_kit",
+        "name": "Kit Transmisión",
+        "is_active": true,
+        "tenant_id": null,
+        "created_at": "2026-04-26T17:27:33.100573+00:00",
+        "description": "Kit mixto de transmisión; ficha resume contenido y compatibilidades principales.",
+        "default_tags": [
+          "drivetrain",
+          "kit"
+        ],
+        "form_contract": {
+          "rules_version": 2,
+          "roles": {
+            "bottom_bracket_family": "legacy",
+            "chain_ebike_rated": "legacy",
+            "chain_profile_family": "legacy",
+            "chainring_teeth": "legacy",
+            "crank_arm_length_mm": "legacy",
+            "drivetrain_declared_compatible_ecosystems": "legacy",
+            "drivetrain_platform": "legacy",
+            "drivetrain_primary_ecosystem": "legacy",
+            "front_chainring_count": "legacy",
+            "kit_contents": "legacy",
+            "spindle_interface": "legacy",
+            "kit_members": "contents",
+            "spec_evidence_source": "declaration"
+          },
+          "semantic_roles": {
+            "bottom_bracket_family": "legacy",
+            "chain_ebike_rated": "legacy",
+            "chain_profile_family": "legacy",
+            "chainring_teeth": "legacy",
+            "crank_arm_length_mm": "legacy",
+            "drivetrain_declared_compatible_ecosystems": "legacy",
+            "drivetrain_platform": "legacy",
+            "drivetrain_primary_ecosystem": "legacy",
+            "front_chainring_count": "legacy",
+            "kit_contents": "legacy",
+            "spindle_interface": "legacy",
+            "kit_members": "contents",
+            "spec_evidence_source": "evidence"
+          },
+          "labels": {},
+          "allowed_options": {},
+          "allowed_when": {
+            "bottom_bracket_family": {
+              "kind": "never"
+            },
+            "chain_ebike_rated": {
+              "kind": "never"
+            },
+            "chain_profile_family": {
+              "kind": "never"
+            },
+            "chainring_teeth": {
+              "kind": "never"
+            },
+            "crank_arm_length_mm": {
+              "kind": "never"
+            },
+            "drivetrain_declared_compatible_ecosystems": {
+              "kind": "never"
+            },
+            "drivetrain_platform": {
+              "kind": "never"
+            },
+            "drivetrain_primary_ecosystem": {
+              "kind": "never"
+            },
+            "front_chainring_count": {
+              "kind": "never"
+            },
+            "kit_contents": {
+              "kind": "never"
+            },
+            "spindle_interface": {
+              "kind": "never"
+            },
+            "kit_members": {
+              "kind": "always"
+            },
+            "spec_evidence_source": {
+              "kind": "always"
+            }
+          },
+          "required_when": {
+            "bottom_bracket_family": {
+              "kind": "never"
+            },
+            "chain_ebike_rated": {
+              "kind": "never"
+            },
+            "chain_profile_family": {
+              "kind": "never"
+            },
+            "chainring_teeth": {
+              "kind": "never"
+            },
+            "crank_arm_length_mm": {
+              "kind": "never"
+            },
+            "drivetrain_declared_compatible_ecosystems": {
+              "kind": "never"
+            },
+            "drivetrain_platform": {
+              "kind": "never"
+            },
+            "drivetrain_primary_ecosystem": {
+              "kind": "never"
+            },
+            "front_chainring_count": {
+              "kind": "never"
+            },
+            "kit_contents": {
+              "kind": "never"
+            },
+            "spindle_interface": {
+              "kind": "never"
+            },
+            "kit_members": {
+              "kind": "always"
+            },
+            "spec_evidence_source": {
+              "kind": "never"
+            }
+          },
+          "prerequisites": {
+            "kit_members": [
+              "spec_evidence_source"
+            ]
+          },
+          "helpers": {
+            "kit_members": "Registra las piezas incluidas en esta presentación y sus fuentes. Cada pieza conserva su propia identificación y ficha técnica. El contenido del envase no acredita que las piezas sean compatibles entre sí."
+          },
+          "evidence_requirements": {
+            "kit_members": "package_or_label",
+            "spec_evidence_source": "oem_or_package"
+          },
+          "member_profiles": {
+            "version": 1,
+            "collections": [
+              {
+                "field": "kit_members",
+                "family_column": "family",
+                "identity_columns": [
+                  "member_role",
+                  "position",
+                  "identity_brand",
+                  "identity_model"
+                ]
+              }
+            ]
+          }
+        },
+        "contract_version": 16,
+        "technical_family": "drivetrain_kit"
+      }
+    }
+  ],
+  "adjudication": {
+    "owner_review": "Root; Claude rounds 217/218 corrected against live preimage.",
+    "scope": "One shared contents field, eleven existing fields retained as legacy, independent member profiles.",
+    "limits": "No automatic connection or compatibility verdict across pieces; family successors remain separate."
+  },
+  "product_writes": false,
+  "fill_allowed": false,
+  "mechanical_approval": false
+}

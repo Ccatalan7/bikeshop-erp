@@ -1,0 +1,87 @@
+{
+  "schema_version": 1,
+  "approval_scope": "field_representation",
+  "base_sha256": "f3178bd3c860c421d2365961fe3ff057581d2d038bb999bc59f5f0f959937072",
+  "proposal_file": "all-family-row-conditions-proposal-2026-09-07.json",
+  "proposal_sha256": "94faca196c4572e2faeb8cf748dd9b8843c9c63e531c1f021803a4146bb4f5d0",
+  "review_file": "all-family-row-conditions-proposal-2026-09-07.md",
+  "review_sha256": "8bc5ff935668a9b42bbe805c7d3a3cf6d5a16b38512137a1d57b5ee8c9005b05",
+  "patch_adjudications": [
+    {
+      "patch_id": "RCF-brake_caliper",
+      "decision": "aceptar",
+      "reason": "Requisito local explícito de completitud; no rellena datos ni aprueba compatibilidad. En light, estrecha sólo el propietario de las luces físicas; no identifica unidades por nombre."
+    },
+    {
+      "patch_id": "RCF-brake_lever",
+      "decision": "aceptar",
+      "reason": "Requisito local explícito de completitud; no rellena datos ni aprueba compatibilidad. En light, estrecha sólo el propietario de las luces físicas; no identifica unidades por nombre."
+    },
+    {
+      "patch_id": "RCF-hydraulic_disc_brake",
+      "decision": "aceptar",
+      "reason": "Requisito local explícito de completitud; no rellena datos ni aprueba compatibilidad. En light, estrecha sólo el propietario de las luces físicas; no identifica unidades por nombre."
+    },
+    {
+      "patch_id": "RCF-mechanical_disc_brake",
+      "decision": "aceptar",
+      "reason": "Requisito local explícito de completitud; no rellena datos ni aprueba compatibilidad. En light, estrecha sólo el propietario de las luces físicas; no identifica unidades por nombre."
+    },
+    {
+      "patch_id": "RCF-rim_brake",
+      "decision": "aceptar",
+      "reason": "Requisito local explícito de completitud; no rellena datos ni aprueba compatibilidad. En light, estrecha sólo el propietario de las luces físicas; no identifica unidades por nombre."
+    },
+    {
+      "patch_id": "RCF-seatpost",
+      "decision": "aceptar",
+      "reason": "Requisito local explícito de completitud; no rellena datos ni aprueba compatibilidad. En light, estrecha sólo el propietario de las luces físicas; no identifica unidades por nombre."
+    },
+    {
+      "patch_id": "RCF-rotor_mount_adapter",
+      "decision": "aceptar",
+      "reason": "Requisito local explícito de completitud; no rellena datos ni aprueba compatibilidad. En light, estrecha sólo el propietario de las luces físicas; no identifica unidades por nombre."
+    },
+    {
+      "patch_id": "RCF-workshop_tool",
+      "decision": "aceptar",
+      "reason": "Requisito local explícito de completitud; no rellena datos ni aprueba compatibilidad. En light, estrecha sólo el propietario de las luces físicas; no identifica unidades por nombre."
+    },
+    {
+      "patch_id": "RCF-light",
+      "decision": "aceptar",
+      "reason": "Requisito local explícito de completitud; no rellena datos ni aprueba compatibilidad. En light, estrecha sólo el propietario de las luces físicas; no identifica unidades por nombre."
+    },
+    {
+      "patch_id": "RCF-consumer_electronics",
+      "decision": "aceptar",
+      "reason": "Requisito local explícito de completitud; no rellena datos ni aprueba compatibilidad. En light, estrecha sólo el propietario de las luces físicas; no identifica unidades por nombre."
+    },
+    {
+      "patch_id": "RCF-accessory_mount",
+      "decision": "aceptar",
+      "reason": "Requisito local explícito de completitud; no rellena datos ni aprueba compatibilidad. En light, estrecha sólo el propietario de las luces físicas; no identifica unidades por nombre."
+    },
+    {
+      "patch_id": "RCF-food_beverage",
+      "decision": "aceptar",
+      "reason": "Requisito local explícito de completitud; no rellena datos ni aprueba compatibilidad. En light, estrecha sólo el propietario de las luces físicas; no identifica unidades por nombre."
+    },
+    {
+      "patch_id": "RCF-pump",
+      "decision": "aceptar",
+      "reason": "Requisito local explícito de completitud; no rellena datos ni aprueba compatibilidad. En light, estrecha sólo el propietario de las luces físicas; no identifica unidades por nombre."
+    },
+    {
+      "patch_id": "RCF-brake_shift_combined_control",
+      "decision": "aceptar",
+      "reason": "Requisito local explícito de completitud; no rellena datos ni aprueba compatibilidad. En light, estrecha sólo el propietario de las luces físicas; no identifica unidades por nombre."
+    }
+  ],
+  "case_overrides_accepted": [
+    "light_kit_member_inside_kit_members_undetectable"
+  ],
+  "mechanical_coverage_complete": false,
+  "automatic_fill_authorized": false,
+  "product_writes": 0
+}

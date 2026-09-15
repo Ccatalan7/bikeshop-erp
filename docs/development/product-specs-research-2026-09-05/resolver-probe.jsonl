@@ -1,0 +1,6 @@
+{"field":"chain_speeds","allowed":["6","7","8"],"enabled":true,"hidden":false}
+{"field":"drivetrain_primary_ecosystem","allowed":null,"enabled":true,"hidden":false}
+{"field":"drivetrain_declared_compatible_ecosystems","allowed":null,"enabled":true,"hidden":false}
+{"field":"chain_profile_family","allowed":["Campagnolo"],"enabled":false,"hidden":false}
+{"field":"chain_width_family","allowed":null,"enabled":true,"hidden":false}
+{"field":"chain_outer_width_mm","allowed":["5.25","5.3","5.62","5.88","5.95","6.6","6.7"],"enabled":true,"hidden":false}

@@ -1,0 +1,1043 @@
+{
+  "schema_version": 1,
+  "cases": [
+    {
+      "id": "wss_tire_pressure_of_another_variant",
+      "template": "tire",
+      "kind": "contradictory_undetectable",
+      "values": {
+        "tire_rim_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "c1",
+              "values": {
+                "rim_bead_profile": "Sin gancho (hookless)",
+                "mounting_method": "Tubeless",
+                "rim_internal_width_max_mm": "25",
+                "max_pressure": "4.5",
+                "pressure_unit": "bar"
+              },
+              "sources": [
+                "https://www.continental-tires.com/us/en/tire-knowledge/hookless-vs-hooked-rims/"
+              ]
+            }
+          ]
+        },
+        "tire_width_mm": "28",
+        "bead_seat_diameter_mm": "622"
+      },
+      "source_urls": [
+        "https://www.continental-tires.com/us/en/tire-knowledge/hookless-vs-hooked-rims/"
+      ],
+      "expected_blocking": [],
+      "note": "La 28c con los límites de la 30c: el motor no puede saberlo. Es error de captura, y la regresión que el hallazgo pide vive en la revisión de la fuente, no en el esquema.",
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false
+    },
+    {
+      "id": "wss_tire_hookless_without_configurations",
+      "template": "tire",
+      "kind": "unknown",
+      "values": {
+        "bead_seat_diameter_mm": "622",
+        "tire_tubeless_ready": true
+      },
+      "source_urls": [
+        "https://support.zipp.com/hc/en-us/articles/7868244824731-Can-you-run-a-tube-in-a-Zipp-hookless-rim-with-a-tubeless-tire"
+      ],
+      "expected_blocking": [],
+      "note": "Sin filas, la respuesta para hookless es desconocida. Poner cámara no cambia la exigencia y el booleano de un lado no la resuelve.",
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false
+    },
+    {
+      "id": "wss_tire_same_variant_profile_method_twice",
+      "template": "tire",
+      "kind": "contradictory",
+      "values": {
+        "tire_rim_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "a",
+              "values": {
+                "rim_bead_profile": "Sin gancho (hookless)",
+                "mounting_method": "Tubeless",
+                "max_pressure": "5.0",
+                "pressure_unit": "bar"
+              },
+              "sources": [
+                "https://www.continental-tires.com/us/en/tire-knowledge/hookless-vs-hooked-rims/"
+              ]
+            },
+            {
+              "id": "b",
+              "values": {
+                "rim_bead_profile": "Sin gancho (hookless)",
+                "mounting_method": "Tubeless",
+                "max_pressure": "7.0",
+                "pressure_unit": "bar"
+              },
+              "sources": [
+                "https://www.continental-tires.com/us/en/tire-knowledge/hookless-vs-hooked-rims/"
+              ]
+            }
+          ]
+        },
+        "tire_width_mm": "28",
+        "bead_seat_diameter_mm": "622"
+      },
+      "source_urls": [],
+      "expected_blocking": [
+        {
+          "code": "row_shape",
+          "field": "tire_rim_configurations"
+        }
+      ],
+      "note": "unique_by [variante, perfil, método] rechaza dos presiones para la misma configuración.",
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false
+    },
+    {
+      "id": "wss_shock_trunnion_top_eyelet_bottom",
+      "template": "rear_shock",
+      "kind": "valid",
+      "values": {
+        "eye_to_eye_mm": "205",
+        "stroke_mm": "65",
+        "shock_mount_kind": "Trunnion",
+        "mounting_hardware_included": true,
+        "spec_evidence_source": "RockShox Rear Suspension Fitment",
+        "shock_end_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "e1",
+              "values": {
+                "end_position": "Cuerpo",
+                "mount_kind": "Trunnion"
+              },
+              "sources": []
+            },
+            {
+              "id": "e2",
+              "values": {
+                "end_position": "Vástago",
+                "mount_kind": "Ojal estándar"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "source_urls": [
+        "https://www.sram.com/en/service/articles/RockShox-fitment-article"
+      ],
+      "expected_blocking": [],
+      "note": "Fixture de representación por extremo físico; no atribuye combinación ni medidas de hardware a un SKU OEM.",
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false
+    },
+    {
+      "id": "wss_shock_two_rows_same_end",
+      "template": "rear_shock",
+      "kind": "contradictory",
+      "values": {
+        "shock_end_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "a",
+              "values": {
+                "end_position": "Cuerpo",
+                "mount_kind": "Trunnion"
+              },
+              "sources": []
+            },
+            {
+              "id": "b",
+              "values": {
+                "end_position": "Cuerpo",
+                "mount_kind": "Ojal estándar"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "source_urls": [],
+      "expected_blocking": [
+        {
+          "code": "row_shape",
+          "field": "shock_end_configurations"
+        }
+      ],
+      "note": "Fixture de representación por extremo físico; no atribuye combinación ni medidas de hardware a un SKU OEM.",
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false,
+      "expected_sql_blocking": [
+        {
+          "code": "field_constraint",
+          "field": "shock_end_configurations"
+        }
+      ]
+    },
+    {
+      "id": "wss_bearing_same_envelope_different_construction",
+      "template": "bearing",
+      "kind": "valid",
+      "values": {
+        "bearing_construction": "Cartucho sellado",
+        "bearing_size_code": "6902 2RS MAX",
+        "bearing_dimensional_code": "6902",
+        "bearing_internal_construction": "MAX",
+        "bearing_seal_kind": "2RS (goma, doble)",
+        "bearing_inner_diameter_mm": "15",
+        "bearing_outer_diameter_mm": "28",
+        "bearing_width_mm": "7",
+        "bearing_application": "Otro",
+        "spec_evidence_source": "Enduro Help Center",
+        "bearing_element_retention": "Complemento completo / sin jaula"
+      },
+      "source_urls": [
+        "https://cycling.endurobearings.com/en-ca/apps/help-center"
+      ],
+      "expected_blocking": [],
+      "note": "Diseño MAX conserva su literal; Enduro declara complemento completo y canal de llenado. La envolvente no aprueba el uso.",
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false
+    },
+    {
+      "id": "wss_headset_bearing_angles_per_end",
+      "template": "headset",
+      "kind": "valid",
+      "values": {
+        "headset_part_scope": "Completa",
+        "headset_upper_shis": "ZS44/28.6",
+        "headset_lower_shis": "EC44/40",
+        "spec_evidence_source": "Cane Creek Forty",
+        "headset_bearing_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "u",
+              "values": {
+                "position": "Superior",
+                "inner_contact_angle_deg": "36",
+                "outer_contact_angle_deg": "45",
+                "seat_type": "ZS (semi-integrado)",
+                "construction": "Cartucho",
+                "seat_geometry": "Biseles interior y exterior"
+              },
+              "sources": [
+                "https://www.canecreek.com/products/40"
+              ]
+            },
+            {
+              "id": "l",
+              "values": {
+                "position": "Inferior",
+                "inner_contact_angle_deg": "45",
+                "outer_contact_angle_deg": "45",
+                "seat_type": "EC (externo)",
+                "construction": "Cartucho",
+                "seat_geometry": "Biseles interior y exterior"
+              },
+              "sources": [
+                "https://www.canecreek.com/products/40"
+              ]
+            }
+          ]
+        }
+      },
+      "source_urls": [
+        "https://www.canecreek.com/products/40"
+      ],
+      "expected_blocking": [],
+      "note": "Campo dependiente de posición: 36×45 arriba y 45×45 abajo dejan de colapsar en «45».",
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false
+    },
+    {
+      "id": "wss_headset_lower_only_scope",
+      "template": "headset",
+      "kind": "valid",
+      "values": {
+        "headset_part_scope": "Inferior",
+        "headset_lower_shis": "EC49/38.1",
+        "headset_bearing_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "l",
+              "values": {
+                "position": "Inferior",
+                "inner_contact_angle_deg": "45",
+                "outer_contact_angle_deg": "45",
+                "construction": "Cartucho",
+                "seat_geometry": "Biseles interior y exterior"
+              },
+              "sources": [
+                "https://www.canecreek.com/products/40"
+              ]
+            }
+          ]
+        }
+      },
+      "source_urls": [
+        "https://www.canecreek.com/products/40"
+      ],
+      "expected_blocking": [],
+      "note": "W06 ya resuelto: una mitad inferior no exige inventar el extremo superior y EC49/38.1 se guarda porque el campo es texto.",
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false
+    },
+    {
+      "id": "wss_bearing_headset_without_angles",
+      "template": "bearing",
+      "kind": "unknown",
+      "values": {
+        "bearing_construction": "Cartucho sellado",
+        "bearing_application": "Dirección",
+        "bearing_size_code": "MH-P08",
+        "spec_evidence_source": "Catálogo del fabricante",
+        "bearing_seat_geometry": "Biseles interior y exterior"
+      },
+      "source_urls": [
+        "https://www.canecreek.com/products/40"
+      ],
+      "expected_blocking": [],
+      "note": "Con destino «Dirección» el par pasa a exigible y su ausencia queda pendiente, no aprobada. Antes de este parche no se pedía.",
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false,
+      "expected_issue_subset": [
+        {
+          "code": "required_missing",
+          "field": "bearing_inner_contact_angle_deg",
+          "blocking": false
+        },
+        {
+          "code": "required_missing",
+          "field": "bearing_outer_contact_angle_deg",
+          "blocking": false
+        }
+      ]
+    },
+    {
+      "id": "wss_frame_44_housing_two_alternatives",
+      "template": "frame",
+      "kind": "valid",
+      "values": {
+        "headset_upper_shis": "ZS44/28.6",
+        "headset_lower_shis": "EC44/30",
+        "headset_port_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "u",
+              "values": {
+                "position": "Superior",
+                "seat_type": "Alojamiento para cazoleta prensada",
+                "housing_diameter_mm": "44"
+              },
+              "sources": []
+            },
+            {
+              "id": "l",
+              "values": {
+                "position": "Inferior",
+                "seat_type": "Alojamiento para cazoleta prensada",
+                "housing_diameter_mm": "44"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "source_urls": [
+        "https://support.canecreek.com/support/solutions/articles/62000202657-full-article-everything-you-need-to-know-about-headsets-"
+      ],
+      "expected_blocking": [],
+      "note": "El alojamiento de 44 mm admite EC44/30 y ZS44/30; el SHIS registrado es la configuración original y no cierra la lista.",
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false
+    },
+    {
+      "id": "wss_frame_housing_without_shis",
+      "template": "frame",
+      "kind": "unknown",
+      "values": {
+        "headset_port_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "l",
+              "values": {
+                "position": "Inferior",
+                "seat_type": "Alojamiento para cazoleta prensada",
+                "measured_diameter_mm": "41.8"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "source_urls": [
+        "https://www.parktool.com/en-us/blog/repair-help/headset-standards"
+      ],
+      "expected_blocking": [],
+      "note": "Diámetro medido de 41,8 sin código: el redondeo a IS42 es una convención declarada, no una medición, y no se escribe solo. Antes del parche el SHIS era obligatorio y obligaba a inventarlo.",
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false
+    },
+    {
+      "id": "wss_fork_fox40_envelope",
+      "template": "fork",
+      "kind": "valid",
+      "values": {
+        "fork_kind": "Suspensión (aire)",
+        "bead_seat_diameter_mm": "559",
+        "max_tire_width_mm": "71",
+        "travel_mm": "203",
+        "axle_to_crown_mm": "580",
+        "crown_stack_min_mm": "105",
+        "crown_stack_max_mm": "166.8",
+        "spec_evidence_source": "FOX 2013, Installing the 40",
+        "fork_tire_clearance_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "c",
+              "values": {
+                "bead_seat_diameter_mm": "559",
+                "max_tire_width_mm": "71",
+                "max_inflated_diameter_mm": "694",
+                "max_inflated_shoulder_diameter_mm": "670",
+                "measurement_method": "Diámetro de pico y de borde, neumático inflado"
+              },
+              "sources": [
+                "https://tech.ridefox.com/fox_tech_center/owners_manuals/013/Content/Forks/40/40withDMS_Installation.html"
+              ]
+            }
+          ]
+        },
+        "fork_crown_layout": "Doble corona"
+      },
+      "source_urls": [
+        "https://tech.ridefox.com/fox_tech_center/owners_manuals/013/Content/Forks/40/40withDMS_Installation.html"
+      ],
+      "expected_blocking": [],
+      "note": "El caso construido de 70 mm de ancho y 695 mm de pico queda fuera aunque pase el ancho. Límites de esta generación, no de la familia.",
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false
+    },
+    {
+      "id": "wss_fork_stack_inverted",
+      "template": "fork",
+      "kind": "contradictory",
+      "values": {
+        "fork_kind": "Suspensión (aire)",
+        "crown_stack_min_mm": "166.8",
+        "crown_stack_max_mm": "105",
+        "fork_crown_layout": "Doble corona"
+      },
+      "source_urls": [
+        "https://tech.ridefox.com/fox_tech_center/owners_manuals/013/Content/Forks/40/40withDMS_Installation.html"
+      ],
+      "expected_blocking": [
+        {
+          "code": "range_order",
+          "field": "crown_stack_max_mm"
+        },
+        {
+          "code": "range_order",
+          "field": "crown_stack_min_mm"
+        }
+      ],
+      "note": "El par escalar del contrato 0200 marca los dos extremos.",
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false
+    },
+    {
+      "id": "wss_frame_surly_gnot_rite",
+      "template": "frame",
+      "kind": "valid",
+      "values": {
+        "rear_hub_old_mm": "132.5",
+        "rear_axle_type": "Cierre rápido 10 mm (trasero)",
+        "spec_evidence_source": "Surly Pack Rat framesheet 85-000633_INST_A",
+        "dropout_hub_acceptance_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "a",
+              "values": {
+                "position": "Trasera",
+                "accepted_hub_old_mm": "130",
+                "retention_kind": "Cierre rápido",
+                "scope_note": "Gnot-rite: el fabricante declara 130 y 135 para este cuadro"
+              },
+              "sources": [
+                "https://surlybikes.com/uploads/downloads/surly-pack-rat-framesheet-85-000633_INST.pdf"
+              ]
+            },
+            {
+              "id": "b",
+              "values": {
+                "position": "Trasera",
+                "accepted_hub_old_mm": "135",
+                "retention_kind": "Cierre rápido",
+                "scope_note": "Gnot-rite: el fabricante declara 130 y 135 para este cuadro"
+              },
+              "sources": [
+                "https://surlybikes.com/uploads/downloads/surly-pack-rat-framesheet-85-000633_INST.pdf"
+              ]
+            }
+          ]
+        }
+      },
+      "source_urls": [
+        "https://surlybikes.com/uploads/downloads/surly-pack-rat-framesheet-85-000633_INST.pdf"
+      ],
+      "expected_blocking": [],
+      "note": "132,5 se guarda exacto (ya era decimal) y las mazas aceptadas son filas. 131 no queda aceptado y esto no autoriza forzar otro cuadro.",
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false
+    },
+    {
+      "id": "wss_frame_dropout_open_interval",
+      "template": "frame",
+      "kind": "contradictory_undetectable",
+      "values": {
+        "rear_hub_old_mm": "132.5",
+        "dropout_hub_acceptance_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "a",
+              "values": {
+                "position": "Trasera",
+                "accepted_hub_old_mm": "131",
+                "retention_kind": "Cierre rápido"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "source_urls": [],
+      "expected_blocking": [],
+      "note": "Nada impide escribir 131: la fuente Surly no lo declara. El esquema no inventa el intervalo, pero tampoco detecta una fila sin respaldo (E2/E3).",
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false
+    },
+    {
+      "id": "wss_spoke_sapim_2mm_fg23",
+      "template": "spoke",
+      "kind": "valid",
+      "values": {
+        "spoke_gauge": "14G",
+        "spoke_thread_diameter_mm": "2.0",
+        "spoke_thread_standard": "FG 2.3",
+        "spoke_length_mm": "294",
+        "spec_evidence_source": "Sapim, folleto 2018, p. 8"
+      },
+      "source_urls": [
+        "https://www.sapim.be/sites/default/files/Sapim%20brochure%202018%20def%20A5%202018-Taiwanese%20LR.pdf"
+      ],
+      "expected_blocking": [],
+      "note": "Alambre de 2,0 mm medido y rosca FG 2.3 declarada: dos hechos. Con el rótulo anterior parecían el mismo y se contradecían.",
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false
+    },
+    {
+      "id": "wss_spoke_nipple_pair_naming",
+      "template": "spoke_nipple",
+      "kind": "valid",
+      "values": {
+        "nipple_thread": "14G",
+        "nipple_thread_standard": "FG 2.3",
+        "nipple_length_mm": "12"
+      },
+      "source_urls": [
+        "https://www.sapim.be/sites/default/files/Sapim%20brochure%202018%20def%20A5%202018-Taiwanese%20LR.pdf"
+      ],
+      "expected_blocking": [],
+      "note": "El niple declara la misma convención: un radio FG 2.3 y este niple dejan de parecer incompatibles.",
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false
+    },
+    {
+      "id": "wss_spoke_thread_standard_unknown",
+      "template": "spoke",
+      "kind": "unknown",
+      "values": {
+        "spoke_gauge": "14G",
+        "spoke_length_mm": "260"
+      },
+      "source_urls": [
+        "https://www.sapim.be/sites/default/files/Sapim%20brochure%202018%20def%20A5%202018-Taiwanese%20LR.pdf"
+      ],
+      "expected_blocking": [],
+      "note": "Sin designación publicada, la rosca queda desconocida: no se deriva de 14G.",
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false
+    },
+    {
+      "id": "wss_SF1",
+      "template": "bearing",
+      "kind": "válido",
+      "values": {
+        "bearing_construction": "Cartucho sellado",
+        "bearing_internal_construction": "Contacto angular",
+        "bearing_application": "Dirección",
+        "bearing_inner_contact_angle_deg": "36",
+        "bearing_outer_contact_angle_deg": "45",
+        "bearing_seat_geometry": "Biseles interior y exterior"
+      },
+      "source_urls": [],
+      "expected_blocking": [],
+      "note": "Cartucho de contacto angular con el par marcado: el único caso donde el par se exige.",
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false
+    },
+    {
+      "id": "wss_SF2",
+      "template": "bearing",
+      "kind": "desconocido",
+      "values": {
+        "bearing_construction": "Cartucho sellado",
+        "bearing_internal_construction": "Contacto angular",
+        "bearing_application": "Dirección",
+        "bearing_seat_geometry": "Biseles interior y exterior"
+      },
+      "source_urls": [],
+      "expected_blocking": [],
+      "note": "Contacto angular sin par publicado: pendiente, no aprobado.",
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false,
+      "expected_issue_subset": [
+        {
+          "code": "required_missing",
+          "field": "bearing_inner_contact_angle_deg",
+          "blocking": false
+        },
+        {
+          "code": "required_missing",
+          "field": "bearing_outer_contact_angle_deg",
+          "blocking": false
+        }
+      ]
+    },
+    {
+      "id": "wss_SF3",
+      "template": "bearing",
+      "kind": "válido",
+      "values": {
+        "bearing_construction": "Bolas sueltas (bolsa)",
+        "bearing_application": "Dirección",
+        "ball_diameter_in": "5/32",
+        "ball_count_per_pack": "100"
+      },
+      "source_urls": [],
+      "expected_blocking": [],
+      "note": "Una bolsa de bolas para dirección no debe pedir ni admitir ángulos. Con el parche del paquete quedaba con dos pendientes imposibles de resolver; con la base actual además puede escribirlos.",
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false,
+      "forbidden_issue_fields": [
+        "bearing_inner_contact_angle_deg",
+        "bearing_outer_contact_angle_deg"
+      ]
+    },
+    {
+      "id": "wss_SF4",
+      "template": "bearing",
+      "kind": "válido",
+      "values": {
+        "bearing_construction": "Canastillo con bolas",
+        "bearing_application": "Dirección"
+      },
+      "source_urls": [],
+      "expected_blocking": [],
+      "note": "Mismo caso con canastillo: Park Tool lo enumera aparte del cartucho.",
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false,
+      "forbidden_issue_fields": [
+        "bearing_inner_contact_angle_deg",
+        "bearing_outer_contact_angle_deg"
+      ]
+    },
+    {
+      "id": "wss_SF5",
+      "template": "tire",
+      "kind": "válido",
+      "values": {
+        "tire_etrto": "28-622",
+        "tire_width_mm": "28",
+        "bead_seat_diameter_mm": "622",
+        "spec_evidence_source": "Continental, Hookless vs. Hooked Rims",
+        "tire_rim_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "hk",
+              "values": {
+                "rim_bead_profile": "Sin gancho (hookless)",
+                "mounting_method": "Tubeless",
+                "rim_internal_width_max_mm": "23",
+                "max_pressure": "5.0",
+                "pressure_unit": "bar"
+              },
+              "sources": [
+                "https://www.continental-tires.com/us/en/tire-knowledge/hookless-vs-hooked-rims/"
+              ]
+            }
+          ]
+        }
+      },
+      "source_urls": [],
+      "expected_blocking": [],
+      "note": "Continental GP5000 S TR 28-622: máximo 23 mm internos y 5.0 bar. No se inventa un mínimo.",
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false
+    },
+    {
+      "id": "wss_SF6",
+      "template": "tire",
+      "kind": "contradictorio",
+      "values": {
+        "tire_rim_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "a",
+              "values": {
+                "rim_bead_profile": "Sin gancho (hookless)",
+                "mounting_method": "Tubeless",
+                "max_pressure": "5.0",
+                "pressure_unit": "bar"
+              },
+              "sources": []
+            },
+            {
+              "id": "b",
+              "values": {
+                "rim_bead_profile": "Sin gancho (hookless)",
+                "mounting_method": "Tubeless",
+                "max_pressure": "4.5",
+                "pressure_unit": "bar"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "source_urls": [],
+      "expected_blocking": [
+        {
+          "code": "row_shape",
+          "field": "tire_rim_configurations"
+        }
+      ],
+      "note": "Dos presiones para la misma configuración de este SKU. Antes de SR-Q2 esto se «resolvía» poniendo variantes distintas y quedaba válido.",
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false
+    },
+    {
+      "id": "wss_SF7",
+      "template": "fork",
+      "kind": "contradictorio",
+      "values": {
+        "fork_kind": "Suspensión (aire)",
+        "fork_tire_clearance_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "a",
+              "values": {
+                "bead_seat_diameter_mm": "559",
+                "max_tire_width_mm": "71"
+              },
+              "sources": []
+            },
+            {
+              "id": "b",
+              "values": {
+                "bead_seat_diameter_mm": "559",
+                "max_tire_width_mm": "64"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "source_urls": [],
+      "expected_blocking": [
+        {
+          "code": "row_shape",
+          "field": "fork_tire_clearance_configurations"
+        }
+      ],
+      "note": "Dos envolventes para el mismo rodado. Con el unique_by del paquete ambas pasaban.",
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false,
+      "expected_sql_blocking": [
+        {
+          "code": "field_constraint",
+          "field": "fork_tire_clearance_configurations"
+        }
+      ]
+    },
+    {
+      "id": "wss_SF8",
+      "template": "fork",
+      "kind": "synthetic_representation",
+      "values": {
+        "fork_kind": "Suspensión (aire)",
+        "fork_tire_clearance_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "a",
+              "values": {
+                "bead_seat_diameter_mm": "584",
+                "max_tire_width_mm": "64"
+              },
+              "sources": []
+            },
+            {
+              "id": "b",
+              "values": {
+                "bead_seat_diameter_mm": "622",
+                "max_tire_width_mm": "61"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "source_urls": [],
+      "expected_blocking": [],
+      "note": "Fixture sintética: dos BSD para una misma horquilla si OEM los declara; no identifica ni aprueba una horquilla real.",
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false
+    },
+    {
+      "id": "wss_SF9",
+      "template": "spoke",
+      "kind": "válido",
+      "values": {
+        "spoke_gauge": "14G",
+        "spoke_thread_diameter_mm": "2.3",
+        "spoke_thread_standard": "FG 2.3",
+        "spoke_length_mm": "263"
+      },
+      "source_urls": [],
+      "expected_blocking": [],
+      "note": "Alambre 14G (2,0 mm), rosca laminada de 2,3 mm y su designación. Con el rótulo que el paquete proponía, este 2,3 se habría leído como un alambre de 2,3 mm.",
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false
+    },
+    {
+      "id": "wss_gp5000_s_tr_30_622_separate_product",
+      "template": "tire",
+      "kind": "válido",
+      "values": {
+        "tire_etrto": "30-622",
+        "tire_width_mm": "30",
+        "bead_seat_diameter_mm": "622",
+        "spec_evidence_source": "Continental, Hookless vs. Hooked Rims",
+        "tire_rim_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "hk",
+              "values": {
+                "rim_bead_profile": "Sin gancho (hookless)",
+                "mounting_method": "Tubeless",
+                "rim_internal_width_max_mm": "25",
+                "max_pressure": "4.5",
+                "pressure_unit": "bar"
+              },
+              "sources": [
+                "https://www.continental-tires.com/us/en/tire-knowledge/hookless-vs-hooked-rims/"
+              ]
+            }
+          ]
+        }
+      },
+      "source_urls": [],
+      "expected_blocking": [],
+      "note": "Otro producto: GP5000 S TR 30-622, máximo 25 mm internos y 4.5 bar; no pertenece a la ficha de la 28-622.",
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false
+    },
+    {
+      "id": "wss_root_rolling_angle_does_not_imply_mount_bevels",
+      "template": "bearing",
+      "values": {
+        "bearing_construction": "Cartucho blindado",
+        "bearing_internal_construction": "Angular Contact MAX",
+        "bearing_seat_geometry": "Sin biseles de apoyo",
+        "bearing_element_retention": "Complemento completo / sin jaula",
+        "bearing_size_code": "7001 1ZS MAX"
+      },
+      "kind": "root_boundary",
+      "source_urls": [],
+      "expected_blocking": [],
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false,
+      "forbidden_issue_fields": [
+        "bearing_inner_contact_angle_deg",
+        "bearing_outer_contact_angle_deg"
+      ]
+    },
+    {
+      "id": "wss_root_loose_ball_cannot_receive_a_bevel_angle",
+      "template": "bearing",
+      "values": {
+        "bearing_construction": "Bolas sueltas (bolsa)",
+        "bearing_application": "Dirección",
+        "bearing_inner_contact_angle_deg": "36"
+      },
+      "kind": "root_boundary",
+      "source_urls": [],
+      "expected_blocking": [
+        {
+          "code": "field_applicability",
+          "field": "bearing_inner_contact_angle_deg"
+        }
+      ],
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false
+    },
+    {
+      "id": "wss_root_bevel_angle_outside_geometric_domain",
+      "template": "bearing",
+      "values": {
+        "bearing_construction": "Cartucho sellado",
+        "bearing_seat_geometry": "Biseles interior y exterior",
+        "bearing_inner_contact_angle_deg": "360",
+        "bearing_outer_contact_angle_deg": "45"
+      },
+      "kind": "root_boundary",
+      "source_urls": [],
+      "expected_blocking": [
+        {
+          "code": "range",
+          "field": "bearing_inner_contact_angle_deg"
+        }
+      ],
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false,
+      "expected_sql_blocking": [
+        {
+          "code": "field_constraint",
+          "field": "bearing_inner_contact_angle_deg"
+        }
+      ]
+    },
+    {
+      "id": "wss_root_open_cartridge_dimensions_are_applicable",
+      "template": "bottom_bracket_bearing",
+      "values": {
+        "bearing_construction": "Cartucho abierto",
+        "bearing_size_code": "6902",
+        "bearing_inner_diameter_mm": "15",
+        "bearing_outer_diameter_mm": "28",
+        "bb_bearing_width_mm": "7"
+      },
+      "kind": "root_boundary",
+      "source_urls": [],
+      "expected_blocking": [],
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false
+    },
+    {
+      "id": "wss_root_single_crown_cannot_receive_double_crown_stack",
+      "template": "fork",
+      "values": {
+        "fork_crown_layout": "Una corona",
+        "crown_stack_min_mm": "105"
+      },
+      "kind": "root_boundary",
+      "source_urls": [],
+      "expected_blocking": [
+        {
+          "code": "field_applicability",
+          "field": "crown_stack_min_mm"
+        }
+      ],
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false
+    },
+    {
+      "id": "wss_root_headset_loose_balls_do_not_have_cartridge_bevels",
+      "template": "headset",
+      "values": {
+        "headset_part_scope": "Superior",
+        "headset_bearing_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "upper",
+              "values": {
+                "position": "Superior",
+                "construction": "Bolas sueltas",
+                "inner_contact_angle_deg": "36"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "kind": "root_boundary",
+      "source_urls": [],
+      "expected_blocking": [
+        {
+          "code": "row_field_applicability",
+          "field": "headset_bearing_configurations"
+        }
+      ],
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false
+    },
+    {
+      "id": "wss_root_pressure_unit_requires_its_value",
+      "template": "tire",
+      "values": {
+        "tire_rim_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "hookless",
+              "values": {
+                "rim_bead_profile": "Sin gancho (hookless)",
+                "mounting_method": "Tubeless",
+                "pressure_unit": "bar"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "kind": "root_boundary",
+      "source_urls": [],
+      "expected_blocking": [],
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false,
+      "expected_row_condition_issues": [
+        {
+          "code": "row_required_missing",
+          "field": "tire_rim_configurations",
+          "row_id": "hookless",
+          "column": "max_pressure",
+          "blocking": false
+        }
+      ]
+    }
+  ],
+  "mechanical_coverage_complete": false,
+  "automatic_fill_authorized": false
+}

@@ -1,0 +1,255 @@
+{
+  "schema_version": 1,
+  "purpose": "Regression cases for field representation and prerequisites. No inventory product, installed assembly, universal compatibility or complete fiche is certified. Missing required observations remain warnings.",
+  "cases": [
+    {
+      "id": "mallet_clipless_pins_and_mixed_bearings",
+      "template": "pedal",
+      "values": {
+        "pedal_type": "Automático (clipless)",
+        "replaceable_pins": true,
+        "pedal_bearing_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "a22b9884-d111-5e3f-a557-bb0ba4a10dc6",
+              "values": {
+                "position": "Interior",
+                "construction": "Casquillo",
+                "model": "Igus LL-glide"
+              },
+              "sources": [
+                "https://www.crankbrothers.com/products/mallet-e"
+              ]
+            },
+            {
+              "id": "1c86f95c-36f2-5185-bd83-29825a9ebd7f",
+              "values": {
+                "position": "Exterior",
+                "construction": "Cartucho",
+                "model": "Enduro MAX"
+              },
+              "sources": [
+                "https://www.crankbrothers.com/products/mallet-e"
+              ]
+            }
+          ]
+        },
+        "cleats_included": true,
+        "included_cleat_model": "Standard Release 15° / 20°, 6° float"
+      },
+      "kind": "source_scoped_representation",
+      "source_urls": [
+        "https://www.crankbrothers.com/products/mallet-e"
+      ],
+      "expected_blocking": []
+    },
+    {
+      "id": "absent_cleats_cannot_name_included_model",
+      "template": "pedal",
+      "values": {
+        "cleats_included": false,
+        "included_cleat_model": "Cala sintética"
+      },
+      "kind": "synthetic_negative",
+      "source_urls": [
+        "https://www.crankbrothers.com/products/mallet-e"
+      ],
+      "expected_blocking": [
+        {
+          "code": "field_applicability",
+          "field": "included_cleat_model"
+        }
+      ]
+    },
+    {
+      "id": "quill_adapter_has_two_diameters",
+      "template": "stem",
+      "values": {
+        "stem_kind": "Adaptador quill → ahead",
+        "quill_diameter_mm": "22.2",
+        "quill_adapter_output_diameter_mm": "28.6"
+      },
+      "kind": "synthetic_geometry_not_oem_fitment",
+      "source_urls": [
+        "https://www.parktool.com/en-us/blog/repair-help/stem-removal-installation-quill-stems"
+      ],
+      "expected_blocking": []
+    },
+    {
+      "id": "quill_adapter_has_no_handlebar_clamp",
+      "template": "stem",
+      "values": {
+        "stem_kind": "Adaptador quill → ahead",
+        "bar_clamp_diameter_mm": "31.8"
+      },
+      "kind": "synthetic_negative",
+      "source_urls": [
+        "https://www.parktool.com/en-us/blog/repair-help/stem-removal-installation-quill-stems"
+      ],
+      "expected_blocking": [
+        {
+          "code": "field_applicability",
+          "field": "bar_clamp_diameter_mm"
+        }
+      ]
+    },
+    {
+      "id": "quill_insertion_is_not_ahead_clamp",
+      "template": "stem",
+      "values": {
+        "stem_kind": "Tee de espiga (quill)",
+        "stem_steerer_clamp_diameter_mm": "28.6"
+      },
+      "kind": "synthetic_negative",
+      "source_urls": [
+        "https://www.parktool.com/en-us/blog/repair-help/stem-removal-installation-quill-stems"
+      ],
+      "expected_blocking": [
+        {
+          "code": "field_applicability",
+          "field": "stem_steerer_clamp_diameter_mm"
+        }
+      ]
+    },
+    {
+      "id": "ritchey_rail_coverage_stays_per_optional_kit",
+      "template": "seatpost",
+      "values": {
+        "seatpost_kind": "Rígida",
+        "seatpost_saddle_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "00f0315b-c3d8-5786-b898-e8225417834e",
+              "values": {
+                "rail_geometry": "Oval 7x9 mm",
+                "configuration_state": "Con kit opcional",
+                "model": "WCS Carbon 1-Bolt clampset 7x10",
+                "conditions": "Rieles de carbono; únicamente postes Superlogic y WCS Carbon 1-bolt indicados por OEM."
+              },
+              "sources": [
+                "https://ritcheylogic.com/bike/seatposts/wcs-carbon-1-bolt-seatpost-complete-clampset"
+              ]
+            },
+            {
+              "id": "72c2031f-0bbe-5306-9288-7a776e1f647b",
+              "values": {
+                "rail_geometry": "Oval 7x9.6 mm",
+                "configuration_state": "Con kit opcional",
+                "model": "WCS Carbon 1-Bolt clampset 7x10",
+                "conditions": "Rieles de carbono; únicamente postes Superlogic y WCS Carbon 1-bolt indicados por OEM."
+              },
+              "sources": [
+                "https://ritcheylogic.com/bike/seatposts/wcs-carbon-1-bolt-seatpost-complete-clampset"
+              ]
+            },
+            {
+              "id": "c6bf82d0-4171-5cf7-af9b-2984f703ae22",
+              "values": {
+                "rail_geometry": "Oval 7x10 mm",
+                "configuration_state": "Con kit opcional",
+                "model": "WCS Carbon 1-Bolt clampset 7x10",
+                "conditions": "Rieles de carbono; únicamente postes Superlogic y WCS Carbon 1-bolt indicados por OEM."
+              },
+              "sources": [
+                "https://ritcheylogic.com/bike/seatposts/wcs-carbon-1-bolt-seatpost-complete-clampset"
+              ]
+            }
+          ]
+        }
+      },
+      "kind": "source_scoped_representation",
+      "source_urls": [
+        "https://ritcheylogic.com/bike/seatposts/wcs-carbon-1-bolt-seatpost-complete-clampset"
+      ],
+      "expected_blocking": []
+    },
+    {
+      "id": "shim_cannot_have_seatpost_offset",
+      "template": "seatpost",
+      "values": {
+        "seatpost_kind": "Suplemento (shim)",
+        "seatpost_offset_mm": "20"
+      },
+      "kind": "synthetic_negative",
+      "source_urls": [
+        "https://ritcheylogic.com/bike/seatposts/wcs-carbon-1-bolt-seatpost-complete-clampset"
+      ],
+      "expected_blocking": [
+        {
+          "code": "field_applicability",
+          "field": "seatpost_offset_mm"
+        }
+      ]
+    },
+    {
+      "id": "u_lock_cable_kit_exposes_both_measurements",
+      "template": "lock",
+      "values": {
+        "lock_kind": "Kit U + cable",
+        "inner_width_mm": "83",
+        "inner_height_mm": "178",
+        "cable_length_mm": "1219.2"
+      },
+      "kind": "synthetic_dimensions_source_confirms_kit_kind_only",
+      "source_urls": [
+        "https://www.kryptonitelock.com/en/products/product-information/current-key/002079.html?type=bicycle"
+      ],
+      "expected_blocking": []
+    },
+    {
+      "id": "reactiv_photochromic_and_polarized_same_lens",
+      "template": "eyewear",
+      "values": {
+        "eyewear_lens_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "0511372e-8a72-5049-a81c-aec5d368899b",
+              "values": {
+                "model": "REACTIV 2-4 Polarized",
+                "photochromic": true,
+                "polarized": true
+              },
+              "sources": [
+                "https://www.julbo.com/en_gb/sunglasses/photochromic-2-4-polarized-sunglasses"
+              ]
+            }
+          ]
+        }
+      },
+      "kind": "source_scoped_representation",
+      "source_urls": [
+        "https://www.julbo.com/en_gb/sunglasses/photochromic-2-4-polarized-sunglasses"
+      ],
+      "expected_blocking": []
+    },
+    {
+      "id": "jacket_can_have_long_sleeves",
+      "template": "rider_apparel",
+      "values": {
+        "garment_kind": "Chaqueta",
+        "sleeve": "Larga"
+      },
+      "kind": "source_scoped_representation",
+      "source_urls": [
+        "https://www.castelli-cycling.com/AU/en/Men/Cycling/Top/Jackets/Cold/PERFETTO-RoS-LONG-SLEEVE/p/4519500_383_52_S"
+      ],
+      "expected_blocking": []
+    },
+    {
+      "id": "oem_size_label_is_not_closed_menu",
+      "template": "rider_apparel",
+      "values": {
+        "garment_kind": "Chaqueta",
+        "oem_size_label": "XXXL / código OEM 56"
+      },
+      "kind": "synthetic_label_no_cross_brand_equivalence",
+      "source_urls": [
+        "https://www.castelli-cycling.com/AU/en/Men/Cycling/Top/Jackets/Cold/PERFETTO-RoS-LONG-SLEEVE/p/4519500_383_52_S"
+      ],
+      "expected_blocking": []
+    }
+  ]
+}

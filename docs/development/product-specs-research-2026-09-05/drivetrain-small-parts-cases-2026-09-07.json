@@ -1,0 +1,1730 @@
+{
+  "schema_version": 1,
+  "title": "All-family physical-port cardinality",
+  "catalogue_sha256": "e847f24f1a6cac14a34d90f2cf54a713df621dced5bb2f9a9eda7cc07a10b25d",
+  "independent_review_hashes": [
+    "4cbd9cd4e1ccb2f41ab3249cbaed83fe419689aa6ba1dbb24a5b9dd856bd66d1",
+    "a1c6bfc5fae5c11b3b7f804b240ea36b2a36db2f6e4ba2ff868c061802856820"
+  ],
+  "mechanical_coverage_complete": false,
+  "automatic_fill_authorized": false,
+  "cases": [
+    {
+      "id": "fastener_hassns_m8_chainring_bolt_pitch_unknown",
+      "template": "fastener",
+      "values": {
+        "fastener_kind": "Perno",
+        "thread": "M8",
+        "declared_purpose": "Perno de plato",
+        "length_datum": "Desconocido / sin confirmar",
+        "length_mm": "8.5",
+        "pack_quantity": "1"
+      },
+      "kind": "inventory_candidate_unverified",
+      "source_ids": [
+        "E-PT-THREAD",
+        "E-INVENTARIO"
+      ],
+      "source_urls": [
+        "https://www.parktool.com/en-us/blog/repair-help/basic-thread-concepts"
+      ],
+      "expected_blocking": [],
+      "inventory_product": "Perno Corona HASSNS M8 8.5mm  NEGRO",
+      "note": "Producto real «Perno Corona HASSNS M8 8.5mm»: el paso 0.75 que Park Tool asocia a pernos de plato NO se escribe desde el uso; queda pendiente hasta etiqueta/OEM. La referencia del largo es desconocida y se declara así.",
+      "review_note": "Título conserva nominal/largo declarado; paso y referencia del largo pendientes de etiqueta/modelo.",
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false,
+      "root_reconciliation": []
+    },
+    {
+      "id": "fastener_rotor_bolt_t25_park_standard_scope",
+      "template": "fastener",
+      "values": {
+        "fastener_kind": "Perno",
+        "thread": "M5",
+        "thread_pitch_mm": "0.8",
+        "thread_hand": "Derecha",
+        "head_drive": "Torx",
+        "torx_size": "T25",
+        "declared_purpose": "Perno de rotor",
+        "strength_class_claim": "Desconocido / sin confirmar"
+      },
+      "kind": "synthetic_representation",
+      "source_ids": [
+        "E-PT-THREAD",
+        "E-INVENTARIO"
+      ],
+      "source_urls": [
+        "https://www.parktool.com/en-us/blog/repair-help/basic-thread-concepts"
+      ],
+      "expected_blocking": [],
+      "inventory_product": "PERNO FRENO DISCO (ROTOR) PARA TORQ T25 ( MINIMO 20 PCS )",
+      "note": "M5 x 0.8 es el estándar de aplicación que Park Tool documenta para pernos de rotor; como dato del SKU sólo vale si la etiqueta/OEM del perno lo confirma (aquí se muestra el alcance, no una medición).",
+      "review_note": "Ilustración de rosca; Park no identifica este SKU ni prueba accionamiento, mano o resistencia particulares.",
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false,
+      "root_reconciliation": []
+    },
+    {
+      "id": "fastener_kit_rows_shape",
+      "template": "fastener",
+      "values": {
+        "fastener_kind": "Kit",
+        "fastener_component_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r01",
+              "values": {
+                "member_role": "Perno de rotor",
+                "thread_hand": "Derecha",
+                "length_mm": "10",
+                "length_datum": "Bajo cabeza",
+                "quantity": "12",
+                "interface_kind": "Rosca",
+                "pitch_unit": "mm",
+                "pitch_value": "0.8",
+                "drive_designation": "T25",
+                "diameter_value": "5",
+                "diameter_unit": "mm"
+              },
+              "sources": [
+                "https://www.parktool.com/en-us/blog/repair-help/basic-thread-concepts"
+              ]
+            },
+            {
+              "id": "r02",
+              "values": {
+                "member_role": "Golilla",
+                "quantity": "12"
+              },
+              "sources": [
+                "https://www.parktool.com/en-us/blog/repair-help/basic-thread-concepts"
+              ]
+            }
+          ]
+        }
+      },
+      "kind": "synthetic_representation",
+      "source_ids": [
+        "E-PT-THREAD"
+      ],
+      "source_urls": [
+        "https://www.parktool.com/en-us/blog/repair-help/basic-thread-concepts"
+      ],
+      "expected_blocking": [],
+      "inventory_product": null,
+      "note": "Forma de un kit: dos miembros con rosca/largo/cantidad propios. Valores ilustrativos del estándar Park Tool; no es un SKU del inventario.",
+      "review_note": "Kit ilustrativo, no evidencia de SKU; golilla sin rosca inventada.",
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false,
+      "root_reconciliation": [],
+      "successor_translation": "Column units retained explicitly; no inference from diameter"
+    },
+    {
+      "id": "RCF47",
+      "template": "fastener",
+      "field": "fastener_component_configurations",
+      "kind": "source_grounded_representation_example",
+      "values": {
+        "fastener_component_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "member_role": "Eje de ejemplo",
+                "quantity": "1",
+                "interface_kind": "Rosca",
+                "pitch_unit": "tpi",
+                "pitch_value": "26",
+                "diameter_value": "9",
+                "diameter_unit": "mm"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_row_condition_issues": [],
+      "expected_blocking": [],
+      "source_ids": [
+        "PARK_THREADS"
+      ],
+      "purpose": "Ejemplo Park de diámetro métrico con TPI; no reintroducir gating por dialecto.",
+      "gap_ids": [],
+      "not_a_mechanical_verdict": true,
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "successor_translation": "Column units retained explicitly; no inference from diameter"
+    },
+    {
+      "id": "rnd_RF1",
+      "template": "fastener",
+      "values": {
+        "fastener_kind": "Perno",
+        "thread": "M5",
+        "thread_pitch_system": "Paso en milímetros",
+        "thread_pitch_mm": "0.8",
+        "length_datum": "Bajo cabeza",
+        "length_mm": "20"
+      },
+      "kind": "synthetic_representation",
+      "note": "Designación métrica completa. Con el sistema en métrico, el campo de TPI no está disponible.",
+      "expected_blocking": [],
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false
+    },
+    {
+      "id": "rnd_RF2",
+      "template": "fastener",
+      "values": {
+        "fastener_kind": "Perno",
+        "thread": "M5",
+        "thread_pitch_system": "Paso en milímetros",
+        "thread_pitch_mm": "1.0",
+        "thread_tpi": 26
+      },
+      "kind": "synthetic_representation",
+      "note": "El caso negativo de la compuerta AG01: hoy se escribe sin ruido; con el sistema declarado, el TPI queda fuera de su condición.",
+      "expected_blocking": [
+        {
+          "code": "field_applicability",
+          "field": "thread_tpi"
+        }
+      ],
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false
+    },
+    {
+      "id": "rnd_RF3",
+      "template": "fastener",
+      "values": {
+        "fastener_kind": "Perno",
+        "thread": "M5",
+        "thread_pitch_system": "Desconocido / sin confirmar"
+      },
+      "kind": "synthetic_representation",
+      "note": "Sin sistema declarado no se escribe ni paso ni TPI: la designación queda incompleta y visible, no rellenada.",
+      "expected_blocking": [],
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false
+    },
+    {
+      "id": "rnd_root_metric_diameter_tpi_pitch",
+      "template": "fastener",
+      "values": {
+        "fastener_kind": "Otro",
+        "thread": "36 mm",
+        "thread_pitch_system": "Hilos por pulgada",
+        "thread_tpi": "24"
+      },
+      "kind": "synthetic_representation",
+      "note": "Park documenta 36 mm × 24 TPI; prueba ejes independientes, no identidad de pieza en inventario.",
+      "expected_blocking": [],
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false
+    },
+    {
+      "id": "rnd_root_pitch_selected_missing_value",
+      "template": "fastener",
+      "values": {
+        "fastener_kind": "Perno",
+        "thread": "M5",
+        "thread_pitch_system": "Paso en milímetros"
+      },
+      "kind": "synthetic_representation",
+      "note": "Contraejemplo de representación; no aprobación de producto.",
+      "expected_blocking": [],
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false,
+      "expected_issue_subset": [
+        {
+          "code": "required_missing",
+          "field": "thread_pitch_mm",
+          "blocking": false
+        }
+      ]
+    },
+    {
+      "id": "ds_kit_two_pitch_systems",
+      "template": "fastener",
+      "values": {
+        "fastener_kind": "Kit",
+        "fastener_component_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "member_role": "Perno de plato",
+                "quantity": "5",
+                "interface_kind": "Rosca",
+                "pitch_unit": "mm",
+                "pitch_value": "0.75",
+                "diameter_value": "8",
+                "diameter_unit": "mm"
+              },
+              "sources": []
+            },
+            {
+              "id": "r2",
+              "values": {
+                "member_role": "Perno de patilla",
+                "quantity": "1",
+                "interface_kind": "Rosca",
+                "pitch_unit": "tpi",
+                "pitch_value": "26",
+                "diameter_value": "0.375",
+                "diameter_unit": "in"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [
+        "https://www.parktool.com/en-us/blog/repair-help/basic-thread-concepts"
+      ],
+      "successor_translation": "Column units retained explicitly; no inference from diameter"
+    },
+    {
+      "id": "ds_kit_metric_nominal_tpi_pitch",
+      "template": "fastener",
+      "values": {
+        "fastener_kind": "Kit",
+        "fastener_component_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "member_role": "Eje",
+                "quantity": "1",
+                "interface_kind": "Rosca",
+                "pitch_unit": "tpi",
+                "pitch_value": "26",
+                "diameter_value": "10",
+                "diameter_unit": "mm"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [
+        "https://www.parktool.com/en-us/blog/repair-help/basic-thread-concepts"
+      ],
+      "successor_translation": "Column units retained explicitly; no inference from diameter"
+    },
+    {
+      "id": "ds_guard_iscg05",
+      "template": "chainring_guard",
+      "values": {
+        "chainring_guard_mounts": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "mount_kind": "ISCG05",
+                "interface_designation": "ISCG05",
+                "target_component": "Cuadro sintético"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "ds_guard_bolt_circle",
+      "template": "chainring_guard",
+      "values": {
+        "chainring_guard_mounts": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "mount_kind": "Círculo de pernos (BCD)",
+                "bcd_mm": "104",
+                "bolt_count": "4"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "ds_guard_iscg_has_no_bcd",
+      "template": "chainring_guard",
+      "values": {
+        "chainring_guard_mounts": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "mount_kind": "ISCG05",
+                "bcd_mm": "104"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [
+        {
+          "code": "row_field_applicability",
+          "field": "chainring_guard_mounts"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "ds_guard_mount_absent",
+      "template": "chainring_guard",
+      "values": {
+        "material": "Aluminio"
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "expected_issue_subset": [
+        {
+          "code": "required_missing",
+          "field": "chainring_guard_mounts",
+          "blocking": false
+        }
+      ],
+      "expected_sql_issue_subset": [
+        {
+          "code": "required_missing",
+          "field": "chainring_guard_mounts",
+          "blocking": false
+        }
+      ]
+    },
+    {
+      "id": "ds_lockring_two_threads",
+      "template": "cassette_lockring",
+      "values": {
+        "lockring_thread_interfaces": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "scope": "Rosca del piñón",
+                "interface_kind": "Rosca",
+                "diameter_unit": "in",
+                "diameter_in": "1.37",
+                "pitch_unit": "tpi",
+                "pitch_tpi": "24",
+                "thread_hand": "Derecha",
+                "application": "Piñón fijo",
+                "target_model": "Sistema inglés tradicional",
+                "owner_role": "Componente objetivo"
+              },
+              "sources": []
+            },
+            {
+              "id": "r2",
+              "values": {
+                "scope": "Contratuerca",
+                "interface_kind": "Rosca",
+                "diameter_unit": "in",
+                "diameter_in": "1.29",
+                "pitch_unit": "tpi",
+                "pitch_tpi": "24",
+                "thread_hand": "Izquierda",
+                "application": "Piñón fijo",
+                "target_model": "Sistema inglés tradicional",
+                "owner_role": "Anillo de bloqueo"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [
+        "https://www.sheldonbrown.com/gloss_l.html"
+      ],
+      "note": "Dos dueños en el conjunto: el piñón no es una segunda rosca propia de la contratuerca."
+    },
+    {
+      "id": "ds_lockring_metric_diameter_tpi_pitch",
+      "template": "cassette_lockring",
+      "values": {
+        "lockring_thread_interfaces": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "scope": "Rosca",
+                "interface_kind": "Rosca",
+                "diameter_unit": "mm",
+                "diameter_mm": "30",
+                "pitch_unit": "tpi",
+                "pitch_tpi": "24",
+                "owner_role": "Anillo de bloqueo",
+                "application": "Cassette",
+                "target_model": "Shimano Hyperglide, ejemplo de Sheldon",
+                "thread_hand": "Derecha",
+                "smallest_cog_form": "Designación literal",
+                "smallest_cog_designation": "Diámetro exterior distinto para 11T o piñones mayores",
+                "conditions": "Diámetro de rosca aproximado en la fuente; no dimensión medida de un SKU"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [
+        "https://www.sheldonbrown.com/gloss_l.html"
+      ]
+    },
+    {
+      "id": "ds_lockring_two_pitch_units",
+      "template": "cassette_lockring",
+      "values": {
+        "lockring_thread_interfaces": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "scope": "Rosca",
+                "interface_kind": "Rosca",
+                "diameter_unit": "mm",
+                "diameter_mm": "30",
+                "pitch_unit": "mm",
+                "pitch_mm": "1",
+                "pitch_tpi": "26"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [
+        {
+          "code": "row_field_applicability",
+          "field": "lockring_thread_interfaces"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "ds_lockring_spline_has_no_pitch",
+      "template": "cassette_lockring",
+      "values": {
+        "lockring_thread_interfaces": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "scope": "Estriado",
+                "interface_kind": "Estriado o ranura",
+                "diameter_unit": "mm",
+                "diameter_mm": "34",
+                "pitch_mm": "1"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [
+        {
+          "code": "row_field_applicability",
+          "field": "lockring_thread_interfaces"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "ds_lockring_thread_absent",
+      "template": "cassette_lockring",
+      "values": {
+        "smallest_cog_fit": "11T"
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "expected_issue_subset": [
+        {
+          "code": "required_missing",
+          "field": "lockring_thread_interfaces",
+          "blocking": false
+        }
+      ],
+      "expected_sql_issue_subset": [
+        {
+          "code": "required_missing",
+          "field": "lockring_thread_interfaces",
+          "blocking": false
+        }
+      ]
+    },
+    {
+      "id": "ds_extender_scoped_claim",
+      "template": "derailleur_hanger_extender",
+      "values": {
+        "hanger_extender_limit_claims": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "target_derailleur": "Cambio sintético de referencia",
+                "target_speeds": "11",
+                "target_cage": "Corta",
+                "conditions": "El fabricante declara alcance, no capacidad",
+                "largest_cog_teeth": "40",
+                "extender_model": "Extensor sintético",
+                "status": "Condicional"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "extender_declaration_form": "Límites de piñón"
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [
+        "https://www.wolftoothcomponents.com/pages/roadlink-tech-page"
+      ]
+    },
+    {
+      "id": "ds_extender_two_derailleurs",
+      "template": "derailleur_hanger_extender",
+      "values": {
+        "hanger_extender_limit_claims": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "target_derailleur": "Cambio A",
+                "largest_cog_teeth": "40",
+                "extender_model": "Extensor sintético",
+                "status": "Condicional"
+              },
+              "sources": []
+            },
+            {
+              "id": "r2",
+              "values": {
+                "target_derailleur": "Cambio B",
+                "largest_cog_teeth": "36",
+                "extender_model": "Extensor sintético",
+                "status": "Condicional"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "extender_declaration_form": "Límites de piñón"
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "ds_extender_claim_absent",
+      "template": "derailleur_hanger_extender",
+      "values": {
+        "hanger_interface": "Patilla estándar (M10x1)"
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "expected_issue_subset": [
+        {
+          "code": "required_missing",
+          "field": "extender_declaration_form",
+          "blocking": false
+        }
+      ],
+      "expected_sql_issue_subset": [
+        {
+          "code": "required_missing",
+          "field": "extender_declaration_form",
+          "blocking": false
+        }
+      ]
+    },
+    {
+      "id": "ds_root_no_thread_pitch_on_plain_member",
+      "template": "fastener",
+      "values": {
+        "fastener_kind": "Kit",
+        "fastener_component_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "member_role": "Golilla",
+                "quantity": "1",
+                "interface_kind": "Sin rosca",
+                "pitch_unit": "mm",
+                "pitch_value": "1"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [
+        {
+          "code": "row_field_applicability",
+          "field": "fastener_component_configurations"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "expected_sql_blocking": [
+        {
+          "code": "row_field_applicability",
+          "field": "fastener_component_configurations"
+        },
+        {
+          "code": "row_field_applicability",
+          "field": "fastener_component_configurations"
+        }
+      ]
+    },
+    {
+      "id": "ds_root_pitch_unit_missing",
+      "template": "fastener",
+      "values": {
+        "fastener_kind": "Kit",
+        "fastener_component_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "member_role": "Perno",
+                "quantity": "1",
+                "interface_kind": "Rosca",
+                "pitch_value": "0.75",
+                "diameter_value": "8",
+                "diameter_unit": "mm"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "expected_issue_subset": [
+        {
+          "code": "row_prerequisite",
+          "field": "fastener_component_configurations",
+          "blocking": false
+        }
+      ],
+      "expected_sql_issue_subset": [
+        {
+          "code": "row_prerequisite",
+          "field": "fastener_component_configurations",
+          "blocking": false
+        }
+      ]
+    },
+    {
+      "id": "ds_root_washer_cannot_receive_torx",
+      "template": "fastener",
+      "values": {
+        "fastener_kind": "Golilla / espaciador",
+        "head_drive": "Torx",
+        "torx_size": "T25"
+      },
+      "expected_blocking": [
+        {
+          "code": "field_applicability",
+          "field": "head_drive"
+        },
+        {
+          "code": "field_applicability",
+          "field": "torx_size"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "ds_root_roadlink_dm_cassette_pair",
+      "template": "derailleur_hanger_extender",
+      "values": {
+        "hanger_extender_claims": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "extender_model": "Wolf Tooth RoadLink DM",
+                "target_derailleur": "Shimano Ultegra R8000",
+                "target_speeds": "11",
+                "smallest_cog_teeth": "11",
+                "largest_cog_teeth": "42",
+                "status": "Aceptable",
+                "target_hanger": "Patilla estándar; no patilla Direct Mount",
+                "capacity_conditions": "Respetar capacidad publicada del cambio y su jaula",
+                "source_url": "https://www.wolftoothcomponents.com/pages/roadlink-tech-page",
+                "source_scope": "RoadLink DM: 11s Cassette Compatibility"
+              },
+              "sources": []
+            },
+            {
+              "id": "r2",
+              "values": {
+                "extender_model": "Wolf Tooth RoadLink DM",
+                "target_derailleur": "Shimano Ultegra R8000",
+                "target_speeds": "11",
+                "smallest_cog_teeth": "10",
+                "largest_cog_teeth": "42",
+                "status": "No compatible",
+                "target_hanger": "Patilla estándar; no patilla Direct Mount",
+                "capacity_conditions": "Respetar capacidad publicada del cambio y su jaula",
+                "source_url": "https://www.wolftoothcomponents.com/pages/roadlink-tech-page",
+                "source_scope": "RoadLink DM: 11s Cassette Compatibility",
+                "conditions": "Lista OEM: Not Supported. Otro apartado declara mejora parcial sin rendimiento de fábrica; no es aprobación."
+              },
+              "sources": []
+            }
+          ]
+        },
+        "extender_declaration_form": "Combinaciones de cassette"
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [
+        "https://www.wolftoothcomponents.com/pages/roadlink-tech-page"
+      ]
+    },
+    {
+      "id": "ds_root_cassette_pair_reversed",
+      "template": "derailleur_hanger_extender",
+      "values": {
+        "hanger_extender_claims": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "extender_model": "Sintético",
+                "target_derailleur": "Sintético",
+                "smallest_cog_teeth": "42",
+                "largest_cog_teeth": "11",
+                "status": "Aceptable"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "extender_declaration_form": "Combinaciones de cassette"
+      },
+      "expected_blocking": [
+        {
+          "code": "row_shape",
+          "field": "hanger_extender_claims"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "ds_root_bash_plates_keep_distinct_ranges",
+      "template": "chainring_guard",
+      "values": {
+        "chainring_guard_mounts": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "mount_kind": "ISCG05",
+                "interface_designation": "ISCG05"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "chainring_guard_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "component": "OneUp V2 32–34T",
+                "mount_row_id": "r1",
+                "installed": true,
+                "size_form": "Intervalo",
+                "min_teeth": "32",
+                "max_teeth": "34",
+                "source_url": "https://int.oneupcomponents.com/blogs/bashguides-chainguides/bashguard-chainguide-install-instructions"
+              },
+              "sources": []
+            },
+            {
+              "id": "r2",
+              "values": {
+                "component": "OneUp V2 36T",
+                "mount_row_id": "r1",
+                "size_form": "Valor exacto",
+                "teeth": "36",
+                "source_url": "https://int.oneupcomponents.com/blogs/bashguides-chainguides/bashguard-chainguide-install-instructions"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [
+        "https://int.oneupcomponents.com/blogs/bashguides-chainguides/bashguard-chainguide-install-instructions"
+      ]
+    },
+    {
+      "id": "ds_root_guard_unresolved_mount",
+      "template": "chainring_guard",
+      "values": {
+        "chainring_guard_mounts": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "mount_kind": "ISCG05",
+                "interface_designation": "ISCG05"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "chainring_guard_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "component": "Sintético",
+                "mount_row_id": "missing",
+                "size_form": "Valor exacto",
+                "teeth": "36"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [
+        {
+          "code": "row_reference_unresolved",
+          "field": "chainring_guard_configurations"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "ds_root_track_lockring_right_hand_conflict",
+      "template": "cassette_lockring",
+      "values": {
+        "lockring_thread_interfaces": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "scope": "Rosca propia",
+                "owner_role": "Anillo de bloqueo",
+                "application": "Piñón fijo",
+                "target_model": "Inglés tradicional",
+                "interface_kind": "Rosca",
+                "diameter_unit": "in",
+                "diameter_in": "1.29",
+                "pitch_unit": "tpi",
+                "pitch_tpi": "24",
+                "thread_hand": "Derecha"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [
+        {
+          "code": "row_value_conflict",
+          "field": "lockring_thread_interfaces"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [
+        "https://www.sheldonbrown.com/gloss_l.html"
+      ]
+    },
+    {
+      "id": "ds_root_campagnolo_generation_scoped",
+      "template": "cassette_lockring",
+      "values": {
+        "lockring_thread_interfaces": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "scope": "Rosca propia",
+                "owner_role": "Anillo de bloqueo",
+                "application": "Cassette",
+                "target_model": "Campagnolo 9/10 velocidades",
+                "target_edition": "1996–1999",
+                "interface_kind": "Rosca",
+                "diameter_unit": "mm",
+                "diameter_mm": "26",
+                "pitch_unit": "mm",
+                "pitch_mm": "1",
+                "smallest_cog_form": "Valor exacto",
+                "smallest_cog_teeth": "11",
+                "conditions": "No extrapolar a generación 2000+; exterior distinto 11T/12–14T",
+                "source_url": "https://www.sheldonbrown.com/gloss_l.html"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [
+        "https://www.sheldonbrown.com/gloss_l.html"
+      ]
+    },
+    {
+      "id": "ds_root_track_cannot_claim_cassette_outer_cog",
+      "template": "cassette_lockring",
+      "values": {
+        "lockring_thread_interfaces": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "scope": "Rosca propia",
+                "owner_role": "Anillo de bloqueo",
+                "application": "Piñón fijo",
+                "target_model": "Sintético",
+                "interface_kind": "Designación OEM",
+                "designation": "OEM",
+                "smallest_cog_form": "Valor exacto",
+                "smallest_cog_teeth": "11"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [
+        {
+          "code": "row_field_applicability",
+          "field": "lockring_thread_interfaces"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "expected_sql_blocking": [
+        {
+          "code": "row_field_applicability",
+          "field": "lockring_thread_interfaces"
+        },
+        {
+          "code": "row_field_applicability",
+          "field": "lockring_thread_interfaces"
+        }
+      ]
+    },
+    {
+      "id": "ds_review_diameter_cannot_embed_pitch_text",
+      "template": "fastener",
+      "values": {
+        "fastener_kind": "Kit",
+        "fastener_component_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "member_role": "Prueba",
+                "quantity": "1",
+                "interface_kind": "Rosca",
+                "diameter_value": "M8 x 1.25",
+                "diameter_unit": "mm",
+                "pitch_value": "26",
+                "pitch_unit": "tpi"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [
+        {
+          "code": "row_shape",
+          "field": "fastener_component_configurations"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "ds_review_literal_cannot_have_a_second_pitch",
+      "template": "fastener",
+      "values": {
+        "fastener_kind": "Kit",
+        "fastener_component_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "member_role": "Pieza",
+                "quantity": "1",
+                "interface_kind": "Designación OEM",
+                "interface_designation": "M8 x 1.25",
+                "pitch_value": "26"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [
+        {
+          "code": "row_field_applicability",
+          "field": "fastener_component_configurations"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "ds_review_literal_uncommon_thread_preserved",
+      "template": "fastener",
+      "values": {
+        "fastener_kind": "Kit",
+        "fastener_component_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "member_role": "Pieza",
+                "quantity": "1",
+                "interface_kind": "Designación OEM",
+                "interface_designation": "Designación OEM no descompuesta"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "ds_review_same_cassette_cannot_have_opposite_statuses",
+      "template": "derailleur_hanger_extender",
+      "values": {
+        "hanger_extender_claims": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "extender_model": "Extensor de prueba",
+                "target_derailleur": "Cambio de prueba",
+                "target_cage": "Jaula A",
+                "target_speeds": "11",
+                "configuration": "Montaje A",
+                "source_scope": "Lista de compatibilidad",
+                "smallest_cog_teeth": "11",
+                "largest_cog_teeth": "42",
+                "status": "Recomendado"
+              },
+              "sources": []
+            },
+            {
+              "id": "r2",
+              "values": {
+                "extender_model": "Extensor de prueba",
+                "target_derailleur": "Cambio de prueba",
+                "target_cage": "Jaula A",
+                "target_speeds": "11",
+                "configuration": "Montaje A",
+                "source_scope": "Lista de compatibilidad",
+                "smallest_cog_teeth": "11",
+                "largest_cog_teeth": "42",
+                "status": "No compatible"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "extender_declaration_form": "Combinaciones de cassette"
+      },
+      "expected_blocking": [
+        {
+          "code": "row_shape",
+          "field": "hanger_extender_claims"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "ds_review_different_cage_keeps_own_status",
+      "template": "derailleur_hanger_extender",
+      "values": {
+        "hanger_extender_claims": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "extender_model": "Extensor de prueba",
+                "target_derailleur": "Cambio de prueba",
+                "target_cage": "Jaula A",
+                "target_speeds": "11",
+                "configuration": "Montaje A",
+                "source_scope": "Lista de compatibilidad",
+                "smallest_cog_teeth": "11",
+                "largest_cog_teeth": "42",
+                "status": "Recomendado"
+              },
+              "sources": []
+            },
+            {
+              "id": "r2",
+              "values": {
+                "extender_model": "Extensor de prueba",
+                "target_derailleur": "Cambio de prueba",
+                "target_cage": "Jaula B",
+                "target_speeds": "11",
+                "configuration": "Montaje A",
+                "source_scope": "Lista de compatibilidad",
+                "smallest_cog_teeth": "11",
+                "largest_cog_teeth": "42",
+                "status": "No compatible"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "extender_declaration_form": "Combinaciones de cassette"
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "ds_review_different_cassette_keeps_own_status",
+      "template": "derailleur_hanger_extender",
+      "values": {
+        "hanger_extender_claims": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "extender_model": "Extensor de prueba",
+                "target_derailleur": "Cambio de prueba",
+                "target_cage": "Jaula A",
+                "target_speeds": "11",
+                "configuration": "Montaje A",
+                "source_scope": "Lista de compatibilidad",
+                "smallest_cog_teeth": "11",
+                "largest_cog_teeth": "42",
+                "status": "Recomendado"
+              },
+              "sources": []
+            },
+            {
+              "id": "r2",
+              "values": {
+                "extender_model": "Extensor de prueba",
+                "target_derailleur": "Cambio de prueba",
+                "target_cage": "Jaula A",
+                "target_speeds": "11",
+                "configuration": "Montaje A",
+                "source_scope": "Lista de compatibilidad",
+                "smallest_cog_teeth": "10",
+                "largest_cog_teeth": "42",
+                "status": "No compatible"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "extender_declaration_form": "Combinaciones de cassette"
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "ds_review_maximum_only_cannot_have_two_limits",
+      "template": "derailleur_hanger_extender",
+      "values": {
+        "hanger_extender_limit_claims": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "extender_model": "Extensor de prueba",
+                "target_derailleur": "Cambio de prueba",
+                "target_cage": "Jaula A",
+                "target_speeds": "11",
+                "configuration": "Montaje A",
+                "source_scope": "Lista de compatibilidad",
+                "largest_cog_teeth": "42",
+                "status": "Recomendado"
+              },
+              "sources": []
+            },
+            {
+              "id": "r2",
+              "values": {
+                "extender_model": "Extensor de prueba",
+                "target_derailleur": "Cambio de prueba",
+                "target_cage": "Jaula A",
+                "target_speeds": "11",
+                "configuration": "Montaje A",
+                "source_scope": "Lista de compatibilidad",
+                "largest_cog_teeth": "46",
+                "status": "Recomendado"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "extender_declaration_form": "Límites de piñón"
+      },
+      "expected_blocking": [
+        {
+          "code": "row_shape",
+          "field": "hanger_extender_limit_claims"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "ds_review_maximum_only_has_no_lower_cog",
+      "template": "derailleur_hanger_extender",
+      "values": {
+        "hanger_extender_limit_claims": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "extender_model": "Extensor de prueba",
+                "target_derailleur": "Cambio de prueba",
+                "target_cage": "Jaula A",
+                "target_speeds": "11",
+                "configuration": "Montaje A",
+                "source_scope": "Lista de compatibilidad",
+                "smallest_cog_teeth": "11",
+                "largest_cog_teeth": "42",
+                "status": "Recomendado"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "extender_declaration_form": "Límites de piñón"
+      },
+      "expected_blocking": [
+        {
+          "code": "row_shape",
+          "field": "hanger_extender_limit_claims"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "ds_review_same_plate_cannot_be_installed_and_uninstalled",
+      "template": "chainring_guard",
+      "values": {
+        "chainring_guard_mounts": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "mount_kind": "ISCG05",
+                "interface_designation": "ISCG05"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "chainring_guard_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "component": "Placa de prueba",
+                "mount_row_id": "r1",
+                "configuration": "Presentación A",
+                "size_form": "Valor exacto",
+                "teeth": "32",
+                "installed": true
+              },
+              "sources": []
+            },
+            {
+              "id": "r2",
+              "values": {
+                "component": "Placa de prueba",
+                "mount_row_id": "r1",
+                "configuration": "Presentación A",
+                "size_form": "Valor exacto",
+                "teeth": "32",
+                "installed": false
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [
+        {
+          "code": "row_shape",
+          "field": "chainring_guard_configurations"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "ds_review_other_presentation_can_change_installed_plate",
+      "template": "chainring_guard",
+      "values": {
+        "chainring_guard_mounts": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "mount_kind": "ISCG05",
+                "interface_designation": "ISCG05"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "chainring_guard_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "component": "Placa de prueba",
+                "mount_row_id": "r1",
+                "configuration": "Presentación A",
+                "size_form": "Valor exacto",
+                "teeth": "32",
+                "installed": true
+              },
+              "sources": []
+            },
+            {
+              "id": "r2",
+              "values": {
+                "component": "Placa de prueba",
+                "mount_row_id": "r1",
+                "configuration": "Presentación B",
+                "size_form": "Valor exacto",
+                "teeth": "32",
+                "installed": false
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "ds_review_same_lockring_interface_cannot_have_two_diameters",
+      "template": "cassette_lockring",
+      "values": {
+        "lockring_thread_interfaces": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "scope": "Rosca propia",
+                "owner_role": "Anillo de bloqueo",
+                "application": "Cassette",
+                "target_model": "Anillo de prueba",
+                "target_edition": "Edición A",
+                "configuration": "Rosca A",
+                "interface_kind": "Rosca",
+                "diameter_unit": "mm",
+                "diameter_mm": "30",
+                "pitch_unit": "tpi",
+                "pitch_tpi": "24"
+              },
+              "sources": []
+            },
+            {
+              "id": "r2",
+              "values": {
+                "scope": "Rosca propia",
+                "owner_role": "Anillo de bloqueo",
+                "application": "Cassette",
+                "target_model": "Anillo de prueba",
+                "target_edition": "Edición A",
+                "configuration": "Rosca A",
+                "interface_kind": "Rosca",
+                "diameter_unit": "mm",
+                "diameter_mm": "41",
+                "pitch_unit": "tpi",
+                "pitch_tpi": "24"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [
+        {
+          "code": "row_shape",
+          "field": "lockring_thread_interfaces"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "ds_review_other_lockring_interface_not_collapsed",
+      "template": "cassette_lockring",
+      "values": {
+        "lockring_thread_interfaces": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "scope": "Rosca propia",
+                "owner_role": "Anillo de bloqueo",
+                "application": "Cassette",
+                "target_model": "Anillo de prueba",
+                "target_edition": "Edición A",
+                "configuration": "Rosca A",
+                "interface_kind": "Rosca",
+                "diameter_unit": "mm",
+                "diameter_mm": "30",
+                "pitch_unit": "tpi",
+                "pitch_tpi": "24"
+              },
+              "sources": []
+            },
+            {
+              "id": "r2",
+              "values": {
+                "scope": "Rosca del objetivo",
+                "owner_role": "Componente objetivo",
+                "application": "Cassette",
+                "target_model": "Anillo de prueba",
+                "target_edition": "Edición A",
+                "configuration": "Rosca B",
+                "interface_kind": "Rosca",
+                "diameter_unit": "mm",
+                "diameter_mm": "41",
+                "pitch_unit": "tpi",
+                "pitch_tpi": "24"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "ds_review_initial_scope_gates_maximum_table",
+      "template": "derailleur_hanger_extender",
+      "values": {
+        "extender_declaration_form": "Combinaciones de cassette",
+        "hanger_extender_limit_claims": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "extender_model": "Extensor de prueba",
+                "target_derailleur": "Cambio de prueba",
+                "target_cage": "Jaula A",
+                "target_speeds": "11",
+                "configuration": "Montaje A",
+                "source_scope": "Lista de compatibilidad",
+                "largest_cog_teeth": "42",
+                "status": "Recomendado"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [
+        {
+          "code": "field_applicability",
+          "field": "hanger_extender_limit_claims"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    }
+  ],
+  "root_nd_case_overrides": [
+    {
+      "id": "helmet_smith_mainline_certifications_by_row",
+      "reason": "Integral pertenece al eje de construcción, no al uso."
+    },
+    {
+      "id": "helmet_inventory_best_enduro_certificado_sin_norma",
+      "reason": "Se conserva Enduro sin inferir cobertura desde el título."
+    },
+    {
+      "id": "RCF25",
+      "reason": "Una variante distinta del soporte no es montaje de este SKU; se rechaza el token retirado."
+    }
+  ],
+  "root_row_value_case_overrides": [
+    "RCF08",
+    "CPC_GAP_INCLUDED_CLAMP_FALSE"
+  ],
+  "deferred_pressure_fixture_ids": [],
+  "superseded_pressure_fixtures": [
+    "wrfp_hookless_row_maximum_is_not_the_headline",
+    "wrfp_schwalbe_general_maximum_in_bar",
+    "wrfp_unit_without_value_is_pending",
+    "wrfp_value_without_unit_stays_pending"
+  ],
+  "required_server_migration": "20260907025000"
+}

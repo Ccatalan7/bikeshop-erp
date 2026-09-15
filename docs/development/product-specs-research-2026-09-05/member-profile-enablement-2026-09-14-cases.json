@@ -1,0 +1,443 @@
+{
+  "schema_version": 1,
+  "catalogue_sha256": "074e2f2e4c5ae1b44ca0a6d77113a8939ef9337004daeb47a5204384eb2ddaf4",
+  "cases": [
+    {
+      "id": "member_optin_fender_accessory_mount",
+      "template": "fender",
+      "values": {
+        "kit_members": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "included-piece",
+              "values": {
+                "member_role": "otro",
+                "family": "accessory_mount",
+                "quantity": "1",
+                "position": "Sin posición"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false
+    },
+    {
+      "id": "member_optin_fender_light",
+      "template": "fender",
+      "values": {
+        "kit_members": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "included-piece",
+              "values": {
+                "member_role": "otro",
+                "family": "light",
+                "quantity": "1",
+                "position": "Sin posición"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false
+    },
+    {
+      "id": "member_optin_handlebar_covering_accessory_mount",
+      "template": "handlebar_covering",
+      "values": {
+        "kit_members": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "included-piece",
+              "values": {
+                "member_role": "otro",
+                "family": "accessory_mount",
+                "quantity": "1",
+                "position": "Sin posición"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false
+    },
+    {
+      "id": "member_optin_handlebar_covering_light",
+      "template": "handlebar_covering",
+      "values": {
+        "kit_members": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "included-piece",
+              "values": {
+                "member_role": "otro",
+                "family": "light",
+                "quantity": "1",
+                "position": "Sin posición"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false
+    },
+    {
+      "id": "member_optin_headset_small_part_accessory_mount",
+      "template": "headset_small_part",
+      "values": {
+        "kit_members": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "included-piece",
+              "values": {
+                "member_role": "otro",
+                "family": "accessory_mount",
+                "quantity": "1",
+                "position": "Sin posición"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false
+    },
+    {
+      "id": "member_optin_headset_small_part_light",
+      "template": "headset_small_part",
+      "values": {
+        "kit_members": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "included-piece",
+              "values": {
+                "member_role": "otro",
+                "family": "light",
+                "quantity": "1",
+                "position": "Sin posición"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false
+    },
+    {
+      "id": "member_optin_light_accessory_mount",
+      "template": "light",
+      "values": {
+        "kit_members": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "included-piece",
+              "values": {
+                "member_role": "otro",
+                "family": "accessory_mount",
+                "quantity": "1",
+                "position": "Sin posición"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false
+    },
+    {
+      "id": "member_optin_light_light",
+      "template": "light",
+      "values": {
+        "kit_members": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "included-piece",
+              "values": {
+                "member_role": "otro",
+                "family": "light",
+                "quantity": "1",
+                "position": "Sin posición"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [
+        {
+          "code": "row_option",
+          "field": "kit_members"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false
+    },
+    {
+      "id": "member_optin_lock_accessory_mount",
+      "template": "lock",
+      "values": {
+        "kit_members": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "included-piece",
+              "values": {
+                "member_role": "otro",
+                "family": "accessory_mount",
+                "quantity": "1",
+                "position": "Sin posición"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false
+    },
+    {
+      "id": "member_optin_lock_light",
+      "template": "lock",
+      "values": {
+        "kit_members": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "included-piece",
+              "values": {
+                "member_role": "otro",
+                "family": "light",
+                "quantity": "1",
+                "position": "Sin posición"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false
+    },
+    {
+      "id": "member_optin_rider_protection_accessory_mount",
+      "template": "rider_protection",
+      "values": {
+        "kit_members": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "included-piece",
+              "values": {
+                "member_role": "otro",
+                "family": "accessory_mount",
+                "quantity": "1",
+                "position": "Sin posición"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false
+    },
+    {
+      "id": "member_optin_rider_protection_light",
+      "template": "rider_protection",
+      "values": {
+        "kit_members": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "included-piece",
+              "values": {
+                "member_role": "otro",
+                "family": "light",
+                "quantity": "1",
+                "position": "Sin posición"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false
+    },
+    {
+      "id": "member_optin_training_wheel_accessory_mount",
+      "template": "training_wheel",
+      "values": {
+        "kit_members": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "included-piece",
+              "values": {
+                "member_role": "otro",
+                "family": "accessory_mount",
+                "quantity": "1",
+                "position": "Sin posición"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false
+    },
+    {
+      "id": "member_optin_training_wheel_light",
+      "template": "training_wheel",
+      "values": {
+        "kit_members": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "included-piece",
+              "values": {
+                "member_role": "otro",
+                "family": "light",
+                "quantity": "1",
+                "position": "Sin posición"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false
+    },
+    {
+      "id": "member_optin_tube_repair_accessory_mount",
+      "template": "tube_repair",
+      "values": {
+        "kit_members": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "included-piece",
+              "values": {
+                "member_role": "otro",
+                "family": "accessory_mount",
+                "quantity": "1",
+                "position": "Sin posición"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false
+    },
+    {
+      "id": "member_optin_tube_repair_light",
+      "template": "tube_repair",
+      "values": {
+        "kit_members": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "included-piece",
+              "values": {
+                "member_role": "otro",
+                "family": "light",
+                "quantity": "1",
+                "position": "Sin posición"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false
+    },
+    {
+      "id": "member_optin_tubeless_repair_accessory_mount",
+      "template": "tubeless_repair",
+      "values": {
+        "kit_members": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "included-piece",
+              "values": {
+                "member_role": "otro",
+                "family": "accessory_mount",
+                "quantity": "1",
+                "position": "Sin posición"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false
+    },
+    {
+      "id": "member_optin_tubeless_repair_light",
+      "template": "tubeless_repair",
+      "values": {
+        "kit_members": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "included-piece",
+              "values": {
+                "member_role": "otro",
+                "family": "light",
+                "quantity": "1",
+                "position": "Sin posición"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false
+    }
+  ]
+}

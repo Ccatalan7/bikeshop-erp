@@ -1,0 +1,2035 @@
+{
+  "schema_version": 1,
+  "title": "Adjudicación independiente de 67 parches mecánicos: frenos y transmisión",
+  "reviewer": "Codex /root/spec_boundary_review",
+  "prepared_on": "2026-09-06",
+  "applied": false,
+  "scope": "Revisión de propuesta congelada y fuentes; no se editaron SQL/Dart, no se ejecutó runtime ni se escribió en producción. Los casos no declaran familias completas ni catálogo rellenado.",
+  "inputs": [
+    {
+      "path": "docs/development/product-specs-research-2026-09-05/all-family-mechanical-corrections-2026-09-06.json",
+      "sha256": "e3cc7d120e0f44453b61a64de4d0fb130e5165b55d4c72646f6d3640983a6b0e"
+    },
+    {
+      "path": "docs/development/product-specs-research-2026-09-05/all-family-compiled-contract-2026-09-06.json",
+      "sha256": "785cd11a39011b643e4bcb1422ab805c242f8a7aae0108b399c6aff0c0d78175"
+    }
+  ],
+  "decision_semantics": {
+    "aceptar": "Se acepta el cambio semántico acotado; no omite gates de compilación, integridad o migración de datos.",
+    "corregir": "No aplicar tal cual; conservar la intención y realizar el cambio acotado especificado.",
+    "rechazar": "Descartar el mecanismo propuesto; sustituir según la alternativa indicada."
+  },
+  "stats": {
+    "patches_reviewed": 67,
+    "pointer_preimages_validated": 67,
+    "decisions": {
+      "aceptar": 17,
+      "corregir": 32,
+      "rechazar": 18
+    },
+    "finding_groups": 31,
+    "sources": 25,
+    "fixtures_authored": 18,
+    "fixtures_executed": 0,
+    "catalogue_products_verified": 0
+  },
+  "global_invariants": [
+    "Montaje directo, adaptación y ensamblaje son decisiones diferentes.",
+    "Un requisito necesario ausente no se convierte en permiso por llamarse caution.",
+    "Unknown, fuera del alcance y exclusión explícita son estados distintos.",
+    "Una URL sólo es localizador; no acredita lectura, cobertura cerrada o compatibilidad.",
+    "Marca/modelo/generación/variante y puerto/posición deben identificar los dos extremos.",
+    "Condiciones y fuentes se conservan dentro de una misma fila; no generar producto cartesiano entre conjuntos.",
+    "Compatibilidad documentada por OEM y compatibilidad observada en catálogo/runtime se registran por separado."
+  ],
+  "sources": {
+    "SH-C731": {
+      "title": "Shimano C-731: freehub and cassette spline compatibility",
+      "url": "https://productinfo.shimano.com/en/compatibility/C-731",
+      "source_type": "primary",
+      "read_scope": "Tabla y notas *1–*7 leídas; alcance Shimano de esta edición; no LINKGLIDE.",
+      "supports": "Distingue L/M/S/L2/MICRO SPLINE; las excepciones de modelos y los separadores pertenecen a filas específicas."
+    },
+    "SR-FULLMOUNT": {
+      "title": "SRAM: Understanding UDH and Full Mount",
+      "url": "https://www.sram.com/en/learn/understanding-udh-and-full-mount",
+      "source_type": "primary",
+      "read_scope": "Página OEM; secciones UDH, Eagle Transmission y XPLR AXS.",
+      "supports": "El puerto UDH admite patilla UDH o Full Mount; XPLR AXS 13 también es Full Mount. T-Type identifica la plataforma Eagle Transmission."
+    },
+    "SR-XPLR-CHAIN": {
+      "title": "SRAM RED XPLR AXS: chains and T-type",
+      "url": "https://support.sram.com/hc/en-us/articles/27120282414747-What-chains-are-compatible-with-SRAM-RED-XPLR-AXS-Can-I-use-a-T-type-chain",
+      "source_type": "primary",
+      "read_scope": "Respuesta OEM completa.",
+      "supports": "RED XPLR AXS exige cadenas Road Flattop; semejanza geométrica con cadenas MTB no equivale a aprobación de uso."
+    },
+    "SR-XPLR-FRAME": {
+      "title": "SRAM RED XPLR AXS: frame requirements",
+      "url": "https://support.sram.com/hc/en-us/articles/27118530717467-What-kind-of-bike-frame-is-compatible-with-SRAM-RED-XPLR-AXS",
+      "source_type": "primary",
+      "read_scope": "Respuesta OEM completa.",
+      "supports": "Además del puerto UDH, limita geometría de vainas y línea de cadena; excluye suspensión que cambia la longitud de vainas."
+    },
+    "SH-RD0004": {
+      "title": "Shimano DM-RD0004-09-ENG, RD-M9000 / RD-M8000",
+      "url": "https://si.shimano.com/en/pdfs/dm/RD0004/DM-RD0004-09-ENG.pdf",
+      "source_type": "primary",
+      "read_scope": "Texto del manual, instalación normal y direct mount, pp. 8–9; no se transcriben medidas de dibujos.",
+      "supports": "El montaje normal y el directo difieren en el bracket axle de los modelos nombrados. No demuestra conversión universal de cualquier cambio."
+    },
+    "SH-FD0003": {
+      "title": "Shimano DM-FD0003-06-ENG, front derailleurs",
+      "url": "https://si.shimano.com/en/pdfs/dm/FD0003/DM-FD0003-06-ENG.pdf",
+      "source_type": "primary",
+      "read_scope": "Texto del manual: instalación direct mount y E-type; se conservan los modelos del manual.",
+      "supports": "E-type y direct mount tienen procedimientos de fijación distintos; un token fusionado no determina el anclaje exacto."
+    },
+    "SH-AD91": {
+      "title": "Shimano SM-AD91-L clamp band adapter",
+      "url": "https://bike.shimano.com/en-UK/products/components/pdp.P-SM-AD91-L.html",
+      "source_type": "primary",
+      "read_scope": "Ficha OEM indexada: adaptador de desviador braze-on a cuadro de abrazadera, variantes de diámetro.",
+      "supports": "La adaptación tiene una dirección y una variante de diámetro; no prueba que todo desviador incluya todos los suplementos."
+    },
+    "SH-FD-PACKAGE": {
+      "title": "Shimano specifications: FD-M4100-M packaging note",
+      "url": "https://productinfo.shimano.com/en/spec/mtb-front-derailleur",
+      "source_type": "primary",
+      "read_scope": "Extracto primario indexado con nota de adaptador S sólo en paquete OTC; la página abierta no expuso la tabla y la URL v035 del handbook respondió 404. Evidencia auxiliar pendiente de captura OEM íntegra.",
+      "supports": "Indicio específico de que inclusión de suplemento depende del embalaje; no se usa como bloqueo ni como fixture OEM cerrada."
+    },
+    "SH-ST8000": {
+      "title": "Shimano ST-R8000-R Dual Control",
+      "url": "https://bike.shimano.com/es-ES/products/components/pdp.P-ST-R8000-R.html",
+      "source_type": "primary",
+      "read_scope": "Ficha OEM indexada del modelo de freno de llanta y cambio mecánico de 11 velocidades.",
+      "supports": "Una misma maneta integrada posee funciones de freno y cambio; la plantilla comercial no identifica un único puerto de cable."
+    },
+    "SB-FREEWHEEL": {
+      "title": "Sheldon Brown: Traditional Thread-on Freewheels",
+      "url": "https://www.sheldonbrown.com/freewheels.html",
+      "source_type": "primary",
+      "read_scope": "Tabla de roscas y limitaciones de intercambiabilidad.",
+      "supports": "Distingue ISO, británica, italiana, francesa y BMX M30. Nombre de estándar y diámetro decimal nominal no son el mismo dato."
+    },
+    "SB-FIXED": {
+      "title": "Sheldon Brown: Fixed Gear Conversions",
+      "url": "https://www.sheldonbrown.com/fixed-conversion.html",
+      "source_type": "primary",
+      "read_scope": "Secciones Track Hubs y freewheel hubs.",
+      "supports": "Mazas de pista tienen rosca de piñón derecha y contratuerca izquierda. Hay contratuercas ISO 1.29x24, Campagnolo/Phil Wood 1.32x24 y francesa 33x1; una maza de rueda libre carece de retención izquierda."
+    },
+    "SB-BRAZED": {
+      "title": "Sheldon Brown: Brakes with Brazed-on Fittings",
+      "url": "https://www.sheldonbrown.com/cantilever-adjustment.html",
+      "source_type": "primary",
+      "read_scope": "Tipos, tabla de posición de pivotes y explicación de tiro.",
+      "supports": "Cantilever/V-brake y U-brake no se identifican por el mero número de pivotes; el anclaje y el tiro son interfaces separadas."
+    },
+    "PK-ROTOR": {
+      "title": "Park Tool: Disc Brake Rotor Removal and Installation",
+      "url": "https://www.parktool.com/en-us/blog/repair-help/disc-brake-rotor-removal-installation",
+      "source_type": "primary",
+      "read_scope": "Apartado de adaptadores de rotor.",
+      "supports": "Hay adaptadores de rotor de seis pernos a maza Center Lock; la dirección y el kit importan."
+    },
+    "PK-CHAIN": {
+      "title": "Park Tool: Chain Replacement, Derailleur Bikes",
+      "url": "https://www.parktool.com/en-us/blog/repair-help/chain-replacement-derailleur-bikes",
+      "source_type": "primary",
+      "read_scope": "Conexión de cadena y remache específico del fabricante/modelo.",
+      "supports": "La conexión necesita el tipo apropiado; el número de velocidades o una anchura por sí solos no identifican el conector."
+    },
+    "PK-BB": {
+      "title": "Park Tool: Bottom Bracket Standards and Terminology",
+      "url": "https://www.parktool.com/en-us/blog/repair-help/bottom-bracket-standards-and-terminology",
+      "source_type": "primary",
+      "read_scope": "Secciones PF42 y PF46.",
+      "supports": "BBright Direct Fit aparece bajo PF42 y BBright Press Fit bajo PF46; el legacy BBRight / OSBB no resuelve una interfaz única."
+    },
+    "TRP-HYRD": {
+      "title": "TRP HY/RD caliper",
+      "url": "https://trpcycling.com/products/hy-rd",
+      "source_type": "primary",
+      "read_scope": "Página OEM: accionamiento por cable, palancas de ruta Shimano/SRAM 11, pastillas M525/M515 y requisitos propios.",
+      "supports": "Un cáliper con hidráulica interna puede recibir cable de una maneta mecánica. La aprobación del modelo no se extiende a cualquier maneta por compartir accionamiento."
+    },
+    "SH-RTAD05": {
+      "title": "Shimano DM-MDBR001-06: SM-RTAD05",
+      "url": "https://si.shimano.com/en/pdfs/dm/MDBR001/DM-MDBR001.pdf",
+      "source_type": "primary",
+      "read_scope": "Texto pp. 6, 8 y 13, sin inferir valores de figuras.",
+      "supports": "Adaptador de rotor de seis pernos a maza Center Lock; no admite diámetro superior a 203 mm ni SM-RT86/RT76. Este manual no demuestra un mínimo de 160 mm."
+    },
+    "SR-DOT": {
+      "title": "SRAM S-900 Aero HRD Service Manual",
+      "url": "https://www.sram.com/globalassets/document-hierarchy/service-manuals/sram-road/brakes/gen.0000000005452-rev-a-s-900-aero-hrd-service-manual.pdf",
+      "source_type": "primary",
+      "read_scope": "Extracto OEM de fluidos del manual del modelo; alcance acotado.",
+      "supports": "Admite DOT 5.1 o DOT 4 para ese sistema y excluye mineral y DOT 5; no es una regla para toda marca o modelo."
+    },
+    "SR-MAVEN-OIL": {
+      "title": "SRAM Maven: correct mineral oil",
+      "url": "https://support.sram.com/hc/en-us/articles/23147687539099-Which-is-the-right-brake-fluid-for-my-SRAM-Maven-mineral-oil-brake",
+      "source_type": "primary",
+      "read_scope": "Respuesta OEM.",
+      "supports": "Maven requiere Maxima Mineral Brake Oil; el token genérico mineral no es aprobación de cualquier aceite."
+    },
+    "SR-HYDRAULIC-MATRIX": {
+      "title": "SRAM GEN.0000000006520 Rev M: lever/caliper compatibility",
+      "url": "https://www.sram.com/globalassets/document-hierarchy/compatibility-map/mtb-and-road-hydraulic-disc-brake-lever-and-caliper-compatibility.pdf",
+      "source_type": "primary",
+      "read_scope": "Notas y leyenda textuales de pp. 1–2. La herramienta de captura devolvió referencias sin imagen; no se adjudicaron celdas de la matriz por color.",
+      "supports": "La leyenda distingue rendimiento diseñado, rendimiento variable y combinaciones prohibidas; exige latiguillo apropiado y separa DOT/mineral."
+    },
+    "SR-MAVEN-MOTIVE": {
+      "title": "SRAM: mixing Maven and Motive levers/calipers",
+      "url": "https://support.sram.com/hc/en-us/articles/46533533422363-Can-I-mix-and-match-between-SRAM-Maven-and-Motive-levers-and-calipers",
+      "source_type": "primary",
+      "read_scope": "Respuesta OEM.",
+      "supports": "Algunas mezclas son posibles pero cambian tacto/rendimiento; no hay equivalencia global por fluido."
+    },
+    "WT-GOAT11": {
+      "title": "Wolf Tooth GoatLink 11",
+      "url": "https://www.wolftoothcomponents.com/products/goatlink-11",
+      "source_type": "primary",
+      "read_scope": "Compatibilidad y exclusiones OEM del producto.",
+      "supports": "Lista modelos SLX M7000, XT M8000, XTR M9000 con patilla estándar y excluye cuadros direct mount nativos y cambios SRAM dentro del alcance del adaptador."
+    },
+    "KMC-X8": {
+      "title": "KMC X8 Silver BX08NP114",
+      "url": "https://www.kmcchain.eu/products/x8-silver",
+      "source_type": "primary",
+      "read_scope": "Ficha OEM del SKU y compatibilidad declarada.",
+      "supports": "Declara uso 6/7/8 velocidades. Ese conjunto es cobertura del producto, no tres valores simultáneos de una bicicleta."
+    },
+    "KMC-78": {
+      "title": "KMC MissingLink 7/8R EPT Silver 7.3 C78EPTR73",
+      "url": "https://www.kmcchain.eu/products/missinglink-7-8r-ept-silver-73",
+      "source_type": "primary",
+      "read_scope": "Ficha OEM y modelos de cadena nombrados.",
+      "supports": "Nombra X8 y otras cadenas; permite un caso positivo por modelo del conector y de la cadena."
+    },
+    "KMC-FLATNR": {
+      "title": "KMC MissingLink FLATNR Gold CFLATGNRO",
+      "url": "https://www.kmcchain.eu/products/missinglink-flatnr-gold",
+      "source_type": "primary",
+      "read_scope": "Ficha OEM: X FLAT / X SL FLAT, no reutilizable y tamaño nominal.",
+      "supports": "El tamaño 1/2 x 11/128 no reemplaza el alcance de modelo/perfil ni la condición de reutilización."
+    }
+  },
+  "findings": [
+    {
+      "id": "A01",
+      "patch_ids": [
+        "MC-01-shar0",
+        "MC-01-defi1",
+        "MC-01-defi2",
+        "MC-01-defi3"
+      ],
+      "decision": "aceptar",
+      "severity_if_applied_as_written": "none",
+      "title": "Rótulo HG L sin separador universal",
+      "finding": "El texto anterior imponía 1.85 + 1.0 mm a toda corona ROAD 10; el nuevo remite a filas.",
+      "bounded_change": "Aceptar el rótulo nuevo y mantener el identificador de estándar separado de sus condiciones. No usar el texto como prueba de todas las coronas de terceros.",
+      "counterexample": "La condición adicional de seis ROAD 10 pertenece a modelos concretos en C-731.",
+      "source_ids": [
+        "SH-C731"
+      ],
+      "residual_gate": "Alias atómicos y referencias: las cuatro ocurrencias del token anterior están cubiertas por los cuatro parches; las filas MC-03 se adjudican aparte."
+    },
+    {
+      "id": "A02",
+      "patch_ids": [
+        "MC-02-4",
+        "MC-02-5",
+        "MC-02-6",
+        "MC-02-7"
+      ],
+      "decision": "aceptar",
+      "severity_if_applied_as_written": "none",
+      "title": "Rótulo HG M conserva excepciones",
+      "finding": "El nuevo texto deja ROAD 11 y 7 bajo filas y LINKGLIDE bajo su tabla separada.",
+      "bounded_change": "Aceptar el rótulo como nombre orientador. C-649 y otros fabricantes requieren su propia evidencia y no se consideran revisados por este rótulo.",
+      "counterexample": "No toda corona de 7 velocidades queda automáticamente aprobada para M.",
+      "source_ids": [
+        "SH-C731"
+      ],
+      "residual_gate": "Compilar y probar la interfaz direccional y sus estados desconocidos; no equivale a ensamblaje completo."
+    },
+    {
+      "id": "A03",
+      "patch_ids": [
+        "MC-03"
+      ],
+      "decision": "corregir",
+      "severity_if_applied_as_written": "P1",
+      "title": "Filas C-731 deben ser mutuamente excluyentes",
+      "finding": "Las filas genéricas ROAD 11 y 10/9/8 se solapan con las excepciones nominales; models_only vacío no excluye modelos especiales.",
+      "bounded_change": "Dar ámbito Shimano/edición a todas las filas. Excluir CS-HG800/700/RS400 de L+ROAD11 sin suplemento; excluir CS-7900/7800/6700/6600/5700/5600 de las filas genéricas 10/9/8 en L y M. Mantener suplementos correlacionados dentro de cada fila. Modelo desconocido no resuelve una excepción. No extrapolar celdas ausentes fuera del ámbito C-731.",
+      "counterexample": "CS-HG800 en L puede ser capturado por ROAD11 genérico sin 1.85; CS-5700 en L puede ser capturado por 10/9/8 con sólo 1.85.",
+      "source_ids": [
+        "SH-C731"
+      ],
+      "residual_gate": "Antes de motor: normalizar modelos y ámbito; casos de intersección/exclusión y modelo desconocido; no compilar frases de cassette como códigos medidos."
+    },
+    {
+      "id": "A04",
+      "patch_ids": [
+        "MC-04-9",
+        "MC-04-10"
+      ],
+      "decision": "corregir",
+      "severity_if_applied_as_written": "P1",
+      "title": "Lista de modelos requiere un tipo implementado",
+      "finding": "La intención de limitar por modelo es válida; text_list/optional/semantics no son una columna ejecutable de rows_schema 190.",
+      "bounded_change": "Traducir a filas por marca+modelo+generación/variante, o a una relación de conjuntos soportada. En 190 las columnas admiten text/token/decimal/integer/boolean/url; no insertar text_list ni metadata desconocida.",
+      "counterexample": "Una fila cuyo modelo no coincide no puede aprovechar una coincidencia sólo del ancho o de la marca.",
+      "source_ids": [
+        "SH-C731"
+      ],
+      "residual_gate": "Separar blueprint explicativo de schema ejecutable; validar compilación y fuentes por fila."
+    },
+    {
+      "id": "A05",
+      "patch_ids": [
+        "MC-05-cassette",
+        "MC-05-hub",
+        "MC-05-wheel"
+      ],
+      "decision": "rechazar",
+      "severity_if_applied_as_written": "P1",
+      "title": "URL OEM no cierra el universo de compatibilidad",
+      "finding": "El no_row_matches propuesto convierte no listado en incompatible sólo por venir de C-731/C-649/S16. La URL no acredita ámbito ni completitud.",
+      "bounded_change": "Mantener unknown/outside_declared_scope para ausencias. Emitir incompatible sólo por una exclusión explícita de la pareja/configuración o una tabla cerrada con ambos sujetos identificados dentro de su ámbito y edición. Separador exigido significa requisito pendiente, nunca permiso de uso sin él.",
+      "counterexample": "Un cassette de tercero no listado en C-731 no hereda una exclusión mecánica mundial.",
+      "source_ids": [
+        "SH-C731",
+        "WT-GOAT11"
+      ],
+      "residual_gate": "Compilar y probar la interfaz direccional y sus estados desconocidos; no equivale a ensamblaje completo."
+    },
+    {
+      "id": "A06",
+      "patch_ids": [
+        "MC-06"
+      ],
+      "decision": "corregir",
+      "severity_if_applied_as_written": "P1",
+      "title": "RD: puerto de cuadro, patilla instalada y adaptador",
+      "finding": "Corregir eq entre vocabularios es necesario, pero el fallback por par ausente y FullMount=T-Type crean errores nuevos. La fila Direct mount no puede universalizar RD-M8000/M9000.",
+      "bounded_change": "Modelar frame_port UDH por separado de hanger_installed. Añadir Full Mount sin T-Type; evaluar plataforma y restricciones de cuadro por modelo. Mantener conversión de bracket sólo para modelos revisados y con la pieza requerida. Pares sin fila quedan unknown; claw necesita puntera/retención confirmadas.",
+      "counterexample": "RED XPLR AXS 13 usa Full Mount y Road Flattop; una bicicleta UDH no queda aprobada si falla la geometría OEM.",
+      "source_ids": [
+        "SR-FULLMOUNT",
+        "SR-XPLR-CHAIN",
+        "SR-XPLR-FRAME",
+        "SH-RD0004"
+      ],
+      "residual_gate": "Compilar y probar la interfaz direccional y sus estados desconocidos; no equivale a ensamblaje completo."
+    },
+    {
+      "id": "A07",
+      "patch_ids": [
+        "MC-07",
+        "MC-07b"
+      ],
+      "decision": "corregir",
+      "severity_if_applied_as_written": "P1",
+      "title": "Full Mount no es sinónimo de T-Type",
+      "finding": "El nuevo token incluye una equivalencia falsa en su nombre y verified=true no tiene alcance de modelo.",
+      "bounded_change": "Usar Full Mount (sin patilla) como código de montaje, conservar T-Type/Eagle Transmission y XPLR 13 como plataformas distintas y fuentes por pareja.",
+      "counterexample": "Full Mount RED XPLR AXS 13 con cadena Road Flattop.",
+      "source_ids": [
+        "SR-FULLMOUNT",
+        "SR-XPLR-CHAIN"
+      ],
+      "residual_gate": "Compilar y probar la interfaz direccional y sus estados desconocidos; no equivale a ensamblaje completo."
+    },
+    {
+      "id": "A08",
+      "patch_ids": [
+        "MC-08"
+      ],
+      "decision": "corregir",
+      "severity_if_applied_as_written": "P1",
+      "title": "FD: E-type, direct mount y configuración 1x",
+      "finding": "El token de cuadro sigue fusionando dos fijaciones; 1x describe configuración y no demuestra ausencia física de montaje. La adaptación inversa de abrazadera a braze-on no está acreditada.",
+      "bounded_change": "Separar puerto físico y configuración. Distinguir E-type con/sin placa de pedalier y direct mount por modelo. Aceptar sólo la dirección braze-on a abrazadera respaldada por el adaptador exacto. Unknown para tokens fusionados, otros adaptadores o pares no investigados.",
+      "counterexample": "SM-AD91 adapta un desviador braze-on a cuadro apto para abrazadera; no prueba el camino contrario ni que un cuadro configurado 1x carezca de puerto.",
+      "source_ids": [
+        "SH-FD0003",
+        "SH-AD91"
+      ],
+      "residual_gate": "Compilar y probar la interfaz direccional y sus estados desconocidos; no equivale a ensamblaje completo."
+    },
+    {
+      "id": "A09",
+      "patch_ids": [
+        "MC-09"
+      ],
+      "decision": "corregir",
+      "severity_if_applied_as_written": "P1",
+      "title": "FD: diámetro y suplemento direccional",
+      "finding": "La proyección decimal es razonable; es falso asumir que todo 34.9 trae suplementos 31.8/28.6. Un diámetro distinto no tiene siempre solución por suplemento.",
+      "bounded_change": "Proyectar sólo tokens numéricos conocidos a decimal. Separar diámetro base, diámetro objetivo, adaptador homologado e incluido. Clamp menor que tubo mayor falla encaje directo; clamp mayor sólo tiene ruta condicional si el suplemento exacto está documentado. Otro=unknown y No aplica=not_applicable explícito.",
+      "counterexample": "Una abrazadera 28.6 no abraza un tubo 34.9; una 34.9 sin información de suplemento no satisface automáticamente 28.6.",
+      "source_ids": [
+        "SH-FD0003",
+        "SH-AD91"
+      ],
+      "residual_gate": "Capturar manual/ficha íntegros del embalaje antes de automatizar incluido=true. La nota FD-M4100 indexada es evidencia auxiliar, no cierre OEM."
+    },
+    {
+      "id": "A10",
+      "patch_ids": [
+        "MC-10"
+      ],
+      "decision": "corregir",
+      "severity_if_applied_as_written": "P2",
+      "title": "Rueda libre: código de rosca y fuente correcta",
+      "finding": "La proyección entre códigos es útil, pero S12 de la propuesta es una página de pastillas de freno y no respalda roscas. ISO/británica/italiana no son el mismo diámetro escrito.",
+      "bounded_change": "Reasignar fuente a Sheldon freewheels. Mantener código de estándar separado de medida y tolerancia; tokens legacy 1.37 ISO deben normalizarse como código confirmado, no como medición exacta. Conservar francés/italiano unknown si falta puerto preciso. Limitar exclusión ISO↔M30 al encaje directo conocido.",
+      "counterexample": "Sheldon diferencia ISO 1.375x24 y británica 1.370x24; la rosca francesa no es la ISO, pese a cercanía dimensional.",
+      "source_ids": [
+        "SB-FREEWHEEL"
+      ],
+      "residual_gate": "Compilar y probar la interfaz direccional y sus estados desconocidos; no equivale a ensamblaje completo."
+    },
+    {
+      "id": "A11",
+      "patch_ids": [
+        "MC-11"
+      ],
+      "decision": "rechazar",
+      "severity_if_applied_as_written": "P1",
+      "title": "Piñón fijo: roscar no satisface la retención",
+      "finding": "La alternativa maza de rueda libre sin rosca izquierda queda en caution y podría pasar un agregador que sólo bloquea incompatible. Falta un requisito necesario.",
+      "bounded_change": "Separar rosca derecha del piñón, rosca izquierda de maza, estándar y presencia de contratuerca. La pareja puede pasar el subchequeo de rosca del piñón, pero la ausencia confirmada de retención requerida impide aprobar el montaje fijo; desconocido deja requisitos pendientes. No codificar una adaptación histórica como permiso universal.",
+      "counterexample": "Una maza ISO de rueda libre permite roscar un piñón pero carece de la retención izquierda del montaje de pista.",
+      "source_ids": [
+        "SB-FIXED"
+      ],
+      "residual_gate": "Probar que nunca se aprueba ensamblaje fijo con contratuerca requerida ausente, aunque la rosca derecha coincida."
+    },
+    {
+      "id": "A12",
+      "patch_ids": [
+        "MC-12"
+      ],
+      "decision": "corregir",
+      "severity_if_applied_as_written": "P1",
+      "title": "Freno de llanta: extremo delantero o trasero explícito",
+      "finding": "Los aliases de anclaje ayudan, pero brake_mount_front|brake_mount_rear no es un campo ni selecciona el extremo montado. Dos pivotes no bastan para identificar U-brake o cantilever.",
+      "bounded_change": "Resolver un endpoint por posición elegida. Comparar el código exacto del montaje directo; desconocido para vocabulario incompleto. Evaluar alcance de zapata, posición de pivotes, llanta y tiro en interfaces adicionales.",
+      "counterexample": "Un cuadro puede tener montaje delantero y trasero distintos; no debe aprobarse el trasero por el dato delantero.",
+      "source_ids": [
+        "SB-BRAZED"
+      ],
+      "residual_gate": "Compilar y probar la interfaz direccional y sus estados desconocidos; no equivale a ensamblaje completo."
+    },
+    {
+      "id": "A13",
+      "patch_ids": [
+        "MC-13-22",
+        "MC-13-23",
+        "MC-13-fixtures-192-product-lever_pull_required",
+        "MC-13-fixtures-192-counterpart-lever_cable_pull",
+        "MC-13-fixtures-193-product-lever_pull_required",
+        "MC-13-fixtures-194-product-lever_pull_required"
+      ],
+      "decision": "aceptar",
+      "severity_if_applied_as_written": "none",
+      "title": "Unificar alias de tiro largo",
+      "finding": "Las seis sustituciones cubren todas las ocurrencias exactas de Tiro largo en el contrato congelado.",
+      "bounded_change": "Aceptar el alias común; no inferir el tiro de una maneta o freno concreto sólo por un nombre comercial V-brake o disco. La fixture sigue siendo sintética.",
+      "counterexample": "El mismo tiro declarado no debe discrepar sólo por usar un rótulo corto frente al canónico.",
+      "source_ids": [
+        "SB-BRAZED"
+      ],
+      "residual_gate": "Se verificó cobertura textual 6/6; faltan compilación e interfaz real, no se computan como demostración OEM."
+    },
+    {
+      "id": "A14C",
+      "patch_ids": [
+        "MC-14-brake_caliper"
+      ],
+      "decision": "corregir",
+      "severity_if_applied_as_written": "P1",
+      "title": "Accionamiento del cáliper como requisito parcial",
+      "finding": "La dirección Hybrid→Mechanical es correcta; compartir Hidráulico no demuestra una pareja maneta/cáliper compatible.",
+      "bounded_change": "Conservar la proyección como compatibilidad del puerto de accionamiento solamente. Conectar las reglas de tiro para cable y matriz de modelos/latiguillo/fluido para hidráulico. No traducir un par no modelado en exclusión global.",
+      "counterexample": "TRP HY/RD recibe cable mecánico pero tiene un conjunto de manetas de ruta declarado por TRP.",
+      "source_ids": [
+        "TRP-HYRD",
+        "SR-HYDRAULIC-MATRIX"
+      ],
+      "residual_gate": "Compilar y probar la interfaz direccional y sus estados desconocidos; no equivale a ensamblaje completo."
+    },
+    {
+      "id": "A14L",
+      "patch_ids": [
+        "MC-14-brake_lever"
+      ],
+      "decision": "rechazar",
+      "severity_if_applied_as_written": "P1",
+      "title": "Proyección de la maneta está invertida",
+      "finding": "Se copió la tabla del cáliper. En la plantilla brake_lever no existe Hybrid; falta Mechanical→Hybrid, por lo que el caso real cae en incompatible.",
+      "bounded_change": "Invertir endpoints: maneta Mechanical puede satisfacer entrada de cáliper Mechanical o Hybrid, sujeto al tiro/modelo; Hydraulic sólo abre evaluación hidráulica específica. Mantener dirección explícita y pruebas recíprocas.",
+      "counterexample": "Maneta de ruta mecánica Shimano/SRAM 11 y TRP HY/RD es una combinación declarada; la propuesta la bloquea desde la maneta.",
+      "source_ids": [
+        "TRP-HYRD"
+      ],
+      "residual_gate": "Regresión bidireccional de la misma pareja; inspección del conjunto permitido de brake_lever.fields[0]."
+    },
+    {
+      "id": "A15",
+      "patch_ids": [
+        "MC-15a",
+        "MC-15b"
+      ],
+      "decision": "aceptar",
+      "severity_if_applied_as_written": "none",
+      "title": "El cáliper híbrido necesita especificar tiro de cable",
+      "finding": "HY/RD demuestra una entrada por cable aunque el accionamiento interno sea hidráulico.",
+      "bounded_change": "Aceptar cable_pull_required permitido y requerido para Mechanical o Hybrid. Mantener especificación por modelo.",
+      "counterexample": "HY/RD debe declarar el tiro de la entrada por cable.",
+      "source_ids": [
+        "TRP-HYRD"
+      ],
+      "residual_gate": "La condición fluid_type del cáliper ya admite Hydraulic o Hybrid en el congelado; no duplicar una corrección innecesaria."
+    },
+    {
+      "id": "A16",
+      "patch_ids": [
+        "MC-16"
+      ],
+      "decision": "corregir",
+      "severity_if_applied_as_written": "P2",
+      "title": "Direct mount genérico no se puede borrar sin resolver identidad",
+      "finding": "Eliminar el duplicado es útil sólo si sus referencias y productos corresponden realmente al Shimano Direct mount. Un extensor tiene dos extremos y alcance de modelo.",
+      "bounded_change": "Retirar el alias ambiguo de opciones nuevas y conservar legacy. Resolver por fuente a Shimano Direct mount o unknown, actualizar allowed_options y fixtures. No equipararlo a Full Mount ni afirmar que todos los extensores sirven para cuadros direct mount.",
+      "counterexample": "GoatLink 11 tiene modelos concretos y excluye cuadros Shimano direct mount nativos.",
+      "source_ids": [
+        "WT-GOAT11",
+        "SH-RD0004",
+        "SR-FULLMOUNT"
+      ],
+      "residual_gate": "Compilar y probar la interfaz direccional y sus estados desconocidos; no equivale a ensamblaje completo."
+    },
+    {
+      "id": "A17A",
+      "patch_ids": [
+        "MC-17a"
+      ],
+      "decision": "rechazar",
+      "severity_if_applied_as_written": "P1",
+      "title": "La plantilla no identifica el puerto de cable",
+      "finding": "Freno→brake_lever y Cambio→shifter bloquea funciones de productos integrados. template_key no es sustituto del contrato de entrada.",
+      "bounded_change": "Crear puertos por función en el modelo de producto: brake_cable_input y shift_cable_input, cada uno con cabeza y requisitos. Seleccionar el puerto real; conservar ambas funciones en manetas integradas.",
+      "counterexample": "Shimano ST-R8000-R posee freno de llanta y cambio mecánico de 11: un cable de freno debe poder evaluarse en su puerto de freno aunque la plantilla sea shifter.",
+      "source_ids": [
+        "SH-ST8000"
+      ],
+      "residual_gate": "Compilar y probar la interfaz direccional y sus estados desconocidos; no equivale a ensamblaje completo."
+    },
+    {
+      "id": "A17B",
+      "patch_ids": [
+        "MC-17b"
+      ],
+      "decision": "corregir",
+      "severity_if_applied_as_written": "P2",
+      "title": "Cabeza de cable: desactivar sin un campo resoluble",
+      "finding": "Cambiar mismatch a unknown es correcto; counterpart_field=null no debe llegar como regla ejecutable inválida.",
+      "bounded_change": "Mantener la regla deshabilitada con motivo de campo ausente y resultado unknown. Añadir luego requisito por puerto de freno y de cambio, con cabeza canónica/medidas del modelo. No confundir maneta con sólo freno.",
+      "counterexample": "ST-R8000 requiere evaluar el cable contra el puerto concreto, no contra la clasificación comercial global.",
+      "source_ids": [
+        "SH-ST8000"
+      ],
+      "residual_gate": "Compilar y probar la interfaz direccional y sus estados desconocidos; no equivale a ensamblaje completo."
+    },
+    {
+      "id": "A18",
+      "patch_ids": [
+        "MC-18-brake_caliper",
+        "MC-18-brake_lever",
+        "MC-18-brake_fluid"
+      ],
+      "decision": "corregir",
+      "severity_if_applied_as_written": "P1",
+      "title": "Fluidos permitidos por sistema; sin clases de equivalencia globales",
+      "finding": "DOT4/DOT5.1 están admitidos en ciertos manuales SRAM, pero esa autorización no se extiende a todos los sistemas DOT. Mineral tampoco es una formulación única.",
+      "bounded_change": "Eliminar equivalence_classes globales. Guardar accepted_fluids por modelo/generación y fluido exacto; distinguir DOT5 siliconado. Mismatch documentado de fluidos se bloquea, dato insuficiente queda unknown. Comparar maneta/cáliper mediante matriz propia, no sólo fluido.",
+      "counterexample": "Maven exige Maxima; compartir mineral o DOT no aprueba cualquier pareja de maneta/cáliper.",
+      "source_ids": [
+        "SR-DOT",
+        "SR-MAVEN-OIL",
+        "SR-HYDRAULIC-MATRIX",
+        "SR-MAVEN-MOTIVE"
+      ],
+      "residual_gate": "Compilar y probar la interfaz direccional y sus estados desconocidos; no equivale a ensamblaje completo."
+    },
+    {
+      "id": "A19",
+      "patch_ids": [
+        "MC-19-hub",
+        "MC-19-rotor",
+        "MC-19-wheel"
+      ],
+      "decision": "corregir",
+      "severity_if_applied_as_written": "P1",
+      "title": "Rotor: adaptación direccional y límites demostrados",
+      "finding": "SM-RTAD05 es una ruta real; el inverso no listado no prueba imposibilidad mundial. El mínimo 160 mm no quedó demostrado en el manual leído.",
+      "bounded_change": "Separar direct_fit de adapter_path. Usar SM-RTAD05 sólo para rotor seis pernos→maza Center Lock; mantener max 203 mm y exclusión RT86/RT76. No inventar mínimo 160. En ruta inversa, direct_fit=false y adapter_path=unknown, sin aprobación de ensamblaje. Exigir las demás condiciones del kit.",
+      "counterexample": "Rotor RT86 de seis pernos no queda aprobado con SM-RTAD05 aunque el montaje y diámetro parezcan servir.",
+      "source_ids": [
+        "PK-ROTOR",
+        "SH-RTAD05"
+      ],
+      "residual_gate": "Conservar source revision y piezas de retención; si se quiere límite mínimo, obtener OEM que lo declare."
+    },
+    {
+      "id": "A20",
+      "patch_ids": [
+        "MC-20-brake_caliper",
+        "MC-20-brake_pad"
+      ],
+      "decision": "corregir",
+      "severity_if_applied_as_written": "P1",
+      "title": "Código libre de pastilla no es interfaz mecánica",
+      "finding": "Texto distinto puede ser alias; texto igual tampoco demuestra geometría/material/retención. En brake_pad se deja row_match sobre pad_shape_code de texto.",
+      "bounded_change": "Desactivar comparación mecánica por texto libre; usar unknown hasta normalizar familia/modelo de pastilla y relación con cáliper. Si se conserva una comparación textual, que sea sólo estructural y no apruebe ni bloquee. Eliminar referencia a exhaustive=true como cierre global.",
+      "counterexample": "TRP declara pastillas M525/M515 para HY/RD aunque un vendedor utilice un código distinto.",
+      "source_ids": [
+        "TRP-HYRD"
+      ],
+      "residual_gate": "Resolver el tipo del operador antes de compilar; una regla rows no recibe un escalar de código."
+    },
+    {
+      "id": "A21",
+      "patch_ids": [
+        "MC-21-compatible_caliper_models-43",
+        "MC-21-compatible_caliper_models-44",
+        "MC-21-shifter_models_compatible-45",
+        "MC-21-shifter_models_compatible-46",
+        "MC-21-derailleur_models_compatible-47",
+        "MC-21-derailleur_models_compatible-48",
+        "MC-21-compatible_brake_models-49",
+        "MC-21-compatible_brake_models-50",
+        "MC-21-compatible_derailleur_models-51",
+        "MC-21-compatible_derailleur_models-52",
+        "MC-21-compatible_frames-53",
+        "MC-21-compatible_frames-54"
+      ],
+      "decision": "rechazar",
+      "severity_if_applied_as_written": "P1",
+      "title": "Exhaustive por fila es un cierre global inválido",
+      "finding": "Una bandera por fila no describe el universo cubierto por una tabla, su edición, modelos/generaciones ni condiciones. Una URL no le añade esa información.",
+      "bounded_change": "No añadir exhaustive como permiso de negación. Si hace falta tabla cerrada, definir coverage_scope a nivel de relación: fabricante, familias/modelos/generaciones, interfaz/posición, edición, condiciones y regla OEM explícita sobre ausencias. Aplicarla sólo cuando ambas identidades estén dentro de ese ámbito; preferir exclusiones explícitas.",
+      "counterexample": "GoatLink 11 puede excluir un montaje concreto dentro de su alcance; eso no permite que cualquier lista parcial de compatible_frames prohíba todos los cuadros no escritos.",
+      "source_ids": [
+        "WT-GOAT11",
+        "SR-HYDRAULIC-MATRIX"
+      ],
+      "residual_gate": "Compilar y probar la interfaz direccional y sus estados desconocidos; no equivale a ensamblaje completo."
+    },
+    {
+      "id": "A22",
+      "patch_ids": [
+        "MC-22-rear_derailleur",
+        "MC-22-shifter",
+        "MC-22-brake_small_part",
+        "MC-22-derailleur_pulley",
+        "MC-22-derailleur_hanger"
+      ],
+      "decision": "corregir",
+      "severity_if_applied_as_written": "P1",
+      "title": "Mantener unknown sin la excepción exhaustive+URL",
+      "finding": "El cambio principal a unknown es correcto; su nota vuelve a permitir la misma negación global del grupo MC-21.",
+      "bounded_change": "Aceptar no listado=unknown y quitar la excepción some_row.exhaustive + source_url. Consumir sólo exclusiones expresas o cobertura cerrada validada y acotada a la configuración seleccionada.",
+      "counterexample": "Una lista parcial de repuestos o generaciones anteriores no excluye automáticamente un modelo todavía no investigado.",
+      "source_ids": [
+        "WT-GOAT11",
+        "SR-HYDRAULIC-MATRIX"
+      ],
+      "residual_gate": "Compilar y probar la interfaz direccional y sus estados desconocidos; no equivale a ensamblaje completo."
+    },
+    {
+      "id": "A23",
+      "patch_ids": [
+        "MC-23"
+      ],
+      "decision": "aceptar",
+      "severity_if_applied_as_written": "none",
+      "title": "BBRight / OSBB legacy es ambiguo",
+      "finding": "El valor combina nombres que no resuelven un único diámetro ni ancho; mapearlo a PF46 afirmaba más de lo observado.",
+      "bounded_change": "Aceptar unknown y conservar el texto legado como evidencia. Resolver luego por cuadro/modelo/año y medidas documentadas.",
+      "counterexample": "Park distingue BBright Direct Fit bajo PF42 y BBright Press Fit bajo PF46.",
+      "source_ids": [
+        "PK-BB"
+      ],
+      "residual_gate": "Compilar y probar la interfaz direccional y sus estados desconocidos; no equivale a ensamblaje completo."
+    },
+    {
+      "id": "A24",
+      "patch_ids": [
+        "MC-24"
+      ],
+      "decision": "corregir",
+      "severity_if_applied_as_written": "P1",
+      "title": "Migración legacy no puede inventar rosca ni variante",
+      "finding": "Separar diccionarios por plantilla es correcto; Rosca fija / contratuerca se convierte indebidamente en ISO 1.29 y varias salidas son prosa condicional, no tokens.",
+      "bounded_change": "Mapear sólo códigos inequívocos del campo/plantilla original. Dejar rosca fija genérica y HG genérico en unknown; resolver HG Road11 por modelo/fuente y conservar relación de cuerpos aceptados aparte. Emitir tokens válidos con provenance, nunca frases con salvo o un cassette XD también entra.",
+      "counterexample": "Una maza antigua Campagnolo/Phil Wood usa contratuerca 1.32x24; el legacy genérico no puede transformarla en 1.29x24.",
+      "source_ids": [
+        "SB-FIXED",
+        "SB-FREEWHEEL",
+        "SH-C731"
+      ],
+      "residual_gate": "El diccionario necesita compilación y revisión de valores reales antes de relleno; no aplicar datos por el nombre comercial."
+    },
+    {
+      "id": "A25",
+      "patch_ids": [
+        "MC-25"
+      ],
+      "decision": "corregir",
+      "severity_if_applied_as_written": "P1",
+      "title": "Velocidades: pertenencia de la configuración elegida",
+      "finding": "La conversión integer→token debe fijar dirección. Un conjunto de cobertura no se compara por igualdad o subconjunto contra el único número de la bicicleta.",
+      "bounded_change": "Evaluar bike.rear_speeds ∈ chain.declared_supported_speeds tras proyección exacta. Coincidencia es sólo ese requisito. Si una fuente excluye el modelo/perfil, bloquear por esa exclusión aunque el número coincida; si sólo falta declaración, unknown/outside_declared_scope y sin aprobación global.",
+      "counterexample": "KMC X8 declara [6,7,8]; bicicleta 8 satisface esta condición sin que el conjunto [6,7,8] deba ser subconjunto de [8].",
+      "source_ids": [
+        "KMC-X8",
+        "SR-XPLR-CHAIN"
+      ],
+      "residual_gate": "Compilar y probar la interfaz direccional y sus estados desconocidos; no equivale a ensamblaje completo."
+    },
+    {
+      "id": "A26",
+      "patch_ids": [
+        "MC-26"
+      ],
+      "decision": "corregir",
+      "severity_if_applied_as_written": "P1",
+      "title": "Conector: anchura no sustituye modelo/perfil",
+      "finding": "Bajar cualquier desajuste a caution y llamar al ancho la comparación física podría aprobar el conector equivocado. Coberturas multivelocidad también necesitan configuración común.",
+      "bounded_change": "Usar relación conector→cadena por modelo/perfil y condiciones de reutilización. Velocidad y medidas son filtros parciales; coincidencia de 11/128 o de ancho exterior no basta. Exclusión OEM expresa bloquea; ausencia de evidencia mantiene unknown.",
+      "counterexample": "KMC FLATNR declara X FLAT/X SL FLAT y no reutilización; KMC 7/8R nombra X8. No se obtiene esa elección sólo del número de velocidades.",
+      "source_ids": [
+        "KMC-FLATNR",
+        "KMC-78",
+        "PK-CHAIN",
+        "SR-XPLR-CHAIN"
+      ],
+      "residual_gate": "Compilar y probar la interfaz direccional y sus estados desconocidos; no equivale a ensamblaje completo."
+    },
+    {
+      "id": "A27",
+      "patch_ids": [
+        "MC-27"
+      ],
+      "decision": "corregir",
+      "severity_if_applied_as_written": "P1",
+      "title": "Verified no debe significar URL registrada",
+      "finding": "La propuesta admite una diferencia esencial pero conserva un nombre equívoco y permite bloquear cualquier diferencia del mismo vocabulario. Además omite como grado válido un manual OEM realmente leído.",
+      "bounded_change": "Separar source_registered, contract_validated y domain_assertion_verified por afirmación/pareja/alcance. Incluir manual OEM leído y locator. Un contraste estructural prueba consistencia de datos, no incompatibilidad mecánica universal; política de unknown y adapter_path explícita.",
+      "counterexample": "Mismo fluido o mismo vocabulario no implica misma compatibilidad de maneta/cáliper.",
+      "source_ids": [
+        "SR-HYDRAULIC-MATRIX"
+      ],
+      "residual_gate": "Recalcular metadata y contadores; mantener evidencia de fixtures fuera de assertions OEM."
+    },
+    {
+      "id": "A28",
+      "patch_ids": [
+        "MC-28"
+      ],
+      "decision": "corregir",
+      "severity_if_applied_as_written": "P2",
+      "title": "Fixture OEM y producto observado son pruebas distintas",
+      "finding": "Es correcto no llamar reales a fixtures compiladas; es demasiado restrictivo exigir un producto y contraparte del catálogo para toda evidencia de un caso físico.",
+      "bounded_change": "Registrar origin=synthetic_compiled, source_grounded_oem, catalogue_observed y runtime_verified como ejes separados. Un caso OEM documentado puede ser válido sin estar en stock; una fixture que copia la regla no demuestra dominio.",
+      "counterexample": "La combinación HY/RD con entrada por cable está documentada aunque no haya ese cáliper en inventario.",
+      "source_ids": [
+        "TRP-HYRD"
+      ],
+      "residual_gate": "Compilar y probar la interfaz direccional y sus estados desconocidos; no equivale a ensamblaje completo."
+    },
+    {
+      "id": "A29",
+      "patch_ids": [
+        "MC-29"
+      ],
+      "decision": "corregir",
+      "severity_if_applied_as_written": "P2",
+      "title": "Contador de verificación derivado del nuevo contrato",
+      "finding": "Poner verified_rules=0 mientras los objetos mantienen verified=true deja datos contradictorios.",
+      "bounded_change": "Separar conteos de reglas compiladas, fuentes registradas y afirmaciones OEM verificadas. Calcularlos desde los registros después de migrar grading; cero sólo si el conjunto realmente está vacío.",
+      "counterexample": "Una nueva cifra no corrige el significado de las banderas en las reglas.",
+      "source_ids": [
+        "SR-HYDRAULIC-MATRIX"
+      ],
+      "residual_gate": "Chequeo de consistencia interno; ninguna cifra representa cobertura completa del catálogo."
+    }
+  ],
+  "patch_adjudications": [
+    {
+      "patch_id": "MC-01-shar0",
+      "path": "/shared_vocabularies/rear_drive_interface/values/2",
+      "proposed_op": "replace",
+      "preimage_validation": "before_matches",
+      "decision": "aceptar",
+      "finding_id": "A01",
+      "severity_if_applied_as_written": "none",
+      "bounded_change": "Aceptar el rótulo nuevo y mantener el identificador de estándar separado de sus condiciones. No usar el texto como prueba de todas las coronas de terceros.",
+      "source_ids": [
+        "SH-C731"
+      ]
+    },
+    {
+      "patch_id": "MC-01-defi1",
+      "path": "/definitions/rear_drive_interface/vocabulary/2/value",
+      "proposed_op": "replace",
+      "preimage_validation": "before_matches",
+      "decision": "aceptar",
+      "finding_id": "A01",
+      "severity_if_applied_as_written": "none",
+      "bounded_change": "Aceptar el rótulo nuevo y mantener el identificador de estándar separado de sus condiciones. No usar el texto como prueba de todas las coronas de terceros.",
+      "source_ids": [
+        "SH-C731"
+      ]
+    },
+    {
+      "patch_id": "MC-01-defi2",
+      "path": "/definitions/freehub_bodies_accepted/vocabulary/2/value",
+      "proposed_op": "replace",
+      "preimage_validation": "before_matches",
+      "decision": "aceptar",
+      "finding_id": "A01",
+      "severity_if_applied_as_written": "none",
+      "bounded_change": "Aceptar el rótulo nuevo y mantener el identificador de estándar separado de sus condiciones. No usar el texto como prueba de todas las coronas de terceros.",
+      "source_ids": [
+        "SH-C731"
+      ]
+    },
+    {
+      "patch_id": "MC-01-defi3",
+      "path": "/definitions/target_rear_drive_interface/vocabulary/2/value",
+      "proposed_op": "replace",
+      "preimage_validation": "before_matches",
+      "decision": "aceptar",
+      "finding_id": "A01",
+      "severity_if_applied_as_written": "none",
+      "bounded_change": "Aceptar el rótulo nuevo y mantener el identificador de estándar separado de sus condiciones. No usar el texto como prueba de todas las coronas de terceros.",
+      "source_ids": [
+        "SH-C731"
+      ]
+    },
+    {
+      "patch_id": "MC-02-4",
+      "path": "/shared_vocabularies/rear_drive_interface/values/1",
+      "proposed_op": "replace",
+      "preimage_validation": "before_matches",
+      "decision": "aceptar",
+      "finding_id": "A02",
+      "severity_if_applied_as_written": "none",
+      "bounded_change": "Aceptar el rótulo como nombre orientador. C-649 y otros fabricantes requieren su propia evidencia y no se consideran revisados por este rótulo.",
+      "source_ids": [
+        "SH-C731"
+      ]
+    },
+    {
+      "patch_id": "MC-02-5",
+      "path": "/definitions/rear_drive_interface/vocabulary/1/value",
+      "proposed_op": "replace",
+      "preimage_validation": "before_matches",
+      "decision": "aceptar",
+      "finding_id": "A02",
+      "severity_if_applied_as_written": "none",
+      "bounded_change": "Aceptar el rótulo como nombre orientador. C-649 y otros fabricantes requieren su propia evidencia y no se consideran revisados por este rótulo.",
+      "source_ids": [
+        "SH-C731"
+      ]
+    },
+    {
+      "patch_id": "MC-02-6",
+      "path": "/definitions/freehub_bodies_accepted/vocabulary/1/value",
+      "proposed_op": "replace",
+      "preimage_validation": "before_matches",
+      "decision": "aceptar",
+      "finding_id": "A02",
+      "severity_if_applied_as_written": "none",
+      "bounded_change": "Aceptar el rótulo como nombre orientador. C-649 y otros fabricantes requieren su propia evidencia y no se consideran revisados por este rótulo.",
+      "source_ids": [
+        "SH-C731"
+      ]
+    },
+    {
+      "patch_id": "MC-02-7",
+      "path": "/definitions/target_rear_drive_interface/vocabulary/1/value",
+      "proposed_op": "replace",
+      "preimage_validation": "before_matches",
+      "decision": "aceptar",
+      "finding_id": "A02",
+      "severity_if_applied_as_written": "none",
+      "bounded_change": "Aceptar el rótulo como nombre orientador. C-649 y otros fabricantes requieren su propia evidencia y no se consideran revisados por este rótulo.",
+      "source_ids": [
+        "SH-C731"
+      ]
+    },
+    {
+      "patch_id": "MC-03",
+      "path": "/shared_vocabularies/rear_drive_interface/c731_rows",
+      "proposed_op": "add",
+      "preimage_validation": "absent_key",
+      "decision": "corregir",
+      "finding_id": "A03",
+      "severity_if_applied_as_written": "P1",
+      "bounded_change": "Dar ámbito Shimano/edición a todas las filas. Excluir CS-HG800/700/RS400 de L+ROAD11 sin suplemento; excluir CS-7900/7800/6700/6600/5700/5600 de las filas genéricas 10/9/8 en L y M. Mantener suplementos correlacionados dentro de cada fila. Modelo desconocido no resuelve una excepción. No extrapolar celdas ausentes fuera del ámbito C-731.",
+      "source_ids": [
+        "SH-C731"
+      ]
+    },
+    {
+      "patch_id": "MC-04-9",
+      "path": "/row_schemas/freehub_bodies_accepted/columns/-",
+      "proposed_op": "add",
+      "preimage_validation": "append_parent_exists",
+      "decision": "corregir",
+      "finding_id": "A04",
+      "severity_if_applied_as_written": "P1",
+      "bounded_change": "Traducir a filas por marca+modelo+generación/variante, o a una relación de conjuntos soportada. En 190 las columnas admiten text/token/decimal/integer/boolean/url; no insertar text_list ni metadata desconocida.",
+      "source_ids": [
+        "SH-C731"
+      ]
+    },
+    {
+      "patch_id": "MC-04-10",
+      "path": "/definitions/freehub_bodies_accepted/row_schema/columns/-",
+      "proposed_op": "add",
+      "preimage_validation": "append_parent_exists",
+      "decision": "corregir",
+      "finding_id": "A04",
+      "severity_if_applied_as_written": "P1",
+      "bounded_change": "Traducir a filas por marca+modelo+generación/variante, o a una relación de conjuntos soportada. En 190 las columnas admiten text/token/decimal/integer/boolean/url; no insertar text_list ni metadata desconocida.",
+      "source_ids": [
+        "SH-C731"
+      ]
+    },
+    {
+      "patch_id": "MC-05-cassette",
+      "path": "/templates/8/interfaces/0/rules/0/row_semantics",
+      "proposed_op": "add",
+      "preimage_validation": "absent_key",
+      "decision": "rechazar",
+      "finding_id": "A05",
+      "severity_if_applied_as_written": "P1",
+      "bounded_change": "Mantener unknown/outside_declared_scope para ausencias. Emitir incompatible sólo por una exclusión explícita de la pareja/configuración o una tabla cerrada con ambos sujetos identificados dentro de su ámbito y edición. Separador exigido significa requisito pendiente, nunca permiso de uso sin él.",
+      "source_ids": [
+        "SH-C731",
+        "WT-GOAT11"
+      ]
+    },
+    {
+      "patch_id": "MC-05-hub",
+      "path": "/templates/25/interfaces/1/rules/0/row_semantics",
+      "proposed_op": "add",
+      "preimage_validation": "absent_key",
+      "decision": "rechazar",
+      "finding_id": "A05",
+      "severity_if_applied_as_written": "P1",
+      "bounded_change": "Mantener unknown/outside_declared_scope para ausencias. Emitir incompatible sólo por una exclusión explícita de la pareja/configuración o una tabla cerrada con ambos sujetos identificados dentro de su ámbito y edición. Separador exigido significa requisito pendiente, nunca permiso de uso sin él.",
+      "source_ids": [
+        "SH-C731",
+        "WT-GOAT11"
+      ]
+    },
+    {
+      "patch_id": "MC-05-wheel",
+      "path": "/templates/103/interfaces/2/rules/0/row_semantics",
+      "proposed_op": "add",
+      "preimage_validation": "absent_key",
+      "decision": "rechazar",
+      "finding_id": "A05",
+      "severity_if_applied_as_written": "P1",
+      "bounded_change": "Mantener unknown/outside_declared_scope para ausencias. Emitir incompatible sólo por una exclusión explícita de la pareja/configuración o una tabla cerrada con ambos sujetos identificados dentro de su ámbito y edición. Separador exigido significa requisito pendiente, nunca permiso de uso sin él.",
+      "source_ids": [
+        "SH-C731",
+        "WT-GOAT11"
+      ]
+    },
+    {
+      "patch_id": "MC-06",
+      "path": "/templates/26/interfaces/2/rules/0",
+      "proposed_op": "replace",
+      "preimage_validation": "before_matches",
+      "decision": "corregir",
+      "finding_id": "A06",
+      "severity_if_applied_as_written": "P1",
+      "bounded_change": "Modelar frame_port UDH por separado de hanger_installed. Añadir Full Mount sin T-Type; evaluar plataforma y restricciones de cuadro por modelo. Mantener conversión de bracket sólo para modelos revisados y con la pieza requerida. Pares sin fila quedan unknown; claw necesita puntera/retención confirmadas.",
+      "source_ids": [
+        "SR-FULLMOUNT",
+        "SR-XPLR-CHAIN",
+        "SR-XPLR-FRAME",
+        "SH-RD0004"
+      ]
+    },
+    {
+      "patch_id": "MC-07",
+      "path": "/definitions/rear_derailleur_mount_type/vocabulary/-",
+      "proposed_op": "add",
+      "preimage_validation": "append_parent_exists",
+      "decision": "corregir",
+      "finding_id": "A07",
+      "severity_if_applied_as_written": "P1",
+      "bounded_change": "Usar Full Mount (sin patilla) como código de montaje, conservar T-Type/Eagle Transmission y XPLR 13 como plataformas distintas y fuentes por pareja.",
+      "source_ids": [
+        "SR-FULLMOUNT",
+        "SR-XPLR-CHAIN"
+      ]
+    },
+    {
+      "patch_id": "MC-07b",
+      "path": "/definitions/rear_derailleur_mount_type/option_additions_proposed",
+      "proposed_op": "add",
+      "preimage_validation": "absent_key",
+      "decision": "corregir",
+      "finding_id": "A07",
+      "severity_if_applied_as_written": "P1",
+      "bounded_change": "Usar Full Mount (sin patilla) como código de montaje, conservar T-Type/Eagle Transmission y XPLR 13 como plataformas distintas y fuentes por pareja.",
+      "source_ids": [
+        "SR-FULLMOUNT",
+        "SR-XPLR-CHAIN"
+      ]
+    },
+    {
+      "patch_id": "MC-08",
+      "path": "/templates/23/interfaces/0/rules/0",
+      "proposed_op": "replace",
+      "preimage_validation": "before_matches",
+      "decision": "corregir",
+      "finding_id": "A08",
+      "severity_if_applied_as_written": "P1",
+      "bounded_change": "Separar puerto físico y configuración. Distinguir E-type con/sin placa de pedalier y direct mount por modelo. Aceptar sólo la dirección braze-on a abrazadera respaldada por el adaptador exacto. Unknown para tokens fusionados, otros adaptadores o pares no investigados.",
+      "source_ids": [
+        "SH-FD0003",
+        "SH-AD91"
+      ]
+    },
+    {
+      "patch_id": "MC-09",
+      "path": "/templates/23/interfaces/0/rules/1",
+      "proposed_op": "replace",
+      "preimage_validation": "before_matches",
+      "decision": "corregir",
+      "finding_id": "A09",
+      "severity_if_applied_as_written": "P1",
+      "bounded_change": "Proyectar sólo tokens numéricos conocidos a decimal. Separar diámetro base, diámetro objetivo, adaptador homologado e incluido. Clamp menor que tubo mayor falla encaje directo; clamp mayor sólo tiene ruta condicional si el suplemento exacto está documentado. Otro=unknown y No aplica=not_applicable explícito.",
+      "source_ids": [
+        "SH-FD0003",
+        "SH-AD91"
+      ]
+    },
+    {
+      "patch_id": "MC-10",
+      "path": "/templates/22/interfaces/0/rules/0",
+      "proposed_op": "replace",
+      "preimage_validation": "before_matches",
+      "decision": "corregir",
+      "finding_id": "A10",
+      "severity_if_applied_as_written": "P2",
+      "bounded_change": "Reasignar fuente a Sheldon freewheels. Mantener código de estándar separado de medida y tolerancia; tokens legacy 1.37 ISO deben normalizarse como código confirmado, no como medición exacta. Conservar francés/italiano unknown si falta puerto preciso. Limitar exclusión ISO↔M30 al encaje directo conocido.",
+      "source_ids": [
+        "SB-FREEWHEEL"
+      ]
+    },
+    {
+      "patch_id": "MC-11",
+      "path": "/templates/21/interfaces/0/rules/0",
+      "proposed_op": "replace",
+      "preimage_validation": "before_matches",
+      "decision": "rechazar",
+      "finding_id": "A11",
+      "severity_if_applied_as_written": "P1",
+      "bounded_change": "Separar rosca derecha del piñón, rosca izquierda de maza, estándar y presencia de contratuerca. La pareja puede pasar el subchequeo de rosca del piñón, pero la ausencia confirmada de retención requerida impide aprobar el montaje fijo; desconocido deja requisitos pendientes. No codificar una adaptación histórica como permiso universal.",
+      "source_ids": [
+        "SB-FIXED"
+      ]
+    },
+    {
+      "patch_id": "MC-12",
+      "path": "/templates/28/interfaces/0/rules/0",
+      "proposed_op": "replace",
+      "preimage_validation": "before_matches",
+      "decision": "corregir",
+      "finding_id": "A12",
+      "severity_if_applied_as_written": "P1",
+      "bounded_change": "Resolver un endpoint por posición elegida. Comparar el código exacto del montaje directo; desconocido para vocabulario incompleto. Evaluar alcance de zapata, posición de pivotes, llanta y tiro en interfaces adicionales.",
+      "source_ids": [
+        "SB-BRAZED"
+      ]
+    },
+    {
+      "patch_id": "MC-13-22",
+      "path": "/definitions/cable_pull_required/vocabulary/0/value",
+      "proposed_op": "replace",
+      "preimage_validation": "before_matches",
+      "decision": "aceptar",
+      "finding_id": "A13",
+      "severity_if_applied_as_written": "none",
+      "bounded_change": "Aceptar el alias común; no inferir el tiro de una maneta o freno concreto sólo por un nombre comercial V-brake o disco. La fixture sigue siendo sintética.",
+      "source_ids": [
+        "SB-BRAZED"
+      ]
+    },
+    {
+      "patch_id": "MC-13-23",
+      "path": "/definitions/lever_pull_required/vocabulary/0/value",
+      "proposed_op": "replace",
+      "preimage_validation": "before_matches",
+      "decision": "aceptar",
+      "finding_id": "A13",
+      "severity_if_applied_as_written": "none",
+      "bounded_change": "Aceptar el alias común; no inferir el tiro de una maneta o freno concreto sólo por un nombre comercial V-brake o disco. La fixture sigue siendo sintética.",
+      "source_ids": [
+        "SB-BRAZED"
+      ]
+    },
+    {
+      "patch_id": "MC-13-fixtures-192-product-lever_pull_required",
+      "path": "/fixtures/192/product/lever_pull_required",
+      "proposed_op": "replace",
+      "preimage_validation": "before_matches",
+      "decision": "aceptar",
+      "finding_id": "A13",
+      "severity_if_applied_as_written": "none",
+      "bounded_change": "Aceptar el alias común; no inferir el tiro de una maneta o freno concreto sólo por un nombre comercial V-brake o disco. La fixture sigue siendo sintética.",
+      "source_ids": [
+        "SB-BRAZED"
+      ]
+    },
+    {
+      "patch_id": "MC-13-fixtures-192-counterpart-lever_cable_pull",
+      "path": "/fixtures/192/counterpart/lever_cable_pull",
+      "proposed_op": "replace",
+      "preimage_validation": "before_matches",
+      "decision": "aceptar",
+      "finding_id": "A13",
+      "severity_if_applied_as_written": "none",
+      "bounded_change": "Aceptar el alias común; no inferir el tiro de una maneta o freno concreto sólo por un nombre comercial V-brake o disco. La fixture sigue siendo sintética.",
+      "source_ids": [
+        "SB-BRAZED"
+      ]
+    },
+    {
+      "patch_id": "MC-13-fixtures-193-product-lever_pull_required",
+      "path": "/fixtures/193/product/lever_pull_required",
+      "proposed_op": "replace",
+      "preimage_validation": "before_matches",
+      "decision": "aceptar",
+      "finding_id": "A13",
+      "severity_if_applied_as_written": "none",
+      "bounded_change": "Aceptar el alias común; no inferir el tiro de una maneta o freno concreto sólo por un nombre comercial V-brake o disco. La fixture sigue siendo sintética.",
+      "source_ids": [
+        "SB-BRAZED"
+      ]
+    },
+    {
+      "patch_id": "MC-13-fixtures-194-product-lever_pull_required",
+      "path": "/fixtures/194/product/lever_pull_required",
+      "proposed_op": "replace",
+      "preimage_validation": "before_matches",
+      "decision": "aceptar",
+      "finding_id": "A13",
+      "severity_if_applied_as_written": "none",
+      "bounded_change": "Aceptar el alias común; no inferir el tiro de una maneta o freno concreto sólo por un nombre comercial V-brake o disco. La fixture sigue siendo sintética.",
+      "source_ids": [
+        "SB-BRAZED"
+      ]
+    },
+    {
+      "patch_id": "MC-14-brake_caliper",
+      "path": "/templates/5/interfaces/2/rules/0",
+      "proposed_op": "replace",
+      "preimage_validation": "before_matches",
+      "decision": "corregir",
+      "finding_id": "A14C",
+      "severity_if_applied_as_written": "P1",
+      "bounded_change": "Conservar la proyección como compatibilidad del puerto de accionamiento solamente. Conectar las reglas de tiro para cable y matriz de modelos/latiguillo/fluido para hidráulico. No traducir un par no modelado en exclusión global.",
+      "source_ids": [
+        "TRP-HYRD",
+        "SR-HYDRAULIC-MATRIX"
+      ]
+    },
+    {
+      "patch_id": "MC-14-brake_lever",
+      "path": "/templates/6/interfaces/0/rules/0",
+      "proposed_op": "replace",
+      "preimage_validation": "before_matches",
+      "decision": "rechazar",
+      "finding_id": "A14L",
+      "severity_if_applied_as_written": "P1",
+      "bounded_change": "Invertir endpoints: maneta Mechanical puede satisfacer entrada de cáliper Mechanical o Hybrid, sujeto al tiro/modelo; Hydraulic sólo abre evaluación hidráulica específica. Mantener dirección explícita y pruebas recíprocas.",
+      "source_ids": [
+        "TRP-HYRD"
+      ]
+    },
+    {
+      "patch_id": "MC-15a",
+      "path": "/templates/5/fields/14/allowed_when",
+      "proposed_op": "replace",
+      "preimage_validation": "before_matches",
+      "decision": "aceptar",
+      "finding_id": "A15",
+      "severity_if_applied_as_written": "none",
+      "bounded_change": "Aceptar cable_pull_required permitido y requerido para Mechanical o Hybrid. Mantener especificación por modelo.",
+      "source_ids": [
+        "TRP-HYRD"
+      ]
+    },
+    {
+      "patch_id": "MC-15b",
+      "path": "/templates/5/fields/14/required_when",
+      "proposed_op": "replace",
+      "preimage_validation": "before_matches",
+      "decision": "aceptar",
+      "finding_id": "A15",
+      "severity_if_applied_as_written": "none",
+      "bounded_change": "Aceptar cable_pull_required permitido y requerido para Mechanical o Hybrid. Mantener especificación por modelo.",
+      "source_ids": [
+        "TRP-HYRD"
+      ]
+    },
+    {
+      "patch_id": "MC-16",
+      "path": "/definitions/hanger_interface/vocabulary/5",
+      "proposed_op": "remove",
+      "preimage_validation": "before_matches",
+      "decision": "corregir",
+      "finding_id": "A16",
+      "severity_if_applied_as_written": "P2",
+      "bounded_change": "Retirar el alias ambiguo de opciones nuevas y conservar legacy. Resolver por fuente a Shimano Direct mount o unknown, actualizar allowed_options y fixtures. No equipararlo a Full Mount ni afirmar que todos los extensores sirven para cuadros direct mount.",
+      "source_ids": [
+        "WT-GOAT11",
+        "SH-RD0004",
+        "SR-FULLMOUNT"
+      ]
+    },
+    {
+      "patch_id": "MC-17a",
+      "path": "/templates/60/interfaces/0/rules/0",
+      "proposed_op": "replace",
+      "preimage_validation": "before_matches",
+      "decision": "rechazar",
+      "finding_id": "A17A",
+      "severity_if_applied_as_written": "P1",
+      "bounded_change": "Crear puertos por función en el modelo de producto: brake_cable_input y shift_cable_input, cada uno con cabeza y requisitos. Seleccionar el puerto real; conservar ambas funciones en manetas integradas.",
+      "source_ids": [
+        "SH-ST8000"
+      ]
+    },
+    {
+      "patch_id": "MC-17b",
+      "path": "/templates/60/interfaces/0/rules/1",
+      "proposed_op": "replace",
+      "preimage_validation": "before_matches",
+      "decision": "corregir",
+      "finding_id": "A17B",
+      "severity_if_applied_as_written": "P2",
+      "bounded_change": "Mantener la regla deshabilitada con motivo de campo ausente y resultado unknown. Añadir luego requisito por puerto de freno y de cambio, con cabeza canónica/medidas del modelo. No confundir maneta con sólo freno.",
+      "source_ids": [
+        "SH-ST8000"
+      ]
+    },
+    {
+      "patch_id": "MC-18-brake_caliper",
+      "path": "/templates/5/interfaces/2/rules/1",
+      "proposed_op": "replace",
+      "preimage_validation": "before_matches",
+      "decision": "corregir",
+      "finding_id": "A18",
+      "severity_if_applied_as_written": "P1",
+      "bounded_change": "Eliminar equivalence_classes globales. Guardar accepted_fluids por modelo/generación y fluido exacto; distinguir DOT5 siliconado. Mismatch documentado de fluidos se bloquea, dato insuficiente queda unknown. Comparar maneta/cáliper mediante matriz propia, no sólo fluido.",
+      "source_ids": [
+        "SR-DOT",
+        "SR-MAVEN-OIL",
+        "SR-HYDRAULIC-MATRIX",
+        "SR-MAVEN-MOTIVE"
+      ]
+    },
+    {
+      "patch_id": "MC-18-brake_lever",
+      "path": "/templates/6/interfaces/0/rules/2",
+      "proposed_op": "replace",
+      "preimage_validation": "before_matches",
+      "decision": "corregir",
+      "finding_id": "A18",
+      "severity_if_applied_as_written": "P1",
+      "bounded_change": "Eliminar equivalence_classes globales. Guardar accepted_fluids por modelo/generación y fluido exacto; distinguir DOT5 siliconado. Mismatch documentado de fluidos se bloquea, dato insuficiente queda unknown. Comparar maneta/cáliper mediante matriz propia, no sólo fluido.",
+      "source_ids": [
+        "SR-DOT",
+        "SR-MAVEN-OIL",
+        "SR-HYDRAULIC-MATRIX",
+        "SR-MAVEN-MOTIVE"
+      ]
+    },
+    {
+      "patch_id": "MC-18-brake_fluid",
+      "path": "/templates/65/interfaces/0/rules/0",
+      "proposed_op": "replace",
+      "preimage_validation": "before_matches",
+      "decision": "corregir",
+      "finding_id": "A18",
+      "severity_if_applied_as_written": "P1",
+      "bounded_change": "Eliminar equivalence_classes globales. Guardar accepted_fluids por modelo/generación y fluido exacto; distinguir DOT5 siliconado. Mismatch documentado de fluidos se bloquea, dato insuficiente queda unknown. Comparar maneta/cáliper mediante matriz propia, no sólo fluido.",
+      "source_ids": [
+        "SR-DOT",
+        "SR-MAVEN-OIL",
+        "SR-HYDRAULIC-MATRIX",
+        "SR-MAVEN-MOTIVE"
+      ]
+    },
+    {
+      "patch_id": "MC-19-hub",
+      "path": "/templates/25/interfaces/2/rules/0",
+      "proposed_op": "replace",
+      "preimage_validation": "before_matches",
+      "decision": "corregir",
+      "finding_id": "A19",
+      "severity_if_applied_as_written": "P1",
+      "bounded_change": "Separar direct_fit de adapter_path. Usar SM-RTAD05 sólo para rotor seis pernos→maza Center Lock; mantener max 203 mm y exclusión RT86/RT76. No inventar mínimo 160. En ruta inversa, direct_fit=false y adapter_path=unknown, sin aprobación de ensamblaje. Exigir las demás condiciones del kit.",
+      "source_ids": [
+        "PK-ROTOR",
+        "SH-RTAD05"
+      ]
+    },
+    {
+      "patch_id": "MC-19-rotor",
+      "path": "/templates/30/interfaces/0/rules/0",
+      "proposed_op": "replace",
+      "preimage_validation": "before_matches",
+      "decision": "corregir",
+      "finding_id": "A19",
+      "severity_if_applied_as_written": "P1",
+      "bounded_change": "Separar direct_fit de adapter_path. Usar SM-RTAD05 sólo para rotor seis pernos→maza Center Lock; mantener max 203 mm y exclusión RT86/RT76. No inventar mínimo 160. En ruta inversa, direct_fit=false y adapter_path=unknown, sin aprobación de ensamblaje. Exigir las demás condiciones del kit.",
+      "source_ids": [
+        "PK-ROTOR",
+        "SH-RTAD05"
+      ]
+    },
+    {
+      "patch_id": "MC-19-wheel",
+      "path": "/templates/103/interfaces/3/rules/0",
+      "proposed_op": "replace",
+      "preimage_validation": "before_matches",
+      "decision": "corregir",
+      "finding_id": "A19",
+      "severity_if_applied_as_written": "P1",
+      "bounded_change": "Separar direct_fit de adapter_path. Usar SM-RTAD05 sólo para rotor seis pernos→maza Center Lock; mantener max 203 mm y exclusión RT86/RT76. No inventar mínimo 160. En ruta inversa, direct_fit=false y adapter_path=unknown, sin aprobación de ensamblaje. Exigir las demás condiciones del kit.",
+      "source_ids": [
+        "PK-ROTOR",
+        "SH-RTAD05"
+      ]
+    },
+    {
+      "patch_id": "MC-20-brake_caliper",
+      "path": "/templates/5/interfaces/1/rules/0",
+      "proposed_op": "replace",
+      "preimage_validation": "before_matches",
+      "decision": "corregir",
+      "finding_id": "A20",
+      "severity_if_applied_as_written": "P1",
+      "bounded_change": "Desactivar comparación mecánica por texto libre; usar unknown hasta normalizar familia/modelo de pastilla y relación con cáliper. Si se conserva una comparación textual, que sea sólo estructural y no apruebe ni bloquee. Eliminar referencia a exhaustive=true como cierre global.",
+      "source_ids": [
+        "TRP-HYRD"
+      ]
+    },
+    {
+      "patch_id": "MC-20-brake_pad",
+      "path": "/templates/7/interfaces/0/rules/0",
+      "proposed_op": "replace",
+      "preimage_validation": "before_matches",
+      "decision": "corregir",
+      "finding_id": "A20",
+      "severity_if_applied_as_written": "P1",
+      "bounded_change": "Desactivar comparación mecánica por texto libre; usar unknown hasta normalizar familia/modelo de pastilla y relación con cáliper. Si se conserva una comparación textual, que sea sólo estructural y no apruebe ni bloquee. Eliminar referencia a exhaustive=true como cierre global.",
+      "source_ids": [
+        "TRP-HYRD"
+      ]
+    },
+    {
+      "patch_id": "MC-21-compatible_caliper_models-43",
+      "path": "/row_schemas/compatible_caliper_models/columns/-",
+      "proposed_op": "add",
+      "preimage_validation": "append_parent_exists",
+      "decision": "rechazar",
+      "finding_id": "A21",
+      "severity_if_applied_as_written": "P1",
+      "bounded_change": "No añadir exhaustive como permiso de negación. Si hace falta tabla cerrada, definir coverage_scope a nivel de relación: fabricante, familias/modelos/generaciones, interfaz/posición, edición, condiciones y regla OEM explícita sobre ausencias. Aplicarla sólo cuando ambas identidades estén dentro de ese ámbito; preferir exclusiones explícitas.",
+      "source_ids": [
+        "WT-GOAT11",
+        "SR-HYDRAULIC-MATRIX"
+      ]
+    },
+    {
+      "patch_id": "MC-21-compatible_caliper_models-44",
+      "path": "/definitions/compatible_caliper_models/row_schema/columns/-",
+      "proposed_op": "add",
+      "preimage_validation": "append_parent_exists",
+      "decision": "rechazar",
+      "finding_id": "A21",
+      "severity_if_applied_as_written": "P1",
+      "bounded_change": "No añadir exhaustive como permiso de negación. Si hace falta tabla cerrada, definir coverage_scope a nivel de relación: fabricante, familias/modelos/generaciones, interfaz/posición, edición, condiciones y regla OEM explícita sobre ausencias. Aplicarla sólo cuando ambas identidades estén dentro de ese ámbito; preferir exclusiones explícitas.",
+      "source_ids": [
+        "WT-GOAT11",
+        "SR-HYDRAULIC-MATRIX"
+      ]
+    },
+    {
+      "patch_id": "MC-21-shifter_models_compatible-45",
+      "path": "/row_schemas/shifter_models_compatible/columns/-",
+      "proposed_op": "add",
+      "preimage_validation": "append_parent_exists",
+      "decision": "rechazar",
+      "finding_id": "A21",
+      "severity_if_applied_as_written": "P1",
+      "bounded_change": "No añadir exhaustive como permiso de negación. Si hace falta tabla cerrada, definir coverage_scope a nivel de relación: fabricante, familias/modelos/generaciones, interfaz/posición, edición, condiciones y regla OEM explícita sobre ausencias. Aplicarla sólo cuando ambas identidades estén dentro de ese ámbito; preferir exclusiones explícitas.",
+      "source_ids": [
+        "WT-GOAT11",
+        "SR-HYDRAULIC-MATRIX"
+      ]
+    },
+    {
+      "patch_id": "MC-21-shifter_models_compatible-46",
+      "path": "/definitions/shifter_models_compatible/row_schema/columns/-",
+      "proposed_op": "add",
+      "preimage_validation": "append_parent_exists",
+      "decision": "rechazar",
+      "finding_id": "A21",
+      "severity_if_applied_as_written": "P1",
+      "bounded_change": "No añadir exhaustive como permiso de negación. Si hace falta tabla cerrada, definir coverage_scope a nivel de relación: fabricante, familias/modelos/generaciones, interfaz/posición, edición, condiciones y regla OEM explícita sobre ausencias. Aplicarla sólo cuando ambas identidades estén dentro de ese ámbito; preferir exclusiones explícitas.",
+      "source_ids": [
+        "WT-GOAT11",
+        "SR-HYDRAULIC-MATRIX"
+      ]
+    },
+    {
+      "patch_id": "MC-21-derailleur_models_compatible-47",
+      "path": "/row_schemas/derailleur_models_compatible/columns/-",
+      "proposed_op": "add",
+      "preimage_validation": "append_parent_exists",
+      "decision": "rechazar",
+      "finding_id": "A21",
+      "severity_if_applied_as_written": "P1",
+      "bounded_change": "No añadir exhaustive como permiso de negación. Si hace falta tabla cerrada, definir coverage_scope a nivel de relación: fabricante, familias/modelos/generaciones, interfaz/posición, edición, condiciones y regla OEM explícita sobre ausencias. Aplicarla sólo cuando ambas identidades estén dentro de ese ámbito; preferir exclusiones explícitas.",
+      "source_ids": [
+        "WT-GOAT11",
+        "SR-HYDRAULIC-MATRIX"
+      ]
+    },
+    {
+      "patch_id": "MC-21-derailleur_models_compatible-48",
+      "path": "/definitions/derailleur_models_compatible/row_schema/columns/-",
+      "proposed_op": "add",
+      "preimage_validation": "append_parent_exists",
+      "decision": "rechazar",
+      "finding_id": "A21",
+      "severity_if_applied_as_written": "P1",
+      "bounded_change": "No añadir exhaustive como permiso de negación. Si hace falta tabla cerrada, definir coverage_scope a nivel de relación: fabricante, familias/modelos/generaciones, interfaz/posición, edición, condiciones y regla OEM explícita sobre ausencias. Aplicarla sólo cuando ambas identidades estén dentro de ese ámbito; preferir exclusiones explícitas.",
+      "source_ids": [
+        "WT-GOAT11",
+        "SR-HYDRAULIC-MATRIX"
+      ]
+    },
+    {
+      "patch_id": "MC-21-compatible_brake_models-49",
+      "path": "/row_schemas/compatible_brake_models/columns/-",
+      "proposed_op": "add",
+      "preimage_validation": "append_parent_exists",
+      "decision": "rechazar",
+      "finding_id": "A21",
+      "severity_if_applied_as_written": "P1",
+      "bounded_change": "No añadir exhaustive como permiso de negación. Si hace falta tabla cerrada, definir coverage_scope a nivel de relación: fabricante, familias/modelos/generaciones, interfaz/posición, edición, condiciones y regla OEM explícita sobre ausencias. Aplicarla sólo cuando ambas identidades estén dentro de ese ámbito; preferir exclusiones explícitas.",
+      "source_ids": [
+        "WT-GOAT11",
+        "SR-HYDRAULIC-MATRIX"
+      ]
+    },
+    {
+      "patch_id": "MC-21-compatible_brake_models-50",
+      "path": "/definitions/compatible_brake_models/row_schema/columns/-",
+      "proposed_op": "add",
+      "preimage_validation": "append_parent_exists",
+      "decision": "rechazar",
+      "finding_id": "A21",
+      "severity_if_applied_as_written": "P1",
+      "bounded_change": "No añadir exhaustive como permiso de negación. Si hace falta tabla cerrada, definir coverage_scope a nivel de relación: fabricante, familias/modelos/generaciones, interfaz/posición, edición, condiciones y regla OEM explícita sobre ausencias. Aplicarla sólo cuando ambas identidades estén dentro de ese ámbito; preferir exclusiones explícitas.",
+      "source_ids": [
+        "WT-GOAT11",
+        "SR-HYDRAULIC-MATRIX"
+      ]
+    },
+    {
+      "patch_id": "MC-21-compatible_derailleur_models-51",
+      "path": "/row_schemas/compatible_derailleur_models/columns/-",
+      "proposed_op": "add",
+      "preimage_validation": "append_parent_exists",
+      "decision": "rechazar",
+      "finding_id": "A21",
+      "severity_if_applied_as_written": "P1",
+      "bounded_change": "No añadir exhaustive como permiso de negación. Si hace falta tabla cerrada, definir coverage_scope a nivel de relación: fabricante, familias/modelos/generaciones, interfaz/posición, edición, condiciones y regla OEM explícita sobre ausencias. Aplicarla sólo cuando ambas identidades estén dentro de ese ámbito; preferir exclusiones explícitas.",
+      "source_ids": [
+        "WT-GOAT11",
+        "SR-HYDRAULIC-MATRIX"
+      ]
+    },
+    {
+      "patch_id": "MC-21-compatible_derailleur_models-52",
+      "path": "/definitions/compatible_derailleur_models/row_schema/columns/-",
+      "proposed_op": "add",
+      "preimage_validation": "append_parent_exists",
+      "decision": "rechazar",
+      "finding_id": "A21",
+      "severity_if_applied_as_written": "P1",
+      "bounded_change": "No añadir exhaustive como permiso de negación. Si hace falta tabla cerrada, definir coverage_scope a nivel de relación: fabricante, familias/modelos/generaciones, interfaz/posición, edición, condiciones y regla OEM explícita sobre ausencias. Aplicarla sólo cuando ambas identidades estén dentro de ese ámbito; preferir exclusiones explícitas.",
+      "source_ids": [
+        "WT-GOAT11",
+        "SR-HYDRAULIC-MATRIX"
+      ]
+    },
+    {
+      "patch_id": "MC-21-compatible_frames-53",
+      "path": "/row_schemas/compatible_frames/columns/-",
+      "proposed_op": "add",
+      "preimage_validation": "append_parent_exists",
+      "decision": "rechazar",
+      "finding_id": "A21",
+      "severity_if_applied_as_written": "P1",
+      "bounded_change": "No añadir exhaustive como permiso de negación. Si hace falta tabla cerrada, definir coverage_scope a nivel de relación: fabricante, familias/modelos/generaciones, interfaz/posición, edición, condiciones y regla OEM explícita sobre ausencias. Aplicarla sólo cuando ambas identidades estén dentro de ese ámbito; preferir exclusiones explícitas.",
+      "source_ids": [
+        "WT-GOAT11",
+        "SR-HYDRAULIC-MATRIX"
+      ]
+    },
+    {
+      "patch_id": "MC-21-compatible_frames-54",
+      "path": "/definitions/compatible_frames/row_schema/columns/-",
+      "proposed_op": "add",
+      "preimage_validation": "append_parent_exists",
+      "decision": "rechazar",
+      "finding_id": "A21",
+      "severity_if_applied_as_written": "P1",
+      "bounded_change": "No añadir exhaustive como permiso de negación. Si hace falta tabla cerrada, definir coverage_scope a nivel de relación: fabricante, familias/modelos/generaciones, interfaz/posición, edición, condiciones y regla OEM explícita sobre ausencias. Aplicarla sólo cuando ambas identidades estén dentro de ese ámbito; preferir exclusiones explícitas.",
+      "source_ids": [
+        "WT-GOAT11",
+        "SR-HYDRAULIC-MATRIX"
+      ]
+    },
+    {
+      "patch_id": "MC-22-rear_derailleur",
+      "path": "/templates/26/interfaces/1/rules/0",
+      "proposed_op": "replace",
+      "preimage_validation": "before_matches",
+      "decision": "corregir",
+      "finding_id": "A22",
+      "severity_if_applied_as_written": "P1",
+      "bounded_change": "Aceptar no listado=unknown y quitar la excepción some_row.exhaustive + source_url. Consumir sólo exclusiones expresas o cobertura cerrada validada y acotada a la configuración seleccionada.",
+      "source_ids": [
+        "WT-GOAT11",
+        "SR-HYDRAULIC-MATRIX"
+      ]
+    },
+    {
+      "patch_id": "MC-22-shifter",
+      "path": "/templates/31/interfaces/0/rules/0",
+      "proposed_op": "replace",
+      "preimage_validation": "before_matches",
+      "decision": "corregir",
+      "finding_id": "A22",
+      "severity_if_applied_as_written": "P1",
+      "bounded_change": "Aceptar no listado=unknown y quitar la excepción some_row.exhaustive + source_url. Consumir sólo exclusiones expresas o cobertura cerrada validada y acotada a la configuración seleccionada.",
+      "source_ids": [
+        "WT-GOAT11",
+        "SR-HYDRAULIC-MATRIX"
+      ]
+    },
+    {
+      "patch_id": "MC-22-brake_small_part",
+      "path": "/templates/68/interfaces/0/rules/0",
+      "proposed_op": "replace",
+      "preimage_validation": "before_matches",
+      "decision": "corregir",
+      "finding_id": "A22",
+      "severity_if_applied_as_written": "P1",
+      "bounded_change": "Aceptar no listado=unknown y quitar la excepción some_row.exhaustive + source_url. Consumir sólo exclusiones expresas o cobertura cerrada validada y acotada a la configuración seleccionada.",
+      "source_ids": [
+        "WT-GOAT11",
+        "SR-HYDRAULIC-MATRIX"
+      ]
+    },
+    {
+      "patch_id": "MC-22-derailleur_pulley",
+      "path": "/templates/19/interfaces/0/rules/0",
+      "proposed_op": "replace",
+      "preimage_validation": "before_matches",
+      "decision": "corregir",
+      "finding_id": "A22",
+      "severity_if_applied_as_written": "P1",
+      "bounded_change": "Aceptar no listado=unknown y quitar la excepción some_row.exhaustive + source_url. Consumir sólo exclusiones expresas o cobertura cerrada validada y acotada a la configuración seleccionada.",
+      "source_ids": [
+        "WT-GOAT11",
+        "SR-HYDRAULIC-MATRIX"
+      ]
+    },
+    {
+      "patch_id": "MC-22-derailleur_hanger",
+      "path": "/templates/18/interfaces/0/rules/0",
+      "proposed_op": "replace",
+      "preimage_validation": "before_matches",
+      "decision": "corregir",
+      "finding_id": "A22",
+      "severity_if_applied_as_written": "P1",
+      "bounded_change": "Aceptar no listado=unknown y quitar la excepción some_row.exhaustive + source_url. Consumir sólo exclusiones expresas o cobertura cerrada validada y acotada a la configuración seleccionada.",
+      "source_ids": [
+        "WT-GOAT11",
+        "SR-HYDRAULIC-MATRIX"
+      ]
+    },
+    {
+      "patch_id": "MC-23",
+      "path": "/legacy_value_maps/bb_shell_standard→bb_shell_interface/map/BBRight ~1 OSBB",
+      "proposed_op": "replace",
+      "preimage_validation": "before_matches",
+      "decision": "aceptar",
+      "finding_id": "A23",
+      "severity_if_applied_as_written": "none",
+      "bounded_change": "Aceptar unknown y conservar el texto legado como evidencia. Resolver luego por cuadro/modelo/año y medidas documentadas.",
+      "source_ids": [
+        "PK-BB"
+      ]
+    },
+    {
+      "patch_id": "MC-24",
+      "path": "/legacy_value_maps/freehub_type→rear_drive_interface (hub) ~1 cassette_spline_standard (cassette) ~1 freewheel_thread_standard (freewheel)/map",
+      "proposed_op": "replace",
+      "preimage_validation": "before_matches",
+      "decision": "corregir",
+      "finding_id": "A24",
+      "severity_if_applied_as_written": "P1",
+      "bounded_change": "Mapear sólo códigos inequívocos del campo/plantilla original. Dejar rosca fija genérica y HG genérico en unknown; resolver HG Road11 por modelo/fuente y conservar relación de cuerpos aceptados aparte. Emitir tokens válidos con provenance, nunca frases con salvo o un cassette XD también entra.",
+      "source_ids": [
+        "SB-FIXED",
+        "SB-FREEWHEEL",
+        "SH-C731"
+      ]
+    },
+    {
+      "patch_id": "MC-25",
+      "path": "/templates/10/interfaces/0/rules/0",
+      "proposed_op": "replace",
+      "preimage_validation": "before_matches",
+      "decision": "corregir",
+      "finding_id": "A25",
+      "severity_if_applied_as_written": "P1",
+      "bounded_change": "Evaluar bike.rear_speeds ∈ chain.declared_supported_speeds tras proyección exacta. Coincidencia es sólo ese requisito. Si una fuente excluye el modelo/perfil, bloquear por esa exclusión aunque el número coincida; si sólo falta declaración, unknown/outside_declared_scope y sin aprobación global.",
+      "source_ids": [
+        "KMC-X8",
+        "SR-XPLR-CHAIN"
+      ]
+    },
+    {
+      "patch_id": "MC-26",
+      "path": "/templates/12/interfaces/0/rules/1",
+      "proposed_op": "replace",
+      "preimage_validation": "before_matches",
+      "decision": "corregir",
+      "finding_id": "A26",
+      "severity_if_applied_as_written": "P1",
+      "bounded_change": "Usar relación conector→cadena por modelo/perfil y condiciones de reutilización. Velocidad y medidas son filtros parciales; coincidencia de 11/128 o de ancho exterior no basta. Exclusión OEM expresa bloquea; ausencia de evidencia mantiene unknown.",
+      "source_ids": [
+        "KMC-FLATNR",
+        "KMC-78",
+        "PK-CHAIN",
+        "SR-XPLR-CHAIN"
+      ]
+    },
+    {
+      "patch_id": "MC-27",
+      "path": "/assembly_policy/verification_semantics",
+      "proposed_op": "add",
+      "preimage_validation": "absent_key",
+      "decision": "corregir",
+      "finding_id": "A27",
+      "severity_if_applied_as_written": "P1",
+      "bounded_change": "Separar source_registered, contract_validated y domain_assertion_verified por afirmación/pareja/alcance. Incluir manual OEM leído y locator. Un contraste estructural prueba consistencia de datos, no incompatibilidad mecánica universal; política de unknown y adapter_path explícita.",
+      "source_ids": [
+        "SR-HYDRAULIC-MATRIX"
+      ]
+    },
+    {
+      "patch_id": "MC-28",
+      "path": "/fixtures_policy",
+      "proposed_op": "add",
+      "preimage_validation": "absent_key",
+      "decision": "corregir",
+      "finding_id": "A28",
+      "severity_if_applied_as_written": "P2",
+      "bounded_change": "Registrar origin=synthetic_compiled, source_grounded_oem, catalogue_observed y runtime_verified como ejes separados. Un caso OEM documentado puede ser válido sin estar en stock; una fixture que copia la regla no demuestra dominio.",
+      "source_ids": [
+        "TRP-HYRD"
+      ]
+    },
+    {
+      "patch_id": "MC-29",
+      "path": "/stats/verified_rules",
+      "proposed_op": "replace",
+      "preimage_validation": "before_matches",
+      "decision": "corregir",
+      "finding_id": "A29",
+      "severity_if_applied_as_written": "P2",
+      "bounded_change": "Separar conteos de reglas compiladas, fuentes registradas y afirmaciones OEM verificadas. Calcularlos desde los registros después de migrar grading; cero sólo si el conjunto realmente está vacío.",
+      "source_ids": [
+        "SR-HYDRAULIC-MATRIX"
+      ]
+    }
+  ],
+  "source_grounded_and_guard_fixtures": [
+    {
+      "id": "MA-F01",
+      "origin": "source_grounded_oem",
+      "case": {
+        "derailleur": "SRAM RED XPLR AXS 13",
+        "mount": "Full Mount"
+      },
+      "expected": "Montaje Full Mount; no inferir plataforma T-Type.",
+      "source_ids": [
+        "SR-FULLMOUNT"
+      ],
+      "related_findings": [
+        "A06",
+        "A07"
+      ],
+      "executed": false,
+      "catalogue_product_verified": false
+    },
+    {
+      "id": "MA-F02",
+      "origin": "source_grounded_oem",
+      "case": {
+        "derailleur": "SRAM RED XPLR AXS",
+        "chain": "T-Type MTB"
+      },
+      "expected": "Exclusión OEM de uso; la igualdad geométrica o Full Mount no la anula.",
+      "source_ids": [
+        "SR-XPLR-CHAIN"
+      ],
+      "related_findings": [
+        "A06",
+        "A07",
+        "A26"
+      ],
+      "executed": false,
+      "catalogue_product_verified": false
+    },
+    {
+      "id": "MA-F03",
+      "origin": "source_grounded_oem",
+      "case": {
+        "body": "HG L",
+        "cassette": "CS-HG800"
+      },
+      "expected": "Exigir suplemento 1.85 mm; no coincidir con fila ROAD11 genérica sin suplemento.",
+      "source_ids": [
+        "SH-C731"
+      ],
+      "related_findings": [
+        "A03"
+      ],
+      "executed": false,
+      "catalogue_product_verified": false
+    },
+    {
+      "id": "MA-F04",
+      "origin": "source_grounded_oem",
+      "case": {
+        "body": "HG L",
+        "cassette": "CS-5700"
+      },
+      "expected": "Exigir suplementos 1.85 mm y 1.0 mm dentro de la misma fila.",
+      "source_ids": [
+        "SH-C731"
+      ],
+      "related_findings": [
+        "A03"
+      ],
+      "executed": false,
+      "catalogue_product_verified": false
+    },
+    {
+      "id": "MA-F05",
+      "origin": "source_grounded_oem",
+      "case": {
+        "body": "HG M",
+        "cassette": "CS-5700"
+      },
+      "expected": "Exigir suplemento 1.0 mm, sin ser eclipsado por fila 10/9/8 genérica.",
+      "source_ids": [
+        "SH-C731"
+      ],
+      "related_findings": [
+        "A03"
+      ],
+      "executed": false,
+      "catalogue_product_verified": false
+    },
+    {
+      "id": "MA-F06",
+      "origin": "inference_guard",
+      "case": {
+        "body": "HG L",
+        "cassette_family": "ROAD11",
+        "cassette_model": null
+      },
+      "expected": "No resolver excepción de suplemento; unknown mientras el modelo/fila no se determine.",
+      "source_ids": [
+        "SH-C731"
+      ],
+      "related_findings": [
+        "A03"
+      ],
+      "executed": false,
+      "catalogue_product_verified": false
+    },
+    {
+      "id": "MA-F07",
+      "origin": "source_grounded_oem",
+      "case": {
+        "lever": "Shimano/SRAM 11-speed road cable-actuated lever within TRP declaration",
+        "caliper": "TRP HY/RD"
+      },
+      "expected": "La interfaz de accionamiento por cable pasa en ambas direcciones; los otros requisitos siguen activos.",
+      "source_ids": [
+        "TRP-HYRD"
+      ],
+      "related_findings": [
+        "A14C",
+        "A14L",
+        "A15"
+      ],
+      "executed": false,
+      "catalogue_product_verified": false
+    },
+    {
+      "id": "MA-F08",
+      "origin": "source_grounded_oem",
+      "case": {
+        "product": "Shimano ST-R8000-R",
+        "selected_port": "brake_cable_input"
+      },
+      "expected": "Puerto de freno existente; no rechazar por template_key=shifter.",
+      "source_ids": [
+        "SH-ST8000"
+      ],
+      "related_findings": [
+        "A17A",
+        "A17B"
+      ],
+      "executed": false,
+      "catalogue_product_verified": false
+    },
+    {
+      "id": "MA-F09",
+      "origin": "source_grounded_oem",
+      "case": {
+        "adapter": "SM-RTAD05",
+        "rotor": "SM-RT86"
+      },
+      "expected": "Exclusión explícita OEM; seis pernos no basta para aprobar.",
+      "source_ids": [
+        "SH-RTAD05"
+      ],
+      "related_findings": [
+        "A19"
+      ],
+      "executed": false,
+      "catalogue_product_verified": false
+    },
+    {
+      "id": "MA-F10",
+      "origin": "source_grounded_oem",
+      "case": {
+        "adapter": "SM-RTAD05",
+        "rotor_diameter_mm": "220"
+      },
+      "expected": "Exclusión: supera máximo 203 mm.",
+      "source_ids": [
+        "SH-RTAD05"
+      ],
+      "related_findings": [
+        "A19"
+      ],
+      "executed": false,
+      "catalogue_product_verified": false
+    },
+    {
+      "id": "MA-F11",
+      "origin": "inference_guard",
+      "case": {
+        "hub_mount": "6-bolt",
+        "rotor_mount": "Center Lock",
+        "adapter_evidence": null
+      },
+      "expected": "No acople directo; adaptación desconocida; no aprobar ensamblaje ni declarar imposibilidad universal por falta de tabla.",
+      "source_ids": [
+        "PK-ROTOR",
+        "SH-RTAD05"
+      ],
+      "related_findings": [
+        "A19"
+      ],
+      "executed": false,
+      "catalogue_product_verified": false
+    },
+    {
+      "id": "MA-F12",
+      "origin": "source_grounded_reference",
+      "case": {
+        "drive": "fixed",
+        "hub": "ISO freewheel thread only",
+        "left_hand_lockring_thread": false
+      },
+      "expected": "Rosca derecha puede coincidir; retención izquierda requerida ausente impide aprobar el montaje fijo ordinario.",
+      "source_ids": [
+        "SB-FIXED"
+      ],
+      "related_findings": [
+        "A11"
+      ],
+      "executed": false,
+      "catalogue_product_verified": false
+    },
+    {
+      "id": "MA-F13",
+      "origin": "inference_guard",
+      "case": {
+        "legacy": "Rosca fija / contratuerca",
+        "brand": "Campagnolo/Phil Wood historical hub",
+        "measured_lockring": null
+      },
+      "expected": "No mapear automáticamente a ISO 1.29x24; mantener unknown hasta resolver modelo/estándar.",
+      "source_ids": [
+        "SB-FIXED"
+      ],
+      "related_findings": [
+        "A24"
+      ],
+      "executed": false,
+      "catalogue_product_verified": false
+    },
+    {
+      "id": "MA-F14",
+      "origin": "source_grounded_oem",
+      "case": {
+        "chain": "KMC X8 BX08NP114",
+        "supported_speeds": [
+          "6",
+          "7",
+          "8"
+        ],
+        "bike_rear_speeds": "8"
+      },
+      "expected": "Pasa la pertenencia de la configuración; no implica aprobar el resto del conjunto.",
+      "source_ids": [
+        "KMC-X8"
+      ],
+      "related_findings": [
+        "A25"
+      ],
+      "executed": false,
+      "catalogue_product_verified": false
+    },
+    {
+      "id": "MA-F15",
+      "origin": "source_grounded_oem",
+      "case": {
+        "connector": "KMC 7/8R C78EPTR73",
+        "chain": "KMC X8"
+      },
+      "expected": "Pareja nombrada por el fabricante; medir ancho no es la única justificación.",
+      "source_ids": [
+        "KMC-78"
+      ],
+      "related_findings": [
+        "A26"
+      ],
+      "executed": false,
+      "catalogue_product_verified": false
+    },
+    {
+      "id": "MA-F16",
+      "origin": "source_grounded_oem",
+      "case": {
+        "connector": "KMC FLATNR CFLATGNRO",
+        "reuse_requested": true
+      },
+      "expected": "No reutilizable según ficha del modelo, independientemente de coincidencia nominal de ancho.",
+      "source_ids": [
+        "KMC-FLATNR"
+      ],
+      "related_findings": [
+        "A26"
+      ],
+      "executed": false,
+      "catalogue_product_verified": false
+    },
+    {
+      "id": "MA-F17",
+      "origin": "inference_guard",
+      "case": {
+        "list": "compatible_models",
+        "some_row_exhaustive": true,
+        "source_url_present": true,
+        "counterpart_outside_named_scope": true
+      },
+      "expected": "Unknown/outside_declared_scope; no negación global.",
+      "source_ids": [
+        "WT-GOAT11",
+        "SR-HYDRAULIC-MATRIX"
+      ],
+      "related_findings": [
+        "A05",
+        "A21",
+        "A22"
+      ],
+      "executed": false,
+      "catalogue_product_verified": false
+    },
+    {
+      "id": "MA-F18",
+      "origin": "source_grounded_reference",
+      "case": {
+        "legacy_bb": "BBRight / OSBB"
+      },
+      "expected": "Unknown; no selección automática de PF46.",
+      "source_ids": [
+        "PK-BB"
+      ],
+      "related_findings": [
+        "A23"
+      ],
+      "executed": false,
+      "catalogue_product_verified": false
+    }
+  ],
+  "residual_gates": [
+    "No aplicar las 67 operaciones en bloque. Traducir primero el subconjunto aceptado/corregido a un contrato ejecutable.",
+    "Revisar gramática de proyecciones, endpoints y row_match; este dictamen no hace funcionar instrucciones escritas como prosa.",
+    "Completar lectura OEM por modelo y captura de tablas gráficas antes de materializar celdas no leídas; no se adjudicaron colores de la matriz SRAM.",
+    "Resolver nota de inclusión de suplemento por embalaje y límite mínimo de rotor si se pretenden usar; ambos quedan pendientes.",
+    "Ejecutar fixtures adaptadas al motor, luego read-back de productos/contrapartes reales sin convertir esa evidencia parcial en cobertura del catálogo."
+  ]
+}

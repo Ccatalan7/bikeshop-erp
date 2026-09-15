@@ -1,0 +1,914 @@
+{
+  "schema_version": 1,
+  "cases": [
+    {
+      "id": "rnd_RF1",
+      "template": "fastener",
+      "values": {
+        "fastener_kind": "Perno",
+        "thread": "M5",
+        "thread_pitch_system": "Paso en milímetros",
+        "thread_pitch_mm": "0.8",
+        "length_datum": "Bajo cabeza",
+        "length_mm": "20"
+      },
+      "kind": "synthetic_representation",
+      "note": "Designación métrica completa. Con el sistema en métrico, el campo de TPI no está disponible.",
+      "expected_blocking": [],
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false
+    },
+    {
+      "id": "rnd_RF2",
+      "template": "fastener",
+      "values": {
+        "fastener_kind": "Perno",
+        "thread": "M5",
+        "thread_pitch_system": "Paso en milímetros",
+        "thread_pitch_mm": "1.0",
+        "thread_tpi": 26
+      },
+      "kind": "synthetic_representation",
+      "note": "El caso negativo de la compuerta AG01: hoy se escribe sin ruido; con el sistema declarado, el TPI queda fuera de su condición.",
+      "expected_blocking": [
+        {
+          "code": "field_applicability",
+          "field": "thread_tpi"
+        }
+      ],
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false
+    },
+    {
+      "id": "rnd_RF3",
+      "template": "fastener",
+      "values": {
+        "fastener_kind": "Perno",
+        "thread": "M5",
+        "thread_pitch_system": "Desconocido / sin confirmar"
+      },
+      "kind": "synthetic_representation",
+      "note": "Sin sistema declarado no se escribe ni paso ni TPI: la designación queda incompleta y visible, no rellenada.",
+      "expected_blocking": [],
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false
+    },
+    {
+      "id": "rnd_RF4",
+      "template": "workshop_tool",
+      "values": {
+        "tool_kind": "Extractor de cassette / rueda libre",
+        "tool_capabilities": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "a",
+              "values": {
+                "operation": "Extraer",
+                "target_standard": "Shimano HG",
+                "supported": true
+              },
+              "sources": []
+            },
+            {
+              "id": "b",
+              "values": {
+                "operation": "Extraer",
+                "target_standard": "Shimano HG",
+                "supported": false
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "kind": "unresolved_semantic_gap",
+      "note": "Persiste el conflicto documental: no se sustituye por una identidad que rechace configuraciones válidas. No habilita llenado.",
+      "expected_blocking": [],
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false
+    },
+    {
+      "id": "rnd_RF5",
+      "template": "workshop_tool",
+      "values": {
+        "tool_kind": "Extractor de cassette / rueda libre",
+        "tool_capabilities": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "a",
+              "values": {
+                "operation": "Extraer",
+                "target_standard": "Shimano HG",
+                "supported": true
+              },
+              "sources": []
+            },
+            {
+              "id": "b",
+              "values": {
+                "operation": "Instalar",
+                "target_standard": "Shimano HG",
+                "supported": false,
+                "brand_scope": "La interfaz de extracción no es el spline de instalación"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "kind": "synthetic_representation",
+      "note": "Dos operaciones sobre el mismo estándar con resultados distintos: legítimo y es justo la corrección que pedía el hallazgo sobre HG y XD.",
+      "expected_blocking": [],
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false
+    },
+    {
+      "id": "rnd_RF6",
+      "template": "bottle",
+      "values": {
+        "volume_ml": "600",
+        "bottle_retention_system": "FIDLOCK TWIST",
+        "base_included": true,
+        "included_base_model": "TWIST bike base"
+      },
+      "kind": "synthetic_representation",
+      "note": "Una botella TWIST sin diámetro de portabidón. Hoy el campo está permitido y su ausencia parece un dato que falta.",
+      "expected_blocking": [],
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false
+    },
+    {
+      "id": "rnd_RF7",
+      "template": "bottle",
+      "values": {
+        "volume_ml": "600",
+        "bottle_retention_system": "FIDLOCK TWIST",
+        "bottle_diameter_mm": "74"
+      },
+      "kind": "synthetic_representation",
+      "note": "Reducir la TWIST a una botella de un diámetro es lo que el hallazgo prohíbe.",
+      "expected_blocking": [
+        {
+          "code": "field_applicability",
+          "field": "bottle_diameter_mm"
+        }
+      ],
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false
+    },
+    {
+      "id": "rnd_RF8",
+      "template": "pump",
+      "values": {
+        "pump_kind": "Inflador CO2",
+        "max_pressure_psi": "160"
+      },
+      "kind": "synthetic_representation",
+      "note": "El escalar anterior se conserva como legacy; no expresa la presión canónica con alcance.",
+      "expected_blocking": [],
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false
+    },
+    {
+      "id": "rnd_RF9",
+      "template": "pump",
+      "values": {
+        "pump_kind": "Inflador CO2",
+        "valve_heads_supported": [
+          "Presta (francesa)",
+          "Schrader (americana / auto)"
+        ],
+        "inflation_target_note": "La presión final depende del volumen del neumático",
+        "co2_cartridge_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "a",
+              "values": {
+                "configuration_kind": "Cartucho de esta presentación",
+                "gas_mass_g": "16",
+                "threaded": true,
+                "thread_designation": "3/8-24 UNF",
+                "included_quantity": "2",
+                "gross_weight_g": "48"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "kind": "synthetic_representation",
+      "note": "Valores sintéticos para transporte y campos; no acredita rosca, peso ni contenido de un SKU OEM.",
+      "expected_blocking": [],
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false
+    },
+    {
+      "id": "rnd_RF10",
+      "template": "pump",
+      "values": {
+        "pump_kind": "Inflador CO2",
+        "valve_heads_supported": [
+          "Presta (francesa)"
+        ]
+      },
+      "kind": "synthetic_representation",
+      "note": "Sin cartuchos declarados no se infiere ninguno: la interfaz queda desconocida y no se copia de otro inflador.",
+      "expected_blocking": [],
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false
+    },
+    {
+      "id": "rnd_RF11",
+      "template": "helmet",
+      "values": {
+        "intended_audience": "Niño / juvenil",
+        "label_evidence_state": "Etiqueta observada",
+        "certification_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "a",
+              "values": {
+                "standard": "EN 1078",
+                "standard_text": "EN 1078:2012+A1:2012",
+                "edition": "2012+A1",
+                "market": "UE",
+                "evidence_kind": "Etiqueta observada en la unidad",
+                "evidence_date": "2026-09-07"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "helmet_construction": "Integral"
+      },
+      "kind": "synthetic_representation",
+      "note": "Ejemplo sintético; no se afirma haber observado la etiqueta de un producto real.",
+      "expected_blocking": [],
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false
+    },
+    {
+      "id": "rnd_RF12",
+      "template": "helmet",
+      "values": {
+        "helmet_kind": "Urbano",
+        "intended_audience": "Adulto",
+        "label_evidence_state": "Etiqueta no observada"
+      },
+      "kind": "synthetic_representation",
+      "note": "Sin etiqueta observada no hay declaración de norma; la ausencia no se escribe como una norma más.",
+      "expected_blocking": [],
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false
+    },
+    {
+      "id": "rnd_RF13",
+      "template": "food_beverage",
+      "values": {
+        "food_item_kind": "Snack",
+        "preparation_kind": "Envasado",
+        "net_mass_g": "60",
+        "nutrition_facts": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "a",
+              "values": {
+                "nutrient": "Carbohidratos (g)",
+                "amount": "20",
+                "basis": "Por 100 g"
+              },
+              "sources": []
+            },
+            {
+              "id": "b",
+              "values": {
+                "nutrient": "Carbohidratos (g)",
+                "amount": "25",
+                "basis": "Por 100 g"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "kind": "unresolved_semantic_gap",
+      "note": "Persiste el conflicto documental: no se sustituye por una identidad que rechace configuraciones válidas. No habilita llenado.",
+      "expected_blocking": [],
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false
+    },
+    {
+      "id": "rnd_RF14",
+      "template": "food_beverage",
+      "values": {
+        "food_item_kind": "Snack",
+        "preparation_kind": "Envasado",
+        "net_mass_g": "60",
+        "units_per_pack": "1",
+        "allergen_statement_source": "Etiqueta del envase",
+        "allergen_note": "Contiene leche y frutos secos",
+        "spec_evidence_source": "Envase fotografiado en tienda",
+        "nutrition_facts": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "a",
+              "values": {
+                "nutrient": "Carbohidratos (g)",
+                "amount": "20",
+                "basis": "Por 100 g"
+              },
+              "sources": []
+            },
+            {
+              "id": "b",
+              "values": {
+                "nutrient": "Carbohidratos (g)",
+                "amount": "12",
+                "basis": "Por porción declarada",
+                "serving_reference": "1 barra de 60 g",
+                "basis_amount": "60",
+                "basis_unit": "g"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "kind": "synthetic_representation",
+      "note": "El mismo nutriente sobre dos bases distintas es legítimo y la identidad lo permite.",
+      "expected_blocking": [],
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false
+    },
+    {
+      "id": "rnd_RF15",
+      "template": "eyewear",
+      "values": {
+        "eyewear_lens_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "a",
+              "values": {
+                "model": "Lente gris",
+                "polarized": true,
+                "photochromic": true
+              },
+              "sources": []
+            },
+            {
+              "id": "b",
+              "values": {
+                "model": "Lente gris",
+                "polarized": false
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "kind": "unresolved_semantic_gap",
+      "note": "Persiste el conflicto documental: no se sustituye por una identidad que rechace configuraciones válidas. No habilita llenado.",
+      "expected_blocking": [],
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false
+    },
+    {
+      "id": "rnd_RF16",
+      "template": "lock",
+      "values": {
+        "lock_kind": "Kit U + cable",
+        "inner_width_mm": "110",
+        "inner_height_mm": "230",
+        "cable_length_mm": "1200",
+        "cable_diameter_mm": "10"
+      },
+      "kind": "synthetic_representation",
+      "note": "Las medidas del arco y del cable en la misma presentación, sin nivel de seguridad declarado: pendiente, no transferido desde el arco.",
+      "expected_blocking": [],
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false
+    },
+    {
+      "id": "rnd_root_metric_diameter_tpi_pitch",
+      "template": "fastener",
+      "values": {
+        "fastener_kind": "Otro",
+        "thread": "36 mm",
+        "thread_pitch_system": "Hilos por pulgada",
+        "thread_tpi": "24"
+      },
+      "kind": "synthetic_representation",
+      "note": "Park documenta 36 mm × 24 TPI; prueba ejes independientes, no identidad de pieza en inventario.",
+      "expected_blocking": [],
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false
+    },
+    {
+      "id": "rnd_root_pitch_selected_missing_value",
+      "template": "fastener",
+      "values": {
+        "fastener_kind": "Perno",
+        "thread": "M5",
+        "thread_pitch_system": "Paso en milímetros"
+      },
+      "kind": "synthetic_representation",
+      "note": "Contraejemplo de representación; no aprobación de producto.",
+      "expected_blocking": [],
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false,
+      "expected_issue_subset": [
+        {
+          "code": "required_missing",
+          "field": "thread_pitch_mm",
+          "blocking": false
+        }
+      ]
+    },
+    {
+      "id": "rnd_root_twist_physical_envelope",
+      "template": "bottle",
+      "values": {
+        "bottle_retention_system": "FIDLOCK TWIST",
+        "bottle_body_dimensions": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "dimension": "Ancho",
+                "value_mm": "76",
+                "configuration": "Botella con base incluida",
+                "datum": "Ancho del conjunto bottle 800 + bike base, plantilla OEM 1:1"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "kind": "synthetic_representation",
+      "note": "Fidlock publica dimensiones del conjunto; medir el exterior no lo convierte en compatible con un aro.",
+      "expected_blocking": [],
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false
+    },
+    {
+      "id": "rnd_root_co2_gauge_scale",
+      "template": "pump",
+      "values": {
+        "pump_kind": "Inflador CO2",
+        "pump_pressure_specifications": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "quantity_kind": "Fondo de escala del manómetro",
+                "value": "160",
+                "unit": "psi",
+                "configuration": "Manómetro AirBooster G2"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "kind": "synthetic_representation",
+      "note": "Topeak: el manómetro lee hasta 160 psi. No es promesa de presión final del neumático.",
+      "expected_blocking": [],
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false
+    },
+    {
+      "id": "rnd_root_co2_estimate_incomplete",
+      "template": "pump",
+      "values": {
+        "pump_kind": "Inflador CO2",
+        "pump_pressure_specifications": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "quantity_kind": "Presión orientativa CO2 para la configuración indicada",
+                "value": "100",
+                "unit": "psi",
+                "configuration": "Estimación sin neumático/cartucho confirmado"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "kind": "synthetic_representation",
+      "note": "Contraejemplo de representación; no aprobación de producto.",
+      "expected_blocking": [],
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false,
+      "expected_issue_subset": [
+        {
+          "code": "row_required_missing",
+          "field": "pump_pressure_specifications",
+          "blocking": false
+        }
+      ]
+    },
+    {
+      "id": "rnd_root_co2_estimate_scoped",
+      "template": "pump",
+      "values": {
+        "pump_kind": "Inflador CO2",
+        "pump_pressure_specifications": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "quantity_kind": "Presión orientativa CO2 para la configuración indicada",
+                "value": "100",
+                "unit": "psi",
+                "configuration": "Tabla Topeak CO2 INFLATOR 2021-03",
+                "target_tire": "ROAD 700C x 25",
+                "cartridge_gas_g": "16",
+                "tires_inflated": "1",
+                "conditions": "Valor orientativo de la tabla; respetar límites del neumático y aro"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "kind": "synthetic_representation",
+      "note": "Contraejemplo de representación; no aprobación de producto.",
+      "expected_blocking": [],
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false
+    },
+    {
+      "id": "rnd_root_gauge_is_not_co2_estimate",
+      "template": "pump",
+      "values": {
+        "pump_kind": "Inflador CO2",
+        "pump_pressure_specifications": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "quantity_kind": "Fondo de escala del manómetro",
+                "value": "160",
+                "unit": "psi",
+                "configuration": "Escala del manómetro",
+                "cartridge_gas_g": "16"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "kind": "synthetic_representation",
+      "note": "Contraejemplo de representación; no aprobación de producto.",
+      "expected_blocking": [
+        {
+          "code": "row_field_applicability",
+          "field": "pump_pressure_specifications"
+        }
+      ],
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false
+    },
+    {
+      "id": "rnd_root_two_security_programmes",
+      "template": "lock",
+      "values": {
+        "lock_kind": "U-lock",
+        "security_rating_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "component": "U / arco",
+                "issuer": "Sold Secure",
+                "component_model": "GRANIT XPlus 540",
+                "level": "Diamond",
+                "rating_scheme": "Pedal Cycle"
+              },
+              "sources": []
+            },
+            {
+              "id": "r2",
+              "values": {
+                "component": "U / arco",
+                "issuer": "Sold Secure",
+                "component_model": "GRANIT XPlus 540",
+                "level": "Gold",
+                "rating_scheme": "Powered Cycle"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "kind": "synthetic_representation",
+      "note": "ABUS declara ambos programas para el mismo candado; no se deduplica por emisor.",
+      "expected_blocking": [],
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false
+    },
+    {
+      "id": "rnd_root_security_programme_missing",
+      "template": "lock",
+      "values": {
+        "security_rating_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "component": "U / arco",
+                "issuer": "Sold Secure",
+                "component_model": "GRANIT XPlus 540",
+                "level": "Diamond"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "kind": "synthetic_representation",
+      "note": "Contraejemplo de representación; no aprobación de producto.",
+      "expected_blocking": [],
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false,
+      "expected_issue_subset": [
+        {
+          "code": "row_required_missing",
+          "field": "security_rating_configurations",
+          "blocking": false
+        }
+      ]
+    },
+    {
+      "id": "rnd_root_tool_distinct_scope",
+      "template": "workshop_tool",
+      "values": {
+        "tool_capabilities": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "operation": "Extraer",
+                "target_standard": "Interfaz declarada",
+                "supported": true,
+                "brand_scope": "Modelo A"
+              },
+              "sources": []
+            },
+            {
+              "id": "r2",
+              "values": {
+                "operation": "Extraer",
+                "target_standard": "Interfaz declarada",
+                "supported": false,
+                "brand_scope": "Modelo B"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "kind": "synthetic_representation",
+      "note": "Contraejemplo de representación; no aprobación de producto.",
+      "expected_blocking": [],
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false
+    },
+    {
+      "id": "rnd_root_bag_expansion_states",
+      "template": "bike_bag",
+      "values": {
+        "bag_member_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "member": "Compartimento superior",
+                "position": "Superior",
+                "configuration": "Cerrado",
+                "height_mm": "215"
+              },
+              "sources": []
+            },
+            {
+              "id": "r2",
+              "values": {
+                "member": "Compartimento superior",
+                "position": "Superior",
+                "configuration": "Expandido",
+                "height_mm": "290"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "kind": "synthetic_representation",
+      "note": "Topeak TT9635B publica una altura variable; el nombre del miembro no identifica el estado medido.",
+      "expected_blocking": [],
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false
+    },
+    {
+      "id": "rnd_root_two_cartridge_counterparts",
+      "template": "pump",
+      "values": {
+        "pump_kind": "Inflador CO2",
+        "co2_cartridge_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "configuration_kind": "Cartucho compatible declarado",
+                "gas_mass_g": "16",
+                "threaded": true,
+                "thread_designation": "Declaración sintética de rosca",
+                "counterpart_model": "Cartucho A"
+              },
+              "sources": []
+            },
+            {
+              "id": "r2",
+              "values": {
+                "configuration_kind": "Cartucho compatible declarado",
+                "gas_mass_g": "16",
+                "threaded": true,
+                "thread_designation": "Declaración sintética de rosca",
+                "counterpart_model": "Cartucho B"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "kind": "synthetic_representation",
+      "note": "Contraejemplo de representación; no aprobación de producto.",
+      "expected_blocking": [],
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false
+    },
+    {
+      "id": "rnd_root_two_other_nutrients",
+      "template": "food_beverage",
+      "values": {
+        "nutrition_facts": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "nutrient": "Otro",
+                "amount_unit": "mg",
+                "basis": "Por 100 g",
+                "nutrient_name": "Potasio",
+                "amount": "100"
+              },
+              "sources": []
+            },
+            {
+              "id": "r2",
+              "values": {
+                "nutrient": "Otro",
+                "amount_unit": "mg",
+                "basis": "Por 100 g",
+                "nutrient_name": "Calcio",
+                "amount": "50"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "kind": "synthetic_representation",
+      "note": "Contraejemplo de representación; no aprobación de producto.",
+      "expected_blocking": [],
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false
+    },
+    {
+      "id": "rnd_root_two_serving_sizes",
+      "template": "food_beverage",
+      "values": {
+        "nutrition_facts": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "nutrient": "Carbohidratos (g)",
+                "basis": "Por porción declarada",
+                "basis_unit": "g",
+                "basis_amount": "30",
+                "amount": "20",
+                "serving_reference": "Porción pequeña"
+              },
+              "sources": []
+            },
+            {
+              "id": "r2",
+              "values": {
+                "nutrient": "Carbohidratos (g)",
+                "basis": "Por porción declarada",
+                "basis_unit": "g",
+                "basis_amount": "60",
+                "amount": "40",
+                "serving_reference": "Porción grande"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "kind": "synthetic_representation",
+      "note": "Contraejemplo de representación; no aprobación de producto.",
+      "expected_blocking": [],
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false
+    },
+    {
+      "id": "rnd_root_lens_same_name_distinct_scope",
+      "template": "eyewear",
+      "values": {
+        "eyewear_lens_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "model": "Lente gris",
+                "conditions": "Lente izquierda de este par",
+                "polarized": true
+              },
+              "sources": []
+            },
+            {
+              "id": "r2",
+              "values": {
+                "model": "Lente gris",
+                "conditions": "Lente derecha de este par",
+                "polarized": true
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "kind": "synthetic_representation",
+      "note": "Contraejemplo de representación; no aprobación de producto.",
+      "expected_blocking": [],
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false
+    },
+    {
+      "id": "rnd_root_helmet_child_full_face",
+      "template": "helmet",
+      "values": {
+        "helmet_kind": "Enduro",
+        "helmet_construction": "Integral",
+        "intended_audience": "Niño / juvenil"
+      },
+      "kind": "synthetic_representation",
+      "note": "Contraejemplo de representación; no aprobación de producto.",
+      "expected_blocking": [],
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false
+    },
+    {
+      "id": "rnd_root_helmet_construction_in_wrong_axis",
+      "template": "helmet",
+      "values": {
+        "helmet_kind": "Integral"
+      },
+      "kind": "synthetic_representation",
+      "note": "Contraejemplo de representación; no aprobación de producto.",
+      "expected_blocking": [
+        {
+          "code": "option",
+          "field": "helmet_kind"
+        }
+      ],
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false
+    }
+  ],
+  "automatic_fill_authorized": false
+}

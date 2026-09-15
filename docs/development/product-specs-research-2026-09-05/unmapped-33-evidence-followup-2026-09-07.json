@@ -1,0 +1,458 @@
+{
+  "schema_version": 1,
+  "title": "Seguimiento de evidencia de los 33: correcciones ejecutadas e investigación cumplida",
+  "author": "Claude (revisor independiente)",
+  "prepared_on": "2026-09-07",
+  "addendum_to": {
+    "artifact": "unmapped-ambiguous-and-business-review-2026-09-07.json",
+    "artifact_sha256": "d966352e06415821860eafc0138e9fc7a9797ab4e9b43d6622989277c5f1ae2c",
+    "note": "La revisión anterior queda congelada. Aquí no se reescribe: se corrige por id."
+  },
+  "boundaries": "Lectura de producción sólo lectura por scripts/db/query.sh, acotada a los 33 registros y a las contrapartes que nombran. Sin escrituras, sin sondas, sin mensajes externos, sin cambios a productos ni a archivos de root. No se asigna ninguna plantilla y no se escribe ningún hecho. Los dos registros Garozzo y las propuestas de asignación son trabajo de root y no se tocan.",
+  "evidence_sources": [
+    {
+      "kind": "produccion_solo_lectura",
+      "detail": "Lectura de producción por scripts/db/query.sh, sólo lectura, sin escrituras y sin sondas: products (campos de identidad y tratamiento), purchase_receipt_lines, sales_order_items, service_product_profile_mappings, product_images y suppliers, acotado a los 33 registros y a las contrapartes que nombran."
+    },
+    {
+      "kind": "imagenes_abiertas_por_claude",
+      "detail": "Cuatro archivos descargados desde el almacenamiento público del ERP y abiertos. El sha256 de cada uno coincide con el registrado en product-identity-image-review-2026-09-06.json.",
+      "files": {
+        "2ea1138a-82f3-4e4f-85d4-2ab6d3c979cc": {
+          "file": "24131.jpg",
+          "sha256": "c2cdd2df878961535af7c36ec321d6110f813f0bba1320c908acab48d161169e",
+          "bytes": 37360,
+          "dimensions_or_size": "600x450",
+          "matches_frozen_image_review_sha256": true
+        },
+        "49b90689-b504-4216-81e3-b311e29bfb90": {
+          "file": "1541.jpg",
+          "sha256": "adafb07fd22454ac5bdec428455d5f495bd1ebf3e921005251c28afd69583dc1",
+          "bytes": 7227,
+          "dimensions_or_size": "JPEG 7 227 bytes",
+          "matches_frozen_image_review_sha256": true
+        },
+        "b887f8e9-755a-42c6-8668-e4c451a537ae": {
+          "file": "1559.jpg",
+          "sha256": "ed46c419e70942e288666062d33fbb5148c3adcfacf98132cdff63e3e43c00d1",
+          "bytes": 11052,
+          "dimensions_or_size": "JPEG 11 052 bytes",
+          "matches_frozen_image_review_sha256": true
+        },
+        "ccdb85f9-8456-4da3-930a-e3d359ca6f47": {
+          "file": "67.png",
+          "sha256": "42ef7eae7554e1f77f8616d7784e7775f046ff6cc422ac8353caf5d11aeea7a3",
+          "bytes": 29506,
+          "dimensions_or_size": "175x216",
+          "matches_frozen_image_review_sha256": true
+        }
+      }
+    },
+    {
+      "kind": "busqueda_publica",
+      "detail": "«Rito Cycle Parts PP-01»: marca confirmada como real en marketplaces latinoamericanos; el modelo PP-01 no aparece en ninguna fuente. Búsqueda ejecutada y registrada como fallida."
+    }
+  ],
+  "corrections": [
+    {
+      "id": "C1",
+      "targets": [
+        "finding A4",
+        "cc9f7f88-0401-4eb2-bbd6-74b1b1b07336",
+        "54aa6f11-e04d-446c-aa33-7e6580dbe7e1",
+        "a4373f06-b5b1-48e6-b501-64091f999fd3",
+        "8e0be162-e824-4bc4-be0f-9be8f19ec7db",
+        "20f982dc-02f0-4612-8754-fed9934eabe4",
+        "d5803c84-0678-44c7-b204-dd2f9be5f7e4"
+      ],
+      "my_claim": "«Bettabikes aparece como sufijo en 29 nombres y ALIEXPRESS en otro, así que los registros que llevan sólo ese nombre son rótulos» — y marqué esos dos como decisión respaldada.",
+      "why_wrong": "La co-ocurrencia demuestra que la palabra se usa como sufijo de proveedor en otros productos. No demuestra nada sobre la identidad de este registro: que exista un proveedor con ese nombre no convierte a este renglón en su rótulo administrativo.",
+      "new_evidence": "La tabla suppliers registra AliExpress, Betta Bikes, Dr. Bike, MKR Imports, Andes Industrial y AndesLife. «Dr. Bike» coincide exacto y «MKR» es prefijo de «MKR Imports». Es una hipótesis de origen mucho mejor que la co-ocurrencia, y sigue sin ser identidad. «Andes» coincide con dos proveedores distintos y «Pack» con ninguno. Los seis tienen cero líneas de compra y cero de venta, así que el discriminante que yo mismo propuse no devuelve nada.",
+      "correction": "Los seis pasan a pendiente. Ninguno queda como demostrado. La coincidencia con un proveedor registrado se anota como hipótesis de origen, separada de la identidad."
+    },
+    {
+      "id": "C2",
+      "targets": [
+        "finding A8"
+      ],
+      "my_claim": "«No cambia el análisis, pero sí la prioridad: ninguno de ellos bloquea el avance de fichas.»",
+      "why_wrong": "Inactivo no es fuera de alcance. Los cinco siguen dentro del alcance del dueño y no tienen exención de saneamiento ni de llenado; que no bloqueen hoy no es una propiedad del registro sino de mi orden de trabajo.",
+      "new_evidence": "Producción confirma is_active = false en los cinco y, además, cero movimiento en todos: ni compras ni ventas. La inactividad no viene acompañada de ninguna marca que los excluya.",
+      "correction": "Se retira la frase de prioridad. Los cinco quedan dentro del alcance, con su estado de actividad como dato y no como exención."
+    },
+    {
+      "id": "C3",
+      "targets": [
+        "f8089a2e-da2a-430c-8949-137fdd1930a7"
+      ],
+      "my_claim": "Decisión respaldada, no es producto técnico: «una ficha de cámara plana describiría sólo una parte del paquete».",
+      "why_wrong": "Descarté el material físico sin mirar el uso real. Podría ser un servicio con material o un paquete compuesto, y en los dos casos hay una cámara de por medio.",
+      "new_evidence": "Producción declara purchase_treatment = workshop_consumable e is_service = false para M010. El tratamiento declarado apunta a material consumido en taller, no a un servicio puro. Y el uso no decide: cero líneas de compra, cero de venta y ningún perfil de servicio asociado.",
+      "correction": "Pasa a pendiente. No se descarta la ficha ni el material físico. El siguiente discriminante es si el paquete se vende como una unidad con cámara incluida o como mano de obra que consume una cámara del inventario."
+    },
+    {
+      "id": "C4",
+      "targets": [
+        "ccdb85f9-8456-4da3-930a-e3d359ca6f47"
+      ],
+      "my_claim": "«dejar escrito en not_for que no está declarado como líquido de frenos».",
+      "why_wrong": "not_for es para prohibiciones declaradas por el fabricante. La falta de evidencia no es incompatibilidad, y escribirla ahí la convertiría en una prohibición OEM que nadie declaró.",
+      "new_evidence": "Abrí la imagen: la etiqueta dice LUBETRAC y, debajo, «LUBRICANTE MULTI PROPÓSITO». Eso es un uso declarado y va en declared_applications. Sobre frenos la etiqueta no dice nada: ni lo permite ni lo prohíbe.",
+      "correction": "El uso en frenos se registra como no declarado, fuera de not_for. La instrucción anterior queda anulada."
+    },
+    {
+      "id": "C5",
+      "targets": [
+        "02472142-39a6-4037-9d87-d044786eea7e",
+        "47cbf024-c586-4170-af0e-c0fea99e3146",
+        "e174953e-ff08-48b9-ad39-3737a3ab5518"
+      ],
+      "my_claim": "«si aparece eje, es bottom_bracket; si sólo copas y rodamientos, es bottom_bracket_cup con bottom_bracket_bearing aparte».",
+      "why_wrong": "La presencia o ausencia del eje no define el objeto: hay sistemas donde el eje pertenece a las bielas y el pedalier son sólo copas y rodamientos, y aun así se vende y se instala como un pedalier. Y la segunda mitad era peor: proponía partir en dos fichas un kit que se vende como una unidad.",
+      "new_evidence": "Producción no aporta contenido: los tres tienen is_set = false, sin parent_set_id, sin descripción, sin marca y sin ningún documento asociado.",
+      "correction": "El discriminante pasa a ser qué vende el proveedor como una unidad y qué interfaz presentan las copas, no si hay eje en la caja. Un kit vendido como unidad no se parte para que calce con una plantilla."
+    },
+    {
+      "id": "C6",
+      "targets": [
+        "finding A6",
+        "49b90689-b504-4216-81e3-b311e29bfb90"
+      ],
+      "my_claim": "Elegí control_small_part porque lleva noodle_angle_deg, «que es el recorrido del cable de un V-Brake».",
+      "why_wrong": "Al abrir la imagen se ve que el objeto es el fuelle, no el codo. El noodle_angle_deg describe el codo metálico y quedaría vacío para esta pieza, así que el campo que usé como argumento no aplica.",
+      "new_evidence": "La imagen abierta: manguito de goma corrugado, con collar ancho en un extremo y un extremo ranurado en el otro.",
+      "correction": "El objeto queda resuelto; la plantilla dueña no. Entre control_small_part y brake_small_part hace falta la intención del dueño de esas dos plantillas, y lo registro como discriminante abierto en vez de sostener mi razón anterior."
+    },
+    {
+      "id": "C7",
+      "targets": [
+        "finding A7",
+        "grupo de servicios"
+      ],
+      "my_claim": "Llamé «servicio de taller» a Diagnóstico, Retiro de Óxido, Descontaminación y las demás intervenciones.",
+      "why_wrong": "Era una lectura del nombre presentada junto a datos de producción, lo que la hace parecer un dato del ERP. No lo es.",
+      "new_evidence": "Producción declara is_service = false en los 33, incluidos Diagnóstico y Retiro de Óxido. Lo que sí distingue a varios es purchase_treatment = workshop_consumable, presente en Aceite Mineral Chepark, M010, Descontaminación, Retiro de Óxido, el eje delantero y la gomita.",
+      "correction": "La lectura del nombre se mantiene como hipótesis, y se separa del campo del ERP, que dice lo contrario. La contradicción entre el nombre y is_service queda anotada como pregunta abierta para el dueño de esos registros."
+    }
+  ],
+  "status_changes": [
+    {
+      "id": "cc9f7f88-0401-4eb2-bbd6-74b1b1b07336",
+      "name": "ALIEXPRESS",
+      "from": "respaldada",
+      "to": "pendiente",
+      "by_correction": "C1"
+    },
+    {
+      "id": "54aa6f11-e04d-446c-aa33-7e6580dbe7e1",
+      "name": "BETTABIKES",
+      "from": "respaldada",
+      "to": "pendiente",
+      "by_correction": "C1"
+    },
+    {
+      "id": "f8089a2e-da2a-430c-8949-137fdd1930a7",
+      "name": "Cámara nueva + servicio de cambio",
+      "from": "respaldada",
+      "to": "pendiente",
+      "by_correction": "C3"
+    }
+  ],
+  "investigations": [
+    {
+      "id": "2ea1138a-82f3-4e4f-85d4-2ab6d3c979cc",
+      "name": "Set Cubre Manubrio 125mm/220mm Black",
+      "previous_decision": "respaldada",
+      "previous_family": {
+        "template_key": "handlebar_covering",
+        "template_id": "30a5664f-8dbb-5a1c-9fdd-61b59c33eca2",
+        "technical_family": "handlebar_covering"
+      },
+      "status_after_investigation": "respaldada",
+      "observed_source": [
+        "Imagen abierta por Claude, 600x450: cuatro piezas tubulares de espuma negra. Dos largas, lisas y abiertas en los dos extremos. Dos más cortas con un extremo cerrado y un anillo de terminación visible.",
+        "El sha256 del archivo que descargué coincide con el que registró la revisión de imagen congelada, así que es la misma evidencia.",
+        "Producción: proveedor Comercial Ciclo, is_set = false, sin descripción, sin marca."
+      ],
+      "hypothesis": [
+        "Las dos largas serían los manguitos de 220 mm y las dos cortas los puños de 125 mm, que son las dos medidas del nombre. Es una lectura de la foto y de la longitud, no una declaración del fabricante."
+      ],
+      "undeclared": [
+        "Material, diámetro interior y composición del set. El ERP no marca el registro como set y no trae descripción."
+      ],
+      "searches_executed": [],
+      "next_discriminant": {
+        "assignee": "Claude",
+        "action": "Medir el diámetro interior de las cuatro piezas, o pedir a Comercial Ciclo la ficha del artículo 24131; con eso se llena kit_members y las medidas."
+      },
+      "image_opened": {
+        "file": "24131.jpg",
+        "sha256": "c2cdd2df878961535af7c36ec321d6110f813f0bba1320c908acab48d161169e",
+        "bytes": 37360,
+        "dimensions_or_size": "600x450",
+        "matches_frozen_image_review_sha256": true
+      }
+    },
+    {
+      "id": "49b90689-b504-4216-81e3-b311e29bfb90",
+      "name": "GOMITA PARA FRENO V-BRAKE COMPATIBLE / GENERICO",
+      "previous_decision": "respaldada",
+      "previous_family": {
+        "template_key": "control_small_part",
+        "template_id": "37a61da4-67f9-5ab8-9a10-7868b3035f3c",
+        "technical_family": "control_small_part"
+      },
+      "status_after_investigation": "pendiente",
+      "observed_source": [
+        "Imagen abierta por Claude: manguito de goma negro corrugado, en acordeón, con un collar más ancho en un extremo y un extremo ranurado en el otro. No es zapata ni pastilla.",
+        "sha256 coincide con el de la revisión congelada.",
+        "Producción: marca Andes Industrial, purchase_treatment workshop_consumable."
+      ],
+      "hypothesis": [
+        "Fuelle protector del tramo de cable expuesto de un V-Brake."
+      ],
+      "undeclared": [
+        "Diámetro interior, y si el fabricante lo declara para cable o para el puente de unión. Ninguna medida aparece en el ERP."
+      ],
+      "searches_executed": [],
+      "next_discriminant": {
+        "assignee": "Codex",
+        "action": "Definir con el dueño de las plantillas si un fuelle pertenece a control_small_part o a brake_small_part, y medir el diámetro interior. Ver corrección C6."
+      },
+      "image_opened": {
+        "file": "1541.jpg",
+        "sha256": "adafb07fd22454ac5bdec428455d5f495bd1ebf3e921005251c28afd69583dc1",
+        "bytes": 7227,
+        "dimensions_or_size": "JPEG 7 227 bytes",
+        "matches_frozen_image_review_sha256": true
+      }
+    },
+    {
+      "id": "b887f8e9-755a-42c6-8668-e4c451a537ae",
+      "name": "LIMPIADOR TRIPLE PLATO PP-01",
+      "previous_decision": "respaldada",
+      "previous_family": {
+        "template_key": "workshop_tool",
+        "template_id": "9fa846f3-8544-5fdf-9220-9f86e196ddb0",
+        "technical_family": "workshop_tool"
+      },
+      "status_after_investigation": "respaldada",
+      "observed_source": [
+        "Imagen abierta por Claude, 11 052 bytes: herramienta metálica sólida, anodizada celeste, dos placas unidas por un perno pivote, una con canto ganchudo y dentado. Lleva la marca «Rito CYCLE PARTS» grabada. No es envase ni botella.",
+        "sha256 coincide con el de la revisión congelada.",
+        "Producción: marca Rito, proveedor RBX, inventory_qty 1. Es el único de los 33 con existencia."
+      ],
+      "hypothesis": [
+        "Rascador para limpiar entre dientes de platos o piñones. La forma del canto lo sugiere; la resolución no permite ver el mecanismo."
+      ],
+      "undeclared": [
+        "El tipo exacto de herramienta y para qué diente está dimensionada."
+      ],
+      "searches_executed": [
+        "Búsqueda pública «Rito Cycle Parts PP-01»: la marca Rito Cycle Parts existe y se comercializa en marketplaces latinoamericanos, pero ninguna fuente identifica el modelo PP-01. Búsqueda ejecutada y sin resultado, que no es lo mismo que producto inexistente."
+      ],
+      "next_discriminant": {
+        "assignee": "Claude",
+        "action": "Pedir a RBX la ficha del artículo 1559 o una foto de mayor resolución; el discriminante es si el canto dentado entra entre platos o entre piñones."
+      },
+      "image_opened": {
+        "file": "1559.jpg",
+        "sha256": "ed46c419e70942e288666062d33fbb5148c3adcfacf98132cdff63e3e43c00d1",
+        "bytes": 11052,
+        "dimensions_or_size": "JPEG 11 052 bytes",
+        "matches_frozen_image_review_sha256": true
+      }
+    },
+    {
+      "id": "ccdb85f9-8456-4da3-930a-e3d359ca6f47",
+      "name": "ACEITE NACIONAL",
+      "previous_decision": "respaldada",
+      "previous_family": {
+        "template_key": "workshop_chemical",
+        "template_id": "61bc1c93-8b73-55d0-9584-6087a8190dfe",
+        "technical_family": "workshop_chemical"
+      },
+      "status_after_investigation": "respaldada",
+      "observed_source": [
+        "Imagen abierta por Claude, 175x216: botella blanca de apriete con tapa cónica roja de goteo. La etiqueta dice «LUBETRAC» y, debajo, «LUBRICANTE MULTI PROPÓSITO». Se lee «CONT. APROX.» pero la cifra del volumen no es legible con seguridad a esa resolución.",
+        "sha256 coincide con el de la revisión congelada.",
+        "Producción: proveedor Trip, y el campo description contiene el valor basura «test 2»."
+      ],
+      "hypothesis": [
+        "Lubricante multipropósito de taller. El nombre del registro dice «ACEITE NACIONAL» y la etiqueta dice LUBETRAC: el nombre del ERP no es el del envase."
+      ],
+      "undeclared": [
+        "El uso en frenos no está declarado ni prohibido en la etiqueta: queda como no declarado y no se escribe en not_for. Tampoco están declarados la composición ni el volumen exacto."
+      ],
+      "searches_executed": [],
+      "next_discriminant": {
+        "assignee": "Claude",
+        "action": "Leer el volumen del envase físico o de una foto de mayor resolución, y decidir qué hacer con la discrepancia entre el nombre del registro y la marca de la etiqueta."
+      },
+      "image_opened": {
+        "file": "67.png",
+        "sha256": "42ef7eae7554e1f77f8616d7784e7775f046ff6cc422ac8353caf5d11aeea7a3",
+        "bytes": 29506,
+        "dimensions_or_size": "175x216",
+        "matches_frozen_image_review_sha256": true
+      }
+    },
+    {
+      "id": "9dace983-0f30-49c7-9a3f-7a1b8ea62133",
+      "name": "Aceite Mineral Chepark",
+      "previous_decision": "pendiente",
+      "previous_family": {
+        "template_key": "brake_fluid",
+        "template_id": "2a8d4d76-2120-51e6-a2f7-42be2563c7d7",
+        "technical_family": "brake_fluid"
+      },
+      "status_after_investigation": "pendiente",
+      "observed_source": [
+        "Producción: no tiene imagen. image_url nulo y cero filas en product_images. Proveedor Vittal, purchase_treatment workshop_consumable. Cero compras y cero ventas."
+      ],
+      "hypothesis": [
+        "Podría ser el aceite mineral de freno de la marca, pero eso viene del catálogo de Chepark y no de este registro."
+      ],
+      "undeclared": [
+        "Código, volumen y sistema al que va destinado. Nada de eso está en el ERP."
+      ],
+      "searches_executed": [
+        "Búsqueda pública anterior: Chepark comercializa BIC-860, aceite mineral para freno hidráulico. No identifica a este sku."
+      ],
+      "next_discriminant": {
+        "assignee": "Claude",
+        "action": "Pedir a Vittal el documento del artículo 2854 o una foto de la botella; el discriminante es el código impreso y si la etiqueta nombra un sistema de frenos."
+      },
+      "image_opened": null
+    },
+    {
+      "id": "19539d72-bff0-4875-b22e-a130297741d3",
+      "name": "Limpiador Cadena y Piñón Chepark",
+      "previous_decision": "pendiente",
+      "previous_family": {
+        "template_key": null,
+        "template_id": null,
+        "technical_family": null
+      },
+      "status_after_investigation": "pendiente",
+      "observed_source": [
+        "Producción: no tiene imagen, proveedor Vittal, cero compras y cero ventas."
+      ],
+      "hypothesis": [
+        "El nombre nombra igual a una máquina de limpieza de cadena que a un líquido."
+      ],
+      "undeclared": [
+        "Todo lo que distingue una cosa de la otra: envase y volumen frente a mecanismo."
+      ],
+      "searches_executed": [],
+      "next_discriminant": {
+        "assignee": "Claude",
+        "action": "Pedir a Vittal el documento del artículo 1197 junto con el 2854, que es el mismo proveedor; el discriminante es envase con volumen frente a objeto con mecanismo."
+      },
+      "image_opened": null
+    },
+    {
+      "id": "b4f7fe80-76c4-4dea-ae7a-adde6efe2aa0",
+      "name": "Rotor Freno Trasero BMX PadroBikes",
+      "previous_decision": "respaldada",
+      "previous_family": {
+        "template_key": "bmx_cable_detangler",
+        "template_id": "9e85c3f5-d7fb-5fa7-b93b-dee112f414ab",
+        "technical_family": "bmx_cable_detangler"
+      },
+      "status_after_investigation": "pendiente",
+      "observed_source": [
+        "Producción: no tiene imagen, cero compras y cero ventas. El proveedor registrado es Padro Bikes, que es la palabra que aparece al final del nombre."
+      ],
+      "hypothesis": [
+        "Sigue siendo el desacoplador de cables de BMX, por la definición documentada de «rotor» en una bicicleta de estilo libre y porque el nombre dice rotor, freno trasero y BMX."
+      ],
+      "undeclared": [
+        "Nada en la evidencia propia de este registro muestra el objeto. La lectura descansa en el vocabulario, no en una foto ni en un documento."
+      ],
+      "searches_executed": [],
+      "next_discriminant": {
+        "assignee": "Codex",
+        "action": "Pedir a Padro Bikes el documento o una foto del artículo; si aparece un disco, la familia cambia a rotor."
+      },
+      "image_opened": null
+    }
+  ],
+  "global_findings": [
+    {
+      "id": "G1",
+      "title": "Ninguno de los 33 tiene uso documentado",
+      "text": "Cero líneas en purchase_receipt_lines, cero en sales_order_items, cero perfiles en service_product_profile_mappings y cero filas en product_images para los 33. El «uso real» no resuelve ninguno, y el discriminante que yo había propuesto para los rótulos —buscarlos como contraparte o como línea— no devuelve nada. Todo lo que queda por resolver depende de imágenes, del documento del proveedor o del fabricante."
+    },
+    {
+      "id": "G2",
+      "title": "Las imágenes no viven donde las buscaba",
+      "text": "product_images está vacía para los 33; las fotos están en products.image_url. Ocho de los 33 la tienen. Abrí las cuatro que me correspondían y las cuatro coinciden en sha256 con las que registró la revisión de imagen congelada, así que la evidencia original quedó verificada, no sólo citada."
+    },
+    {
+      "id": "G3",
+      "title": "is_service dice lo contrario que el nombre",
+      "text": "Los 33 tienen is_service = false, incluidos Diagnóstico y Retiro de Óxido. Lo que sí separa a varios es purchase_treatment = workshop_consumable. Mi lectura de «servicio» venía del nombre y la presenté junto a datos del ERP; queda como hipótesis y la contradicción con el campo queda anotada."
+    },
+    {
+      "id": "G4",
+      "title": "Dos registros nombran algo distinto de lo que muestra su envase",
+      "text": "«ACEITE NACIONAL» tiene una etiqueta LUBETRAC, y «FUNDA PROTECTORA BEST» tenía un envase VISION según la revisión congelada. Son dos casos del mismo patrón: el nombre del ERP no es el del producto fotografiado. Ninguno se resuelve renombrando por la foto."
+    },
+    {
+      "id": "G5",
+      "title": "Un campo de datos con valor de prueba",
+      "text": "La descripción de ACEITE NACIONAL contiene «test 2». No cambia la familia candidata, pero es un valor basura en un campo que una ficha podría llegar a leer."
+    }
+  ],
+  "production_snapshot": {
+    "read_at": "2026-09-07",
+    "all_33_zero_purchase_lines": true,
+    "all_33_zero_sales_items": true,
+    "all_33_zero_service_profile_mappings": true,
+    "all_33_zero_product_images_rows": true,
+    "all_33_is_service_false": true,
+    "workshop_consumable_treatment": [
+      "Aceite Mineral Chepark",
+      "Cámara nueva + servicio de cambio",
+      "Descontaminación Disco de Freno",
+      "Retiro de Óxido",
+      "EJE BLOQUEO SOLO DELANTERO",
+      "GOMITA PARA FRENO V-BRAKE"
+    ],
+    "suppliers_matching_label_records": {
+      "ALIEXPRESS": [
+        "AliExpress"
+      ],
+      "BETTABIKES": [
+        "Betta Bikes"
+      ],
+      "Andes": [
+        "Andes Industrial",
+        "AndesLife"
+      ],
+      "Dr. Bike": [
+        "Dr. Bike"
+      ],
+      "MKR": [
+        "MKR Imports"
+      ],
+      "Pack": []
+    },
+    "note": "La coincidencia con un proveedor registrado es hipótesis de origen, no identidad del registro. Ver C1."
+  },
+  "gates": {
+    "publication": false,
+    "fill": false,
+    "assignment": false,
+    "mechanical_approval": false
+  },
+  "stats": {
+    "corrections": 7,
+    "status_changes": 3,
+    "investigations_executed": 7,
+    "images_opened": 4,
+    "resolved_by_opening_the_image": 3,
+    "still_pending": 4
+  }
+}

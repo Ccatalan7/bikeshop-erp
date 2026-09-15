@@ -1,0 +1,210 @@
+{
+  "schema_version": 1,
+  "title": "kit_members: quién es dueño de qué, y qué impide activar las 12 familias",
+  "author": "Claude (revisor independiente)",
+  "prepared_on": "2026-09-07",
+  "corrects": {
+    "artifact": "non-drivetrain-publication-readiness-2026-09-07.json",
+    "artifact_sha256": "ce9db0e8b79977da97f62171818cb18a8461713231eeaf14999db56507dda810",
+    "finding": "PUB-D01"
+  },
+  "catalogue": {
+    "artifact": "all-family-port-cardinality-integrated-2026-09-07.json",
+    "artifact_sha256": "16459826fee4c589cce37243afe4e159317212ddf1d47d6d6f1d76f9b3fadf15"
+  },
+  "release_checkpoint_read": {
+    "artifact": "release-checkpoint-2026-09-07.md",
+    "artifact_sha256": "cf49fb2b2b8116760550d8eeb4e6c7c196c2c2aee6a331e588f542106b92173a"
+  },
+  "boundaries": "Sólo lecturas de artefactos y código y una búsqueda pública. Sin base de datos, sin runtime, sin git, sin cambios a catálogo, código compartido ni migraciones. Sin subagentes.",
+  "withdrawal": {
+    "id": "PUB-D01",
+    "status": "retirado",
+    "my_claim": "kit_members admite family=light fuera de la plantilla light y eso reabre el segundo dueño de los datos de la luz.",
+    "why_it_was_wrong": [
+      "kit_members no tiene ninguna columna de especificación. Sus seis columnas son member_role, family, quantity, position, identity_brand e identity_model: declaran qué trae la caja, cuántos y en qué posición. No hay batería, ni modos, ni lúmenes, ni norma, ni IP.",
+      "El dueño de las especificaciones de cada luz es light_member_configurations, con tipo y capacidad de batería, voltaje, conector de carga, tipo y diámetros de soporte, grado IP y revisión; y light_mode_configurations enlaza a ella por member_id. Comparar las dos tablas muestra que sólo una es dueña de datos.",
+      "Ninguna de las dos tiene consumidor: «kit_members» y «light_member_configurations» no aparecen ni una vez en lib/. Sin lector no puede haber transferencia de identidad, modos ni certificación.",
+      "El estrechamiento de la plantilla light es una desambiguación dentro de la familia, no un invariante global: impide que una luz liste luces como contenido genérico cuando sus miembros ya viven en light_member_configurations con su member_id. Ese motivo no existe en lock ni en rider_protection."
+    ],
+    "what_i_could_not_substantiate": "Busqué también un producto real que el estrechamiento prohibiría en esas dos familias y no lo encontré con fuente primaria. El caso más cercano, el ABUS BORDO 6000C LED, tiene un LED integrado para iluminar la ventana de la combinación —texto indexado; la página devuelve 403 a mi lectura— y no una luz de bicicleta incluida en la caja. Así que no sostengo que el estrechamiento sea dañino: sostengo que es innecesario para el motivo que yo di, que es la razón más fuerte y la que de verdad tenía que comprobar.",
+    "conclusion": "No integres PUB-D01. family se queda sin estrechar fuera de light."
+  },
+  "ownership_map": {
+    "kit_members": {
+      "owns": "contenido declarado de la caja",
+      "columns": [
+        "member_role",
+        "family",
+        "quantity",
+        "position",
+        "identity_brand",
+        "identity_model"
+      ],
+      "specification_columns": 0,
+      "consumers_in_lib": 0,
+      "used_by_templates": 23
+    },
+    "light_member_configurations": {
+      "owns": "especificaciones de cada luz del producto",
+      "columns": [
+        "member_id",
+        "position",
+        "battery_kind",
+        "battery_capacity_mah",
+        "battery_voltage_v",
+        "charge_connector",
+        "mount_kind",
+        "mount_diameter_min_mm",
+        "mount_diameter_max_mm",
+        "mount_circumference_max_mm",
+        "ip_rating",
+        "source_url",
+        "member_revision",
+        "mount_zone",
+        "power_input_connector",
+        "ip_standard",
+        "power_source_note"
+      ],
+      "specification_columns": 15,
+      "consumers_in_lib": 0,
+      "used_by_templates": 1
+    },
+    "products.parent_set_id": {
+      "owns": "membresía real entre productos del catálogo",
+      "companion_columns": [
+        "set_type",
+        "component_label",
+        "component_position",
+        "is_set"
+      ],
+      "consumers_in_lib": [
+        "public_inventory_service",
+        "shared/models/product",
+        "shared/services/inventory_service",
+        "smart_purchase_list_service"
+      ]
+    }
+  },
+  "residual_findings": [
+    {
+      "id": "KIT-R01",
+      "title": "La transferencia falsa posible no es la familia: es el texto de identidad",
+      "evidence": "identity_brand e identity_model son texto libre que nombra la identidad de un producto sin id y sin parent_set_id. La membresía real de este ERP es parent_set_id con set_type, component_label y component_position, y ésa sí tiene consumidores: la tienda pública, el modelo de producto, el servicio de inventario y la lista inteligente de compras.",
+      "the_transfer_that_would_be_false": "Un consumidor futuro que uniera marca y modelo de kit_members con el catálogo estaría inventando una membresía que nadie declaró. Es la misma regla que ya está escrita: no usar nombres como join, no deduplicar por nombres.",
+      "today": "No ocurre, porque no hay ningún consumidor del campo.",
+      "minimal_fix": "Dejarlo escrito donde el operador y el próximo implementador lo lean: un helper en kit_members que diga que la tabla declara contenido y no es dueña de ninguna especificación, que un miembro que además es un producto del catálogo se expresa por parent_set_id, y que identity_brand e identity_model son texto declarativo que no se une al catálogo. No hace falta motor: hoy no hay nada que guardar porque no hay lector."
+    },
+    {
+      "id": "KIT-R02",
+      "title": "family es requerida y no tiene salida, así que un contenido de familia indeterminada no se puede registrar",
+      "evidence": "La columna family es requerida y su vocabulario son las 105 claves de plantilla, sin «Otro». member_role, en cambio, sí ofrece «otro». Un kit que trae algo cuya familia no está en la lista, o que el operador todavía no determinó, no tiene forma de guardarse: la fila queda incompleta y no hay token con que decir «aún no sé».",
+      "why_it_matters": "Es lo contrario de lo que yo había reportado: el vocabulario no es demasiado abierto sino demasiado cerrado. Y como las 105 opciones son las claves de plantilla, agregar una familia mañana cambia este enum para las 23 plantillas que lo usan, incluidas las que se publiquen ahora.",
+      "not_claimed": "No propongo el token todavía: no miré datos de producto y no sé con qué frecuencia aparece un contenido indeterminado. Lo dejo como observación con su evidencia, para que la decidas con la auditoría de adopción que ya tienes."
+    }
+  ],
+  "executable_cases": [
+    {
+      "id": "KIT-P1",
+      "kind": "positivo",
+      "template": "lock",
+      "row": {
+        "member_role": "otro",
+        "family": "light",
+        "quantity": "1",
+        "position": "Sin posición",
+        "identity_brand": "Marca declarada en el envase",
+        "identity_model": "Modelo declarado"
+      },
+      "expected": "sin incidencia",
+      "why": "Un candado que declara traer una luz en la caja es contenido declarado. No transfiere modos, batería ni certificación porque la tabla no tiene esas columnas."
+    },
+    {
+      "id": "KIT-P2",
+      "kind": "positivo",
+      "template": "rider_protection",
+      "row": {
+        "member_role": "otro",
+        "family": "light",
+        "quantity": "1",
+        "position": "Trasero"
+      },
+      "expected": "sin incidencia",
+      "why": "Igual que el anterior, sin identidad declarada: menos dato, misma legitimidad."
+    },
+    {
+      "id": "KIT-N1",
+      "kind": "negativo",
+      "template": "light",
+      "row": {
+        "member_role": "otro",
+        "family": "light",
+        "quantity": "1",
+        "position": "Delantero"
+      },
+      "expected": "row_option bloqueante por allowed_options de la propia plantilla light",
+      "why": "Ya está cerrado por el estrechamiento existente y debe seguir cerrado: los miembros de una luz viven en light_member_configurations con su member_id."
+    },
+    {
+      "id": "KIT-N2",
+      "kind": "negativo",
+      "template": "lock",
+      "row": {
+        "member_role": "otro",
+        "family": "light",
+        "quantity": "1",
+        "position": "Sin posición",
+        "identity_brand": "Cateye",
+        "identity_model": "AMPP500"
+      },
+      "expected": "sin incidencia hoy, y así debe quedar; lo que nunca debe ocurrir es que un consumidor una ese texto con el producto Cateye del catálogo",
+      "why": "Éste es el caso que hay que vigilar en el consumidor, no en el metadato. Nombrar una marca y un modelo no declara membresía: la membresía es parent_set_id."
+    },
+    {
+      "id": "KIT-U1",
+      "kind": "desconocido",
+      "template": "lock",
+      "row": {
+        "member_role": "otro",
+        "quantity": "1",
+        "position": "Sin posición"
+      },
+      "expected": "row_incomplete no bloqueante por family ausente",
+      "why": "Familia indeterminada. Hoy sólo se puede dejar la fila incompleta, porque family no tiene «Otro». Ver KIT-R02."
+    },
+    {
+      "id": "KIT-U2",
+      "kind": "desconocido",
+      "template": "lock",
+      "row": null,
+      "scalar_note": "Candado con iluminación integrada de la ventana de combinación",
+      "expected": "ninguna fila de kit_members",
+      "why": "Una función integrada no es un contenido incluido. El LED del BORDO 6000C ilumina la combinación y no es una luz de bicicleta entregada aparte, así que no corresponde una fila con family=light. Distinguir función de contenido es lo que evita el kit inventado."
+    }
+  ],
+  "template_activation": {
+    "question": "¿Hay un impedimento estructural para activar las 12 plantillas, aparte del llenado y la aprobación mecánica?",
+    "answer": "No lo hay.",
+    "evidence": [
+      "spec_templates tiene una sola columna de estado, is_active, con default true. No hay columna de publicación, ni dependencia entre plantillas, ni compuerta global en el esquema. Las compuertas que usamos —fill_allowed y las otras tres— viven en el artefacto de propuesta, no en la base.",
+      "La activación es por fila y es ortogonal al llenado: activar una plantilla no autoriza escribir un solo hecho.",
+      "Las 12 son origin=new en el catálogo congelado, así que activarlas es crearlas, no reactivar algo con historia."
+    ],
+    "finite_consequence": "Hay una consecuencia que conviene tener por escrito antes de activar. products.spec_template_active_guard es una columna generada siempre true, con clave foránea compuesta (spec_template_id, spec_template_active_guard) hacia spec_templates(id, is_active). Mientras ninguna ficha esté ligada, activar y desactivar es libre; en cuanto un producto se liga, poner is_active en false viola esa clave. Activar es barato; desactivar después de ligar exige desligar primero. category_tech_mappings tiene la misma guarda para sus mapeos activos.",
+    "not_claimed": "No comprobé en producción si alguna de las 12 claves ya existe como plantilla de sistema: no leí base de datos. El índice único sobre key con tenant_id nulo lo haría fallar ruidosamente si existiera."
+  },
+  "counts": {
+    "withdrawn_defects": 1,
+    "residual_findings": 2,
+    "executable_cases": 6,
+    "kit_members_specification_columns": 0,
+    "kit_members_consumers": 0,
+    "structural_impediments_to_activation": 0
+  },
+  "gates_unchanged": {
+    "fill_allowed": false,
+    "compatibility_rules_integrated": false,
+    "all_product_assignment_review_complete": false,
+    "all_family_domain_review_complete": false
+  }
+}

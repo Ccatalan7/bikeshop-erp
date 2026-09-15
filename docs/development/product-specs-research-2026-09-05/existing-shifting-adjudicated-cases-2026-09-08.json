@@ -1,0 +1,2098 @@
+{
+  "cases": [
+    {
+      "id": "sh_an_individual_indexed_shifter_names_its_positions",
+      "template": "shifter",
+      "values": {
+        "shifter_position": "Izquierdo / delantero",
+        "spec_evidence_source": "https://example.invalid/synthetic",
+        "shifter_control_style": "Gatillo (trigger)",
+        "shifter_actuation_mode": "Indexado",
+        "shifter_indexed_positions": "8"
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [
+        "https://www.parktool.com/en-us/blog/repair-help/how-a-rear-derailleur-works"
+      ]
+    },
+    {
+      "id": "sh_a_friction_shifter_has_no_indexed_positions",
+      "template": "shifter",
+      "values": {
+        "shifter_position": "Izquierdo / delantero",
+        "spec_evidence_source": "https://example.invalid/synthetic",
+        "shifter_control_style": "Gatillo (trigger)",
+        "shifter_actuation_mode": "Fricción",
+        "shifter_indexed_positions": "8"
+      },
+      "expected_blocking": [
+        {
+          "code": "field_applicability",
+          "field": "shifter_indexed_positions"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [
+        "https://www.sheldonbrown.com/derailer-adjustment.html"
+      ]
+    },
+    {
+      "id": "sh_an_indexed_shifter_without_its_positions_is_pending",
+      "template": "shifter",
+      "values": {
+        "shifter_position": "Izquierdo / delantero",
+        "spec_evidence_source": "https://example.invalid/synthetic",
+        "shifter_control_style": "Gatillo (trigger)",
+        "shifter_actuation_mode": "Indexado"
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "expected_issue_subset": [
+        {
+          "code": "required_missing",
+          "field": "shifter_indexed_positions",
+          "blocking": false
+        }
+      ],
+      "expected_sql_issue_subset": [
+        {
+          "code": "required_missing",
+          "field": "shifter_indexed_positions",
+          "blocking": false
+        }
+      ]
+    },
+    {
+      "id": "sh_a_switchable_shifter_still_declares_its_indexed_positions",
+      "template": "shifter",
+      "values": {
+        "shifter_position": "Izquierdo / delantero",
+        "spec_evidence_source": "https://example.invalid/synthetic",
+        "shifter_control_style": "Gatillo (trigger)",
+        "shifter_actuation_mode": "Conmutable entre indexado y fricción",
+        "shifter_indexed_positions": "6"
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [
+        "https://www.sheldonbrown.com/derailer-adjustment.html"
+      ]
+    },
+    {
+      "id": "sh_a_pair_cannot_carry_one_scalar_count",
+      "template": "shifter",
+      "values": {
+        "shifter_position": "Par",
+        "spec_evidence_source": "https://example.invalid/synthetic",
+        "shifter_indexed_positions": "7"
+      },
+      "expected_blocking": [
+        {
+          "code": "field_applicability",
+          "field": "shifter_indexed_positions"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "sh_a_pair_cannot_carry_one_scalar_clamp",
+      "template": "shifter",
+      "values": {
+        "shifter_position": "Par",
+        "spec_evidence_source": "https://example.invalid/synthetic",
+        "handlebar_clamp_mm": "22.2"
+      },
+      "expected_blocking": [
+        {
+          "code": "field_applicability",
+          "field": "handlebar_clamp_mm"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "sh_a_pair_lists_two_units_with_different_mechanisms",
+      "template": "shifter",
+      "values": {
+        "shifter_position": "Par",
+        "spec_evidence_source": "https://example.invalid/synthetic",
+        "shifter_unit_count": "2",
+        "shifter_units": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "unit_identity": "Mando Izquierdo / delantero",
+                "unit_side": "Izquierdo / delantero",
+                "actuation_mode": "Fricción",
+                "source_document": "Envase identificado",
+                "declared_speeds": "3"
+              },
+              "sources": []
+            },
+            {
+              "id": "r2",
+              "values": {
+                "unit_identity": "Mando Derecho / trasero",
+                "unit_side": "Derecho / trasero",
+                "actuation_mode": "Indexado",
+                "source_document": "Envase identificado",
+                "indexed_positions": "7",
+                "declared_speeds": "7"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [
+        "https://www.sheldonbrown.com/derailer-adjustment.html"
+      ]
+    },
+    {
+      "id": "sh_the_same_side_twice_blocks",
+      "template": "shifter",
+      "values": {
+        "shifter_position": "Par",
+        "spec_evidence_source": "https://example.invalid/synthetic",
+        "shifter_unit_count": "2",
+        "shifter_units": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "unit_identity": "Mando Derecho / trasero",
+                "unit_side": "Derecho / trasero",
+                "actuation_mode": "Indexado",
+                "source_document": "Envase identificado",
+                "indexed_positions": "7",
+                "declared_speeds": "7"
+              },
+              "sources": []
+            },
+            {
+              "id": "r2",
+              "values": {
+                "unit_identity": "Mando Derecho / trasero",
+                "unit_side": "Derecho / trasero",
+                "actuation_mode": "Indexado",
+                "source_document": "Envase identificado",
+                "indexed_positions": "7",
+                "declared_speeds": "7"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [
+        {
+          "code": "row_shape",
+          "field": "shifter_units"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "sh_a_friction_unit_has_no_indexed_positions",
+      "template": "shifter",
+      "values": {
+        "shifter_position": "Par",
+        "spec_evidence_source": "https://example.invalid/synthetic",
+        "shifter_unit_count": "2",
+        "shifter_units": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "unit_identity": "Mando Izquierdo / delantero",
+                "unit_side": "Izquierdo / delantero",
+                "actuation_mode": "Fricción",
+                "source_document": "Envase identificado",
+                "indexed_positions": "3"
+              },
+              "sources": []
+            },
+            {
+              "id": "r2",
+              "values": {
+                "unit_identity": "Mando Derecho / trasero",
+                "unit_side": "Derecho / trasero",
+                "actuation_mode": "Indexado",
+                "source_document": "Envase identificado",
+                "indexed_positions": "7",
+                "declared_speeds": "7"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [
+        {
+          "code": "row_field_applicability",
+          "field": "shifter_units"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "sh_a_pair_without_its_count_is_pending",
+      "template": "shifter",
+      "values": {
+        "shifter_position": "Par",
+        "spec_evidence_source": "https://example.invalid/synthetic",
+        "shifter_units": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "unit_identity": "Mando Izquierdo / delantero",
+                "unit_side": "Izquierdo / delantero",
+                "actuation_mode": "Fricción",
+                "source_document": "Envase identificado",
+                "declared_speeds": "3"
+              },
+              "sources": []
+            },
+            {
+              "id": "r2",
+              "values": {
+                "unit_identity": "Mando Derecho / trasero",
+                "unit_side": "Derecho / trasero",
+                "actuation_mode": "Indexado",
+                "source_document": "Envase identificado",
+                "indexed_positions": "7",
+                "declared_speeds": "7"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "expected_issue_subset": [
+        {
+          "code": "row_cardinality_pending",
+          "field": "shifter_units",
+          "blocking": false
+        }
+      ],
+      "expected_sql_issue_subset": [
+        {
+          "code": "row_cardinality_pending",
+          "field": "shifter_units",
+          "blocking": false
+        }
+      ]
+    },
+    {
+      "id": "sh_a_unit_without_its_document_is_pending",
+      "template": "shifter",
+      "values": {
+        "shifter_position": "Par",
+        "spec_evidence_source": "https://example.invalid/synthetic",
+        "shifter_unit_count": "2",
+        "shifter_units": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "unit_identity": "Mando Izquierdo / delantero",
+                "unit_side": "Izquierdo / delantero",
+                "actuation_mode": "Fricción",
+                "declared_speeds": "3"
+              },
+              "sources": []
+            },
+            {
+              "id": "r2",
+              "values": {
+                "unit_identity": "Mando Derecho / trasero",
+                "unit_side": "Derecho / trasero",
+                "actuation_mode": "Indexado",
+                "source_document": "Envase identificado",
+                "indexed_positions": "7",
+                "declared_speeds": "7"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "expected_issue_subset": [
+        {
+          "code": "row_incomplete",
+          "field": "shifter_units",
+          "blocking": false
+        }
+      ],
+      "expected_sql_issue_subset": [
+        {
+          "code": "row_incomplete",
+          "field": "shifter_units",
+          "blocking": false
+        }
+      ]
+    },
+    {
+      "id": "sh_an_individual_cannot_list_package_units",
+      "template": "shifter",
+      "values": {
+        "shifter_position": "Universal",
+        "spec_evidence_source": "https://example.invalid/synthetic",
+        "shifter_control_style": "Gatillo (trigger)",
+        "shifter_units": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "unit_identity": "Mando Izquierdo / delantero",
+                "unit_side": "Izquierdo / delantero",
+                "actuation_mode": "Fricción",
+                "source_document": "Envase identificado",
+                "declared_speeds": "3"
+              },
+              "sources": []
+            },
+            {
+              "id": "r2",
+              "values": {
+                "unit_identity": "Mando Derecho / trasero",
+                "unit_side": "Derecho / trasero",
+                "actuation_mode": "Indexado",
+                "source_document": "Envase identificado",
+                "indexed_positions": "7",
+                "declared_speeds": "7"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [
+        {
+          "code": "field_applicability",
+          "field": "shifter_units"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "sh_a_claim_names_a_model_or_an_interface",
+      "template": "shifter",
+      "values": {
+        "shifter_position": "Izquierdo / delantero",
+        "spec_evidence_source": "https://example.invalid/synthetic",
+        "shifter_control_style": "Gatillo (trigger)",
+        "shifter_compatibility_claims": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "claim_identity": "Modelo declarado",
+                "scope_kind": "Modelo documentado",
+                "source_document": "Documento identificado",
+                "brand": "Marca declarada",
+                "model": "Modelo declarado",
+                "target_component": "Cambio trasero",
+                "declaration_result": "Compatible declarado"
+              },
+              "sources": []
+            },
+            {
+              "id": "r2",
+              "values": {
+                "claim_identity": "Interfaz declarada",
+                "scope_kind": "Interfaz o estándar documentado",
+                "source_document": "Documento identificado",
+                "declared_interface": "Interfaz declarada",
+                "target_component": "Cambio trasero",
+                "declaration_result": "Compatible declarado"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "sh_a_model_claim_without_its_model_is_pending",
+      "template": "shifter",
+      "values": {
+        "shifter_position": "Izquierdo / delantero",
+        "spec_evidence_source": "https://example.invalid/synthetic",
+        "shifter_control_style": "Gatillo (trigger)",
+        "shifter_compatibility_claims": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "claim_identity": "Sin modelo",
+                "scope_kind": "Modelo documentado",
+                "source_document": "Documento identificado",
+                "brand": "Marca declarada",
+                "target_component": "Cambio trasero",
+                "declaration_result": "Compatible declarado"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "expected_issue_subset": [
+        {
+          "code": "row_required_missing",
+          "field": "shifter_compatibility_claims",
+          "blocking": false
+        }
+      ],
+      "expected_sql_issue_subset": [
+        {
+          "code": "row_required_missing",
+          "field": "shifter_compatibility_claims",
+          "blocking": false
+        }
+      ]
+    },
+    {
+      "id": "sh_an_interface_claim_cannot_name_a_model",
+      "template": "shifter",
+      "values": {
+        "shifter_position": "Izquierdo / delantero",
+        "spec_evidence_source": "https://example.invalid/synthetic",
+        "shifter_control_style": "Gatillo (trigger)",
+        "shifter_compatibility_claims": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "claim_identity": "Interfaz con modelo",
+                "scope_kind": "Interfaz o estándar documentado",
+                "source_document": "Documento identificado",
+                "declared_interface": "Interfaz declarada",
+                "model": "Modelo",
+                "target_component": "Cambio trasero",
+                "declaration_result": "Compatible declarado"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [
+        {
+          "code": "row_field_applicability",
+          "field": "shifter_compatibility_claims"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "rd_a_rear_derailleur_names_its_range_and_mount",
+      "template": "rear_derailleur",
+      "values": {
+        "spec_evidence_source": "https://example.invalid/synthetic",
+        "rear_derailleur_mount_type": "Pata/postiza estándar",
+        "rear_derailleur_min_teeth": "11",
+        "rear_derailleur_max_teeth": "36",
+        "rear_derailleur_total_capacity_teeth": "37",
+        "derailleur_cage_length": "SGS / larga",
+        "rear_derailleur_spring_return": "Retorno normal (top normal)"
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "rd_a_supplied_claw_is_contents_not_the_frame_interface",
+      "template": "rear_derailleur",
+      "values": {
+        "spec_evidence_source": "https://example.invalid/synthetic",
+        "rear_derailleur_mount_type": "Pata/postiza estándar",
+        "rear_derailleur_supplied_mount_adapter": true,
+        "rear_derailleur_supplied_adapter_reference": "Uña identificada"
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [
+        "https://www.sheldonbrown.com/derailer-adjustment.html"
+      ],
+      "forbidden_issue_fields": [
+        "rear_derailleur_mount_type"
+      ]
+    },
+    {
+      "id": "rd_an_adapter_reference_without_the_adapter_blocks",
+      "template": "rear_derailleur",
+      "values": {
+        "spec_evidence_source": "https://example.invalid/synthetic",
+        "rear_derailleur_mount_type": "Pata/postiza estándar",
+        "rear_derailleur_supplied_mount_adapter": false,
+        "rear_derailleur_supplied_adapter_reference": "Uña identificada"
+      },
+      "expected_blocking": [
+        {
+          "code": "field_applicability",
+          "field": "rear_derailleur_supplied_adapter_reference"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "rd_an_inverse_spring_return_is_not_a_clutch",
+      "template": "rear_derailleur",
+      "values": {
+        "spec_evidence_source": "https://example.invalid/synthetic",
+        "rear_derailleur_mount_type": "Pata/postiza estándar",
+        "derailleur_clutch": false,
+        "rear_derailleur_spring_return": "Retorno inverso (low normal / Rapid Rise)"
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [
+        "https://www.sheldonbrown.com/derailer-adjustment.html"
+      ],
+      "forbidden_issue_fields": [
+        "derailleur_clutch"
+      ]
+    },
+    {
+      "id": "rd_a_declared_ratio_without_evidence_is_pending",
+      "template": "rear_derailleur",
+      "values": {
+        "rear_derailleur_mount_type": "Pata/postiza estándar",
+        "rear_derailleur_actuation_ratio_declaration": "Relación declarada"
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "expected_issue_subset": [
+        {
+          "code": "prerequisite",
+          "field": "rear_derailleur_actuation_ratio_declaration",
+          "blocking": false
+        }
+      ],
+      "expected_sql_issue_subset": [
+        {
+          "code": "prerequisite_missing",
+          "field": "rear_derailleur_actuation_ratio_declaration",
+          "blocking": false
+        }
+      ]
+    },
+    {
+      "id": "rd_a_rear_derailleur_without_its_mount_is_pending",
+      "template": "rear_derailleur",
+      "values": {
+        "spec_evidence_source": "https://example.invalid/synthetic"
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "expected_issue_subset": [
+        {
+          "code": "required_missing",
+          "field": "rear_derailleur_mount_type",
+          "blocking": false
+        }
+      ],
+      "expected_sql_issue_subset": [
+        {
+          "code": "required_missing",
+          "field": "rear_derailleur_mount_type",
+          "blocking": false
+        }
+      ]
+    },
+    {
+      "id": "rd_an_interface_claim_cannot_name_a_model",
+      "template": "rear_derailleur",
+      "values": {
+        "spec_evidence_source": "https://example.invalid/synthetic",
+        "rear_derailleur_mount_type": "Pata/postiza estándar",
+        "rear_derailleur_compatibility_claims": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "claim_identity": "Interfaz con modelo",
+                "scope_kind": "Interfaz o estándar documentado",
+                "source_document": "Documento identificado",
+                "declared_interface": "Interfaz declarada",
+                "model": "Modelo",
+                "target_component": "Mando",
+                "declaration_result": "Compatible declarado"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [
+        {
+          "code": "row_field_applicability",
+          "field": "rear_derailleur_compatibility_claims"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "fd_a_clamp_derailleur_lists_the_diameters_it_admits",
+      "template": "front_derailleur",
+      "values": {
+        "spec_evidence_source": "https://example.invalid/synthetic",
+        "front_derailleur_mount_type": "Abrazadera",
+        "front_derailleur_clamp_options": {
+          "schema_version": 2,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "option_identity": "34.9 directa",
+                "attachment_method": "Abrazadera directa",
+                "direct_tube_diameter_mm": "34.9",
+                "source_document": "Shimano FD-R2000-B, handbook p. 140 y EV-FD-R2000-4160",
+                "source_url": "https://productinfo.shimano.com/pdfs/product/archive/2024-2025_Specifications_v032_en.pdf"
+              },
+              "sources": []
+            },
+            {
+              "id": "r2",
+              "values": {
+                "option_identity": "31.8 con M",
+                "attachment_method": "Abrazadera con casquillo reductor",
+                "reduced_tube_diameter_mm": "31.8",
+                "unreduced_clamp_diameter_mm": "34.9",
+                "adapter_reference": "Y2B198020 / M",
+                "source_document": "Shimano FD-R2000-B, handbook p. 140 y EV-FD-R2000-4160",
+                "source_url": "https://productinfo.shimano.com/pdfs/product/archive/2024-2025_Specifications_v032_en.pdf"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "fd_a_braze_on_derailleur_has_no_clamp_options",
+      "template": "front_derailleur",
+      "values": {
+        "spec_evidence_source": "https://example.invalid/synthetic",
+        "front_derailleur_mount_type": "Braze-on",
+        "front_derailleur_clamp_options": {
+          "schema_version": 2,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "option_identity": "34.9 directa",
+                "attachment_method": "Abrazadera directa",
+                "direct_tube_diameter_mm": "34.9",
+                "source_document": "Shimano FD-R2000-B, handbook p. 140 y EV-FD-R2000-4160",
+                "source_url": "https://productinfo.shimano.com/pdfs/product/archive/2024-2025_Specifications_v032_en.pdf"
+              },
+              "sources": []
+            },
+            {
+              "id": "r2",
+              "values": {
+                "option_identity": "31.8 con M",
+                "attachment_method": "Abrazadera con casquillo reductor",
+                "reduced_tube_diameter_mm": "31.8",
+                "unreduced_clamp_diameter_mm": "34.9",
+                "adapter_reference": "Y2B198020 / M",
+                "source_document": "Shimano FD-R2000-B, handbook p. 140 y EV-FD-R2000-4160",
+                "source_url": "https://productinfo.shimano.com/pdfs/product/archive/2024-2025_Specifications_v032_en.pdf"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [
+        {
+          "code": "field_applicability",
+          "field": "front_derailleur_clamp_options"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [
+        "https://www.parktool.com/en-us/blog/repair-help/front-derailleur-adjustment"
+      ]
+    },
+    {
+      "id": "fd_a_clamp_derailleur_without_its_options_is_pending",
+      "template": "front_derailleur",
+      "values": {
+        "spec_evidence_source": "https://example.invalid/synthetic",
+        "front_derailleur_mount_type": "Abrazadera"
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "expected_issue_subset": [
+        {
+          "code": "required_missing",
+          "field": "front_derailleur_clamp_options",
+          "blocking": false
+        }
+      ],
+      "expected_sql_issue_subset": [
+        {
+          "code": "required_missing",
+          "field": "front_derailleur_clamp_options",
+          "blocking": false
+        }
+      ]
+    },
+    {
+      "id": "fd_the_same_clamp_configuration_identity_twice_blocks",
+      "template": "front_derailleur",
+      "values": {
+        "spec_evidence_source": "https://example.invalid/synthetic",
+        "front_derailleur_mount_type": "Abrazadera",
+        "front_derailleur_clamp_options": {
+          "schema_version": 2,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "option_identity": "34.9 directa",
+                "attachment_method": "Abrazadera directa",
+                "direct_tube_diameter_mm": "34.9",
+                "source_document": "Shimano FD-R2000-B, handbook p. 140 y EV-FD-R2000-4160",
+                "source_url": "https://productinfo.shimano.com/pdfs/product/archive/2024-2025_Specifications_v032_en.pdf"
+              },
+              "sources": []
+            },
+            {
+              "id": "r2",
+              "values": {
+                "option_identity": "34.9 directa",
+                "attachment_method": "Abrazadera con casquillo reductor",
+                "reduced_tube_diameter_mm": "31.8",
+                "unreduced_clamp_diameter_mm": "34.9",
+                "adapter_reference": "Y2B198020 / M",
+                "source_document": "Shimano FD-R2000-B, handbook p. 140 y EV-FD-R2000-4160",
+                "source_url": "https://productinfo.shimano.com/pdfs/product/archive/2024-2025_Specifications_v032_en.pdf"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [
+        {
+          "code": "row_shape",
+          "field": "front_derailleur_clamp_options"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "fd_a_clamp_option_without_its_attachment_method_is_pending",
+      "template": "front_derailleur",
+      "values": {
+        "spec_evidence_source": "https://example.invalid/synthetic",
+        "front_derailleur_mount_type": "Abrazadera",
+        "front_derailleur_clamp_options": {
+          "schema_version": 2,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "option_identity": "Unknown mounting",
+                "source_document": "Synthetic"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "expected_issue_subset": [
+        {
+          "code": "row_incomplete",
+          "field": "front_derailleur_clamp_options",
+          "blocking": false
+        }
+      ],
+      "expected_sql_issue_subset": [
+        {
+          "code": "row_incomplete",
+          "field": "front_derailleur_clamp_options",
+          "blocking": false
+        }
+      ]
+    },
+    {
+      "id": "fd_the_cable_route_is_not_the_cage_geometry",
+      "template": "front_derailleur",
+      "values": {
+        "spec_evidence_source": "https://example.invalid/synthetic",
+        "front_derailleur_mount_type": "Abrazadera",
+        "front_derailleur_clamp_options": {
+          "schema_version": 2,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "option_identity": "34.9 directa",
+                "attachment_method": "Abrazadera directa",
+                "direct_tube_diameter_mm": "34.9",
+                "source_document": "Shimano FD-R2000-B, handbook p. 140 y EV-FD-R2000-4160",
+                "source_url": "https://productinfo.shimano.com/pdfs/product/archive/2024-2025_Specifications_v032_en.pdf"
+              },
+              "sources": []
+            },
+            {
+              "id": "r2",
+              "values": {
+                "option_identity": "31.8 con M",
+                "attachment_method": "Abrazadera con casquillo reductor",
+                "reduced_tube_diameter_mm": "31.8",
+                "unreduced_clamp_diameter_mm": "34.9",
+                "adapter_reference": "Y2B198020 / M",
+                "source_document": "Shimano FD-R2000-B, handbook p. 140 y EV-FD-R2000-4160",
+                "source_url": "https://productinfo.shimano.com/pdfs/product/archive/2024-2025_Specifications_v032_en.pdf"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "front_derailleur_cable_pull": "Top pull",
+        "front_derailleur_swing": "Side swing",
+        "front_derailleur_cable_anchor": "Anclaje exterior del perno"
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [
+        "https://www.sheldonbrown.com/derailer-adjustment.html"
+      ],
+      "forbidden_issue_fields": [
+        "front_derailleur_cable_pull",
+        "front_derailleur_swing"
+      ]
+    },
+    {
+      "id": "fd_the_retired_single_clamp_no_longer_answers",
+      "template": "front_derailleur",
+      "values": {
+        "spec_evidence_source": "https://example.invalid/synthetic",
+        "front_derailleur_mount_type": "Abrazadera",
+        "front_derailleur_clamp_options": {
+          "schema_version": 2,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "option_identity": "34.9 directa",
+                "attachment_method": "Abrazadera directa",
+                "direct_tube_diameter_mm": "34.9",
+                "source_document": "Shimano FD-R2000-B, handbook p. 140 y EV-FD-R2000-4160",
+                "source_url": "https://productinfo.shimano.com/pdfs/product/archive/2024-2025_Specifications_v032_en.pdf"
+              },
+              "sources": []
+            },
+            {
+              "id": "r2",
+              "values": {
+                "option_identity": "31.8 con M",
+                "attachment_method": "Abrazadera con casquillo reductor",
+                "reduced_tube_diameter_mm": "31.8",
+                "unreduced_clamp_diameter_mm": "34.9",
+                "adapter_reference": "Y2B198020 / M",
+                "source_document": "Shimano FD-R2000-B, handbook p. 140 y EV-FD-R2000-4160",
+                "source_url": "https://productinfo.shimano.com/pdfs/product/archive/2024-2025_Specifications_v032_en.pdf"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "front_derailleur_clamp_mm": "31.8"
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "forbidden_issue_fields": [
+        "front_derailleur_clamp_mm"
+      ]
+    },
+    {
+      "id": "shr_a_pair_cannot_share_one_model_claim",
+      "template": "shifter",
+      "values": {
+        "shifter_position": "Par",
+        "shifter_unit_count": "2",
+        "shifter_units": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "unit_identity": "Left",
+                "unit_side": "Izquierdo / delantero",
+                "actuation_mode": "Fricción",
+                "source_document": "Synthetic"
+              },
+              "sources": []
+            },
+            {
+              "id": "r2",
+              "values": {
+                "unit_identity": "Right",
+                "unit_side": "Derecho / trasero",
+                "actuation_mode": "Indexado",
+                "indexed_positions": "8",
+                "source_document": "Synthetic"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "spec_evidence_source": "https://example.invalid/synthetic",
+        "shifter_compatibility_claims": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "claim_identity": "First",
+                "scope_kind": "Interfaz o estándar documentado",
+                "declared_interface": "Synthetic interface",
+                "source_document": "Synthetic",
+                "target_component": "Cambio trasero",
+                "declaration_result": "Compatible declarado"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [
+        {
+          "code": "field_applicability",
+          "field": "shifter_compatibility_claims"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "shr_each_claim_owns_its_unit",
+      "template": "shifter",
+      "values": {
+        "shifter_position": "Par",
+        "shifter_unit_count": "2",
+        "shifter_units": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "unit_identity": "Left",
+                "unit_side": "Izquierdo / delantero",
+                "actuation_mode": "Fricción",
+                "source_document": "Synthetic"
+              },
+              "sources": []
+            },
+            {
+              "id": "r2",
+              "values": {
+                "unit_identity": "Right",
+                "unit_side": "Derecho / trasero",
+                "actuation_mode": "Indexado",
+                "indexed_positions": "8",
+                "source_document": "Synthetic"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "spec_evidence_source": "https://example.invalid/synthetic",
+        "shifter_unit_compatibility_claims": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "claim_identity": "First",
+                "scope_kind": "Interfaz o estándar documentado",
+                "declared_interface": "Synthetic interface",
+                "source_document": "Synthetic",
+                "target_component": "Desviador delantero",
+                "declaration_result": "Compatible declarado",
+                "unit_reference": "r1"
+              },
+              "sources": []
+            },
+            {
+              "id": "r2",
+              "values": {
+                "claim_identity": "Second",
+                "scope_kind": "Interfaz o estándar documentado",
+                "declared_interface": "Synthetic interface",
+                "source_document": "Synthetic",
+                "target_component": "Cambio trasero",
+                "declaration_result": "Compatible declarado",
+                "unit_reference": "r2"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "shr_a_claim_cannot_name_a_unit_outside_the_package",
+      "template": "shifter",
+      "values": {
+        "shifter_position": "Par",
+        "shifter_unit_count": "2",
+        "shifter_units": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "unit_identity": "Left",
+                "unit_side": "Izquierdo / delantero",
+                "actuation_mode": "Fricción",
+                "source_document": "Synthetic"
+              },
+              "sources": []
+            },
+            {
+              "id": "r2",
+              "values": {
+                "unit_identity": "Right",
+                "unit_side": "Derecho / trasero",
+                "actuation_mode": "Indexado",
+                "indexed_positions": "8",
+                "source_document": "Synthetic"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "spec_evidence_source": "https://example.invalid/synthetic",
+        "shifter_unit_compatibility_claims": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "claim_identity": "First",
+                "scope_kind": "Interfaz o estándar documentado",
+                "declared_interface": "Synthetic interface",
+                "source_document": "Synthetic",
+                "target_component": "Cambio trasero",
+                "declaration_result": "Compatible declarado",
+                "unit_reference": "foreign"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [
+        {
+          "code": "row_reference_unresolved",
+          "field": "shifter_unit_compatibility_claims"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "shr_a_single_cannot_use_pair_claims",
+      "template": "shifter",
+      "values": {
+        "shifter_position": "Derecho / trasero",
+        "shifter_unit_compatibility_claims": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "claim_identity": "First",
+                "scope_kind": "Interfaz o estándar documentado",
+                "declared_interface": "Synthetic interface",
+                "source_document": "Synthetic",
+                "target_component": "Cambio trasero",
+                "declaration_result": "Compatible declarado",
+                "unit_reference": "r1"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [
+        {
+          "code": "field_applicability",
+          "field": "shifter_unit_compatibility_claims"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "shr_a_pair_cannot_declare_three_units",
+      "template": "shifter",
+      "values": {
+        "shifter_position": "Par",
+        "shifter_unit_count": "3",
+        "shifter_units": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "unit_identity": "Left",
+                "unit_side": "Izquierdo / delantero",
+                "actuation_mode": "Fricción",
+                "source_document": "Synthetic"
+              },
+              "sources": []
+            },
+            {
+              "id": "r2",
+              "values": {
+                "unit_identity": "Right",
+                "unit_side": "Derecho / trasero",
+                "actuation_mode": "Indexado",
+                "indexed_positions": "8",
+                "source_document": "Synthetic"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "spec_evidence_source": "https://example.invalid/synthetic"
+      },
+      "expected_blocking": [
+        {
+          "code": "range",
+          "field": "shifter_unit_count"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "expected_sql_blocking": [
+        {
+          "code": "field_constraint",
+          "field": "shifter_unit_count"
+        }
+      ]
+    },
+    {
+      "id": "shr_a_conditional_claim_without_conditions_is_pending",
+      "template": "shifter",
+      "values": {
+        "shifter_position": "Par",
+        "shifter_unit_count": "2",
+        "shifter_units": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "unit_identity": "Left",
+                "unit_side": "Izquierdo / delantero",
+                "actuation_mode": "Fricción",
+                "source_document": "Synthetic"
+              },
+              "sources": []
+            },
+            {
+              "id": "r2",
+              "values": {
+                "unit_identity": "Right",
+                "unit_side": "Derecho / trasero",
+                "actuation_mode": "Indexado",
+                "indexed_positions": "8",
+                "source_document": "Synthetic"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "spec_evidence_source": "https://example.invalid/synthetic",
+        "shifter_unit_compatibility_claims": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "claim_identity": "First",
+                "scope_kind": "Interfaz o estándar documentado",
+                "declared_interface": "Synthetic interface",
+                "source_document": "Synthetic",
+                "target_component": "Cambio trasero",
+                "declaration_result": "Condicional declarado",
+                "unit_reference": "r1"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "expected_issue_subset": [
+        {
+          "code": "row_required_missing",
+          "field": "shifter_unit_compatibility_claims",
+          "blocking": false
+        }
+      ],
+      "expected_sql_issue_subset": [
+        {
+          "code": "row_required_missing",
+          "field": "shifter_unit_compatibility_claims",
+          "blocking": false
+        }
+      ]
+    },
+    {
+      "id": "rdr_u6000_limits_stay_with_their_speed_count",
+      "template": "rear_derailleur",
+      "values": {
+        "spec_evidence_source": "https://bike.shimano.com/en-NA/products/components/pdp.P-RD-U6000.html",
+        "rear_derailleur_mount_type": "Pata/postiza estándar",
+        "rear_derailleur_application_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "configuration_identity": "RD-U6000 1x10",
+                "front_chainring_count": "1",
+                "rear_sprocket_count": "10",
+                "largest_sprocket_max_teeth": "48",
+                "total_capacity_teeth": "39",
+                "max_front_difference_teeth": "0",
+                "source_document": "Shimano RD-U6000 official product page",
+                "conditions": "Una misma declaración OEM 11/10, separada según sus máximos por velocidad. La tabla conjunta declara mínimo 48T y máximo 50T; no desglosa el mínimo por velocidad.",
+                "source_url": "https://bike.shimano.com/en-NA/products/components/pdp.P-RD-U6000.html"
+              },
+              "sources": []
+            },
+            {
+              "id": "r2",
+              "values": {
+                "configuration_identity": "RD-U6000 1x11",
+                "front_chainring_count": "1",
+                "rear_sprocket_count": "11",
+                "largest_sprocket_max_teeth": "50",
+                "total_capacity_teeth": "39",
+                "max_front_difference_teeth": "0",
+                "source_document": "Shimano RD-U6000 official product page",
+                "conditions": "Una misma declaración OEM 11/10, separada según sus máximos por velocidad. La tabla conjunta declara mínimo 48T y máximo 50T; no desglosa el mínimo por velocidad.",
+                "source_url": "https://bike.shimano.com/en-NA/products/components/pdp.P-RD-U6000.html"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [
+        "https://bike.shimano.com/en-NA/products/components/pdp.P-RD-U6000.html"
+      ]
+    },
+    {
+      "id": "rdr_a_speed_array_cannot_merge_two_configurations",
+      "template": "rear_derailleur",
+      "values": {
+        "spec_evidence_source": "https://bike.shimano.com/en-NA/products/components/pdp.P-RD-U6000.html",
+        "rear_derailleur_mount_type": "Pata/postiza estándar",
+        "rear_derailleur_application_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "configuration_identity": "RD-U6000 1x10",
+                "front_chainring_count": "1",
+                "rear_sprocket_count": [
+                  "10",
+                  "11"
+                ],
+                "largest_sprocket_max_teeth": "48",
+                "total_capacity_teeth": "39",
+                "max_front_difference_teeth": "0",
+                "source_document": "Shimano RD-U6000 official product page",
+                "conditions": "Una misma declaración OEM 11/10, separada según sus máximos por velocidad. La tabla conjunta declara mínimo 48T y máximo 50T; no desglosa el mínimo por velocidad.",
+                "source_url": "https://bike.shimano.com/en-NA/products/components/pdp.P-RD-U6000.html"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [
+        {
+          "code": "row_shape",
+          "field": "rear_derailleur_application_configurations"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "expected_sql_blocking": [
+        {
+          "code": "field_constraint",
+          "field": "rear_derailleur_application_configurations"
+        }
+      ]
+    },
+    {
+      "id": "rdr_an_inverted_large_cog_range_blocks",
+      "template": "rear_derailleur",
+      "values": {
+        "spec_evidence_source": "https://bike.shimano.com/en-NA/products/components/pdp.P-RD-U6000.html",
+        "rear_derailleur_mount_type": "Pata/postiza estándar",
+        "rear_derailleur_application_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "configuration_identity": "RD-U6000 1x10",
+                "front_chainring_count": "1",
+                "rear_sprocket_count": "10",
+                "largest_sprocket_max_teeth": "48",
+                "total_capacity_teeth": "39",
+                "max_front_difference_teeth": "0",
+                "source_document": "Shimano RD-U6000 official product page",
+                "conditions": "Una misma declaración OEM 11/10, separada según sus máximos por velocidad. La tabla conjunta declara mínimo 48T y máximo 50T; no desglosa el mínimo por velocidad.",
+                "source_url": "https://bike.shimano.com/en-NA/products/components/pdp.P-RD-U6000.html",
+                "largest_sprocket_min_teeth": "50"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [
+        {
+          "code": "row_shape",
+          "field": "rear_derailleur_application_configurations"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "expected_sql_blocking": [
+        {
+          "code": "field_constraint",
+          "field": "rear_derailleur_application_configurations"
+        }
+      ]
+    },
+    {
+      "id": "rdr_a_fractional_tooth_blocks",
+      "template": "rear_derailleur",
+      "values": {
+        "spec_evidence_source": "https://bike.shimano.com/en-NA/products/components/pdp.P-RD-U6000.html",
+        "rear_derailleur_mount_type": "Pata/postiza estándar",
+        "rear_derailleur_application_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "configuration_identity": "RD-U6000 1x10",
+                "front_chainring_count": "1",
+                "rear_sprocket_count": "10",
+                "largest_sprocket_max_teeth": "48.5",
+                "total_capacity_teeth": "39",
+                "max_front_difference_teeth": "0",
+                "source_document": "Shimano RD-U6000 official product page",
+                "conditions": "Una misma declaración OEM 11/10, separada según sus máximos por velocidad. La tabla conjunta declara mínimo 48T y máximo 50T; no desglosa el mínimo por velocidad.",
+                "source_url": "https://bike.shimano.com/en-NA/products/components/pdp.P-RD-U6000.html"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [
+        {
+          "code": "row_shape",
+          "field": "rear_derailleur_application_configurations"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "expected_sql_blocking": [
+        {
+          "code": "field_constraint",
+          "field": "rear_derailleur_application_configurations"
+        }
+      ]
+    },
+    {
+      "id": "rdr_a_configuration_needs_its_document",
+      "template": "rear_derailleur",
+      "values": {
+        "spec_evidence_source": "https://bike.shimano.com/en-NA/products/components/pdp.P-RD-U6000.html",
+        "rear_derailleur_mount_type": "Pata/postiza estándar",
+        "rear_derailleur_application_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "configuration_identity": "RD-U6000 1x10",
+                "front_chainring_count": "1",
+                "rear_sprocket_count": "10",
+                "largest_sprocket_max_teeth": "48",
+                "total_capacity_teeth": "39",
+                "max_front_difference_teeth": "0",
+                "conditions": "Una misma declaración OEM 11/10, separada según sus máximos por velocidad. La tabla conjunta declara mínimo 48T y máximo 50T; no desglosa el mínimo por velocidad.",
+                "source_url": "https://bike.shimano.com/en-NA/products/components/pdp.P-RD-U6000.html"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "expected_issue_subset": [
+        {
+          "code": "row_incomplete",
+          "field": "rear_derailleur_application_configurations",
+          "blocking": false
+        }
+      ],
+      "expected_sql_issue_subset": [
+        {
+          "code": "row_incomplete",
+          "field": "rear_derailleur_application_configurations",
+          "blocking": false
+        }
+      ]
+    },
+    {
+      "id": "fdr_top_gear_bounds_belong_to_the_large_ring",
+      "template": "front_derailleur",
+      "values": {
+        "spec_evidence_source": "https://productinfo.shimano.com/pdfs/product/archive/2024-2025_Specifications_v032_en.pdf",
+        "front_derailleur_mount_type": "Abrazadera",
+        "front_derailleur_clamp_options": {
+          "schema_version": 2,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "option_identity": "34.9 directa",
+                "attachment_method": "Abrazadera directa",
+                "direct_tube_diameter_mm": "34.9",
+                "source_document": "Shimano FD-R2000-B, handbook p. 140 y EV-FD-R2000-4160",
+                "source_url": "https://productinfo.shimano.com/pdfs/product/archive/2024-2025_Specifications_v032_en.pdf"
+              },
+              "sources": []
+            },
+            {
+              "id": "r2",
+              "values": {
+                "option_identity": "31.8 con M",
+                "attachment_method": "Abrazadera con casquillo reductor",
+                "reduced_tube_diameter_mm": "31.8",
+                "unreduced_clamp_diameter_mm": "34.9",
+                "adapter_reference": "Y2B198020 / M",
+                "source_document": "Shimano FD-R2000-B, handbook p. 140 y EV-FD-R2000-4160",
+                "source_url": "https://productinfo.shimano.com/pdfs/product/archive/2024-2025_Specifications_v032_en.pdf"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "front_derailleur_application_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "configuration_identity": "FD-R2000-B 2x8",
+                "front_chainring_count": "2",
+                "rear_sprocket_count": "8",
+                "top_chainring_min_teeth": "46",
+                "top_chainring_max_teeth": "52",
+                "total_capacity_teeth": "16",
+                "chainstay_angle_min_deg": "61",
+                "chainstay_angle_max_deg": "66",
+                "chain_declaration": "HG 8/7/6-speed",
+                "chainline_mm": "43.5",
+                "source_document": "Shimano handbook v3.2 2024-2025 p. 140",
+                "source_url": "https://productinfo.shimano.com/pdfs/product/archive/2024-2025_Specifications_v032_en.pdf"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [
+        "https://productinfo.shimano.com/pdfs/product/archive/2024-2025_Specifications_v032_en.pdf"
+      ],
+      "expected_issue_subset": [
+        {
+          "code": "row_required_missing",
+          "field": "front_derailleur_application_configurations",
+          "blocking": false
+        }
+      ],
+      "expected_sql_issue_subset": [
+        {
+          "code": "row_required_missing",
+          "field": "front_derailleur_application_configurations",
+          "blocking": false
+        }
+      ]
+    },
+    {
+      "id": "fdr_inverted_large_ring_bounds_block",
+      "template": "front_derailleur",
+      "values": {
+        "spec_evidence_source": "https://productinfo.shimano.com/pdfs/product/archive/2024-2025_Specifications_v032_en.pdf",
+        "front_derailleur_mount_type": "Abrazadera",
+        "front_derailleur_clamp_options": {
+          "schema_version": 2,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "option_identity": "34.9 directa",
+                "attachment_method": "Abrazadera directa",
+                "direct_tube_diameter_mm": "34.9",
+                "source_document": "Shimano FD-R2000-B, handbook p. 140 y EV-FD-R2000-4160",
+                "source_url": "https://productinfo.shimano.com/pdfs/product/archive/2024-2025_Specifications_v032_en.pdf"
+              },
+              "sources": []
+            },
+            {
+              "id": "r2",
+              "values": {
+                "option_identity": "31.8 con M",
+                "attachment_method": "Abrazadera con casquillo reductor",
+                "reduced_tube_diameter_mm": "31.8",
+                "unreduced_clamp_diameter_mm": "34.9",
+                "adapter_reference": "Y2B198020 / M",
+                "source_document": "Shimano FD-R2000-B, handbook p. 140 y EV-FD-R2000-4160",
+                "source_url": "https://productinfo.shimano.com/pdfs/product/archive/2024-2025_Specifications_v032_en.pdf"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "front_derailleur_application_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "configuration_identity": "FD-R2000-B 2x8",
+                "front_chainring_count": "2",
+                "rear_sprocket_count": "8",
+                "top_chainring_min_teeth": "53",
+                "top_chainring_max_teeth": "52",
+                "total_capacity_teeth": "16",
+                "chainstay_angle_min_deg": "61",
+                "chainstay_angle_max_deg": "66",
+                "chain_declaration": "HG 8/7/6-speed",
+                "chainline_mm": "43.5",
+                "source_document": "Shimano handbook v3.2 2024-2025 p. 140",
+                "source_url": "https://productinfo.shimano.com/pdfs/product/archive/2024-2025_Specifications_v032_en.pdf"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [
+        {
+          "code": "row_shape",
+          "field": "front_derailleur_application_configurations"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "fdr_a_double_has_no_middle_ring_difference",
+      "template": "front_derailleur",
+      "values": {
+        "spec_evidence_source": "https://productinfo.shimano.com/pdfs/product/archive/2024-2025_Specifications_v032_en.pdf",
+        "front_derailleur_mount_type": "Abrazadera",
+        "front_derailleur_clamp_options": {
+          "schema_version": 2,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "option_identity": "34.9 directa",
+                "attachment_method": "Abrazadera directa",
+                "direct_tube_diameter_mm": "34.9",
+                "source_document": "Shimano FD-R2000-B, handbook p. 140 y EV-FD-R2000-4160",
+                "source_url": "https://productinfo.shimano.com/pdfs/product/archive/2024-2025_Specifications_v032_en.pdf"
+              },
+              "sources": []
+            },
+            {
+              "id": "r2",
+              "values": {
+                "option_identity": "31.8 con M",
+                "attachment_method": "Abrazadera con casquillo reductor",
+                "reduced_tube_diameter_mm": "31.8",
+                "unreduced_clamp_diameter_mm": "34.9",
+                "adapter_reference": "Y2B198020 / M",
+                "source_document": "Shimano FD-R2000-B, handbook p. 140 y EV-FD-R2000-4160",
+                "source_url": "https://productinfo.shimano.com/pdfs/product/archive/2024-2025_Specifications_v032_en.pdf"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "front_derailleur_application_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "configuration_identity": "FD-R2000-B 2x8",
+                "front_chainring_count": "2",
+                "rear_sprocket_count": "8",
+                "top_chainring_min_teeth": "46",
+                "top_chainring_max_teeth": "52",
+                "total_capacity_teeth": "16",
+                "chainstay_angle_min_deg": "61",
+                "chainstay_angle_max_deg": "66",
+                "chain_declaration": "HG 8/7/6-speed",
+                "chainline_mm": "43.5",
+                "source_document": "Shimano handbook v3.2 2024-2025 p. 140",
+                "source_url": "https://productinfo.shimano.com/pdfs/product/archive/2024-2025_Specifications_v032_en.pdf",
+                "top_middle_difference_teeth": "11"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [
+        {
+          "code": "row_field_applicability",
+          "field": "front_derailleur_application_configurations"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "fdr_chainline_needs_its_geometric_datum",
+      "template": "front_derailleur",
+      "values": {
+        "spec_evidence_source": "https://productinfo.shimano.com/pdfs/product/archive/2024-2025_Specifications_v032_en.pdf",
+        "front_derailleur_mount_type": "Abrazadera",
+        "front_derailleur_clamp_options": {
+          "schema_version": 2,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "option_identity": "34.9 directa",
+                "attachment_method": "Abrazadera directa",
+                "direct_tube_diameter_mm": "34.9",
+                "source_document": "Shimano FD-R2000-B, handbook p. 140 y EV-FD-R2000-4160",
+                "source_url": "https://productinfo.shimano.com/pdfs/product/archive/2024-2025_Specifications_v032_en.pdf"
+              },
+              "sources": []
+            },
+            {
+              "id": "r2",
+              "values": {
+                "option_identity": "31.8 con M",
+                "attachment_method": "Abrazadera con casquillo reductor",
+                "reduced_tube_diameter_mm": "31.8",
+                "unreduced_clamp_diameter_mm": "34.9",
+                "adapter_reference": "Y2B198020 / M",
+                "source_document": "Shimano FD-R2000-B, handbook p. 140 y EV-FD-R2000-4160",
+                "source_url": "https://productinfo.shimano.com/pdfs/product/archive/2024-2025_Specifications_v032_en.pdf"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "front_derailleur_application_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "configuration_identity": "FD-R2000-B 2x8",
+                "front_chainring_count": "2",
+                "rear_sprocket_count": "8",
+                "top_chainring_min_teeth": "46",
+                "top_chainring_max_teeth": "52",
+                "total_capacity_teeth": "16",
+                "chainstay_angle_min_deg": "61",
+                "chainstay_angle_max_deg": "66",
+                "chain_declaration": "HG 8/7/6-speed",
+                "chainline_mm": "43.5",
+                "source_document": "Shimano handbook v3.2 2024-2025 p. 140",
+                "source_url": "https://productinfo.shimano.com/pdfs/product/archive/2024-2025_Specifications_v032_en.pdf"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "expected_issue_subset": [
+        {
+          "code": "row_required_missing",
+          "field": "front_derailleur_application_configurations",
+          "blocking": false
+        }
+      ],
+      "expected_sql_issue_subset": [
+        {
+          "code": "row_required_missing",
+          "field": "front_derailleur_application_configurations",
+          "blocking": false
+        }
+      ]
+    },
+    {
+      "id": "fdr_a_reducer_cannot_enlarge_the_clamp",
+      "template": "front_derailleur",
+      "values": {
+        "spec_evidence_source": "https://productinfo.shimano.com/pdfs/product/archive/2024-2025_Specifications_v032_en.pdf",
+        "front_derailleur_mount_type": "Abrazadera",
+        "front_derailleur_clamp_options": {
+          "schema_version": 2,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "option_identity": "31.8 con M",
+                "attachment_method": "Abrazadera con casquillo reductor",
+                "reduced_tube_diameter_mm": "36",
+                "unreduced_clamp_diameter_mm": "34.9",
+                "adapter_reference": "Y2B198020 / M",
+                "source_document": "Shimano FD-R2000-B, handbook p. 140 y EV-FD-R2000-4160",
+                "source_url": "https://productinfo.shimano.com/pdfs/product/archive/2024-2025_Specifications_v032_en.pdf"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [
+        {
+          "code": "row_shape",
+          "field": "front_derailleur_clamp_options"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "fdr_a_reducer_cannot_have_equal_nominal_interfaces",
+      "template": "front_derailleur",
+      "values": {
+        "spec_evidence_source": "https://productinfo.shimano.com/pdfs/product/archive/2024-2025_Specifications_v032_en.pdf",
+        "front_derailleur_mount_type": "Abrazadera",
+        "front_derailleur_clamp_options": {
+          "schema_version": 2,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "option_identity": "31.8 con M",
+                "attachment_method": "Abrazadera con casquillo reductor",
+                "reduced_tube_diameter_mm": "34.9",
+                "unreduced_clamp_diameter_mm": "34.9",
+                "adapter_reference": "Y2B198020 / M",
+                "source_document": "Shimano FD-R2000-B, handbook p. 140 y EV-FD-R2000-4160",
+                "source_url": "https://productinfo.shimano.com/pdfs/product/archive/2024-2025_Specifications_v032_en.pdf"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [
+        {
+          "code": "row_shape",
+          "field": "front_derailleur_clamp_options"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "fdr_direct_contact_cannot_claim_an_included_reducer",
+      "template": "front_derailleur",
+      "values": {
+        "spec_evidence_source": "https://productinfo.shimano.com/pdfs/product/archive/2024-2025_Specifications_v032_en.pdf",
+        "front_derailleur_mount_type": "Abrazadera",
+        "front_derailleur_clamp_options": {
+          "schema_version": 2,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "option_identity": "34.9 directa",
+                "attachment_method": "Abrazadera directa",
+                "direct_tube_diameter_mm": "34.9",
+                "source_document": "Shimano FD-R2000-B, handbook p. 140 y EV-FD-R2000-4160",
+                "source_url": "https://productinfo.shimano.com/pdfs/product/archive/2024-2025_Specifications_v032_en.pdf",
+                "adapter_included": true
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [
+        {
+          "code": "row_field_applicability",
+          "field": "front_derailleur_clamp_options"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "fdr_adapter_inclusion_can_remain_unknown",
+      "template": "front_derailleur",
+      "values": {
+        "spec_evidence_source": "https://productinfo.shimano.com/pdfs/product/archive/2024-2025_Specifications_v032_en.pdf",
+        "front_derailleur_mount_type": "Abrazadera",
+        "front_derailleur_clamp_options": {
+          "schema_version": 2,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "option_identity": "34.9 directa",
+                "attachment_method": "Abrazadera directa",
+                "direct_tube_diameter_mm": "34.9",
+                "source_document": "Shimano FD-R2000-B, handbook p. 140 y EV-FD-R2000-4160",
+                "source_url": "https://productinfo.shimano.com/pdfs/product/archive/2024-2025_Specifications_v032_en.pdf"
+              },
+              "sources": []
+            },
+            {
+              "id": "r2",
+              "values": {
+                "option_identity": "31.8 con M",
+                "attachment_method": "Abrazadera con casquillo reductor",
+                "reduced_tube_diameter_mm": "31.8",
+                "unreduced_clamp_diameter_mm": "34.9",
+                "adapter_reference": "Y2B198020 / M",
+                "source_document": "Shimano FD-R2000-B, handbook p. 140 y EV-FD-R2000-4160",
+                "source_url": "https://productinfo.shimano.com/pdfs/product/archive/2024-2025_Specifications_v032_en.pdf"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [
+        "https://productinfo.shimano.com/pdfs/product/archive/2024-2025_Specifications_v032_en.pdf",
+        "https://dassets.shimano.com/content/dam/global/cg1SHICCycling/final/ev/ev/EV-FD-R2000-4160.pdf"
+      ]
+    }
+  ],
+  "pending_cases": [
+    {
+      "id": "combined_shift_and_brake_controls_belong_to_their_family",
+      "required_result": "assignment_pending",
+      "reason": "Several records in scope are combined shift/brake units. The brake_shift_combined_control family already exists; the move needs the assignment queue and product evidence, not a reading of the title."
+    },
+    {
+      "id": "shifter_and_derailleur_codes_belong_to_the_product",
+      "required_result": "identity_pending",
+      "reason": "Titles carry manufacturer codes while model and manufacturer_sku are empty in almost every record. Identity is resolved in the product, never in a second store here."
+    },
+    {
+      "id": "index_or_friction_in_a_title_is_a_reading_hint",
+      "required_result": "unknown_without_model_scoped_evidence",
+      "reason": "Some titles spell out Index or Friccion. The actuation mode is a property of the control and is filled from the package or the manual, never from the title."
+    },
+    {
+      "id": "a_body_design_name_does_not_prove_a_clutch",
+      "required_result": "unknown_without_model_scoped_evidence",
+      "reason": "A design or family name in a title says nothing about a chain stabiliser; derailleur_clutch stays unknown until a document declares it."
+    },
+    {
+      "id": "several_clamp_diameters_in_a_title_need_the_package",
+      "required_result": "unknown_without_model_scoped_evidence",
+      "reason": "Titles declare two or three clamp diameters. Whether the reduction ships in the box is a fact of the package and is not inferred from the range written in the name."
+    },
+    {
+      "id": "oem_relation_and_editor_validation_pending",
+      "required_result": "unknown_without_model_scoped_evidence",
+      "reason": "Directed OEM relations and the real editor round are not exercised by this packet."
+    },
+    {
+      "id": "documented_configurations_require_model_and_source_adjudication",
+      "required_result": "unknown_without_exact_reference",
+      "reason": "Range and ownership validation does not authenticate a document, resolve a product identity or approve a complete assembly."
+    }
+  ],
+  "catalogue_sha256": "924a77009aff0db778c3e909c8e286edf9d80037c94f0739a0d800d89d145c39"
+}

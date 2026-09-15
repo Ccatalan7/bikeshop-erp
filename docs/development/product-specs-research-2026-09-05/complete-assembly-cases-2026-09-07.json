@@ -1,0 +1,3836 @@
+{
+  "schema_version": 1,
+  "title": "All-family physical-port cardinality",
+  "catalogue_sha256": "c941116c127382ae1839b95184b7cd5ff6fdf41674aac5eca759d75d68ad5e7b",
+  "independent_review_hashes": [
+    "4cbd9cd4e1ccb2f41ab3249cbaed83fe419689aa6ba1dbb24a5b9dd856bd66d1",
+    "a1c6bfc5fae5c11b3b7f804b240ea36b2a36db2f6e4ba2ff868c061802856820"
+  ],
+  "mechanical_coverage_complete": false,
+  "automatic_fill_authorized": false,
+  "cases": [
+    {
+      "id": "RCF23",
+      "template": "bicycle",
+      "field": "kit_members",
+      "kind": "synthetic_regression",
+      "values": {
+        "kit_members": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "member_role": "soporte",
+                "family": "light",
+                "quantity": "1",
+                "position": "Sin posición"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_row_condition_issues": [],
+      "expected_blocking": [],
+      "source_ids": [
+        "CATALOG",
+        "ENGINE2200"
+      ],
+      "purpose": "La restricción es exclusiva de light; un kit de bicicleta puede contener una luz.",
+      "gap_ids": [],
+      "not_a_mechanical_verdict": true,
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false
+    },
+    {
+      "id": "wss_frame_44_housing_two_alternatives",
+      "template": "frame",
+      "kind": "valid",
+      "values": {
+        "headset_upper_shis": "ZS44/28.6",
+        "headset_lower_shis": "EC44/30",
+        "headset_port_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "u",
+              "values": {
+                "position": "Superior",
+                "seat_type": "Alojamiento para cazoleta prensada",
+                "housing_diameter_mm": "44"
+              },
+              "sources": []
+            },
+            {
+              "id": "l",
+              "values": {
+                "position": "Inferior",
+                "seat_type": "Alojamiento para cazoleta prensada",
+                "housing_diameter_mm": "44"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "source_urls": [
+        "https://support.canecreek.com/support/solutions/articles/62000202657-full-article-everything-you-need-to-know-about-headsets-"
+      ],
+      "expected_blocking": [],
+      "note": "El alojamiento de 44 mm admite EC44/30 y ZS44/30; el SHIS registrado es la configuración original y no cierra la lista.",
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false
+    },
+    {
+      "id": "wss_frame_housing_without_shis",
+      "template": "frame",
+      "kind": "unknown",
+      "values": {
+        "headset_port_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "l",
+              "values": {
+                "position": "Inferior",
+                "seat_type": "Alojamiento para cazoleta prensada",
+                "measured_diameter_mm": "41.8"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "source_urls": [
+        "https://www.parktool.com/en-us/blog/repair-help/headset-standards"
+      ],
+      "expected_blocking": [],
+      "note": "Diámetro medido de 41,8 sin código: el redondeo a IS42 es una convención declarada, no una medición, y no se escribe solo. Antes del parche el SHIS era obligatorio y obligaba a inventarlo.",
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false
+    },
+    {
+      "id": "wss_frame_surly_gnot_rite",
+      "template": "frame",
+      "kind": "valid",
+      "values": {
+        "rear_hub_old_mm": "132.5",
+        "rear_axle_type": "Cierre rápido 10 mm (trasero)",
+        "spec_evidence_source": "Surly Pack Rat framesheet 85-000633_INST_A",
+        "dropout_hub_acceptance_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "a",
+              "values": {
+                "position": "Trasera",
+                "accepted_hub_old_mm": "130",
+                "retention_kind": "Cierre rápido",
+                "scope_note": "Gnot-rite: el fabricante declara 130 y 135 para este cuadro"
+              },
+              "sources": [
+                "https://surlybikes.com/uploads/downloads/surly-pack-rat-framesheet-85-000633_INST.pdf"
+              ]
+            },
+            {
+              "id": "b",
+              "values": {
+                "position": "Trasera",
+                "accepted_hub_old_mm": "135",
+                "retention_kind": "Cierre rápido",
+                "scope_note": "Gnot-rite: el fabricante declara 130 y 135 para este cuadro"
+              },
+              "sources": [
+                "https://surlybikes.com/uploads/downloads/surly-pack-rat-framesheet-85-000633_INST.pdf"
+              ]
+            }
+          ]
+        }
+      },
+      "source_urls": [
+        "https://surlybikes.com/uploads/downloads/surly-pack-rat-framesheet-85-000633_INST.pdf"
+      ],
+      "expected_blocking": [],
+      "note": "132,5 se guarda exacto (ya era decimal) y las mazas aceptadas son filas. 131 no queda aceptado y esto no autoriza forzar otro cuadro.",
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false
+    },
+    {
+      "id": "wss_frame_dropout_open_interval",
+      "template": "frame",
+      "kind": "contradictory_undetectable",
+      "values": {
+        "rear_hub_old_mm": "132.5",
+        "dropout_hub_acceptance_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "a",
+              "values": {
+                "position": "Trasera",
+                "accepted_hub_old_mm": "131",
+                "retention_kind": "Cierre rápido"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "source_urls": [],
+      "expected_blocking": [],
+      "note": "Nada impide escribir 131: la fuente Surly no lo declara. El esquema no inventa el intervalo, pero tampoco detecta una fila sin respaldo (E2/E3).",
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false
+    },
+    {
+      "id": "ca_same_tube_two_datums_coexist",
+      "template": "frame",
+      "values": {
+        "frame_geometry_measurements": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "measure": "Tubo de sillín",
+                "value": "560",
+                "unit": "mm",
+                "datum": "Centro del pedalier al extremo del tubo de sillín",
+                "source_url": "https://example.invalid/assembly-representation",
+                "configuration_row_id": "r1",
+                "source_scope": "Medición sintética"
+              },
+              "sources": []
+            },
+            {
+              "id": "r2",
+              "values": {
+                "measure": "Tubo de sillín",
+                "value": "540",
+                "unit": "mm",
+                "datum": "Centro del pedalier al centro del tubo superior",
+                "source_url": "https://example.invalid/assembly-representation",
+                "configuration_row_id": "r1",
+                "source_scope": "Medición sintética"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "assembly_variant_identity": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "scope": "Esta variante de catálogo",
+                "brand": "Marca sintética",
+                "model": "Modelo sintético",
+                "variant": "Variante M",
+                "size_label": "M",
+                "edition": "Edición sintética",
+                "source_scope": "Ficha de esta variante",
+                "source_url": "https://example.invalid/assembly-representation"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "assembly_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "variant_row_id": "r1",
+                "configuration": "Montaje suministrado",
+                "state": "Suministrada",
+                "source_scope": "Montaje",
+                "source_url": "https://example.invalid/assembly-representation"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "successor_translation": "Campos del candidato no publicado movidos a su variante/configuración/rueda explícitas. Cifras sintéticas; no son lectura de un modelo OEM ni receta de llenado."
+    },
+    {
+      "id": "ca_same_measure_same_datum_twice_blocks",
+      "template": "frame",
+      "values": {
+        "frame_geometry_measurements": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "measure": "Tubo de sillín",
+                "value": "540",
+                "unit": "mm",
+                "datum": "Centro del pedalier al centro del tubo superior",
+                "source_url": "https://example.invalid/assembly-representation",
+                "configuration_row_id": "r1",
+                "source_scope": "Medición sintética"
+              },
+              "sources": []
+            },
+            {
+              "id": "r2",
+              "values": {
+                "measure": "Tubo de sillín",
+                "value": "560",
+                "unit": "mm",
+                "datum": "Centro del pedalier al centro del tubo superior",
+                "source_url": "https://example.invalid/assembly-representation",
+                "configuration_row_id": "r1",
+                "source_scope": "Medición sintética"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "assembly_variant_identity": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "scope": "Esta variante de catálogo",
+                "brand": "Marca sintética",
+                "model": "Modelo sintético",
+                "variant": "Variante M",
+                "size_label": "M",
+                "edition": "Edición sintética",
+                "source_scope": "Ficha de esta variante",
+                "source_url": "https://example.invalid/assembly-representation"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "assembly_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "variant_row_id": "r1",
+                "configuration": "Montaje suministrado",
+                "state": "Suministrada",
+                "source_scope": "Montaje",
+                "source_url": "https://example.invalid/assembly-representation"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [
+        {
+          "code": "row_shape",
+          "field": "frame_geometry_measurements"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "successor_translation": "Campos del candidato no publicado movidos a su variante/configuración/rueda explícitas. Cifras sintéticas; no son lectura de un modelo OEM ni receta de llenado."
+    },
+    {
+      "id": "ca_angle_must_be_in_degrees",
+      "template": "frame",
+      "values": {
+        "frame_geometry_measurements": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "measure": "Ángulo de dirección",
+                "value": "69",
+                "unit": "mm",
+                "datum": "Respecto a la horizontal",
+                "source_url": "https://example.invalid/assembly-representation",
+                "configuration_row_id": "r1",
+                "source_scope": "Medición sintética"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "assembly_variant_identity": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "scope": "Esta variante de catálogo",
+                "brand": "Marca sintética",
+                "model": "Modelo sintético",
+                "variant": "Variante M",
+                "size_label": "M",
+                "edition": "Edición sintética",
+                "source_scope": "Ficha de esta variante",
+                "source_url": "https://example.invalid/assembly-representation"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "assembly_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "variant_row_id": "r1",
+                "configuration": "Montaje suministrado",
+                "state": "Suministrada",
+                "source_scope": "Montaje",
+                "source_url": "https://example.invalid/assembly-representation"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [
+        {
+          "code": "row_value_conflict",
+          "field": "frame_geometry_measurements"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "successor_translation": "Campos del candidato no publicado movidos a su variante/configuración/rueda explícitas. Cifras sintéticas; no son lectura de un modelo OEM ni receta de llenado."
+    },
+    {
+      "id": "ca_angle_in_degrees_is_fine",
+      "template": "frame",
+      "values": {
+        "frame_geometry_measurements": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "measure": "Ángulo de sillín",
+                "value": "73.5",
+                "unit": "grados",
+                "datum": "Respecto a la horizontal",
+                "source_url": "https://example.invalid/assembly-representation",
+                "configuration_row_id": "r1",
+                "source_scope": "Medición sintética"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "assembly_variant_identity": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "scope": "Esta variante de catálogo",
+                "brand": "Marca sintética",
+                "model": "Modelo sintético",
+                "variant": "Variante M",
+                "size_label": "M",
+                "edition": "Edición sintética",
+                "source_scope": "Ficha de esta variante",
+                "source_url": "https://example.invalid/assembly-representation"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "assembly_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "variant_row_id": "r1",
+                "configuration": "Montaje suministrado",
+                "state": "Suministrada",
+                "source_scope": "Montaje",
+                "source_url": "https://example.invalid/assembly-representation"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "successor_translation": "Campos del candidato no publicado movidos a su variante/configuración/rueda explícitas. Cifras sintéticas; no son lectura de un modelo OEM ni receta de llenado."
+    },
+    {
+      "id": "ca_length_may_be_imperial",
+      "template": "frame",
+      "values": {
+        "frame_geometry_measurements": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "measure": "Tubo superior",
+                "value": "22.5",
+                "unit": "in",
+                "datum": "Horizontal efectivo",
+                "source_url": "https://example.invalid/assembly-representation",
+                "configuration_row_id": "r1",
+                "source_scope": "Medición sintética"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "assembly_variant_identity": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "scope": "Esta variante de catálogo",
+                "brand": "Marca sintética",
+                "model": "Modelo sintético",
+                "variant": "Variante M",
+                "size_label": "M",
+                "edition": "Edición sintética",
+                "source_scope": "Ficha de esta variante",
+                "source_url": "https://example.invalid/assembly-representation"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "assembly_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "variant_row_id": "r1",
+                "configuration": "Montaje suministrado",
+                "state": "Suministrada",
+                "source_scope": "Montaje",
+                "source_url": "https://example.invalid/assembly-representation"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "successor_translation": "Campos del candidato no publicado movidos a su variante/configuración/rueda explícitas. Cifras sintéticas; no son lectura de un modelo OEM ni receta de llenado."
+    },
+    {
+      "id": "ca_geometry_row_without_datum_is_pending",
+      "template": "frame",
+      "values": {
+        "frame_geometry_measurements": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "measure": "Alcance (reach)",
+                "value": "400",
+                "unit": "mm",
+                "source_url": "https://example.invalid/assembly-representation",
+                "configuration_row_id": "r1",
+                "source_scope": "Medición sintética"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "assembly_variant_identity": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "scope": "Esta variante de catálogo",
+                "brand": "Marca sintética",
+                "model": "Modelo sintético",
+                "variant": "Variante M",
+                "size_label": "M",
+                "edition": "Edición sintética",
+                "source_scope": "Ficha de esta variante",
+                "source_url": "https://example.invalid/assembly-representation"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "assembly_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "variant_row_id": "r1",
+                "configuration": "Montaje suministrado",
+                "state": "Suministrada",
+                "source_scope": "Montaje",
+                "source_url": "https://example.invalid/assembly-representation"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "expected_issue_subset": [
+        {
+          "code": "row_incomplete",
+          "field": "frame_geometry_measurements",
+          "blocking": false
+        }
+      ],
+      "expected_sql_issue_subset": [
+        {
+          "code": "row_incomplete",
+          "field": "frame_geometry_measurements",
+          "blocking": false
+        }
+      ],
+      "successor_translation": "Campos del candidato no publicado movidos a su variante/configuración/rueda explícitas. Cifras sintéticas; no son lectura de un modelo OEM ni receta de llenado."
+    },
+    {
+      "id": "ca_source_does_not_state_its_datum",
+      "template": "frame",
+      "values": {
+        "frame_geometry_measurements": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "measure": "Tubo de sillín",
+                "value": "560",
+                "unit": "mm",
+                "source_url": "https://example.invalid/assembly-representation",
+                "configuration_row_id": "r1",
+                "source_scope": "Medición sintética"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "assembly_variant_identity": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "scope": "Esta variante de catálogo",
+                "brand": "Marca sintética",
+                "model": "Modelo sintético",
+                "variant": "Variante M",
+                "size_label": "M",
+                "edition": "Edición sintética",
+                "source_scope": "Ficha de esta variante",
+                "source_url": "https://example.invalid/assembly-representation"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "assembly_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "variant_row_id": "r1",
+                "configuration": "Montaje suministrado",
+                "state": "Suministrada",
+                "source_scope": "Montaje",
+                "source_url": "https://example.invalid/assembly-representation"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "expected_issue_subset": [
+        {
+          "code": "row_incomplete",
+          "field": "frame_geometry_measurements",
+          "blocking": false
+        }
+      ],
+      "expected_sql_issue_subset": [
+        {
+          "code": "row_incomplete",
+          "field": "frame_geometry_measurements",
+          "blocking": false
+        }
+      ],
+      "successor_translation": "Campos del candidato no publicado movidos a su variante/configuración/rueda explícitas. Cifras sintéticas; no son lectura de un modelo OEM ni receta de llenado."
+    },
+    {
+      "id": "ca_actual_and_effective_top_tube_coexist",
+      "template": "frame",
+      "values": {
+        "frame_geometry_measurements": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "measure": "Tubo superior",
+                "value": "560",
+                "unit": "mm",
+                "datum": "Longitud real",
+                "source_url": "https://example.invalid/assembly-representation",
+                "configuration_row_id": "r1",
+                "source_scope": "Medición sintética"
+              },
+              "sources": []
+            },
+            {
+              "id": "r2",
+              "values": {
+                "measure": "Tubo superior",
+                "value": "565",
+                "unit": "mm",
+                "datum": "Longitud efectiva (horizontal)",
+                "source_url": "https://example.invalid/assembly-representation",
+                "configuration_row_id": "r1",
+                "source_scope": "Medición sintética"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "assembly_variant_identity": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "scope": "Esta variante de catálogo",
+                "brand": "Marca sintética",
+                "model": "Modelo sintético",
+                "variant": "Variante M",
+                "size_label": "M",
+                "edition": "Edición sintética",
+                "source_scope": "Ficha de esta variante",
+                "source_url": "https://example.invalid/assembly-representation"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "assembly_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "variant_row_id": "r1",
+                "configuration": "Montaje suministrado",
+                "state": "Suministrada",
+                "source_scope": "Montaje",
+                "source_url": "https://example.invalid/assembly-representation"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "successor_translation": "Campos del candidato no publicado movidos a su variante/configuración/rueda explícitas. Cifras sintéticas; no son lectura de un modelo OEM ni receta de llenado."
+    },
+    {
+      "id": "ca_two_sizes_keep_their_own_geometry",
+      "template": "frame",
+      "values": {
+        "frame_geometry_measurements": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "measure": "Tubo de sillín",
+                "value": "540",
+                "unit": "mm",
+                "datum": "Centro del pedalier al centro del tubo superior",
+                "source_url": "https://example.invalid/assembly-representation",
+                "configuration_row_id": "r1",
+                "source_scope": "Medición sintética"
+              },
+              "sources": []
+            },
+            {
+              "id": "r2",
+              "values": {
+                "measure": "Tubo de sillín",
+                "value": "580",
+                "unit": "mm",
+                "datum": "Centro del pedalier al centro del tubo superior",
+                "source_url": "https://example.invalid/assembly-representation",
+                "configuration_row_id": "r2",
+                "source_scope": "Medición sintética"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "assembly_variant_identity": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "scope": "Esta variante de catálogo",
+                "brand": "Marca sintética",
+                "model": "Modelo sintético",
+                "variant": "Variante M",
+                "size_label": "M",
+                "edition": "Edición sintética",
+                "source_scope": "Ficha de esta variante",
+                "source_url": "https://example.invalid/assembly-representation"
+              },
+              "sources": []
+            },
+            {
+              "id": "r2",
+              "values": {
+                "scope": "Esta variante de catálogo",
+                "brand": "Marca sintética",
+                "model": "Modelo sintético",
+                "variant": "Variante L",
+                "size_label": "L",
+                "edition": "Edición sintética",
+                "source_scope": "Ficha de esta variante",
+                "source_url": "https://example.invalid/assembly-representation"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "assembly_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "variant_row_id": "r1",
+                "configuration": "Montaje suministrado",
+                "state": "Suministrada",
+                "source_scope": "Montaje",
+                "source_url": "https://example.invalid/assembly-representation"
+              },
+              "sources": []
+            },
+            {
+              "id": "r2",
+              "values": {
+                "variant_row_id": "r2",
+                "configuration": "Montaje suministrado",
+                "state": "Suministrada",
+                "source_scope": "Montaje",
+                "source_url": "https://example.invalid/assembly-representation"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [
+        {
+          "code": "row_shape",
+          "field": "assembly_variant_identity"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "successor_translation": "Una ficha de SKU no es el catálogo de tallas. Los datos conservan dos identidades y ahora se rechaza unirlas."
+    },
+    {
+      "id": "ca_size_without_published_range",
+      "template": "bicycle",
+      "values": {
+        "bicycle_size_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "rider_form": "No publicado",
+                "source_url": "https://example.invalid/assembly-representation",
+                "configuration_row_id": "r1"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "assembly_variant_identity": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "scope": "Esta variante de catálogo",
+                "brand": "Marca sintética",
+                "model": "Modelo sintético",
+                "variant": "Variante M",
+                "size_label": "M",
+                "edition": "Edición sintética",
+                "source_scope": "Ficha de esta variante",
+                "source_url": "https://example.invalid/assembly-representation"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "assembly_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "variant_row_id": "r1",
+                "configuration": "Montaje suministrado",
+                "state": "Suministrada",
+                "source_scope": "Montaje",
+                "source_url": "https://example.invalid/assembly-representation"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "assembly_wheel_members": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "position": "Delantera",
+                "bead_seat_diameter_mm": "622",
+                "source_url": "https://example.invalid/assembly-representation",
+                "configuration_row_id": "r1",
+                "member": "Delantera",
+                "source_scope": "Montaje sintético"
+              },
+              "sources": []
+            },
+            {
+              "id": "r2",
+              "values": {
+                "position": "Trasera",
+                "bead_seat_diameter_mm": "622",
+                "source_url": "https://example.invalid/assembly-representation",
+                "configuration_row_id": "r1",
+                "member": "Trasera",
+                "source_scope": "Montaje sintético"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "successor_translation": "Campos del candidato no publicado movidos a su variante/configuración/rueda explícitas. Cifras sintéticas; no son lectura de un modelo OEM ni receta de llenado."
+    },
+    {
+      "id": "ca_unpublished_range_cannot_carry_a_figure",
+      "template": "bicycle",
+      "values": {
+        "bicycle_size_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "rider_form": "No publicado",
+                "source_url": "https://example.invalid/assembly-representation",
+                "rider_min": "165",
+                "configuration_row_id": "r1"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "assembly_variant_identity": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "scope": "Esta variante de catálogo",
+                "brand": "Marca sintética",
+                "model": "Modelo sintético",
+                "variant": "Variante M",
+                "size_label": "M",
+                "edition": "Edición sintética",
+                "source_scope": "Ficha de esta variante",
+                "source_url": "https://example.invalid/assembly-representation"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "assembly_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "variant_row_id": "r1",
+                "configuration": "Montaje suministrado",
+                "state": "Suministrada",
+                "source_scope": "Montaje",
+                "source_url": "https://example.invalid/assembly-representation"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "assembly_wheel_members": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "position": "Delantera",
+                "bead_seat_diameter_mm": "622",
+                "source_url": "https://example.invalid/assembly-representation",
+                "configuration_row_id": "r1",
+                "member": "Delantera",
+                "source_scope": "Montaje sintético"
+              },
+              "sources": []
+            },
+            {
+              "id": "r2",
+              "values": {
+                "position": "Trasera",
+                "bead_seat_diameter_mm": "622",
+                "source_url": "https://example.invalid/assembly-representation",
+                "configuration_row_id": "r1",
+                "member": "Trasera",
+                "source_scope": "Montaje sintético"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [
+        {
+          "code": "row_field_applicability",
+          "field": "bicycle_size_configurations"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "successor_translation": "Campos del candidato no publicado movidos a su variante/configuración/rueda explícitas. Cifras sintéticas; no son lectura de un modelo OEM ni receta de llenado."
+    },
+    {
+      "id": "ca_declared_range_keeps_its_unit",
+      "template": "bicycle",
+      "values": {
+        "bicycle_size_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "rider_form": "Declarado",
+                "source_url": "https://example.invalid/assembly-representation",
+                "rider_min": "165",
+                "rider_max": "178",
+                "rider_unit": "cm",
+                "configuration_row_id": "r1"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "assembly_variant_identity": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "scope": "Esta variante de catálogo",
+                "brand": "Marca sintética",
+                "model": "Modelo sintético",
+                "variant": "Variante M",
+                "size_label": "M",
+                "edition": "Edición sintética",
+                "source_scope": "Ficha de esta variante",
+                "source_url": "https://example.invalid/assembly-representation"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "assembly_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "variant_row_id": "r1",
+                "configuration": "Montaje suministrado",
+                "state": "Suministrada",
+                "source_scope": "Montaje",
+                "source_url": "https://example.invalid/assembly-representation"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "assembly_wheel_members": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "position": "Delantera",
+                "bead_seat_diameter_mm": "622",
+                "source_url": "https://example.invalid/assembly-representation",
+                "configuration_row_id": "r1",
+                "member": "Delantera",
+                "source_scope": "Montaje sintético"
+              },
+              "sources": []
+            },
+            {
+              "id": "r2",
+              "values": {
+                "position": "Trasera",
+                "bead_seat_diameter_mm": "622",
+                "source_url": "https://example.invalid/assembly-representation",
+                "configuration_row_id": "r1",
+                "member": "Trasera",
+                "source_scope": "Montaje sintético"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "successor_translation": "Campos del candidato no publicado movidos a su variante/configuración/rueda explícitas. Cifras sintéticas; no son lectura de un modelo OEM ni receta de llenado."
+    },
+    {
+      "id": "ca_inverted_rider_range_blocks",
+      "template": "bicycle",
+      "values": {
+        "bicycle_size_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "rider_form": "Declarado",
+                "source_url": "https://example.invalid/assembly-representation",
+                "rider_min": "178",
+                "rider_max": "165",
+                "rider_unit": "cm",
+                "configuration_row_id": "r1"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "assembly_variant_identity": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "scope": "Esta variante de catálogo",
+                "brand": "Marca sintética",
+                "model": "Modelo sintético",
+                "variant": "Variante M",
+                "size_label": "M",
+                "edition": "Edición sintética",
+                "source_scope": "Ficha de esta variante",
+                "source_url": "https://example.invalid/assembly-representation"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "assembly_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "variant_row_id": "r1",
+                "configuration": "Montaje suministrado",
+                "state": "Suministrada",
+                "source_scope": "Montaje",
+                "source_url": "https://example.invalid/assembly-representation"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "assembly_wheel_members": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "position": "Delantera",
+                "bead_seat_diameter_mm": "622",
+                "source_url": "https://example.invalid/assembly-representation",
+                "configuration_row_id": "r1",
+                "member": "Delantera",
+                "source_scope": "Montaje sintético"
+              },
+              "sources": []
+            },
+            {
+              "id": "r2",
+              "values": {
+                "position": "Trasera",
+                "bead_seat_diameter_mm": "622",
+                "source_url": "https://example.invalid/assembly-representation",
+                "configuration_row_id": "r1",
+                "member": "Trasera",
+                "source_scope": "Montaje sintético"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [
+        {
+          "code": "row_shape",
+          "field": "bicycle_size_configurations"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "successor_translation": "Campos del candidato no publicado movidos a su variante/configuración/rueda explícitas. Cifras sintéticas; no son lectura de un modelo OEM ni receta de llenado."
+    },
+    {
+      "id": "ca_same_size_twice_blocks",
+      "template": "bicycle",
+      "values": {
+        "bicycle_size_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "rider_form": "No publicado",
+                "source_url": "https://example.invalid/assembly-representation",
+                "configuration_row_id": "r1"
+              },
+              "sources": []
+            },
+            {
+              "id": "r2",
+              "values": {
+                "rider_form": "Declarado",
+                "source_url": "https://example.invalid/assembly-representation",
+                "rider_min": "165",
+                "rider_max": "178",
+                "rider_unit": "cm",
+                "configuration_row_id": "r1"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "assembly_variant_identity": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "scope": "Esta variante de catálogo",
+                "brand": "Marca sintética",
+                "model": "Modelo sintético",
+                "variant": "Variante M",
+                "size_label": "M",
+                "edition": "Edición sintética",
+                "source_scope": "Ficha de esta variante",
+                "source_url": "https://example.invalid/assembly-representation"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "assembly_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "variant_row_id": "r1",
+                "configuration": "Montaje suministrado",
+                "state": "Suministrada",
+                "source_scope": "Montaje",
+                "source_url": "https://example.invalid/assembly-representation"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "assembly_wheel_members": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "position": "Delantera",
+                "bead_seat_diameter_mm": "622",
+                "source_url": "https://example.invalid/assembly-representation",
+                "configuration_row_id": "r1",
+                "member": "Delantera",
+                "source_scope": "Montaje sintético"
+              },
+              "sources": []
+            },
+            {
+              "id": "r2",
+              "values": {
+                "position": "Trasera",
+                "bead_seat_diameter_mm": "622",
+                "source_url": "https://example.invalid/assembly-representation",
+                "configuration_row_id": "r1",
+                "member": "Trasera",
+                "source_scope": "Montaje sintético"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [
+        {
+          "code": "row_shape",
+          "field": "bicycle_size_configurations"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "successor_translation": "Campos del candidato no publicado movidos a su variante/configuración/rueda explícitas. Cifras sintéticas; no son lectura de un modelo OEM ni receta de llenado."
+    },
+    {
+      "id": "ca_front_and_rear_keep_their_own_figures",
+      "template": "bicycle",
+      "values": {
+        "bicycle_size_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "rider_form": "No publicado",
+                "source_url": "https://example.invalid/assembly-representation",
+                "configuration_row_id": "r1"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "assembly_variant_identity": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "scope": "Esta variante de catálogo",
+                "brand": "Marca sintética",
+                "model": "Modelo sintético",
+                "variant": "Variante M",
+                "size_label": "M",
+                "edition": "Edición sintética",
+                "source_scope": "Ficha de esta variante",
+                "source_url": "https://example.invalid/assembly-representation"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "assembly_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "variant_row_id": "r1",
+                "configuration": "Montaje suministrado",
+                "state": "Suministrada",
+                "source_scope": "Montaje",
+                "source_url": "https://example.invalid/assembly-representation"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "assembly_wheel_members": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "position": "Delantera",
+                "bead_seat_diameter_mm": "622",
+                "source_url": "https://example.invalid/assembly-representation",
+                "hub_old_mm": "100",
+                "axle_type": "Eje pasante 12 mm",
+                "max_rotor_mm": "160",
+                "configuration_row_id": "r1",
+                "member": "Delantera",
+                "source_scope": "Montaje sintético",
+                "disc_present": true,
+                "frame_brake_mount": "Flat Mount"
+              },
+              "sources": []
+            },
+            {
+              "id": "r2",
+              "values": {
+                "position": "Trasera",
+                "bead_seat_diameter_mm": "584",
+                "source_url": "https://example.invalid/assembly-representation",
+                "hub_old_mm": "142",
+                "axle_type": "Eje pasante 12 mm",
+                "max_rotor_mm": "160",
+                "configuration_row_id": "r1",
+                "member": "Trasera",
+                "source_scope": "Montaje sintético",
+                "disc_present": true,
+                "frame_brake_mount": "Flat Mount"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "successor_translation": "Campos del candidato no publicado movidos a su variante/configuración/rueda explícitas. Cifras sintéticas; no son lectura de un modelo OEM ni receta de llenado."
+    },
+    {
+      "id": "ca_same_wheel_position_twice_blocks",
+      "template": "bicycle",
+      "values": {
+        "bicycle_size_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "rider_form": "No publicado",
+                "source_url": "https://example.invalid/assembly-representation",
+                "configuration_row_id": "r1"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "assembly_variant_identity": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "scope": "Esta variante de catálogo",
+                "brand": "Marca sintética",
+                "model": "Modelo sintético",
+                "variant": "Variante M",
+                "size_label": "M",
+                "edition": "Edición sintética",
+                "source_scope": "Ficha de esta variante",
+                "source_url": "https://example.invalid/assembly-representation"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "assembly_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "variant_row_id": "r1",
+                "configuration": "Montaje suministrado",
+                "state": "Suministrada",
+                "source_scope": "Montaje",
+                "source_url": "https://example.invalid/assembly-representation"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "assembly_wheel_members": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "position": "Delantera",
+                "bead_seat_diameter_mm": "622",
+                "source_url": "https://example.invalid/assembly-representation",
+                "configuration_row_id": "r1",
+                "member": "Delantera",
+                "source_scope": "Montaje sintético"
+              },
+              "sources": []
+            },
+            {
+              "id": "r2",
+              "values": {
+                "position": "Delantera",
+                "bead_seat_diameter_mm": "622",
+                "source_url": "https://example.invalid/assembly-representation",
+                "hub_old_mm": "110",
+                "configuration_row_id": "r1",
+                "member": "Delantera",
+                "source_scope": "Montaje sintético"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [
+        {
+          "code": "row_shape",
+          "field": "assembly_wheel_members"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "successor_translation": "Campos del candidato no publicado movidos a su variante/configuración/rueda explícitas. Cifras sintéticas; no son lectura de un modelo OEM ni receta de llenado."
+    },
+    {
+      "id": "ca_rim_braked_wheel_has_no_rotor",
+      "template": "bicycle",
+      "values": {
+        "bicycle_size_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "rider_form": "No publicado",
+                "source_url": "https://example.invalid/assembly-representation",
+                "configuration_row_id": "r1"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "assembly_variant_identity": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "scope": "Esta variante de catálogo",
+                "brand": "Marca sintética",
+                "model": "Modelo sintético",
+                "variant": "Variante M",
+                "size_label": "M",
+                "edition": "Edición sintética",
+                "source_scope": "Ficha de esta variante",
+                "source_url": "https://example.invalid/assembly-representation"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "assembly_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "variant_row_id": "r1",
+                "configuration": "Montaje suministrado",
+                "state": "Suministrada",
+                "source_scope": "Montaje",
+                "source_url": "https://example.invalid/assembly-representation"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "assembly_wheel_members": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "position": "Delantera",
+                "bead_seat_diameter_mm": "622",
+                "source_url": "https://example.invalid/assembly-representation",
+                "max_rotor_mm": "160",
+                "configuration_row_id": "r1",
+                "member": "Delantera",
+                "source_scope": "Montaje sintético",
+                "disc_present": false
+              },
+              "sources": []
+            },
+            {
+              "id": "r2",
+              "values": {
+                "position": "Trasera",
+                "bead_seat_diameter_mm": "622",
+                "source_url": "https://example.invalid/assembly-representation",
+                "configuration_row_id": "r1",
+                "member": "Trasera",
+                "source_scope": "Montaje sintético"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [
+        {
+          "code": "row_field_applicability",
+          "field": "assembly_wheel_members"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "successor_translation": "Campos del candidato no publicado movidos a su variante/configuración/rueda explícitas. Cifras sintéticas; no son lectura de un modelo OEM ni receta de llenado."
+    },
+    {
+      "id": "ca_fitted_rotor_cannot_exceed_the_maximum",
+      "template": "bicycle",
+      "values": {
+        "bicycle_size_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "rider_form": "No publicado",
+                "source_url": "https://example.invalid/assembly-representation",
+                "configuration_row_id": "r1"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "assembly_variant_identity": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "scope": "Esta variante de catálogo",
+                "brand": "Marca sintética",
+                "model": "Modelo sintético",
+                "variant": "Variante M",
+                "size_label": "M",
+                "edition": "Edición sintética",
+                "source_scope": "Ficha de esta variante",
+                "source_url": "https://example.invalid/assembly-representation"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "assembly_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "variant_row_id": "r1",
+                "configuration": "Montaje suministrado",
+                "state": "Suministrada",
+                "source_scope": "Montaje",
+                "source_url": "https://example.invalid/assembly-representation"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "assembly_wheel_members": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "position": "Delantera",
+                "bead_seat_diameter_mm": "622",
+                "source_url": "https://example.invalid/assembly-representation",
+                "rotor_fitted_mm": "180",
+                "max_rotor_mm": "160",
+                "configuration_row_id": "r1",
+                "member": "Delantera",
+                "source_scope": "Montaje sintético",
+                "disc_present": true,
+                "frame_brake_mount": "Post Mount"
+              },
+              "sources": []
+            },
+            {
+              "id": "r2",
+              "values": {
+                "position": "Trasera",
+                "bead_seat_diameter_mm": "622",
+                "source_url": "https://example.invalid/assembly-representation",
+                "configuration_row_id": "r1",
+                "member": "Trasera",
+                "source_scope": "Montaje sintético"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [
+        {
+          "code": "row_shape",
+          "field": "assembly_wheel_members"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "successor_translation": "Campos del candidato no publicado movidos a su variante/configuración/rueda explícitas. Cifras sintéticas; no son lectura de un modelo OEM ni receta de llenado."
+    },
+    {
+      "id": "ca_compatible_is_not_included",
+      "template": "wheel",
+      "values": {
+        "wheel_compatible_claims": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "component_kind": "Cubierta",
+                "target_brand": "Marca sintética",
+                "target_model": "Cubierta sintética",
+                "target_edition": "No declarada",
+                "status": "Compatible declarado",
+                "source_scope": "Apartado sintético",
+                "source_url": "https://example.invalid/assembly-representation",
+                "wheel_row_id": "r1"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "assembly_variant_identity": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "scope": "Esta variante de catálogo",
+                "brand": "Marca sintética",
+                "model": "Modelo sintético",
+                "variant": "Variante M",
+                "size_label": "M",
+                "edition": "Edición sintética",
+                "source_scope": "Ficha de esta variante",
+                "source_url": "https://example.invalid/assembly-representation"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "assembly_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "variant_row_id": "r1",
+                "configuration": "Montaje suministrado",
+                "state": "Suministrada",
+                "source_scope": "Montaje",
+                "source_url": "https://example.invalid/assembly-representation"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "assembly_wheel_members": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "configuration_row_id": "r1",
+                "member": "Delantera",
+                "position": "Delantera",
+                "source_scope": "Montaje sintético",
+                "source_url": "https://example.invalid/assembly-representation",
+                "bead_seat_diameter_mm": "622",
+                "hub_old_mm": "100",
+                "axle_type": "Eje pasante 12 mm"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "successor_translation": "Campos del candidato no publicado movidos a su variante/configuración/rueda explícitas. Cifras sintéticas; no son lectura de un modelo OEM ni receta de llenado."
+    },
+    {
+      "id": "ca_conditioned_claim_needs_its_condition",
+      "template": "wheel",
+      "values": {
+        "wheel_compatible_claims": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "component_kind": "Cubierta",
+                "target_brand": "Marca sintética",
+                "target_model": "Sintético",
+                "target_edition": "No declarada",
+                "status": "Condicionado",
+                "source_scope": "Apartado sintético",
+                "source_url": "https://example.invalid/assembly-representation",
+                "wheel_row_id": "r1"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "assembly_variant_identity": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "scope": "Esta variante de catálogo",
+                "brand": "Marca sintética",
+                "model": "Modelo sintético",
+                "variant": "Variante M",
+                "size_label": "M",
+                "edition": "Edición sintética",
+                "source_scope": "Ficha de esta variante",
+                "source_url": "https://example.invalid/assembly-representation"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "assembly_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "variant_row_id": "r1",
+                "configuration": "Montaje suministrado",
+                "state": "Suministrada",
+                "source_scope": "Montaje",
+                "source_url": "https://example.invalid/assembly-representation"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "assembly_wheel_members": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "configuration_row_id": "r1",
+                "member": "Delantera",
+                "position": "Delantera",
+                "source_scope": "Montaje sintético",
+                "source_url": "https://example.invalid/assembly-representation",
+                "bead_seat_diameter_mm": "622",
+                "hub_old_mm": "100",
+                "axle_type": "Eje pasante 12 mm"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "expected_issue_subset": [
+        {
+          "code": "row_required_missing",
+          "field": "wheel_compatible_claims",
+          "blocking": false
+        }
+      ],
+      "expected_sql_issue_subset": [
+        {
+          "code": "row_required_missing",
+          "field": "wheel_compatible_claims",
+          "blocking": false
+        }
+      ],
+      "successor_translation": "Campos del candidato no publicado movidos a su variante/configuración/rueda explícitas. Cifras sintéticas; no son lectura de un modelo OEM ni receta de llenado."
+    },
+    {
+      "id": "ca_same_claim_twice_blocks",
+      "template": "wheel",
+      "values": {
+        "wheel_compatible_claims": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "component_kind": "Cubierta",
+                "target_brand": "Marca sintética",
+                "target_model": "Sintético",
+                "target_edition": "2021",
+                "status": "Compatible declarado",
+                "source_scope": "Apartado sintético",
+                "source_url": "https://example.invalid/assembly-representation",
+                "wheel_row_id": "r1"
+              },
+              "sources": []
+            },
+            {
+              "id": "r2",
+              "values": {
+                "component_kind": "Cubierta",
+                "target_brand": "Marca sintética",
+                "target_model": "Sintético",
+                "target_edition": "2021",
+                "status": "Incompatible declarado",
+                "source_scope": "Apartado sintético",
+                "source_url": "https://example.invalid/assembly-representation",
+                "wheel_row_id": "r1"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "assembly_variant_identity": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "scope": "Esta variante de catálogo",
+                "brand": "Marca sintética",
+                "model": "Modelo sintético",
+                "variant": "Variante M",
+                "size_label": "M",
+                "edition": "Edición sintética",
+                "source_scope": "Ficha de esta variante",
+                "source_url": "https://example.invalid/assembly-representation"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "assembly_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "variant_row_id": "r1",
+                "configuration": "Montaje suministrado",
+                "state": "Suministrada",
+                "source_scope": "Montaje",
+                "source_url": "https://example.invalid/assembly-representation"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "assembly_wheel_members": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "configuration_row_id": "r1",
+                "member": "Delantera",
+                "position": "Delantera",
+                "source_scope": "Montaje sintético",
+                "source_url": "https://example.invalid/assembly-representation",
+                "bead_seat_diameter_mm": "622",
+                "hub_old_mm": "100",
+                "axle_type": "Eje pasante 12 mm"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [
+        {
+          "code": "row_shape",
+          "field": "wheel_compatible_claims"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "successor_translation": "Campos del candidato no publicado movidos a su variante/configuración/rueda explícitas. Cifras sintéticas; no son lectura de un modelo OEM ni receta de llenado."
+    },
+    {
+      "id": "ca_undeclared_edition_still_guards",
+      "template": "wheel",
+      "values": {
+        "wheel_compatible_claims": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "component_kind": "Cubierta",
+                "target_brand": "Marca sintética",
+                "target_model": "Sintético",
+                "target_edition": "No declarada",
+                "status": "Compatible declarado",
+                "source_scope": "Apartado sintético",
+                "source_url": "https://example.invalid/assembly-representation",
+                "wheel_row_id": "r1"
+              },
+              "sources": []
+            },
+            {
+              "id": "r2",
+              "values": {
+                "component_kind": "Cubierta",
+                "target_brand": "Marca sintética",
+                "target_model": "Sintético",
+                "target_edition": "No declarada",
+                "status": "Incompatible declarado",
+                "source_scope": "Apartado sintético",
+                "source_url": "https://example.invalid/assembly-representation",
+                "wheel_row_id": "r1"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "assembly_variant_identity": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "scope": "Esta variante de catálogo",
+                "brand": "Marca sintética",
+                "model": "Modelo sintético",
+                "variant": "Variante M",
+                "size_label": "M",
+                "edition": "Edición sintética",
+                "source_scope": "Ficha de esta variante",
+                "source_url": "https://example.invalid/assembly-representation"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "assembly_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "variant_row_id": "r1",
+                "configuration": "Montaje suministrado",
+                "state": "Suministrada",
+                "source_scope": "Montaje",
+                "source_url": "https://example.invalid/assembly-representation"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "assembly_wheel_members": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "configuration_row_id": "r1",
+                "member": "Delantera",
+                "position": "Delantera",
+                "source_scope": "Montaje sintético",
+                "source_url": "https://example.invalid/assembly-representation",
+                "bead_seat_diameter_mm": "622",
+                "hub_old_mm": "100",
+                "axle_type": "Eje pasante 12 mm"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [
+        {
+          "code": "row_shape",
+          "field": "wheel_compatible_claims"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "successor_translation": "Campos del candidato no publicado movidos a su variante/configuración/rueda explícitas. Cifras sintéticas; no son lectura de un modelo OEM ni receta de llenado."
+    },
+    {
+      "id": "ca_different_edition_keeps_its_claim",
+      "template": "wheel",
+      "values": {
+        "wheel_compatible_claims": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "component_kind": "Cubierta",
+                "target_brand": "Marca sintética",
+                "target_model": "Sintético",
+                "target_edition": "2019",
+                "status": "Compatible declarado",
+                "source_scope": "Apartado sintético",
+                "source_url": "https://example.invalid/assembly-representation",
+                "wheel_row_id": "r1"
+              },
+              "sources": []
+            },
+            {
+              "id": "r2",
+              "values": {
+                "component_kind": "Cubierta",
+                "target_brand": "Marca sintética",
+                "target_model": "Sintético",
+                "target_edition": "2021",
+                "status": "Incompatible declarado",
+                "source_scope": "Apartado sintético",
+                "source_url": "https://example.invalid/assembly-representation",
+                "wheel_row_id": "r1"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "assembly_variant_identity": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "scope": "Esta variante de catálogo",
+                "brand": "Marca sintética",
+                "model": "Modelo sintético",
+                "variant": "Variante M",
+                "size_label": "M",
+                "edition": "Edición sintética",
+                "source_scope": "Ficha de esta variante",
+                "source_url": "https://example.invalid/assembly-representation"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "assembly_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "variant_row_id": "r1",
+                "configuration": "Montaje suministrado",
+                "state": "Suministrada",
+                "source_scope": "Montaje",
+                "source_url": "https://example.invalid/assembly-representation"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "assembly_wheel_members": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "configuration_row_id": "r1",
+                "member": "Delantera",
+                "position": "Delantera",
+                "source_scope": "Montaje sintético",
+                "source_url": "https://example.invalid/assembly-representation",
+                "bead_seat_diameter_mm": "622",
+                "hub_old_mm": "100",
+                "axle_type": "Eje pasante 12 mm"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "successor_translation": "Campos del candidato no publicado movidos a su variante/configuración/rueda explícitas. Cifras sintéticas; no son lectura de un modelo OEM ni receta de llenado."
+    },
+    {
+      "id": "ca_wheelset_does_not_mix_its_wheels",
+      "template": "wheel",
+      "values": {
+        "assembly_variant_identity": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "scope": "Esta variante de catálogo",
+                "brand": "Marca sintética",
+                "model": "Modelo sintético",
+                "variant": "Variante M",
+                "size_label": "M",
+                "edition": "Edición sintética",
+                "source_scope": "Ficha de esta variante",
+                "source_url": "https://example.invalid/assembly-representation"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "assembly_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "variant_row_id": "r1",
+                "configuration": "Montaje suministrado",
+                "state": "Suministrada",
+                "source_scope": "Montaje",
+                "source_url": "https://example.invalid/assembly-representation"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "assembly_wheel_members": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "position": "Delantera",
+                "bead_seat_diameter_mm": "622",
+                "hub_old_mm": "100",
+                "axle_type": "Eje pasante 12 mm",
+                "configuration_row_id": "r1",
+                "member": "Delantera",
+                "source_scope": "Montaje sintético",
+                "source_url": "https://example.invalid/assembly-representation"
+              },
+              "sources": []
+            },
+            {
+              "id": "r2",
+              "values": {
+                "position": "Trasera",
+                "bead_seat_diameter_mm": "622",
+                "hub_old_mm": "142",
+                "axle_type": "Eje pasante 12 mm",
+                "configuration_row_id": "r1",
+                "member": "Trasera",
+                "source_scope": "Montaje sintético",
+                "source_url": "https://example.invalid/assembly-representation"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "successor_translation": "Campos del candidato no publicado movidos a su variante/configuración/rueda explícitas. Cifras sintéticas; no son lectura de un modelo OEM ni receta de llenado."
+    },
+    {
+      "id": "ca_root_second_product_variant_is_not_an_assembly_option",
+      "template": "bicycle",
+      "values": {
+        "assembly_variant_identity": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "scope": "Esta variante de catálogo",
+                "brand": "Marca sintética",
+                "model": "Modelo sintético",
+                "variant": "Variante M",
+                "size_label": "M",
+                "edition": "Edición sintética",
+                "source_scope": "Ficha de esta variante",
+                "source_url": "https://example.invalid/assembly-representation"
+              },
+              "sources": []
+            },
+            {
+              "id": "r2",
+              "values": {
+                "scope": "Esta variante de catálogo",
+                "brand": "Marca sintética",
+                "model": "Modelo sintético",
+                "variant": "Variante L",
+                "size_label": "L",
+                "edition": "Edición sintética",
+                "source_scope": "Ficha de esta variante",
+                "source_url": "https://example.invalid/assembly-representation"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "assembly_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "variant_row_id": "r1",
+                "configuration": "Montaje suministrado",
+                "state": "Suministrada",
+                "source_scope": "Montaje",
+                "source_url": "https://example.invalid/assembly-representation"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [
+        {
+          "code": "row_shape",
+          "field": "assembly_variant_identity"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "ca_root_dangling_variant_cannot_own_a_configuration",
+      "template": "frame",
+      "values": {
+        "assembly_variant_identity": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "scope": "Esta variante de catálogo",
+                "brand": "Marca sintética",
+                "model": "Modelo sintético",
+                "variant": "Variante M",
+                "size_label": "M",
+                "edition": "Edición sintética",
+                "source_scope": "Ficha de esta variante",
+                "source_url": "https://example.invalid/assembly-representation"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "assembly_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "variant_row_id": "missing",
+                "configuration": "Montaje suministrado",
+                "state": "Suministrada",
+                "source_scope": "Montaje",
+                "source_url": "https://example.invalid/assembly-representation"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [
+        {
+          "code": "row_reference_unresolved",
+          "field": "assembly_configurations"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "ca_root_two_oem_mountings_belong_to_one_variant",
+      "template": "frame",
+      "values": {
+        "assembly_variant_identity": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "scope": "Esta variante de catálogo",
+                "brand": "Marca sintética",
+                "model": "Modelo sintético",
+                "variant": "Variante M",
+                "size_label": "M",
+                "edition": "Edición sintética",
+                "source_scope": "Ficha de esta variante",
+                "source_url": "https://example.invalid/assembly-representation"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "assembly_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "variant_row_id": "r1",
+                "configuration": "Montaje suministrado",
+                "state": "Suministrada",
+                "source_scope": "Montaje",
+                "source_url": "https://example.invalid/assembly-representation"
+              },
+              "sources": []
+            },
+            {
+              "id": "r2",
+              "values": {
+                "variant_row_id": "r1",
+                "configuration": "Montaje B",
+                "state": "Alternativa OEM documentada",
+                "source_scope": "Montaje",
+                "source_url": "https://example.invalid/assembly-representation",
+                "conditions": "Piezas OEM y ajuste"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "ca_root_undeclared_alternative_conditions_stay_pending",
+      "template": "frame",
+      "values": {
+        "assembly_variant_identity": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "scope": "Esta variante de catálogo",
+                "brand": "Marca sintética",
+                "model": "Modelo sintético",
+                "variant": "Variante M",
+                "size_label": "M",
+                "edition": "Edición sintética",
+                "source_scope": "Ficha de esta variante",
+                "source_url": "https://example.invalid/assembly-representation"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "assembly_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "variant_row_id": "r1",
+                "configuration": "Montaje suministrado",
+                "state": "Alternativa OEM documentada",
+                "source_scope": "Montaje",
+                "source_url": "https://example.invalid/assembly-representation"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "expected_issue_subset": [
+        {
+          "code": "row_required_missing",
+          "field": "assembly_configurations",
+          "blocking": false
+        }
+      ],
+      "expected_sql_issue_subset": [
+        {
+          "code": "row_required_missing",
+          "field": "assembly_configurations",
+          "blocking": false
+        }
+      ]
+    },
+    {
+      "id": "ca_root_front_and_rear_bead_profiles_stay_separate",
+      "template": "wheel",
+      "values": {
+        "assembly_variant_identity": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "scope": "Esta variante de catálogo",
+                "brand": "Marca sintética",
+                "model": "Modelo sintético",
+                "variant": "Variante M",
+                "size_label": "M",
+                "edition": "Edición sintética",
+                "source_scope": "Ficha de esta variante",
+                "source_url": "https://example.invalid/assembly-representation"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "assembly_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "variant_row_id": "r1",
+                "configuration": "Montaje suministrado",
+                "state": "Suministrada",
+                "source_scope": "Montaje",
+                "source_url": "https://example.invalid/assembly-representation"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "assembly_wheel_members": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "configuration_row_id": "r1",
+                "member": "Delantera",
+                "position": "Delantera",
+                "source_scope": "Montaje sintético",
+                "source_url": "https://example.invalid/assembly-representation",
+                "rim_bead_profile": "Con gancho (hooked)"
+              },
+              "sources": []
+            },
+            {
+              "id": "r2",
+              "values": {
+                "configuration_row_id": "r1",
+                "member": "Trasera",
+                "position": "Trasera",
+                "source_scope": "Montaje sintético",
+                "source_url": "https://example.invalid/assembly-representation",
+                "rim_bead_profile": "Sin gancho (hookless)"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "ca_root_member_identity_blocks_two_widths_for_one_wheel",
+      "template": "wheel",
+      "values": {
+        "assembly_variant_identity": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "scope": "Esta variante de catálogo",
+                "brand": "Marca sintética",
+                "model": "Modelo sintético",
+                "variant": "Variante M",
+                "size_label": "M",
+                "edition": "Edición sintética",
+                "source_scope": "Ficha de esta variante",
+                "source_url": "https://example.invalid/assembly-representation"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "assembly_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "variant_row_id": "r1",
+                "configuration": "Montaje suministrado",
+                "state": "Suministrada",
+                "source_scope": "Montaje",
+                "source_url": "https://example.invalid/assembly-representation"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "assembly_wheel_members": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "configuration_row_id": "r1",
+                "member": "Delantera",
+                "position": "Delantera",
+                "source_scope": "Montaje sintético",
+                "source_url": "https://example.invalid/assembly-representation",
+                "hub_old_mm": "100"
+              },
+              "sources": []
+            },
+            {
+              "id": "r2",
+              "values": {
+                "configuration_row_id": "r1",
+                "member": "Delantera",
+                "position": "Delantera",
+                "source_scope": "Montaje sintético",
+                "source_url": "https://example.invalid/assembly-representation",
+                "hub_old_mm": "110"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [
+        {
+          "code": "row_shape",
+          "field": "assembly_wheel_members"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "ca_root_wheel_cannot_float_between_mountings",
+      "template": "wheel",
+      "values": {
+        "assembly_variant_identity": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "scope": "Esta variante de catálogo",
+                "brand": "Marca sintética",
+                "model": "Modelo sintético",
+                "variant": "Variante M",
+                "size_label": "M",
+                "edition": "Edición sintética",
+                "source_scope": "Ficha de esta variante",
+                "source_url": "https://example.invalid/assembly-representation"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "assembly_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "variant_row_id": "r1",
+                "configuration": "Montaje suministrado",
+                "state": "Suministrada",
+                "source_scope": "Montaje",
+                "source_url": "https://example.invalid/assembly-representation"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "assembly_wheel_members": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "configuration_row_id": "missing",
+                "member": "Delantera",
+                "position": "Delantera",
+                "source_scope": "Montaje sintético",
+                "source_url": "https://example.invalid/assembly-representation"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [
+        {
+          "code": "row_reference_unresolved",
+          "field": "assembly_wheel_members"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "ca_root_disc_wheel_can_have_zero_wire_spokes",
+      "template": "wheel",
+      "values": {
+        "assembly_variant_identity": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "scope": "Esta variante de catálogo",
+                "brand": "Marca sintética",
+                "model": "Modelo sintético",
+                "variant": "Variante M",
+                "size_label": "M",
+                "edition": "Edición sintética",
+                "source_scope": "Ficha de esta variante",
+                "source_url": "https://example.invalid/assembly-representation"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "assembly_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "variant_row_id": "r1",
+                "configuration": "Montaje suministrado",
+                "state": "Suministrada",
+                "source_scope": "Montaje",
+                "source_url": "https://example.invalid/assembly-representation"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "assembly_wheel_members": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "configuration_row_id": "r1",
+                "member": "Delantera",
+                "position": "Delantera",
+                "source_scope": "Montaje sintético",
+                "source_url": "https://example.invalid/assembly-representation",
+                "spoke_count": "0"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "ca_root_non_disc_wheel_cannot_hold_a_rotor_mount",
+      "template": "wheel",
+      "values": {
+        "assembly_variant_identity": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "scope": "Esta variante de catálogo",
+                "brand": "Marca sintética",
+                "model": "Modelo sintético",
+                "variant": "Variante M",
+                "size_label": "M",
+                "edition": "Edición sintética",
+                "source_scope": "Ficha de esta variante",
+                "source_url": "https://example.invalid/assembly-representation"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "assembly_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "variant_row_id": "r1",
+                "configuration": "Montaje suministrado",
+                "state": "Suministrada",
+                "source_scope": "Montaje",
+                "source_url": "https://example.invalid/assembly-representation"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "assembly_wheel_members": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "configuration_row_id": "r1",
+                "member": "Delantera",
+                "position": "Delantera",
+                "source_scope": "Montaje sintético",
+                "source_url": "https://example.invalid/assembly-representation",
+                "disc_present": false,
+                "rotor_mount": "6 pernos"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [
+        {
+          "code": "row_field_applicability",
+          "field": "assembly_wheel_members"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "ca_root_no_drive_port_cannot_hold_a_freehub",
+      "template": "wheel",
+      "values": {
+        "assembly_variant_identity": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "scope": "Esta variante de catálogo",
+                "brand": "Marca sintética",
+                "model": "Modelo sintético",
+                "variant": "Variante M",
+                "size_label": "M",
+                "edition": "Edición sintética",
+                "source_scope": "Ficha de esta variante",
+                "source_url": "https://example.invalid/assembly-representation"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "assembly_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "variant_row_id": "r1",
+                "configuration": "Montaje suministrado",
+                "state": "Suministrada",
+                "source_scope": "Montaje",
+                "source_url": "https://example.invalid/assembly-representation"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "assembly_wheel_members": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "configuration_row_id": "r1",
+                "member": "Delantera",
+                "position": "Delantera",
+                "source_scope": "Montaje sintético",
+                "source_url": "https://example.invalid/assembly-representation",
+                "drive_present": false,
+                "drive_interface": "HG"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [
+        {
+          "code": "row_field_applicability",
+          "field": "assembly_wheel_members"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "ca_root_linear_measure_cannot_use_degrees",
+      "template": "frame",
+      "values": {
+        "assembly_variant_identity": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "scope": "Esta variante de catálogo",
+                "brand": "Marca sintética",
+                "model": "Modelo sintético",
+                "variant": "Variante M",
+                "size_label": "M",
+                "edition": "Edición sintética",
+                "source_scope": "Ficha de esta variante",
+                "source_url": "https://example.invalid/assembly-representation"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "assembly_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "variant_row_id": "r1",
+                "configuration": "Montaje suministrado",
+                "state": "Suministrada",
+                "source_scope": "Montaje",
+                "source_url": "https://example.invalid/assembly-representation"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "frame_geometry_measurements": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "configuration_row_id": "r1",
+                "measure": "Tubo superior",
+                "value": "560",
+                "unit": "grados",
+                "datum": "Longitud efectiva",
+                "source_scope": "Sintético",
+                "source_url": "https://example.invalid/assembly-representation"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [
+        {
+          "code": "row_field_applicability",
+          "field": "frame_geometry_measurements"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "ca_root_signed_bottom_bracket_offset_is_not_a_negative_length",
+      "template": "frame",
+      "values": {
+        "assembly_variant_identity": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "scope": "Esta variante de catálogo",
+                "brand": "Marca sintética",
+                "model": "Modelo sintético",
+                "variant": "Variante M",
+                "size_label": "M",
+                "edition": "Edición sintética",
+                "source_scope": "Ficha de esta variante",
+                "source_url": "https://example.invalid/assembly-representation"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "assembly_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "variant_row_id": "r1",
+                "configuration": "Montaje suministrado",
+                "state": "Suministrada",
+                "source_scope": "Montaje",
+                "source_url": "https://example.invalid/assembly-representation"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "frame_geometry_measurements": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "configuration_row_id": "r1",
+                "measure": "Desnivel firmado del pedalier",
+                "unit": "mm",
+                "datum": "Convención con signo explícita de la fuente",
+                "source_scope": "Sintético",
+                "source_url": "https://example.invalid/assembly-representation",
+                "offset_value": "-5"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "ca_root_geometry_cannot_link_another_absent_configuration",
+      "template": "frame",
+      "values": {
+        "assembly_variant_identity": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "scope": "Esta variante de catálogo",
+                "brand": "Marca sintética",
+                "model": "Modelo sintético",
+                "variant": "Variante M",
+                "size_label": "M",
+                "edition": "Edición sintética",
+                "source_scope": "Ficha de esta variante",
+                "source_url": "https://example.invalid/assembly-representation"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "assembly_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "variant_row_id": "r1",
+                "configuration": "Montaje suministrado",
+                "state": "Suministrada",
+                "source_scope": "Montaje",
+                "source_url": "https://example.invalid/assembly-representation"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "frame_geometry_measurements": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "configuration_row_id": "missing",
+                "measure": "Tubo superior",
+                "value": "560",
+                "unit": "mm",
+                "datum": "Longitud efectiva",
+                "source_scope": "Sintético",
+                "source_url": "https://example.invalid/assembly-representation"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [
+        {
+          "code": "row_reference_unresolved",
+          "field": "frame_geometry_measurements"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "ca_root_two_batteries_retain_per_pack_energy",
+      "template": "bicycle",
+      "values": {
+        "assembly_variant_identity": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "scope": "Esta variante de catálogo",
+                "brand": "Marca sintética",
+                "model": "Modelo sintético",
+                "variant": "Variante M",
+                "size_label": "M",
+                "edition": "Edición sintética",
+                "source_scope": "Ficha de esta variante",
+                "source_url": "https://example.invalid/assembly-representation"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "assembly_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "variant_row_id": "r1",
+                "configuration": "Montaje suministrado",
+                "state": "Suministrada",
+                "source_scope": "Montaje",
+                "source_url": "https://example.invalid/assembly-representation"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "assembly_component_members": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "configuration_row_id": "r1",
+                "member": "Batería principal",
+                "kind": "Batería",
+                "quantity": "1",
+                "battery_energy_wh": "500",
+                "nominal_voltage_v": "36",
+                "source_scope": "Sintético",
+                "source_url": "https://example.invalid/assembly-representation"
+              },
+              "sources": []
+            },
+            {
+              "id": "r2",
+              "values": {
+                "configuration_row_id": "r1",
+                "member": "Batería auxiliar",
+                "kind": "Batería",
+                "quantity": "1",
+                "battery_energy_wh": "250",
+                "nominal_voltage_v": "36",
+                "source_scope": "Sintético",
+                "source_url": "https://example.invalid/assembly-representation"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "ca_root_battery_energy_cannot_belong_to_a_fork",
+      "template": "bicycle",
+      "values": {
+        "assembly_variant_identity": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "scope": "Esta variante de catálogo",
+                "brand": "Marca sintética",
+                "model": "Modelo sintético",
+                "variant": "Variante M",
+                "size_label": "M",
+                "edition": "Edición sintética",
+                "source_scope": "Ficha de esta variante",
+                "source_url": "https://example.invalid/assembly-representation"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "assembly_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "variant_row_id": "r1",
+                "configuration": "Montaje suministrado",
+                "state": "Suministrada",
+                "source_scope": "Montaje",
+                "source_url": "https://example.invalid/assembly-representation"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "assembly_component_members": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "configuration_row_id": "r1",
+                "member": "Batería principal",
+                "kind": "Horquilla",
+                "quantity": "1",
+                "battery_energy_wh": "500",
+                "nominal_voltage_v": "36",
+                "source_scope": "Sintético",
+                "source_url": "https://example.invalid/assembly-representation"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [
+        {
+          "code": "row_field_applicability",
+          "field": "assembly_component_members"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "expected_sql_blocking": [
+        {
+          "code": "row_field_applicability",
+          "field": "assembly_component_members"
+        },
+        {
+          "code": "row_field_applicability",
+          "field": "assembly_component_members"
+        }
+      ]
+    },
+    {
+      "id": "ca_root_charger_output_is_not_a_battery_nominal_voltage",
+      "template": "bicycle",
+      "values": {
+        "assembly_variant_identity": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "scope": "Esta variante de catálogo",
+                "brand": "Marca sintética",
+                "model": "Modelo sintético",
+                "variant": "Variante M",
+                "size_label": "M",
+                "edition": "Edición sintética",
+                "source_scope": "Ficha de esta variante",
+                "source_url": "https://example.invalid/assembly-representation"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "assembly_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "variant_row_id": "r1",
+                "configuration": "Montaje suministrado",
+                "state": "Suministrada",
+                "source_scope": "Montaje",
+                "source_url": "https://example.invalid/assembly-representation"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "assembly_component_members": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "configuration_row_id": "r1",
+                "member": "Batería principal",
+                "kind": "Batería",
+                "quantity": "1",
+                "battery_energy_wh": "500",
+                "nominal_voltage_v": "36",
+                "source_scope": "Sintético",
+                "source_url": "https://example.invalid/assembly-representation",
+                "charger_output_voltage_v": "42"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [
+        {
+          "code": "row_field_applicability",
+          "field": "assembly_component_members"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "ca_root_cup_thread_does_not_make_a_smooth_frame_threaded",
+      "template": "frame",
+      "values": {
+        "assembly_variant_identity": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "scope": "Esta variante de catálogo",
+                "brand": "Marca sintética",
+                "model": "Modelo sintético",
+                "variant": "Variante M",
+                "size_label": "M",
+                "edition": "Edición sintética",
+                "source_scope": "Ficha de esta variante",
+                "source_url": "https://example.invalid/assembly-representation"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "assembly_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "variant_row_id": "r1",
+                "configuration": "Montaje suministrado",
+                "state": "Suministrada",
+                "source_scope": "Montaje",
+                "source_url": "https://example.invalid/assembly-representation"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "assembly_frame_interfaces": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "configuration_row_id": "r1",
+                "interface": "Caja BB",
+                "port_kind": "Caja de pedalier",
+                "form": "Asiento sin rosca",
+                "diameter": "46",
+                "diameter_unit": "mm",
+                "width_mm": "86.5",
+                "datum": "Alojamiento del cuadro sintético",
+                "source_scope": "Sintético",
+                "source_url": "https://example.invalid/assembly-representation",
+                "pitch": "24",
+                "pitch_unit": "tpi"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [
+        {
+          "code": "row_field_applicability",
+          "field": "assembly_frame_interfaces"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "expected_sql_blocking": [
+        {
+          "code": "row_field_applicability",
+          "field": "assembly_frame_interfaces"
+        },
+        {
+          "code": "row_field_applicability",
+          "field": "assembly_frame_interfaces"
+        }
+      ]
+    },
+    {
+      "id": "ca_root_metric_diameter_and_imperial_pitch_independent",
+      "template": "frame",
+      "values": {
+        "assembly_variant_identity": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "scope": "Esta variante de catálogo",
+                "brand": "Marca sintética",
+                "model": "Modelo sintético",
+                "variant": "Variante M",
+                "size_label": "M",
+                "edition": "Edición sintética",
+                "source_scope": "Ficha de esta variante",
+                "source_url": "https://example.invalid/assembly-representation"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "assembly_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "variant_row_id": "r1",
+                "configuration": "Montaje suministrado",
+                "state": "Suministrada",
+                "source_scope": "Montaje",
+                "source_url": "https://example.invalid/assembly-representation"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "assembly_frame_interfaces": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "configuration_row_id": "r1",
+                "interface": "Caja BB",
+                "port_kind": "Caja de pedalier",
+                "form": "Rosca medida",
+                "diameter": "10",
+                "diameter_unit": "mm",
+                "width_mm": "86.5",
+                "datum": "Alojamiento del cuadro sintético",
+                "source_scope": "Sintético",
+                "source_url": "https://example.invalid/assembly-representation",
+                "pitch": "26",
+                "pitch_unit": "tpi",
+                "thread_hand": "Derecha"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "ca_root_belt_has_no_chainring_count",
+      "template": "bicycle",
+      "values": {
+        "assembly_variant_identity": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "scope": "Esta variante de catálogo",
+                "brand": "Marca sintética",
+                "model": "Modelo sintético",
+                "variant": "Variante M",
+                "size_label": "M",
+                "edition": "Edición sintética",
+                "source_scope": "Ficha de esta variante",
+                "source_url": "https://example.invalid/assembly-representation"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "assembly_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "variant_row_id": "r1",
+                "configuration": "Montaje suministrado",
+                "state": "Suministrada",
+                "source_scope": "Montaje",
+                "source_url": "https://example.invalid/assembly-representation"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "bicycle_drive_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "configuration_row_id": "r1",
+                "drive_kind": "Correa",
+                "front_chainrings": "2",
+                "source_scope": "Sintético",
+                "source_url": "https://example.invalid/assembly-representation"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [
+        {
+          "code": "row_field_applicability",
+          "field": "bicycle_drive_configurations"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "ca_root_internal_and_external_gear_counts_remain_distinct",
+      "template": "bicycle",
+      "values": {
+        "assembly_variant_identity": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "scope": "Esta variante de catálogo",
+                "brand": "Marca sintética",
+                "model": "Modelo sintético",
+                "variant": "Variante M",
+                "size_label": "M",
+                "edition": "Edición sintética",
+                "source_scope": "Ficha de esta variante",
+                "source_url": "https://example.invalid/assembly-representation"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "assembly_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "variant_row_id": "r1",
+                "configuration": "Montaje suministrado",
+                "state": "Suministrada",
+                "source_scope": "Montaje",
+                "source_url": "https://example.invalid/assembly-representation"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "bicycle_drive_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "configuration_row_id": "r1",
+                "drive_kind": "Cadena",
+                "front_chainrings": "1",
+                "rear_external_gears": "9",
+                "hub_internal_gears": "3",
+                "source_scope": "Sintético",
+                "source_url": "https://example.invalid/assembly-representation"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "ca_root_surly_clearance_keeps_fender_conditions",
+      "template": "frame",
+      "values": {
+        "assembly_variant_identity": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "scope": "Esta variante de catálogo",
+                "brand": "Marca sintética",
+                "model": "Modelo sintético",
+                "variant": "Variante M",
+                "size_label": "M",
+                "edition": "Edición sintética",
+                "source_scope": "Ficha de esta variante",
+                "source_url": "https://example.invalid/assembly-representation"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "assembly_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "variant_row_id": "r1",
+                "configuration": "Montaje suministrado",
+                "state": "Suministrada",
+                "source_scope": "Montaje",
+                "source_url": "https://example.invalid/assembly-representation"
+              },
+              "sources": []
+            },
+            {
+              "id": "r2",
+              "values": {
+                "variant_row_id": "r1",
+                "configuration": "Con guardabarros",
+                "state": "Alternativa OEM documentada",
+                "source_scope": "Montaje",
+                "source_url": "https://example.invalid/assembly-representation",
+                "conditions": "Guardabarros y límites OEM"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "assembly_frame_fitment_claims": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "configuration_row_id": "r1",
+                "location": "Paso de rueda",
+                "target_kind": "Neumático",
+                "target_model": "700c nominal publicado",
+                "target_edition": "Página legacy Cross-Check",
+                "status": "Condicionado",
+                "conditions": "Depende de cubierta, llanta, posición del eje y otros factores",
+                "source_scope": "Tire Clearance",
+                "source_url": "https://surlybikes.com/products/cross_check_2000",
+                "max_tire_width_mm": "42",
+                "fender_present": false
+              },
+              "sources": []
+            },
+            {
+              "id": "r2",
+              "values": {
+                "configuration_row_id": "r2",
+                "location": "Paso de rueda",
+                "target_kind": "Neumático",
+                "target_model": "700c nominal publicado",
+                "target_edition": "Página legacy Cross-Check",
+                "status": "Condicionado",
+                "conditions": "Depende de cubierta, llanta, posición del eje y otros factores",
+                "source_scope": "Tire Clearance",
+                "source_url": "https://surlybikes.com/products/cross_check_2000",
+                "max_tire_width_mm": "40",
+                "fender_present": true
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [
+        "https://surlybikes.com/products/cross_check_2000"
+      ]
+    }
+  ],
+  "root_nd_case_overrides": [
+    {
+      "id": "helmet_smith_mainline_certifications_by_row",
+      "reason": "Integral pertenece al eje de construcción, no al uso."
+    },
+    {
+      "id": "helmet_inventory_best_enduro_certificado_sin_norma",
+      "reason": "Se conserva Enduro sin inferir cobertura desde el título."
+    },
+    {
+      "id": "RCF25",
+      "reason": "Una variante distinta del soporte no es montaje de este SKU; se rechaza el token retirado."
+    }
+  ],
+  "root_row_value_case_overrides": [
+    "RCF08",
+    "CPC_GAP_INCLUDED_CLAMP_FALSE"
+  ],
+  "deferred_pressure_fixture_ids": [],
+  "superseded_pressure_fixtures": [
+    "wrfp_hookless_row_maximum_is_not_the_headline",
+    "wrfp_schwalbe_general_maximum_in_bar",
+    "wrfp_unit_without_value_is_pending",
+    "wrfp_value_without_unit_stays_pending"
+  ],
+  "required_server_migration": "20260907025000"
+}

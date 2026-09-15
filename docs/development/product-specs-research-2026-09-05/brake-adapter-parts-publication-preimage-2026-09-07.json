@@ -1,0 +1,857 @@
+[
+    {
+        "metadata": {
+            "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+            "captured_at": "2026-09-08T02:34:54.840578+00:00",
+            "template_collisions": [
+            ],
+            "existing_definitions": [
+                {
+                    "id": "369c2b61-dd89-5153-8fdb-7ecf123529fd",
+                    "key": "compatible_brake_models",
+                    "unit": null,
+                    "label": "Modelos de freno documentados",
+                    "options": [
+                    ],
+                    "data_type": "json",
+                    "tenant_id": null,
+                    "created_at": "2026-09-08T02:08:22.750833+00:00",
+                    "group_name": null,
+                    "sort_order": 0,
+                    "updated_at": "2026-09-08T02:08:22.750833+00:00",
+                    "description": null,
+                    "is_filterable": false,
+                    "allowed_values": [
+                    ],
+                    "validation_rules": {
+                        "rows_schema": {
+                            "columns": [
+                                {
+                                    "key": "brand",
+                                    "type": "text",
+                                    "label": "Marca",
+                                    "required": true
+                                },
+                                {
+                                    "key": "model",
+                                    "type": "text",
+                                    "label": "Modelo",
+                                    "required": true
+                                },
+                                {
+                                    "key": "source_url",
+                                    "type": "url",
+                                    "label": "Fuente",
+                                    "required": true
+                                },
+                                {
+                                    "key": "generation",
+                                    "type": "text",
+                                    "label": "Generación o edición",
+                                    "required": false
+                                },
+                                {
+                                    "key": "conditions",
+                                    "type": "text",
+                                    "label": "Condiciones de la declaración",
+                                    "required": false
+                                },
+                                {
+                                    "key": "position",
+                                    "type": "token",
+                                    "label": "Posición de la contraparte",
+                                    "required": false,
+                                    "allowed_values": [
+                                        "Delantero",
+                                        "Trasero"
+                                    ]
+                                },
+                                {
+                                    "key": "variant",
+                                    "type": "text",
+                                    "label": "Variante exacta de la contraparte",
+                                    "required": false
+                                }
+                            ],
+                            "version": 1
+                        }
+                    },
+                    "is_customer_visible": false,
+                    "is_mechanic_visible": true,
+                    "is_required_by_default": false,
+                    "is_compatibility_relevant": false
+                },
+                {
+                    "id": "4f055961-6c16-430b-a4e2-e6b09dc1cccc",
+                    "key": "spec_evidence_source",
+                    "unit": null,
+                    "label": "Fuente de la declaración",
+                    "options": [
+                    ],
+                    "data_type": "text",
+                    "tenant_id": null,
+                    "created_at": "2026-09-06T06:58:57.745728+00:00",
+                    "group_name": null,
+                    "sort_order": 900,
+                    "updated_at": "2026-09-06T06:58:57.745728+00:00",
+                    "description": "URL del fabricante, manual o identificación del envase que respalda la declaración.",
+                    "is_filterable": false,
+                    "allowed_values": [
+                    ],
+                    "validation_rules": {
+                    },
+                    "is_customer_visible": false,
+                    "is_mechanic_visible": true,
+                    "is_required_by_default": false,
+                    "is_compatibility_relevant": false
+                },
+                {
+                    "id": "7da3359a-e29f-57d8-901f-355753d1c6b3",
+                    "key": "material",
+                    "unit": null,
+                    "label": "Material",
+                    "options": [
+                        {
+                            "id": "0f7a88b0-4cf7-5429-9678-30180a13c41e",
+                            "code": "catalog_903afabafdfb27787b1e00c966021b0c",
+                            "label": "Policarbonato / plástico",
+                            "is_active": true,
+                            "tenant_id": null,
+                            "created_at": "2026-09-07T22:33:40.381707+00:00",
+                            "sort_order": 10,
+                            "updated_at": "2026-09-07T22:33:40.381707+00:00",
+                            "spec_definition_id": "7da3359a-e29f-57d8-901f-355753d1c6b3"
+                        },
+                        {
+                            "id": "11fbf5fa-89db-5f5d-bf42-d4b4f27ce3b4",
+                            "code": "catalog_70cc49d9167b975547d0730eee2beddf",
+                            "label": "Titanio",
+                            "is_active": true,
+                            "tenant_id": null,
+                            "created_at": "2026-09-07T22:33:40.381707+00:00",
+                            "sort_order": 11,
+                            "updated_at": "2026-09-07T22:33:40.381707+00:00",
+                            "spec_definition_id": "7da3359a-e29f-57d8-901f-355753d1c6b3"
+                        },
+                        {
+                            "id": "18676042-bb7f-53a8-825f-6e1779939de0",
+                            "code": "catalog_e266cfd65ad46a67fc54b0efd38e40dd",
+                            "label": "Polar",
+                            "is_active": true,
+                            "tenant_id": null,
+                            "created_at": "2026-09-07T22:33:40.381707+00:00",
+                            "sort_order": 26,
+                            "updated_at": "2026-09-07T22:33:40.381707+00:00",
+                            "spec_definition_id": "7da3359a-e29f-57d8-901f-355753d1c6b3"
+                        },
+                        {
+                            "id": "1b12240f-919b-5ff0-ba34-35e949e21483",
+                            "code": "catalog_8265ca77f1ed28b82afd09bc72da0884",
+                            "label": "Acero",
+                            "is_active": true,
+                            "tenant_id": null,
+                            "created_at": "2026-09-07T22:33:40.381707+00:00",
+                            "sort_order": 0,
+                            "updated_at": "2026-09-07T22:33:40.381707+00:00",
+                            "spec_definition_id": "7da3359a-e29f-57d8-901f-355753d1c6b3"
+                        },
+                        {
+                            "id": "2a4d8d37-e119-5797-b9be-b168b918353f",
+                            "code": "catalog_83c79025b595f0896b60de03d1fc64f2",
+                            "label": "Neopreno",
+                            "is_active": true,
+                            "tenant_id": null,
+                            "created_at": "2026-09-07T22:33:40.381707+00:00",
+                            "sort_order": 24,
+                            "updated_at": "2026-09-07T22:33:40.381707+00:00",
+                            "spec_definition_id": "7da3359a-e29f-57d8-901f-355753d1c6b3"
+                        },
+                        {
+                            "id": "32b400b8-9ed3-5b8e-834a-0252f819e27d",
+                            "code": "catalog_5756f15654fa53239591def5b5a0f2bc",
+                            "label": "Poliéster",
+                            "is_active": true,
+                            "tenant_id": null,
+                            "created_at": "2026-09-07T22:33:40.381707+00:00",
+                            "sort_order": 25,
+                            "updated_at": "2026-09-07T22:33:40.381707+00:00",
+                            "spec_definition_id": "7da3359a-e29f-57d8-901f-355753d1c6b3"
+                        },
+                        {
+                            "id": "4ffab964-2ebc-5021-90c0-be85480b68ec",
+                            "code": "catalog_f1bf3336d6fd120b3eee3952c39c0677",
+                            "label": "Carbono",
+                            "is_active": true,
+                            "tenant_id": null,
+                            "created_at": "2026-09-07T22:33:40.381707+00:00",
+                            "sort_order": 8,
+                            "updated_at": "2026-09-07T22:33:40.381707+00:00",
+                            "spec_definition_id": "7da3359a-e29f-57d8-901f-355753d1c6b3"
+                        },
+                        {
+                            "id": "5941e1d7-4af1-53fc-891d-07d61d639e01",
+                            "code": "catalog_666b8b46df3bf02a807530692d01ecf4",
+                            "label": "PE / plástico",
+                            "is_active": true,
+                            "tenant_id": null,
+                            "created_at": "2026-09-07T22:33:40.381707+00:00",
+                            "sort_order": 20,
+                            "updated_at": "2026-09-07T22:33:40.381707+00:00",
+                            "spec_definition_id": "7da3359a-e29f-57d8-901f-355753d1c6b3"
+                        },
+                        {
+                            "id": "6df2768e-61d3-5383-ad5a-001a88f6879f",
+                            "code": "catalog_eda88ba0a167a288dce3e99be54bfa69",
+                            "label": "Gel / PU",
+                            "is_active": true,
+                            "tenant_id": null,
+                            "created_at": "2026-09-07T22:33:40.381707+00:00",
+                            "sort_order": 6,
+                            "updated_at": "2026-09-07T22:33:40.381707+00:00",
+                            "spec_definition_id": "7da3359a-e29f-57d8-901f-355753d1c6b3"
+                        },
+                        {
+                            "id": "72005f61-79a3-54cb-882d-0f3c92ab0efc",
+                            "code": "catalog_d09dfb57de9bcb275cdbffe1d9f7d4ed",
+                            "label": "Latón",
+                            "is_active": true,
+                            "tenant_id": null,
+                            "created_at": "2026-09-07T22:33:40.381707+00:00",
+                            "sort_order": 12,
+                            "updated_at": "2026-09-07T22:33:40.381707+00:00",
+                            "spec_definition_id": "7da3359a-e29f-57d8-901f-355753d1c6b3"
+                        },
+                        {
+                            "id": "76ab4355-d966-5e41-b886-d2b357a66e64",
+                            "code": "catalog_3add2a4e04f3365b9551044bf9e00baf",
+                            "label": "Plástico",
+                            "is_active": true,
+                            "tenant_id": null,
+                            "created_at": "2026-09-07T22:33:40.381707+00:00",
+                            "sort_order": 2,
+                            "updated_at": "2026-09-07T22:33:40.381707+00:00",
+                            "spec_definition_id": "7da3359a-e29f-57d8-901f-355753d1c6b3"
+                        },
+                        {
+                            "id": "78c8ca78-87a0-5370-9fe0-bfd99b9bb1db",
+                            "code": "catalog_978d237a8b99eff81cf349e2409e9ee3",
+                            "label": "Plástico / nylon",
+                            "is_active": true,
+                            "tenant_id": null,
+                            "created_at": "2026-09-07T22:33:40.381707+00:00",
+                            "sort_order": 18,
+                            "updated_at": "2026-09-07T22:33:40.381707+00:00",
+                            "spec_definition_id": "7da3359a-e29f-57d8-901f-355753d1c6b3"
+                        },
+                        {
+                            "id": "7d421327-d744-5f53-9e0f-3a86cb84ae4e",
+                            "code": "catalog_c2295235a535ea3e85b7a0e5ab85afb0",
+                            "label": "Otro",
+                            "is_active": true,
+                            "tenant_id": null,
+                            "created_at": "2026-09-07T22:33:40.381707+00:00",
+                            "sort_order": 3,
+                            "updated_at": "2026-09-07T22:33:40.381707+00:00",
+                            "spec_definition_id": "7da3359a-e29f-57d8-901f-355753d1c6b3"
+                        },
+                        {
+                            "id": "81b9ec48-84af-50c5-9331-0c084bf8b952",
+                            "code": "catalog_83967661f51953134a64311d65e5541a",
+                            "label": "Goma",
+                            "is_active": true,
+                            "tenant_id": null,
+                            "created_at": "2026-09-07T22:33:40.381707+00:00",
+                            "sort_order": 19,
+                            "updated_at": "2026-09-07T22:33:40.381707+00:00",
+                            "spec_definition_id": "7da3359a-e29f-57d8-901f-355753d1c6b3"
+                        },
+                        {
+                            "id": "8cb43060-b124-5141-aecb-d7ca8c301784",
+                            "code": "catalog_d4ab62ce43f88267676dc8fd37c1af6f",
+                            "label": "Acero inoxidable",
+                            "is_active": true,
+                            "tenant_id": null,
+                            "created_at": "2026-09-07T22:33:40.381707+00:00",
+                            "sort_order": 16,
+                            "updated_at": "2026-09-07T22:33:40.381707+00:00",
+                            "spec_definition_id": "7da3359a-e29f-57d8-901f-355753d1c6b3"
+                        },
+                        {
+                            "id": "9aabd194-418e-57b7-9162-b1fa27275915",
+                            "code": "catalog_c93a50726342225b7b323e2de4064ebc",
+                            "label": "Magnesio / mixta",
+                            "is_active": true,
+                            "tenant_id": null,
+                            "created_at": "2026-09-07T22:33:40.381707+00:00",
+                            "sort_order": 9,
+                            "updated_at": "2026-09-07T22:33:40.381707+00:00",
+                            "spec_definition_id": "7da3359a-e29f-57d8-901f-355753d1c6b3"
+                        },
+                        {
+                            "id": "a03a449f-2130-5fd7-9b8a-76698d86cb8b",
+                            "code": "catalog_959ebb89f0689b5549189de2bcd866c6",
+                            "label": "Tritan",
+                            "is_active": true,
+                            "tenant_id": null,
+                            "created_at": "2026-09-07T22:33:40.381707+00:00",
+                            "sort_order": 21,
+                            "updated_at": "2026-09-07T22:33:40.381707+00:00",
+                            "spec_definition_id": "7da3359a-e29f-57d8-901f-355753d1c6b3"
+                        },
+                        {
+                            "id": "a6404bd8-4942-56d4-b8b0-40404909ed8d",
+                            "code": "catalog_e8abd84a32604632f01c81dac8526457",
+                            "label": "Poliéster / PET",
+                            "is_active": true,
+                            "tenant_id": null,
+                            "created_at": "2026-09-07T22:33:40.381707+00:00",
+                            "sort_order": 13,
+                            "updated_at": "2026-09-07T22:33:40.381707+00:00",
+                            "spec_definition_id": "7da3359a-e29f-57d8-901f-355753d1c6b3"
+                        },
+                        {
+                            "id": "aed6613f-f75c-591e-ac95-01d904df245e",
+                            "code": "catalog_f0fa8cf43bf1f7c3f4a4b7385d51ce0b",
+                            "label": "Algodón",
+                            "is_active": true,
+                            "tenant_id": null,
+                            "created_at": "2026-09-07T22:33:40.381707+00:00",
+                            "sort_order": 27,
+                            "updated_at": "2026-09-07T22:33:40.381707+00:00",
+                            "spec_definition_id": "7da3359a-e29f-57d8-901f-355753d1c6b3"
+                        },
+                        {
+                            "id": "b6430da5-0bbc-5fb6-8309-830153bfde99",
+                            "code": "catalog_d65a2876c47595510cc52a5bd5d589f6",
+                            "label": "Mezcla",
+                            "is_active": true,
+                            "tenant_id": null,
+                            "created_at": "2026-09-07T22:33:40.381707+00:00",
+                            "sort_order": 28,
+                            "updated_at": "2026-09-07T22:33:40.381707+00:00",
+                            "spec_definition_id": "7da3359a-e29f-57d8-901f-355753d1c6b3"
+                        },
+                        {
+                            "id": "bb2e4d96-1e8d-50c2-822b-d2e286f1654c",
+                            "code": "catalog_78b342449927661ac3b622233fc2869b",
+                            "label": "Acero galvanizado",
+                            "is_active": true,
+                            "tenant_id": null,
+                            "created_at": "2026-09-07T22:33:40.381707+00:00",
+                            "sort_order": 15,
+                            "updated_at": "2026-09-07T22:33:40.381707+00:00",
+                            "spec_definition_id": "7da3359a-e29f-57d8-901f-355753d1c6b3"
+                        },
+                        {
+                            "id": "c5dfe1a4-1133-5f84-af73-82564d0b5766",
+                            "code": "catalog_4ba389f6e8a3692d46102e09d396ddc2",
+                            "label": "EVA",
+                            "is_active": true,
+                            "tenant_id": null,
+                            "created_at": "2026-09-07T22:33:40.381707+00:00",
+                            "sort_order": 4,
+                            "updated_at": "2026-09-07T22:33:40.381707+00:00",
+                            "spec_definition_id": "7da3359a-e29f-57d8-901f-355753d1c6b3"
+                        },
+                        {
+                            "id": "c5fda83c-954f-52a2-a67d-1c6a8ca0808a",
+                            "code": "catalog_98b40d133309aed77e37fb1843cdbc27",
+                            "label": "PVC / vinilo",
+                            "is_active": true,
+                            "tenant_id": null,
+                            "created_at": "2026-09-07T22:33:40.381707+00:00",
+                            "sort_order": 23,
+                            "updated_at": "2026-09-07T22:33:40.381707+00:00",
+                            "spec_definition_id": "7da3359a-e29f-57d8-901f-355753d1c6b3"
+                        },
+                        {
+                            "id": "d1ada999-7a10-5de2-837d-d1b4a2f72af6",
+                            "code": "catalog_708f9ce7c90b4bd833fed140664df384",
+                            "label": "Mimbre",
+                            "is_active": true,
+                            "tenant_id": null,
+                            "created_at": "2026-09-07T22:33:40.381707+00:00",
+                            "sort_order": 22,
+                            "updated_at": "2026-09-07T22:33:40.381707+00:00",
+                            "spec_definition_id": "7da3359a-e29f-57d8-901f-355753d1c6b3"
+                        },
+                        {
+                            "id": "d3e3d8c7-43eb-5d4e-ac76-fa34e0a57b40",
+                            "code": "catalog_6691e26bfeea24b353c9357ca4275ab6",
+                            "label": "Aluminio",
+                            "is_active": true,
+                            "tenant_id": null,
+                            "created_at": "2026-09-07T22:33:40.381707+00:00",
+                            "sort_order": 1,
+                            "updated_at": "2026-09-07T22:33:40.381707+00:00",
+                            "spec_definition_id": "7da3359a-e29f-57d8-901f-355753d1c6b3"
+                        },
+                        {
+                            "id": "dc1c2129-e647-50bc-816f-a315d2621247",
+                            "code": "catalog_1ba6129627b0af4dc9d3e3cf9b84e6ea",
+                            "label": "Recubierto (teflón / polímero)",
+                            "is_active": true,
+                            "tenant_id": null,
+                            "created_at": "2026-09-07T22:33:40.381707+00:00",
+                            "sort_order": 17,
+                            "updated_at": "2026-09-07T22:33:40.381707+00:00",
+                            "spec_definition_id": "7da3359a-e29f-57d8-901f-355753d1c6b3"
+                        },
+                        {
+                            "id": "dc2b5e86-8a3f-5283-9b72-338e2c362cbd",
+                            "code": "catalog_025d10f299c1af11ed2b61ff7dd07ee8",
+                            "label": "Corcho",
+                            "is_active": true,
+                            "tenant_id": null,
+                            "created_at": "2026-09-07T22:33:40.381707+00:00",
+                            "sort_order": 5,
+                            "updated_at": "2026-09-07T22:33:40.381707+00:00",
+                            "spec_definition_id": "7da3359a-e29f-57d8-901f-355753d1c6b3"
+                        },
+                        {
+                            "id": "f8fd17f7-50df-5e55-9904-bb7d6a3e11e0",
+                            "code": "catalog_457724ad08d0131d0c80c98ad534533e",
+                            "label": "Silicona",
+                            "is_active": true,
+                            "tenant_id": null,
+                            "created_at": "2026-09-07T22:33:40.381707+00:00",
+                            "sort_order": 7,
+                            "updated_at": "2026-09-07T22:33:40.381707+00:00",
+                            "spec_definition_id": "7da3359a-e29f-57d8-901f-355753d1c6b3"
+                        },
+                        {
+                            "id": "f94df7ee-e1e0-5d45-8a4c-385ff5bb6671",
+                            "code": "catalog_1ab67d54125e7b2bd931c766113c49df",
+                            "label": "Nylon",
+                            "is_active": true,
+                            "tenant_id": null,
+                            "created_at": "2026-09-07T22:33:40.381707+00:00",
+                            "sort_order": 14,
+                            "updated_at": "2026-09-07T22:33:40.381707+00:00",
+                            "spec_definition_id": "7da3359a-e29f-57d8-901f-355753d1c6b3"
+                        }
+                    ],
+                    "data_type": "single_select",
+                    "tenant_id": null,
+                    "created_at": "2026-09-07T22:33:40.381707+00:00",
+                    "group_name": null,
+                    "sort_order": 0,
+                    "updated_at": "2026-09-07T22:33:40.381707+00:00",
+                    "description": null,
+                    "is_filterable": false,
+                    "allowed_values": [
+                        "Acero",
+                        "Aluminio",
+                        "Plástico",
+                        "Otro",
+                        "EVA",
+                        "Corcho",
+                        "Gel / PU",
+                        "Silicona",
+                        "Carbono",
+                        "Magnesio / mixta",
+                        "Policarbonato / plástico",
+                        "Titanio",
+                        "Latón",
+                        "Poliéster / PET",
+                        "Nylon",
+                        "Acero galvanizado",
+                        "Acero inoxidable",
+                        "Recubierto (teflón / polímero)",
+                        "Plástico / nylon",
+                        "Goma",
+                        "PE / plástico",
+                        "Tritan",
+                        "Mimbre",
+                        "PVC / vinilo",
+                        "Neopreno",
+                        "Poliéster",
+                        "Polar",
+                        "Algodón",
+                        "Mezcla"
+                    ],
+                    "validation_rules": {
+                    },
+                    "is_customer_visible": false,
+                    "is_mechanic_visible": true,
+                    "is_required_by_default": false,
+                    "is_compatibility_relevant": false
+                },
+                {
+                    "id": "920bb7cf-9240-5ba9-8ec9-744c335ec01b",
+                    "key": "thread",
+                    "unit": null,
+                    "label": "Designación nominal de la rosca (según etiqueta)",
+                    "options": [
+                        {
+                            "id": "083c9577-e7a9-53bf-bc8c-6a5ad3857633",
+                            "code": "catalog_b32843f22ae0b752c2b7f782c9bdc997",
+                            "label": "9 mm",
+                            "is_active": true,
+                            "tenant_id": null,
+                            "created_at": "2026-09-07T23:23:18.284731+00:00",
+                            "sort_order": 21,
+                            "updated_at": "2026-09-07T23:23:18.284731+00:00",
+                            "spec_definition_id": "920bb7cf-9240-5ba9-8ec9-744c335ec01b"
+                        },
+                        {
+                            "id": "1180b108-4805-5be0-bb13-aa9d72c4b9b7",
+                            "code": "catalog_5d9642022ecdd2f8382586602986dcd9",
+                            "label": "M15",
+                            "is_active": true,
+                            "tenant_id": null,
+                            "created_at": "2026-09-07T23:23:18.284731+00:00",
+                            "sort_order": 13,
+                            "updated_at": "2026-09-07T23:23:18.284731+00:00",
+                            "spec_definition_id": "920bb7cf-9240-5ba9-8ec9-744c335ec01b"
+                        },
+                        {
+                            "id": "1aa2888e-2f76-57ea-b609-823985027629",
+                            "code": "catalog_d87d684a63ec1a3c79ad97a3c69a3dfb",
+                            "label": "5/16\"",
+                            "is_active": true,
+                            "tenant_id": null,
+                            "created_at": "2026-09-07T23:23:18.284731+00:00",
+                            "sort_order": 18,
+                            "updated_at": "2026-09-07T23:23:18.284731+00:00",
+                            "spec_definition_id": "920bb7cf-9240-5ba9-8ec9-744c335ec01b"
+                        },
+                        {
+                            "id": "31a5ba26-aab9-5101-a9af-5d7746bc10c4",
+                            "code": "catalog_e9b2ff641da23037adec56684fb7552b",
+                            "label": "M12",
+                            "is_active": true,
+                            "tenant_id": null,
+                            "created_at": "2026-09-07T23:23:18.284731+00:00",
+                            "sort_order": 5,
+                            "updated_at": "2026-09-07T23:23:18.284731+00:00",
+                            "spec_definition_id": "920bb7cf-9240-5ba9-8ec9-744c335ec01b"
+                        },
+                        {
+                            "id": "37141163-e5b9-58f9-8098-d726fddcc79f",
+                            "code": "catalog_de6e897b1c6ced32e6762f3ceaebffd6",
+                            "label": "Desconocido / sin confirmar",
+                            "is_active": true,
+                            "tenant_id": null,
+                            "created_at": "2026-09-07T23:23:18.284731+00:00",
+                            "sort_order": 9,
+                            "updated_at": "2026-09-07T23:23:18.284731+00:00",
+                            "spec_definition_id": "920bb7cf-9240-5ba9-8ec9-744c335ec01b"
+                        },
+                        {
+                            "id": "3bedd965-e2a7-57ef-a4a2-489bfb463eb8",
+                            "code": "catalog_c415ea602c82b1e1b579f2e282377994",
+                            "label": "M10",
+                            "is_active": true,
+                            "tenant_id": null,
+                            "created_at": "2026-09-07T23:23:18.284731+00:00",
+                            "sort_order": 4,
+                            "updated_at": "2026-09-07T23:23:18.284731+00:00",
+                            "spec_definition_id": "920bb7cf-9240-5ba9-8ec9-744c335ec01b"
+                        },
+                        {
+                            "id": "463987ad-020a-5013-ac81-08d6ff398f21",
+                            "code": "catalog_31a0b85dab4ffccf5c18d93ac2d5945a",
+                            "label": "M9",
+                            "is_active": true,
+                            "tenant_id": null,
+                            "created_at": "2026-09-07T23:23:18.284731+00:00",
+                            "sort_order": 12,
+                            "updated_at": "2026-09-07T23:23:18.284731+00:00",
+                            "spec_definition_id": "920bb7cf-9240-5ba9-8ec9-744c335ec01b"
+                        },
+                        {
+                            "id": "47a8facd-4ff7-58a1-99ce-b7dbfa73e2c5",
+                            "code": "catalog_f07d64e873a4e0a6a0a970dbb158788d",
+                            "label": "M22",
+                            "is_active": true,
+                            "tenant_id": null,
+                            "created_at": "2026-09-07T23:23:18.284731+00:00",
+                            "sort_order": 17,
+                            "updated_at": "2026-09-07T23:23:18.284731+00:00",
+                            "spec_definition_id": "920bb7cf-9240-5ba9-8ec9-744c335ec01b"
+                        },
+                        {
+                            "id": "49c54db5-09db-5f69-97fc-f35d45d0dc9f",
+                            "code": "catalog_74b463f02d110a4068fb6941803e3e4a",
+                            "label": "36 mm",
+                            "is_active": true,
+                            "tenant_id": null,
+                            "created_at": "2026-09-07T23:23:18.284731+00:00",
+                            "sort_order": 23,
+                            "updated_at": "2026-09-07T23:23:18.284731+00:00",
+                            "spec_definition_id": "920bb7cf-9240-5ba9-8ec9-744c335ec01b"
+                        },
+                        {
+                            "id": "6fce41d2-2223-5594-9b2d-bf3b51680a31",
+                            "code": "catalog_ecd6b331a243b9b0e8f354bda6e84690",
+                            "label": "10 mm",
+                            "is_active": true,
+                            "tenant_id": null,
+                            "created_at": "2026-09-07T23:23:18.284731+00:00",
+                            "sort_order": 22,
+                            "updated_at": "2026-09-07T23:23:18.284731+00:00",
+                            "spec_definition_id": "920bb7cf-9240-5ba9-8ec9-744c335ec01b"
+                        },
+                        {
+                            "id": "7cbc380c-c232-5dd3-91fe-82e83217144c",
+                            "code": "catalog_68cb9f4e18c8a567bfeb04d5fc3f57aa",
+                            "label": "M8",
+                            "is_active": true,
+                            "tenant_id": null,
+                            "created_at": "2026-09-07T23:23:18.284731+00:00",
+                            "sort_order": 3,
+                            "updated_at": "2026-09-07T23:23:18.284731+00:00",
+                            "spec_definition_id": "920bb7cf-9240-5ba9-8ec9-744c335ec01b"
+                        },
+                        {
+                            "id": "7ddc4e0e-5bb4-5fc0-9003-48f22ccb84c5",
+                            "code": "catalog_cfc4058beaf69e8781f1d33dee1b5ef2",
+                            "label": "M7",
+                            "is_active": true,
+                            "tenant_id": null,
+                            "created_at": "2026-09-07T23:23:18.284731+00:00",
+                            "sort_order": 11,
+                            "updated_at": "2026-09-07T23:23:18.284731+00:00",
+                            "spec_definition_id": "920bb7cf-9240-5ba9-8ec9-744c335ec01b"
+                        },
+                        {
+                            "id": "8d8dfde1-50fe-5656-b56e-8e5745b0fea6",
+                            "code": "catalog_66b543df60a981ccfcd2d3114605a39a",
+                            "label": "M4",
+                            "is_active": true,
+                            "tenant_id": null,
+                            "created_at": "2026-09-07T23:23:18.284731+00:00",
+                            "sort_order": 0,
+                            "updated_at": "2026-09-07T23:23:18.284731+00:00",
+                            "spec_definition_id": "920bb7cf-9240-5ba9-8ec9-744c335ec01b"
+                        },
+                        {
+                            "id": "9cf0698b-1a34-5725-91dc-9c74f2808054",
+                            "code": "catalog_39c33d2d42b0cb57db30411b166ce3df",
+                            "label": "M18",
+                            "is_active": true,
+                            "tenant_id": null,
+                            "created_at": "2026-09-07T23:23:18.284731+00:00",
+                            "sort_order": 14,
+                            "updated_at": "2026-09-07T23:23:18.284731+00:00",
+                            "spec_definition_id": "920bb7cf-9240-5ba9-8ec9-744c335ec01b"
+                        },
+                        {
+                            "id": "a0cadb43-af42-52d2-8932-d10fcf13e717",
+                            "code": "catalog_4ea25ca9e7779ca3853c8902f0c4541f",
+                            "label": "9/16\"",
+                            "is_active": true,
+                            "tenant_id": null,
+                            "created_at": "2026-09-07T23:23:18.284731+00:00",
+                            "sort_order": 20,
+                            "updated_at": "2026-09-07T23:23:18.284731+00:00",
+                            "spec_definition_id": "920bb7cf-9240-5ba9-8ec9-744c335ec01b"
+                        },
+                        {
+                            "id": "a18d7c27-0cfd-5bf3-8e2c-d44b12883e9e",
+                            "code": "catalog_7fcf2493a1dc564d5fde9375979d82c4",
+                            "label": "3/8\"",
+                            "is_active": true,
+                            "tenant_id": null,
+                            "created_at": "2026-09-07T23:23:18.284731+00:00",
+                            "sort_order": 7,
+                            "updated_at": "2026-09-07T23:23:18.284731+00:00",
+                            "spec_definition_id": "920bb7cf-9240-5ba9-8ec9-744c335ec01b"
+                        },
+                        {
+                            "id": "aa3c174e-4daa-5a75-9772-0cad56237312",
+                            "code": "catalog_e653259c786a626611864bc5ade16f4a",
+                            "label": "1/2\"",
+                            "is_active": true,
+                            "tenant_id": null,
+                            "created_at": "2026-09-07T23:23:18.284731+00:00",
+                            "sort_order": 19,
+                            "updated_at": "2026-09-07T23:23:18.284731+00:00",
+                            "spec_definition_id": "920bb7cf-9240-5ba9-8ec9-744c335ec01b"
+                        },
+                        {
+                            "id": "ac8d2da0-b30f-59e6-8b3f-4e697aa50611",
+                            "code": "catalog_3f44a84e6e34fdb5a2f89c68d8c36175",
+                            "label": "M5",
+                            "is_active": true,
+                            "tenant_id": null,
+                            "created_at": "2026-09-07T23:23:18.284731+00:00",
+                            "sort_order": 1,
+                            "updated_at": "2026-09-07T23:23:18.284731+00:00",
+                            "spec_definition_id": "920bb7cf-9240-5ba9-8ec9-744c335ec01b"
+                        },
+                        {
+                            "id": "af5edcd6-6fce-52b0-9d0a-c16dac8d1f70",
+                            "code": "catalog_f1c6eb6f4e48eb34ab40b2987d4976a8",
+                            "label": "M3",
+                            "is_active": true,
+                            "tenant_id": null,
+                            "created_at": "2026-09-07T23:23:18.284731+00:00",
+                            "sort_order": 10,
+                            "updated_at": "2026-09-07T23:23:18.284731+00:00",
+                            "spec_definition_id": "920bb7cf-9240-5ba9-8ec9-744c335ec01b"
+                        },
+                        {
+                            "id": "b6ff5303-c24e-5aef-8ce6-3c7bab609a4a",
+                            "code": "catalog_c7ad88feac64b5b6cca8f234b392862c",
+                            "label": "M19",
+                            "is_active": true,
+                            "tenant_id": null,
+                            "created_at": "2026-09-07T23:23:18.284731+00:00",
+                            "sort_order": 15,
+                            "updated_at": "2026-09-07T23:23:18.284731+00:00",
+                            "spec_definition_id": "920bb7cf-9240-5ba9-8ec9-744c335ec01b"
+                        },
+                        {
+                            "id": "d0697951-ccf9-5c21-9ee3-2ced101a0157",
+                            "code": "catalog_5ce2c8f3128f285f06d30b60a7641e97",
+                            "label": "M14",
+                            "is_active": true,
+                            "tenant_id": null,
+                            "created_at": "2026-09-07T23:23:18.284731+00:00",
+                            "sort_order": 6,
+                            "updated_at": "2026-09-07T23:23:18.284731+00:00",
+                            "spec_definition_id": "920bb7cf-9240-5ba9-8ec9-744c335ec01b"
+                        },
+                        {
+                            "id": "d4657329-2ccf-58de-91d7-393803a6677c",
+                            "code": "catalog_a70c8fdd4d0b26b13353ccc82293251a",
+                            "label": "2.2 mm",
+                            "is_active": true,
+                            "tenant_id": null,
+                            "created_at": "2026-09-07T23:23:18.284731+00:00",
+                            "sort_order": 24,
+                            "updated_at": "2026-09-07T23:23:18.284731+00:00",
+                            "spec_definition_id": "920bb7cf-9240-5ba9-8ec9-744c335ec01b"
+                        },
+                        {
+                            "id": "d59f678a-28ce-51a4-8eab-2e427bf07912",
+                            "code": "catalog_fc1df6307a9c4971569997963dcc8b08",
+                            "label": "M6",
+                            "is_active": true,
+                            "tenant_id": null,
+                            "created_at": "2026-09-07T23:23:18.284731+00:00",
+                            "sort_order": 2,
+                            "updated_at": "2026-09-07T23:23:18.284731+00:00",
+                            "spec_definition_id": "920bb7cf-9240-5ba9-8ec9-744c335ec01b"
+                        },
+                        {
+                            "id": "dac3d2d2-74bb-5d95-8f32-57e1e5342bf5",
+                            "code": "catalog_2116f1c2188e41f62a04f683afa7ac60",
+                            "label": "Otra",
+                            "is_active": true,
+                            "tenant_id": null,
+                            "created_at": "2026-09-07T23:23:18.284731+00:00",
+                            "sort_order": 8,
+                            "updated_at": "2026-09-07T23:23:18.284731+00:00",
+                            "spec_definition_id": "920bb7cf-9240-5ba9-8ec9-744c335ec01b"
+                        },
+                        {
+                            "id": "e184058c-15b1-5224-b7b9-807cd78aa62c",
+                            "code": "catalog_483e3992681e676e99f8b29bf279e20b",
+                            "label": "M20",
+                            "is_active": true,
+                            "tenant_id": null,
+                            "created_at": "2026-09-07T23:23:18.284731+00:00",
+                            "sort_order": 16,
+                            "updated_at": "2026-09-07T23:23:18.284731+00:00",
+                            "spec_definition_id": "920bb7cf-9240-5ba9-8ec9-744c335ec01b"
+                        }
+                    ],
+                    "data_type": "single_select",
+                    "tenant_id": null,
+                    "created_at": "2026-09-07T23:23:18.284731+00:00",
+                    "group_name": null,
+                    "sort_order": 0,
+                    "updated_at": "2026-09-07T23:23:18.284731+00:00",
+                    "description": null,
+                    "is_filterable": false,
+                    "allowed_values": [
+                        "M4",
+                        "M5",
+                        "M6",
+                        "M8",
+                        "M10",
+                        "M12",
+                        "M14",
+                        "3/8\"",
+                        "Otra",
+                        "Desconocido / sin confirmar",
+                        "M3",
+                        "M7",
+                        "M9",
+                        "M15",
+                        "M18",
+                        "M19",
+                        "M20",
+                        "M22",
+                        "5/16\"",
+                        "1/2\"",
+                        "9/16\"",
+                        "9 mm",
+                        "10 mm",
+                        "36 mm",
+                        "2.2 mm"
+                    ],
+                    "validation_rules": {
+                    },
+                    "is_customer_visible": false,
+                    "is_mechanic_visible": true,
+                    "is_required_by_default": false,
+                    "is_compatibility_relevant": false
+                },
+                {
+                    "id": "92497d9e-8383-5db9-9306-937adec10fb3",
+                    "key": "bolts_included",
+                    "unit": null,
+                    "label": "Incluye pernos",
+                    "options": [
+                    ],
+                    "data_type": "boolean",
+                    "tenant_id": null,
+                    "created_at": "2026-09-07T22:33:40.381707+00:00",
+                    "group_name": null,
+                    "sort_order": 0,
+                    "updated_at": "2026-09-07T22:33:40.381707+00:00",
+                    "description": null,
+                    "is_filterable": false,
+                    "allowed_values": [
+                    ],
+                    "validation_rules": {
+                    },
+                    "is_customer_visible": false,
+                    "is_mechanic_visible": true,
+                    "is_required_by_default": false,
+                    "is_compatibility_relevant": false
+                },
+                {
+                    "id": "c8398080-0892-5433-951f-15eaac0feef9",
+                    "key": "pack_quantity",
+                    "unit": "unidades",
+                    "label": "Unidades por envase",
+                    "options": [
+                    ],
+                    "data_type": "number",
+                    "tenant_id": null,
+                    "created_at": "2026-09-07T23:23:18.284731+00:00",
+                    "group_name": null,
+                    "sort_order": 0,
+                    "updated_at": "2026-09-07T23:23:18.284731+00:00",
+                    "description": null,
+                    "is_filterable": false,
+                    "allowed_values": [
+                    ],
+                    "validation_rules": {
+                        "integer": true,
+                        "positive": true
+                    },
+                    "is_customer_visible": false,
+                    "is_mechanic_visible": true,
+                    "is_required_by_default": false,
+                    "is_compatibility_relevant": false
+                }
+            ]
+        }
+    }
+]

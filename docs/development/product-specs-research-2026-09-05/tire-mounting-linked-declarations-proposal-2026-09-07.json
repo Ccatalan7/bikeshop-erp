@@ -1,0 +1,1665 @@
+{
+  "schema_version": 1,
+  "title": "Declaraciones de montaje y cifras de presión enlazadas",
+  "author": "Claude (revisor independiente de representación)",
+  "prepared_on": "2026-09-07",
+  "status": "propuesta local; sin adjudicación, sin asignación, sin llenado, sin publicación",
+  "target": {
+    "base": "all-family-evidence-scopes-integrated-2026-09-07.json",
+    "base_sha256": "e709158d0ac49603ab01dfde19326d1f9f2fd0d0ce50723cb5d0076390226d9d",
+    "cases": "all-family-evidence-scopes-cases-integrated-2026-09-07.json",
+    "cases_sha256": "456946a2bb7b2ca23bb9decc77a729a5f157eec7ce983f27d8f0aaaeab5b884e",
+    "cases_count": 302
+  },
+  "supersedes": {
+    "proposal": "tire-configuration-source-scope-proposal-2026-09-07.json",
+    "rejected_element": "unique_by(rim_bead_profile, mounting_method, source_document)",
+    "why": "Prohibía declaraciones legítimas adicionales del mismo documento y convertía una hipótesis editorial en un veto mecánico."
+  },
+  "architecture": {
+    "target_table": "tire_mounting_declarations",
+    "source_table": "tire_declared_pressures",
+    "link": {
+      "id": "tire_pressure_declaration",
+      "field": "tire_declared_pressures",
+      "column": "declaration_row_id",
+      "target_field": "tire_mounting_declarations",
+      "label_columns": [
+        "rim_bead_profile",
+        "mounting_method",
+        "declared_conditions",
+        "source_document"
+      ]
+    },
+    "identity": "el id de fila, único por construcción del parser y resuelto por el motor de enlaces",
+    "unique_by": "ninguno en ninguna de las dos tablas, a propósito",
+    "scope_owner": "la declaración; las cifras heredan alcance y documento por el enlace"
+  },
+  "representation_vs_approval": "Aprobar una representación no aprueba un montaje ni certifica una familia. Conservar dos declaraciones en conflicto no aprueba ninguna. Ningún estado pendiente es un permiso mecánico. No se llena ningún producto, no se atribuye ninguna cifra a otro SKU y no se convierte entre bar y psi. El contexto de una declaración no identifica al SKU. No se toca compilador, catálogo, código, pruebas de root, base de datos ni runtime, y el contrato local de cardinalidad es de otro revisor.",
+  "sources": [
+    {
+      "id": "S-CONTI-US",
+      "title": "Continental, Hookless vs. Hooked Rims (us/en)",
+      "url": "https://www.continental-tires.com/us/en/tire-knowledge/hookless-vs-hooked-rims/",
+      "read": "2026-09-07",
+      "proves": "GP 5000 S TR «700 x 28c»: «5.0 | 72» y 23 mm de ancho interior máximo, para montaje sin gancho. Y sobre el montaje con gancho remite al envase, advirtiendo que el máximo «may differ between hooked and hookless applications». Un mismo documento declarando dos montajes de distinta manera."
+    },
+    {
+      "id": "S-CONTI-B2C",
+      "title": "Continental, Hookless vs. Hooked Rims (products/b2c)",
+      "url": "https://www.continental-tires.com/products/b2c/tire-knowledge/hookless-vs-hooked-rims/",
+      "read": "2026-09-07",
+      "proves": "El mismo fabricante en otro documento designa en ETRTO —«28-622»— y declara las mismas cifras, «5.0 | 72» y 23 mm. Ninguno de los dos certifica una edición."
+    },
+    {
+      "id": "S-SHELDON-SIZING",
+      "title": "Sheldon Brown, Tire Sizing Systems",
+      "url": "https://www.sheldonbrown.com/tire-sizing.html",
+      "read": "2026-09-07",
+      "proves": "Contextual. El calce lo decide el diámetro de asiento: «Generally, if this number matches, the tire will fit onto the rim». Su relación de anchos es «a general guideline» y su tabla «may err a bit on the side of caution».",
+      "limits": "Es guía histórica de anchos: no sustituye el máximo OEM de una variante y no prueba que una norma sea o deje de ser documental."
+    },
+    {
+      "id": "S-PARK-TUBELESS",
+      "title": "Park Tool, Tubeless Tire Compatibility",
+      "url": "https://www.parktool.com/en-us/blog/repair-help/tubeless-tire-compatibility",
+      "read": "2026-09-07",
+      "proves": "Contextual. El lecho con gancho «helps catch and hold the bead», y el sistema descansa en «tolerances outlined in the ETRTO standards».",
+      "limits": "Nombrar una norma no la vuelve no documental: la norma también se lee en un documento y no reemplaza lo que el fabricante declara por variante."
+    }
+  ],
+  "findings": [
+    {
+      "id": "F1",
+      "question": "Tenías razón en rechazar mi clave.",
+      "answer": "Dos veces, y por dos razones distintas.",
+      "text": "La primera: mi propio F4 admitía declaraciones legítimas adicionales por sub-rango, carga u otra condición, y no haberlas encontrado en dos sitios no prueba que sean imposibles. Estaba pidiendo que aceptaras una prohibición apoyada en una búsqueda mía. La segunda es peor y es la que no había visto: «dos veces en un documento es un error» no es una regla mecánica, es una hipótesis editorial. Un documento puede declarar dos veces el mismo perfil y método bajo condiciones distintas y estar bien. Una clave que lo prohíbe convierte un juicio en un veto."
+    },
+    {
+      "id": "F2",
+      "question": "¿Cuál es entonces la identidad estable de una declaración?",
+      "answer": "Su propia fila.",
+      "text": "El parser ya exige que los id de fila sean únicos dentro del campo, y el motor de enlaces resuelve por ese id: la celda del enlace guarda el id de la fila de destino y el validador comprueba que exista. La identidad ya está ahí y es estable. Ninguna combinación de columnas necesita fingir que identifica. Esto es lo mismo que me corregiste sobre member_revision hace varias rondas: row.id ya da identidad, y un unique_by no justifica inventar un dato."
+    },
+    {
+      "id": "F3",
+      "question": "¿Cómo queda el alcance completo?",
+      "answer": "En la declaración, y las cifras lo heredan por el enlace.",
+      "text": "La declaración lleva sujeto, condiciones, límites de ancho y documento; la cifra lleva sólo qué cifra es, su unidad y su valor. El alcance no se repite en cada cifra, así que no hay dos dueños del ancho ni del documento, y las dos unidades de un mismo máximo son dos filas que apuntan a la misma declaración."
+    },
+    {
+      "id": "F4",
+      "question": "¿Cómo se representan varias declaraciones del mismo documento?",
+      "answer": "Como varias filas, sin nada que las impida.",
+      "text": "Sin unique_by no hay tope. Lo que las distingue para el operador es la columna de condiciones declaradas, y el formulario las muestra por sus columnas de rótulo cuando hay que elegir una para enlazar. Hay un caso real en el mismo documento de Continental: declara el montaje sin gancho con cifras y, para el montaje con gancho, remite al envase. Son dos declaraciones legítimas del mismo documento."
+    },
+    {
+      "id": "F5",
+      "question": "¿Y la ausencia de unidad o de fuente?",
+      "answer": "Pendiente, nunca permiso.",
+      "text": "Una cifra sin declaración enlazada no hereda documento ni condiciones: la condición «toda cifra pide su declaración» la deja pendiente por fila y por columna. Una cifra sin unidad queda con requisitos por confirmar. Una unidad declarada desconocida deja la fila incompleta. Ninguno de esos estados autoriza nada: son huecos visibles, no permisos. Mantengo el nivel correcto en la fixtura de token desconocido, sin rebajarla al comportamiento que el servidor corrige en 2500."
+    },
+    {
+      "id": "F6",
+      "question": "¿Qué se pierde al separar en dos tablas?",
+      "answer": "La mitad de R6 y la detección de declaraciones sin cifras. Lo digo antes de que lo pruebes.",
+      "text": "R6 exigía dos cosas a un montaje sin gancho: su ancho interior máximo y su unidad de presión. Lo primero cruza intacto a la tabla de declaraciones. Lo segundo ya no se puede expresar: la unidad vive ahora en otro campo y ninguna condición de fila cruza de campo. Y el motor de enlaces recorre las filas de origen, así que una declaración sin ninguna cifra enlazada no emite nada; lo comprobé leyendo el validador y lo dejo como fixtura con esa expectativa. Es el precio de la arquitectura que pediste, y no propongo ningún mecanismo nuevo para taparlo."
+    },
+    {
+      "id": "F7",
+      "question": "¿Y la discrepancia entre documentos?",
+      "answer": "Se conserva entera, y conservar no es aprobar.",
+      "text": "Dos documentos son dos declaraciones con sus propias cifras. El motor no elige entre ellas, no marca ninguna errónea y no deriva nada de que convivan. El desempate es humano y la ficha lo muestra como lo que es: evidencia en conflicto, no un dato aprobado."
+    },
+    {
+      "id": "F8",
+      "question": "Sobre el documento y su edición.",
+      "answer": "Se anota el documento como se leyó, no una edición certificada.",
+      "text": "Retiraste bien mi atribución: el «2014» del título de Schwalbe es parte del nombre comercial del artículo y no acredita una edición documental. Ninguna de las páginas que leí certifica edición. Por eso la columna se llama «documento que declara, como se leyó» y su ayuda dice que no se afirma una edición que el editor no certifique."
+    },
+    {
+      "id": "F9",
+      "question": "¿Por qué retirar el dueño anterior y no dejarlo convivir?",
+      "answer": "Porque serían dos dueños del mismo hecho.",
+      "text": "Dejarlo activo permitiría declarar el mismo montaje en dos lugares sin ninguna regla que los compare. Pasa a legado, que en este motor significa que el validador descarta sus valores antes de validar: el contenido queda intacto, sin reinterpretarse y sin borrarse. Su entrada en row_conditions se retira porque el validador rechaza condiciones sobre un campo legacy, no porque la regla estorbe."
+    },
+    {
+      "id": "F10",
+      "question": "¿Sobre Sheldon y Park?",
+      "answer": "Quedan como contexto, con su límite escrito.",
+      "text": "Sirven para separar lo físico de lo declarado: el calce lo decide el diámetro de asiento y el lecho de la llanta es una realidad. Pero su guía de anchos es histórica y general, no sustituye el máximo que el fabricante publica por variante, y nombrar la norma ETRTO no vuelve no documental a esa norma. Lo dejé anotado en cada fuente."
+    }
+  ],
+  "new_definitions": {
+    "tire_mounting_declarations": {
+      "key": "tire_mounting_declarations",
+      "origin": "new",
+      "id": null,
+      "label": "Declaraciones de montaje de esta variante",
+      "data_type": "json",
+      "unit": null,
+      "allowed_values": [],
+      "validation_rules": {
+        "row_label": "Declaración de montaje",
+        "rows_schema": {
+          "version": 1,
+          "columns": [
+            {
+              "key": "rim_bead_profile",
+              "label": "Perfil de la llanta",
+              "type": "token",
+              "required": true,
+              "allowed_values": [
+                "Con gancho (hooked)",
+                "Sin gancho (hookless)",
+                "Tubular / de pegar",
+                "Otro",
+                "Desconocido / sin confirmar"
+              ]
+            },
+            {
+              "key": "mounting_method",
+              "label": "Método de montaje",
+              "type": "token",
+              "required": true,
+              "allowed_values": [
+                "Con cámara",
+                "Tubeless",
+                "Tubular",
+                "Desconocido / sin confirmar"
+              ]
+            },
+            {
+              "key": "condition_scope",
+              "label": "Condiciones adicionales del documento",
+              "type": "token",
+              "required": true,
+              "allowed_values": [
+                "Sin condiciones adicionales declaradas",
+                "Con condiciones adicionales declaradas",
+                "Desconocido / sin confirmar"
+              ]
+            },
+            {
+              "key": "declared_conditions",
+              "label": "Condiciones declaradas, literal",
+              "type": "text"
+            },
+            {
+              "key": "rim_internal_width_min_mm",
+              "label": "Ancho interior mínimo",
+              "type": "decimal",
+              "unit": "mm",
+              "validation": {
+                "positive": true
+              }
+            },
+            {
+              "key": "rim_internal_width_max_mm",
+              "label": "Ancho interior máximo",
+              "type": "decimal",
+              "unit": "mm",
+              "validation": {
+                "positive": true
+              }
+            },
+            {
+              "key": "source_document",
+              "label": "Documento que declara, como se leyó",
+              "type": "text",
+              "required": true
+            },
+            {
+              "key": "source_url",
+              "label": "Fuente",
+              "type": "url"
+            }
+          ],
+          "ordered_pairs": [
+            [
+              "rim_internal_width_min_mm",
+              "rim_internal_width_max_mm"
+            ]
+          ]
+        }
+      },
+      "used_by": []
+    },
+    "tire_declared_pressures": {
+      "key": "tire_declared_pressures",
+      "origin": "new",
+      "id": null,
+      "label": "Cifras de presión declaradas para un montaje",
+      "data_type": "json",
+      "unit": null,
+      "allowed_values": [],
+      "validation_rules": {
+        "row_label": "Cifra de presión",
+        "rows_schema": {
+          "version": 1,
+          "columns": [
+            {
+              "key": "declaration_row_id",
+              "label": "Declaración de montaje a la que corresponde",
+              "type": "text"
+            },
+            {
+              "key": "quantity_kind",
+              "label": "Qué cifra es",
+              "type": "token",
+              "required": true,
+              "allowed_values": [
+                "Máximo declarado",
+                "Mínimo declarado",
+                "Desconocido / sin confirmar"
+              ]
+            },
+            {
+              "key": "pressure_unit",
+              "label": "Unidad impresa",
+              "type": "token",
+              "required": true,
+              "allowed_values": [
+                "bar",
+                "psi",
+                "Desconocido / sin confirmar"
+              ]
+            },
+            {
+              "key": "pressure_value",
+              "label": "Cifra impresa",
+              "type": "decimal",
+              "validation": {
+                "positive": true
+              }
+            },
+            {
+              "key": "source_url",
+              "label": "Fuente",
+              "type": "url"
+            }
+          ]
+        }
+      },
+      "used_by": []
+    }
+  },
+  "patches": [
+    {
+      "id": "TMLD-01-mounting-declarations",
+      "op": "add_field",
+      "template": "tire",
+      "key": "tire_mounting_declarations",
+      "before": null,
+      "after": {
+        "field_entry": {
+          "key": "tire_mounting_declarations",
+          "section_key": "measurement",
+          "sort_order": 230,
+          "is_required": false,
+          "visibility_rules": [],
+          "option_rules": [],
+          "constraint_rules": []
+        },
+        "definition_used_by_append": "tire",
+        "roles": "measurement",
+        "semantic_roles": "compatibility",
+        "allowed_when": {
+          "kind": "always"
+        },
+        "required_when": {
+          "kind": "never"
+        },
+        "prerequisites": [
+          "spec_evidence_source"
+        ],
+        "evidence_requirements": "oem_spec",
+        "helpers": "Cada fila es UNA declaración de montaje: qué documento declara qué, para qué perfil de llanta y qué método, bajo qué condiciones y con qué límites de ancho. La identidad de la declaración es su propia fila, no la combinación de sus columnas: un mismo documento puede declarar varias veces el mismo perfil y método bajo condiciones distintas, y las dos declaraciones son legítimas. El contexto describe el alcance de lo declarado y no identifica al producto. El documento se anota como se lo identificó al leerlo; no se afirma una edición que el editor no certifique. Las cifras de presión no van aquí: van en «Cifras de presión declaradas» y se enlazan a esta fila."
+      },
+      "before_extensions_required": {},
+      "scope": "El destino del enlace. Una fila es una declaración completa: sujeto, condiciones, límites de ancho y documento. Sin unique_by: la identidad es la fila, que ya es única por construcción del parser, y ninguna combinación de sus columnas pretende identificarla.",
+      "not_claimed": "que el contexto identifique al SKU. Perfil, método, condiciones y documento describen el alcance de lo declarado; no dicen qué producto es."
+    },
+    {
+      "id": "TMLD-02-declared-pressures",
+      "op": "add_field",
+      "template": "tire",
+      "key": "tire_declared_pressures",
+      "before": null,
+      "after": {
+        "field_entry": {
+          "key": "tire_declared_pressures",
+          "section_key": "measurement",
+          "sort_order": 240,
+          "is_required": false,
+          "visibility_rules": [],
+          "option_rules": [],
+          "constraint_rules": []
+        },
+        "definition_used_by_append": "tire",
+        "roles": "measurement",
+        "semantic_roles": "measurement",
+        "allowed_when": {
+          "kind": "always"
+        },
+        "required_when": {
+          "kind": "never"
+        },
+        "prerequisites": [
+          "spec_evidence_source"
+        ],
+        "evidence_requirements": "package_or_label",
+        "helpers": "Cada fila es UNA cifra de presión impresa, con su unidad, enlazada a la declaración de montaje a la que pertenece. El alcance y el documento los aporta la declaración enlazada, así que no se repiten aquí. Un mismo máximo impreso en dos unidades son dos filas enlazadas a la misma declaración: nunca se convierte una en la otra, y el ancho de la declaración sigue teniendo un solo dueño. Una cifra sin declaración enlazada no tiene alcance ni documento y queda pendiente. Los máximos que el documento declara sin condicionarlos a un montaje van en «Máximos generales declarados», no aquí."
+      },
+      "before_extensions_required": {},
+      "scope": "El origen del enlace. Una fila es una cifra impresa con su unidad y qué cifra es. Varias filas pueden apuntar a la misma declaración: dos unidades del mismo máximo, o un máximo y un mínimo. Sin unique_by, por lo mismo que la tabla de declaraciones.",
+      "not_claimed": "que la unidad se pueda convertir, ni que dos filas de la misma declaración con la misma unidad sean necesariamente un error."
+    },
+    {
+      "id": "TMLD-03-retire-previous-owner",
+      "op": "replace_field_contract",
+      "template": "tire",
+      "key": "tire_rim_configurations",
+      "before": {
+        "roles": "measurement",
+        "semantic_roles": "compatibility"
+      },
+      "after": {
+        "roles": "legacy",
+        "semantic_roles": "legacy"
+      },
+      "before_extensions_required": {},
+      "scope": "El dueño anterior pasa a legado para que no haya dos dueños del mismo hecho. validateProductSpecDraft descarta los valores de campos legacy antes de validar: el contenido se conserva intacto, no se reinterpreta y no se borra. Los metadatos aún son inéditos y no hay hechos reales que migrar en la base.",
+      "not_claimed": "que el contenido anterior se traduzca solo. La migración es explícita y sus fixturas la muestran fila por fila."
+    },
+    {
+      "id": "TMLD-04-row-conditions",
+      "op": "replace_template_coherence",
+      "template": "tire",
+      "key": "row_conditions",
+      "before": {
+        "present": true,
+        "value": {
+          "version": 1,
+          "fields": {
+            "tire_rim_configurations": {
+              "allowed_when": {
+                "max_pressure": {
+                  "kind": "when",
+                  "rows": [
+                    [
+                      {
+                        "field": "pressure_unit",
+                        "operator": "in",
+                        "value_type": "token",
+                        "value": [
+                          "bar",
+                          "psi"
+                        ]
+                      }
+                    ]
+                  ]
+                }
+              },
+              "required_when": {
+                "max_pressure": {
+                  "kind": "when",
+                  "rows": [
+                    [
+                      {
+                        "field": "pressure_unit",
+                        "operator": "in",
+                        "value_type": "token",
+                        "value": [
+                          "bar",
+                          "psi"
+                        ]
+                      }
+                    ]
+                  ]
+                },
+                "pressure_unit": {
+                  "kind": "when",
+                  "rows": [
+                    [
+                      {
+                        "field": "rim_bead_profile",
+                        "operator": "eq",
+                        "value_type": "token",
+                        "value": "Sin gancho (hookless)"
+                      }
+                    ]
+                  ]
+                },
+                "rim_internal_width_max_mm": {
+                  "kind": "when",
+                  "rows": [
+                    [
+                      {
+                        "field": "rim_bead_profile",
+                        "operator": "eq",
+                        "value_type": "token",
+                        "value": "Sin gancho (hookless)"
+                      }
+                    ]
+                  ]
+                }
+              },
+              "allowed_options": {}
+            },
+            "tire_general_max_pressures": {
+              "allowed_when": {
+                "max_pressure_value": {
+                  "kind": "when",
+                  "rows": [
+                    [
+                      {
+                        "field": "pressure_unit",
+                        "operator": "in",
+                        "value_type": "token",
+                        "value": [
+                          "bar",
+                          "psi"
+                        ]
+                      }
+                    ]
+                  ]
+                }
+              },
+              "required_when": {
+                "max_pressure_value": {
+                  "kind": "when",
+                  "rows": [
+                    [
+                      {
+                        "field": "pressure_unit",
+                        "operator": "in",
+                        "value_type": "token",
+                        "value": [
+                          "bar",
+                          "psi"
+                        ]
+                      }
+                    ]
+                  ]
+                }
+              },
+              "allowed_options": {}
+            }
+          }
+        }
+      },
+      "after": {
+        "version": 1,
+        "fields": {
+          "tire_general_max_pressures": {
+            "allowed_when": {
+              "max_pressure_value": {
+                "kind": "when",
+                "rows": [
+                  [
+                    {
+                      "field": "pressure_unit",
+                      "operator": "in",
+                      "value_type": "token",
+                      "value": [
+                        "bar",
+                        "psi"
+                      ]
+                    }
+                  ]
+                ]
+              }
+            },
+            "required_when": {
+              "max_pressure_value": {
+                "kind": "when",
+                "rows": [
+                  [
+                    {
+                      "field": "pressure_unit",
+                      "operator": "in",
+                      "value_type": "token",
+                      "value": [
+                        "bar",
+                        "psi"
+                      ]
+                    }
+                  ]
+                ]
+              }
+            },
+            "allowed_options": {}
+          },
+          "tire_mounting_declarations": {
+            "allowed_when": {},
+            "required_when": {
+              "rim_internal_width_max_mm": {
+                "kind": "when",
+                "rows": [
+                  [
+                    {
+                      "field": "rim_bead_profile",
+                      "operator": "eq",
+                      "value_type": "token",
+                      "value": "Sin gancho (hookless)"
+                    }
+                  ]
+                ]
+              },
+              "declared_conditions": {
+                "kind": "when",
+                "rows": [
+                  [
+                    {
+                      "field": "condition_scope",
+                      "operator": "eq",
+                      "value_type": "token",
+                      "value": "Con condiciones adicionales declaradas"
+                    }
+                  ]
+                ]
+              }
+            },
+            "allowed_options": {}
+          },
+          "tire_declared_pressures": {
+            "allowed_when": {
+              "pressure_value": {
+                "kind": "when",
+                "rows": [
+                  [
+                    {
+                      "field": "pressure_unit",
+                      "operator": "in",
+                      "value_type": "token",
+                      "value": [
+                        "bar",
+                        "psi"
+                      ]
+                    }
+                  ]
+                ]
+              }
+            },
+            "required_when": {
+              "pressure_value": {
+                "kind": "when",
+                "rows": [
+                  [
+                    {
+                      "field": "pressure_unit",
+                      "operator": "in",
+                      "value_type": "token",
+                      "value": [
+                        "bar",
+                        "psi"
+                      ]
+                    }
+                  ]
+                ]
+              },
+              "declaration_row_id": {
+                "kind": "always"
+              }
+            },
+            "allowed_options": {}
+          }
+        }
+      },
+      "before_extensions_required": {},
+      "scope": "Retira la entrada del campo retirado, porque el validador rechaza condiciones sobre un campo legacy, y la vuelve a expresar sobre el nuevo dueño: una declaración sin gancho sigue pidiendo su ancho interior máximo. Añade que una cifra exige su unidad y que toda cifra pide su declaración. La entrada de la tabla de máximos generales se conserva palabra por palabra.",
+      "not_claimed": "que R6 sobreviva entero. Su otra mitad —que un montaje sin gancho traiga su unidad de presión— cruzaba de campo y ninguna condición cruza campos. Ver F6."
+    },
+    {
+      "id": "TMLD-05-link",
+      "op": "replace_template_coherence",
+      "template": "tire",
+      "key": "row_coherence",
+      "before": {
+        "present": false,
+        "value": null
+      },
+      "after": {
+        "version": 1,
+        "links": [
+          {
+            "id": "tire_pressure_declaration",
+            "field": "tire_declared_pressures",
+            "column": "declaration_row_id",
+            "target_field": "tire_mounting_declarations",
+            "label_columns": [
+              "rim_bead_profile",
+              "mounting_method",
+              "declared_conditions",
+              "source_document"
+            ]
+          }
+        ]
+      },
+      "before_extensions_required": {},
+      "scope": "El enlace que ya usan luz, electrónica y frenos: la celda de la fila de presión guarda el id de la fila de declaración, y las columnas de rótulo son las que el formulario muestra para elegirla. El dueño no escribe ids a mano.",
+      "not_claimed": "que el enlace detecte una declaración sin cifras. El motor recorre las filas de origen, así que una declaración huérfana no emite nada. Ver F6."
+    }
+  ],
+  "fixtures": [
+    {
+      "id": "tmld_migration_one_row_becomes_one_declaration_and_two_figures",
+      "template": "tire",
+      "kind": "migration_explicit",
+      "values": {
+        "tire_etrto": "28-622",
+        "tire_width_mm": "28",
+        "bead_seat_diameter_mm": "622",
+        "spec_evidence_source": "Continental, Hookless vs. Hooked Rims",
+        "tire_rim_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "hk",
+              "values": {
+                "rim_bead_profile": "Sin gancho (hookless)",
+                "mounting_method": "Tubeless",
+                "rim_internal_width_max_mm": "23",
+                "max_pressure": "5.0",
+                "pressure_unit": "bar",
+                "source_url": "https://www.continental-tires.com/us/en/tire-knowledge/hookless-vs-hooked-rims/"
+              },
+              "sources": [
+                "https://www.continental-tires.com/us/en/tire-knowledge/hookless-vs-hooked-rims/"
+              ]
+            }
+          ]
+        },
+        "tire_mounting_declarations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "d1",
+              "values": {
+                "rim_bead_profile": "Sin gancho (hookless)",
+                "mounting_method": "Tubeless",
+                "condition_scope": "Sin condiciones adicionales declaradas",
+                "source_document": "Continental, Hookless vs. Hooked Rims, sitio us/en, leído 2026-09-07",
+                "rim_internal_width_max_mm": "23",
+                "source_url": "https://www.continental-tires.com/us/en/tire-knowledge/hookless-vs-hooked-rims/"
+              },
+              "sources": [
+                "https://www.continental-tires.com/us/en/tire-knowledge/hookless-vs-hooked-rims/"
+              ]
+            }
+          ]
+        },
+        "tire_declared_pressures": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "p1",
+              "values": {
+                "quantity_kind": "Máximo declarado",
+                "pressure_unit": "bar",
+                "declaration_row_id": "d1",
+                "pressure_value": "5.0",
+                "source_url": "https://www.continental-tires.com/us/en/tire-knowledge/hookless-vs-hooked-rims/"
+              },
+              "sources": [
+                "https://www.continental-tires.com/us/en/tire-knowledge/hookless-vs-hooked-rims/"
+              ]
+            },
+            {
+              "id": "p2",
+              "values": {
+                "quantity_kind": "Máximo declarado",
+                "pressure_unit": "psi",
+                "declaration_row_id": "d1",
+                "pressure_value": "72",
+                "source_url": "https://www.continental-tires.com/us/en/tire-knowledge/hookless-vs-hooked-rims/"
+              },
+              "sources": [
+                "https://www.continental-tires.com/us/en/tire-knowledge/hookless-vs-hooked-rims/"
+              ]
+            }
+          ]
+        }
+      },
+      "source_urls": [
+        "https://www.continental-tires.com/us/en/tire-knowledge/hookless-vs-hooked-rims/"
+      ],
+      "expected_blocking": [],
+      "forbidden_issue_fields": [
+        "tire_rim_configurations"
+      ],
+      "note": "La migración explícita de la fila original de Continental: una declaración con su ancho máximo y su documento, y dos cifras enlazadas, 5.0 bar y 72 psi. El contenido original viaja intacto en el campo retirado y el validador no lo interpreta ni lo emite. El ancho tiene un solo dueño aunque haya dos unidades.",
+      "observed_in_local_trial": [
+        {
+          "code": "required_missing",
+          "field": "tire_bead_type",
+          "row": null,
+          "column": null,
+          "blocking": false
+        }
+      ]
+    },
+    {
+      "id": "tmld_original_alone_is_preserved_and_silent",
+      "template": "tire",
+      "kind": "migration_explicit",
+      "values": {
+        "tire_etrto": "28-622",
+        "tire_width_mm": "28",
+        "bead_seat_diameter_mm": "622",
+        "spec_evidence_source": "Continental, Hookless vs. Hooked Rims",
+        "tire_rim_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "hk",
+              "values": {
+                "rim_bead_profile": "Sin gancho (hookless)",
+                "mounting_method": "Tubeless",
+                "rim_internal_width_max_mm": "23",
+                "max_pressure": "5.0",
+                "pressure_unit": "bar",
+                "source_url": "https://www.continental-tires.com/us/en/tire-knowledge/hookless-vs-hooked-rims/"
+              },
+              "sources": [
+                "https://www.continental-tires.com/us/en/tire-knowledge/hookless-vs-hooked-rims/"
+              ]
+            }
+          ]
+        }
+      },
+      "source_urls": [
+        "https://www.continental-tires.com/us/en/tire-knowledge/hookless-vs-hooked-rims/"
+      ],
+      "expected_blocking": [],
+      "forbidden_issue_fields": [
+        "tire_rim_configurations"
+      ],
+      "note": "Antes de migrar, el original se conserva y deja de gobernar el formulario. Ninguna incidencia lo nombra.",
+      "observed_in_local_trial": [
+        {
+          "code": "required_missing",
+          "field": "tire_bead_type",
+          "row": null,
+          "column": null,
+          "blocking": false
+        }
+      ]
+    },
+    {
+      "id": "tmld_same_document_declares_hookless_and_defers_hooked",
+      "template": "tire",
+      "kind": "válido",
+      "values": {
+        "tire_etrto": "28-622",
+        "tire_width_mm": "28",
+        "bead_seat_diameter_mm": "622",
+        "spec_evidence_source": "Continental, Hookless vs. Hooked Rims",
+        "tire_mounting_declarations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "d_hk",
+              "values": {
+                "rim_bead_profile": "Sin gancho (hookless)",
+                "mounting_method": "Tubeless",
+                "condition_scope": "Sin condiciones adicionales declaradas",
+                "source_document": "Continental, Hookless vs. Hooked Rims, sitio us/en, leído 2026-09-07",
+                "rim_internal_width_max_mm": "23",
+                "source_url": "https://www.continental-tires.com/us/en/tire-knowledge/hookless-vs-hooked-rims/"
+              },
+              "sources": [
+                "https://www.continental-tires.com/us/en/tire-knowledge/hookless-vs-hooked-rims/"
+              ]
+            },
+            {
+              "id": "d_hooked",
+              "values": {
+                "rim_bead_profile": "Con gancho (hooked)",
+                "mounting_method": "Tubeless",
+                "condition_scope": "Con condiciones adicionales declaradas",
+                "source_document": "Continental, Hookless vs. Hooked Rims, sitio us/en, leído 2026-09-07",
+                "declared_conditions": "El documento remite al envase para el máximo con gancho y advierte que puede diferir del máximo sin gancho.",
+                "source_url": "https://www.continental-tires.com/us/en/tire-knowledge/hookless-vs-hooked-rims/"
+              },
+              "sources": [
+                "https://www.continental-tires.com/us/en/tire-knowledge/hookless-vs-hooked-rims/"
+              ]
+            }
+          ]
+        },
+        "tire_declared_pressures": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "p1",
+              "values": {
+                "quantity_kind": "Máximo declarado",
+                "pressure_unit": "bar",
+                "declaration_row_id": "d_hk",
+                "pressure_value": "5.0",
+                "source_url": "https://www.continental-tires.com/us/en/tire-knowledge/hookless-vs-hooked-rims/"
+              },
+              "sources": [
+                "https://www.continental-tires.com/us/en/tire-knowledge/hookless-vs-hooked-rims/"
+              ]
+            },
+            {
+              "id": "p2",
+              "values": {
+                "quantity_kind": "Máximo declarado",
+                "pressure_unit": "psi",
+                "declaration_row_id": "d_hk",
+                "pressure_value": "72",
+                "source_url": "https://www.continental-tires.com/us/en/tire-knowledge/hookless-vs-hooked-rims/"
+              },
+              "sources": [
+                "https://www.continental-tires.com/us/en/tire-knowledge/hookless-vs-hooked-rims/"
+              ]
+            }
+          ]
+        }
+      },
+      "source_urls": [
+        "https://www.continental-tires.com/us/en/tire-knowledge/hookless-vs-hooked-rims/"
+      ],
+      "expected_blocking": [],
+      "note": "Real y verificable: un mismo documento de Continental declara el montaje sin gancho con cifras y, para el montaje con gancho, remite al envase. Son dos declaraciones del mismo documento y ninguna estorba a la otra. La segunda no tiene cifras enlazadas y eso no es un defecto.",
+      "observed_in_local_trial": [
+        {
+          "code": "required_missing",
+          "field": "tire_bead_type",
+          "row": null,
+          "column": null,
+          "blocking": false
+        }
+      ]
+    },
+    {
+      "id": "tmld_two_declarations_same_document_same_subject",
+      "template": "tire",
+      "kind": "synthetic_subrange_shape",
+      "values": {
+        "bead_seat_diameter_mm": "622",
+        "tire_mounting_declarations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "d_a",
+              "values": {
+                "rim_bead_profile": "Sin gancho (hookless)",
+                "mounting_method": "Tubeless",
+                "condition_scope": "Con condiciones adicionales declaradas",
+                "source_document": "Documento sintético único",
+                "declared_conditions": "Documento sintético: para llantas de hasta 21 mm",
+                "rim_internal_width_max_mm": "21"
+              },
+              "sources": []
+            },
+            {
+              "id": "d_b",
+              "values": {
+                "rim_bead_profile": "Sin gancho (hookless)",
+                "mounting_method": "Tubeless",
+                "condition_scope": "Con condiciones adicionales declaradas",
+                "source_document": "Documento sintético único",
+                "declared_conditions": "Documento sintético: para llantas de 22 a 25 mm",
+                "rim_internal_width_min_mm": "22",
+                "rim_internal_width_max_mm": "25"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "tire_declared_pressures": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "p_a",
+              "values": {
+                "quantity_kind": "Máximo declarado",
+                "pressure_unit": "bar",
+                "declaration_row_id": "d_a",
+                "pressure_value": "5.0"
+              },
+              "sources": []
+            },
+            {
+              "id": "p_b",
+              "values": {
+                "quantity_kind": "Máximo declarado",
+                "pressure_unit": "bar",
+                "declaration_row_id": "d_b",
+                "pressure_value": "4.5"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "source_urls": [],
+      "expected_blocking": [],
+      "note": "La forma que mi clave rechazada habría bloqueado: un mismo documento declarando dos veces el mismo perfil y método, separados por un sub-rango de ancho. Aquí conviven sin problema porque la identidad es la fila. Cifras y textos sintéticos, sin atribuir a ningún fabricante.",
+      "observed_in_local_trial": [
+        {
+          "code": "required_missing",
+          "field": "tire_width_mm",
+          "row": null,
+          "column": null,
+          "blocking": false
+        },
+        {
+          "code": "required_missing",
+          "field": "tire_bead_type",
+          "row": null,
+          "column": null,
+          "blocking": false
+        },
+        {
+          "code": "prerequisite",
+          "field": "tire_mounting_declarations",
+          "row": null,
+          "column": null,
+          "blocking": false
+        },
+        {
+          "code": "prerequisite",
+          "field": "tire_declared_pressures",
+          "row": null,
+          "column": null,
+          "blocking": false
+        }
+      ]
+    },
+    {
+      "id": "tmld_figure_without_declaration_is_pending",
+      "template": "tire",
+      "kind": "desconocido",
+      "values": {
+        "bead_seat_diameter_mm": "622",
+        "tire_declared_pressures": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "p1",
+              "values": {
+                "quantity_kind": "Máximo declarado",
+                "pressure_unit": "bar",
+                "pressure_value": "5.0"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "source_urls": [],
+      "expected_blocking": [],
+      "expected_row_condition_issues": [
+        {
+          "code": "row_required_missing",
+          "field": "tire_declared_pressures",
+          "row_id": "p1",
+          "column": "declaration_row_id",
+          "blocking": false
+        }
+      ],
+      "note": "Ausencia de fuente y de alcance: una cifra sin declaración enlazada no hereda documento ni condiciones, y queda pendiente. No bloquea, y tampoco vale como dato con alcance.",
+      "observed_in_local_trial": [
+        {
+          "code": "required_missing",
+          "field": "tire_width_mm",
+          "row": null,
+          "column": null,
+          "blocking": false
+        },
+        {
+          "code": "required_missing",
+          "field": "tire_bead_type",
+          "row": null,
+          "column": null,
+          "blocking": false
+        },
+        {
+          "code": "prerequisite",
+          "field": "tire_declared_pressures",
+          "row": null,
+          "column": null,
+          "blocking": false
+        },
+        {
+          "code": "row_required_missing",
+          "field": "tire_declared_pressures",
+          "row": "p1",
+          "column": "declaration_row_id",
+          "blocking": false
+        }
+      ]
+    },
+    {
+      "id": "tmld_figure_pointing_to_a_missing_declaration_blocks",
+      "template": "tire",
+      "kind": "contradictorio",
+      "values": {
+        "bead_seat_diameter_mm": "622",
+        "tire_mounting_declarations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "d1",
+              "values": {
+                "rim_bead_profile": "Sin gancho (hookless)",
+                "mounting_method": "Tubeless",
+                "condition_scope": "Sin condiciones adicionales declaradas",
+                "source_document": "Documento sintético",
+                "rim_internal_width_max_mm": "23"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "tire_declared_pressures": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "p1",
+              "values": {
+                "quantity_kind": "Máximo declarado",
+                "pressure_unit": "bar",
+                "declaration_row_id": "d9",
+                "pressure_value": "5.0"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "source_urls": [],
+      "expected_blocking": [
+        {
+          "code": "row_reference_unresolved",
+          "field": "tire_declared_pressures"
+        }
+      ],
+      "note": "Un enlace que apunta a una declaración inexistente sí es un error y bloquea.",
+      "observed_in_local_trial": [
+        {
+          "code": "required_missing",
+          "field": "tire_width_mm",
+          "row": null,
+          "column": null,
+          "blocking": false
+        },
+        {
+          "code": "required_missing",
+          "field": "tire_bead_type",
+          "row": null,
+          "column": null,
+          "blocking": false
+        },
+        {
+          "code": "prerequisite",
+          "field": "tire_mounting_declarations",
+          "row": null,
+          "column": null,
+          "blocking": false
+        },
+        {
+          "code": "prerequisite",
+          "field": "tire_declared_pressures",
+          "row": null,
+          "column": null,
+          "blocking": false
+        },
+        {
+          "code": "row_reference_unresolved",
+          "field": "tire_declared_pressures",
+          "row": "p1",
+          "column": "declaration_row_id",
+          "blocking": true
+        }
+      ]
+    },
+    {
+      "id": "tmld_figures_before_any_declaration_are_pending",
+      "template": "tire",
+      "kind": "desconocido",
+      "values": {
+        "bead_seat_diameter_mm": "622",
+        "tire_declared_pressures": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "p1",
+              "values": {
+                "quantity_kind": "Máximo declarado",
+                "pressure_unit": "bar",
+                "declaration_row_id": "d1",
+                "pressure_value": "5.0"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "source_urls": [],
+      "expected_blocking": [],
+      "note": "Sin ninguna declaración cargada todavía, el enlace queda pendiente y no bloquea: el motor distingue «aún no existe el destino» de «apunta a algo que no está».",
+      "observed_in_local_trial": [
+        {
+          "code": "required_missing",
+          "field": "tire_width_mm",
+          "row": null,
+          "column": null,
+          "blocking": false
+        },
+        {
+          "code": "required_missing",
+          "field": "tire_bead_type",
+          "row": null,
+          "column": null,
+          "blocking": false
+        },
+        {
+          "code": "prerequisite",
+          "field": "tire_declared_pressures",
+          "row": null,
+          "column": null,
+          "blocking": false
+        },
+        {
+          "code": "row_reference_pending",
+          "field": "tire_declared_pressures",
+          "row": "p1",
+          "column": "declaration_row_id",
+          "blocking": false
+        }
+      ]
+    },
+    {
+      "id": "tmld_unknown_unit_is_pending_not_permission",
+      "template": "tire",
+      "kind": "known_server_gap",
+      "values": {
+        "bead_seat_diameter_mm": "622",
+        "tire_mounting_declarations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "d1",
+              "values": {
+                "rim_bead_profile": "Sin gancho (hookless)",
+                "mounting_method": "Tubeless",
+                "condition_scope": "Sin condiciones adicionales declaradas",
+                "source_document": "Documento sintético",
+                "rim_internal_width_max_mm": "23"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "tire_declared_pressures": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "p1",
+              "values": {
+                "quantity_kind": "Máximo declarado",
+                "pressure_unit": "Desconocido / sin confirmar",
+                "declaration_row_id": "d1",
+                "pressure_value": "5.0"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "source_urls": [],
+      "expected_blocking": [],
+      "note": "Unidad declarada desconocida: la fila queda incompleta y la cifra pendiente. No es permiso mecánico para nada. El cliente Dart lo marca; el servidor hoy omite el row_incomplete del token desconocido y eso se corrige en 2500, así que esta fixtura fija el nivel correcto y no el actual del servidor.",
+      "observed_in_local_trial": [
+        {
+          "code": "required_missing",
+          "field": "tire_width_mm",
+          "row": null,
+          "column": null,
+          "blocking": false
+        },
+        {
+          "code": "required_missing",
+          "field": "tire_bead_type",
+          "row": null,
+          "column": null,
+          "blocking": false
+        },
+        {
+          "code": "prerequisite",
+          "field": "tire_mounting_declarations",
+          "row": null,
+          "column": null,
+          "blocking": false
+        },
+        {
+          "code": "prerequisite",
+          "field": "tire_declared_pressures",
+          "row": null,
+          "column": null,
+          "blocking": false
+        },
+        {
+          "code": "row_incomplete",
+          "field": "tire_declared_pressures",
+          "row": null,
+          "column": null,
+          "blocking": false
+        },
+        {
+          "code": "row_prerequisite",
+          "field": "tire_declared_pressures",
+          "row": "p1",
+          "column": "pressure_value",
+          "blocking": false
+        }
+      ]
+    },
+    {
+      "id": "tmld_value_without_unit_is_pending",
+      "template": "tire",
+      "kind": "desconocido",
+      "values": {
+        "bead_seat_diameter_mm": "622",
+        "tire_mounting_declarations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "d1",
+              "values": {
+                "rim_bead_profile": "Sin gancho (hookless)",
+                "mounting_method": "Tubeless",
+                "condition_scope": "Sin condiciones adicionales declaradas",
+                "source_document": "Documento sintético",
+                "rim_internal_width_max_mm": "23"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "tire_declared_pressures": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "p1",
+              "values": {
+                "declaration_row_id": "d1",
+                "quantity_kind": "Máximo declarado",
+                "pressure_value": "5.0"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "source_urls": [],
+      "expected_blocking": [],
+      "expected_row_condition_issues": [
+        {
+          "code": "row_prerequisite",
+          "field": "tire_declared_pressures",
+          "row_id": "p1",
+          "column": "pressure_value",
+          "blocking": false
+        }
+      ],
+      "note": "Una cifra sin unidad queda con requisitos por confirmar, igual que en las otras tablas.",
+      "observed_in_local_trial": [
+        {
+          "code": "required_missing",
+          "field": "tire_width_mm",
+          "row": null,
+          "column": null,
+          "blocking": false
+        },
+        {
+          "code": "required_missing",
+          "field": "tire_bead_type",
+          "row": null,
+          "column": null,
+          "blocking": false
+        },
+        {
+          "code": "prerequisite",
+          "field": "tire_mounting_declarations",
+          "row": null,
+          "column": null,
+          "blocking": false
+        },
+        {
+          "code": "prerequisite",
+          "field": "tire_declared_pressures",
+          "row": null,
+          "column": null,
+          "blocking": false
+        },
+        {
+          "code": "row_incomplete",
+          "field": "tire_declared_pressures",
+          "row": null,
+          "column": null,
+          "blocking": false
+        },
+        {
+          "code": "row_prerequisite",
+          "field": "tire_declared_pressures",
+          "row": "p1",
+          "column": "pressure_value",
+          "blocking": false
+        }
+      ]
+    },
+    {
+      "id": "tmld_hookless_declaration_still_requires_its_max_width",
+      "template": "tire",
+      "kind": "r6_regression",
+      "values": {
+        "bead_seat_diameter_mm": "622",
+        "tire_mounting_declarations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "d1",
+              "values": {
+                "rim_bead_profile": "Sin gancho (hookless)",
+                "mounting_method": "Tubeless",
+                "condition_scope": "Sin condiciones adicionales declaradas",
+                "source_document": "Documento sintético"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "source_urls": [],
+      "expected_blocking": [],
+      "expected_row_condition_issues": [
+        {
+          "code": "row_required_missing",
+          "field": "tire_mounting_declarations",
+          "row_id": "d1",
+          "column": "rim_internal_width_max_mm",
+          "blocking": false
+        }
+      ],
+      "note": "La mitad de R6 que sí cruza a la nueva tabla: sin gancho pide su ancho interior máximo.",
+      "observed_in_local_trial": [
+        {
+          "code": "required_missing",
+          "field": "tire_width_mm",
+          "row": null,
+          "column": null,
+          "blocking": false
+        },
+        {
+          "code": "required_missing",
+          "field": "tire_bead_type",
+          "row": null,
+          "column": null,
+          "blocking": false
+        },
+        {
+          "code": "prerequisite",
+          "field": "tire_mounting_declarations",
+          "row": null,
+          "column": null,
+          "blocking": false
+        },
+        {
+          "code": "row_required_missing",
+          "field": "tire_mounting_declarations",
+          "row": "d1",
+          "column": "rim_internal_width_max_mm",
+          "blocking": false
+        }
+      ]
+    },
+    {
+      "id": "tmld_documentary_discrepancy_is_preserved_not_approved",
+      "template": "tire",
+      "kind": "documentary_conflict_pending",
+      "values": {
+        "tire_etrto": "28-622",
+        "tire_width_mm": "28",
+        "bead_seat_diameter_mm": "622",
+        "spec_evidence_source": "Continental, Hookless vs. Hooked Rims",
+        "tire_mounting_declarations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "d_us",
+              "values": {
+                "rim_bead_profile": "Sin gancho (hookless)",
+                "mounting_method": "Tubeless",
+                "condition_scope": "Sin condiciones adicionales declaradas",
+                "source_document": "Continental, Hookless vs. Hooked Rims, sitio us/en, leído 2026-09-07",
+                "rim_internal_width_max_mm": "23",
+                "source_url": "https://www.continental-tires.com/us/en/tire-knowledge/hookless-vs-hooked-rims/"
+              },
+              "sources": [
+                "https://www.continental-tires.com/us/en/tire-knowledge/hookless-vs-hooked-rims/"
+              ]
+            },
+            {
+              "id": "d_b2c",
+              "values": {
+                "rim_bead_profile": "Sin gancho (hookless)",
+                "mounting_method": "Tubeless",
+                "condition_scope": "Sin condiciones adicionales declaradas",
+                "source_document": "Continental, Hookless vs. Hooked Rims, sitio products/b2c, leído 2026-09-07",
+                "rim_internal_width_max_mm": "23",
+                "source_url": "https://www.continental-tires.com/products/b2c/tire-knowledge/hookless-vs-hooked-rims/"
+              },
+              "sources": [
+                "https://www.continental-tires.com/products/b2c/tire-knowledge/hookless-vs-hooked-rims/"
+              ]
+            }
+          ]
+        },
+        "tire_declared_pressures": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "p1",
+              "values": {
+                "quantity_kind": "Máximo declarado",
+                "pressure_unit": "bar",
+                "declaration_row_id": "d_us",
+                "pressure_value": "5.0",
+                "source_url": "https://www.continental-tires.com/us/en/tire-knowledge/hookless-vs-hooked-rims/"
+              },
+              "sources": [
+                "https://www.continental-tires.com/us/en/tire-knowledge/hookless-vs-hooked-rims/"
+              ]
+            },
+            {
+              "id": "p2",
+              "values": {
+                "quantity_kind": "Máximo declarado",
+                "pressure_unit": "psi",
+                "declaration_row_id": "d_us",
+                "pressure_value": "72",
+                "source_url": "https://www.continental-tires.com/us/en/tire-knowledge/hookless-vs-hooked-rims/"
+              },
+              "sources": [
+                "https://www.continental-tires.com/us/en/tire-knowledge/hookless-vs-hooked-rims/"
+              ]
+            },
+            {
+              "id": "p3",
+              "values": {
+                "quantity_kind": "Máximo declarado",
+                "pressure_unit": "bar",
+                "declaration_row_id": "d_b2c",
+                "pressure_value": "5.0",
+                "source_url": "https://www.continental-tires.com/products/b2c/tire-knowledge/hookless-vs-hooked-rims/"
+              },
+              "sources": [
+                "https://www.continental-tires.com/products/b2c/tire-knowledge/hookless-vs-hooked-rims/"
+              ]
+            },
+            {
+              "id": "p4",
+              "values": {
+                "quantity_kind": "Máximo declarado",
+                "pressure_unit": "psi",
+                "declaration_row_id": "d_b2c",
+                "pressure_value": "72",
+                "source_url": "https://www.continental-tires.com/products/b2c/tire-knowledge/hookless-vs-hooked-rims/"
+              },
+              "sources": [
+                "https://www.continental-tires.com/products/b2c/tire-knowledge/hookless-vs-hooked-rims/"
+              ]
+            }
+          ]
+        }
+      },
+      "source_urls": [
+        "https://www.continental-tires.com/us/en/tire-knowledge/hookless-vs-hooked-rims/",
+        "https://www.continental-tires.com/products/b2c/tire-knowledge/hookless-vs-hooked-rims/"
+      ],
+      "expected_blocking": [],
+      "note": "Los dos documentos de Continental para el 28-622, cada uno con su declaración y sus dos cifras. Conservarlos no es aprobarlos: el motor no elige entre declaraciones y nada en la ficha dice cuál rige. Si difirieran, seguiría igual.",
+      "observed_in_local_trial": [
+        {
+          "code": "required_missing",
+          "field": "tire_bead_type",
+          "row": null,
+          "column": null,
+          "blocking": false
+        }
+      ]
+    },
+    {
+      "id": "tmld_reversed_width_range_still_blocks",
+      "template": "tire",
+      "kind": "contradictorio",
+      "values": {
+        "bead_seat_diameter_mm": "622",
+        "tire_mounting_declarations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "d1",
+              "values": {
+                "rim_bead_profile": "Sin gancho (hookless)",
+                "mounting_method": "Tubeless",
+                "condition_scope": "Sin condiciones adicionales declaradas",
+                "source_document": "Documento sintético",
+                "rim_internal_width_min_mm": "25",
+                "rim_internal_width_max_mm": "21"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "source_urls": [],
+      "expected_blocking": [
+        {
+          "code": "row_shape",
+          "field": "tire_mounting_declarations"
+        }
+      ],
+      "note": "ordered_pairs viaja con la tabla nueva: un rango invertido sigue siendo imposible.",
+      "observed_in_local_trial": [
+        {
+          "code": "required_missing",
+          "field": "tire_width_mm",
+          "row": null,
+          "column": null,
+          "blocking": false
+        },
+        {
+          "code": "required_missing",
+          "field": "tire_bead_type",
+          "row": null,
+          "column": null,
+          "blocking": false
+        },
+        {
+          "code": "prerequisite",
+          "field": "tire_mounting_declarations",
+          "row": null,
+          "column": null,
+          "blocking": false
+        },
+        {
+          "code": "row_shape",
+          "field": "tire_mounting_declarations",
+          "row": null,
+          "column": null,
+          "blocking": true
+        }
+      ]
+    }
+  ],
+  "engine_facts_verified": [
+    {
+      "fact": "La celda del enlace guarda el id de la fila de destino: el validador comprueba target.rows.any((r) => r.id == value).",
+      "where": "lib/modules/inventory/models/product_spec_coherence.dart:318-337"
+    },
+    {
+      "fact": "Una fila de origen sin valor de enlace no emite nada; el pendiente lo aporta row_conditions.",
+      "where": "lib/modules/inventory/models/product_spec_coherence.dart:322"
+    },
+    {
+      "fact": "row_reference_pending es no bloqueante cuando el destino aún no existe; row_reference_unresolved bloquea cuando el id no está.",
+      "where": "lib/modules/inventory/models/product_spec_coherence.dart:325-336"
+    },
+    {
+      "fact": "El motor de enlaces recorre las filas de origen, así que una fila de destino sin origen no produce ninguna incidencia.",
+      "where": "lib/modules/inventory/models/product_spec_coherence.dart:318-338"
+    },
+    {
+      "fact": "La columna del enlace debe ser text o token sin allowed_values, y las columnas de rótulo pertenecen al destino.",
+      "where": "scripts/inventory/compile_product_spec_catalog.py:602-630"
+    },
+    {
+      "fact": "validate_row_conditions rechaza una entrada cuyo campo esté en rol legacy, por eso la entrada del dueño anterior se retira al retirarlo.",
+      "where": "scripts/inventory/product_spec_row_condition_metadata.py:143-149"
+    },
+    {
+      "fact": "validateProductSpecDraft descarta los valores de campos legacy antes de validar: el contenido anterior se conserva y no se reinterpreta.",
+      "where": "lib/modules/inventory/models/product_spec_contract.dart:174-180"
+    }
+  ],
+  "known_gaps": [
+    {
+      "id": "G-R6-half",
+      "text": "La mitad de R6 que exigía la unidad de presión a un montaje sin gancho no sobrevive: cruzaría de campo y ninguna condición cruza campos."
+    },
+    {
+      "id": "G-orphan-declaration",
+      "text": "Una declaración sin ninguna cifra enlazada no produce incidencia alguna."
+    },
+    {
+      "id": "G-server-unknown-token",
+      "text": "El servidor omite hoy el row_incomplete del token desconocido; se corrige en 2500. La fixtura conserva el nivel correcto y no el actual del servidor."
+    }
+  ],
+  "gates": {
+    "publication": false,
+    "fill": false,
+    "assignment": false,
+    "mechanical_approval": false,
+    "families_certified": false
+  },
+  "stats": {
+    "patches": 5,
+    "new_definitions": 2,
+    "fixtures": 12,
+    "sources": 4
+  },
+  "local_trial": {
+    "compiler": "apply_reviewed_field_addendum con adjudicación de ensayo de Claude: los cinco parches aplican, validate_contract pasa y publication_gates no cambia.",
+    "dart": "Las doce fixturas corrieron contra validateProductSpecDraft con el catálogo ya parchado; observed_in_local_trial es la salida literal del motor."
+  }
+}

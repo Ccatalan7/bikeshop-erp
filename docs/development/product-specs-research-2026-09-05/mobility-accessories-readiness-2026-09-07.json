@@ -1,0 +1,439 @@
+{
+  "schema_version": 1,
+  "title": "Aptitud de representación de 14 familias de movilidad y accesorios",
+  "author": "Claude (revisor independiente)",
+  "prepared_on": "2026-09-07",
+  "catalogue": {
+    "artifact": "all-family-port-cardinality-integrated-2026-09-07.json",
+    "artifact_sha256": "16459826fee4c589cce37243afe4e159317212ddf1d47d6d6f1d76f9b3fadf15"
+  },
+  "boundaries": "Sólo lecturas de artefactos congelados y código. Sin base de datos, sin runtime, sin git, sin subagentes. No se reabrió la investigación por familia.",
+  "families": [
+    "workshop_tool",
+    "light",
+    "cycle_computer",
+    "consumer_electronics",
+    "accessory_mount",
+    "rack_basket",
+    "fender",
+    "kickstand",
+    "bike_bag",
+    "rider_bag",
+    "training_wheel",
+    "bike_protection",
+    "eyewear",
+    "pump"
+  ],
+  "headline": "Ninguna de las cinco compuertas abiertas que tocaban este bloque sigue sin implementar, y ninguna de las 14 familias tiene un impedimento estructural para publicar sus metadatos. Lo que queda son un defecto de representación que debe cerrarse antes de abrir el llenado, un defecto del consumidor de compras, y dos pendientes con dueño.",
+  "previous_findings_now_closed": [
+    {
+      "id": "AG02",
+      "paths": [
+        "light.power_source",
+        "light.light_mount_kind"
+      ],
+      "was": "additional_patch_required",
+      "now": "implementado",
+      "how": "Los cinco escalares de luz —power_source, charge_connector, light_mount_kind, mount_diameter_min_mm, mount_diameter_max_mm— quedaron role=legacy con allowed_when never y required_when never, y light_member_configurations pasó a required_when always. No se añadieron guardas de «luz única»: se retiró el segundo dueño. La entrada externa se separó del puerto de carga dentro de la fila, con power_input_connector required_when battery_kind en las dos alimentaciones externas."
+    },
+    {
+      "id": "AG03",
+      "paths": [
+        "light_mode_configurations.member_id",
+        "power_budget_configurations.port_id",
+        "sensor_support_configurations.transport"
+      ],
+      "was": "representation_engine_gap",
+      "now": "implementado",
+      "how": "Las dos referencias por id existen como links de row_coherence: light_member_link y consumer_electronics_member_link, de modo que un modo o un puerto fantasma da row_reference_unresolved bloqueante. La mitad de cycle_computer se cerró por el otro lado: al rechazar sensor_link_ant_plus, _bluetooth y _wired, las filas quedaron como único dueño de la pareja tipo/transporte/soportado y ya no existe un upstream con el que contradecirse."
+    },
+    {
+      "id": "AG04",
+      "paths": [
+        "accessory_mount.bar_diameter_min_mm",
+        "accessory_mount.device_width_min_mm"
+      ],
+      "was": "representation_engine_gap",
+      "now": "implementado",
+      "how": "scalar_ordered_pairs declara las dos parejas, así que 35→22 y 100→55 bloquean. Y la mitad discreta se cerró con bar_fit_representation: el rango continuo sólo se permite con «Rango continuo declarado por OEM» y bar_clamp_configurations sólo con «Medidas discretas (filas)». Son excluyentes por construcción, sin inventar una lista de diámetros."
+    },
+    {
+      "id": "AG05",
+      "paths": [
+        "power_port_configurations",
+        "power_budget_configurations"
+      ],
+      "was": "requires_owner_design",
+      "now": "implementado",
+      "how": "Tres tablas separan las tres afirmaciones: power_port_configurations (límite individual, unique_by port_id), power_budget_configurations (asignación simultánea, unique_by configuration+port_id) y power_port_profile_configurations (perfil declarado, con profile_kind que exige tensión o etiqueta OEM). No se agregó ninguna regla universal de sumas, que es lo que el caso negativo prohibía. La cardinalidad physical_port_occurrences ata las filas a ports_count."
+    },
+    {
+      "id": "AG06",
+      "paths": [
+        "consumer_electronics.rated_power_w"
+      ],
+      "was": "additional_patch_required",
+      "now": "implementado",
+      "how": "rated_power_w quedó allowed_when device_kind = «Cargador», y el cable conserva cable_power_capacity_w como dueño único. Un cable ya no puede publicar dos potencias del mismo significado."
+    }
+  ],
+  "previous_findings_out_of_block": [
+    {
+      "id": "AG01",
+      "why": "fastener no pertenece a este bloque"
+    },
+    {
+      "id": "AG07",
+      "why": "nutrition_facts / caffeine_basis pertenecen a food_beverage, ya publicada"
+    },
+    {
+      "id": "AG08",
+      "why": "es la compuerta de llenado, global y todavía cerrada; no es condición de publicación"
+    }
+  ],
+  "new_findings": [
+    {
+      "id": "MA-1",
+      "kind": "defecto estructural",
+      "families": [
+        "rack_basket",
+        "fender",
+        "kickstand",
+        "training_wheel"
+      ],
+      "title": "El rango de tamaño de rueda no tiene orden, y hoy no puede tenerlo",
+      "evidence": [
+        "nominal_wheel_size_min y nominal_wheel_size_max son single_select, no number.",
+        "scalar_ordered_pairs rechaza cualquier clave cuyo tipo no sea number: lib/modules/inventory/models/product_spec_coherence.dart:216 exige activeTypes[k]=='number' y si no lanza FormatException. La pareja no está sin declarar: no se puede declarar.",
+        "En training_wheel los dos extremos son required_when always. La única pareja obligatoria del bloque es justo la que no tiene guarda.",
+        "El vocabulario trae 700c y 29\" para el mismo asiento de talón de 622 mm (Sheldon Brown, medidas de neumático / ETRTO), y «Otra», que no tiene posición. Aun con un ordinal, la pareja seguiría siendo ambigua."
+      ],
+      "not_claimed": "No propongo ninguna regla de compatibilidad ni ninguna conversión de pulgadas a milímetros. Sólo señalo que la representación admite hoy un rango invertido y que el orden no es verificable.",
+      "scope": "La definición no está entre las 93 globales publicadas y sus cuatro usuarios están en este bloque, así que la corrección es autocontenida.",
+      "minimal_change": "Reutilizar el patrón que raíz ya aprobó en este mismo bloque: un selector de representación al estilo bar_fit_representation que diga si el OEM declaró un rango o una lista, con la lista viviendo en filas. Si se conserva la lectura de rango, decirlo en el helper: el orden no se verifica.",
+      "cases": [
+        {
+          "kind": "positivo",
+          "values": {
+            "nominal_wheel_size_min": "20\"",
+            "nominal_wheel_size_max": "26\""
+          },
+          "today": "sin incidencia",
+          "after": "sin incidencia"
+        },
+        {
+          "kind": "negativo",
+          "values": {
+            "nominal_wheel_size_min": "29\"",
+            "nominal_wheel_size_max": "20\""
+          },
+          "today": "ACEPTADO — este es el defecto",
+          "after": "rechazado, o imposible de expresar bajo el selector"
+        },
+        {
+          "kind": "desconocido",
+          "values": {
+            "nominal_wheel_size_max": "26\""
+          },
+          "today": "required_missing no bloqueante en training_wheel",
+          "after": "igual; la ausencia sigue siendo pendiente"
+        }
+      ]
+    },
+    {
+      "id": "MA-2",
+      "kind": "defecto de proyección",
+      "families": [
+        "workshop_tool",
+        "light",
+        "cycle_computer",
+        "consumer_electronics",
+        "accessory_mount",
+        "rack_basket",
+        "fender",
+        "kickstand",
+        "bike_bag",
+        "rider_bag",
+        "training_wheel",
+        "bike_protection",
+        "eyewear",
+        "pump"
+      ],
+      "title": "Todo campo de una plantilla se vuelve vocabulario de compra, incluidos los que no se pueden llenar",
+      "evidence": [
+        "supplyNeedSearchFieldsOf, en lib/modules/purchases/services/supply_need_effective_criteria.dart:115-133, recorre todos los template.fields con definición y no filtra por rol, allowed_when, is_filterable ni visibilidad. Traslada dataType, unit, allowedValues y validationRules.",
+        "Medido en este bloque: 160 campos, de los cuales 11 son legacy o allowed_when never —light 8, cycle_computer 2, pump 1— y 22 son tablas de filas (data_type json).",
+        "Éste es el lector que no se ve buscando un nombre literal. La tienda no proyecta nada: lib/public_store/services/public_inventory_service.dart no contiene ninguna lectura de ficha. El consumidor vivo es la ruta de compras."
+      ],
+      "not_a_publication_blocker": "Sólo se manifiesta cuando un producto queda ligado y se crea una necesidad de suministro. Pero se multiplica con cada bloque, y la corrección es del consumidor, no del catálogo.",
+      "minimal_change": "En supplyNeedSearchFieldsOf, omitir el campo cuyo allowed_when sea never y omitir data_type json. No cambia catálogo, definiciones ni plantillas.",
+      "cases": [
+        {
+          "kind": "positivo",
+          "field": "fender.max_tire_width_mm",
+          "expect": "sigue siendo criterio de compra"
+        },
+        {
+          "kind": "negativo",
+          "field": "light.power_source",
+          "expect": "legacy + never: no debe ofrecerse como criterio de una luz"
+        },
+        {
+          "kind": "desconocido",
+          "field": "un campo cuyo allowed_when depende de un valor no puesto",
+          "expect": "se sigue ofreciendo; desconocido no es no, y no se descarta en silencio"
+        }
+      ]
+    },
+    {
+      "id": "MA-3",
+      "kind": "pendiente",
+      "families": [
+        "workshop_tool",
+        "pump"
+      ],
+      "title": "La unidad pegada al nombre se corrigió en uno de los dos usuarios",
+      "evidence": "En pump, max_pressure_psi quedó legacy y el dueño pasó a pump_pressure_specifications, con quantity_kind, value y unit como token requerido. En workshop_tool sigue vivo como declaration, con la unidad soldada al nombre. Los dos usuarios están en este bloque y la definición no está entre las 93.",
+      "why_not_a_defect": "El campo es opcional y no bloqueante; no impide publicar la plantilla.",
+      "minimal_change": "Darle a workshop_tool el mismo tratamiento, o dejar escrito por qué no lo necesita.",
+      "cases": [
+        {
+          "kind": "positivo",
+          "v": "workshop_tool con presión declarada en psi por el fabricante",
+          "expect": "sin incidencia"
+        },
+        {
+          "kind": "negativo",
+          "v": "una presión declarada en bar",
+          "expect": "hoy sólo se puede guardar convertida o no guardarse; ninguna de las dos es una lectura"
+        },
+        {
+          "kind": "desconocido",
+          "v": "sin presión declarada",
+          "expect": "pendiente, no bloqueante"
+        }
+      ]
+    },
+    {
+      "id": "MA-4",
+      "kind": "pendiente",
+      "families": [
+        "bike_bag",
+        "rider_bag"
+      ],
+      "title": "volume_l no declara su alcance, donde modes_count sí lo hace",
+      "evidence": "bag_member_configurations lleva volume_l por miembro más configuration y measurement_reference, así que el alcance es expresable en la fila y no en el escalar. El precedente ya existe en este bloque: light.modes_count tiene el helper «Total declarado para la luz individual y su alcance; no se calcula contando filas».",
+      "minimal_change": "El mismo helper para volume_l en las dos familias. No una regla de suma.",
+      "no_mechanical_negative": "No propongo que 20 L con dos miembros de 20 L se bloquee: nada distingue una declaración por unidad de una por conjunto, y raíz ya rechazó las reglas universales de suma en el caso negativo de AG05. Por eso este hallazgo no tiene caso negativo mecánico, y decirlo es parte del hallazgo.",
+      "cases": [
+        {
+          "kind": "positivo",
+          "v": "par de alforjas, volume_l 40 y dos filas de 20",
+          "expect": "sin incidencia; el helper hace explícita la lectura"
+        },
+        {
+          "kind": "negativo",
+          "v": null,
+          "expect": "no existe uno mecánico — ver no_mechanical_negative"
+        },
+        {
+          "kind": "desconocido",
+          "v": "volume_l ausente",
+          "expect": "pendiente, no bloqueante"
+        }
+      ]
+    }
+  ],
+  "shared_published_definitions": {
+    "power_source": {
+      "published_global": true,
+      "families": [
+        "light",
+        "audible_signal",
+        "cycle_computer"
+      ],
+      "note": "legacy y never en light; vivo en cycle_computer y en audible_signal, que YA está publicada."
+    },
+    "mount_diameter_min_mm": {
+      "published_global": true,
+      "families": [
+        "light",
+        "audible_signal"
+      ],
+      "note": "never en light, así que su dueño real hoy es audible_signal, ya publicada."
+    },
+    "mount_diameter_max_mm": {
+      "published_global": true,
+      "families": [
+        "light",
+        "audible_signal"
+      ],
+      "note": "igual que el anterior."
+    },
+    "kit_members": {
+      "published_global": true,
+      "families_total": 23,
+      "in_block": [
+        "light",
+        "fender",
+        "training_wheel"
+      ],
+      "note": "El helper de alcance de contenido sólo existe en lock y rider_protection. Los tres usuarios de este bloque no lo tienen. Extenderlo es un forward que afecta a las 23."
+    },
+    "color": {
+      "published_global": true,
+      "families_total": 37,
+      "in_block": 11
+    },
+    "material": {
+      "published_global": true,
+      "families_total": 27,
+      "in_block": 5
+    },
+    "volume_ml": {
+      "published_global": true,
+      "families_total": 4,
+      "in_block": [
+        "workshop_tool"
+      ]
+    },
+    "width_mm": {
+      "published_global": true,
+      "families": [
+        "bike_protection",
+        "reflector"
+      ],
+      "note": "reflector ya está publicada."
+    }
+  },
+  "projection_limits": {
+    "store": "lib/public_store/services/public_inventory_service.dart no lee ninguna ficha. Publicar estas 14 no proyecta nada a la tienda; no es una cuestión de is_customer_visible.",
+    "workshop": "El editor de fichas renderiza todas las columnas de una tabla de filas (product_spec_rows_field.dart:153) sin visibilidad por columna. En este bloque eso son tablas de hasta 17 columnas —tool_capabilities y light_member_configurations—, 13 en rack_mount_configurations y 11 en power_port_profile_configurations. Es un límite de usabilidad real, no un defecto de contrato.",
+    "purchasing": "Ver MA-2: es el consumidor vivo, y consume todos los campos."
+  },
+  "per_family": {
+    "workshop_tool": {
+      "verdict": "apta",
+      "blockers": [],
+      "pending": [
+        "MA-3",
+        "MA-2 (consumidor)"
+      ]
+    },
+    "light": {
+      "verdict": "apta",
+      "blockers": [],
+      "pending": [
+        "MA-2 (consumidor)"
+      ]
+    },
+    "cycle_computer": {
+      "verdict": "apta",
+      "blockers": [],
+      "pending": [
+        "MA-2 (consumidor)"
+      ]
+    },
+    "consumer_electronics": {
+      "verdict": "apta",
+      "blockers": [],
+      "pending": [
+        "MA-2 (consumidor)"
+      ]
+    },
+    "accessory_mount": {
+      "verdict": "apta",
+      "blockers": [],
+      "pending": [
+        "MA-2 (consumidor)"
+      ]
+    },
+    "rack_basket": {
+      "verdict": "apta",
+      "blockers": [],
+      "pending": [
+        "MA-1",
+        "MA-2 (consumidor)"
+      ]
+    },
+    "fender": {
+      "verdict": "apta",
+      "blockers": [],
+      "pending": [
+        "MA-1",
+        "MA-2 (consumidor)"
+      ]
+    },
+    "kickstand": {
+      "verdict": "apta",
+      "blockers": [],
+      "pending": [
+        "MA-1",
+        "MA-2 (consumidor)"
+      ]
+    },
+    "bike_bag": {
+      "verdict": "apta",
+      "blockers": [],
+      "pending": [
+        "MA-4",
+        "MA-2 (consumidor)"
+      ]
+    },
+    "rider_bag": {
+      "verdict": "apta",
+      "blockers": [],
+      "pending": [
+        "MA-4",
+        "MA-2 (consumidor)"
+      ]
+    },
+    "training_wheel": {
+      "verdict": "apta",
+      "blockers": [],
+      "pending": [
+        "MA-1",
+        "MA-2 (consumidor)"
+      ]
+    },
+    "bike_protection": {
+      "verdict": "apta",
+      "blockers": [],
+      "pending": [
+        "MA-2 (consumidor)"
+      ]
+    },
+    "eyewear": {
+      "verdict": "apta",
+      "blockers": [],
+      "pending": [
+        "MA-2 (consumidor)"
+      ]
+    },
+    "pump": {
+      "verdict": "apta",
+      "blockers": [],
+      "pending": [
+        "MA-3",
+        "MA-2 (consumidor)"
+      ]
+    }
+  },
+  "counts": {
+    "families": 14,
+    "fields": 160,
+    "row_tables": 22,
+    "legacy_or_never_fields": 11,
+    "previous_gates_touching_block": 5,
+    "previous_gates_unimplemented": 0,
+    "structural_impediments_to_publish": 0,
+    "new_findings": 4,
+    "published_global_definitions_reused": 8
+  },
+  "gates_unchanged": {
+    "fill_allowed": false,
+    "compatibility_rules_integrated": false,
+    "all_product_assignment_review_complete": false,
+    "all_family_domain_review_complete": false
+  }
+}

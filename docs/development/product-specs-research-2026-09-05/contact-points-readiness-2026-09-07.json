@@ -1,0 +1,250 @@
+{
+  "schema_version": 1,
+  "title": "Aptitud de representación: 10 plantillas de puntos de contacto",
+  "author": "Claude (revisor independiente)",
+  "prepared_on": "2026-09-07",
+  "purpose": "El siguiente bloque implementable. No es un plan.",
+  "catalogue": {
+    "artifact": "all-family-port-cardinality-integrated-2026-09-07.json",
+    "artifact_sha256": "16459826fee4c589cce37243afe4e159317212ddf1d47d6d6f1d76f9b3fadf15"
+  },
+  "boundaries": "Sólo lecturas de artefactos congelados, código y dos consultas públicas. Sin base de datos, runtime, git, escrituras ni subagentes. No se reinició la investigación general.",
+  "families": [
+    "pedal",
+    "pedal_peg",
+    "grip",
+    "handlebar_covering",
+    "handlebar",
+    "stem",
+    "seatpost",
+    "seat_clamp",
+    "saddle",
+    "saddle_cover"
+  ],
+  "headline": "Las diez son publicables: ninguna tiene impedimento estructural. Las cinco interfaces que priorizaste ya están representadas en dos lados y con vocabulario común. Hay un defecto concreto —grip— y una limpieza en dos familias.",
+  "findings": [
+    {
+      "id": "CP-1",
+      "kind": "defecto concreto",
+      "family": "grip",
+      "title": "Dos diámetros sin eje declarado",
+      "evidence": [
+        "grip_bar_nominal_diameter_mm es required_when always y grip_inner_diameter_mm es allowed_when always: sin condición, sin token de referencia y sin helper. Las dos son used_by [\"grip\"].",
+        "Mecánicamente son ejes distintos: en un puño deslizante el calibre interior es nominalmente el del manillar; en un lock-on el manguito va montado sobre el manillar y su calibre interior es mayor que 22,2 mm, mientras el manillar que calza sigue siendo 22,2. Los dos números son legítimos, pero sólo uno es la interfaz.",
+        "Hoy nada dice cuál es cuál y nada impide dos valores que se contradigan."
+      ],
+      "oem_evidence": "En lo que pude leer, los fabricantes publican longitud y par de apriete —ODI da 135 mm y 130 mm por modelo y 4,5–5,0 Nm para el v2.1— y no encontré un calibre interior publicado. Es resultado de búsqueda, no una tabla textual, así que NO propongo eliminar el campo sobre esa base.",
+      "minimal_change": "El patrón ya existe en la familia vecina: handlebar.bar_width_reference declara qué mide la anchura. Aquí falta el equivalente. Sirve un token de referencia sobre el par, o condicionar grip_inner_diameter_mm a donde el fabricante lo publique. Cuál de las dos es tu decisión; lo que no puede quedarse es que los dos números convivan sin decir cuál es la interfaz.",
+      "not_claimed": "No propongo derivar calce desde el diámetro, ni un mínimo mecánico, ni que un calibre interior distinto de 22,2 sea un error.",
+      "cases": [
+        {
+          "kind": "positivo",
+          "values": {
+            "grip_attachment": "Lock-on (doble abrazadera)",
+            "grip_bar_nominal_diameter_mm": "22.2",
+            "grip_clamp_torque_nm": "5"
+          },
+          "expect": "sin incidencia: la interfaz declarada y el par publicado, sin calibre interior"
+        },
+        {
+          "kind": "negativo",
+          "values": {
+            "grip_bar_nominal_diameter_mm": "22.2",
+            "grip_inner_diameter_mm": "31.8"
+          },
+          "expect": "hoy ACEPTADO. Con el eje declarado, o queda fuera de alcance o se lee como lo que es; sin él, dos cifras incompatibles conviven sin dueño"
+        },
+        {
+          "kind": "desconocido",
+          "values": {
+            "grip_attachment": "Deslizante"
+          },
+          "expect": "required_missing no bloqueante sobre grip_bar_nominal_diameter_mm; se conserva pendiente"
+        }
+      ]
+    },
+    {
+      "id": "CP-2",
+      "kind": "limpieza",
+      "families": [
+        "pedal",
+        "seatpost"
+      ],
+      "title": "Reglas vivas sobre campos ya retirados",
+      "evidence": "pedal.pedal_thread es role legacy y a la vez required_when always. seatpost.dropper_actuation es legacy y lleva un allowed_when condicional. Las dos reglas son INERTES: verifiqué el motor la ronda pasada y un campo legacy se elimina de values en product_spec_contract.dart:174-179 y el bucle por campo lo salta en :237, así que ni el required_missing ni la aplicabilidad llegan a evaluarse.",
+      "why_it_matters": "No bloquea nada, pero el próximo lector del contrato va a creer que pedal_thread es obligatorio, y no lo es ni puede serlo.",
+      "minimal_change": "Quitar la regla. No agregar allowed_when never: también sería inerte, como quedó establecido en DL-5.",
+      "cases": [
+        {
+          "kind": "positivo",
+          "values": {
+            "pedal_thread_standard": "9/16\" x 20 TPI"
+          },
+          "expect": "sin incidencia; el dueño vivo es el estándar con TPI"
+        },
+        {
+          "kind": "negativo",
+          "values": {
+            "pedal_thread": "9/16"
+          },
+          "expect": "ninguna incidencia hoy, y ninguna después: el valor no llega a los hechos"
+        },
+        {
+          "kind": "desconocido",
+          "values": {},
+          "expect": "required_missing sobre pedal_thread_standard, no sobre pedal_thread"
+        }
+      ]
+    },
+    {
+      "id": "CP-3",
+      "kind": "verificado correcto",
+      "title": "Las cinco interfaces ya están en dos lados y con el mismo vocabulario",
+      "axes": [
+        {
+          "axis": "rieles de sillín vs mordazas",
+          "finding": "saddle.saddle_rail_geometry y seatpost_saddle_configurations.rail_geometry tienen los MISMOS siete valores en el mismo orden —Redondo 7 mm, Oval 7x9, 7x9.6, 7x10, 8x8.5, Sistema propietario, Otro—. Una pregunta de calce es contestable sin tabla de traducción, que es lo que suele faltar."
+        },
+        {
+          "axis": "rosca de pedal vs retención/zapatilla",
+          "finding": "pedal_thread_standard lleva la designación completa: 9/16\" x 20 TPI, 1/2\" x 20 TPI, M14 x 1.25 y 1\" x 24 TPI (Shimano Dyna Drive) —la taxonomía de Sheldon Brown—, separada de pedal_type y cleat_system, que son el eje de retención. El viejo pedal_thread, que sólo decía «9/16» sin paso, quedó retirado."
+        },
+        {
+          "axis": "diámetro de manillar donde se sujeta cada pieza",
+          "finding": "bar_clamp_diameter_mm es UNA definición compartida por handlebar y stem, condicionada en cada lado por su propia construcción —bar_construction «Manubrio separado» y stem_kind—, y grip_area_diameter_mm es otro eje. La zona de sujeción y la zona de agarre no se confunden. handlebar_covering.inner_diameter_mm queda condicionado a su tipo de funda."
+        },
+        {
+          "axis": "diámetro de tija vs abrazadera externa del cuadro",
+          "finding": "seatpost_diameter_mm es used_by [seatpost, bicycle, frame] y seat_tube_outer_diameter_mm es used_by [seat_clamp, bicycle, frame]: son definiciones DISTINTAS. El collarín habla del tubo, la tija habla de sí misma y el cuadro declara las dos. El shim tiene además su par exterior e interior."
+        },
+        {
+          "axis": "control de tija telescópica vs simple longitud",
+          "finding": "dropper_control_kind y dropper_cable_routing reemplazan a dropper_actuation, que mezclaba accionamiento con ruteo en una sola lista. dropper_travel_mm es distinto de seatpost_length_mm, y dropper_control_configurations exige seatpost_scope, así que un mando compatible no se nombra sin decir para qué tija vale."
+        }
+      ],
+      "not_claimed": "Ninguno de estos ejes autoriza a derivar compatibilidad de la medida sola, y no propongo ningún mínimo mecánico universal."
+    },
+    {
+      "id": "CP-4",
+      "kind": "alcance compartido",
+      "title": "Nueve definiciones ya publicadas se reutilizan en este bloque",
+      "note": "Ninguna se muta. Cualquier propuesta sobre ellas es un forward que afecta a todos sus usuarios, no una definición inédita, aunque el catálogo congelado todavía las llame origin=new.",
+      "shared": [
+        {
+          "key": "color",
+          "published_in": [
+            "bloque 12",
+            "bloque 14"
+          ],
+          "used_by": 37,
+          "here": 6
+        },
+        {
+          "key": "material",
+          "published_in": [
+            "bloque 12",
+            "bloque 14"
+          ],
+          "used_by": 27,
+          "here": 6
+        },
+        {
+          "key": "kit_members",
+          "published_in": [
+            "bloque 12",
+            "bloque 14"
+          ],
+          "used_by": 23,
+          "here": 1
+        },
+        {
+          "key": "pack_quantity",
+          "published_in": [
+            "bloque 14"
+          ],
+          "used_by": 19,
+          "here": 2
+        },
+        {
+          "key": "spec_evidence_source",
+          "published_in": [
+            "bloque 14"
+          ],
+          "used_by": 105,
+          "here": 10
+        },
+        {
+          "key": "length_mm",
+          "published_in": [
+            "bloque 14"
+          ],
+          "used_by": 3,
+          "here": 1
+        },
+        {
+          "key": "weight_g",
+          "published_in": [
+            "bloque 12"
+          ],
+          "used_by": 3,
+          "here": 1
+        },
+        {
+          "key": "padding",
+          "published_in": [
+            "bloque 12"
+          ],
+          "used_by": 2,
+          "here": 1
+        },
+        {
+          "key": "conflicting_claims",
+          "published_in": [
+            "bloque 14"
+          ],
+          "used_by": 2,
+          "here": 1,
+          "note": "el otro usuario es bike_bag, ya publicada"
+        }
+      ]
+    },
+    {
+      "id": "CP-5",
+      "kind": "observación",
+      "title": "La fuente por fila ya existe en el sobre, no en la columna",
+      "text": "dropper_control_configurations y pedal_bearing_configurations no tienen columna source_url, a diferencia de las demás tablas de estos bloques. Lo verifiqué antes de reportarlo como defecto y NO lo es: toda fila lleva un arreglo sources en su sobre, validado como URLs únicas y bien formadas en product_spec_rows.dart:100-106, independiente de cualquier columna. La observación que queda es la inversa y no es de este bloque: donde existe la columna, la evidencia de una fila puede vivir en dos sitios.",
+      "not_a_proposal": true
+    }
+  ],
+  "per_family": {
+    "pedal": "apta, con limpieza CP-2",
+    "pedal_peg": "apta",
+    "grip": "defecto concreto (CP-1)",
+    "handlebar_covering": "apta",
+    "handlebar": "apta",
+    "stem": "apta",
+    "seatpost": "apta, con limpieza CP-2",
+    "seat_clamp": "apta",
+    "saddle": "apta",
+    "saddle_cover": "apta"
+  },
+  "projection": "Nada nuevo respecto de lo ya medido: la tienda no lee fichas, y compras consume los escalares detrás de la frontera supplyNeedCriterionFieldsOf. De los 107 campos del bloque, 5 son tablas de filas que esa frontera ya excluye por tipo.",
+  "counts": {
+    "families": 10,
+    "distinct_definitions": 107,
+    "already_published_reused": 9,
+    "new_definitions": 98,
+    "row_tables": 5,
+    "structural_impediments_to_publish": 0,
+    "concrete_defects": 1,
+    "cleanups": 1,
+    "scalar_min_max_pairs": 1,
+    "unordered_min_max_pairs": 0
+  },
+  "gates_unchanged": {
+    "fill_allowed": false,
+    "compatibility_rules_integrated": false,
+    "all_product_assignment_review_complete": false,
+    "all_family_domain_review_complete": false
+  }
+}

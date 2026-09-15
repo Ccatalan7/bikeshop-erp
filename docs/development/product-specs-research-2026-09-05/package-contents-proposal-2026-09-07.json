@@ -1,0 +1,214 @@
+{
+  "schema_version": 1,
+  "base_artifact": "all-family-row-values-integrated-2026-09-07.json",
+  "base_sha256": "58e68f0c4f0d7b8e824a84a3931cf9f7bd03767f8a65aaa55020bc6af7465f03",
+  "new_definitions": {
+    "included_chainring_count": {
+      "id": null,
+      "key": "included_chainring_count",
+      "origin": "new",
+      "label": "Cantidad de platos incluidos",
+      "data_type": "number",
+      "unit": null,
+      "allowed_values": [],
+      "validation_rules": {
+        "min": "0",
+        "integer": true
+      },
+      "used_by": []
+    }
+  },
+  "patches": [
+    {
+      "id": "CONT-01",
+      "op": "replace_field_contract",
+      "template": "crankset",
+      "key": "chainring_count",
+      "before": {
+        "roles": "primary",
+        "semantic_roles": "intrinsic",
+        "required_when": {
+          "kind": "always"
+        },
+        "evidence_requirements": "oem_or_package",
+        "helpers": null
+      },
+      "after": {
+        "roles": "legacy",
+        "semantic_roles": "legacy",
+        "required_when": {
+          "kind": "never"
+        },
+        "evidence_requirements": "name_reading_hint_only",
+        "helpers": "Cantidad antigua sin distinguir contenido y configuración. Se conserva; no se copia al contenido ni acredita capacidad de montaje."
+      }
+    },
+    {
+      "id": "CONT-02",
+      "op": "add_field",
+      "template": "crankset",
+      "key": "included_chainring_count",
+      "before": null,
+      "after": {
+        "field_entry": {
+          "key": "included_chainring_count",
+          "section_key": "contents",
+          "sort_order": 200,
+          "is_required": false,
+          "visibility_rules": [],
+          "option_rules": [],
+          "constraint_rules": []
+        },
+        "definition_used_by_append": "crankset",
+        "roles": "contents",
+        "semantic_roles": "contents",
+        "allowed_when": {
+          "kind": "always"
+        },
+        "required_when": {
+          "kind": "always"
+        },
+        "helpers": "Número de platos físicamente suministrados con esta variante. Cero exige evidencia de que no se incluyen; sin confirmación queda Sin dato. No indica cuántos platos admite un montaje.",
+        "evidence_requirements": "package_or_label"
+      }
+    },
+    {
+      "id": "CONT-03",
+      "op": "replace_field_contract",
+      "template": "drivetrain_kit",
+      "key": "chainring_count",
+      "before": {
+        "roles": "primary",
+        "semantic_roles": "intrinsic",
+        "required_when": {
+          "kind": "never"
+        },
+        "evidence_requirements": "oem_or_package",
+        "helpers": null
+      },
+      "after": {
+        "roles": "legacy",
+        "semantic_roles": "legacy",
+        "required_when": {
+          "kind": "never"
+        },
+        "evidence_requirements": "name_reading_hint_only",
+        "helpers": "Cantidad antigua sin distinguir contenido y configuración. Se conserva; no se copia al contenido ni acredita capacidad de montaje."
+      }
+    },
+    {
+      "id": "CONT-04",
+      "op": "add_field",
+      "template": "drivetrain_kit",
+      "key": "included_chainring_count",
+      "before": null,
+      "after": {
+        "field_entry": {
+          "key": "included_chainring_count",
+          "section_key": "contents",
+          "sort_order": 150,
+          "is_required": false,
+          "visibility_rules": [],
+          "option_rules": [],
+          "constraint_rules": []
+        },
+        "definition_used_by_append": "drivetrain_kit",
+        "roles": "contents",
+        "semantic_roles": "contents",
+        "allowed_when": {
+          "kind": "always"
+        },
+        "required_when": {
+          "kind": "always"
+        },
+        "helpers": "Número de platos físicamente suministrados con esta variante. Cero exige evidencia de que no se incluyen; sin confirmación queda Sin dato. No indica cuántos platos admite un montaje.",
+        "evidence_requirements": "package_or_label"
+      }
+    },
+    {
+      "id": "CONT-05",
+      "op": "replace_field_contract",
+      "template": "crankset",
+      "key": "chainring_teeth_rows",
+      "before": {
+        "roles": "primary",
+        "semantic_roles": "intrinsic",
+        "labels": null,
+        "helpers": null,
+        "allowed_when": {
+          "kind": "always"
+        },
+        "required_when": {
+          "kind": "never"
+        },
+        "evidence_requirements": "oem_or_package"
+      },
+      "after": {
+        "roles": "contents",
+        "semantic_roles": "contents",
+        "labels": "Dientes y posición de los platos incluidos",
+        "helpers": "Describe sólo los platos suministrados. Las configuraciones compatibles u opcionales necesitan sus propias declaraciones; no se copian aquí.",
+        "allowed_when": {
+          "kind": "when",
+          "rows": [
+            [
+              {
+                "field": "included_chainring_count",
+                "operator": "gt",
+                "value_type": "decimal",
+                "value": "0"
+              }
+            ]
+          ]
+        },
+        "required_when": {
+          "kind": "when",
+          "rows": [
+            [
+              {
+                "field": "included_chainring_count",
+                "operator": "gt",
+                "value_type": "decimal",
+                "value": "0"
+              }
+            ]
+          ]
+        },
+        "evidence_requirements": "package_or_label"
+      }
+    },
+    {
+      "id": "CONT-06",
+      "op": "replace_template_label",
+      "template": "mechanical_disc_brake",
+      "key": "name",
+      "before": "Freno mecánico de disco completo",
+      "after": "Conjunto de freno mecánico de disco"
+    },
+    {
+      "id": "CONT-07",
+      "op": "replace_field_contract",
+      "template": "mechanical_disc_brake",
+      "key": "kit_members",
+      "before": {
+        "helpers": null
+      },
+      "after": {
+        "helpers": "Componentes realmente suministrados con esta variante. Un conjunto puede traer cálipers y discos; su nombre no presume manillas, cables, fundas ni adaptadores. No confundir ausencia de dato con exclusión."
+      }
+    }
+  ],
+  "sources": [
+    {
+      "url": "https://www.profileracing.com/product/no-boss-3-piece-chromoly-race-crankset/",
+      "scope": "Contraejemplo OEM: juego de bielas y eje vendido para usar plato/spider aparte. No identifica ni rellena J253."
+    },
+    {
+      "artifact": "assigned-product-family-adjudication-2026-09-07.json",
+      "sha256": "852577ba7176e438be9a145be4327d70d936e464ca613a6571eb46d15a9b155a",
+      "scope": "AG01/AG02, imágenes J253 y 1062 inspeccionadas también por Root; no prueba exclusiones."
+    }
+  ],
+  "mechanical_coverage_complete": false,
+  "automatic_fill_authorized": false
+}

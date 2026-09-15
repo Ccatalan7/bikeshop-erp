@@ -1,0 +1,11 @@
+{
+  "kind": "saved_product_identity",
+  "product_id": "3851271a-8631-4942-a7dc-776853ae0408",
+  "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+  "field": "name",
+  "value": "Conexión De Cadena Kmc Cl573r 6/7/8 Plata 2p",
+  "read_on": "2026-09-07",
+  "snapshot_sha256": "c1dd18c019ce26c794ce7643c978085ed7f9e84e1d7c0baff5c4a5b767b58ffc",
+  "product_sha256": "b65668215bdce017a892b0ca640d794d74b1b3bc0a9b2810fac111734c62408d",
+  "scope": "Nombre guardado en ERP; no verifica variante física ni presentación."
+}

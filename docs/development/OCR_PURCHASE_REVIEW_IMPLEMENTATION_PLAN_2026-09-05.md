@@ -168,6 +168,16 @@ del día con la acción de abrir factura.
    `CODEX_CLAUDE_COLLABORATION.md`. Un commit por bloque; `origin` sólo
    después de esa revisión.
 
+## Estado (2026-09-05, cierre de la tarde)
+
+Bloques 0–5 implementados y verificados en vivo sobre la reimportación del
+06/04/2026; el matcher sí se tocó, contra lo que decía el plan: la traza
+mostró que la IA acertaba y el código descartaba, así que la corrección fue
+de post-proceso y recorrido (`product-identity-matching-contract.md`,
+secciones del 2026-09-05). Pendiente del bloque 6: cross-review con Codex y
+`origin`. Quedó fuera: el marcador del calendario (sin valor en la guía) y la
+acción de lote «Aceptar N coincidencias directas».
+
 ## Lo que este plan no hace
 
 - No cambia el matcher ni la compuerta de categoría (queda para acuerdo con

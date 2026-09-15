@@ -1,0 +1,298 @@
+[
+  {
+    "key": "bearing",
+    "fields": 2,
+    "is_active": true,
+    "option_rules": 0,
+    "technical_family": "bearing",
+    "visibility_rules": 0
+  },
+  {
+    "key": "bottom_bracket",
+    "fields": 15,
+    "is_active": true,
+    "option_rules": 12,
+    "technical_family": "bottom_bracket",
+    "visibility_rules": 14
+  },
+  {
+    "key": "bottom_bracket_axle",
+    "fields": 4,
+    "is_active": true,
+    "option_rules": 4,
+    "technical_family": "bottom_bracket_axle",
+    "visibility_rules": 3
+  },
+  {
+    "key": "bottom_bracket_bearing",
+    "fields": 8,
+    "is_active": true,
+    "option_rules": 1,
+    "technical_family": "bottom_bracket_bearing",
+    "visibility_rules": 7
+  },
+  {
+    "key": "bottom_bracket_cup",
+    "fields": 6,
+    "is_active": true,
+    "option_rules": 5,
+    "technical_family": "bottom_bracket_cup",
+    "visibility_rules": 5
+  },
+  {
+    "key": "brake_caliper",
+    "fields": 12,
+    "is_active": true,
+    "option_rules": 0,
+    "technical_family": "brake_caliper",
+    "visibility_rules": 0
+  },
+  {
+    "key": "brake_lever",
+    "fields": 5,
+    "is_active": true,
+    "option_rules": 0,
+    "technical_family": "brake_lever",
+    "visibility_rules": 0
+  },
+  {
+    "key": "brake_pad",
+    "fields": 8,
+    "is_active": true,
+    "option_rules": 0,
+    "technical_family": "brake_pad",
+    "visibility_rules": 0
+  },
+  {
+    "key": "cassette",
+    "fields": 5,
+    "is_active": true,
+    "option_rules": 0,
+    "technical_family": "cassette",
+    "visibility_rules": 0
+  },
+  {
+    "key": "cassette_spacer",
+    "fields": 2,
+    "is_active": true,
+    "option_rules": 0,
+    "technical_family": "cassette_spacer",
+    "visibility_rules": 0
+  },
+  {
+    "key": "chain",
+    "fields": 12,
+    "is_active": true,
+    "option_rules": 0,
+    "technical_family": "chain",
+    "visibility_rules": 0
+  },
+  {
+    "key": "chain_guide",
+    "fields": 3,
+    "is_active": true,
+    "option_rules": 0,
+    "technical_family": "chain_guide",
+    "visibility_rules": 0
+  },
+  {
+    "key": "chain_link",
+    "fields": 10,
+    "is_active": true,
+    "option_rules": 0,
+    "technical_family": "chain_link",
+    "visibility_rules": 0
+  },
+  {
+    "key": "chainring",
+    "fields": 10,
+    "is_active": true,
+    "option_rules": 0,
+    "technical_family": "chainring",
+    "visibility_rules": 0
+  },
+  {
+    "key": "hydraulic_disc_brake",
+    "fields": 11,
+    "is_active": true,
+    "option_rules": 0,
+    "technical_family": "complete_brake",
+    "visibility_rules": 0
+  },
+  {
+    "key": "mechanical_disc_brake",
+    "fields": 7,
+    "is_active": true,
+    "option_rules": 0,
+    "technical_family": "complete_brake",
+    "visibility_rules": 0
+  },
+  {
+    "key": "crank_arm",
+    "fields": 4,
+    "is_active": true,
+    "option_rules": 0,
+    "technical_family": "crank_arm",
+    "visibility_rules": 0
+  },
+  {
+    "key": "crankset",
+    "fields": 9,
+    "is_active": true,
+    "option_rules": 0,
+    "technical_family": "crankset",
+    "visibility_rules": 0
+  },
+  {
+    "key": "derailleur_hanger",
+    "fields": 3,
+    "is_active": true,
+    "option_rules": 0,
+    "technical_family": "derailleur_hanger",
+    "visibility_rules": 0
+  },
+  {
+    "key": "derailleur_pulley",
+    "fields": 2,
+    "is_active": true,
+    "option_rules": 0,
+    "technical_family": "derailleur_pulley",
+    "visibility_rules": 0
+  },
+  {
+    "key": "drivetrain_kit",
+    "fields": 11,
+    "is_active": true,
+    "option_rules": 0,
+    "technical_family": "drivetrain_kit",
+    "visibility_rules": 0
+  },
+  {
+    "key": "fixed_cog",
+    "fields": 4,
+    "is_active": true,
+    "option_rules": 0,
+    "technical_family": "fixed_cog",
+    "visibility_rules": 0
+  },
+  {
+    "key": "freewheel",
+    "fields": 5,
+    "is_active": true,
+    "option_rules": 0,
+    "technical_family": "freewheel",
+    "visibility_rules": 0
+  },
+  {
+    "key": "front_derailleur",
+    "fields": 9,
+    "is_active": true,
+    "option_rules": 0,
+    "technical_family": "front_derailleur",
+    "visibility_rules": 0
+  },
+  {
+    "key": "headset",
+    "fields": 3,
+    "is_active": true,
+    "option_rules": 0,
+    "technical_family": "headset",
+    "visibility_rules": 0
+  },
+  {
+    "key": "hub",
+    "fields": 5,
+    "is_active": true,
+    "option_rules": 0,
+    "technical_family": "hub",
+    "visibility_rules": 0
+  },
+  {
+    "key": "rear_derailleur",
+    "fields": 11,
+    "is_active": true,
+    "option_rules": 0,
+    "technical_family": "rear_derailleur",
+    "visibility_rules": 0
+  },
+  {
+    "key": "rim",
+    "fields": 13,
+    "is_active": true,
+    "option_rules": 0,
+    "technical_family": "rim",
+    "visibility_rules": 1
+  },
+  {
+    "key": "rim_brake",
+    "fields": 4,
+    "is_active": true,
+    "option_rules": 0,
+    "technical_family": "rim_brake",
+    "visibility_rules": 0
+  },
+  {
+    "key": "rim_strip",
+    "fields": 2,
+    "is_active": true,
+    "option_rules": 0,
+    "technical_family": "rim_strip",
+    "visibility_rules": 0
+  },
+  {
+    "key": "rotor",
+    "fields": 8,
+    "is_active": true,
+    "option_rules": 0,
+    "technical_family": "rotor",
+    "visibility_rules": 0
+  },
+  {
+    "key": "shifter",
+    "fields": 7,
+    "is_active": true,
+    "option_rules": 0,
+    "technical_family": "shifter",
+    "visibility_rules": 0
+  },
+  {
+    "key": "spoke",
+    "fields": 3,
+    "is_active": true,
+    "option_rules": 0,
+    "technical_family": "spoke",
+    "visibility_rules": 0
+  },
+  {
+    "key": "tire",
+    "fields": 6,
+    "is_active": true,
+    "option_rules": 0,
+    "technical_family": "tire",
+    "visibility_rules": 0
+  },
+  {
+    "key": "tube",
+    "fields": 9,
+    "is_active": true,
+    "option_rules": 0,
+    "technical_family": "tube",
+    "visibility_rules": 0
+  },
+  {
+    "key": "tubeless_consumable",
+    "fields": 1,
+    "is_active": true,
+    "option_rules": 0,
+    "technical_family": "tubeless_consumable",
+    "visibility_rules": 0
+  },
+  {
+    "key": "tubeless_valve",
+    "fields": 2,
+    "is_active": true,
+    "option_rules": 0,
+    "technical_family": "tubeless_valve",
+    "visibility_rules": 0
+  }
+]

@@ -1,0 +1,48 @@
+{
+  "functions": [
+    {
+      "acl": "{postgres=X/postgres,service_role=X/postgres}",
+      "md5": "be905e64b956bff3c947784d791a7c00",
+      "settings": [
+        "search_path=pg_catalog, public, pg_temp"
+      ],
+      "signature": "spec_coherence_issues_internal_v1(jsonb,jsonb,jsonb)",
+      "owner_name": "postgres",
+      "volatility": "i",
+      "security_definer": false
+    },
+    {
+      "acl": "{postgres=X/postgres,service_role=X/postgres}",
+      "md5": "1ac8377c198430e211730278917cfdf3",
+      "settings": [
+        "search_path=pg_catalog, public, pg_temp"
+      ],
+      "signature": "spec_coherence_metadata_internal_v1(jsonb,jsonb)",
+      "owner_name": "postgres",
+      "volatility": "i",
+      "security_definer": false
+    },
+    {
+      "acl": "{postgres=X/postgres,service_role=X/postgres}",
+      "md5": "7eedf2cd0074f0d14fa89a8f145b5c8f",
+      "settings": [
+        "search_path=pg_catalog, public, pg_temp"
+      ],
+      "signature": "spec_coherence_pairs_internal_v1(jsonb,jsonb)",
+      "owner_name": "postgres",
+      "volatility": "i",
+      "security_definer": false
+    },
+    {
+      "acl": "{postgres=X/postgres,service_role=X/postgres}",
+      "md5": "f95f1176094ae7376a826a85b0dbd8f0",
+      "settings": [
+        "search_path=pg_catalog, public, pg_temp"
+      ],
+      "signature": "spec_coherence_publication_guard_internal_v1()",
+      "owner_name": "postgres",
+      "volatility": "v",
+      "security_definer": true
+    }
+  ]
+}

@@ -1,0 +1,2933 @@
+{
+  "schema_version": 1,
+  "title": "All-family physical-port cardinality",
+  "catalogue_sha256": "733781370463914b23c107a65d005109189ed9f1496b91053a1b628842fb5a44",
+  "independent_review_hashes": [
+    "4cbd9cd4e1ccb2f41ab3249cbaed83fe419689aa6ba1dbb24a5b9dd856bd66d1",
+    "a1c6bfc5fae5c11b3b7f804b240ea36b2a36db2f6e4ba2ff868c061802856820"
+  ],
+  "mechanical_coverage_complete": false,
+  "automatic_fill_authorized": false,
+  "cases": [
+    {
+      "id": "brake_hydraulic_combined_no_cable_pull",
+      "template": "brake_shift_combined_control",
+      "values": {
+        "combined_control_units": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "unit": "Derecho",
+                "control_model": "Mando sintético",
+                "edition": "Edición sintética",
+                "source_url": "https://example.invalid/synthetic",
+                "member": "Pieza sintética 1"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "combined_control_brake_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "unit_row_id": "r1",
+                "configuration": "Sintética",
+                "brake_function": "Con freno",
+                "brake_actuation": "Hidráulico",
+                "lever_cable_pull": "Tiro corto (ruta / cantilever / caliper)",
+                "source_scope": "Apartado sintético",
+                "source_url": "https://example.invalid/synthetic"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "kind": "synthetic_negative",
+      "source_urls": [],
+      "evidence_kind": "synthetic_invariant_not_oem_facts",
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false,
+      "expected_blocking": [
+        {
+          "code": "row_field_applicability",
+          "field": "combined_control_brake_configurations"
+        }
+      ],
+      "successor_translation": "Los escalares que esta prueba usaba pasan a legacy y el circuito de freno vive por configuración de cada mando. Se conserva exactamente lo que afirma —una maneta hidráulica no declara tiro de cable— y cambia el dueño: la incidencia pasa de field_applicability sobre lever_cable_pull a row_field_applicability sobre combined_control_brake_configurations. La celda shifter_position se retira del escenario porque el lado ahora lo dice la fila del mando."
+    },
+    {
+      "id": "cbc_pair_is_two_units_with_their_own_clamp",
+      "template": "brake_shift_combined_control",
+      "values": {
+        "combined_control_units": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "unit": "Izquierdo",
+                "control_model": "Mando sintético",
+                "edition": "Edición sintética",
+                "source_url": "https://example.invalid/synthetic",
+                "clamp_mm": "22.2",
+                "member": "Pieza sintética 1"
+              },
+              "sources": []
+            },
+            {
+              "id": "r2",
+              "values": {
+                "unit": "Derecho",
+                "control_model": "Mando sintético",
+                "edition": "Edición sintética",
+                "source_url": "https://example.invalid/synthetic",
+                "clamp_mm": "31.8",
+                "member": "Pieza sintética 2"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "cbc_same_unit_and_edition_twice_blocks",
+      "template": "brake_shift_combined_control",
+      "values": {
+        "combined_control_units": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "unit": "Derecho",
+                "control_model": "Mando sintético",
+                "edition": "Edición sintética",
+                "source_url": "https://example.invalid/synthetic",
+                "member": "La misma pieza física"
+              },
+              "sources": []
+            },
+            {
+              "id": "r2",
+              "values": {
+                "unit": "Derecho",
+                "control_model": "Mando sintético",
+                "edition": "Edición sintética",
+                "source_url": "https://example.invalid/synthetic",
+                "clamp_mm": "22.2",
+                "member": "La misma pieza física"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [
+        {
+          "code": "row_shape",
+          "field": "combined_control_units"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "successor_translation": "La duplicación prohibida es la misma pieza física. Lado, modelo y edición pueden repetirse en dos piezas distintas; se explicita la identidad de ocurrencia sin cambiar el bloqueo esperado ni convertir un modelo en cantidad."
+    },
+    {
+      "id": "cbc_different_edition_is_kept",
+      "template": "brake_shift_combined_control",
+      "values": {
+        "combined_control_units": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "unit": "Derecho",
+                "control_model": "Mando sintético",
+                "edition": "2019",
+                "source_url": "https://example.invalid/synthetic",
+                "member": "Pieza sintética 1"
+              },
+              "sources": []
+            },
+            {
+              "id": "r2",
+              "values": {
+                "unit": "Derecho",
+                "control_model": "Mando sintético",
+                "edition": "2021",
+                "source_url": "https://example.invalid/synthetic",
+                "member": "Pieza sintética 2"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "cbc_cable_configuration_cannot_declare_a_fluid",
+      "template": "brake_shift_combined_control",
+      "values": {
+        "combined_control_units": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "unit": "Derecho",
+                "control_model": "Mando sintético",
+                "edition": "Edición sintética",
+                "source_url": "https://example.invalid/synthetic",
+                "member": "Pieza sintética 1"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "combined_control_brake_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "unit_row_id": "r1",
+                "configuration": "Sintética",
+                "brake_function": "Con freno",
+                "brake_actuation": "Mecánico (cable)",
+                "lever_cable_pull": "Tiro corto (ruta / cantilever / caliper)",
+                "source_scope": "Apartado sintético",
+                "source_url": "https://example.invalid/synthetic",
+                "fluid_class": "DOT 5.1",
+                "fluid_product": "Producto sintético"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [
+        {
+          "code": "row_field_applicability",
+          "field": "combined_control_brake_configurations"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "expected_sql_blocking": [
+        {
+          "code": "row_field_applicability",
+          "field": "combined_control_brake_configurations"
+        },
+        {
+          "code": "row_field_applicability",
+          "field": "combined_control_brake_configurations"
+        }
+      ]
+    },
+    {
+      "id": "cbc_cable_configuration_cannot_declare_a_hose",
+      "template": "brake_shift_combined_control",
+      "values": {
+        "combined_control_units": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "unit": "Derecho",
+                "control_model": "Mando sintético",
+                "edition": "Edición sintética",
+                "source_url": "https://example.invalid/synthetic",
+                "member": "Pieza sintética 1"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "combined_control_brake_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "unit_row_id": "r1",
+                "configuration": "Sintética",
+                "brake_function": "Con freno",
+                "brake_actuation": "Mecánico (cable)",
+                "lever_cable_pull": "Tiro corto (ruta / cantilever / caliper)",
+                "source_scope": "Apartado sintético",
+                "source_url": "https://example.invalid/synthetic",
+                "external_hose_connection": true
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [
+        {
+          "code": "row_field_applicability",
+          "field": "combined_control_brake_configurations"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "cbc_hydraulic_configuration_cannot_declare_a_pull",
+      "template": "brake_shift_combined_control",
+      "values": {
+        "combined_control_units": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "unit": "Derecho",
+                "control_model": "Mando sintético",
+                "edition": "Edición sintética",
+                "source_url": "https://example.invalid/synthetic",
+                "member": "Pieza sintética 1"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "combined_control_brake_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "unit_row_id": "r1",
+                "configuration": "Sintética",
+                "brake_function": "Con freno",
+                "brake_actuation": "Hidráulico",
+                "external_hose_connection": true,
+                "system_brand": "Marca sintética",
+                "system_model": "Sistema sintético",
+                "system_edition": "Edición sintética",
+                "fluid_class": "DOT 5.1",
+                "fluid_product": "Producto sintético",
+                "source_scope": "Apartado sintético",
+                "source_url": "https://example.invalid/synthetic",
+                "lever_cable_pull": "Tiro corto (ruta / cantilever / caliper)"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [
+        {
+          "code": "row_field_applicability",
+          "field": "combined_control_brake_configurations"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "cbc_brakeless_configuration_carries_nothing",
+      "template": "brake_shift_combined_control",
+      "values": {
+        "combined_control_units": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "unit": "Derecho",
+                "control_model": "Mando sintético",
+                "edition": "Edición sintética",
+                "source_url": "https://example.invalid/synthetic",
+                "member": "Pieza sintética 1"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "combined_control_brake_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "unit_row_id": "r1",
+                "configuration": "Sintética",
+                "brake_function": "Sin freno",
+                "source_scope": "Apartado sintético",
+                "source_url": "https://example.invalid/synthetic"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "cbc_brakeless_configuration_cannot_declare_a_fluid",
+      "template": "brake_shift_combined_control",
+      "values": {
+        "combined_control_units": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "unit": "Derecho",
+                "control_model": "Mando sintético",
+                "edition": "Edición sintética",
+                "source_url": "https://example.invalid/synthetic",
+                "member": "Pieza sintética 1"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "combined_control_brake_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "unit_row_id": "r1",
+                "configuration": "Sintética",
+                "brake_function": "Sin freno",
+                "source_scope": "Apartado sintético",
+                "source_url": "https://example.invalid/synthetic",
+                "fluid_class": "DOT 4"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [
+        {
+          "code": "row_field_applicability",
+          "field": "combined_control_brake_configurations"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "cbc_brakeless_configuration_cannot_declare_a_pull",
+      "template": "brake_shift_combined_control",
+      "values": {
+        "combined_control_units": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "unit": "Derecho",
+                "control_model": "Mando sintético",
+                "edition": "Edición sintética",
+                "source_url": "https://example.invalid/synthetic",
+                "member": "Pieza sintética 1"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "combined_control_brake_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "unit_row_id": "r1",
+                "configuration": "Sintética",
+                "brake_function": "Sin freno",
+                "source_scope": "Apartado sintético",
+                "source_url": "https://example.invalid/synthetic",
+                "lever_cable_pull": "Tiro corto (ruta / cantilever / caliper)"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [
+        {
+          "code": "row_field_applicability",
+          "field": "combined_control_brake_configurations"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "cbc_brakeless_configuration_cannot_declare_actuation",
+      "template": "brake_shift_combined_control",
+      "values": {
+        "combined_control_units": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "unit": "Derecho",
+                "control_model": "Mando sintético",
+                "edition": "Edición sintética",
+                "source_url": "https://example.invalid/synthetic",
+                "member": "Pieza sintética 1"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "combined_control_brake_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "unit_row_id": "r1",
+                "configuration": "Sintética",
+                "brake_function": "Sin freno",
+                "source_scope": "Apartado sintético",
+                "source_url": "https://example.invalid/synthetic",
+                "brake_actuation": "Mecánico (cable)"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [
+        {
+          "code": "row_field_applicability",
+          "field": "combined_control_brake_configurations"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "cbc_hybrid_configuration_keeps_pull_and_fluid",
+      "template": "brake_shift_combined_control",
+      "values": {
+        "combined_control_units": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "unit": "Derecho",
+                "control_model": "Mando sintético",
+                "edition": "Edición sintética",
+                "source_url": "https://example.invalid/synthetic",
+                "member": "Pieza sintética 1"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "combined_control_brake_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "unit_row_id": "r1",
+                "configuration": "Sintética",
+                "brake_function": "Con freno",
+                "brake_actuation": "Mecánico (cable) hacia conversor hidráulico externo",
+                "external_hose_connection": true,
+                "system_brand": "Marca sintética",
+                "system_model": "Sistema sintético",
+                "system_edition": "Edición sintética",
+                "fluid_class": "DOT 5.1",
+                "fluid_product": "Producto sintético",
+                "source_scope": "Apartado sintético",
+                "source_url": "https://example.invalid/synthetic",
+                "lever_cable_pull": "Tiro largo (V-brake / disco mecánico tiro largo)"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [
+        {
+          "code": "row_field_applicability",
+          "field": "combined_control_brake_configurations"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "successor_translation": "Se rechaza la premisa anterior: un sistema cable/hidráulico con conversor externo no traslada el líquido al mando. El ejemplo TRP HY/RD ubica la hidráulica en el cáliper; se conservan los valores sintéticos contradictorios para probar que ahora se rechazan.",
+      "expected_sql_blocking": [
+        {
+          "code": "row_field_applicability",
+          "field": "combined_control_brake_configurations"
+        },
+        {
+          "code": "row_field_applicability",
+          "field": "combined_control_brake_configurations"
+        },
+        {
+          "code": "row_field_applicability",
+          "field": "combined_control_brake_configurations"
+        },
+        {
+          "code": "row_field_applicability",
+          "field": "combined_control_brake_configurations"
+        },
+        {
+          "code": "row_field_applicability",
+          "field": "combined_control_brake_configurations"
+        },
+        {
+          "code": "row_field_applicability",
+          "field": "combined_control_brake_configurations"
+        }
+      ]
+    },
+    {
+      "id": "cbc_no_external_hose_cannot_carry_a_connector",
+      "template": "brake_shift_combined_control",
+      "values": {
+        "combined_control_units": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "unit": "Derecho",
+                "control_model": "Mando sintético",
+                "edition": "Edición sintética",
+                "source_url": "https://example.invalid/synthetic",
+                "member": "Pieza sintética 1"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "combined_control_brake_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "unit_row_id": "r1",
+                "configuration": "Sintética",
+                "brake_function": "Con freno",
+                "brake_actuation": "Hidráulico",
+                "external_hose_connection": false,
+                "system_brand": "Marca sintética",
+                "system_model": "Sistema sintético",
+                "system_edition": "Edición sintética",
+                "fluid_class": "DOT 5.1",
+                "fluid_product": "Producto sintético",
+                "source_scope": "Apartado sintético",
+                "source_url": "https://example.invalid/synthetic",
+                "external_connector_model": "Conector sintético"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [
+        {
+          "code": "row_field_applicability",
+          "field": "combined_control_brake_configurations"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "cbc_no_external_hose_cannot_carry_its_spec",
+      "template": "brake_shift_combined_control",
+      "values": {
+        "combined_control_units": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "unit": "Derecho",
+                "control_model": "Mando sintético",
+                "edition": "Edición sintética",
+                "source_url": "https://example.invalid/synthetic",
+                "member": "Pieza sintética 1"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "combined_control_brake_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "unit_row_id": "r1",
+                "configuration": "Sintética",
+                "brake_function": "Con freno",
+                "brake_actuation": "Hidráulico",
+                "external_hose_connection": false,
+                "system_brand": "Marca sintética",
+                "system_model": "Sistema sintético",
+                "system_edition": "Edición sintética",
+                "fluid_class": "DOT 5.1",
+                "fluid_product": "Producto sintético",
+                "source_scope": "Apartado sintético",
+                "source_url": "https://example.invalid/synthetic",
+                "external_connection_spec": "Especificación"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [
+        {
+          "code": "row_field_applicability",
+          "field": "combined_control_brake_configurations"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "cbc_declared_external_hose_carries_its_connector",
+      "template": "brake_shift_combined_control",
+      "values": {
+        "combined_control_units": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "unit": "Derecho",
+                "control_model": "Mando sintético",
+                "edition": "Edición sintética",
+                "source_url": "https://example.invalid/synthetic",
+                "member": "Pieza sintética 1"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "combined_control_brake_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "unit_row_id": "r1",
+                "configuration": "Sintética",
+                "brake_function": "Con freno",
+                "brake_actuation": "Hidráulico",
+                "external_hose_connection": true,
+                "system_brand": "Marca sintética",
+                "system_model": "Sistema sintético",
+                "system_edition": "Edición sintética",
+                "fluid_class": "DOT 5.1",
+                "fluid_product": "Producto sintético",
+                "source_scope": "Apartado sintético",
+                "source_url": "https://example.invalid/synthetic",
+                "external_connector_model": "Conector sintético",
+                "external_connection_spec": "Especificación"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "cbc_cable_configuration_cannot_carry_a_connector",
+      "template": "brake_shift_combined_control",
+      "values": {
+        "combined_control_units": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "unit": "Derecho",
+                "control_model": "Mando sintético",
+                "edition": "Edición sintética",
+                "source_url": "https://example.invalid/synthetic",
+                "member": "Pieza sintética 1"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "combined_control_brake_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "unit_row_id": "r1",
+                "configuration": "Sintética",
+                "brake_function": "Con freno",
+                "brake_actuation": "Mecánico (cable)",
+                "lever_cable_pull": "Tiro corto (ruta / cantilever / caliper)",
+                "source_scope": "Apartado sintético",
+                "source_url": "https://example.invalid/synthetic",
+                "external_connector_model": "Conector sintético"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [
+        {
+          "code": "row_field_applicability",
+          "field": "combined_control_brake_configurations"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "cbc_two_fluids_are_two_complete_configurations",
+      "template": "brake_shift_combined_control",
+      "values": {
+        "combined_control_units": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "unit": "Derecho",
+                "control_model": "Mando sintético",
+                "edition": "Edición sintética",
+                "source_url": "https://example.invalid/synthetic",
+                "member": "Pieza sintética 1"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "combined_control_brake_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "unit_row_id": "r1",
+                "configuration": "Con DOT 5.1",
+                "brake_function": "Con freno",
+                "brake_actuation": "Hidráulico",
+                "external_hose_connection": true,
+                "system_brand": "Marca sintética",
+                "system_model": "Sistema sintético",
+                "system_edition": "Edición sintética",
+                "fluid_class": "DOT 5.1",
+                "fluid_product": "Producto sintético",
+                "source_scope": "Apartado sintético",
+                "source_url": "https://example.invalid/synthetic"
+              },
+              "sources": []
+            },
+            {
+              "id": "r2",
+              "values": {
+                "unit_row_id": "r1",
+                "configuration": "Con DOT 4",
+                "brake_function": "Con freno",
+                "brake_actuation": "Hidráulico",
+                "external_hose_connection": true,
+                "system_brand": "Marca sintética",
+                "system_model": "Sistema sintético",
+                "system_edition": "Otra edición",
+                "fluid_class": "DOT 4",
+                "fluid_product": "Producto sintético",
+                "source_scope": "Apartado sintético",
+                "source_url": "https://example.invalid/synthetic"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "cbc_same_configuration_twice_blocks",
+      "template": "brake_shift_combined_control",
+      "values": {
+        "combined_control_units": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "unit": "Derecho",
+                "control_model": "Mando sintético",
+                "edition": "Edición sintética",
+                "source_url": "https://example.invalid/synthetic",
+                "member": "Pieza sintética 1"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "combined_control_brake_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "unit_row_id": "r1",
+                "configuration": "Sintética",
+                "brake_function": "Con freno",
+                "brake_actuation": "Hidráulico",
+                "external_hose_connection": true,
+                "system_brand": "Marca sintética",
+                "system_model": "Sistema sintético",
+                "system_edition": "Edición sintética",
+                "fluid_class": "DOT 5.1",
+                "fluid_product": "Producto sintético",
+                "source_scope": "Apartado sintético",
+                "source_url": "https://example.invalid/synthetic"
+              },
+              "sources": []
+            },
+            {
+              "id": "r2",
+              "values": {
+                "unit_row_id": "r1",
+                "configuration": "Sintética",
+                "brake_function": "Con freno",
+                "brake_actuation": "Hidráulico",
+                "external_hose_connection": true,
+                "system_brand": "Marca sintética",
+                "system_model": "Sistema sintético",
+                "system_edition": "Edición sintética",
+                "fluid_class": "DOT 4",
+                "fluid_product": "Producto sintético",
+                "source_scope": "Apartado sintético",
+                "source_url": "https://example.invalid/synthetic"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [
+        {
+          "code": "row_shape",
+          "field": "combined_control_brake_configurations"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "cbc_same_configuration_from_two_sources_is_kept",
+      "template": "brake_shift_combined_control",
+      "values": {
+        "combined_control_units": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "unit": "Derecho",
+                "control_model": "Mando sintético",
+                "edition": "Edición sintética",
+                "source_url": "https://example.invalid/synthetic",
+                "member": "Pieza sintética 1"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "combined_control_brake_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "unit_row_id": "r1",
+                "configuration": "Sintética",
+                "brake_function": "Con freno",
+                "brake_actuation": "Hidráulico",
+                "external_hose_connection": true,
+                "system_brand": "Marca sintética",
+                "system_model": "Sistema sintético",
+                "system_edition": "Edición sintética",
+                "fluid_class": "DOT 5.1",
+                "fluid_product": "Producto sintético",
+                "source_scope": "Apartado sintético",
+                "source_url": "https://example.invalid/synthetic"
+              },
+              "sources": []
+            },
+            {
+              "id": "r2",
+              "values": {
+                "unit_row_id": "r1",
+                "configuration": "Sintética",
+                "brake_function": "Con freno",
+                "brake_actuation": "Hidráulico",
+                "external_hose_connection": true,
+                "system_brand": "Marca sintética",
+                "system_model": "Sistema sintético",
+                "system_edition": "Edición sintética",
+                "fluid_class": "DOT 5.1",
+                "fluid_product": "Producto sintético",
+                "source_scope": "Otro apartado",
+                "source_url": "https://example.invalid/synthetic"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "cbc_two_levers_may_differ_in_brake_circuit",
+      "template": "brake_shift_combined_control",
+      "values": {
+        "combined_control_units": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "unit": "Izquierdo",
+                "control_model": "Mando sintético",
+                "edition": "Edición sintética",
+                "source_url": "https://example.invalid/synthetic",
+                "member": "Pieza sintética 1"
+              },
+              "sources": []
+            },
+            {
+              "id": "r2",
+              "values": {
+                "unit": "Derecho",
+                "control_model": "Mando sintético",
+                "edition": "Edición sintética",
+                "source_url": "https://example.invalid/synthetic",
+                "member": "Pieza sintética 2"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "combined_control_brake_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "unit_row_id": "r1",
+                "configuration": "Sintética",
+                "brake_function": "Con freno",
+                "brake_actuation": "Hidráulico",
+                "external_hose_connection": true,
+                "system_brand": "Marca sintética",
+                "system_model": "Sistema sintético",
+                "system_edition": "Edición sintética",
+                "fluid_class": "DOT 5.1",
+                "fluid_product": "Producto sintético",
+                "source_scope": "Apartado sintético",
+                "source_url": "https://example.invalid/synthetic"
+              },
+              "sources": []
+            },
+            {
+              "id": "r2",
+              "values": {
+                "unit_row_id": "r2",
+                "configuration": "Sintética",
+                "brake_function": "Con freno",
+                "brake_actuation": "Mecánico (cable)",
+                "lever_cable_pull": "Tiro corto (ruta / cantilever / caliper)",
+                "source_scope": "Apartado sintético",
+                "source_url": "https://example.invalid/synthetic"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "cbc_brake_configuration_cannot_point_at_an_absent_unit",
+      "template": "brake_shift_combined_control",
+      "values": {
+        "combined_control_units": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "unit": "Derecho",
+                "control_model": "Mando sintético",
+                "edition": "Edición sintética",
+                "source_url": "https://example.invalid/synthetic",
+                "member": "Pieza sintética 1"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "combined_control_brake_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "unit_row_id": "r9",
+                "configuration": "Sintética",
+                "brake_function": "Con freno",
+                "brake_actuation": "Mecánico (cable)",
+                "lever_cable_pull": "Tiro corto (ruta / cantilever / caliper)",
+                "source_scope": "Apartado sintético",
+                "source_url": "https://example.invalid/synthetic"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [
+        {
+          "code": "row_reference_unresolved",
+          "field": "combined_control_brake_configurations"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "cbc_brake_configuration_without_its_unit_is_incomplete",
+      "template": "brake_shift_combined_control",
+      "values": {
+        "combined_control_units": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "unit": "Derecho",
+                "control_model": "Mando sintético",
+                "edition": "Edición sintética",
+                "source_url": "https://example.invalid/synthetic",
+                "member": "Pieza sintética 1"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "combined_control_brake_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "configuration": "Sintética",
+                "brake_function": "Con freno",
+                "brake_actuation": "Mecánico (cable)",
+                "source_scope": "Apartado sintético",
+                "source_url": "https://example.invalid/synthetic"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "expected_issue_subset": [
+        {
+          "code": "row_incomplete",
+          "field": "combined_control_brake_configurations",
+          "blocking": false
+        }
+      ],
+      "expected_sql_issue_subset": [
+        {
+          "code": "row_incomplete",
+          "field": "combined_control_brake_configurations",
+          "blocking": false
+        }
+      ]
+    },
+    {
+      "id": "cbc_shiftless_configuration_cannot_name_a_target",
+      "template": "brake_shift_combined_control",
+      "values": {
+        "combined_control_units": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "unit": "Derecho",
+                "control_model": "Mando sintético",
+                "edition": "Edición sintética",
+                "source_url": "https://example.invalid/synthetic",
+                "member": "Pieza sintética 1"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "combined_control_shift_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "unit_row_id": "r1",
+                "configuration": "Sintética",
+                "shift_mode": "Sin función de cambio",
+                "source_scope": "Apartado sintético",
+                "source_url": "https://example.invalid/synthetic",
+                "target_brand": "Marca sintética",
+                "target_model": "Modelo sintético",
+                "target_edition": "Edición sintética",
+                "status": "Compatible declarado"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [
+        {
+          "code": "row_field_applicability",
+          "field": "combined_control_shift_configurations"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "expected_sql_blocking": [
+        {
+          "code": "row_field_applicability",
+          "field": "combined_control_shift_configurations"
+        },
+        {
+          "code": "row_field_applicability",
+          "field": "combined_control_shift_configurations"
+        },
+        {
+          "code": "row_field_applicability",
+          "field": "combined_control_shift_configurations"
+        },
+        {
+          "code": "row_field_applicability",
+          "field": "combined_control_shift_configurations"
+        }
+      ]
+    },
+    {
+      "id": "cbc_shiftless_configuration_cannot_declare_a_verdict",
+      "template": "brake_shift_combined_control",
+      "values": {
+        "combined_control_units": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "unit": "Derecho",
+                "control_model": "Mando sintético",
+                "edition": "Edición sintética",
+                "source_url": "https://example.invalid/synthetic",
+                "member": "Pieza sintética 1"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "combined_control_shift_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "unit_row_id": "r1",
+                "configuration": "Sintética",
+                "shift_mode": "Sin función de cambio",
+                "source_scope": "Apartado sintético",
+                "source_url": "https://example.invalid/synthetic",
+                "status": "Incompatible declarado"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [
+        {
+          "code": "row_field_applicability",
+          "field": "combined_control_shift_configurations"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "cbc_shiftless_configuration_cannot_publish_a_scope",
+      "template": "brake_shift_combined_control",
+      "values": {
+        "combined_control_units": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "unit": "Derecho",
+                "control_model": "Mando sintético",
+                "edition": "Edición sintética",
+                "source_url": "https://example.invalid/synthetic",
+                "member": "Pieza sintética 1"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "combined_control_shift_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "unit_row_id": "r1",
+                "configuration": "Sintética",
+                "shift_mode": "Sin función de cambio",
+                "source_scope": "Apartado sintético",
+                "source_url": "https://example.invalid/synthetic",
+                "conditions": "Alcance sintético"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [
+        {
+          "code": "row_field_applicability",
+          "field": "combined_control_shift_configurations"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "cbc_shiftless_configuration_cannot_index",
+      "template": "brake_shift_combined_control",
+      "values": {
+        "combined_control_units": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "unit": "Derecho",
+                "control_model": "Mando sintético",
+                "edition": "Edición sintética",
+                "source_url": "https://example.invalid/synthetic",
+                "member": "Pieza sintética 1"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "combined_control_shift_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "unit_row_id": "r1",
+                "configuration": "Sintética",
+                "shift_mode": "Sin función de cambio",
+                "source_scope": "Apartado sintético",
+                "source_url": "https://example.invalid/synthetic",
+                "mechanical_positions": "11"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [
+        {
+          "code": "row_field_applicability",
+          "field": "combined_control_shift_configurations"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "cbc_shift_configuration_cannot_point_at_an_absent_unit",
+      "template": "brake_shift_combined_control",
+      "values": {
+        "combined_control_units": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "unit": "Derecho",
+                "control_model": "Mando sintético",
+                "edition": "Edición sintética",
+                "source_url": "https://example.invalid/synthetic",
+                "member": "Pieza sintética 1"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "combined_control_shift_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "unit_row_id": "r9",
+                "configuration": "Sintética",
+                "shift_mode": "Mecánico indexado",
+                "mechanical_positions": "11",
+                "commanded_target": "Cambio trasero",
+                "source_scope": "Apartado sintético",
+                "source_url": "https://example.invalid/synthetic"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [
+        {
+          "code": "row_reference_unresolved",
+          "field": "combined_control_shift_configurations"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "cbc_wireless_mode_cannot_declare_mechanical_positions",
+      "template": "brake_shift_combined_control",
+      "values": {
+        "combined_control_units": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "unit": "Derecho",
+                "control_model": "Mando sintético",
+                "edition": "Edición sintética",
+                "source_url": "https://example.invalid/synthetic",
+                "member": "Pieza sintética 1"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "combined_control_shift_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "unit_row_id": "r1",
+                "configuration": "Sintética",
+                "shift_mode": "Electrónico inalámbrico",
+                "mechanical_positions": "11",
+                "commanded_target": "Cambio trasero",
+                "source_scope": "Apartado sintético",
+                "source_url": "https://example.invalid/synthetic",
+                "shift_protocol": "Protocolo sintético"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [
+        {
+          "code": "row_field_applicability",
+          "field": "combined_control_shift_configurations"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "cbc_wired_mode_cannot_declare_mechanical_positions",
+      "template": "brake_shift_combined_control",
+      "values": {
+        "combined_control_units": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "unit": "Derecho",
+                "control_model": "Mando sintético",
+                "edition": "Edición sintética",
+                "source_url": "https://example.invalid/synthetic",
+                "member": "Pieza sintética 1"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "combined_control_shift_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "unit_row_id": "r1",
+                "configuration": "Sintética",
+                "shift_mode": "Electrónico por cable",
+                "mechanical_positions": "11",
+                "commanded_target": "Cambio trasero",
+                "source_scope": "Apartado sintético",
+                "source_url": "https://example.invalid/synthetic",
+                "shift_protocol": "Protocolo sintético"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [
+        {
+          "code": "row_field_applicability",
+          "field": "combined_control_shift_configurations"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "cbc_friction_mode_cannot_declare_mechanical_positions",
+      "template": "brake_shift_combined_control",
+      "values": {
+        "combined_control_units": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "unit": "Derecho",
+                "control_model": "Mando sintético",
+                "edition": "Edición sintética",
+                "source_url": "https://example.invalid/synthetic",
+                "member": "Pieza sintética 1"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "combined_control_shift_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "unit_row_id": "r1",
+                "configuration": "Sintética",
+                "shift_mode": "Mecánico de fricción",
+                "mechanical_positions": "11",
+                "commanded_target": "Cambio trasero",
+                "source_scope": "Apartado sintético",
+                "source_url": "https://example.invalid/synthetic"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [
+        {
+          "code": "row_field_applicability",
+          "field": "combined_control_shift_configurations"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "cbc_friction_mode_cannot_declare_a_protocol",
+      "template": "brake_shift_combined_control",
+      "values": {
+        "combined_control_units": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "unit": "Derecho",
+                "control_model": "Mando sintético",
+                "edition": "Edición sintética",
+                "source_url": "https://example.invalid/synthetic",
+                "member": "Pieza sintética 1"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "combined_control_shift_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "unit_row_id": "r1",
+                "configuration": "Sintética",
+                "shift_mode": "Mecánico de fricción",
+                "commanded_target": "Cambio trasero",
+                "source_scope": "Apartado sintético",
+                "source_url": "https://example.invalid/synthetic",
+                "shift_protocol": "Protocolo sintético"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [
+        {
+          "code": "row_field_applicability",
+          "field": "combined_control_shift_configurations"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "cbc_mechanical_mode_cannot_declare_a_protocol",
+      "template": "brake_shift_combined_control",
+      "values": {
+        "combined_control_units": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "unit": "Derecho",
+                "control_model": "Mando sintético",
+                "edition": "Edición sintética",
+                "source_url": "https://example.invalid/synthetic",
+                "member": "Pieza sintética 1"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "combined_control_shift_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "unit_row_id": "r1",
+                "configuration": "Sintética",
+                "shift_mode": "Mecánico indexado",
+                "mechanical_positions": "11",
+                "commanded_target": "Cambio trasero",
+                "source_scope": "Apartado sintético",
+                "source_url": "https://example.invalid/synthetic",
+                "shift_protocol": "Protocolo sintético"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [
+        {
+          "code": "row_field_applicability",
+          "field": "combined_control_shift_configurations"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "cbc_mechanical_mode_cannot_be_reassignable",
+      "template": "brake_shift_combined_control",
+      "values": {
+        "combined_control_units": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "unit": "Derecho",
+                "control_model": "Mando sintético",
+                "edition": "Edición sintética",
+                "source_url": "https://example.invalid/synthetic",
+                "member": "Pieza sintética 1"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "combined_control_shift_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "unit_row_id": "r1",
+                "configuration": "Sintética",
+                "shift_mode": "Mecánico indexado",
+                "mechanical_positions": "11",
+                "commanded_target": "Cambio trasero",
+                "source_scope": "Apartado sintético",
+                "source_url": "https://example.invalid/synthetic",
+                "action_assignment": "Asignable por programación"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [
+        {
+          "code": "row_field_applicability",
+          "field": "combined_control_shift_configurations"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "cbc_friction_mode_keeps_its_target_without_a_count",
+      "template": "brake_shift_combined_control",
+      "values": {
+        "combined_control_units": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "unit": "Derecho",
+                "control_model": "Mando sintético",
+                "edition": "Edición sintética",
+                "source_url": "https://example.invalid/synthetic",
+                "member": "Pieza sintética 1"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "combined_control_shift_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "unit_row_id": "r1",
+                "configuration": "Sintética",
+                "shift_mode": "Mecánico de fricción",
+                "commanded_target": "Cambio trasero",
+                "source_scope": "Apartado sintético",
+                "source_url": "https://example.invalid/synthetic"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "cbc_indexed_mode_without_its_count_is_pending",
+      "template": "brake_shift_combined_control",
+      "values": {
+        "combined_control_units": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "unit": "Derecho",
+                "control_model": "Mando sintético",
+                "edition": "Edición sintética",
+                "source_url": "https://example.invalid/synthetic",
+                "member": "Pieza sintética 1"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "combined_control_shift_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "unit_row_id": "r1",
+                "configuration": "Sintética",
+                "shift_mode": "Mecánico indexado",
+                "commanded_target": "Cambio trasero",
+                "source_scope": "Apartado sintético",
+                "source_url": "https://example.invalid/synthetic",
+                "target_brand": "Marca sintética",
+                "target_model": "Modelo sintético",
+                "target_edition": "Edición sintética",
+                "status": "Compatible declarado"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "expected_issue_subset": [
+        {
+          "code": "row_required_missing",
+          "field": "combined_control_shift_configurations",
+          "blocking": false
+        }
+      ],
+      "expected_sql_issue_subset": [
+        {
+          "code": "row_required_missing",
+          "field": "combined_control_shift_configurations",
+          "blocking": false
+        }
+      ]
+    },
+    {
+      "id": "cbc_electronic_mode_may_be_reassignable",
+      "template": "brake_shift_combined_control",
+      "values": {
+        "combined_control_units": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "unit": "Izquierdo",
+                "control_model": "Mando sintético",
+                "edition": "Edición sintética",
+                "source_url": "https://example.invalid/synthetic",
+                "member": "Pieza sintética 1"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "combined_control_shift_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "unit_row_id": "r1",
+                "configuration": "Sintética",
+                "shift_mode": "Electrónico inalámbrico",
+                "commanded_target": "Cambio trasero",
+                "source_scope": "Apartado sintético",
+                "source_url": "https://example.invalid/synthetic",
+                "shift_protocol": "Protocolo sintético",
+                "action_assignment": "Asignable por programación"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "cbc_electronic_mode_may_be_fixed",
+      "template": "brake_shift_combined_control",
+      "values": {
+        "combined_control_units": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "unit": "Derecho",
+                "control_model": "Mando sintético",
+                "edition": "Edición sintética",
+                "source_url": "https://example.invalid/synthetic",
+                "member": "Pieza sintética 1"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "combined_control_shift_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "unit_row_id": "r1",
+                "configuration": "Sintética",
+                "shift_mode": "Electrónico inalámbrico",
+                "commanded_target": "Cambio trasero",
+                "source_scope": "Apartado sintético",
+                "source_url": "https://example.invalid/synthetic",
+                "shift_protocol": "Protocolo sintético",
+                "action_assignment": "Fijo por construcción"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "cbc_wired_electronic_mode_is_its_own_mode",
+      "template": "brake_shift_combined_control",
+      "values": {
+        "combined_control_units": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "unit": "Derecho",
+                "control_model": "Mando sintético",
+                "edition": "Edición sintética",
+                "source_url": "https://example.invalid/synthetic",
+                "member": "Pieza sintética 1"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "combined_control_shift_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "unit_row_id": "r1",
+                "configuration": "Sintética",
+                "shift_mode": "Electrónico por cable",
+                "commanded_target": "Cambio trasero",
+                "source_scope": "Apartado sintético",
+                "source_url": "https://example.invalid/synthetic",
+                "shift_protocol": "Protocolo sintético"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "cbc_left_may_command_the_rear",
+      "template": "brake_shift_combined_control",
+      "values": {
+        "combined_control_units": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "unit": "Izquierdo",
+                "control_model": "Mando sintético",
+                "edition": "Edición sintética",
+                "source_url": "https://example.invalid/synthetic",
+                "member": "Pieza sintética 1"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "combined_control_shift_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "unit_row_id": "r1",
+                "configuration": "Sintética",
+                "shift_mode": "Mecánico indexado",
+                "mechanical_positions": "11",
+                "commanded_target": "Cambio trasero",
+                "source_scope": "Apartado sintético",
+                "source_url": "https://example.invalid/synthetic"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "cbc_electronic_shift_with_a_cable_brake",
+      "template": "brake_shift_combined_control",
+      "values": {
+        "combined_control_units": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "unit": "Derecho",
+                "control_model": "Mando sintético",
+                "edition": "Edición sintética",
+                "source_url": "https://example.invalid/synthetic",
+                "member": "Pieza sintética 1"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "combined_control_shift_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "unit_row_id": "r1",
+                "configuration": "Sintética",
+                "shift_mode": "Electrónico inalámbrico",
+                "commanded_target": "Cambio trasero",
+                "source_scope": "Apartado sintético",
+                "source_url": "https://example.invalid/synthetic",
+                "shift_protocol": "Protocolo sintético"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "combined_control_brake_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "unit_row_id": "r1",
+                "configuration": "Sintética",
+                "brake_function": "Con freno",
+                "brake_actuation": "Mecánico (cable)",
+                "lever_cable_pull": "Tiro corto (ruta / cantilever / caliper)",
+                "source_scope": "Apartado sintético",
+                "source_url": "https://example.invalid/synthetic"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "cbc_electronic_shift_with_a_hydraulic_brake",
+      "template": "brake_shift_combined_control",
+      "values": {
+        "combined_control_units": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "unit": "Derecho",
+                "control_model": "Mando sintético",
+                "edition": "Edición sintética",
+                "source_url": "https://example.invalid/synthetic",
+                "member": "Pieza sintética 1"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "combined_control_shift_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "unit_row_id": "r1",
+                "configuration": "Sintética",
+                "shift_mode": "Electrónico inalámbrico",
+                "commanded_target": "Cambio trasero",
+                "source_scope": "Apartado sintético",
+                "source_url": "https://example.invalid/synthetic",
+                "shift_protocol": "Protocolo sintético"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "combined_control_brake_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "unit_row_id": "r1",
+                "configuration": "Sintética",
+                "brake_function": "Con freno",
+                "brake_actuation": "Hidráulico",
+                "external_hose_connection": true,
+                "system_brand": "Marca sintética",
+                "system_model": "Sistema sintético",
+                "system_edition": "Edición sintética",
+                "fluid_class": "DOT 5.1",
+                "fluid_product": "Producto sintético",
+                "source_scope": "Apartado sintético",
+                "source_url": "https://example.invalid/synthetic"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "cbc_each_unit_keeps_its_own_shift_configuration",
+      "template": "brake_shift_combined_control",
+      "values": {
+        "combined_control_units": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "unit": "Izquierdo",
+                "control_model": "Mando sintético",
+                "edition": "Edición sintética",
+                "source_url": "https://example.invalid/synthetic",
+                "member": "Pieza sintética 1"
+              },
+              "sources": []
+            },
+            {
+              "id": "r2",
+              "values": {
+                "unit": "Derecho",
+                "control_model": "Mando sintético",
+                "edition": "Edición sintética",
+                "source_url": "https://example.invalid/synthetic",
+                "member": "Pieza sintética 2"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "combined_control_shift_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "unit_row_id": "r1",
+                "configuration": "Sintética",
+                "shift_mode": "Mecánico indexado",
+                "mechanical_positions": "2",
+                "commanded_target": "Cambio delantero",
+                "source_scope": "Apartado sintético",
+                "source_url": "https://example.invalid/synthetic"
+              },
+              "sources": []
+            },
+            {
+              "id": "r2",
+              "values": {
+                "unit_row_id": "r2",
+                "configuration": "Sintética",
+                "shift_mode": "Mecánico indexado",
+                "mechanical_positions": "11",
+                "commanded_target": "Cambio trasero",
+                "source_scope": "Apartado sintético",
+                "source_url": "https://example.invalid/synthetic"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "cbc_documented_exclusion_is_recordable",
+      "template": "brake_shift_combined_control",
+      "values": {
+        "combined_control_units": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "unit": "Derecho",
+                "control_model": "Mando sintético",
+                "edition": "Edición sintética",
+                "source_url": "https://example.invalid/synthetic",
+                "member": "Pieza sintética 1"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "combined_control_shift_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "unit_row_id": "r1",
+                "configuration": "Sintética",
+                "shift_mode": "Mecánico indexado",
+                "mechanical_positions": "11",
+                "commanded_target": "Cambio trasero",
+                "source_scope": "Apartado sintético",
+                "source_url": "https://example.invalid/synthetic",
+                "target_brand": "Marca sintética",
+                "target_model": "Modelo sintético",
+                "target_edition": "Edición sintética",
+                "status": "Incompatible declarado"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "cbc_compatible_verdict_may_publish_its_scope",
+      "template": "brake_shift_combined_control",
+      "values": {
+        "combined_control_units": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "unit": "Derecho",
+                "control_model": "Mando sintético",
+                "edition": "Edición sintética",
+                "source_url": "https://example.invalid/synthetic",
+                "member": "Pieza sintética 1"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "combined_control_shift_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "unit_row_id": "r1",
+                "configuration": "Sintética",
+                "shift_mode": "Mecánico indexado",
+                "mechanical_positions": "11",
+                "commanded_target": "Cambio trasero",
+                "source_scope": "Apartado sintético",
+                "source_url": "https://example.invalid/synthetic",
+                "target_brand": "Marca sintética",
+                "target_model": "Modelo sintético",
+                "target_edition": "Edición sintética",
+                "status": "Compatible declarado",
+                "conditions": "Alcance sintético"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "cbc_incompatible_verdict_may_publish_its_scope",
+      "template": "brake_shift_combined_control",
+      "values": {
+        "combined_control_units": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "unit": "Derecho",
+                "control_model": "Mando sintético",
+                "edition": "Edición sintética",
+                "source_url": "https://example.invalid/synthetic",
+                "member": "Pieza sintética 1"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "combined_control_shift_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "unit_row_id": "r1",
+                "configuration": "Sintética",
+                "shift_mode": "Mecánico indexado",
+                "mechanical_positions": "11",
+                "commanded_target": "Cambio trasero",
+                "source_scope": "Apartado sintético",
+                "source_url": "https://example.invalid/synthetic",
+                "target_brand": "Marca sintética",
+                "target_model": "Modelo sintético",
+                "target_edition": "Edición sintética",
+                "status": "Incompatible declarado",
+                "conditions": "Alcance sintético"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "cbc_conditioned_verdict_needs_its_conditions",
+      "template": "brake_shift_combined_control",
+      "values": {
+        "combined_control_units": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "unit": "Derecho",
+                "control_model": "Mando sintético",
+                "edition": "Edición sintética",
+                "source_url": "https://example.invalid/synthetic",
+                "member": "Pieza sintética 1"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "combined_control_shift_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "unit_row_id": "r1",
+                "configuration": "Sintética",
+                "shift_mode": "Mecánico indexado",
+                "mechanical_positions": "11",
+                "commanded_target": "Cambio trasero",
+                "source_scope": "Apartado sintético",
+                "source_url": "https://example.invalid/synthetic",
+                "target_brand": "Marca sintética",
+                "target_model": "Modelo sintético",
+                "target_edition": "Edición sintética",
+                "status": "Condicionado"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "expected_issue_subset": [
+        {
+          "code": "row_required_missing",
+          "field": "combined_control_shift_configurations",
+          "blocking": false
+        }
+      ],
+      "expected_sql_issue_subset": [
+        {
+          "code": "row_required_missing",
+          "field": "combined_control_shift_configurations",
+          "blocking": false
+        }
+      ]
+    },
+    {
+      "id": "cbc_conditioned_verdict_with_its_conditions_is_complete",
+      "template": "brake_shift_combined_control",
+      "values": {
+        "combined_control_units": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "unit": "Derecho",
+                "control_model": "Mando sintético",
+                "edition": "Edición sintética",
+                "source_url": "https://example.invalid/synthetic",
+                "member": "Pieza sintética 1"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "combined_control_shift_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "unit_row_id": "r1",
+                "configuration": "Sintética",
+                "shift_mode": "Mecánico indexado",
+                "mechanical_positions": "11",
+                "commanded_target": "Cambio trasero",
+                "source_scope": "Apartado sintético",
+                "source_url": "https://example.invalid/synthetic",
+                "target_brand": "Marca sintética",
+                "target_model": "Modelo sintético",
+                "target_edition": "Edición sintética",
+                "status": "Condicionado",
+                "conditions": "Alcance sintético"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "cbc_declared_count_matches_its_rows",
+      "template": "brake_shift_combined_control",
+      "values": {
+        "combined_control_declared_units": "2",
+        "combined_control_units": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "unit": "Izquierdo",
+                "control_model": "Mando sintético",
+                "edition": "Edición sintética",
+                "source_url": "https://example.invalid/synthetic",
+                "member": "Pieza sintética 1"
+              },
+              "sources": []
+            },
+            {
+              "id": "r2",
+              "values": {
+                "unit": "Derecho",
+                "control_model": "Mando sintético",
+                "edition": "Edición sintética",
+                "source_url": "https://example.invalid/synthetic",
+                "member": "Pieza sintética 2"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "cbc_more_rows_than_declared_blocks",
+      "template": "brake_shift_combined_control",
+      "values": {
+        "combined_control_declared_units": "1",
+        "combined_control_units": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "unit": "Izquierdo",
+                "control_model": "Mando sintético",
+                "edition": "Edición sintética",
+                "source_url": "https://example.invalid/synthetic",
+                "member": "Pieza sintética 1"
+              },
+              "sources": []
+            },
+            {
+              "id": "r2",
+              "values": {
+                "unit": "Derecho",
+                "control_model": "Mando sintético",
+                "edition": "Edición sintética",
+                "source_url": "https://example.invalid/synthetic",
+                "member": "Pieza sintética 2"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [
+        {
+          "code": "row_cardinality_conflict",
+          "field": "combined_control_units"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "cbc_fewer_rows_than_declared_is_pending",
+      "template": "brake_shift_combined_control",
+      "values": {
+        "combined_control_declared_units": "2",
+        "combined_control_units": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "unit": "Derecho",
+                "control_model": "Mando sintético",
+                "edition": "Edición sintética",
+                "source_url": "https://example.invalid/synthetic",
+                "member": "Pieza sintética 1"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "expected_issue_subset": [
+        {
+          "code": "row_cardinality_pending",
+          "field": "combined_control_units",
+          "blocking": false
+        }
+      ],
+      "expected_sql_issue_subset": [
+        {
+          "code": "row_cardinality_pending",
+          "field": "combined_control_units",
+          "blocking": false
+        }
+      ]
+    },
+    {
+      "id": "cbc_a_set_without_a_count_assumes_nothing",
+      "template": "brake_shift_combined_control",
+      "values": {
+        "combined_control_units": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "unit": "Derecho",
+                "control_model": "Mando sintético",
+                "edition": "Edición sintética",
+                "source_url": "https://example.invalid/synthetic",
+                "member": "Pieza sintética 1"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "ccr_two_identical_controls_are_two_physical_occurrences",
+      "template": "brake_shift_combined_control",
+      "values": {
+        "combined_control_declared_units": "2",
+        "combined_control_units": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "member": "A",
+                "unit": "Derecho",
+                "control_model": "Modelo sintético",
+                "edition": "Edición sintética",
+                "source_url": "https://example.invalid/synthetic"
+              },
+              "sources": []
+            },
+            {
+              "id": "r2",
+              "values": {
+                "member": "B",
+                "unit": "Derecho",
+                "control_model": "Modelo sintético",
+                "edition": "Edición sintética",
+                "source_url": "https://example.invalid/synthetic"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "ccr_same_occurrence_cannot_be_two_models",
+      "template": "brake_shift_combined_control",
+      "values": {
+        "combined_control_declared_units": "2",
+        "combined_control_units": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "member": "A",
+                "unit": "Derecho",
+                "control_model": "Modelo sintético",
+                "edition": "Edición sintética",
+                "source_url": "https://example.invalid/synthetic"
+              },
+              "sources": []
+            },
+            {
+              "id": "r2",
+              "values": {
+                "member": "A",
+                "unit": "Derecho",
+                "control_model": "Otro modelo",
+                "edition": "Edición sintética",
+                "source_url": "https://example.invalid/synthetic"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [
+        {
+          "code": "row_shape",
+          "field": "combined_control_units"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "ccr_cable_to_external_converter_keeps_only_control_properties",
+      "template": "brake_shift_combined_control",
+      "values": {
+        "combined_control_units": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "member": "A",
+                "unit": "Derecho",
+                "control_model": "Modelo sintético",
+                "edition": "Edición sintética",
+                "source_url": "https://example.invalid/synthetic"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "combined_control_brake_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "unit_row_id": "r1",
+                "configuration": "Montaje sintético",
+                "brake_function": "Con freno",
+                "brake_actuation": "Mecánico (cable) hacia conversor hidráulico externo",
+                "lever_cable_pull": "Tiro corto (ruta / cantilever / caliper)",
+                "source_scope": "Apartado sintético",
+                "source_url": "https://example.invalid/synthetic"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "ccr_target_without_status_is_pending",
+      "template": "brake_shift_combined_control",
+      "values": {
+        "combined_control_units": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "unit": "Derecho",
+                "control_model": "Mando sintético",
+                "edition": "Edición sintética",
+                "source_url": "https://example.invalid/synthetic",
+                "member": "Pieza sintética 1"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "combined_control_shift_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "unit_row_id": "r1",
+                "configuration": "Sintética",
+                "shift_mode": "Mecánico indexado",
+                "mechanical_positions": "11",
+                "commanded_target": "Cambio trasero",
+                "source_scope": "Apartado sintético",
+                "source_url": "https://example.invalid/synthetic",
+                "target_brand": "Marca sintética",
+                "target_model": "Modelo sintético",
+                "target_edition": "Edición sintética"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "expected_issue_subset": [
+        {
+          "code": "row_required_missing",
+          "field": "combined_control_shift_configurations",
+          "blocking": false
+        }
+      ],
+      "expected_row_condition_issues": [
+        {
+          "code": "row_required_missing",
+          "field": "combined_control_shift_configurations",
+          "row_id": "r1",
+          "column": "status",
+          "blocking": false
+        },
+        {
+          "code": "row_prerequisite",
+          "field": "combined_control_shift_configurations",
+          "row_id": "r1",
+          "column": "conditions",
+          "blocking": false
+        }
+      ]
+    }
+  ],
+  "root_nd_case_overrides": [
+    {
+      "id": "helmet_smith_mainline_certifications_by_row",
+      "reason": "Integral pertenece al eje de construcción, no al uso."
+    },
+    {
+      "id": "helmet_inventory_best_enduro_certificado_sin_norma",
+      "reason": "Se conserva Enduro sin inferir cobertura desde el título."
+    },
+    {
+      "id": "RCF25",
+      "reason": "Una variante distinta del soporte no es montaje de este SKU; se rechaza el token retirado."
+    }
+  ],
+  "root_row_value_case_overrides": [
+    "RCF08",
+    "CPC_GAP_INCLUDED_CLAMP_FALSE"
+  ],
+  "deferred_pressure_fixture_ids": [],
+  "superseded_pressure_fixtures": [
+    "wrfp_hookless_row_maximum_is_not_the_headline",
+    "wrfp_schwalbe_general_maximum_in_bar",
+    "wrfp_unit_without_value_is_pending",
+    "wrfp_value_without_unit_stays_pending"
+  ],
+  "required_server_migration": "20260907025000"
+}

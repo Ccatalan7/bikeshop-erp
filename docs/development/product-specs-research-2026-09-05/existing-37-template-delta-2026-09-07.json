@@ -1,0 +1,815 @@
+{
+  "snapshot_sha256": "45e514239b49e2af4b0bd8c4a715ddf5d3260c344674a4603b856b8a7a9434cf",
+  "captured_at": "2026-09-08T03:15:22.000529+00:00",
+  "templates": 37,
+  "field_uses": 280,
+  "definitions": 128,
+  "proposed_changes_only": true,
+  "product_writes": 0,
+  "families": [
+    {
+      "key": "bearing",
+      "current_fields": 3,
+      "desired_fields": 19,
+      "new_fields": [
+        "ball_count_per_pack",
+        "ball_diameter_in",
+        "bearing_construction",
+        "bearing_dimensional_code",
+        "bearing_element_retention",
+        "bearing_inner_contact_angle_deg",
+        "bearing_inner_diameter_mm",
+        "bearing_internal_construction",
+        "bearing_outer_contact_angle_deg",
+        "bearing_outer_diameter_mm",
+        "bearing_race_contact_angle_deg",
+        "bearing_regreasable",
+        "bearing_row_count",
+        "bearing_seal_kind",
+        "bearing_seat_geometry",
+        "bearing_width_mm"
+      ],
+      "removed_fields": [],
+      "retired_in_proposal": [],
+      "contract_differs": true,
+      "status": "requires_live_binding_and_source_adjudication",
+      "explicit_product_template_bindings": 0,
+      "effective_products_in_authenticated_1910_audit": 9
+    },
+    {
+      "key": "bottom_bracket",
+      "current_fields": 16,
+      "desired_fields": 19,
+      "new_fields": [
+        "bb_shell_interface",
+        "bb_thread_hand",
+        "spindle_taper_standard"
+      ],
+      "removed_fields": [],
+      "retired_in_proposal": [
+        "bb_cup_thread_pair",
+        "bb_shell_standard"
+      ],
+      "contract_differs": true,
+      "status": "requires_live_binding_and_source_adjudication",
+      "explicit_product_template_bindings": 0,
+      "effective_products_in_authenticated_1910_audit": 34
+    },
+    {
+      "key": "bottom_bracket_axle",
+      "current_fields": 5,
+      "desired_fields": 7,
+      "new_fields": [
+        "crank_bolt_thread",
+        "spindle_taper_standard"
+      ],
+      "removed_fields": [],
+      "retired_in_proposal": [],
+      "contract_differs": true,
+      "status": "requires_live_binding_and_source_adjudication",
+      "explicit_product_template_bindings": 0,
+      "effective_products_in_authenticated_1910_audit": 3
+    },
+    {
+      "key": "bottom_bracket_bearing",
+      "current_fields": 9,
+      "desired_fields": 10,
+      "new_fields": [
+        "bearing_construction"
+      ],
+      "removed_fields": [],
+      "retired_in_proposal": [],
+      "contract_differs": true,
+      "status": "requires_live_binding_and_source_adjudication",
+      "explicit_product_template_bindings": 0,
+      "effective_products_in_authenticated_1910_audit": 3
+    },
+    {
+      "key": "bottom_bracket_cup",
+      "current_fields": 7,
+      "desired_fields": 11,
+      "new_fields": [
+        "bb_shell_interface",
+        "bb_thread_hand",
+        "bearing_included",
+        "kit_members"
+      ],
+      "removed_fields": [],
+      "retired_in_proposal": [
+        "bb_cup_thread_pair",
+        "bb_shell_standard"
+      ],
+      "contract_differs": true,
+      "status": "requires_live_binding_and_source_adjudication",
+      "explicit_product_template_bindings": 0,
+      "effective_products_in_authenticated_1910_audit": 8
+    },
+    {
+      "key": "brake_caliper",
+      "current_fields": 13,
+      "desired_fields": 26,
+      "new_fields": [
+        "brake_actuation",
+        "brake_bleed_ports",
+        "brake_external_hose_connection",
+        "brake_fluid_approvals",
+        "brake_hydraulic_connections",
+        "brake_pad_retainer_model",
+        "braking_surface",
+        "cable_pull_required",
+        "caliper_rotor_nominal_thickness_mm",
+        "hose_system_code",
+        "piston_count_value",
+        "rim_brake_mount_fitments",
+        "rotor_size_recipe"
+      ],
+      "removed_fields": [],
+      "retired_in_proposal": [
+        "bleed_port",
+        "brake_system",
+        "brake_type",
+        "caliper_hydraulic",
+        "hose_fitting_type",
+        "piston_count",
+        "rotor_diameter_mm"
+      ],
+      "contract_differs": true,
+      "status": "requires_live_binding_and_source_adjudication",
+      "explicit_product_template_bindings": 0,
+      "effective_products_in_authenticated_1910_audit": 11
+    },
+    {
+      "key": "brake_lever",
+      "current_fields": 6,
+      "desired_fields": 16,
+      "new_fields": [
+        "brake_actuation",
+        "brake_external_hose_connection",
+        "brake_fluid_approvals",
+        "brake_hydraulic_connections",
+        "fluid_type",
+        "handlebar_clamp_mm",
+        "hose_system_code",
+        "integrated_shifter",
+        "kit_members",
+        "lever_cable_pull"
+      ],
+      "removed_fields": [],
+      "retired_in_proposal": [
+        "brake_system",
+        "brake_type",
+        "caliper_hydraulic"
+      ],
+      "contract_differs": true,
+      "status": "requires_live_binding_and_source_adjudication",
+      "explicit_product_template_bindings": 0,
+      "effective_products_in_authenticated_1910_audit": 15
+    },
+    {
+      "key": "brake_pad",
+      "current_fields": 9,
+      "desired_fields": 20,
+      "new_fields": [
+        "brake_pad_oem_compound",
+        "brake_pad_retainer_model",
+        "braking_surface",
+        "compatible_caliper_models",
+        "pack_quantity",
+        "pad_retention",
+        "rim_material_intended",
+        "rim_pad_construction",
+        "rim_pad_interface_model",
+        "rim_pad_length_mm",
+        "rim_pad_stud_type"
+      ],
+      "removed_fields": [],
+      "retired_in_proposal": [
+        "brake_system",
+        "brake_type"
+      ],
+      "contract_differs": true,
+      "status": "requires_live_binding_and_source_adjudication",
+      "explicit_product_template_bindings": 0,
+      "effective_products_in_authenticated_1910_audit": 53
+    },
+    {
+      "key": "cassette",
+      "current_fields": 6,
+      "desired_fields": 12,
+      "new_fields": [
+        "cassette_spline_standard",
+        "cog_sequence",
+        "freehub_bodies_accepted",
+        "lockring_included",
+        "shift_technology",
+        "sprocket_count"
+      ],
+      "removed_fields": [],
+      "retired_in_proposal": [
+        "cassette_cog_sequence",
+        "drivetrain_speeds",
+        "freehub_type"
+      ],
+      "contract_differs": true,
+      "status": "requires_live_binding_and_source_adjudication",
+      "explicit_product_template_bindings": 0,
+      "effective_products_in_authenticated_1910_audit": 29
+    },
+    {
+      "key": "cassette_spacer",
+      "current_fields": 3,
+      "desired_fields": 4,
+      "new_fields": [
+        "target_rear_drive_interface"
+      ],
+      "removed_fields": [],
+      "retired_in_proposal": [
+        "freehub_type"
+      ],
+      "contract_differs": true,
+      "status": "requires_live_binding_and_source_adjudication",
+      "explicit_product_template_bindings": 0,
+      "effective_products_in_authenticated_1910_audit": 3
+    },
+    {
+      "key": "chain",
+      "current_fields": 13,
+      "desired_fields": 13,
+      "new_fields": [],
+      "removed_fields": [],
+      "retired_in_proposal": [
+        "chain_profile_family",
+        "drivetrain_primary_ecosystem"
+      ],
+      "contract_differs": true,
+      "status": "requires_live_binding_and_source_adjudication",
+      "explicit_product_template_bindings": 0,
+      "effective_products_in_authenticated_1910_audit": 31
+    },
+    {
+      "key": "chain_guide",
+      "current_fields": 4,
+      "desired_fields": 7,
+      "new_fields": [
+        "chain_speeds_supported",
+        "chainring_teeth_max",
+        "chainring_teeth_min"
+      ],
+      "removed_fields": [],
+      "retired_in_proposal": [
+        "chainring_teeth"
+      ],
+      "contract_differs": true,
+      "status": "requires_live_binding_and_source_adjudication",
+      "explicit_product_template_bindings": 0,
+      "effective_products_in_authenticated_1910_audit": 3
+    },
+    {
+      "key": "chain_link",
+      "current_fields": 13,
+      "desired_fields": 13,
+      "new_fields": [],
+      "removed_fields": [],
+      "retired_in_proposal": [
+        "chain_profile_family",
+        "drivetrain_mode",
+        "drivetrain_primary_ecosystem"
+      ],
+      "contract_differs": true,
+      "status": "requires_live_binding_and_source_adjudication",
+      "explicit_product_template_bindings": 0,
+      "effective_products_in_authenticated_1910_audit": 9
+    },
+    {
+      "key": "chainring",
+      "current_fields": 11,
+      "desired_fields": 15,
+      "new_fields": [
+        "chainring_bolt_pattern_symmetric",
+        "chainring_position",
+        "compatible_rear_speeds",
+        "teeth_count"
+      ],
+      "removed_fields": [],
+      "retired_in_proposal": [
+        "chain_profile_family",
+        "chainring_bolt_count",
+        "chainring_teeth",
+        "drivetrain_speeds"
+      ],
+      "contract_differs": true,
+      "status": "requires_live_binding_and_source_adjudication",
+      "explicit_product_template_bindings": 0,
+      "effective_products_in_authenticated_1910_audit": 16
+    },
+    {
+      "key": "hydraulic_disc_brake",
+      "current_fields": 12,
+      "desired_fields": 22,
+      "new_fields": [
+        "brake_assembly_configurations",
+        "brake_bleed_ports",
+        "brake_fluid_approvals",
+        "brake_hydraulic_connections",
+        "brake_pad_retainer_model",
+        "hose_system_code",
+        "kit_members",
+        "piston_count_value",
+        "rotor_included_diameter_mm",
+        "rotor_size_recipe"
+      ],
+      "removed_fields": [],
+      "retired_in_proposal": [
+        "bleed_port",
+        "brake_system",
+        "hose_fitting_type",
+        "piston_count",
+        "rotor_diameter_mm"
+      ],
+      "contract_differs": true,
+      "status": "requires_live_binding_and_source_adjudication",
+      "explicit_product_template_bindings": 0,
+      "effective_products_in_authenticated_1910_audit": 3
+    },
+    {
+      "key": "mechanical_disc_brake",
+      "current_fields": 8,
+      "desired_fields": 15,
+      "new_fields": [
+        "brake_assembly_configurations",
+        "brake_pad_retainer_model",
+        "cable_pull_required",
+        "kit_members",
+        "levers_included",
+        "rotor_included_diameter_mm",
+        "rotor_size_recipe"
+      ],
+      "removed_fields": [],
+      "retired_in_proposal": [
+        "brake_system",
+        "rotor_diameter_mm"
+      ],
+      "contract_differs": true,
+      "status": "requires_live_binding_and_source_adjudication",
+      "explicit_product_template_bindings": 0,
+      "effective_products_in_authenticated_1910_audit": 0
+    },
+    {
+      "key": "crank_arm",
+      "current_fields": 5,
+      "desired_fields": 7,
+      "new_fields": [
+        "crank_bolt_thread",
+        "spindle_taper_standard"
+      ],
+      "removed_fields": [],
+      "retired_in_proposal": [],
+      "contract_differs": true,
+      "status": "requires_live_binding_and_source_adjudication",
+      "explicit_product_template_bindings": 0,
+      "effective_products_in_authenticated_1910_audit": 7
+    },
+    {
+      "key": "crankset",
+      "current_fields": 10,
+      "desired_fields": 21,
+      "new_fields": [
+        "bottom_bracket_required",
+        "chainring_bcd_mm",
+        "chainring_count",
+        "chainring_mount_type",
+        "chainring_teeth_rows",
+        "compatible_rear_speeds",
+        "included_chainring_count",
+        "kit_members",
+        "pedal_thread",
+        "spindle_included",
+        "spindle_taper_standard"
+      ],
+      "removed_fields": [],
+      "retired_in_proposal": [
+        "bottom_bracket_family",
+        "chain_profile_family",
+        "chainring_count",
+        "chainring_teeth",
+        "drivetrain_speeds",
+        "front_chainring_count"
+      ],
+      "contract_differs": true,
+      "status": "requires_live_binding_and_source_adjudication",
+      "explicit_product_template_bindings": 0,
+      "effective_products_in_authenticated_1910_audit": 27
+    },
+    {
+      "key": "derailleur_hanger",
+      "current_fields": 4,
+      "desired_fields": 7,
+      "new_fields": [
+        "bolt_pattern",
+        "compatible_frames",
+        "hanger_interface"
+      ],
+      "removed_fields": [],
+      "retired_in_proposal": [
+        "compatible_frame_hint",
+        "rear_derailleur_mount_type"
+      ],
+      "contract_differs": true,
+      "status": "requires_live_binding_and_source_adjudication",
+      "explicit_product_template_bindings": 0,
+      "effective_products_in_authenticated_1910_audit": 23
+    },
+    {
+      "key": "derailleur_pulley",
+      "current_fields": 3,
+      "desired_fields": 7,
+      "new_fields": [
+        "compatible_derailleur_models",
+        "pulley_bearing_type",
+        "pulley_position",
+        "pulley_width_class"
+      ],
+      "removed_fields": [],
+      "retired_in_proposal": [],
+      "contract_differs": true,
+      "status": "requires_live_binding_and_source_adjudication",
+      "explicit_product_template_bindings": 0,
+      "effective_products_in_authenticated_1910_audit": 7
+    },
+    {
+      "key": "drivetrain_kit",
+      "current_fields": 12,
+      "desired_fields": 16,
+      "new_fields": [
+        "chainring_count",
+        "included_chainring_count",
+        "kit_members",
+        "rear_speeds"
+      ],
+      "removed_fields": [],
+      "retired_in_proposal": [
+        "bottom_bracket_family",
+        "chain_profile_family",
+        "chainring_count",
+        "chainring_teeth",
+        "drivetrain_primary_ecosystem",
+        "front_chainring_count",
+        "kit_contents"
+      ],
+      "contract_differs": true,
+      "status": "requires_live_binding_and_source_adjudication",
+      "explicit_product_template_bindings": 0,
+      "effective_products_in_authenticated_1910_audit": 1
+    },
+    {
+      "key": "fixed_cog",
+      "current_fields": 5,
+      "desired_fields": 6,
+      "new_fields": [
+        "cog_thread_standard"
+      ],
+      "removed_fields": [],
+      "retired_in_proposal": [
+        "drivetrain_speeds",
+        "freehub_type"
+      ],
+      "contract_differs": true,
+      "status": "requires_live_binding_and_source_adjudication",
+      "explicit_product_template_bindings": 0,
+      "effective_products_in_authenticated_1910_audit": 0
+    },
+    {
+      "key": "freewheel",
+      "current_fields": 6,
+      "desired_fields": 11,
+      "new_fields": [
+        "chain_width_family",
+        "cog_sequence",
+        "freewheel_thread_standard",
+        "remover_tool_standard",
+        "sprocket_count"
+      ],
+      "removed_fields": [],
+      "retired_in_proposal": [
+        "cassette_cog_sequence",
+        "drivetrain_speeds",
+        "freehub_type"
+      ],
+      "contract_differs": true,
+      "status": "requires_live_binding_and_source_adjudication",
+      "explicit_product_template_bindings": 0,
+      "effective_products_in_authenticated_1910_audit": 28
+    },
+    {
+      "key": "front_derailleur",
+      "current_fields": 10,
+      "desired_fields": 15,
+      "new_fields": [
+        "compatible_chainring_counts",
+        "compatible_rear_speeds",
+        "front_derailleur_cable_pull",
+        "front_derailleur_swing",
+        "max_chainring_teeth"
+      ],
+      "removed_fields": [],
+      "retired_in_proposal": [
+        "drivetrain_primary_ecosystem",
+        "drivetrain_speeds",
+        "front_chainring_count",
+        "front_derailleur_pull_direction"
+      ],
+      "contract_differs": true,
+      "status": "requires_live_binding_and_source_adjudication",
+      "explicit_product_template_bindings": 0,
+      "effective_products_in_authenticated_1910_audit": 15
+    },
+    {
+      "key": "headset",
+      "current_fields": 4,
+      "desired_fields": 11,
+      "new_fields": [
+        "crown_race_included",
+        "headset_bearing_configurations",
+        "headset_lower_shis",
+        "headset_part_scope",
+        "headset_upper_shis",
+        "stack_height_mm",
+        "threaded"
+      ],
+      "removed_fields": [],
+      "retired_in_proposal": [
+        "headset_standard",
+        "steerer_type"
+      ],
+      "contract_differs": true,
+      "status": "requires_live_binding_and_source_adjudication",
+      "explicit_product_template_bindings": 0,
+      "effective_products_in_authenticated_1910_audit": 15
+    },
+    {
+      "key": "hub",
+      "current_fields": 6,
+      "desired_fields": 17,
+      "new_fields": [
+        "axle_type",
+        "center_to_flange_left_mm",
+        "center_to_flange_right_mm",
+        "flange_pcd_left_mm",
+        "flange_pcd_right_mm",
+        "hub_old_mm",
+        "rear_drive_interface",
+        "rotor_mount_type",
+        "spoke_hole_count",
+        "spoke_hole_diameter_mm",
+        "thru_axle_thread"
+      ],
+      "removed_fields": [],
+      "retired_in_proposal": [
+        "freehub_type",
+        "hub_spacing_mm",
+        "spoke_holes"
+      ],
+      "contract_differs": true,
+      "status": "requires_live_binding_and_source_adjudication",
+      "explicit_product_template_bindings": 0,
+      "effective_products_in_authenticated_1910_audit": 48
+    },
+    {
+      "key": "rear_derailleur",
+      "current_fields": 12,
+      "desired_fields": 14,
+      "new_fields": [
+        "compatible_rear_speeds",
+        "shifter_models_compatible"
+      ],
+      "removed_fields": [],
+      "retired_in_proposal": [
+        "drivetrain_primary_ecosystem",
+        "drivetrain_speeds"
+      ],
+      "contract_differs": true,
+      "status": "requires_live_binding_and_source_adjudication",
+      "explicit_product_template_bindings": 0,
+      "effective_products_in_authenticated_1910_audit": 35
+    },
+    {
+      "key": "rim",
+      "current_fields": 14,
+      "desired_fields": 20,
+      "new_fields": [
+        "bead_seat_diameter_mm",
+        "brake_track",
+        "rim_bead_profile",
+        "spoke_hole_count",
+        "tire_width_range_mm",
+        "valve_hole"
+      ],
+      "removed_fields": [],
+      "retired_in_proposal": [
+        "spoke_holes",
+        "valve_type",
+        "wheel_size"
+      ],
+      "contract_differs": true,
+      "status": "requires_live_binding_and_source_adjudication",
+      "explicit_product_template_bindings": 0,
+      "effective_products_in_authenticated_1910_audit": 41
+    },
+    {
+      "key": "rim_brake",
+      "current_fields": 5,
+      "desired_fields": 19,
+      "new_fields": [
+        "brake_actuation",
+        "brake_assembly_configurations",
+        "brake_external_hose_connection",
+        "brake_fluid_approvals",
+        "brake_hydraulic_connections",
+        "kit_members",
+        "lever_pull_required",
+        "reach_max_mm",
+        "reach_min_mm",
+        "rim_brake_frame_mount",
+        "rim_brake_mount_fitments",
+        "rim_brake_style",
+        "rim_pad_interface_model",
+        "rim_pad_stud_type"
+      ],
+      "removed_fields": [],
+      "retired_in_proposal": [
+        "brake_system"
+      ],
+      "contract_differs": true,
+      "status": "requires_live_binding_and_source_adjudication",
+      "explicit_product_template_bindings": 0,
+      "effective_products_in_authenticated_1910_audit": 24
+    },
+    {
+      "key": "rim_strip",
+      "current_fields": 3,
+      "desired_fields": 6,
+      "new_fields": [
+        "bead_seat_diameter_mm",
+        "strip_material",
+        "strip_width_mm"
+      ],
+      "removed_fields": [],
+      "retired_in_proposal": [
+        "valve_type",
+        "wheel_size"
+      ],
+      "contract_differs": true,
+      "status": "requires_live_binding_and_source_adjudication",
+      "explicit_product_template_bindings": 0,
+      "effective_products_in_authenticated_1910_audit": 3
+    },
+    {
+      "key": "rotor",
+      "current_fields": 9,
+      "desired_fields": 12,
+      "new_fields": [
+        "pad_compound_restriction",
+        "rotor_diameter_mm_value",
+        "rotor_min_thickness_mm"
+      ],
+      "removed_fields": [],
+      "retired_in_proposal": [
+        "brake_system",
+        "rotor_diameter_mm"
+      ],
+      "contract_differs": true,
+      "status": "requires_live_binding_and_source_adjudication",
+      "explicit_product_template_bindings": 0,
+      "effective_products_in_authenticated_1910_audit": 18
+    },
+    {
+      "key": "shifter",
+      "current_fields": 8,
+      "desired_fields": 13,
+      "new_fields": [
+        "derailleur_models_compatible",
+        "handlebar_clamp_mm",
+        "kit_members",
+        "shifter_indexed_positions",
+        "shifter_mechanism"
+      ],
+      "removed_fields": [],
+      "retired_in_proposal": [
+        "drivetrain_primary_ecosystem",
+        "drivetrain_speeds",
+        "front_chainring_count"
+      ],
+      "contract_differs": true,
+      "status": "requires_live_binding_and_source_adjudication",
+      "explicit_product_template_bindings": 0,
+      "effective_products_in_authenticated_1910_audit": 32
+    },
+    {
+      "key": "spoke",
+      "current_fields": 4,
+      "desired_fields": 9,
+      "new_fields": [
+        "nipples_included",
+        "pack_quantity",
+        "spoke_material",
+        "spoke_thread_diameter_mm",
+        "spoke_thread_standard"
+      ],
+      "removed_fields": [],
+      "retired_in_proposal": [],
+      "contract_differs": true,
+      "status": "requires_live_binding_and_source_adjudication",
+      "explicit_product_template_bindings": 0,
+      "effective_products_in_authenticated_1910_audit": 48
+    },
+    {
+      "key": "tire",
+      "current_fields": 7,
+      "desired_fields": 14,
+      "new_fields": [
+        "bead_seat_diameter_mm",
+        "tire_general_max_pressures",
+        "tire_max_pressure_psi",
+        "tire_rim_configurations",
+        "tire_tpi",
+        "tire_use",
+        "tire_weight_g"
+      ],
+      "removed_fields": [],
+      "retired_in_proposal": [
+        "tire_max_pressure_psi",
+        "tire_width_in",
+        "wheel_size"
+      ],
+      "contract_differs": true,
+      "status": "requires_live_binding_and_source_adjudication",
+      "explicit_product_template_bindings": 0,
+      "effective_products_in_authenticated_1910_audit": 113
+    },
+    {
+      "key": "tube",
+      "current_fields": 10,
+      "desired_fields": 13,
+      "new_fields": [
+        "tube_fit_rows",
+        "valve_core_removable",
+        "valve_length_mm_value"
+      ],
+      "removed_fields": [],
+      "retired_in_proposal": [
+        "tube_width_max_in",
+        "tube_width_max_mm",
+        "tube_width_min_in",
+        "tube_width_min_mm",
+        "valve_length_mm",
+        "wheel_size"
+      ],
+      "contract_differs": true,
+      "status": "requires_live_binding_and_source_adjudication",
+      "explicit_product_template_bindings": 0,
+      "effective_products_in_authenticated_1910_audit": 137
+    },
+    {
+      "key": "tubeless_consumable",
+      "current_fields": 2,
+      "desired_fields": 6,
+      "new_fields": [
+        "consumable_kind",
+        "kit_members",
+        "recommended_dose_ml",
+        "sealant_base"
+      ],
+      "removed_fields": [],
+      "retired_in_proposal": [],
+      "contract_differs": true,
+      "status": "requires_live_binding_and_source_adjudication",
+      "explicit_product_template_bindings": 0,
+      "effective_products_in_authenticated_1910_audit": 3
+    },
+    {
+      "key": "tubeless_valve",
+      "current_fields": 3,
+      "desired_fields": 8,
+      "new_fields": [
+        "pack_quantity",
+        "rim_hole_diameter_mm",
+        "valve_base_shape",
+        "valve_core_removable",
+        "valve_length_mm_value"
+      ],
+      "removed_fields": [],
+      "retired_in_proposal": [
+        "valve_length_mm"
+      ],
+      "contract_differs": true,
+      "status": "requires_live_binding_and_source_adjudication",
+      "explicit_product_template_bindings": 0,
+      "effective_products_in_authenticated_1910_audit": 8
+    }
+  ],
+  "explicit_product_template_bindings": 0,
+  "effective_binding_audit": "catalog-adoption-audit-20260907T1910.json",
+  "binding_scope_note": "Direct products.spec_template_id only; zero explicit bindings does not mean no assigned products. Effective category/reference binding is audited separately before metadata changes.",
+  "effective_products_in_authenticated_1910_audit": 863,
+  "audit_vs_current_note": "1910 authenticated effective binding audit is a prior snapshot; current independent fingerprint has preserved products and category defaults through25000."
+}

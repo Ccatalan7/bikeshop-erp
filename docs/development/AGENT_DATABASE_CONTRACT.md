@@ -591,6 +591,37 @@ coordinador de apply → assertions → stamp → read-back, y
 `migration_status.sh` consulta la autoridad remota. El receipt local ayuda a la
 auditoría, pero no sustituye el stamp.
 
+**2026-09-10 — una migración que otra migración «salta» sigue pendiente, y el
+cliente ya la llama.** `20260723023000_add_audited_sales_payment_corrections`
+nunca se estampó; `20260819180000` redefinía `correct_sales_payment` dentro de
+un `do` que, si faltaba la tabla de eventos, hacía `raise notice … skipping` y
+seguía. Se desplegó verde y el módulo de pagos de venta llevó siete semanas
+respondiendo `PGRST202` a cada corrección hasta que un operador lo reportó por
+WhatsApp. Tres reglas que salen de ahí:
+
+- Un `skip` guardado dentro de una migración **no** cierra la pendiente que
+  esquiva; hay que dejarla registrada como bloqueo o resolverla en la misma
+  ronda. `migration_status.sh` sobre el archivo viejo la sigue diciendo
+  `NOT_APPLIED`; se corre para cada RPC que el cliente llama antes de dar por
+  desplegada una superficie.
+- El archivo viejo **no se despliega tal cual** cuando una migración posterior
+  ya estampada redefine algo que él también toca: el de julio redefinía
+  `validate_sales_payment_integrity()` con el cuerpo de julio y habría
+  retrocedido el IVA por medio de pago del 19-08. Se escribe un forward nuevo
+  con los cuerpos finales, se afirma en un `do` previo que lo que no se toca ya
+  está en su versión final, y el archivo viejo queda marcado `SUPERSEDED` en su
+  cabecera (no está aplicado, así que editar el comentario no rompe historia).
+- Local no representa a producción en ninguna de las dos direcciones: tenía
+  los objetos de julio (por `core_schema.sql`) y no tenía los cuerpos de
+  agosto. Antes de un pgTAP que dependa de la función, reaplicar en local el
+  stack pendiente real (`query.sh local --write --file` del 0819) y comprobar
+  con `pg_get_functiondef` que el cuerpo es el de producción.
+
+El read-back tuvo su propia trampa: `pg_get_triggerdef` imprime los eventos en
+orden canónico (`BEFORE DELETE OR UPDATE`), no en el orden del `create
+trigger`. Un `like` con el orden del archivo divide por cero en local aunque
+el trigger exista.
+
 ## JSONB backup redaction preserves structure and derived metadata
 
 **2026-08-09 — supplier historical-backup gate.** Removing sensitive keys
@@ -611,6 +642,16 @@ read-only, because checking only the canonical array can turn an unexpected
 legacy shape into a false zero.
 
 ## Credentials
+
+**Formato de resultados (2026-09-15).** `query.sh --format json` envuelve la
+consulta completa en una subconsulta. Un archivo local con `BEGIN`, fixtures y
+`ROLLBACK` debe usar el formato table predeterminado, no JSON; no es un fallo
+del candidato. Evita también llamar `result` a una columna de salida JSON:
+coincide con el alias del wrapper y PostgreSQL puede serializar esa columna
+directamente en lugar de la fila. Usa un nombre explícito como `readback` y
+comprueba la forma devuelta antes de consumirla. Estos dos supuestos causaron
+un ensayo local fallido y una preparación detenida; ninguna escritura llegó a
+producción por esos intentos.
 
 Check presence, never print values, connection strings, or credential-bearing
 commands. Sources and per-consumer scope are in `SUPABASE_WORKFLOW.md`

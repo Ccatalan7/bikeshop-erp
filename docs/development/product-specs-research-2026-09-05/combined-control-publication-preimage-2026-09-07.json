@@ -1,0 +1,503 @@
+[
+    {
+        "metadata": {
+            "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+            "captured_at": "2026-09-08T03:55:37.033767+00:00",
+            "template_collisions": [
+            ],
+            "existing_definitions": [
+                {
+                    "id": "16277f40-31d2-460b-bd2d-be199a289282",
+                    "key": "shift_actuation_family",
+                    "unit": null,
+                    "label": "Familia indexado / tiro",
+                    "options": [
+                        {
+                            "id": "2cdcf32f-0d90-4659-a563-ebab49c887ea",
+                            "code": "shimano_dynasys_11_12v",
+                            "label": "Shimano Dynasys 11/12v",
+                            "is_active": true,
+                            "tenant_id": null,
+                            "created_at": "2026-08-21T17:58:02.773721+00:00",
+                            "sort_order": 3,
+                            "updated_at": "2026-08-21T17:58:02.773721+00:00",
+                            "spec_definition_id": "16277f40-31d2-460b-bd2d-be199a289282"
+                        },
+                        {
+                            "id": "2d543c08-4839-49a2-b8fa-e8921235fce0",
+                            "code": "shimano_cues_linkglide",
+                            "label": "Shimano CUES / Linkglide",
+                            "is_active": true,
+                            "tenant_id": null,
+                            "created_at": "2026-08-21T17:58:02.773721+00:00",
+                            "sort_order": 4,
+                            "updated_at": "2026-08-21T17:58:02.773721+00:00",
+                            "spec_definition_id": "16277f40-31d2-460b-bd2d-be199a289282"
+                        },
+                        {
+                            "id": "2da91422-8e45-4e74-8f51-9bbe72f7de2c",
+                            "code": "desconocido_sin_confirmar",
+                            "label": "Desconocido / sin confirmar",
+                            "is_active": true,
+                            "tenant_id": null,
+                            "created_at": "2026-08-21T17:58:02.773721+00:00",
+                            "sort_order": 14,
+                            "updated_at": "2026-08-21T17:58:02.773721+00:00",
+                            "spec_definition_id": "16277f40-31d2-460b-bd2d-be199a289282"
+                        },
+                        {
+                            "id": "32f77007-093e-46ce-9083-2fa92c752e84",
+                            "code": "sram_axs_road_flattop",
+                            "label": "SRAM AXS road / FlatTop",
+                            "is_active": true,
+                            "tenant_id": null,
+                            "created_at": "2026-08-21T17:58:02.773721+00:00",
+                            "sort_order": 8,
+                            "updated_at": "2026-08-21T17:58:02.773721+00:00",
+                            "spec_definition_id": "16277f40-31d2-460b-bd2d-be199a289282"
+                        },
+                        {
+                            "id": "4998c2c9-e56a-4c85-8628-448696db8517",
+                            "code": "otro",
+                            "label": "Otro",
+                            "is_active": true,
+                            "tenant_id": null,
+                            "created_at": "2026-08-21T17:58:02.773721+00:00",
+                            "sort_order": 13,
+                            "updated_at": "2026-08-21T17:58:02.773721+00:00",
+                            "spec_definition_id": "16277f40-31d2-460b-bd2d-be199a289282"
+                        },
+                        {
+                            "id": "4a9e2c70-7b1d-4ec8-8cef-b1955c322de7",
+                            "code": "shimano_dynasys_10v",
+                            "label": "Shimano Dynasys 10v",
+                            "is_active": true,
+                            "tenant_id": null,
+                            "created_at": "2026-08-21T17:58:02.773721+00:00",
+                            "sort_order": 2,
+                            "updated_at": "2026-08-21T17:58:02.773721+00:00",
+                            "spec_definition_id": "16277f40-31d2-460b-bd2d-be199a289282"
+                        },
+                        {
+                            "id": "5ff3a3aa-55f3-40dd-af0f-5d16f67aed19",
+                            "code": "campagnolo",
+                            "label": "Campagnolo",
+                            "is_active": true,
+                            "tenant_id": null,
+                            "created_at": "2026-08-21T17:58:02.773721+00:00",
+                            "sort_order": 10,
+                            "updated_at": "2026-08-21T17:58:02.773721+00:00",
+                            "spec_definition_id": "16277f40-31d2-460b-bd2d-be199a289282"
+                        },
+                        {
+                            "id": "68104b65-07e2-4aa1-811f-edf5727d8153",
+                            "code": "sram_t_type_transmission",
+                            "label": "SRAM T-Type Transmission",
+                            "is_active": true,
+                            "tenant_id": null,
+                            "created_at": "2026-08-21T17:58:02.773721+00:00",
+                            "sort_order": 9,
+                            "updated_at": "2026-08-21T17:58:02.773721+00:00",
+                            "spec_definition_id": "16277f40-31d2-460b-bd2d-be199a289282"
+                        },
+                        {
+                            "id": "987e5ac1-1988-47da-8725-90b38ed5a16a",
+                            "code": "microshift_advent_acolyte",
+                            "label": "Microshift Advent / Acolyte",
+                            "is_active": true,
+                            "tenant_id": null,
+                            "created_at": "2026-08-21T17:58:02.773721+00:00",
+                            "sort_order": 11,
+                            "updated_at": "2026-08-21T17:58:02.773721+00:00",
+                            "spec_definition_id": "16277f40-31d2-460b-bd2d-be199a289282"
+                        },
+                        {
+                            "id": "aaa8935b-026f-471c-9277-5704553671e5",
+                            "code": "shimano_sis_6_9v",
+                            "label": "Shimano SIS 6-9v",
+                            "is_active": true,
+                            "tenant_id": null,
+                            "created_at": "2026-08-21T17:58:02.773721+00:00",
+                            "sort_order": 1,
+                            "updated_at": "2026-08-21T17:58:02.773721+00:00",
+                            "spec_definition_id": "16277f40-31d2-460b-bd2d-be199a289282"
+                        },
+                        {
+                            "id": "af7eb6b1-10d7-40f5-9c38-3cfc25997420",
+                            "code": "friccion_universal",
+                            "label": "Friccion / universal",
+                            "is_active": true,
+                            "tenant_id": null,
+                            "created_at": "2026-08-21T17:58:02.773721+00:00",
+                            "sort_order": 12,
+                            "updated_at": "2026-08-21T17:58:02.773721+00:00",
+                            "spec_definition_id": "16277f40-31d2-460b-bd2d-be199a289282"
+                        },
+                        {
+                            "id": "e289606d-ed28-45ec-8e58-9d5e3e6eba30",
+                            "code": "sram_x_actuation_eagle",
+                            "label": "SRAM X-Actuation / Eagle",
+                            "is_active": true,
+                            "tenant_id": null,
+                            "created_at": "2026-08-21T17:58:02.773721+00:00",
+                            "sort_order": 7,
+                            "updated_at": "2026-08-21T17:58:02.773721+00:00",
+                            "spec_definition_id": "16277f40-31d2-460b-bd2d-be199a289282"
+                        },
+                        {
+                            "id": "eaeba20e-1d0f-4fd7-8faf-cadeb8482dd5",
+                            "code": "sram_exact_actuation",
+                            "label": "SRAM Exact Actuation",
+                            "is_active": true,
+                            "tenant_id": null,
+                            "created_at": "2026-08-21T17:58:02.773721+00:00",
+                            "sort_order": 6,
+                            "updated_at": "2026-08-21T17:58:02.773721+00:00",
+                            "spec_definition_id": "16277f40-31d2-460b-bd2d-be199a289282"
+                        },
+                        {
+                            "id": "fe52fe81-3c74-4600-b0fe-52a963b4f36f",
+                            "code": "shimano_ruta",
+                            "label": "Shimano ruta",
+                            "is_active": true,
+                            "tenant_id": null,
+                            "created_at": "2026-08-21T17:58:02.773721+00:00",
+                            "sort_order": 5,
+                            "updated_at": "2026-08-21T17:58:02.773721+00:00",
+                            "spec_definition_id": "16277f40-31d2-460b-bd2d-be199a289282"
+                        }
+                    ],
+                    "data_type": "single_select",
+                    "tenant_id": null,
+                    "created_at": "2026-04-26T17:27:29.520986+00:00",
+                    "group_name": "Cambios",
+                    "sort_order": 71,
+                    "updated_at": "2026-04-26T23:52:14.049527+00:00",
+                    "description": "Familia de tiro/indexado para shifter y desviadores; no confundir con marca comercial simple.",
+                    "is_filterable": true,
+                    "allowed_values": [
+                        "Shimano SIS 6-9v",
+                        "Shimano Dynasys 10v",
+                        "Shimano Dynasys 11/12v",
+                        "Shimano CUES / Linkglide",
+                        "Shimano ruta",
+                        "SRAM Exact Actuation",
+                        "SRAM X-Actuation / Eagle",
+                        "SRAM AXS road / FlatTop",
+                        "SRAM T-Type Transmission",
+                        "Campagnolo",
+                        "Microshift Advent / Acolyte",
+                        "Friccion / universal",
+                        "Otro",
+                        "Desconocido / sin confirmar"
+                    ],
+                    "validation_rules": {
+                    },
+                    "is_customer_visible": true,
+                    "is_mechanic_visible": true,
+                    "is_required_by_default": false,
+                    "is_compatibility_relevant": true
+                },
+                {
+                    "id": "3d0e43ef-5414-5814-9267-c6b20b77e41b",
+                    "key": "brake_hydraulic_connections",
+                    "unit": null,
+                    "label": "Mangueras y conexiones por extremo",
+                    "options": [
+                    ],
+                    "data_type": "json",
+                    "tenant_id": null,
+                    "created_at": "2026-09-08T02:49:19.357988+00:00",
+                    "group_name": null,
+                    "sort_order": 0,
+                    "updated_at": "2026-09-08T02:49:19.357988+00:00",
+                    "description": null,
+                    "is_filterable": false,
+                    "allowed_values": [
+                    ],
+                    "validation_rules": {
+                        "rows_schema": {
+                            "columns": [
+                                {
+                                    "key": "circuit_id",
+                                    "type": "text",
+                                    "label": "Identificador del circuito",
+                                    "required": false
+                                },
+                                {
+                                    "key": "component_role",
+                                    "type": "token",
+                                    "label": "Componente",
+                                    "required": true,
+                                    "allowed_values": [
+                                        "Maneta",
+                                        "Cáliper",
+                                        "Convertidor",
+                                        "Manguera"
+                                    ]
+                                },
+                                {
+                                    "key": "end_role",
+                                    "type": "token",
+                                    "label": "Extremo / puerto",
+                                    "required": true,
+                                    "allowed_values": [
+                                        "Entrada",
+                                        "Salida",
+                                        "Extremo A",
+                                        "Extremo B"
+                                    ]
+                                },
+                                {
+                                    "key": "component_brand",
+                                    "type": "text",
+                                    "label": "Marca del componente",
+                                    "required": true
+                                },
+                                {
+                                    "key": "component_model",
+                                    "type": "text",
+                                    "label": "Modelo del componente",
+                                    "required": true
+                                },
+                                {
+                                    "key": "generation",
+                                    "type": "text",
+                                    "label": "Generación / edición del modelo",
+                                    "required": false
+                                },
+                                {
+                                    "key": "hose_brand",
+                                    "type": "text",
+                                    "label": "Marca de manguera",
+                                    "required": true
+                                },
+                                {
+                                    "key": "hose_model",
+                                    "type": "text",
+                                    "label": "Código completo de manguera",
+                                    "required": true
+                                },
+                                {
+                                    "key": "fitting_model",
+                                    "type": "text",
+                                    "label": "Modelo de racor / oliva / inserto",
+                                    "required": false
+                                },
+                                {
+                                    "key": "connection_spec",
+                                    "type": "text",
+                                    "label": "Especificación completa de unión",
+                                    "required": false
+                                },
+                                {
+                                    "key": "source_url",
+                                    "type": "url",
+                                    "label": "Fuente OEM de esta fila",
+                                    "required": true
+                                }
+                            ],
+                            "version": 1
+                        }
+                    },
+                    "is_customer_visible": false,
+                    "is_mechanic_visible": true,
+                    "is_required_by_default": false,
+                    "is_compatibility_relevant": false
+                },
+                {
+                    "id": "4eb570b4-b098-59be-96f2-9c1e0bcd7b65",
+                    "key": "brake_actuation",
+                    "unit": null,
+                    "label": "Accionamiento del freno",
+                    "options": [
+                        {
+                            "id": "0ec7fc3a-6f83-58f5-ba5d-76fb76956bb6",
+                            "code": "catalog_58d6e79ea1b86fd54b776473bafa4682",
+                            "label": "Mecánico (cable)",
+                            "is_active": true,
+                            "tenant_id": null,
+                            "created_at": "2026-09-08T02:53:16.637744+00:00",
+                            "sort_order": 0,
+                            "updated_at": "2026-09-08T02:53:16.637744+00:00",
+                            "spec_definition_id": "4eb570b4-b098-59be-96f2-9c1e0bcd7b65"
+                        },
+                        {
+                            "id": "4227c9f3-dfec-5000-96ec-687809bd2543",
+                            "code": "catalog_e984e15c8cb42550f8561e627baad4b7",
+                            "label": "Contrapedal",
+                            "is_active": true,
+                            "tenant_id": null,
+                            "created_at": "2026-09-08T02:53:16.637744+00:00",
+                            "sort_order": 4,
+                            "updated_at": "2026-09-08T02:53:16.637744+00:00",
+                            "spec_definition_id": "4eb570b4-b098-59be-96f2-9c1e0bcd7b65"
+                        },
+                        {
+                            "id": "769fda80-5854-549d-8b95-886ca2d49c40",
+                            "code": "catalog_de6e897b1c6ced32e6762f3ceaebffd6",
+                            "label": "Desconocido / sin confirmar",
+                            "is_active": true,
+                            "tenant_id": null,
+                            "created_at": "2026-09-08T02:53:16.637744+00:00",
+                            "sort_order": 3,
+                            "updated_at": "2026-09-08T02:53:16.637744+00:00",
+                            "spec_definition_id": "4eb570b4-b098-59be-96f2-9c1e0bcd7b65"
+                        },
+                        {
+                            "id": "9e3a0f4c-145a-56ff-b460-50fd77151648",
+                            "code": "catalog_58a6c1638bf20651ee6442e480fc3a2c",
+                            "label": "Hidráulico",
+                            "is_active": true,
+                            "tenant_id": null,
+                            "created_at": "2026-09-08T02:53:16.637744+00:00",
+                            "sort_order": 1,
+                            "updated_at": "2026-09-08T02:53:16.637744+00:00",
+                            "spec_definition_id": "4eb570b4-b098-59be-96f2-9c1e0bcd7b65"
+                        },
+                        {
+                            "id": "bfef897c-a0ec-5051-8d68-5350a737eb24",
+                            "code": "catalog_ace1b00a5ecbb981b8bdacbf4dd97c07",
+                            "label": "Híbrido (cable a hidráulico)",
+                            "is_active": true,
+                            "tenant_id": null,
+                            "created_at": "2026-09-08T02:53:16.637744+00:00",
+                            "sort_order": 2,
+                            "updated_at": "2026-09-08T02:53:16.637744+00:00",
+                            "spec_definition_id": "4eb570b4-b098-59be-96f2-9c1e0bcd7b65"
+                        },
+                        {
+                            "id": "d1ba8cfa-6a17-5651-8c59-b12eacc0901b",
+                            "code": "catalog_c2295235a535ea3e85b7a0e5ab85afb0",
+                            "label": "Otro",
+                            "is_active": true,
+                            "tenant_id": null,
+                            "created_at": "2026-09-08T02:53:16.637744+00:00",
+                            "sort_order": 5,
+                            "updated_at": "2026-09-08T02:53:16.637744+00:00",
+                            "spec_definition_id": "4eb570b4-b098-59be-96f2-9c1e0bcd7b65"
+                        }
+                    ],
+                    "data_type": "single_select",
+                    "tenant_id": null,
+                    "created_at": "2026-09-08T02:53:16.637744+00:00",
+                    "group_name": null,
+                    "sort_order": 0,
+                    "updated_at": "2026-09-08T02:53:16.637744+00:00",
+                    "description": null,
+                    "is_filterable": false,
+                    "allowed_values": [
+                        "Mecánico (cable)",
+                        "Hidráulico",
+                        "Híbrido (cable a hidráulico)",
+                        "Desconocido / sin confirmar",
+                        "Contrapedal",
+                        "Otro"
+                    ],
+                    "validation_rules": {
+                    },
+                    "is_customer_visible": false,
+                    "is_mechanic_visible": true,
+                    "is_required_by_default": false,
+                    "is_compatibility_relevant": false
+                },
+                {
+                    "id": "4f055961-6c16-430b-a4e2-e6b09dc1cccc",
+                    "key": "spec_evidence_source",
+                    "unit": null,
+                    "label": "Fuente de la declaración",
+                    "options": [
+                    ],
+                    "data_type": "text",
+                    "tenant_id": null,
+                    "created_at": "2026-09-06T06:58:57.745728+00:00",
+                    "group_name": null,
+                    "sort_order": 900,
+                    "updated_at": "2026-09-06T06:58:57.745728+00:00",
+                    "description": "URL del fabricante, manual o identificación del envase que respalda la declaración.",
+                    "is_filterable": false,
+                    "allowed_values": [
+                    ],
+                    "validation_rules": {
+                    },
+                    "is_customer_visible": false,
+                    "is_mechanic_visible": true,
+                    "is_required_by_default": false,
+                    "is_compatibility_relevant": false
+                },
+                {
+                    "id": "a40d3beb-82ae-4b55-82f3-db9ee9ab3610",
+                    "key": "shifter_position",
+                    "unit": null,
+                    "label": "Posición shifter",
+                    "options": [
+                        {
+                            "id": "02bd8add-81d1-47f2-bf48-37cebfe2c57b",
+                            "code": "universal",
+                            "label": "Universal",
+                            "is_active": true,
+                            "tenant_id": null,
+                            "created_at": "2026-08-21T17:58:02.773721+00:00",
+                            "sort_order": 4,
+                            "updated_at": "2026-08-21T17:58:02.773721+00:00",
+                            "spec_definition_id": "a40d3beb-82ae-4b55-82f3-db9ee9ab3610"
+                        },
+                        {
+                            "id": "0e5f2afc-97ff-4fed-bc0d-97c83a531e02",
+                            "code": "derecho_trasero",
+                            "label": "Derecho / trasero",
+                            "is_active": true,
+                            "tenant_id": null,
+                            "created_at": "2026-08-21T17:58:02.773721+00:00",
+                            "sort_order": 2,
+                            "updated_at": "2026-08-21T17:58:02.773721+00:00",
+                            "spec_definition_id": "a40d3beb-82ae-4b55-82f3-db9ee9ab3610"
+                        },
+                        {
+                            "id": "5392cbce-b5cc-41bc-922e-25fdc1ee955d",
+                            "code": "par",
+                            "label": "Par",
+                            "is_active": true,
+                            "tenant_id": null,
+                            "created_at": "2026-08-21T17:58:02.773721+00:00",
+                            "sort_order": 3,
+                            "updated_at": "2026-08-21T17:58:02.773721+00:00",
+                            "spec_definition_id": "a40d3beb-82ae-4b55-82f3-db9ee9ab3610"
+                        },
+                        {
+                            "id": "e8cee314-d13f-4fae-a529-61da592e5e3a",
+                            "code": "izquierdo_delantero",
+                            "label": "Izquierdo / delantero",
+                            "is_active": true,
+                            "tenant_id": null,
+                            "created_at": "2026-08-21T17:58:02.773721+00:00",
+                            "sort_order": 1,
+                            "updated_at": "2026-08-21T17:58:02.773721+00:00",
+                            "spec_definition_id": "a40d3beb-82ae-4b55-82f3-db9ee9ab3610"
+                        }
+                    ],
+                    "data_type": "single_select",
+                    "tenant_id": null,
+                    "created_at": "2026-04-26T17:27:29.520986+00:00",
+                    "group_name": "Cambios",
+                    "sort_order": 70,
+                    "updated_at": "2026-04-26T17:30:29.032543+00:00",
+                    "description": "Indica si el mando controla cambio delantero, trasero o viene como par.",
+                    "is_filterable": true,
+                    "allowed_values": [
+                        "Izquierdo / delantero",
+                        "Derecho / trasero",
+                        "Par",
+                        "Universal"
+                    ],
+                    "validation_rules": {
+                    },
+                    "is_customer_visible": true,
+                    "is_mechanic_visible": true,
+                    "is_required_by_default": false,
+                    "is_compatibility_relevant": true
+                }
+            ]
+        }
+    }
+]

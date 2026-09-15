@@ -1,0 +1,71 @@
+{
+  "approval_scope": "field_representation",
+  "base_sha256": "00041bb82cbddec1278a4d310d26747601518356abce5af4138da9bab7aa4b06",
+  "proposal_sha256": "29176d32164746a87b2a3178180baca350c24c9e8c18bf22e9827b978ae45f8c",
+  "source_cases_sha256": "da0b43e638820fce0fafcf93b53431c96d4be174e4bc180038e20e2d5ab851d9",
+  "patch_adjudications": [
+    {
+      "patch_id": "PCB-P01",
+      "decision": "aceptar",
+      "reason": "Preserve content occurrence or exact declaration scope, units and document; no assembly approval."
+    },
+    {
+      "patch_id": "PCB-P02",
+      "decision": "aceptar",
+      "reason": "Preserve content occurrence or exact declaration scope, units and document; no assembly approval."
+    },
+    {
+      "patch_id": "PCB-P03",
+      "decision": "aceptar",
+      "reason": "Preserve content occurrence or exact declaration scope, units and document; no assembly approval."
+    },
+    {
+      "patch_id": "PCB-P04",
+      "decision": "aceptar",
+      "reason": "Preserve content occurrence or exact declaration scope, units and document; no assembly approval."
+    },
+    {
+      "patch_id": "TPDU-01-general-max-pressures-table",
+      "decision": "corregir",
+      "reason": "Keep the source/example discussion in research; concise operator guidance preserves documentary conflict as unresolved.",
+      "after_override": {
+        "field_entry": {
+          "key": "tire_general_max_pressures",
+          "section_key": "measurement",
+          "sort_order": 220,
+          "is_required": false,
+          "visibility_rules": [],
+          "option_rules": [],
+          "constraint_rules": []
+        },
+        "definition_used_by_append": "tire",
+        "roles": "measurement",
+        "semantic_roles": "measurement",
+        "allowed_when": {
+          "kind": "always"
+        },
+        "required_when": {
+          "kind": "never"
+        },
+        "prerequisites": [
+          "spec_evidence_source"
+        ],
+        "evidence_requirements": "package_or_label",
+        "helpers": "Una fila por máximo que la fuente declara para esta variante sin condicionarlo a un perfil de llanta. Conserva unidad, alcance y documento; no conviertas cifras. Los límites condicionados van en las declaraciones de montaje. Fuentes discrepantes requieren revisión antes de usar sus límites."
+      }
+    },
+    {
+      "patch_id": "TPDU-02-row-conditions-unit-gates-value",
+      "decision": "aceptar",
+      "reason": "Preserve content occurrence or exact declaration scope, units and document; no assembly approval."
+    },
+    {
+      "patch_id": "TPDU-03-retire-max-pressure-psi",
+      "decision": "rechazar",
+      "reason": "Already integrated by WRFP-R3 on this exact base; no second mutation."
+    }
+  ],
+  "mechanical_coverage_complete": false,
+  "automatic_fill_authorized": false,
+  "cardinality_activated": false
+}

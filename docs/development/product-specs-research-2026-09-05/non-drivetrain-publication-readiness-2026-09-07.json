@@ -1,0 +1,477 @@
+{
+  "schema_version": 1,
+  "title": "Doce familias no motrices: revisión de aptitud para publicar representación",
+  "author": "Claude (revisor independiente)",
+  "prepared_on": "2026-09-07",
+  "catalogue": {
+    "artifact": "all-family-port-cardinality-integrated-2026-09-07.json",
+    "artifact_sha256": "16459826fee4c589cce37243afe4e159317212ddf1d47d6d6f1d76f9b3fadf15",
+    "publication_gates_in_artifact": {
+      "all_family_domain_review_complete": false,
+      "all_product_assignment_review_complete": false,
+      "compatibility_rules_integrated": false,
+      "fill_allowed": false
+    }
+  },
+  "prior_artifacts_reused": {
+    "remaining-non-drivetrain-addendum-review-2026-09-07.json": "fd78724798b4c83773e599d33e6705d51fb5298526743470f5a223f5f586d0e1",
+    "remaining-nd-root-decisions-2026-09-07.json": "28576287c068bcd7260a99cf867c231025e455ef2d478d06c16ce0c9eb5e1e7c",
+    "all-family-row-conditions-proposal-2026-09-07.json": "94faca196c4572e2faeb8cf748dd9b8843c9c63e531c1f021803a4146bb4f5d0",
+    "row-gap-closure-review-2026-09-07.json": "aeef526190b16d7a9acd7b0c46de6aa81e82a4a9b2a9a733505cc63ada9e4862"
+  },
+  "what_this_is": "Una revisión, no una autorización. Digo por familia si veo un defecto todavía implementable que impida publicar SUS campos, o si no lo veo. Publicar representación con el llenado cerrado no certifica compatibilidad, no aprueba montajes y no convierte un saneamiento parcial en un saneamiento global terminado.",
+  "method_limits": [
+    "No leí base de datos ni runtime, así que no miré ningún dato de producto.",
+    "No rehíce investigación de fuentes: reutilicé las revisiones congeladas que ya cubrían estas familias y verifiqué contra el catálogo congelado si sus hallazgos quedaron implementados.",
+    "No inventé ninguna matriz ni regla mecánica nueva.",
+    "Una fila parcial permitida no la conté como defecto: la ausencia de un grupo de presencia es un límite de expresión conocido y compartido con otras 11 tablas, no una contradicción de estas familias."
+  ],
+  "block_wide_findings": [
+    {
+      "id": "PUB-F01",
+      "title": "El bloque no contiene ninguna tabla de compatibilidad",
+      "text": "Los cinco campos de filas del bloque son bottle_body_dimensions, kit_members, security_rating_configurations, nutrition_facts y certification_configurations. Ninguno es una matriz compatible_*. Por eso no acepto que estas doce queden bloqueadas por la matriz de transmisión: no dependen de ella. Lo más cercano son los anchos de tubo del portabidón, que son la interfaz que él mismo declara y no una lista de cuadros aprobados."
+    },
+    {
+      "id": "PUB-F02",
+      "title": "Certificación es declaración, no compatibilidad",
+      "text": "certification_configurations la comparten helmet y rider_protection, y las dos están en este bloque, así que publicarlas juntas no alcanza a ninguna familia de fuera. La laguna G03 que cita ese campo es el alcance de la propia certificación —norma, edición, mercado y modelo cubierto—, que el esquema ya representa en columnas, no una matriz de modelos compatibles."
+    },
+    {
+      "id": "PUB-F03",
+      "title": "Catorce definiciones salen del bloque; publicar plantillas no las cambia",
+      "text": "Publicar una plantilla no muta una definición compartida, así que este bloque no altera a las demás familias por el hecho de publicarse. El riesgo es el inverso y es hacia adelante: un cambio futuro en una definición de alcance amplio caería sobre familias ya publicadas. Las cuatro de mayor alcance son spec_evidence_source (105 familias), color (37), material (27) y kit_members (23)."
+    },
+    {
+      "id": "PUB-F04",
+      "title": "El único defecto específico del bloque es el estrechamiento ausente de kit_members",
+      "text": "La integración de luces decidió que cada luz posee sus datos y sus modos por id de miembro en light_member_configurations, y el estrechamiento cerraba el segundo dueño. Un kit de candado o de protección puede declarar hoy un miembro family=light, que es exactamente ese segundo dueño, sin modos y sin enlace de miembro. Un chaleco con luz integrada no es hipotético."
+    }
+  ],
+  "defects": [
+    {
+      "id": "PUB-D01",
+      "title": "kit_members admite family=light fuera de la plantilla light",
+      "kind": "contradiccion_de_arquitectura",
+      "evidence": "La columna family de kit_members enumera las 105 claves de plantilla y no ofrece «Otro». El estrechamiento que excluye light existe en una sola de las 23 plantillas que usan el campo: la propia light, con 104 opciones. Las otras 22, entre ellas lock y rider_protection, no declaran allowed_options sobre family.",
+      "why_it_matters": "La integración de luces decidió que cada luz posee sus datos y sus modos por id de miembro en light_member_configurations, y el estrechamiento cerraba el segundo dueño. Un kit de candado o de protección puede declarar hoy un miembro family=light, que es exactamente ese segundo dueño, sin modos y sin enlace de miembro. Un chaleco con luz integrada no es hipotético.",
+      "not_claimed": "No afirmo que ningún producto lo haga hoy: no miré datos de producto. El agujero es anterior a este bloque y afecta a 22 plantillas; lo que cambia al publicar es que por primera vez queda alcanzable desde una superficie publicada.",
+      "minimal_fix": "Un allowed_options sobre family en row_conditions de lock y de rider_protection, con la misma lista de 104 que ya usa light. Es metadato, no motor, y no toca la definición compartida ni a las otras 20 plantillas.",
+      "blocks": [
+        "lock",
+        "rider_protection"
+      ]
+    }
+  ],
+  "shared_definitions_leaving_the_block": [
+    {
+      "definition": "spec_evidence_source",
+      "used_by_families": 105,
+      "families_outside_block": 93,
+      "publishing_this_block_changes_it": false
+    },
+    {
+      "definition": "color",
+      "used_by_families": 37,
+      "families_outside_block": 28,
+      "publishing_this_block_changes_it": false
+    },
+    {
+      "definition": "material",
+      "used_by_families": 27,
+      "families_outside_block": 24,
+      "publishing_this_block_changes_it": false
+    },
+    {
+      "definition": "kit_members",
+      "used_by_families": 23,
+      "families_outside_block": 21,
+      "publishing_this_block_changes_it": false
+    },
+    {
+      "definition": "volume_ml",
+      "used_by_families": 4,
+      "families_outside_block": 2,
+      "publishing_this_block_changes_it": false
+    },
+    {
+      "definition": "bolts_included",
+      "used_by_families": 3,
+      "families_outside_block": 2,
+      "publishing_this_block_changes_it": false
+    },
+    {
+      "definition": "power_source",
+      "used_by_families": 3,
+      "families_outside_block": 2,
+      "publishing_this_block_changes_it": false
+    },
+    {
+      "definition": "weight_g",
+      "used_by_families": 3,
+      "families_outside_block": 1,
+      "publishing_this_block_changes_it": false
+    },
+    {
+      "definition": "cable_length_mm",
+      "used_by_families": 2,
+      "families_outside_block": 1,
+      "publishing_this_block_changes_it": false
+    },
+    {
+      "definition": "cable_diameter_mm",
+      "used_by_families": 2,
+      "families_outside_block": 1,
+      "publishing_this_block_changes_it": false
+    },
+    {
+      "definition": "width_mm",
+      "used_by_families": 2,
+      "families_outside_block": 1,
+      "publishing_this_block_changes_it": false
+    },
+    {
+      "definition": "padding",
+      "used_by_families": 2,
+      "families_outside_block": 1,
+      "publishing_this_block_changes_it": false
+    },
+    {
+      "definition": "mount_diameter_min_mm",
+      "used_by_families": 2,
+      "families_outside_block": 1,
+      "publishing_this_block_changes_it": false
+    },
+    {
+      "definition": "mount_diameter_max_mm",
+      "used_by_families": 2,
+      "families_outside_block": 1,
+      "publishing_this_block_changes_it": false
+    }
+  ],
+  "families": [
+    {
+      "family": "bottle",
+      "template_id": "4f2500c8-b993-5c0f-9561-1faf1ce739c3",
+      "technical_family": "bottle",
+      "fields": 11,
+      "row_fields": [
+        "bottle_body_dimensions"
+      ],
+      "row_fields_shared_outside_block": [],
+      "definitions_shared_outside_block": [
+        "color",
+        "material",
+        "spec_evidence_source",
+        "volume_ml"
+      ],
+      "contains_compatibility_matrix": false,
+      "prior_review_evidence": [
+        "Mi revisión ND congelada halló que bottle_diameter_mm quedaba permitido siempre mientras el portabidón ya lo condicionaba a su sistema de retención (parche RND-ND16-bottle_diameter-gate) y que reducir una botella TWIST a un solo diámetro era lo que el hallazgo prohibía (fixturas RF6 y RF7).",
+        "Root adjudicó aceptar ese parche, corregir el rótulo del campo compartido y añadir bottle_body_dimensions.",
+        "Verificado hoy en el catálogo congelado: bottle_diameter_mm está condicionado, base_included e included_base_model también, y bottle_body_dimensions existe y es exclusiva de esta familia."
+      ],
+      "blocking_defect": null,
+      "verdict": "apta_como_candidata_de_representacion",
+      "remaining_is_product_data_not_architecture": [
+        "Volumen, material y medidas concretas de cada botella siguen sin investigar por producto."
+      ],
+      "note": null
+    },
+    {
+      "family": "bottle_cage",
+      "template_id": "e1ed9c9d-52a9-5609-aca1-eec5ec84f391",
+      "technical_family": "bottle_cage",
+      "fields": 13,
+      "row_fields": [],
+      "row_fields_shared_outside_block": [],
+      "definitions_shared_outside_block": [
+        "bolts_included",
+        "color",
+        "material",
+        "spec_evidence_source"
+      ],
+      "contains_compatibility_matrix": false,
+      "prior_review_evidence": [
+        "Auditada en la propuesta de row_conditions como uso de plantilla sin campo de filas.",
+        "Verificado hoy: cinco campos condicionados —anchos de tubo, separación y número de anclajes, y lado de entrada— que son la interfaz declarada del propio portabidón."
+      ],
+      "blocking_defect": null,
+      "verdict": "apta_como_candidata_de_representacion",
+      "remaining_is_product_data_not_architecture": [
+        "Qué cuadros acepta cada modelo concreto es dato de producto."
+      ],
+      "note": "Sus medidas de tubo describen la interfaz que el portabidón declara, no una matriz de modelos aprobados. No confundir una interfaz declarada con compatibilidad certificada."
+    },
+    {
+      "family": "lock",
+      "template_id": "e10888b6-e20d-56e5-b69a-9c1ec3a026a8",
+      "technical_family": "lock",
+      "fields": 15,
+      "row_fields": [
+        "kit_members",
+        "security_rating_configurations"
+      ],
+      "row_fields_shared_outside_block": [
+        "kit_members"
+      ],
+      "definitions_shared_outside_block": [
+        "cable_diameter_mm",
+        "cable_length_mm",
+        "color",
+        "kit_members",
+        "spec_evidence_source"
+      ],
+      "contains_compatibility_matrix": false,
+      "prior_review_evidence": [
+        "Mi revisión ND fijó en la fixtura RF16 que las medidas del arco y del cable conviven en una presentación sin transferir el nivel de seguridad de uno a otro.",
+        "Mi revisión de cierre de carencias verificó que security_rating_configurations ganó la columna rating_scheme y que lock declara required_when sobre ella, con los casos ejecutables rnd_root_security_programme_missing y rnd_root_two_security_programmes."
+      ],
+      "blocking_defect": "PUB-D01",
+      "verdict": "apta_con_correccion_previa",
+      "remaining_is_product_data_not_architecture": [
+        "Qué certificación tiene cada candado concreto es dato de producto."
+      ],
+      "note": null
+    },
+    {
+      "family": "audible_signal",
+      "template_id": "dd1571f0-7476-5dd9-98a3-07ef6b0daadf",
+      "technical_family": "audible_signal",
+      "fields": 7,
+      "row_fields": [],
+      "row_fields_shared_outside_block": [],
+      "definitions_shared_outside_block": [
+        "color",
+        "mount_diameter_max_mm",
+        "mount_diameter_min_mm",
+        "power_source",
+        "spec_evidence_source"
+      ],
+      "contains_compatibility_matrix": false,
+      "prior_review_evidence": [
+        "Auditada en la propuesta de row_conditions; sin campo de filas y sin condiciones."
+      ],
+      "blocking_defect": null,
+      "verdict": "apta_como_candidata_de_representacion",
+      "remaining_is_product_data_not_architecture": [
+        "Datos de cada bocina o timbre concreto."
+      ],
+      "note": null
+    },
+    {
+      "family": "reflector",
+      "template_id": "777c6ce3-f570-5103-863a-ebe1d80e8a1c",
+      "technical_family": "reflector",
+      "fields": 4,
+      "row_fields": [],
+      "row_fields_shared_outside_block": [],
+      "definitions_shared_outside_block": [
+        "color",
+        "spec_evidence_source",
+        "width_mm"
+      ],
+      "contains_compatibility_matrix": false,
+      "prior_review_evidence": [
+        "Auditada en la propuesta de row_conditions; cuatro campos, sin filas."
+      ],
+      "blocking_defect": null,
+      "verdict": "apta_como_candidata_de_representacion",
+      "remaining_is_product_data_not_architecture": [
+        "Normas y medidas de cada reflector concreto."
+      ],
+      "note": null
+    },
+    {
+      "family": "souvenir",
+      "template_id": "634c7f4d-b2aa-5001-91ee-4598f8beda46",
+      "technical_family": "souvenir",
+      "fields": 4,
+      "row_fields": [],
+      "row_fields_shared_outside_block": [],
+      "definitions_shared_outside_block": [
+        "spec_evidence_source"
+      ],
+      "contains_compatibility_matrix": false,
+      "prior_review_evidence": [
+        "Auditada en la propuesta de row_conditions; cuatro campos, una sola definición compartida."
+      ],
+      "blocking_defect": null,
+      "verdict": "apta_como_candidata_de_representacion",
+      "remaining_is_product_data_not_architecture": [
+        "Nada estructural pendiente."
+      ],
+      "note": null
+    },
+    {
+      "family": "food_beverage",
+      "template_id": "ebedfe29-430f-5fd8-9988-d3efe3f6f2b0",
+      "technical_family": "food_beverage",
+      "fields": 21,
+      "row_fields": [
+        "nutrition_facts"
+      ],
+      "row_fields_shared_outside_block": [],
+      "definitions_shared_outside_block": [
+        "spec_evidence_source"
+      ],
+      "contains_compatibility_matrix": false,
+      "prior_review_evidence": [
+        "Mi revisión ND fijó que dos cantidades del mismo nutriente sobre la misma base son una contradicción (RF13) y que el mismo nutriente sobre dos bases distintas es legítimo (RF14).",
+        "La laguna G08 de la propuesta advertía que nutrition_facts sólo aplica a preparation_kind = Envasado y que «Por porción servida» no habilita productos preparados en barra."
+      ],
+      "blocking_defect": null,
+      "verdict": "apta_como_candidata_de_representacion",
+      "remaining_is_product_data_not_architecture": [
+        "La tabla nutricional de cada producto concreto."
+      ],
+      "note": "G08 está implementada y lo verifiqué: allowed_when de nutrition_facts condiciona a preparation_kind = «Envasado». El alcance del padre ya no depende de una convención escrita."
+    },
+    {
+      "family": "rider_apparel",
+      "template_id": "c53168f2-ec18-5041-94f9-a35ca1492059",
+      "technical_family": "rider_apparel",
+      "fields": 11,
+      "row_fields": [],
+      "row_fields_shared_outside_block": [],
+      "definitions_shared_outside_block": [
+        "color",
+        "material",
+        "spec_evidence_source"
+      ],
+      "contains_compatibility_matrix": false,
+      "prior_review_evidence": [
+        "Auditada en la propuesta de row_conditions; sin filas. Nueve de sus once definiciones son compartidas y sólo tres salen del bloque."
+      ],
+      "blocking_defect": null,
+      "verdict": "apta_como_candidata_de_representacion",
+      "remaining_is_product_data_not_architecture": [
+        "Tallas y materiales de cada prenda concreta."
+      ],
+      "note": null
+    },
+    {
+      "family": "rider_glove",
+      "template_id": "6d6a3ffd-a742-56f5-bdde-db7814dbe81e",
+      "technical_family": "rider_glove",
+      "fields": 12,
+      "row_fields": [],
+      "row_fields_shared_outside_block": [],
+      "definitions_shared_outside_block": [
+        "color",
+        "padding",
+        "spec_evidence_source"
+      ],
+      "contains_compatibility_matrix": false,
+      "prior_review_evidence": [
+        "Auditada en la propuesta de row_conditions; misma forma que rider_apparel."
+      ],
+      "blocking_defect": null,
+      "verdict": "apta_como_candidata_de_representacion",
+      "remaining_is_product_data_not_architecture": [
+        "Datos de cada guante concreto."
+      ],
+      "note": null
+    },
+    {
+      "family": "rider_protection",
+      "template_id": "280ded31-d4c3-5b14-8d10-f93ba64c7945",
+      "technical_family": "rider_protection",
+      "fields": 9,
+      "row_fields": [
+        "kit_members",
+        "certification_configurations"
+      ],
+      "row_fields_shared_outside_block": [
+        "kit_members"
+      ],
+      "definitions_shared_outside_block": [
+        "color",
+        "kit_members",
+        "spec_evidence_source"
+      ],
+      "contains_compatibility_matrix": false,
+      "prior_review_evidence": [
+        "Auditada en la propuesta de row_conditions con dos campos de filas.",
+        "Comparte certification_configurations con helmet, y las dos familias están en este bloque."
+      ],
+      "blocking_defect": "PUB-D01",
+      "verdict": "apta_con_correccion_previa",
+      "remaining_is_product_data_not_architecture": [
+        "Qué norma cumple cada protección concreta."
+      ],
+      "note": null
+    },
+    {
+      "family": "helmet",
+      "template_id": "0dc937cc-aa06-5699-a044-1c3fa979ca7f",
+      "technical_family": "helmet",
+      "fields": 17,
+      "row_fields": [
+        "certification_configurations"
+      ],
+      "row_fields_shared_outside_block": [],
+      "definitions_shared_outside_block": [
+        "color",
+        "spec_evidence_source",
+        "weight_g"
+      ],
+      "contains_compatibility_matrix": false,
+      "prior_review_evidence": [
+        "Mi revisión ND fijó que construcción y público deben poder declararse a la vez sin obligar a elegir (RF11) y que sin etiqueta observada no hay declaración de norma, sin escribir la ausencia como una norma más (RF12).",
+        "Verificado hoy: certification_configurations exige standard, standard_text y evidence_kind, ofrece «Otra» como salida y conserva edición, mercado y alcance como columnas propias."
+      ],
+      "blocking_defect": null,
+      "verdict": "apta_como_candidata_de_representacion",
+      "remaining_is_product_data_not_architecture": [
+        "Qué certificación tiene cada casco concreto."
+      ],
+      "note": "La exigencia de evidence_kind es lo que sostiene RF12 en el esquema: no se puede registrar una norma sin decir de dónde salió."
+    },
+    {
+      "family": "workshop_chemical",
+      "template_id": "61bc1c93-8b73-55d0-9584-6087a8190dfe",
+      "technical_family": "workshop_chemical",
+      "fields": 8,
+      "row_fields": [],
+      "row_fields_shared_outside_block": [],
+      "definitions_shared_outside_block": [
+        "spec_evidence_source",
+        "volume_ml",
+        "weight_g"
+      ],
+      "contains_compatibility_matrix": false,
+      "prior_review_evidence": [
+        "Auditada en la propuesta de row_conditions; sin filas.",
+        "En mi auditoría de los 33 registros sin ficha propuse esta familia para ACEITE NACIONAL, y tú corrigiste que la falta de evidencia no se escribe como prohibición en not_for."
+      ],
+      "blocking_defect": null,
+      "verdict": "apta_como_candidata_de_representacion",
+      "remaining_is_product_data_not_architecture": [
+        "Volumen, envase y aplicaciones declaradas de cada producto concreto."
+      ],
+      "note": "Esa corrección es una regla de uso del campo not_for, no un defecto del esquema: not_for existe para prohibiciones declaradas y sigue siendo el lugar correcto para ellas."
+    }
+  ],
+  "counts": {
+    "families_reviewed": 12,
+    "apta_como_candidata": 10,
+    "apta_con_correccion_previa": 2,
+    "no_apta": 0,
+    "blocking_defects_found": 1,
+    "defect_kind": {
+      "contradiccion_de_arquitectura": 1,
+      "dato_de_producto_no_investigado": 0
+    },
+    "row_fields_in_block": 5,
+    "compatibility_matrices_in_block": 0,
+    "shared_definitions_leaving_block": 14
+  },
+  "verdict": "Diez familias las veo aptas como candidatas de representación tal como están. Dos, lock y rider_protection, quedan aptas sólo después de una corrección de metadatos concreta y acotada. Ninguna la veo no apta. Esto es mi lectura, no una autorización: la decisión de publicar y el ensayo de adopción sobre productos reales son tuyos.",
+  "gates_unchanged": {
+    "fill_allowed": false,
+    "compatibility_rules_integrated": false,
+    "all_product_assignment_review_complete": false,
+    "all_family_domain_review_complete": false
+  }
+}
