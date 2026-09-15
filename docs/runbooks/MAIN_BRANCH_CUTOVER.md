@@ -83,6 +83,14 @@ un guard de arquitectura que buscaba un nombre de método renombrado en el
 último commit del Mac (`analyzer clean` no es `flutter test`); se corrigió en
 el mismo PR sin tocar el invariante.
 
+*Precisión 2026-09-15:* el check «expected» que nunca llegaba existía de
+verdad —`integrity / Database and application regression gate`, nombre de
+antes de partir el gate en shards— y no se corrigió en el paso 3: las PR #29 y
+#30 se fusionaron como admin (`enforce_admins=false`) con la protección en
+`BLOCKED`. Se reparó por §12.1 después del cutover, con el registro exacto en
+§18 («Cambio exacto de protección»); desde entonces una PR normal llega a
+`CLEAN` sola.
+
 **Paso 4 · Merge.** Botón «Merge pull request» → «Create a merge commit». Nunca
 squash ni rebase: ambos cambian los SHA que los manifests de release citan.
 Verificar desde cualquier clon:
@@ -1171,30 +1179,30 @@ Cada punto es una tarea con su propia PR; ninguno bloquea el cierre de §19.
 
 ## 18. Registro de ejecución
 
-Completar durante la ventana:
+Ruta simplificada (§0), ejecutada el 2026-09-15:
 
 | Campo | Valor |
 | --- | --- |
-| Fecha/hora UTC inicio |  |
-| Modo: completo / Git-only |  |
-| Dueño / operador / verificador |  |
-| `N` — main anterior |  |
-| `F` — smart final aprobado |  |
-| Tags de respaldo |  |
-| `M` — puente |  |
-| `T` — merge de prueba y runs que lo evaluaron |  |
-| Cambio exacto de protección |  |
-| `P` — main promovida |  |
-| Árbol esperado / árbol observado |  |
-| Run ERP / deployment / release anterior |  |
-| Run tienda / deployment / release anterior |  |
-| Runs macOS/Windows/secret scan |  |
-| Tags/releases antes y después |  |
-| SHA final de ambas ramas |  |
-| Freeze activado/desactivado |  |
-| Smokes |  |
-| Incidencias y decisiones |  |
-| Fecha/hora UTC cierre |  |
+| Fecha/hora UTC inicio | 2026-09-15 ~21:30 (merge de la PR #29) |
+| Modo: completo / Git-only | completo, ruta simplificada de §0 |
+| Dueño / operador / verificador | dueño (merge de #29 y #30); agentes Claude (sesión en la nube: preparación y promoción; sesión en el Mac: publicaciones, tienda, secreto, documentación) |
+| `N` — main anterior | `75cb391f…` |
+| `F` — smart final aprobado | `f51f3777…` (+ paso 0 en `claude/gifted-fermi-otkemj`) |
+| Tags de respaldo | ramas `cutover-backup/main-before-20260915` → `75cb391f…`, `cutover-backup/smart-before-20260915` → `f51f3777…` |
+| `M` — puente | sin efecto (`main` era ancestro puro) |
+| `T` — merge de prueba y runs que lo evaluaron | sin efecto; `PR Integrity` y `Secret Scan` de la PR #29 |
+| Cambio exacto de protección | 2026-09-15 ~23:20 UTC, §12.1: `required_status_checks.checks` de `main` pasó de `[Reject newly committed credentials, integrity / Database and application regression gate]` (el segundo no lo produce ningún job desde que el gate se partió en shards; toda PR quedaba `BLOCKED` y #29/#30 se fusionaron como admin) a `[Reject newly committed credentials, integrity / Static analysis and packaged web build, integrity / Application regression gate 0..3]`; `strict=true`, `enforce_admins=false`, `required_conversation_resolution=true` y el resto sin cambio; PATCH sobre `…/protection/required_status_checks` únicamente; la PR #31 pasó a `CLEAN` |
+| `P` — main promovida | `820ea45d` (PR #29); head observado al cerrar: `dc1e6093` (PR #30) |
+| Árbol esperado / árbol observado | `tree(P) = tree(F)`; `git diff --exit-code origin/smartpegas1.0 origin/main` vacío |
+| Run ERP / deployment / release anterior | `35026128013` (`820ea45`, deploy en verde, health rojo por el secreto) y `35030810641` (`dc1e609`, todo en verde al primer intento); `release.json` en vivo: `{"commit":"dc1e609…","run":"35030810641","built_at":"2026-09-15T22:48:12Z"}`; release anterior: build del 2026-08-10 |
+| Run tienda / deployment / release anterior | `35026128122` (gate 1 rojo, test de mensajería corregido en #30) y `35030810512` (rojo en «Build storefront release» por el presupuesto); en vivo sigue `32404d36` (`manual-shell`, `dirty: true`, 2026-09-02) hasta que se fusione la PR #31 y el push publique, o se publique desde el Mac (paso 5) |
+| Runs macOS/Windows/secret scan | push `dc1e609`: `Secret Scan` `35030810046` verde, `ERP Integrity Gate` `35030810103`, gates macOS `35030810951` y Windows `35030810513` artifact-only; publicaciones por `workflow_dispatch` sobre `dc1e609`: macOS `35030916303`, Android `35030919542`, Windows `35030922803`, las tres en verde |
+| Tags/releases antes y después | macOS `macos-v1.0.3-177` → `macos-v1.0.3-180` (`macos-latest` cita `dc1e609`, `vinabike_erp_macos_1.0.3-180.zip`); Windows → `windows-v1.0.3_61-55` (`windows-release-manifest.json` cita `dc1e609`); Android → `latest.json` privado con `version_name 1.0.3`, `build_number 66`, `version_code 2066`, `vinabike-erp-1.0.3+66-arm64-v8a.apk` (97,6 MB), `published_at 2026-09-15T23:12:17Z`; evidencia `android-release-manifest.json` con `commit dc1e609` en el artifact `vinabike-erp-android-release-evidence` del run |
+| SHA final de ambas ramas | `origin/main = origin/smartpegas1.0 = dc1e6093` |
+| Freeze activado/desactivado | no implementado (§0.1); no aplica |
+| Smokes | ERP web: `release.json` y health de producción por el workflow; escritorio: el aviso de actualización a 1.0.3 (180) llegó a la app instalada del dueño el 2026-09-15 ~23:15 UTC |
+| Incidencias y decisiones | (1) secreto `SUPABASE_DB_PASSWORD` de `Production` desactualizado desde 2026-08-10, refrescado 22:36 UTC desde el Keychain; (2) la tienda no se publicaba por push desde el 2026-07-27 por la regla `/accept-invitation` y, hoy, por el presupuesto del bundle —paso 5—; (3) el revisor Copilot cae por el tamaño de `copilot-instructions.md`, no es hallazgo; (4) required check obsoleto en la protección de `main`, reparado (fila de arriba); (5) backlog en §17.1 |
+| Fecha/hora UTC cierre | pendiente: se cierra cuando la tienda sirva el SHA de `main` (paso 5) y termine la observación de §17 (a partir del 2026-09-22) |
 
 ## 19. Criterio de cierre
 
