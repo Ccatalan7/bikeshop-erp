@@ -58,20 +58,43 @@ jobs:
       ${{ github.event_name == 'workflow_dispatch'
           || github.event.pull_request.head.repo.full_name == github.repository }}
     steps:
+      - name: Check the Preview environment credential
+        id: creds
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_PROJECT_VINABIKE }}
+        run: |
+          if [ -n "$FIREBASE_SERVICE_ACCOUNT" ]; then
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+            {
+              echo "## ERP web preview"
+              echo
+              echo "Skipped: the GitHub environment \`Preview\` has no"
+              echo "\`FIREBASE_SERVICE_ACCOUNT_PROJECT_VINABIKE\` secret yet."
+              echo "See docs/development/WEB_PREVIEW.md (one-time setup)."
+            } >> "$GITHUB_STEP_SUMMARY"
+            echo "::notice::Preview skipped: FIREBASE_SERVICE_ACCOUNT_PROJECT_VINABIKE is not available in the Preview environment."
+          fi
+
       - uses: actions/checkout@v7
+        if: steps.creds.outputs.enabled == 'true'
 
       - name: Set up Node for the spreadsheet engine
+        if: steps.creds.outputs.enabled == 'true'
         uses: actions/setup-node@v4
         with:
           node-version: "24.18.0"
           cache: npm
 
       - name: Build packaged spreadsheet engine
+        if: steps.creds.outputs.enabled == 'true'
         run: |
           npm ci
           npm run build:spreadsheet-engine
 
       - name: Set up Flutter
+        if: steps.creds.outputs.enabled == 'true'
         uses: subosito/flutter-action@v2
         with:
           flutter-version: "3.38.5"
@@ -79,6 +102,7 @@ jobs:
           cache: true
 
       - name: Cache resolved Dart packages
+        if: steps.creds.outputs.enabled == 'true'
         uses: actions/cache@v4
         with:
           path: ~/.pub-cache
@@ -86,9 +110,11 @@ jobs:
           restore-keys: pub-${{ runner.os }}-
 
       - name: Install dependencies
+        if: steps.creds.outputs.enabled == 'true'
         run: flutter pub get
 
       - name: Build web release
+        if: steps.creds.outputs.enabled == 'true'
         env:
           PR_NUMBER: ${{ github.event.pull_request.number || '' }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
@@ -106,6 +132,7 @@ jobs:
             > build/web_erp/release.json
 
       - name: Publish the preview channel
+        if: steps.creds.outputs.enabled == 'true'
         id: preview
         uses: FirebaseExtended/action-hosting-deploy@v0
         with:
@@ -119,6 +146,7 @@ jobs:
           channelId: ${{ github.event_name == 'workflow_dispatch' && format('manual-{0}', github.run_id) || '' }}
 
       - name: Verify the preview serves exactly this commit
+        if: steps.creds.outputs.enabled == 'true'
         env:
           PREVIEW_URL: ${{ steps.preview.outputs.details_url }}
         run: |
@@ -129,6 +157,7 @@ jobs:
             | jq -e --arg commit "${{ github.sha }}" '.commit == $commit and .target == "erp-preview"'
 
       - name: Write the link to the run summary
+        if: steps.creds.outputs.enabled == 'true'
         env:
           PREVIEW_URL: ${{ steps.preview.outputs.details_url }}
           EXPIRES: ${{ steps.preview.outputs.expire_time }}
