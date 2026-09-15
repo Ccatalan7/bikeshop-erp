@@ -22,3 +22,7 @@ ee0692fedf57196d79d7586f6e22aa1bce3d21c9:supabase/tests/supply_need_family_resol
 edc67935b9c8fc390edc46ba8acb42304ff95ee0:test/unit/supplier_need_portal_evidence_test.dart:generic-api-key:907
 6b61e71f7bc7d862e74c06bbf93692c083b8bdef:supabase/manual_checks/verification/20260827173500_separate_company_owner_from_employee.sql:generic-api-key:28
 6b61e71f7bc7d862e74c06bbf93692c083b8bdef:supabase/manual_checks/verification/20260827173500_separate_company_owner_from_employee.sql:generic-api-key:48
+# Same promotion: an auth user UUID recorded as an identifier in a research
+# measurement record (docs), not a credential.
+ea38266babc3f9427c009bb34616e1fe74d3d969:docs/development/product-specs-research-2026-09-05/progress-measurement-2026-09-08.json:generic-api-key:453
+ea38266babc3f9427c009bb34616e1fe74d3d969:docs/development/product-specs-research-2026-09-05/progress-measurement-2026-09-08.json:generic-api-key:516
