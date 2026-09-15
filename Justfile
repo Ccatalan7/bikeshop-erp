@@ -81,6 +81,10 @@ db-health environment="local":
     #!/usr/bin/env bash
     exec bash scripts/db/health.sh "{{environment}}"
 
+db-cpu environment="production":
+    #!/usr/bin/env bash
+    exec bash scripts/db/query.sh "{{environment}}" --file supabase/manual_checks/diagnostics/cpu_pressure_profile.sql
+
 e2e:
     #!/usr/bin/env bash
     echo "Staging E2E is suspended: staging is not production-authoritative." >&2

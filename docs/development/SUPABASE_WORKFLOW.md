@@ -28,7 +28,7 @@ which must not be persisted in `.env` or shell startup files.
 | Local pgTAP | `scripts/db/test.sh` / `just db-test` |
 | Canonical bootstrap gate | `just db-gate` |
 | Production-derived compatibility tests | `scripts/db/production_validation.sh` |
-| Trace, fingerprint, drift, health | Guarded recipes under `scripts/db/` |
+| Trace, fingerprint, drift, health, CPU profile | Guarded recipes under `scripts/db/` and `just db-cpu` |
 | Project status, secrets, functions, backups | `scripts/supabase_cli.sh` with explicit project ref |
 | Verified migration-history registration | `scripts/supabase_cli.sh migration repair --linked` after exact read-back |
 | Authenticated REST/RLS behavior | Publishable key and a synthetic authenticated user; privileged secret key only when the test explicitly requires admin behavior |
@@ -226,9 +226,46 @@ just db-trace production tenant 00000000-0000-4000-8000-000000000000
 just db-fingerprint production
 just db-drift local production
 just db-health production
+just db-cpu production
 ```
 
 Full manifests and verbose output stay under ignored `.tmp/db/`.
+
+### A Supabase "high CPU usage" email is answered with `just db-cpu`, not by reading code
+
+2026-09-15. The project is small and still received the >80% CPU alert. The
+codebase cannot say which of its recurring loads is the one that burns the
+instance, only that there are several, and each one looks harmless in
+isolation:
+
+- pg_cron fires three Edge workers **every minute** (`vinabike_transactional_email_worker`,
+  `vinabike_mercadopago_preference_worker`,
+  `vinabike_storefront_publication_dispatcher`), one every 5 min and the backup
+  scheduler every 15 min. Each tick is a Vault decrypt, a `net.http_post`, an
+  Edge invocation and its claim RPC. `cron.job_run_details` is never purged.
+- The scheduled backup serialises the whole tenant into one JSONB row
+  (`create_backup_internal`); an `hourly` schedule turns that into an hourly
+  CPU spike.
+- Every open storefront tab polls categories every 30 s and the unified site
+  payload plus pages every 60 s. Every ERP session polls `erp_notifications`
+  twice every 20 s and tasks every 30 s, on top of its realtime channels.
+- Some 300 RLS policies compare `tenant_id = public.user_tenant_id()` and
+  dozens more call `is_active_tenant_member(tenant_id)` or
+  `can_manage_tenant_*(tenant_id)` with the row's own column. None is wrapped
+  in `(select …)`, so whenever the predicate is not the index key the
+  `user_profiles × tenants` lookup runs once per row instead of once per
+  query.
+
+`supabase/manual_checks/diagnostics/cpu_pressure_profile.sql` measures which
+of those actually costs: execution time by role and by statement
+(`pg_stat_statements`), calls per hour, live activity, replication-slot lag,
+seq-scan pressure, bloat, the backup schedule, the worker runtimes, pg_cron
+run history, pg_net responses and live Realtime subscriptions. Read §1
+(`avg_active_backends`) and §2 (time by role) first; §3 names the statement.
+Trailing sections read the `cron`, `net` and `realtime` schemas and may stop
+on a permission error without invalidating the earlier ones. It needs the
+hosted credential, so it runs from the owner's machine, not from a remote
+container.
 
 ## Authorized production writes
 
