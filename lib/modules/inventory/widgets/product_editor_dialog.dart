@@ -7,11 +7,21 @@ import '../pages/product_form_page.dart';
 ///
 /// The dialog owns only the contextual presentation. Product loading,
 /// validation, persistence, and save results remain owned by [ProductFormPage].
+///
+/// With a null [productId] it creates a product, seeded from what the host
+/// already knows about it; [onSaved] hands the saved product back before the
+/// dialog closes.
 Future<bool?> showProductEditorDialog({
   required BuildContext context,
-  required String productId,
+  String? productId,
   ProductType initialProductType = ProductType.product,
   ProductFormSection initialSection = ProductFormSection.general,
+  String? initialName,
+  String? initialSku,
+  String? initialSupplierCode,
+  double? initialCost,
+  String? initialSupplierId,
+  ValueChanged<Product>? onSaved,
 }) {
   return showGeneralDialog<bool>(
     context: context,
@@ -54,6 +64,12 @@ Future<bool?> showProductEditorDialog({
                       initialProductType: initialProductType,
                       lockProductType: true,
                       initialSection: initialSection,
+                      initialName: initialName,
+                      initialSku: initialSku,
+                      initialSupplierCode: initialSupplierCode,
+                      initialCost: initialCost,
+                      initialSupplierId: initialSupplierId,
+                      onSaved: onSaved,
                     ),
                   ),
                 ),

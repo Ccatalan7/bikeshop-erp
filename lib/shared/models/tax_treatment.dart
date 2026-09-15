@@ -3,7 +3,7 @@
 enum TaxTreatment {
   /// No tax - Full amount is revenue/cost (receipts, international purchases)
   noTax('no_tax'),
-  
+
   /// Tax included - Amount includes 19% IVA (divide by 1.19 for net)
   taxIncluded('tax_included');
 

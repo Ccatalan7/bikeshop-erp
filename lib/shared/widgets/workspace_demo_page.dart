@@ -25,7 +25,7 @@ class _WorkspaceDemoContent extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('Workspace Demo'),
@@ -35,7 +35,7 @@ class _WorkspaceDemoContent extends StatelessWidget {
         children: [
           // Tab bar at the top (includes dropdown menu)
           WorkspaceTabBar(),
-          
+
           // Workspace container (IndexedStack with all workspaces)
           Expanded(
             child: WorkspaceContainer(),

@@ -8,6 +8,17 @@ import '../../ai_assistant/services/ai_service.dart';
 import '../models/inventory_models.dart';
 import '../models/stock_adjustment.dart';
 
+enum InventoryExternalStockFilter {
+  any(0),
+  inStock(1),
+  lowStock(2),
+  outOfStock(3);
+
+  const InventoryExternalStockFilter(this.productListIndex);
+
+  final int productListIndex;
+}
+
 class InventoryService extends ChangeNotifier {
   static final RegExp _aliExpressSkuPattern =
       RegExp(r'^AE(\d+)$', caseSensitive: false);
@@ -68,16 +79,25 @@ class InventoryService extends ChangeNotifier {
   final _externalSearchController = StreamController<String>.broadcast();
   Stream<String> get externalSearchStream => _externalSearchController.stream;
 
-  /// SKUs matched by the AI assistant's semantic+keyword search.
-  /// When set, the product list filters by these SKUs instead of keyword search.
-  List<String>? aiMatchedSkus;
+  /// Exact product IDs from a complete server-projected assistant result.
+  /// Null means the server reported more rows than its bounded projection and
+  /// the product list must apply the visible query locally instead.
+  List<String>? aiMatchedProductIds;
   int? aiStockFilterIndex;
 
-  void applyExternalSearch(String term,
-      {List<String>? matchedSkus, int? stockFilterIndex}) {
-    aiMatchedSkus = matchedSkus;
-    aiStockFilterIndex = stockFilterIndex;
-    saveListState(searchTerm: term, stockFilterIndex: stockFilterIndex);
+  void applyExternalSearch(
+    String term, {
+    List<String>? matchedProductIds,
+    required InventoryExternalStockFilter stockFilter,
+  }) {
+    aiMatchedProductIds = matchedProductIds == null
+        ? null
+        : List<String>.unmodifiable(matchedProductIds);
+    aiStockFilterIndex = stockFilter.productListIndex;
+    saveListState(
+      searchTerm: term,
+      stockFilterIndex: stockFilter.productListIndex,
+    );
     _externalSearchController.add(term);
   }
 
@@ -136,7 +156,7 @@ class InventoryService extends ChangeNotifier {
     savedFilterGoogleMerchant = false;
     savedShowInactive = false;
     savedSortOptionIndex = 2;
-    aiMatchedSkus = null;
+    aiMatchedProductIds = null;
     aiStockFilterIndex = null;
   }
 
@@ -650,6 +670,7 @@ class InventoryService extends ChangeNotifier {
     required Map<String, dynamic> parent,
     required List<Map<String, dynamic>> components,
     required String operationKey,
+    Map<String, dynamic>? specCommand,
   }) async {
     final cleanOperationKey = operationKey.trim();
     if (cleanOperationKey.isEmpty) {
@@ -668,19 +689,62 @@ class InventoryService extends ChangeNotifier {
     }
 
     final response = await _db.rpc(
-      'save_product_set_aggregate',
-      params: {
-        'p_parent': parent,
-        'p_components': components,
-        'p_operation_key': cleanOperationKey,
-      },
+      specCommand == null
+          ? 'save_product_set_aggregate'
+          : 'save_product_with_specs_v1',
+      params: specCommand == null
+          ? {
+              'p_parent': parent,
+              'p_components': components,
+              'p_operation_key': cleanOperationKey,
+            }
+          : {
+              ...specCommand,
+              'p_product': parent,
+              'p_components': components,
+              'p_operation_key': cleanOperationKey,
+            },
     );
     final result = ProductSetAggregateSaveResult.fromJson(
-      _rpcJsonMap(response),
+      specCommand == null
+          ? _rpcJsonMap(response)
+          : Map<String, dynamic>.from(_rpcJsonMap(response)['set'] as Map),
     );
     invalidateProductsCache();
     notifyListeners();
     return result;
+  }
+
+  Future<Product> saveProductWithSpecs({
+    required Product product,
+    required Map<String, dynamic> specCommand,
+    required String operationKey,
+  }) async {
+    final payload = product.toJson(includeNulls: true)
+      ..remove('inventory_qty')
+      ..remove('stock_quantity')
+      ..remove('created_at')
+      ..remove('updated_at')
+      ..remove('tenant_id');
+    // Retain the existing optional embedding behavior outside the transaction.
+    try {
+      final content = '${product.name} ${product.brand ?? ''} '
+          '${product.categoryName ?? ''} ${product.description ?? ''}';
+      final vector = await AIAssistantService().generateEmbedding(content);
+      if (vector != null) payload['embedding'] = vector.toString();
+    } catch (error) {
+      debugPrint('[InventoryService] Product embedding unavailable: $error');
+    }
+    final result =
+        _rpcJsonMap(await _db.rpc('save_product_with_specs_v1', params: {
+      ...specCommand,
+      'p_product': payload,
+      'p_operation_key': operationKey,
+    }));
+    invalidateProductsCache();
+    notifyListeners();
+    return Product.fromJson(
+        Map<String, dynamic>.from(result['product'] as Map));
   }
 
   Future<ProductSetCompositionSnapshot> getProductSetComposition(

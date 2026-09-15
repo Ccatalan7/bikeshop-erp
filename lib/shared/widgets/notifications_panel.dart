@@ -150,13 +150,26 @@ class _NotificationBriefingState extends State<_NotificationBriefing> {
 
   NotificationDigestPeriod _period = NotificationDigestPeriod.today;
   DateTimeRange? _customDateRange;
+
+  /// Whether the attendance block describes the shop right now (the selected
+  /// period reaches today) or a closed period (it ended before today).
+  bool _attendanceLive = true;
+
+  /// Business dates the attendance block was loaded for.
+  NotificationDigestWindow? _attendanceWindow;
   _ActivityFilter _activityFilter = _ActivityFilter.all;
   List<Map<String, dynamic>> _periodNotifications = const [];
   List<AppStoredFile> _files = const [];
   List<DailyAttendanceBriefingEntry> _dailyAttendances = const [];
   StreamSubscription<AppStoredFile>? _savedFileSubscription;
   Timer? _briefingClock;
-  final GlobalKey _activitySectionKey = GlobalKey();
+
+  /// Renewed on every period change. The body sits inside an
+  /// `AnimatedSwitcher` keyed by period, so during the 260 ms transition the
+  /// outgoing body and the incoming one are both in the tree; one shared
+  /// GlobalKey on the activity section was then «Duplicate GlobalKey» on every
+  /// switch. The outgoing body keeps its old key; scroll-to reads the current.
+  GlobalKey _activitySectionKey = GlobalKey();
   final GlobalKey _periodMenuAnchorKey = GlobalKey();
   int _periodLoadEpoch = 0;
   int _filesLoadEpoch = 0;
@@ -302,15 +315,28 @@ class _NotificationBriefingState extends State<_NotificationBriefing> {
         period: NotificationDigestPeriod.today,
         now: referenceNow,
       );
+      // «Ahora en el local» is a live fact: it belongs to any period that
+      // reaches today. A period that ended before today gets the shifts that
+      // closed inside it instead — yesterday's people, not today's.
+      final selectedWindow = NotificationDigestWindow.resolve(
+        period: _period,
+        now: referenceNow,
+        customStartDate: _customDateRange?.start,
+        customEndDate: _customDateRange?.end,
+      );
+      final live = !selectedWindow.endDate.isBefore(todayWindow.startDate);
+      final window = live ? todayWindow : selectedWindow;
       final entries =
           await context.read<HRService>().getDailyAttendanceBriefing(
-                startsAt: todayWindow.startsAt,
-                endsAt: todayWindow.endsAt,
+                startsAt: window.startsAt,
+                endsAt: window.endsAt,
               );
       if (!mounted || loadEpoch != _attendanceLoadEpoch) return;
       setState(() {
         _dailyAttendances = entries;
         _briefingNow = referenceNow;
+        _attendanceLive = live;
+        _attendanceWindow = window;
         _loadingAttendances = false;
         _attendancesError = null;
       });
@@ -402,10 +428,12 @@ class _NotificationBriefingState extends State<_NotificationBriefing> {
     setState(() {
       _period = nextPeriod;
       _customDateRange = nextCustomRange;
+      _activitySectionKey = GlobalKey();
     });
     await Future.wait([
       _loadPeriodNotifications(),
       _loadFiles(),
+      _loadAttendances(),
     ]);
   }
 
@@ -570,11 +598,18 @@ class _NotificationBriefingState extends State<_NotificationBriefing> {
                             child: _AttendanceNowSection(
                               entries: _dailyAttendances,
                               now: _briefingNow,
+                              live: _attendanceLive,
+                              period: _period,
                               loading: _loadingAttendances,
                               hasError: _attendancesError != null,
                               onRetry: _loadAttendances,
                               onOpenAll: () => widget.onNavigate(
-                                _attendanceDayRoute(_briefingNow),
+                                _attendanceLive
+                                    ? _attendanceDayRoute(_briefingNow)
+                                    : _attendanceDateRoute(
+                                        _attendanceWindow?.endDate ??
+                                            _briefingNow,
+                                      ),
                               ),
                               onOpenEntry: (entry) => widget.onNavigate(
                                 _attendanceEntryRoute(entry),
@@ -614,6 +649,18 @@ class _NotificationBriefingState extends State<_NotificationBriefing> {
                               },
                               onTap: (item) {
                                 _markActivityRead(item);
+                                final taskId = taskIdFromToolRoute(item.route);
+                                if (taskId != null) {
+                                  // El destino es la bandeja del rail, no una
+                                  // ruta: se abre el panel en esa tarea.
+                                  context
+                                      .read<RightToolbarService>()
+                                      .openConversation(
+                                        tool: ToolbarTool.tasks,
+                                        conversationId: taskId,
+                                      );
+                                  return;
+                                }
                                 widget.onNavigate(item.route);
                               },
                               onExpand: _markActivityRead,
@@ -689,7 +736,14 @@ class _NotificationBriefingState extends State<_NotificationBriefing> {
       final createdAt = DateTime.tryParse(
         row['created_at']?.toString() ?? '',
       )?.toLocal();
-      if (createdAt == null || !digest.contains(createdAt)) continue;
+      final occurredAt = DateTime.tryParse(
+        row['occurred_at']?.toString() ?? '',
+      )?.toLocal();
+      if (createdAt == null ||
+          (!digest.contains(createdAt) &&
+              (occurredAt == null || !digest.contains(occurredAt)))) {
+        continue;
+      }
       final type = row['type']?.toString() ?? '';
       final platformKey = _platformKeyForNotificationType(type);
       final route = resolveErpNotificationRoute(row);
@@ -697,11 +751,18 @@ class _NotificationBriefingState extends State<_NotificationBriefing> {
       // The payload already travelled with the row (`data` is part of both the
       // period read and the realtime projection), so enrichment costs no query.
       final data = _notificationPayload(row);
+      final economicDateContext = _economicDateContext(
+        createdAt: createdAt,
+        occurredAt: occurredAt,
+        type: type,
+      );
       items.add(
         _BriefingActivityItem(
           title: row['title']?.toString() ?? 'Actividad',
           subtitle: _erpActivitySubtitle(type, body, data),
           createdAt: createdAt,
+          occurredAt: occurredAt,
+          economicDateContext: economicDateContext,
           route: route,
           icon: _iconForNotificationType(type),
           accent: _accentForNotificationType(type),
@@ -831,12 +892,18 @@ String _erpActivitySubtitle(
 ) {
   switch (type) {
     case 'mechanic_job_created':
+    case 'mechanic_job_archived':
       return _joinActivitySegments([body, _payloadText(data, 'bike_label')]);
     case 'sales_payment_received':
+    case 'sales_payment_voided':
     case 'expense_recorded':
+    case 'expense_voided':
+    case 'expense_deleted':
       return _joinActivitySegments(
-          [body, _payloadText(data, 'payment_method')]);
+        [body, _payloadText(data, 'payment_method')],
+      );
     case 'online_order_created':
+    case 'online_order_cancelled':
       final deliveryType = _payloadText(data, 'delivery_type');
       return _joinActivitySegments([
         body,
@@ -852,6 +919,42 @@ String _erpActivitySubtitle(
     default:
       return body;
   }
+}
+
+String _economicDateContext({
+  required DateTime createdAt,
+  required String type,
+  DateTime? occurredAt,
+}) {
+  if (occurredAt == null) return '';
+  final recorded = _chileBriefingTime(createdAt);
+  final occurred = _chileBriefingTime(occurredAt);
+  if (recorded.year == occurred.year &&
+      recorded.month == occurred.month &&
+      recorded.day == occurred.day) {
+    return '';
+  }
+  final today = tz.TZDateTime.now(_chileBriefingLocation());
+  final recordedLabel = recorded.year == today.year &&
+          recorded.month == today.month &&
+          recorded.day == today.day
+      ? 'Registrado hoy'
+      : 'Registrado el ${recorded.day} '
+          '${_briefingMonthShort[recorded.month - 1]}';
+  final economicNoun = switch (type) {
+    'sales_payment_received' => 'pago',
+    'sales_payment_voided' => 'pago',
+    'expense_recorded' => 'gasto',
+    'expense_voided' => 'gasto',
+    'expense_deleted' => 'gasto',
+    _ => 'corresponde',
+  };
+  final occurrenceLabel =
+      economicNoun == 'corresponde' ? 'corresponde al' : '$economicNoun del';
+  final includeYear = recorded.year != occurred.year;
+  return '$recordedLabel · $occurrenceLabel ${occurred.day} '
+      '${_briefingMonthShort[occurred.month - 1]}'
+      '${includeYear ? ' ${occurred.year}' : ''}';
 }
 
 /// Second line of a conversation row.
@@ -881,18 +984,39 @@ _ActivityDetail? _erpActivityDetail(
 ) {
   switch (type) {
     case 'mechanic_job_created':
-      final request = _payloadText(data, 'client_request');
-      if (request.isEmpty) return null;
+      final fields = <_ActivityDetailField>[
+        ..._optionalField(
+          'SOLICITUD DEL CLIENTE',
+          _payloadText(data, 'client_request'),
+          maxLines: 4,
+        ),
+        ..._optionalField(
+          'REGISTRÓ',
+          _payloadText(data, 'recorded_by_name'),
+        ),
+      ];
+      if (fields.isEmpty) return null;
       return _ActivityDetail(
-        noun: 'la solicitud del cliente',
+        noun: 'el detalle del trabajo',
         actionLabel: 'Abrir trabajo',
-        fields: [
-          _ActivityDetailField(
-            label: 'SOLICITUD DEL CLIENTE',
-            value: request,
-            maxLines: 4,
-          ),
-        ],
+        fields: fields,
+      );
+    case 'mechanic_job_archived':
+      final fields = <_ActivityDetailField>[
+        ..._optionalField(
+          'SOLICITUD DEL CLIENTE',
+          _payloadText(data, 'client_request'),
+          maxLines: 4,
+        ),
+        ..._optionalField('REGISTRÓ', _payloadText(data, 'recorded_by_name')),
+        ..._optionalField('ELIMINÓ', _payloadText(data, 'removed_by_name')),
+        ..._optionalField('MOTIVO', _payloadText(data, 'archive_reason')),
+      ];
+      if (fields.isEmpty) return null;
+      return _ActivityDetail(
+        noun: 'el trabajo eliminado',
+        actionLabel: 'Ver eliminados',
+        fields: fields,
       );
     case 'sales_payment_received':
       final fields = <_ActivityDetailField>[
@@ -912,6 +1036,27 @@ _ActivityDetail? _erpActivityDetail(
       return _ActivityDetail(
         noun: 'el detalle del pago',
         actionLabel: 'Abrir pago',
+        fields: fields,
+      );
+    case 'sales_payment_voided':
+      final fields = <_ActivityDetailField>[
+        ..._optionalField('CLIENTE', _payloadText(data, 'customer_name')),
+        ..._optionalField('REGISTRÓ', _payloadText(data, 'recorded_by_name')),
+        ..._optionalField('ANULÓ', _payloadText(data, 'voided_by_name')),
+        ..._optionalField(
+          'REFERENCIA',
+          _payloadText(data, 'reference'),
+        ),
+        ..._divergentDateField(
+          'FECHA DEL PAGO',
+          _payloadText(data, 'payment_date'),
+          createdAt,
+        ),
+      ];
+      if (fields.isEmpty) return null;
+      return _ActivityDetail(
+        noun: 'el pago anulado',
+        actionLabel: 'Abrir factura',
         fields: fields,
       );
     case 'expense_recorded':
@@ -937,14 +1082,53 @@ _ActivityDetail? _erpActivityDetail(
         actionLabel: 'Abrir gasto',
         fields: fields,
       );
+    case 'expense_voided':
+    case 'expense_deleted':
+      final deleted = type == 'expense_deleted';
+      final fields = <_ActivityDetailField>[
+        ..._optionalField('CATEGORÍA', _payloadText(data, 'category_name')),
+        ..._optionalField(
+          'N° DE DOCUMENTO',
+          _payloadText(data, 'document_number'),
+        ),
+        ..._optionalField('REGISTRÓ', _payloadText(data, 'recorded_by_name')),
+        ..._optionalField(
+          deleted ? 'ELIMINÓ' : 'ANULÓ',
+          _payloadText(
+            data,
+            deleted ? 'deleted_by_name' : 'voided_by_name',
+          ),
+        ),
+        ..._divergentDateField(
+          'FECHA DEL DOCUMENTO',
+          _payloadText(data, 'issue_date'),
+          createdAt,
+        ),
+      ];
+      if (fields.isEmpty) return null;
+      return _ActivityDetail(
+        noun: deleted ? 'el gasto eliminado' : 'el gasto anulado',
+        actionLabel: deleted ? 'Ver gastos' : 'Abrir gasto',
+        fields: fields,
+      );
     default:
       return null;
   }
 }
 
-List<_ActivityDetailField> _optionalField(String label, String value) {
+List<_ActivityDetailField> _optionalField(
+  String label,
+  String value, {
+  int maxLines = 2,
+}) {
   if (value.isEmpty) return const [];
-  return [_ActivityDetailField(label: label, value: value)];
+  return [
+    _ActivityDetailField(
+      label: label,
+      value: value,
+      maxLines: maxLines,
+    ),
+  ];
 }
 
 /// A payload date earns a line only when it disagrees with the day the row was
@@ -1230,6 +1414,7 @@ class _DigestPeriodMenu extends StatelessWidget {
   final Future<void> Function(NotificationDigestPeriod) onSelected;
 
   static const _presets = <NotificationDigestPeriod>[
+    NotificationDigestPeriod.yesterday,
     NotificationDigestPeriod.thisWeek,
     NotificationDigestPeriod.previousWeek,
     NotificationDigestPeriod.thisMonth,
@@ -1951,7 +2136,7 @@ class _BriefingHero extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
               Text(
-                '${items.length}',
+                '${items.where((item) => digest.contains(item.metricAt)).length}',
                 style: theme.textTheme.headlineSmall?.copyWith(
                   color: accent,
                   fontWeight: FontWeight.w700,
@@ -2334,6 +2519,8 @@ class _AttendanceNowSection extends StatelessWidget {
   const _AttendanceNowSection({
     required this.entries,
     required this.now,
+    required this.live,
+    required this.period,
     required this.loading,
     required this.hasError,
     required this.onRetry,
@@ -2343,6 +2530,12 @@ class _AttendanceNowSection extends StatelessWidget {
 
   final List<DailyAttendanceBriefingEntry> entries;
   final DateTime now;
+
+  /// `true` when the block describes the shop right now; `false` when the
+  /// selected period ended before today and the block lists its closed
+  /// shifts.
+  final bool live;
+  final NotificationDigestPeriod period;
   final bool loading;
   final bool hasError;
   final Future<void> Function() onRetry;
@@ -2351,8 +2544,9 @@ class _AttendanceNowSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // A shift still open today is not part of a period that already ended.
     final currentEntries = entries
-        .where((entry) => entry.attendance.isOngoing)
+        .where((entry) => live && entry.attendance.isOngoing)
         .toList(growable: false)
       ..sort(
         (first, second) {
@@ -2387,12 +2581,16 @@ class _AttendanceNowSection extends StatelessWidget {
         completedEntries.length -
         visibleCurrentEntries.length -
         visibleCompletedEntries.length;
-    final peopleLabel = currentEntries.length == 1
-        ? '1 persona'
-        : '${currentEntries.length} personas';
+    final peopleLabel = live
+        ? (currentEntries.length == 1
+            ? '1 persona'
+            : '${currentEntries.length} personas')
+        : (completedEntries.length == 1
+            ? '1 turno'
+            : '${completedEntries.length} turnos');
 
     return _OpenSection(
-      title: 'Ahora en el local',
+      title: live ? 'Ahora en el local' : _attendancePeriodTitle(period),
       trailing: peopleLabel,
       trailingWidget: _AttendanceSectionLink(
         label: loading ? 'Actualizando' : peopleLabel,
@@ -2412,7 +2610,32 @@ class _AttendanceNowSection extends StatelessWidget {
                 )
               : Column(
                   children: [
-                    if (visibleCurrentEntries.isEmpty)
+                    if (!live && completedEntries.isEmpty)
+                      const _QuietState(
+                        icon: Icons.person_off_outlined,
+                        text: 'Nadie marcó asistencia en este período.',
+                        accent: _attendanceAccent,
+                      )
+                    else if (!live)
+                      for (var index = 0;
+                          index < visibleCompletedEntries.length;
+                          index++) ...[
+                        _AttendanceNowRow(
+                          entry: visibleCompletedEntries[index],
+                          now: now,
+                          onTap: () =>
+                              onOpenEntry(visibleCompletedEntries[index]),
+                        ),
+                        if (index < visibleCompletedEntries.length - 1)
+                          Divider(
+                            height: 1,
+                            indent: 40,
+                            color: Theme.of(context)
+                                .dividerColor
+                                .withValues(alpha: 0.45),
+                          ),
+                      ]
+                    else if (visibleCurrentEntries.isEmpty)
                       _QuietState(
                         icon: Icons.person_off_outlined,
                         text: completedEntries.isEmpty
@@ -2439,7 +2662,7 @@ class _AttendanceNowSection extends StatelessWidget {
                                 .withValues(alpha: 0.45),
                           ),
                       ],
-                    if (visibleCompletedEntries.isNotEmpty) ...[
+                    if (live && visibleCompletedEntries.isNotEmpty) ...[
                       const SizedBox(height: 8),
                       Divider(
                         height: 1,
@@ -3494,6 +3717,18 @@ class _ActivityRow extends StatelessWidget {
                           ],
                         ),
                       ],
+                      if (item.economicDateContext.isNotEmpty) ...[
+                        const SizedBox(height: 2),
+                        Text(
+                          item.economicDateContext,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: theme.textTheme.labelSmall?.copyWith(
+                            color: item.accent,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
                     ],
                   ),
                 ),
@@ -3846,6 +4081,8 @@ String _periodPresetLabel(NotificationDigestPeriod period) {
   switch (period) {
     case NotificationDigestPeriod.today:
       return 'Hoy';
+    case NotificationDigestPeriod.yesterday:
+      return 'Ayer';
     case NotificationDigestPeriod.thisWeek:
       return 'Esta semana';
     case NotificationDigestPeriod.previousWeek:
@@ -3892,6 +4129,8 @@ String _periodHeroTitle(NotificationDigestPeriod period) {
   switch (period) {
     case NotificationDigestPeriod.today:
       return 'Hoy en Viñabike';
+    case NotificationDigestPeriod.yesterday:
+      return 'Ayer en Viñabike';
     case NotificationDigestPeriod.thisWeek:
       return 'Esta semana en Viñabike';
     case NotificationDigestPeriod.previousWeek:
@@ -3911,6 +4150,8 @@ String _filesPeriodTitle(NotificationDigestPeriod period) {
   switch (period) {
     case NotificationDigestPeriod.today:
       return 'Archivos de hoy';
+    case NotificationDigestPeriod.yesterday:
+      return 'Archivos de ayer';
     case NotificationDigestPeriod.thisWeek:
       return 'Archivos de esta semana';
     case NotificationDigestPeriod.previousWeek:
@@ -4021,7 +4262,8 @@ List<_ActivityPulseBucket> _activityPulseBuckets(
   if (digest.period == NotificationDigestPeriod.today) {
     final counts = List<int>.filled(6, 0);
     for (final item in items) {
-      final chile = _chileBriefingTime(item.createdAt);
+      if (!digest.contains(item.metricAt)) continue;
+      final chile = _chileBriefingTime(item.metricAt);
       counts[(chile.hour ~/ 4).clamp(0, 5)]++;
     }
     const labels = ['00', '04', '08', '12', '16', '20'];
@@ -4040,7 +4282,8 @@ List<_ActivityPulseBucket> _activityPulseBuckets(
     final bucketCount = totalMonths.clamp(1, 12);
     final counts = List<int>.filled(bucketCount, 0);
     for (final item in items) {
-      final chile = _chileBriefingTime(item.createdAt);
+      if (!digest.contains(item.metricAt)) continue;
+      final chile = _chileBriefingTime(item.metricAt);
       final monthOffset =
           ((chile.year - start.year) * 12) + chile.month - start.month;
       if (monthOffset < 0 || monthOffset >= totalMonths) continue;
@@ -4063,7 +4306,8 @@ List<_ActivityPulseBucket> _activityPulseBuckets(
   final bucketCount = totalDays.clamp(1, 7);
   final counts = List<int>.filled(bucketCount, 0);
   for (final item in items) {
-    final chile = _chileBriefingTime(item.createdAt);
+    if (!digest.contains(item.metricAt)) continue;
+    final chile = _chileBriefingTime(item.metricAt);
     final day = DateTime(chile.year, chile.month, chile.day);
     final dayOffset = day.difference(start).inDays;
     if (dayOffset < 0 || dayOffset >= totalDays) continue;
@@ -4095,6 +4339,8 @@ class _BriefingActivityItem {
     required this.kind,
     required this.unread,
     this.notificationId,
+    this.occurredAt,
+    this.economicDateContext = '',
     this.platformKey,
     this.detail,
   });
@@ -4102,6 +4348,8 @@ class _BriefingActivityItem {
   final String title;
   final String subtitle;
   final DateTime createdAt;
+  final DateTime? occurredAt;
+  final String economicDateContext;
   final String route;
   final IconData icon;
   final Color accent;
@@ -4114,6 +4362,13 @@ class _BriefingActivityItem {
   /// worth hiding. Only rows carrying a notification id can expand, because the
   /// list owner tracks the open row by that id.
   final _ActivityDetail? detail;
+
+  DateTime get metricAt => switch (kind) {
+        _BriefingActivityKind.payment ||
+        _BriefingActivityKind.expense =>
+          occurredAt ?? createdAt,
+        _ => createdAt,
+      };
 
   bool get isExpandable => detail != null && notificationId != null;
 }
@@ -4199,12 +4454,21 @@ IconData _iconForNotificationType(String type) {
   switch (type) {
     case 'mechanic_job_created':
       return Icons.build_outlined;
+    case 'mechanic_job_archived':
+      return Icons.remove_circle_outline;
     case 'sales_payment_received':
       return Icons.payments_outlined;
+    case 'sales_payment_voided':
+      return Icons.money_off_outlined;
     case 'expense_recorded':
       return Icons.receipt_long_outlined;
+    case 'expense_voided':
+    case 'expense_deleted':
+      return Icons.money_off_outlined;
     case 'online_order_created':
       return Icons.shopping_bag_outlined;
+    case 'online_order_cancelled':
+      return Icons.remove_shopping_cart_outlined;
     case 'whatsapp_catalog_approved':
       return Icons.verified_outlined;
     default:
@@ -4221,12 +4485,17 @@ String? _platformKeyForNotificationType(String type) {
 _BriefingActivityKind _kindForNotificationType(String type) {
   switch (type) {
     case 'mechanic_job_created':
+    case 'mechanic_job_archived':
       return _BriefingActivityKind.job;
     case 'sales_payment_received':
+    case 'sales_payment_voided':
       return _BriefingActivityKind.payment;
     case 'expense_recorded':
+    case 'expense_voided':
+    case 'expense_deleted':
       return _BriefingActivityKind.expense;
     case 'online_order_created':
+    case 'online_order_cancelled':
       return _BriefingActivityKind.order;
     default:
       return _BriefingActivityKind.alert;
@@ -4243,12 +4512,21 @@ Color _accentForNotificationType(String type) {
   switch (type) {
     case 'mechanic_job_created':
       return _jobsAccent;
+    case 'mechanic_job_archived':
+      return _warningAccent;
     case 'sales_payment_received':
       return _paymentsAccent;
+    case 'sales_payment_voided':
+      return _warningAccent;
     case 'expense_recorded':
       return _expensesAccent;
+    case 'expense_voided':
+    case 'expense_deleted':
+      return _warningAccent;
     case 'online_order_created':
       return _ordersAccent;
+    case 'online_order_cancelled':
+      return _warningAccent;
     case 'whatsapp_catalog_approved':
       return _paymentsAccent;
     default:
@@ -4319,6 +4597,36 @@ String _employeeInitials(Employee employee) {
   ].where((part) => part.isNotEmpty).toList(growable: false);
   if (parts.isEmpty) return '—';
   return parts.take(2).map((part) => part[0].toUpperCase()).join();
+}
+
+String _attendancePeriodTitle(NotificationDigestPeriod period) {
+  switch (period) {
+    case NotificationDigestPeriod.yesterday:
+      return 'Asistencia de ayer';
+    case NotificationDigestPeriod.previousWeek:
+      return 'Asistencia de la semana anterior';
+    case NotificationDigestPeriod.previousMonth:
+      return 'Asistencia del mes anterior';
+    case NotificationDigestPeriod.today:
+    case NotificationDigestPeriod.thisWeek:
+    case NotificationDigestPeriod.thisMonth:
+    case NotificationDigestPeriod.thisYear:
+    case NotificationDigestPeriod.custom:
+      return 'Asistencia del período';
+  }
+}
+
+/// Route for a business date that is already a Chile calendar date (a
+/// digest window boundary), so it must not go through the clock conversion
+/// an instant needs.
+String _attendanceDateRoute(DateTime date) {
+  final value = '${date.year.toString().padLeft(4, '0')}-'
+      '${date.month.toString().padLeft(2, '0')}-'
+      '${date.day.toString().padLeft(2, '0')}';
+  return Uri(
+    path: '/hr/attendances',
+    queryParameters: {'view': 'day', 'date': value},
+  ).toString();
 }
 
 String _attendanceDayRoute(DateTime value) {

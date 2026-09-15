@@ -404,7 +404,8 @@ Suggested keys:
 - add index on `bike_id`
 - enable RLS
 - create standard CRUD policies scoped to `public.user_tenant_id()`
-- update `supabase/sql/core_schema.sql` as source of truth
+- own the change in one standalone forward migration; verify and stamp its exact
+  version in production. `core_schema.sql` is optional historical context only
 
 ## Flutter Implementation Targets
 

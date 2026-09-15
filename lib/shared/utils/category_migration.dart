@@ -11,8 +11,8 @@ class CategoryMigration {
   final TenantService _tenantService;
   final CategoryService _categoryService;
 
-  CategoryMigration(this._db, this._tenantService) 
-    : _categoryService = CategoryService(_db, _tenantService);
+  CategoryMigration(this._db, this._tenantService)
+      : _categoryService = CategoryService(_db, _tenantService);
 
   /// Run the complete migration process
   Future<void> migrate() async {
@@ -45,7 +45,7 @@ class CategoryMigration {
     if (tenantId == null) {
       throw Exception('User does not have a tenant_id. Cannot proceed.');
     }
-    
+
     final defaultCategories = [
       inventory_models.Category(
         tenantId: tenantId,

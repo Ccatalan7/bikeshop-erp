@@ -1,6 +1,8 @@
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+
+import '../../../shared/services/right_toolbar_service.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../utils/message_parser.dart';
 import '../../../shared/services/workspace_manager.dart';
@@ -64,6 +66,17 @@ class ParsedMessageText extends StatelessWidget {
   void _handleRefTap(BuildContext context, ReferenceSegment ref) {
     if (onReferenceTap != null) {
       onReferenceTap!(ref);
+      return;
+    }
+
+    if (ref.type == RefType.task) {
+      // La tarjeta canónica de la tarea vive en la bandeja: se abre el panel
+      // directamente en ese detalle (mismo mecanismo pendiente que usan las
+      // notificaciones para abrir un hilo).
+      context.read<RightToolbarService>().openConversation(
+            tool: ToolbarTool.tasks,
+            conversationId: ref.id,
+          );
       return;
     }
 

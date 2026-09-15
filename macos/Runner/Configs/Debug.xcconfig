@@ -1,2 +1,5 @@
 #include "../../Flutter/Flutter-Debug.xcconfig"
 #include "Warnings.xcconfig"
+
+// Never reuse the installed release identity from a development build.
+VINABIKE_PRODUCT_BUNDLE_IDENTIFIER = com.vinabike.vinabikeErp.debug

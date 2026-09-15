@@ -2,6 +2,9 @@ import Cocoa
 import FlutterMacOS
 
 class MainFlutterWindow: NSWindow {
+  private var htmlPDFRenderer: HTMLPDFRenderer?
+  private var htmlPDFRendererChannel: FlutterMethodChannel?
+
   override func awakeFromNib() {
     let flutterViewController = FlutterViewController()
     let windowFrame = self.frame
@@ -32,6 +35,61 @@ class MainFlutterWindow: NSWindow {
     }
 
     RegisterGeneratedPlugins(registry: flutterViewController)
+    registerHTMLPDFRenderer(on: flutterViewController)
     super.awakeFromNib()
+  }
+
+  private func registerHTMLPDFRenderer(
+    on flutterViewController: FlutterViewController
+  ) {
+    htmlPDFRenderer = HTMLPDFRenderer()
+    let channel = FlutterMethodChannel(
+      name: "com.vinabike.erp/html_pdf_renderer",
+      binaryMessenger: flutterViewController.engine.binaryMessenger
+    )
+    channel.setMethodCallHandler { [weak self] call, result in
+      guard call.method == "renderHtml" else {
+        result(FlutterMethodNotImplemented)
+        return
+      }
+      guard let renderer = self?.htmlPDFRenderer,
+            let arguments = call.arguments as? [String: Any],
+            let html = arguments["html"] as? String,
+            let viewportWidth = arguments["viewportWidth"] as? NSNumber,
+            let viewportHeight = arguments["viewportHeight"] as? NSNumber else {
+        result(
+          FlutterError(
+            code: "invalid_html_pdf_request",
+            message: "Faltan los datos necesarios para generar el PDF.",
+            details: nil
+          )
+        )
+        return
+      }
+
+      renderer.render(
+        html: html,
+        viewportSize: NSSize(
+          width: viewportWidth.doubleValue,
+          height: viewportHeight.doubleValue
+        ),
+        readySelector: arguments["readySelector"] as? String,
+        readyFlag: arguments["readyFlag"] as? String
+      ) { outcome in
+        switch outcome {
+        case .success(let data):
+          result(FlutterStandardTypedData(bytes: data))
+        case .failure(let error):
+          result(
+            FlutterError(
+              code: "html_pdf_render_failed",
+              message: error.localizedDescription,
+              details: error.channelDetails
+            )
+          )
+        }
+      }
+    }
+    htmlPDFRendererChannel = channel
   }
 }

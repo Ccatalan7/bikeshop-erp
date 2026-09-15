@@ -30,7 +30,7 @@ class BarcodeScanEvent {
     final data = json.containsKey('payload')
         ? json['payload'] as Map<String, dynamic>
         : json;
-    
+
     return BarcodeScanEvent(
       barcode: data['barcode'] as String,
       deviceId: data['device_id'] as String,

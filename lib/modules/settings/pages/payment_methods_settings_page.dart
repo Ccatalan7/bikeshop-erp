@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
 import '../../../shared/models/payment_method.dart';
@@ -36,84 +37,84 @@ class _PaymentMethodsSettingsPageState
     final theme = Theme.of(context);
 
     final body = Consumer<PaymentMethodService>(
-        builder: (context, service, child) {
-          if (service.isLoading) {
-            return const Center(child: BrandedLoading());
-          }
+      builder: (context, service, child) {
+        if (service.isLoading) {
+          return const Center(child: BrandedLoading());
+        }
 
-          if (service.error != null) {
-            return Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
+        if (service.error != null) {
+          return Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
                 Icon(Icons.error_outline,
                     size: 64, color: theme.colorScheme.error),
-                  const SizedBox(height: 16),
-                  Text(service.error!, style: theme.textTheme.titleMedium),
-                  const SizedBox(height: 16),
-                  ElevatedButton.icon(
-                    onPressed: () => service.refresh(),
-                    icon: const Icon(Icons.refresh),
-                    label: const Text('Reintentar'),
-                  ),
-                ],
-              ),
-            );
-          }
+                const SizedBox(height: 16),
+                Text(service.error!, style: theme.textTheme.titleMedium),
+                const SizedBox(height: 16),
+                ElevatedButton.icon(
+                  onPressed: () => service.refresh(),
+                  icon: const Icon(Icons.refresh),
+                  label: const Text('Reintentar'),
+                ),
+              ],
+            ),
+          );
+        }
 
-          if (service.paymentMethods.isEmpty) {
-            return Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(Icons.payment, size: 64, color: theme.colorScheme.outline),
-                  const SizedBox(height: 16),
-                  Text(
-                    'No hay métodos de pago configurados',
-                    style: theme.textTheme.titleMedium,
-                  ),
-                  const SizedBox(height: 8),
-                  const Text('Agrega el primer método de pago'),
-                  const SizedBox(height: 16),
-                  ElevatedButton.icon(
+        if (service.paymentMethods.isEmpty) {
+          return Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.payment, size: 64, color: theme.colorScheme.outline),
+                const SizedBox(height: 16),
+                Text(
+                  'No hay métodos de pago configurados',
+                  style: theme.textTheme.titleMedium,
+                ),
+                const SizedBox(height: 8),
+                const Text('Agrega el primer método de pago'),
+                const SizedBox(height: 16),
+                ElevatedButton.icon(
+                  onPressed: () => _showPaymentMethodDialog(context),
+                  icon: const Icon(Icons.add),
+                  label: const Text('Agregar Método de Pago'),
+                ),
+              ],
+            ),
+          );
+        }
+
+        return Column(
+          children: [
+            // In embedded mode, keep an obvious "Add" action since the AppBar is provided by the overlay.
+            if (widget.embedded)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+                child: Align(
+                  alignment: Alignment.centerRight,
+                  child: ElevatedButton.icon(
                     onPressed: () => _showPaymentMethodDialog(context),
                     icon: const Icon(Icons.add),
-                    label: const Text('Agregar Método de Pago'),
-                  ),
-                ],
-              ),
-            );
-          }
-
-          return Column(
-            children: [
-              // In embedded mode, keep an obvious "Add" action since the AppBar is provided by the overlay.
-              if (widget.embedded)
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
-                  child: Align(
-                    alignment: Alignment.centerRight,
-                    child: ElevatedButton.icon(
-                      onPressed: () => _showPaymentMethodDialog(context),
-                      icon: const Icon(Icons.add),
-                      label: const Text('Agregar'),
-                    ),
+                    label: const Text('Agregar'),
                   ),
                 ),
-              Expanded(
-                child: ListView.builder(
-                  padding: const EdgeInsets.all(16),
-                  itemCount: service.paymentMethods.length,
-                  itemBuilder: (context, index) {
-                    final method = service.paymentMethods[index];
-                    return _buildPaymentMethodCard(context, method);
-                  },
-                ),
               ),
-            ],
-          );
-        },
-      );
+            Expanded(
+              child: ListView.builder(
+                padding: const EdgeInsets.all(16),
+                itemCount: service.paymentMethods.length,
+                itemBuilder: (context, index) {
+                  final method = service.paymentMethods[index];
+                  return _buildPaymentMethodCard(context, method);
+                },
+              ),
+            ),
+          ],
+        );
+      },
+    );
 
     if (widget.embedded) return body;
     return Scaffold(
@@ -159,6 +160,9 @@ class _PaymentMethodsSettingsPageState
             const SizedBox(height: 4),
             Text('Código: ${method.code}'),
             Text('Cuenta: ${account.code} - ${account.name}'),
+            Text('Uso: ${_scopeLabel(method.usageScope)}'),
+            if (method.terminalProfileId != null)
+              const Text('Administrado en Terminales y abonos'),
             if (method.requiresReference)
               const Text(
                 'Requiere referencia',
@@ -166,51 +170,70 @@ class _PaymentMethodsSettingsPageState
               ),
           ],
         ),
-        trailing: PopupMenuButton(
-          itemBuilder: (context) => [
-            PopupMenuItem(
-              child: const Row(
-                children: [
-                  Icon(Icons.edit, size: 18),
-                  SizedBox(width: 8),
-                  Text('Editar'),
-                ],
-              ),
-              onTap: () {
-                Future.delayed(
-                  Duration.zero,
-                  () => _showPaymentMethodDialog(context, method: method),
-                );
-              },
-            ),
-            PopupMenuItem(
-              child: Row(
-                children: [
-                  Icon(
-                    method.isActive ? Icons.toggle_off : Icons.toggle_on,
-                    size: 18,
+        trailing: method.terminalProfileId != null
+            ? IconButton(
+                tooltip: 'Abrir terminal',
+                onPressed: () => context.push('/settings/payment-terminals'),
+                icon: const Icon(Icons.point_of_sale_outlined),
+              )
+            : PopupMenuButton(
+                itemBuilder: (context) => [
+                  PopupMenuItem(
+                    child: const Row(
+                      children: [
+                        Icon(Icons.edit, size: 18),
+                        SizedBox(width: 8),
+                        Text('Editar'),
+                      ],
+                    ),
+                    onTap: () {
+                      Future.delayed(
+                        Duration.zero,
+                        () {
+                          if (mounted) {
+                            _showPaymentMethodDialog(
+                              this.context,
+                              method: method,
+                            );
+                          }
+                        },
+                      );
+                    },
                   ),
-                  const SizedBox(width: 8),
-                  Text(method.isActive ? 'Desactivar' : 'Activar'),
+                  PopupMenuItem(
+                    child: Row(
+                      children: [
+                        Icon(
+                          method.isActive ? Icons.toggle_off : Icons.toggle_on,
+                          size: 18,
+                        ),
+                        const SizedBox(width: 8),
+                        Text(method.isActive ? 'Desactivar' : 'Activar'),
+                      ],
+                    ),
+                    onTap: () => _toggleActive(method),
+                  ),
+                  PopupMenuItem(
+                    child: const Row(
+                      children: [
+                        Icon(Icons.delete, size: 18, color: Colors.red),
+                        SizedBox(width: 8),
+                        Text('Eliminar', style: TextStyle(color: Colors.red)),
+                      ],
+                    ),
+                    onTap: () => _deletePaymentMethod(method),
+                  ),
                 ],
               ),
-              onTap: () => _toggleActive(context, method),
-            ),
-            PopupMenuItem(
-              child: const Row(
-                children: [
-                  Icon(Icons.delete, size: 18, color: Colors.red),
-                  SizedBox(width: 8),
-                  Text('Eliminar', style: TextStyle(color: Colors.red)),
-                ],
-              ),
-              onTap: () => _deletePaymentMethod(context, method),
-            ),
-          ],
-        ),
       ),
     );
   }
+
+  String _scopeLabel(PaymentMethodUsageScope scope) => switch (scope) {
+        PaymentMethodUsageScope.inbound => 'Cobros',
+        PaymentMethodUsageScope.outbound => 'Pagos',
+        PaymentMethodUsageScope.both => 'Cobros y pagos',
+      };
 
   IconData _getIconData(String iconName) {
     switch (iconName) {
@@ -219,6 +242,7 @@ class _PaymentMethodsSettingsPageState
       case 'bank':
         return Icons.account_balance;
       case 'card':
+      case 'credit_card':
         return Icons.credit_card;
       case 'receipt':
         return Icons.receipt;
@@ -234,7 +258,7 @@ class _PaymentMethodsSettingsPageState
     );
   }
 
-  void _toggleActive(BuildContext context, PaymentMethod method) async {
+  void _toggleActive(PaymentMethod method) async {
     final service = context.read<PaymentMethodService>();
     final updated = method.copyWith(isActive: !method.isActive);
     final result = await service.updatePaymentMethod(updated);
@@ -259,7 +283,7 @@ class _PaymentMethodsSettingsPageState
     }
   }
 
-  void _deletePaymentMethod(BuildContext context, PaymentMethod method) async {
+  void _deletePaymentMethod(PaymentMethod method) async {
     final confirm = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
@@ -318,6 +342,7 @@ class _PaymentMethodDialogState extends State<_PaymentMethodDialog> {
   late bool _requiresReference;
   late bool _isActive;
   late TaxTreatment _defaultTaxTreatment;
+  late PaymentMethodUsageScope _usageScope;
   String? _selectedAccountId;
   String _selectedIcon = 'payment';
 
@@ -339,6 +364,7 @@ class _PaymentMethodDialogState extends State<_PaymentMethodDialog> {
     _isActive = widget.method?.isActive ?? true;
     _defaultTaxTreatment =
         widget.method?.defaultTaxTreatment ?? TaxTreatment.noTax;
+    _usageScope = widget.method?.usageScope ?? PaymentMethodUsageScope.both;
     _selectedAccountId = widget.method?.accountId;
     _selectedIcon = widget.method?.icon ?? 'payment';
 
@@ -468,6 +494,32 @@ class _PaymentMethodDialogState extends State<_PaymentMethodDialog> {
                 ),
                 const SizedBox(height: 16),
 
+                DropdownButtonFormField<PaymentMethodUsageScope>(
+                  initialValue: _usageScope,
+                  decoration: const InputDecoration(
+                    labelText: 'Dónde se puede usar',
+                    border: OutlineInputBorder(),
+                  ),
+                  items: const [
+                    DropdownMenuItem(
+                      value: PaymentMethodUsageScope.inbound,
+                      child: Text('Sólo cobros de clientes'),
+                    ),
+                    DropdownMenuItem(
+                      value: PaymentMethodUsageScope.outbound,
+                      child: Text('Sólo pagos y desembolsos'),
+                    ),
+                    DropdownMenuItem(
+                      value: PaymentMethodUsageScope.both,
+                      child: Text('Cobros y pagos'),
+                    ),
+                  ],
+                  onChanged: (value) {
+                    if (value != null) setState(() => _usageScope = value);
+                  },
+                ),
+                const SizedBox(height: 16),
+
                 // Tax treatment dropdown
                 DropdownButtonFormField<TaxTreatment>(
                   initialValue: _defaultTaxTreatment,
@@ -589,6 +641,12 @@ class _PaymentMethodDialogState extends State<_PaymentMethodDialog> {
       icon: _selectedIcon,
       sortOrder: _sortOrder,
       isActive: _isActive,
+      usageScope: _usageScope,
+      settlementProvider:
+          widget.method?.settlementProvider ?? PaymentSettlementProvider.none,
+      paymentInstrument:
+          widget.method?.paymentInstrument ?? PaymentCardInstrument.unknown,
+      terminalProfileId: widget.method?.terminalProfileId,
     );
 
     PaymentMethod? result;

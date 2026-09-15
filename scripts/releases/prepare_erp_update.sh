@@ -7,11 +7,9 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 MESSAGE=''
 STATE_FILE_REQUEST='auto'
-NOTES_CANDIDATE=''
 CANONICAL_RELEASE_BRANCH="${VINABIKE_ERP_RELEASE_BRANCH:-smartpegas1.0}"
 CHECK_RELEASE_BRANCH_ONLY='NO'
 state_temp_file=''
-release_notes_temp_dir=''
 release_notes_from_commit=''
 release_notes_candidate_b64=''
 release_notes_candidate_sha256=''
@@ -27,15 +25,6 @@ while [[ $# -gt 0 ]]; do
       ;;
     --state-file)
       STATE_FILE_REQUEST="${2:?--state-file requires a value}"
-      shift
-      ;;
-    # Candidato de novedades ya escrito por quien conduce la publicación.
-    # El productor del texto es intercambiable: lo que garantiza que sea cierto
-    # es la validación —esquema, evidencia citada y filtro de jerga—, no el
-    # proveedor. Sin esto, una cuota agotada de Codex era un punto único de
-    # falla y la actualización salía sin recuadro de novedades.
-    --notes-candidate)
-      NOTES_CANDIDATE="${2:?--notes-candidate requires a value}"
       shift
       ;;
     --check-release-branch)
@@ -128,43 +117,13 @@ cleanup_state_temp_file() {
   fi
 }
 
-cleanup_release_notes_temp_dir() {
-  if [[ -z "$release_notes_temp_dir" ]]; then
-    return
-  fi
-  case "$release_notes_temp_dir" in
-    "${TMPDIR:-/tmp}"/vinabike-shared-release-notes.*)
-      rm -rf -- "$release_notes_temp_dir"
-      ;;
-  esac
-}
-
 cleanup() {
   cleanup_state_temp_file
-  cleanup_release_notes_temp_dir
-}
-
-find_codex_binary() {
-  if command -v codex >/dev/null 2>&1; then
-    command -v codex
-    return
-  fi
-  local bundled_codex='/Applications/ChatGPT.app/Contents/Resources/codex'
-  if [[ -x "$bundled_codex" ]]; then
-    printf '%s\n' "$bundled_codex"
-    return
-  fi
-  return 1
 }
 
 prepare_shared_release_notes() {
   local head_commit="$1"
-  local codex_binary
-  local git_binary
   local desktop_release_notes_from_commit
-  local candidate_file
-  local compact_candidate_file
-  local private_log
 
   release_notes_candidate_b64=''
   release_notes_candidate_sha256=''
@@ -188,142 +147,10 @@ prepare_shared_release_notes() {
     echo 'Could not resolve a safe release-note range.' >&2
     exit 1
   fi
-
-  if [[ -f "$(erp_update_resolve_state_file "$STATE_FILE_REQUEST")" ]] &&
-    erp_update_load_state "$STATE_FILE_REQUEST" macos 2>/dev/null &&
-    [[
-      "$ERP_UPDATE_STATE_HEAD_SHA" == "$head_commit" &&
-      "$ERP_UPDATE_STATE_RELEASE_NOTES_FROM_COMMIT" == \
-        "$release_notes_from_commit" &&
-      -n "$ERP_UPDATE_STATE_RELEASE_NOTES_CANDIDATE_B64"
-    ]]; then
-    release_notes_candidate_b64="$ERP_UPDATE_STATE_RELEASE_NOTES_CANDIDATE_B64"
-    release_notes_candidate_sha256="$ERP_UPDATE_STATE_RELEASE_NOTES_CANDIDATE_SHA256"
-    echo 'Reusing the exact Codex candidate already bound to this commit.'
-    return
-  fi
-
-  if ! command -v node >/dev/null 2>&1; then
-    echo 'Local Codex notes skipped: Node is unavailable; protected CI will use its fallback chain.'
-    return
-  fi
-  if ! command -v gitleaks >/dev/null 2>&1; then
-    echo 'Local Codex notes skipped: gitleaks is unavailable; protected CI will use its fallback chain.'
-    return
-  fi
-  # Codex sólo hace falta cuando NO viene un candidato: con uno supplied, que
-  # el binario esté o no es irrelevante y rendirse acá era gratuito.
-  if ! codex_binary="$(find_codex_binary)"; then
-    if [[ -z "$NOTES_CANDIDATE" ]]; then
-      echo 'Local Codex notes skipped: Codex is unavailable; protected CI will use its fallback chain.'
-      return
-    fi
-    codex_binary='codex'
-  fi
-  git_binary="$(command -v git)"
-
-  release_notes_temp_dir="$(
-    mktemp -d "${TMPDIR:-/tmp}/vinabike-shared-release-notes.XXXXXX"
-  )"
-  chmod 700 "$release_notes_temp_dir"
-  candidate_file="$release_notes_temp_dir/candidate-envelope.json"
-  compact_candidate_file="$release_notes_temp_dir/candidate-envelope.compact.json"
-  private_log="$release_notes_temp_dir/private.log"
-  : > "$private_log"
-  chmod 600 "$private_log"
-
-  step 'Checking the committed release range before local Codex notes'
-  if ! gitleaks git \
-    --log-opts="${release_notes_from_commit}..${head_commit}" \
-    --config .gitleaks.toml \
-    --gitleaks-ignore-path .gitleaksignore \
-    --redact=100 \
-    --no-banner \
-    --no-color \
-    --timeout 120 \
-    "$PROJECT_ROOT" \
-    >"$private_log" 2>&1; then
-    echo 'Local Codex notes skipped: the committed range did not pass the private secret scan.'
-    return
-  fi
-
-  local notes_reason_file="$release_notes_temp_dir/reason.txt"
-  # macOS still ships Bash 3.2: with `set -u`, expanding an empty array aborts
-  # the script. Keep the argv array non-empty and append the optional candidate.
-  local -a release_notes_args=(
-    --from-commit "$release_notes_from_commit"
-    --to-commit "$head_commit"
-    --output "$candidate_file"
-  )
-  if [[ -n "$NOTES_CANDIDATE" ]]; then
-    if [[ ! -r "$NOTES_CANDIDATE" ]]; then
-      echo "The supplied release-note candidate is not readable: $NOTES_CANDIDATE" >&2
-      exit 1
-    fi
-    release_notes_args+=(--candidate-file "$NOTES_CANDIDATE")
-    step 'Preparing one shared user-friendly note from the supplied candidate'
-  else
-    step 'Preparing one shared user-friendly note with local Codex'
-  fi
-  if ! env \
-    -u OPENAI_API_KEY \
-    -u OPENAI_RELEASE_NOTES_ENDPOINT \
-    -u OPENAI_RELEASE_NOTES_MODEL \
-    -u GEMINI_RELEASE_API_KEY \
-    -u GH_TOKEN \
-    node scripts/releases/generate_codex_release_notes.mjs \
-      "${release_notes_args[@]}" \
-      --codex-bin "$codex_binary" \
-      --git-bin "$git_binary" \
-      >"$private_log" 2>"$notes_reason_file"; then
-    # El motivo se DICE. Antes las tres causas reales —rango sin novedades,
-    # cuota agotada y candidato rechazado— salían como la misma línea, la
-    # publicación seguía con el texto determinista y nadie se enteraba.
-    if [[ -s "$notes_reason_file" ]]; then
-      sed -n '1,3p' "$notes_reason_file"
-    fi
-    echo 'Shared note unavailable; protected CI will use Gemini or deterministic notes.'
-    return
-  fi
-
-  if ! jq -ce \
-    --arg from "$release_notes_from_commit" \
-    --arg to "$head_commit" \
-    '
-      select(
-        .schema_version == 1
-        and .from_commit == $from
-        and .to_commit == $to
-        and (.evidence_catalog_sha256 | test("^[0-9a-f]{64}$"))
-        and (.candidate | type == "object")
-      )
-    ' \
-    "$candidate_file" > "$compact_candidate_file"; then
-    echo 'Local Codex notes unavailable; protected CI will use Gemini or deterministic notes.'
-    return
-  fi
-
-  release_notes_candidate_b64="$(
-    base64 < "$compact_candidate_file" | tr -d '\r\n'
-  )"
-  release_notes_candidate_sha256="$(
-    shasum -a 256 "$compact_candidate_file" | awk '{print $1}'
-  )"
-  if [[
-    ${#release_notes_candidate_b64} -gt 16384 ||
-    ! "$release_notes_candidate_b64" =~ ^[A-Za-z0-9+/]*={0,2}$ ||
-    ! "$release_notes_candidate_sha256" =~ ^[0-9a-f]{64}$
-  ]]; then
-    release_notes_candidate_b64=''
-    release_notes_candidate_sha256=''
-    echo 'Local Codex notes unavailable; protected CI will use Gemini or deterministic notes.'
-    return
-  fi
-  echo 'One bounded Codex candidate is ready for both platform publishers.'
+  echo 'Gemini Flash will generate the shared release notes inside protected CI.'
 }
 
-for required in \
-  awk base64 bash chmod date env git gh head jq mktemp mv node rm sed shasum tr; do
+for required in awk bash chmod date git gh jq mktemp mv node; do
   require_command "$required"
 done
 

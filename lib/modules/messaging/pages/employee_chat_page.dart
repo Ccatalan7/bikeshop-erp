@@ -1,13 +1,15 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../../shared/models/supplier.dart' as shared_supplier;
+import '../../../shared/utils/supplier_whatsapp_phone.dart';
+import '../../../shared/widgets/vb_notice.dart';
 import '../../messaging/models/conversation.dart';
 import '../../messaging/providers/chat_provider.dart';
 import '../../messaging/widgets/chat_window.dart';
+import '../../messaging/widgets/compact_chat_route.dart';
 import '../../messaging/widgets/new_chat_dialog.dart';
 import '../../messaging/widgets/context_side_panel.dart';
 import '../../messaging/widgets/chat_context_panel.dart';
@@ -26,8 +28,13 @@ DateTime? _lastHandledTime;
 
 class EmployeeChatPage extends StatefulWidget {
   final String? initialConversationId;
+  final String? initialThreadRootMessageId;
 
-  const EmployeeChatPage({super.key, this.initialConversationId});
+  const EmployeeChatPage({
+    super.key,
+    this.initialConversationId,
+    this.initialThreadRootMessageId,
+  });
 
   @override
   State<EmployeeChatPage> createState() => _EmployeeChatPageState();
@@ -45,6 +52,8 @@ class _EmployeeChatPageState extends State<EmployeeChatPage>
   List<shared_supplier.Supplier> _supplierChatSuppliers = [];
   Map<String, List<PurchaseInvoice>> _supplierInvoicesBySupplierId = const {};
   bool _isLoadingSupplierChats = false;
+  bool _hasLoadedSupplierChats = false;
+  Object? _supplierChatsError;
   bool _showOnlyActiveChats = true;
   String? _openingSupplierId;
   String _searchTerm = '';
@@ -88,6 +97,7 @@ class _EmployeeChatPageState extends State<EmployeeChatPage>
     final provider = context.read<ChatProvider>();
     unawaited(_loadSupplierChatData());
     provider.loadConversations(refreshContextHints: true).then((_) {
+      if (!mounted) return;
       // If opened from notification with a specific conversation, select it
       // Use time-based deduplication: skip if same conversation handled within 2 seconds
       final now = DateTime.now();
@@ -99,11 +109,6 @@ class _EmployeeChatPageState extends State<EmployeeChatPage>
       if (widget.initialConversationId != null && !isDuplicate) {
         _lastHandledConversationId = widget.initialConversationId;
         _lastHandledTime = now;
-
-        // Strip the query param from URL to prevent re-triggering
-        if (mounted) {
-          context.go('/chat');
-        }
 
         debugPrint(
             '🔔 Deep link: selecting conversation ${widget.initialConversationId}');
@@ -134,7 +139,10 @@ class _EmployeeChatPageState extends State<EmployeeChatPage>
             Navigator.push(
               context,
               MaterialPageRoute(
-                builder: (_) => ChatWindow(conversation: targetConv),
+                builder: (_) => CompactChatRoute(
+                  conversation: targetConv,
+                  initialThreadRootMessageId: widget.initialThreadRootMessageId,
+                ),
               ),
             );
           }
@@ -145,11 +153,18 @@ class _EmployeeChatPageState extends State<EmployeeChatPage>
 
   Future<void> _loadSupplierChatData() async {
     if (_isLoadingSupplierChats || !mounted) return;
-    setState(() => _isLoadingSupplierChats = true);
+    setState(() {
+      _isLoadingSupplierChats = true;
+      _supplierChatsError = null;
+    });
     try {
       final purchaseService = context.read<PurchaseService>();
-      final suppliers = await purchaseService.getSuppliers(activeOnly: true);
-      final invoices = await purchaseService.getPurchaseInvoicesForList();
+      final data = await Future.wait<Object>([
+        purchaseService.getSuppliers(activeOnly: true),
+        purchaseService.getPurchaseInvoicesForList(),
+      ]).timeout(const Duration(seconds: 30));
+      final suppliers = data[0] as List<shared_supplier.Supplier>;
+      final invoices = data[1] as List<PurchaseInvoice>;
 
       if (!mounted) return;
       setState(() {
@@ -161,10 +176,15 @@ class _EmployeeChatPageState extends State<EmployeeChatPage>
           );
         _supplierInvoicesBySupplierId = _indexInvoicesBySupplier(invoices);
         _isLoadingSupplierChats = false;
+        _hasLoadedSupplierChats = true;
       });
     } catch (error) {
       debugPrint('Error loading supplier chat data: $error');
-      if (mounted) setState(() => _isLoadingSupplierChats = false);
+      if (mounted)
+        setState(() {
+          _isLoadingSupplierChats = false;
+          _supplierChatsError = error;
+        });
     }
   }
 
@@ -494,7 +514,10 @@ class _EmployeeChatPageState extends State<EmployeeChatPage>
                         ),
                         tabs: [
                           Tab(text: 'Clientes $activeCustomerCount'),
-                          Tab(text: 'Proveedores $supplierCount'),
+                          Tab(
+                              text: _hasLoadedSupplierChats
+                                  ? 'Proveedores $supplierCount'
+                                  : 'Proveedores'),
                           Tab(text: 'Equipo $internalCount'),
                         ],
                       ),
@@ -526,6 +549,11 @@ class _EmployeeChatPageState extends State<EmployeeChatPage>
                         child: activeConversation != null
                             ? ChatWindow(
                                 conversation: activeConversation,
+                                initialThreadRootMessageId:
+                                    activeConversation.id ==
+                                            widget.initialConversationId
+                                        ? widget.initialThreadRootMessageId
+                                        : null,
                                 isContextPanelClosed: isContextClosedForChat,
                                 onShowContextPanel: () =>
                                     _reopenConversationContextPanel(
@@ -665,7 +693,7 @@ class _EmployeeChatPageState extends State<EmployeeChatPage>
                     ),
                     const SizedBox(height: 2),
                     Text(
-                      '$activeCustomerCount clientes · $supplierCount proveedores · $internalCount equipo'
+                      '$activeCustomerCount clientes${_hasLoadedSupplierChats ? ' · $supplierCount proveedores' : ''} · $internalCount equipo'
                       '${pendingCount > 0 ? ' · $pendingCount pendientes' : ''}',
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
@@ -1052,6 +1080,25 @@ class _EmployeeChatPageState extends State<EmployeeChatPage>
 
   Widget _buildSupplierList(ChatProvider provider, String? activeId,
       List<Conversation> conversations) {
+    final failure = VbNotice(
+      title: 'No se pudieron cargar los chats de proveedores',
+      body: _hasLoadedSupplierChats
+          ? 'Se mantienen los últimos datos. Puedes reintentar.'
+          : 'Puedes volver a intentar la carga.',
+      tone: VbNoticeTone.danger,
+      action: IconButton(
+          tooltip: 'Reintentar',
+          onPressed: _loadSupplierChatData,
+          icon: const Icon(Icons.refresh)),
+    );
+    if (!_hasLoadedSupplierChats) {
+      return _supplierChatsError != null
+          ? failure
+          : const Center(
+              child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  semanticsLabel: 'Cargando chats de proveedores'));
+    }
     final supplierConvs = conversations
         .where((c) => c.type == 'support' && c.isSupplierConversation)
         .toList()
@@ -1061,11 +1108,8 @@ class _EmployeeChatPageState extends State<EmployeeChatPage>
       includeInactive: !_showOnlyActiveChats,
     ).where(_matchesSupplierEntrySearch).toList();
 
-    if (_isLoadingSupplierChats && entries.isEmpty) {
-      return const Center(child: CircularProgressIndicator(strokeWidth: 2));
-    }
-
     if (entries.isEmpty) {
+      if (_supplierChatsError != null) return failure;
       return _buildEmptyState(
         icon: Icons.storefront_outlined,
         title: _searchTerm.isEmpty
@@ -1081,6 +1125,7 @@ class _EmployeeChatPageState extends State<EmployeeChatPage>
 
     return ListView(
       children: [
+        if (_supplierChatsError != null) failure,
         for (final entry in entries) ...[
           _buildSupplierChatTile(entry, activeId),
           Divider(
@@ -1278,7 +1323,7 @@ class _EmployeeChatPageState extends State<EmployeeChatPage>
         Navigator.push(
           context,
           MaterialPageRoute(
-            builder: (_) => ChatWindow(conversation: conversation),
+            builder: (_) => CompactChatRoute(conversation: conversation),
           ),
         );
       }
@@ -1314,6 +1359,7 @@ class _EmployeeChatPageState extends State<EmployeeChatPage>
     List<Conversation> supplierConversations, {
     required bool includeInactive,
   }) {
+    if (!_hasLoadedSupplierChats) return const [];
     final entries = <_SupplierChatEntry>[];
     final usedConversationIds = <String>{};
 
@@ -1327,12 +1373,10 @@ class _EmployeeChatPageState extends State<EmployeeChatPage>
       if (conversation != null) usedConversationIds.add(conversation.id);
 
       final invoices = _supplierInvoices(supplier.id);
-      final hasActiveInvoices = invoices.any(_isActivePurchaseInvoice);
-      final hasStandaloneActiveConversation = invoices.isEmpty &&
-          conversation != null &&
-          ConversationActivity.isActiveConversation(conversation);
-      final hasActiveWork =
-          hasActiveInvoices || hasStandaloneActiveConversation;
+      final hasActiveWork = ConversationActivity.hasActiveSupplierWork(
+        conversation: conversation,
+        purchaseInvoiceStatuses: invoices.map((invoice) => invoice.status.name),
+      );
       if (!includeInactive && !hasActiveWork) continue;
 
       entries.add(
@@ -1355,10 +1399,10 @@ class _EmployeeChatPageState extends State<EmployeeChatPage>
       final invoices = supplier.id.isEmpty
           ? <PurchaseInvoice>[]
           : _supplierInvoices(supplier.id);
-      final hasActiveInvoices = invoices.any(_isActivePurchaseInvoice);
-      final hasActiveWork = hasActiveInvoices ||
-          (invoices.isEmpty &&
-              ConversationActivity.isActiveConversation(conversation));
+      final hasActiveWork = ConversationActivity.hasActiveSupplierWork(
+        conversation: conversation,
+        purchaseInvoiceStatuses: invoices.map((invoice) => invoice.status.name),
+      );
       if (!includeInactive && !hasActiveWork) continue;
 
       entries.add(
@@ -1452,19 +1496,14 @@ class _EmployeeChatPageState extends State<EmployeeChatPage>
     return index;
   }
 
-  bool _isActivePurchaseInvoice(PurchaseInvoice invoice) {
-    return ConversationActivity.isActivePurchaseInvoiceStatus(
-      invoice.status.name,
-    );
-  }
-
-  String? _supplierChatPhone(shared_supplier.Supplier supplier) {
-    final salesRepPhone = supplier.salesRepPhone?.trim();
-    if (_hasWhatsAppLikePhone(salesRepPhone)) return salesRepPhone;
-    final phone = supplier.phone?.trim();
-    if (_hasWhatsAppLikePhone(phone)) return phone;
-    return null;
-  }
+  /// La misma regla que el panel rápido de proveedores: el Teléfono de la
+  /// ficha manda cuando sirve para WhatsApp; el vendedor sólo si la ficha
+  /// tiene un fijo o nada.
+  String? _supplierChatPhone(shared_supplier.Supplier supplier) =>
+      supplierWhatsAppPhone(
+        phone: supplier.phone,
+        salesRepPhone: supplier.salesRepPhone,
+      );
 
   bool _hasWhatsAppLikePhone(String? phone) {
     return _normalizedPhone(phone).length >= 8;
@@ -1673,7 +1712,7 @@ class _EmployeeChatPageState extends State<EmployeeChatPage>
               Navigator.push(
                 context,
                 MaterialPageRoute(
-                  builder: (_) => ChatWindow(conversation: conv),
+                  builder: (_) => CompactChatRoute(conversation: conv),
                 ),
               );
             }
@@ -1721,7 +1760,8 @@ class _EmployeeChatPageState extends State<EmployeeChatPage>
   }
 
   String _getSubtitle(Conversation conv) {
-    final contextLabel = _getContextLabel(conv.contextType);
+    if (conv.isTaskThread) return 'Canal de tareas';
+    final contextLabel = _getContextLabel(conv.effectiveContextType);
 
     if (conv.type == 'support') {
       final statusLabel = switch (conv.status) {
@@ -1748,6 +1788,8 @@ class _EmployeeChatPageState extends State<EmployeeChatPage>
         return 'Factura';
       case 'purchase_invoice':
         return 'Compra';
+      case 'task':
+        return 'Tarea';
       case 'supplier':
         return 'Proveedor';
       case 'bike':

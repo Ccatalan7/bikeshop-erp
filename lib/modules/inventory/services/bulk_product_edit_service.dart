@@ -157,27 +157,22 @@ class BulkProductEditService {
 
     final buffer = <String, List<String>>{};
 
-    for (final chunk in _chunk(ids, 200)) {
-      final rows = await _db.supabase
-          .from('product_spec_values')
-          .select('product_id, display_value, spec_definitions!inner(key)')
-          .inFilter('product_id', chunk);
-
-      for (final rawRow in rows) {
-        final row = Map<String, dynamic>.from(rawRow as Map);
-        final productId = row['product_id']?.toString();
-        if (productId == null || productId.isEmpty) continue;
-        final def = row['spec_definitions'] as Map<String, dynamic>?;
-        final key = def?['key']?.toString();
-        final value = row['display_value']?.toString();
-        if ((key ?? '').trim().isEmpty && (value ?? '').trim().isEmpty) {
-          continue;
+    for (final chunk in _chunk(ids, 50)) {
+      // The shared reader applies the product binding and retires legacy
+      // criteria. Preserved observations and diagnostics are not search facts.
+      final contexts = await _db.supabase.rpc('get_product_spec_contexts_v1',
+          params: {'p_product_ids': chunk});
+      for (final product in (contexts as Map).entries) {
+        for (final fact in (product.value as Map).entries) {
+          final key = fact.key.toString();
+          if (key.startsWith('__') || fact.value == null) continue;
+          final value = fact.value is List
+              ? (fact.value as List).join(', ')
+              : fact.value.toString();
+          buffer
+              .putIfAbsent(product.key.toString(), () => <String>[])
+              .add('$key $value');
         }
-        final parts = <String>[];
-        if ((key ?? '').trim().isNotEmpty) parts.add(_normalizeText(key!));
-        if ((value ?? '').trim().isNotEmpty) parts.add(_normalizeText(value!));
-        if (parts.isEmpty) continue;
-        buffer.putIfAbsent(productId, () => <String>[]).add(parts.join(' '));
       }
     }
 

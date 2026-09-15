@@ -263,7 +263,8 @@ class _ConversationTileState extends State<ConversationTile> {
     Color accentColor,
     bool hasUnread,
   ) {
-    final initials = _initialsFor(title);
+    // «Empresa · persona» sigue siendo la empresa en el avatar.
+    final initials = _initialsFor(title.split(' · ').first);
     final avatarUrl = conv.contextHint?.customerImageUrl?.trim();
     final hasAvatar = avatarUrl != null && avatarUrl.isNotEmpty;
     final fallbackAvatar = _buildInitialsAvatar(
@@ -336,7 +337,8 @@ class _ConversationTileState extends State<ConversationTile> {
 
   bool _hasContextSummary(Conversation conv) {
     final hint = conv.contextHint;
-    return widget.operationalStatusLabel?.trim().isNotEmpty == true ||
+    return conv.isTaskThread ||
+        widget.operationalStatusLabel?.trim().isNotEmpty == true ||
         widget.secondaryContextLine?.trim().isNotEmpty == true ||
         hint?.hasJob == true ||
         hint?.hasPurchaseInvoice == true ||
@@ -349,6 +351,11 @@ class _ConversationTileState extends State<ConversationTile> {
     var statusLabel = widget.operationalStatusLabel?.trim();
     var statusColor = widget.operationalStatusColor;
     var secondaryLine = widget.secondaryContextLine?.trim();
+
+    if ((statusLabel == null || statusLabel.isEmpty) && conv.isTaskThread) {
+      statusLabel = 'Canal de tareas';
+      statusColor = Theme.of(context).colorScheme.primary;
+    }
 
     if ((statusLabel == null || statusLabel.isEmpty) && hint?.hasJob == true) {
       statusLabel = [
@@ -394,9 +401,11 @@ class _ConversationTileState extends State<ConversationTile> {
     return Row(
       children: [
         if (hasStatus)
-          _buildOperationalStatus(
-            label: statusLabel,
-            color: statusColor ?? colorScheme.primary,
+          Flexible(
+            child: _buildOperationalStatus(
+              label: statusLabel,
+              color: statusColor ?? colorScheme.primary,
+            ),
           ),
         if (hasStatus && hasSecondary) const SizedBox(width: 7),
         if (hasSecondary)
@@ -458,6 +467,8 @@ class _ConversationTileState extends State<ConversationTile> {
       widget.operationalStatusLabel,
       widget.operationalStatusColor?.toARGB32(),
       widget.secondaryContextLine,
+      conv.effectiveContextType,
+      conv.effectiveContextId,
       hint?.jobId,
       hint?.jobNumber,
       hint?.jobStatus,

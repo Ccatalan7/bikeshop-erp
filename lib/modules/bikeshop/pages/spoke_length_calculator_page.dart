@@ -15,24 +15,24 @@ class SpokeLengthCalculatorPage extends StatefulWidget {
 
 class _SpokeLengthCalculatorPageState extends State<SpokeLengthCalculatorPage> {
   final _formKey = GlobalKey<FormState>();
-  
+
   // Rim inputs
   final _erdController = TextEditingController();
   final _spokeHolesController = TextEditingController(text: '32');
-  
+
   // Hub inputs
   final _leftFlangeDiameterController = TextEditingController();
   final _rightFlangeDiameterController = TextEditingController();
   final _leftFlangeToCenter = TextEditingController();
   final _rightFlangeToCenter = TextEditingController();
-  
+
   // Lacing
   int _crossPattern = 3;
-  
+
   // Results
   double? _leftSpokeLength;
   double? _rightSpokeLength;
-  
+
   @override
   void dispose() {
     _erdController.dispose();
@@ -43,12 +43,12 @@ class _SpokeLengthCalculatorPageState extends State<SpokeLengthCalculatorPage> {
     _rightFlangeToCenter.dispose();
     super.dispose();
   }
-  
+
   void _calculate() {
     if (!_formKey.currentState!.validate()) return;
-    
+
     final service = context.read<WheelBuildingService>();
-    
+
     final erdMm = double.parse(_erdController.text);
     final spokeHoles = int.parse(_spokeHolesController.text);
     final leftFlangeDiameter = double.parse(_leftFlangeDiameterController.text);
@@ -56,7 +56,7 @@ class _SpokeLengthCalculatorPageState extends State<SpokeLengthCalculatorPage> {
         double.parse(_rightFlangeDiameterController.text);
     final leftToCenter = double.parse(_leftFlangeToCenter.text);
     final rightToCenter = double.parse(_rightFlangeToCenter.text);
-    
+
     final leftLength = service.calculateSpokeLength(
       erdMm: erdMm,
       flangeDiameterMm: leftFlangeDiameter,
@@ -64,7 +64,7 @@ class _SpokeLengthCalculatorPageState extends State<SpokeLengthCalculatorPage> {
       spokeHoles: spokeHoles,
       crossPattern: _crossPattern,
     );
-    
+
     final rightLength = service.calculateSpokeLength(
       erdMm: erdMm,
       flangeDiameterMm: rightFlangeDiameter,
@@ -72,13 +72,13 @@ class _SpokeLengthCalculatorPageState extends State<SpokeLengthCalculatorPage> {
       spokeHoles: spokeHoles,
       crossPattern: _crossPattern,
     );
-    
+
     setState(() {
       _leftSpokeLength = leftLength;
       _rightSpokeLength = rightLength;
     });
   }
-  
+
   @override
   Widget build(BuildContext context) {
     return MainLayout(
@@ -95,7 +95,7 @@ class _SpokeLengthCalculatorPageState extends State<SpokeLengthCalculatorPage> {
                 style: Theme.of(context).textTheme.headlineSmall,
               ),
               const SizedBox(height: 24),
-              
+
               // Rim section
               Card(
                 child: Padding(
@@ -150,7 +150,7 @@ class _SpokeLengthCalculatorPageState extends State<SpokeLengthCalculatorPage> {
                 ),
               ),
               const SizedBox(height: 16),
-              
+
               // Hub section
               Card(
                 child: Padding(
@@ -163,7 +163,7 @@ class _SpokeLengthCalculatorPageState extends State<SpokeLengthCalculatorPage> {
                         style: Theme.of(context).textTheme.titleLarge,
                       ),
                       const SizedBox(height: 16),
-                      
+
                       // Left side
                       Text(
                         'Left Side (Non-Drive)',
@@ -210,7 +210,7 @@ class _SpokeLengthCalculatorPageState extends State<SpokeLengthCalculatorPage> {
                         ],
                       ),
                       const SizedBox(height: 16),
-                      
+
                       // Right side
                       Text(
                         'Right Side (Drive)',
@@ -261,7 +261,7 @@ class _SpokeLengthCalculatorPageState extends State<SpokeLengthCalculatorPage> {
                 ),
               ),
               const SizedBox(height: 16),
-              
+
               // Lacing pattern
               Card(
                 child: Padding(
@@ -295,7 +295,7 @@ class _SpokeLengthCalculatorPageState extends State<SpokeLengthCalculatorPage> {
                 ),
               ),
               const SizedBox(height: 24),
-              
+
               // Calculate button
               Center(
                 child: ElevatedButton.icon(
@@ -309,7 +309,7 @@ class _SpokeLengthCalculatorPageState extends State<SpokeLengthCalculatorPage> {
                 ),
               ),
               const SizedBox(height: 24),
-              
+
               // Results
               if (_leftSpokeLength != null && _rightSpokeLength != null)
                 Card(
@@ -352,9 +352,9 @@ class _SpokeLengthCalculatorPageState extends State<SpokeLengthCalculatorPage> {
                                           .textTheme
                                           .headlineMedium
                                           ?.copyWith(
-                                        color: Colors.blue,
-                                        fontWeight: FontWeight.bold,
-                                      ),
+                                            color: Colors.blue,
+                                            fontWeight: FontWeight.bold,
+                                          ),
                                     ),
                                   ],
                                 ),
@@ -381,9 +381,9 @@ class _SpokeLengthCalculatorPageState extends State<SpokeLengthCalculatorPage> {
                                           .textTheme
                                           .headlineMedium
                                           ?.copyWith(
-                                        color: Colors.orange,
-                                        fontWeight: FontWeight.bold,
-                                      ),
+                                            color: Colors.orange,
+                                            fontWeight: FontWeight.bold,
+                                          ),
                                     ),
                                   ],
                                 ),

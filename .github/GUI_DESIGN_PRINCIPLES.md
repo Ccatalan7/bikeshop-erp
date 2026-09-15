@@ -36,6 +36,16 @@ screen look newer. A module-specific Design or Claude proposal is optional and
 must not introduce a wizard, inspector, modal, rail, card wall or disclosure
 unless the task itself justifies that interaction.
 
+**Qué sigue siendo gramática visual aunque el contenido sea nuestro
+(2026-08-17).** La frontera no es «controles sí, disposición no». Pertenecen a
+la gramática, y se copian exactos del diseño: la **contención** —un bloque es un
+panel con superficie, borde, radio y padding, no elementos sueltos apoyados en el
+fondo—, el **ancho de columna y su alineación**, la **escala tipográfica** y el
+**espaciado entre bloques**. Dibujar plano lo que el lenguaje dibuja como panel,
+o inflar el tipo, es un defecto del mismo tipo que inventar un hex. Nuestro es
+**qué va adentro del panel y cómo se llama**; de Design es **cómo se ve el panel
+que lo contiene**.
+
 ## Las palabras son parte del diseño
 
 El dueño de este ERP es el dueño del taller, no un contador ni un
@@ -491,6 +501,50 @@ A long-lived workspace may have different primary actions as its state changes.
 - Use one coherent icon family. Do not decorate headings and actions with
   assorted colored emoji or repeat the same icon in every row.
 
+### Lo que sale del taller se lee antes de salir (2026-08-21)
+
+Un control que manda algo **fuera** —un WhatsApp al cliente, un correo al
+proveedor— no se dispara con el toque que lo elige. Elegir y enviar son dos
+gestos: el primero muestra el texto exacto que va a recibir la otra persona, el
+segundo lo manda. Y «exacto» es literal: el mismo cuerpo, con los mismos
+parámetros ya sustituidos, en la misma gramática de burbuja del chat. Un
+previsualizado que dice «Hola Marcelo Silva» cuando al cliente le llega «Hola
+Marcelo» es peor que no tener previsualizado, porque el operador deja de
+revisar.
+
+De ahí salen dos reglas que se ven al revés de lo que uno haría:
+
+- **No se puede enviar ≠ no se puede leer.** Una plantilla en revisión de Meta
+  igual hay que poder abrirla y leerla; lo que se apaga es el botón de enviar,
+  con el motivo escrito al lado. Apagar la fila entera esconde justo el texto
+  que el operador necesita revisar mientras espera la aprobación.
+- **El previsualizado va en el mismo bloque**, no en un diálogo encima. El
+  operador está comparando el mensaje con la conversación que tiene delante;
+  un modal le tapa la conversación.
+
+El costo real: mensajería enviaba la plantilla en el mismo toque que la elegía,
+sin confirmación y sin mostrar el texto, hasta el 2026-08-21.
+
+### Un hilo tiene raíz y respuestas dentro de un canal (2026-08-28)
+
+Poner una tarjeta de contexto encima de una conversación plana no crea un
+hilo, y crear una conversación aislada por cada entidad tampoco crea un canal.
+La publicación raíz tiene identidad propia y convive con otras publicaciones
+en una conversación de audiencia estable; su contador abre una vista de
+respuestas donde cada mensaje conserva una relación durable con esa raíz.
+Volver al canal muestra todas sus raíces y contadores, no las respuestas
+mezcladas como mensajes normales. Una respuesta sólo aparece además en el
+canal cuando quien la escribe elige explícitamente esa opción.
+
+El compositor también pertenece al nivel visible: en el canal crea una
+publicación nueva, mientras que dentro del hilo agrega una respuesta. En ancho
+de escritorio el hilo se abre en un panel lateral sin esconder el canal; en
+compacto puede ocupar el panel, pero conserva un retorno explícito al canal.
+Un enlace desde otra superficie debe abrir la conversación y la raíz exactas,
+no sólo aterrizar en la bandeja. Esta regla incluye adjuntos y migraciones de
+mensajes existentes; una semejanza visual sin la relación raíz→respuesta en los
+datos sigue siendo un chat plano.
+
 ### Chips, badges, and metrics
 
 Chips and badges are compact semantic tools, not universal containers.
@@ -594,6 +648,38 @@ When a full route is justified, preserve the shell and an exact return path.
 When an inline, pane, popover, or sheet version exposes the same operation, it
 must delegate to the same canonical command as the routed version.
 
+### El cromo y el cuerpo se derivan del mismo valor (2026-08-25)
+
+**Costo real: la misma pantalla salía distinta según por dónde se hubiera
+llegado, y el dueño lo describió como «se comporta como si hubiera dos
+implementaciones paralelas».**
+
+Cuando la navegación interna de un módulo se guarda como varias banderas
+independientes —`_showScenarios`, `_selectingBasket`, la entidad seleccionada,
+la ficha abierta—, nada obliga a que la combinación exista de verdad. En el
+Asistente de compras eso produjo tres defectos a la vez, todos medidos en la app
+real: una comparación de dos necesidades con la barra de **una** necesidad ajena
+encima; la etapa activa marcada **y deshabilitada** al mismo tiempo; y el
+recuento de la etapa mostrando «128 alternativas» de la necesidad anterior sobre
+una lista de dos líneas.
+
+Las reglas que quedan:
+
+- **Un valor sellado por módulo**, y el encabezado, la barra de contexto, las
+  etapas habilitadas, sus recuentos y el cuerpo se derivan todos de él. Un
+  recuento que viene de una caché de otra entidad no describe nada de lo que
+  está en pantalla.
+- **Dos caminos al mismo estado tienen que construir el mismo valor.** Si uno
+  asigna un campo que el otro no, el cromo difiere aunque el cuerpo coincida —y
+  ésa es la variabilidad que el operador siente y no puede explicar.
+- **«Volver» es la pila de ese valor, no un booleano.** Cada estado sabe de
+  dónde salió, y devuelve también la etapa en la que se lo dejó: una regla de
+  entrada correcta (revisar bodega primero) aplicada al retroceder le come al
+  operador el resultado que estaba mirando.
+- Una regla de dominio del recorrido —«menos de dos líneas no es una canasta»—
+  vive en el constructor del tipo, no repetida en cada camino que puede
+  quebrarla.
+
 ## 7. Lists, tables, cards, and detail workspaces
 
 Select the representation that best supports scanning and action:
@@ -627,8 +713,190 @@ Shared requirements:
 - Size columns, panes, and rows from content, task, viewport, and user-adjusted
   preferences rather than universal constants.
 
+A trailing action inside a shared notice still belongs to the notice's width
+budget. In a narrow split-pane decision surface, a labelled secondary button
+may consume the space needed by the evidence and overflow the row. At that
+breakpoint, keep the same command as a compact icon action with tooltip and
+spoken label, or move it to a deliberate next row when its wording must remain
+visible; never squeeze, crop, or wrap the notice into a competing card. This
+pattern was validated on 2026-08-16 in the intelligent-purchasing decision pane
+at `599/600` and `899/900`, with
+`test/widget/intelligent_purchasing_workspace_test.dart` as the minimum
+overflow regression.
+
 Phone and tablet recomposition is owned by the mobile guide. A desktop table
 must not become a horizontally scrolling miniature table by default.
+
+**OCR image editing, correction 2026-09-07.** Replacing the batch image control
+with a clickable thumbnail dropped its file-drop interaction. For this surface,
+click and drop must reach the same local draft owner; upload still belongs to
+confirmation. Keep removal available for local bytes, not just remote URLs.
+A thumbnail removal overlay must fit the thumbnail's corner in both paint and
+hit testing. The full 28 px surface button obscured most of a 34 px image; this
+surface fits the shared button into a 16 px footprint. The remaining image must
+still open its own action, and its tooltip must not compete with removal.
+The regression delivers a platform drop to a specific row in desktop/compact,
+checks that another row is untouched, preserves click selection and disables
+drops behind overlays or while the row is busy/read-only.
+
+### Una etapa que pide N decisiones es una tabla (corrección del dueño, 2026-08-10)
+
+Cuando el operador tiene que **contestar muchas filas del mismo tipo**, la
+representación es una tabla con la comparación en columnas y **un control de
+decisión por fila**. No una tarjeta por decisión, ni «una pregunta a la vez»
+con las demás apiladas debajo.
+
+La versión anterior de la conciliación de nóminas (paso «Propuestas») hacía
+exactamente eso: cada decisión abierta era un bloque de pantalla completa con
+cuatro tarjetas de opción, y encima había tres grupos plegables. Con la cartola
+real —96 movimientos, 19 decisiones, 26 cargos ajenos— el dueño no pudo usarla:
+*«I literally don't understand anything on what the fuck is going on there»*.
+
+Las tres causas, para no repetirlas:
+
+1. **La comparación que la etapa existe para resolver no tenía columna.** Lo
+   que pagó el banco y lo que debe la nómina son dos números que hay que
+   restar; uno vivía como línea de texto dentro de la celda de la persona. Si
+   una pantalla existe para comparar A contra B, A y B van en columnas
+   adyacentes y la diferencia debajo, no dentro de una frase.
+2. **La descripción honesta de cada opción se reimprimía en cada fila.** El
+   texto es correcto y necesario —lo que hace honesta la decisión—, pero es el
+   MISMO en todas las filas: se publica **una vez**, al pie de la tabla o del
+   grupo, y la fila queda con su control.
+3. **Una decisión por pantalla convierte «revisar» en «recorrer».** Un contador
+   `i DE n` con flechas obliga a atravesar la lista para encontrar lo que falta
+   y hace imposible ver el conjunto. Ordenar por lo que la fila *es* —y no por
+   lo que se contestó— deja el trabajo pendiente arriba sin esconder nada ni
+   mover filas bajo el cursor.
+
+Esto es el mismo fallo que `.github/copilot-instructions.md` ya advertía en su
+corrección del 2026-08-09 —«una superficie visualmente moderna sustituyó un
+batch comprensible por un panel/accordion que ocultaba la visión conjunta»— y
+se repitió igual. La regla de arriba existe para que la próxima vez se note
+antes de construirla, no después de que el dueño la use.
+
+### Volvió a pasar: proveedores como párrafos (corrección del dueño, 2026-08-23)
+
+La regla de arriba —«una etapa que pide N decisiones es una tabla»— se escribió
+por la conciliación de nóminas y se repitió igual en el Asistente de compras. El
+bloque «A quién le compramos esto» apilaba una frase por proveedor:
+
+    RBX  15% de lo comprado
+    2 de 9 líneas · $2.850 c/u · última compra hace 5 meses · RBX
+    12 de 12 disponibles hace 7 min · CAMARA 29 +18,5% vs tu costo
+
+El dueño: *«looks like a fucking code block dude, all text, isolated sentences
+without clear actions»*. Tenía razón, y las tres causas son las mismas de 2026-08-10:
+
+1. **Los números que existen para compararse vivían dentro de oraciones.**
+   Participación, costo unitario, antigüedad y confirmación son cuatro columnas;
+   estaban en una frase separada por puntos medios. Nada alineaba.
+2. **La salvedad honesta se reimprimía por fila.** «Costos con flete
+   prorrateado; la disponibilidad de hoy se confirma con ellos» es correcta y
+   necesaria, pero es la MISMA para todas: va **una vez** al pie.
+3. **Las acciones no tenían columna.** «Confirmar hoy · Por qué · Entrar al
+   portal» flotaban al final del párrafo, y una fila sin sitio web corría las
+   suyas y rompía la alineación.
+
+Lo que quedó: anatomía `TB-01` con la geometría de `handoff-t23` —panel sin
+padding, cabecera `sunken` con etiqueta mono de 9 px, fila `9px 11px` con
+hairline, miniatura 38, números comparables en mono, y el hueco de la acción
+reservado aunque el dato falte—. Un proveedor no tiene foto de producto: usa el
+monograma de **dos letras** que el contrato de imagen ya define, con la misma
+geometría para que la fila no cambie de alto.
+
+**Antes de escribir un bloque nuevo, la pregunta es cuántas filas comparables
+va a tener.** Con dos o más, es tabla — aunque el contenido «quepa» en una
+frase.
+
+**Y la tabla se mide contra el ancho que hay, no contra una constante.** La
+primera versión reservó 172 px fijos para las acciones rotuladas: «Confirmado»
+y «Confirmar hoy» se pisaban y la fila se salía del panel. Un solo
+`_TableLayout` decide desde `LayoutBuilder` —lo usan la cabecera y las filas,
+porque si cada una midiera por su cuenta dejarían de calzar justo al
+estrecharse— y va soltando en orden de **menor a mayor valor comparativo**:
+primero el *rótulo* de la orden, después «Confirmado», y sólo al final «Última
+compra». El icono conserva el mando y le devuelve el ancho a los números, que
+es para lo único que la tabla existe.
+
+**Un número en una celda tiene que poder relacionarse con algo de la pantalla.**
+La columna «Confirmado» decía «12 de 12» en la fila de un proveedor y el dueño
+estuvo un rato tratando de ubicar ese 12: la fila hablaba de «2 de 9 líneas · 2
+facturas · 1 producto» y ningún doce aparecía por ninguna parte. Eran dos
+defectos encadenados:
+
+1. **El número contestaba otra pregunta.** Venía del barrido de reposición del
+   proveedor —cámaras de 16", 20", 24", 26" y hasta una biela— sobre una
+   necesidad de cámaras 29. La fila compara proveedores *para esta necesidad*,
+   así que la celda cuenta lo de esta necesidad y nada más. Lo otro sigue
+   existiendo, pero se publica aparte y **con su referente dicho**: «12
+   productos suyos revisados para reposición».
+2. **Un alcance vacío no significa «cuenta todo».** Al no conocer todavía los
+   productos de la línea, el cliente mandaba «sin filtro» y volvía el barrido
+   completo. Vacío significa *nada de esto se ha consultado*, y así hay que
+   preguntarlo. Además el alcance recién existe cuando llegan los candidatos:
+   la celda se vuelve a leer entonces, o se queda con la respuesta de cuando no
+   se sabía de qué se hablaba.
+
+Y con **un solo** elemento la respuesta es una palabra, no una fracción: «Sí»,
+«Sin stock», «No estaba». «1 de 1» es aritmética sobre nada. La fracción sirve
+desde dos, que es cuando compara.
+
+
+**El corte entre rótulo e icono se mide; los que sacan una columna se
+declaran.** No es simetría: cuánto ocupa «Confirmar hoy» depende de la familia
+tipográfica y de la escala de texto del sistema, así que se calcula con un
+`TextPainter` sobre el estilo **resuelto** —`DefaultTextStyle.of(context)`
+fundido con el del control, no el estilo declarado suelto— y sobre el rótulo
+*más ancho* de cada control («Confirmando…», «Ocultar»), para que la columna no
+se corra cuando una fila cambia de estado. Cuántas columnas caben, en cambio,
+sí es una decisión de producto y va en números.
+
+Costo real de saltarse esto: los 216 px «medidos a ojo» en el Mac del dueño
+desbordaban 65 px en la prueba de widget, que usa otra fuente. Un número que
+sólo vale en una máquina no es una medida.
+
+**Y la geometría del icono es de la tabla, no del tema.** `padding` y
+`constraints` de `IconButton` no le ganan al `iconButtonTheme` de la app: su
+`minimumSize`, pensado para una barra de herramientas, desbordaba la celda 20 px
+en compacto. Se fija con `IconButton.styleFrom(minimumSize: Size.zero,
+maximumSize: …, tapTargetSize: shrinkWrap)`.
+
+El tooltip del icono **nombra al proveedor**: cuatro iconos iguales no
+identifican su sujeto, ni para un lector de pantalla ni para una prueba.
+
+**El hueco de un adorno opcional se reserva siempre.** El enlace al sitio existe
+en unos proveedores y en otros no. Con el contenido alineado a la derecha, la
+fila sin sitio corría sus botones el ancho del icono y esa fila dejaba de
+alinear con las demás. Un contenedor de ancho fijo que a veces va vacío —no un
+`if` que quita el hijo— mantiene la columna quieta.
+
+### La procedencia no parte una decisión que el operador compara (corrección del dueño, 2026-08-25)
+
+El Asistente de compras separó un producto exacto de catálogo en una tarjeta y
+los proveedores con compras parecidas en otra tabla. La separación era
+técnicamente honesta —ficha no es factura—, pero visualmente invertía la
+pregunta: el operador pregunta primero **quién puede vender lo pedido**, no en
+qué tabla nació cada evidencia. El único proveedor del producto exacto quedó
+fuera de la comparación, mientras los proveedores de otra medida parecían más
+confiables por traer porcentajes y fechas.
+
+Cuando varias fuentes responden una misma decisión:
+
+1. Se ordenan y agrupan por la dimensión que decide el trabajo —aquí `Exacto`
+   antes de `Parecido`— y comparten una sola anatomía de tabla/tarjeta.
+2. La procedencia se rotula dentro de la fila: `de ficha, no pagado`, `comprado
+   en este ERP`, o `portal revisado <fecha>`. No se borra un dato real por no
+   ser histórico, ni se lo disfraza como una factura.
+3. Un dato que no aplica lleva una frase semántica (`sin compras en este ERP`),
+   nunca `0 %` ni un guion ambiguo. Las cifras de un grupo relajado no cruzan al
+   exacto.
+4. El control nombra la acción real. `Llevar al plan` crea una línea de
+   revisión; `Agregar por cotizar` describía un estado interno e insinuaba una
+   comunicación externa que nunca ocurría.
+5. La misma agrupación y el mismo orden sobreviven al reflow compacto. Cambiar
+   de tabla a filas rotuladas no autoriza a esconder el exacto ni a mezclarlo
+   por costo con los parecidos.
 
 ## 8. Forms and editing
 
@@ -656,6 +924,22 @@ Forms should reflect the operator's mental model, not the storage schema.
   visible value while the command serializes the new kind. The minimum
   regression changes the kind and verifies that the rendered value, available
   operators, validation, and submitted command remain identical.
+- **2026-09-06, dynamic ficha inputs:** when an inner field needs a changing
+  key to reset its controller, expose a stable semantic identity around that
+  editable field as well. A separately drawn visual label must still name the
+  input when it receives accessibility focus. Preserve the child's editable
+  semantics; do not exclude them just to remove a duplicate visual label.
+- **2026-09-07, explicit clear in dependent ficha cells:** when a prerequisite
+  is unknown and an existing cell remains visible, clearing the observation
+  must clear its rendered text even though row identity and field kind did not
+  change. Synchronize external replacement/clear separately from normalized
+  local keystrokes, so an ordinary rebuild preserves the cursor and unfinished
+  decimal input. The minimum regression checks both the command data and the
+  actual editable controller after clear, and preserves other rows and sources.
+  Minimum regression: change the reference/category, address the live field by
+  its stable identity, enter a value and verify the rendered value, validation
+  and draft. An offscreen target must first be scrolled into view; its presence
+  in the semantics tree does not make it hittable.
 
 Compact forms must also follow the mobile guide's keyboard, focus, SafeArea,
 scroll-to-error, and persistent-action rules.
@@ -722,8 +1006,24 @@ rendering behavior must be designed together.
   to escape the viewport.
 - Outside click, `Escape`, cancel, selection, route disposal, and host teardown
   must have explicit behavior. Restore focus to the trigger when appropriate.
+- A routed popover/sheet owns every `FocusNode`, `TextEditingController`, and
+  other listenable in a state object mounted inside that route. Do not dispose
+  those resources from the `Future` returned by `Navigator.push`: that future
+  resolves when `pop` starts, while the reverse-transition widgets are still
+  mounted. The regression must submit a value, immediately refresh the owning
+  model, settle the exit transition, and keep `tester.takeException()` null.
 - If the host scrolls or resizes while the surface is open, the surface must
   either follow, recompute, or close. A detached popover is never acceptable.
+
+An autocomplete embedded in a brief capture popover or compact sheet is not a
+catalog browser. Empty programmatic focus must not preload and expose hundreds
+of rows. Wait for a useful query, keep the result surface aligned to the field,
+and use restrained list rows instead of repeating the full filter/chip toolbar.
+Free description remains available when no canonical item is selected. If the
+surface offers internal back/forward navigation, keep the unsaved draft mounted
+for that round trip; only an explicit close may discard it. The minimum
+regression is empty-focus silence, query-triggered results, no filter wall,
+draft preservation across back/forward, and compact-width overflow coverage.
 
 ### Choose the Flutter primitive deliberately
 
@@ -857,6 +1157,64 @@ Validate behavior through the real host, not an isolated screenshot:
 - add the smallest behavioral regression that would fail if the validated
   interaction regressed.
 
+### `flex-wrap: wrap` no es una `Row` (2026-08-17)
+
+Al traducir una fila de acciones del prototipo se copió `display:flex; gap;
+align-items` y se omitió `flex-wrap: wrap`, porque en escritorio no se nota. A
+390 px desbordó 40 px y tumbó cuatro pruebas.
+
+**La declaración completa se traduce completa.** `flex-wrap` con un espaciador
+`flex:1` significa dos comportamientos en un solo control: en columna ancha el
+último elemento se va al borde derecho; en columna angosta baja de línea. En
+Flutter eso es un `LayoutBuilder` que elige entre `Row` con `Spacer` y `Wrap`,
+con el umbral puesto por el **contenido**, no por el breakpoint del módulo.
+
+Anti-patrón: `Row` con `Spacer` para una fila de acciones que en el diseño
+envuelve. Se ve bien en escritorio y desborda en teléfono.
+
+### Un control que se apaga cambia las pruebas que lo tocan (2026-08-17)
+
+El mismo prototipo apaga la acción primaria mientras el campo está vacío. Al
+implementarlo, 25 pruebas de widget empezaron a fallar lejos del composer: cada
+una escribía y tocaba «Analizar» sin un `pump()` entre medio, así que el botón
+todavía estaba deshabilitado y el toque **no fallaba, no hacía nada**. Los
+errores aparecían mucho después, como elementos que no existían.
+
+Cuando un control pasa a tener estado deshabilitado, toda prueba que escriba y
+después lo toque necesita un `pump()` entre las dos acciones. Un toque sobre un
+botón deshabilitado es silencioso: no lanza, y el diagnóstico aparece a varios
+pasos de distancia.
+
+### Un control repetido por fila necesita nombrar su sujeto (2026-08-17)
+
+En el Plan borrador cada línea traía cuatro controles de icono —menos, más,
+escribir cantidad, quitar— y los cuatro se rotulaban igual en todas las filas:
+«Editar cantidad», «Quitar del plan». Con tres productos en pantalla eso son
+doce controles y **cero identificables**: un lector de pantalla lee el mismo
+rótulo tres veces, una prueba tiene que tocar «el primero» y confiar en el
+orden, y la herramienta de control de la app no puede resolver ninguno.
+
+La regla: **si un control se repite por fila, su rótulo accesible nombra la
+fila** —«Quitar Neumático Maxxis del plan»—, y su `key` lleva el id del
+registro. El tooltip puede seguir explicando la consecuencia («Retira la línea
+del plan; la necesidad sigue abierta») cuando esa consecuencia no es obvia; lo
+que no puede es ser lo único que identifica el control.
+
+Dos trampas mecánicas que costaron una vuelta cada una:
+
+- **`Semantics(label:)` alrededor de un `Text` no reemplaza: fusiona.** El
+  rótulo resultante concatena los dos y no lo encuentra ni
+  `find.bySemanticsLabel` ni la herramienta. Para que gane el que nombra la
+  fila hay que pasar `excludeSemantics: true`.
+- **Una prueba de contrato que grepea `IconButton(` también cuenta
+  `_MiWrapperIconButton(`.** Si el envoltorio es justamente el que garantiza el
+  rótulo, la prueba lo cuenta como infracción. El patrón se ancla con
+  `(?<![A-Za-z0-9_])IconButton\(`.
+
+**Regresión mínima:** con dos filas montadas, cada rótulo accesible aparece
+exactamente una vez, y cada control se alcanza por su `key` con el id del
+registro.
+
 ### Reusable learning rule
 
 When a UI requires several iterations to reach a satisfactory result, document
@@ -905,3 +1263,80 @@ Before approving UI work, confirm:
 
 The desired UI feels calm, capable, distinctive, and alive. It does not look
 like a toy, a generic component catalog, or a legacy monochrome database form.
+
+
+### Revisión OCR: separar decisiones y edición masiva (2026-09-05)
+
+El lote de compras primero compara artículo OCR con productos reales del
+inventario. Una coincidencia o una regla recordada todavía necesita la decisión
+del operador. Las cantidades y reglas se revisan después de elegir la identidad;
+los campos obligatorios para crear no son errores de un producto existente.
+
+La primera implementación escondió cada ficha nueva tras una expansión de fila.
+Eso obligaba a localizar y abrir cada una, sin poder comparar campos del lote.
+En este flujo, todos los productos nuevos se editan en un paso propio con campos
+visibles y columnas alineadas; no se usa expansión por producto. La regresión
+comprueba selección sin escritura, reglas inaccesibles antes de identificar y
+campos visibles sólo en el lote nuevo. Son condiciones de este trabajo masivo,
+no una receta de componentes para otros módulos.
+
+**2026-09-07, edición tabular de productos nuevos.** El encabezado y las filas
+deben compartir la misma definición de columnas. No basta con alinear sus
+cajas externas: `InputDecorator` puede pintar un borde más bajo que su
+`SizedBox` por el padding del texto y la densidad ambiente. La regresión mide
+el contenedor pintado del campo y lo compara con la altura del selector;
+los controles conservan la altura de la guía y centran el texto del tema.
+El encabezado reemplaza la etiqueta visual por celda, pero nunca su nombre
+accesible. La validación aparece sólo bajo el campo responsable, y las opciones
+que se guardan con el lote permanecen dentro de su columna. Estos límites
+se validaron en el paso 3 de OCR con dos productos reales y en claro/oscuro;
+no justifican reducir todos los formularios del ERP a una cuadrícula.
+
+### Cantidades y costos es una tabla, y la regla anterior se ve (corrección del dueño, 2026-09-05)
+
+El paso 2 se había hecho como fichas apiladas: cuatro campos con rótulo, una
+ecuación, tres botones y «Confirmar línea» por fila, una pantalla por línea.
+El dueño: «debería ser una tabla ordenada, no esa mierda… aprovecha muy mal el
+espacio y da más trabajo del que ahorra». Cuando cada fila pide los mismos
+tres números y una decisión, es T-01: header 30 con overline sobre la
+superficie hundida, filas 48 con hairline, la identidad flexible y las cifras
+con ancho fijo, y las celdas editables como I-01 de 34 px sin rótulo propio
+—el encabezado es el rótulo—. La composición aplicada abre como filas
+sangradas (T-03) bajo su línea, no como un panel. El pie confirma las filas
+«Listo»; no existe un botón por fila que repita al del pie.
+
+La semilla heredada del preset y los tonos aproximados del resolver
+alteraban la superficie. La corrección pertenece al dueño de la paleta (ver
+`docs/architecture/appearance-palette-contract.md`), y los widgets consumen
+sus roles semánticos. El foreground de éxito conserva el tono del resolver que
+cumple el contraste mínimo de 4,5:1; el candidato de la guía medía 4,36:1.
+Los valores de color se mantienen en ese dueño, sin duplicarlos en esta guía.
+
+Y una regla recordada nunca es «el sistema sabe»: se muestra con quién la
+confirmó y cuándo, se aplica sola sólo cuando nombra el producto que el
+operador acaba de elegir, y si nombra otro, bloquea el lote hasta «Aplicar» o
+«Cambiar». Las condiciones se prueban en
+`test/widget/ocr_product_review_workspace_test.dart` (tabla en 1440 y 430,
+claro y oscuro, filas de composición, regla con autor) y en
+`test/unit/ocr_purchase_review_flow_test.dart` (`rulesSettled`).
+
+### El botón del tema no es el botón de la guía (corrección del dueño, 2026-09-05, tarde)
+
+El paso 1 volvió a verse «terrible, desnivelado» con la paleta ya corregida:
+la fila apilaba una tarjeta con borde para la coincidencia, un enlace suelto y
+dos botones Material de 48 px de alturas distintas en una columna de 172, y el
+accent llenaba un bloque por línea. El tema define `FilledButton` y
+`OutlinedButton` con `minimumSize` 48 —eso es el control heredado, no el A-01—.
+**A-01 vive en `lib/shared/widgets/vb_button.dart` (`VbButton`)**: cuatro
+variantes, alto por densidad 32 · 38 · 48, padding 14/16, radio 8, rótulo
+12/600 de una línea, `busy` que conserva el rótulo y `disabledReason` al lado.
+Una fila de tabla usa `VbDensity.compact`; el pie, comfortable; bajo 900 px,
+touch. Un `Container(alignment:)` dentro de un `Wrap` o `Column` se estira al
+ancho de la celda y centra el rótulo: el botón mide su rótulo con
+`Center(widthFactor: 1)`.
+
+El paso 1 pasó a la misma tabla T-01 del paso 2 (`ocr_identity_table.dart`):
+tres celdas alineadas arriba —lo leído, la coincidencia sin tarjeta, la
+decisión—, hairline entre filas, un solo botón accent por fila sin decidir,
+badge neutral «Seleccionado» y «Cambiar» en texto cuando ya se decidió.
+Regresión: `test/widget/vb_button_test.dart` y la batería del workspace.

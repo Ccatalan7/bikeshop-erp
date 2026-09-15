@@ -217,10 +217,14 @@ void main() {
     final compactProtectedCalls = RegExp(
       r'\.requestCloseWorkspaceById\s*\(\s*workspace\.id\s*\)',
     ).allMatches(compactSource);
+    // 2026-08-20 · antes eran dos controles —el selector del drawer y la hoja
+    // de tareas— y por eso se exigían dos llamadas. El manejo de espacios salió
+    // del drawer y quedó uno solo. Lo que el contrato protege sigue igual:
+    // ningún cierre compacto puede saltarse la guarda.
     expect(
       compactProtectedCalls.length,
-      greaterThanOrEqualTo(2),
-      reason: 'both compact close controls must use the guarded request API',
+      greaterThanOrEqualTo(1),
+      reason: 'every compact close control must use the guarded request API',
     );
     expect(
       compactSource,

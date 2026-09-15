@@ -251,7 +251,8 @@ WHERE customer_email IN ('guest@example.com', 'hacker@example.com');
 -- ========================================
 
 -- If any test fails unexpectedly, check:
--- 1. RLS policies in core_schema.sql are deployed
+-- 1. Live pg_policy/pg_class definitions and the exact migration stamp;
+--    core_schema.sql is incomplete historical context and is never deployed
 -- 2. user_profiles table has your user linked to tenant
 -- 3. Tables have correct columns (tenant_id, is_active, etc.)
 -- 4. Run: SELECT tablename, policyname FROM pg_policies WHERE schemaname = 'public';

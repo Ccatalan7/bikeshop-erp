@@ -32,22 +32,28 @@ void main() {
 
       final candidates = await _matcher().findCandidates(
         probe: const ProductDuplicateProbe(
-          name: 'Producto nuevo',
+          name: 'Pastillas freno nuevas',
           imageUrl: probeUrl,
         ),
         products: [
           _product(
             id: 'same-image-url',
             sku: 'AE0200',
-            name: 'Nombre histórico distinto',
+            name: 'Pastillas freno históricas',
             additionalImages: const [catalogUrl],
           ),
         ],
       );
 
       expect(candidates, hasLength(1));
-      expect(candidates.single.matchTier, ProductDuplicateMatchTier.exact);
-      expect(candidates.single.reasons, contains('Misma imagen'));
+      expect(
+        candidates.single.matchTier,
+        isNot(ProductDuplicateMatchTier.exact),
+      );
+      expect(
+        candidates.single.reasons,
+        contains('Misma foto de la publicación; no confirma la variante'),
+      );
     });
 
     test('un código de proveedor de OTRO proveedor no es identidad exacta',
@@ -112,7 +118,7 @@ void main() {
       final candidates = await _matcher().findCandidates(
         probe: const ProductDuplicateProbe(
           name: 'Pastillas freno',
-          sku: 'AE0888',
+          catalogSku: 'AE0888',
           supplierName: 'AliExpress',
         ),
         products: [
@@ -198,8 +204,9 @@ void main() {
       );
     });
 
-    test('orden estable por SKU cuando nada más los separa', () async {
-      final candidates = await _matcher().findCandidates(
+    test('empate indistinguible se abstiene y ordena revisión por SKU',
+        () async {
+      final result = await _matcher().resolveCandidates(
         probe: const ProductDuplicateProbe(name: 'Pastillas freno'),
         products: [
           _product(id: 'second', sku: 'B', name: 'Pastillas freno'),
@@ -207,9 +214,11 @@ void main() {
         ],
       );
 
-      expect(candidates, hasLength(2));
+      expect(result.kind, ProductDuplicateDecisionKind.abstained);
+      expect(result.recommendations, isEmpty);
+      expect(result.reason, contains('duplicate-catalog-rows'));
       expect(
-        candidates.map((candidate) => candidate.product.sku),
+        result.operatorChoices.map((candidate) => candidate.product.sku),
         <String>['A', 'B'],
       );
     });
@@ -318,6 +327,7 @@ void main() {
             confidence: 0.9,
           ),
         ),
+        requireAIPrimaryInvestigation: false,
         persistComputedImageFingerprints: false,
       );
 
@@ -372,6 +382,7 @@ ProductDuplicateMatcherService _matcher({
     imageLoader: imageLoader ?? (_) async => null,
     knownBrands: const <String>['Shimano', 'ZTTO', 'Risk', 'Zoom', 'Bucklos'],
     enableVisualReading: false,
+    requireAIPrimaryInvestigation: false,
     persistComputedImageFingerprints: false,
   );
 }

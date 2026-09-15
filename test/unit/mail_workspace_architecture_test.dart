@@ -130,14 +130,19 @@ void main() {
     expect(compose, contains('refreshSenderIdentities()'));
     expect(compose, contains("'Desde:'"));
     expect(compose, contains("'CCO:'"));
-    expect(compose, contains('bcc: _bccController.text.trim()'));
+    expect(
+        compose, contains('final bcc = _bccController.text.trim().isNotEmpty'));
+    expect(compose, contains('bcc: bcc'));
+    expect(compose, contains('buildSafeOutboundMailBody'));
+    expect(compose, contains('widget.manager.replyToEmail'));
     expect(compose, contains('onPressed: _canSend ? _send : null'));
     expect(compose, contains('_requestClose'));
     expect(zoho, contains("body: {'action': 'sender_identities'}"));
     expect(zoho, isNot(contains("url: _accountUrl,\n        );")));
     expect(zoho, contains('resolveSenderIdentity(fromAddress)'));
     expect(zoho, contains("'fromAddress': sender.address"));
-    expect(detail, contains('_emailBodyRendererVersion = 9'));
+    expect(detail, contains('_emailBodyRendererVersion = 10'));
+    expect(detail, contains('sanitizeEmailHtml'));
     expect(detail, contains('BoxConstraints(maxWidth: 960)'));
     expect(detail, contains("'overflow-wrap': 'break-word'"));
     expect(detail, contains('linkifyBareEmailUrls'));

@@ -84,8 +84,15 @@ void main() {
           'Deletion must re-read the authoritative server status before the destructive write.',
     );
     expect(paymentForm, contains('registerPaymentWithInvoiceTax('));
-    expect(paymentForm, contains('_taxChoiceIsLocked'));
-    expect(paymentForm, isNot(contains('value.defaultTaxTreatment ==')));
+    // Corrección 2026-08-19: el IVA sigue al medio de pago, un pago a la vez.
+    // Hasta hoy la factura tenía un único tratamiento que fijaba el primer
+    // pago, así que una venta cobrada mitad efectivo y mitad tarjeta no se
+    // podía clasificar. Derivarlo del medio ya no reclasifica el documento:
+    // clasifica ESE pago, que es lo que asienta su IVA débito.
+    expect(paymentForm, isNot(contains('_taxChoiceIsLocked')));
+    expect(paymentForm, contains('value.defaultTaxTreatment =='));
+    expect(paymentForm,
+        contains("title: const Text('Este pago lleva IVA (19%)')"));
     expect(paymentPage, contains("'Factura pagada'"));
     expect(paymentPage, contains('if (isSettled)'));
     expect(

@@ -243,10 +243,15 @@ void main() {
       isNot(contains('onPermissionRequest: (controller, request) async {')),
     );
     expect(browser, contains('openBrowserWorkspace('));
+    expect(browser, contains('.getFavicons()'));
+    expect(browser, contains("meta[property=\"og:site_name\"]"));
     expect(manager, contains('updateBrowserWorkspaceState('));
     expect(manager, contains('_restoreBrowserSession('));
     expect(app, contains("'dormant-\${workspace.id}'"));
     expect(registry, contains('## Embedded Browser Surfaces'));
+    expect(registry, contains('browser workspaces are session-only'));
+    expect(registry, contains('### Browser workspace stack'));
+    expect(registry, contains('presentation-only'));
     expect(registry, contains('memoria de dominios'));
     expect(registry, contains('autocompletado inline'));
     expect(registry, contains('catálogo corporativo'));
@@ -264,10 +269,24 @@ void main() {
     expect(registry, contains('ambiguous'));
     expect(registry, contains('exact origin'));
     expect(registry, contains('failed repeated login'));
-    expect(browser, contains('allowInsecureSupplierOrigin: false'));
+    // **El relleno inseguro sólo lo abre una declaración administrada.** Antes
+    // acá se exigía el literal `false`, que dejó de existir cuando el portal
+    // legacy de RBX pasó a estar declarado. Lo que hay que defender no es la
+    // constante: es que la bandera **no tenga otra fuente** que esa
+    // declaración, y que la declaración se lea por la frontera sin secretos
+    // —`supplier_credentials` tiene `revoke all` para `authenticated`—.
+    expect(browser, contains('allowInsecureSupplierOrigin: legacy != null'));
+    expect(browser, isNot(contains('allowInsecureSupplierOrigin: true')));
+    expect(browser, contains('expectedInsecureAction: legacy?.actionUrl'));
+    expect(browser, contains('supplier_legacy_transport_for_origin_v1'));
+    expect(
+      browser,
+      isNot(contains("_db.select( 'supplier_credentials'")),
+    );
     expect(browser, isNot(contains('filled-insecure')));
     expect(supplierForm, contains('canonicalSupplierCredentialOrigin'));
-    expect(supplierForm, contains('obscureText: true'));
+    expect(supplierForm, contains('_obscureSecret = true'));
+    expect(supplierForm, contains('obscureText: _obscureSecret'));
     expect(supplierForm, contains('enableSuggestions: false'));
     expect(supplierForm, isNot(contains('PurchaseService')));
     expect(supplierForm, isNot(contains('_showPortalPassword')));

@@ -18,6 +18,8 @@ void main() {
       panel,
       contains('PopupMenuButton<NotificationDigestPeriod>'),
     );
+    expect(panel, contains('NotificationDigestPeriod.yesterday'));
+    expect(panel, contains("return 'Ayer';"));
     expect(panel, contains('NotificationDigestPeriod.thisWeek'));
     expect(panel, contains('NotificationDigestPeriod.previousWeek'));
     expect(panel, contains('NotificationDigestPeriod.thisMonth'));

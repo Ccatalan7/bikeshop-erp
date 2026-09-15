@@ -58,6 +58,9 @@ class BikePartFamily {
     required this.heads,
     this.negativeHeads = const <String>[],
     this.absorbs = const <String>[],
+    this.ambiguousHeads = const <String>[],
+    this.contextWords = const <String>[],
+    this.genericHeads = const <String>[],
   });
 
   /// Stable identifier used by profiles, explanations and tests.
@@ -80,9 +83,32 @@ class BikePartFamily {
   /// `tija`.
   final List<String> negativeHeads;
 
+  /// Heads that name this family only when the sentence corroborates them.
+  ///
+  /// `Pinza` is a caliper on a bicycle and a pair of pliers on a workbench,
+  /// and a shop buys both. Listing every tool phrase as a negative is a race
+  /// nobody wins — `pinzas industriales`, `pinza de precisión`, the next one
+  /// somebody invents. An ambiguous head instead has to be *earned*: it counts
+  /// only when a word from [contextWords] appears in the same text, and is
+  /// simply not a head otherwise.
+  final List<String> ambiguousHeads;
+
+  /// What has to appear for [ambiguousHeads] to count.
+  final List<String> contextWords;
+
   /// Families this one supersedes when both match the identity segment.
   /// A crankset sold with its bottom bracket is still a crankset.
   final List<String> absorbs;
+
+  /// Catch-all nouns that name only the broad class, not a concrete object.
+  ///
+  /// When a title also contains a specific family in the same physical class,
+  /// these heads are semantically dominated. `Herramienta` beside `extractor
+  /// de núcleo de válvula` does not make the source ambiguous; `shifter`
+  /// beside `terminal de cable` still does because both are concrete objects.
+  /// This is head-scoped rather than family-scoped because `sacabielas` is a
+  /// real object even though the same legacy family also owns `extractor`.
+  final List<String> genericHeads;
 }
 
 /// The registry. Order is irrelevant: resolution is by head-noun position and
@@ -98,6 +124,37 @@ class BikePartTaxonomy {
       label: 'Tee',
       heads: ['tee', 'tees', 'potencia', 'potencias', 'stem', 'vastago'],
       negativeHeads: ['adaptador de tee', 'adaptador tee'],
+    ),
+    BikePartFamily(
+      id: 'stem_spacer',
+      physicalClass: PartPhysicalClass.steering,
+      label: 'Espaciador de dirección',
+      heads: [
+        'espaciador de vastago',
+        'espaciadores de vastago',
+        'espaciador de direccion',
+        'espaciadores de direccion',
+        'espaciador de tee',
+        'espaciadores de tee',
+        'headset spacer',
+        'headset spacers',
+        'stem spacer',
+        'stem spacers',
+        'espaciador',
+        'espaciadores',
+        'spacer',
+        'spacers',
+      ],
+      // A bare spacer in this catalog is a steering spacer unless a longer,
+      // explicit object phrase claims it (for example `cassette spacer`).
+      // Treat the noun as generic so concrete steering peers dominate it.
+      genericHeads: ['espaciador', 'espaciadores', 'spacer', 'spacers'],
+      negativeHeads: [
+        'espaciador de motor',
+        'espaciador motor',
+        'espaciador para motor',
+        'motor spacer',
+      ],
     ),
     BikePartFamily(
       id: 'handlebar',
@@ -135,6 +192,32 @@ class BikePartTaxonomy {
       physicalClass: PartPhysicalClass.seating,
       label: 'Sillín',
       heads: ['sillin', 'sillines', 'saddle', 'asiento', 'asientos'],
+      negativeHeads: [
+        'funda de asiento',
+        'fundas de asiento',
+        'funda de sillin',
+        'cubre asiento',
+        'cubre asientos',
+        'saddle cover',
+        'seat cover',
+      ],
+    ),
+    BikePartFamily(
+      id: 'saddle_cover',
+      physicalClass: PartPhysicalClass.seating,
+      label: 'Cubre asiento',
+      heads: [
+        'funda de asiento',
+        'fundas de asiento',
+        'funda de sillin',
+        'fundas de sillin',
+        'cubre asiento',
+        'cubre asientos',
+        'cubre sillin',
+        'saddle cover',
+        'seat cover',
+        'seat cushion cover',
+      ],
     ),
     BikePartFamily(
       id: 'seatpost',
@@ -142,6 +225,27 @@ class BikePartTaxonomy {
       label: 'Tija',
       heads: ['tija', 'tijas', 'seatpost', 'seat post'],
       negativeHeads: ['adaptador de tija', 'adaptador tija'],
+    ),
+    BikePartFamily(
+      id: 'seatpost_shim',
+      physicalClass: PartPhysicalClass.seating,
+      label: 'Adaptador de tija',
+      heads: [
+        'adaptador de tija de asiento',
+        'adaptador de tija',
+        'adaptador tija',
+        'adaptador de tubo de poste de asiento',
+        'adaptador de tubo de sillin',
+        'adaptador de tubo de asiento',
+        'cuna de sillin',
+        'cuna de asiento',
+        'reductor de tija',
+        'casquillo de tija',
+        'seatpost shim',
+        'seat post shim',
+        'seat tube adapter',
+      ],
+      absorbs: ['saddle', 'seatpost'],
     ),
     BikePartFamily(
       id: 'seat_clamp',
@@ -168,6 +272,9 @@ class BikePartTaxonomy {
         'crankset',
         'crank set',
         'pedivela',
+        'juego de bielas',
+        'plato de manivela',
+        'platos de manivela',
         'platos y bielas',
         'plato y biela',
       ],
@@ -286,6 +393,10 @@ class BikePartTaxonomy {
         'powerlink',
         'quick link',
         'quicklink',
+        'chain quick link',
+        'chain quick link connector',
+        'quick link connector',
+        'chain link connector',
       ],
       negativeHeads: [
         'sticker protector',
@@ -428,8 +539,13 @@ class BikePartTaxonomy {
         'shifter',
         'shifters',
         'manilla de cambio',
+        'manillas de cambio',
         'mando de cambio',
+        'mandos de cambio',
         'palanca de cambio',
+        'palancas de cambio',
+        'palanca de cambios',
+        'palancas de cambios',
       ],
     ),
 
@@ -461,7 +577,15 @@ class BikePartTaxonomy {
         'zapatas',
         'patin de freno',
         'patines de freno',
+        // Bare, because the shop writes `patines de frenos` in the plural and
+        // the exact phrase then misses. With no pad head left, `v brake` won
+        // the title and a set of brake shoes was read as a brake arm.
+        'patin',
+        'patines',
       ],
+      // The system name in `patines ... V-Brake` describes fitment; the sold
+      // object is still the replaceable shoe/pad, never the brake arm.
+      absorbs: ['rim_brake_arm'],
     ),
     BikePartFamily(
       id: 'brake_caliper',
@@ -472,7 +596,92 @@ class BikePartTaxonomy {
         'calipers',
         'brake caliper',
         'mordaza de freno',
+        // `Pinza` is what the shop and the supplier both call a caliper, on
+        // disc and on rim brakes alike. Without it a caliper had no family at
+        // all, so nothing could eliminate anything and the AI's guessed name
+        // decided the object.
+        'pinza de freno',
+        'pinzas de freno',
       ],
+      // Bare `pinza` is the word the supplier uses for a caliper — and the
+      // word a tool catalogue uses for pliers. It counts only next to
+      // something that makes it a brake.
+      ambiguousHeads: ['pinza', 'pinzas'],
+      negativeHeads: [
+        // `Pinzas de doble pivote` es un freno de aro: en esta tienda se llama
+        // herradura de tiro lateral, no caliper.
+        'doble pivote',
+        'tiro lateral',
+      ],
+      contextWords: [
+        'freno',
+        'frenos',
+        'disco',
+        'discos',
+        'v brake',
+        'vbrake',
+        'doble pivote',
+        'hidraulico',
+        'hidraulica',
+        'mecanico',
+        'mecanica',
+        'bicicleta',
+      ],
+    ),
+    BikePartFamily(
+      // A complete hydraulic brake is the sold assembly (lever, hose and
+      // caliper), not whichever visible component a photo happens to name.
+      // Keep the heads precise: bare `freno` is a system word and must never
+      // turn every brake-related replacement into a complete brake.
+      id: 'hydraulic_brake_assembly',
+      physicalClass: PartPhysicalClass.braking,
+      label: 'Freno hidráulico completo',
+      heads: [
+        'freno de disco hidraulico',
+        'frenos de disco hidraulicos',
+        'freno hidraulico completo',
+        'frenos hidraulicos completos',
+        'freno hidraulico',
+        'frenos hidraulicos',
+        'juego de freno hidraulico',
+        'juego de frenos hidraulicos',
+        'set de freno hidraulico',
+        'set de frenos hidraulicos',
+        'conjunto de freno hidraulico',
+        'conjunto de frenos hidraulicos',
+        'hydraulic disc brake set',
+        'hydraulic disc brake',
+        'hydraulic brake set',
+        'hydraulic brakes',
+        'hydraulic brake',
+      ],
+      negativeHeads: [
+        'pastilla de freno hidraulico',
+        'pastillas de freno hidraulico',
+        'hydraulic brake pad',
+        'hydraulic brake pads',
+        'manilla de freno hidraulico',
+        'manillas de freno hidraulico',
+        'maneta de freno hidraulico',
+        'manetas de freno hidraulico',
+        'hydraulic brake lever',
+        'hydraulic brake levers',
+        'caliper de freno hidraulico',
+        'pinza de freno hidraulico',
+        'hydraulic brake caliper',
+        'hydraulic brake calipers',
+        'adaptador de freno hidraulico',
+        'manguera de freno hidraulico',
+        'latiguillo de freno hidraulico',
+        'hydraulic brake hose',
+        'hydraulic brake hoses',
+        'hydraulic brake line',
+        'hydraulic brake lines',
+        'kit de purga',
+        'aceite mineral',
+        'liquido de freno',
+      ],
+      absorbs: ['brake_caliper', 'brake_lever'],
     ),
     // A `herradura` is the arm pair of a rim brake. It is not a disc caliper,
     // and the catalog keeps them in different leaves
@@ -492,6 +701,12 @@ class BikePartTaxonomy {
         'brazo de freno',
         'brazos de freno',
         'cantilever',
+        // Un freno de tiro lateral o de doble pivote es, en el catálogo de
+        // esta tienda, una «Herradura»: `Herradura de Tiro Lateral ZTTO ASA
+        // 2.5D`. El catálogo manda sobre la taxonomía — mandarlo a `Calipers`
+        // hizo que la compuerta rechazara justo el producto correcto.
+        'doble pivote',
+        'frenos c',
       ],
       negativeHeads: [
         'goma v brake',
@@ -508,8 +723,14 @@ class BikePartTaxonomy {
       heads: [
         'manilla de freno',
         'manillas de freno',
+        'maneta de freno',
+        'manetas de freno',
         'brake lever',
         'brake levers',
+        'brake handle',
+        'brake handles',
+        'brake handle grip',
+        'brake handle grips',
         'palanca de freno',
       ],
     ),
@@ -583,6 +804,20 @@ class BikePartTaxonomy {
       negativeHeads: ['eje de motor', 'ejes de motor'],
     ),
     BikePartFamily(
+      id: 'axle_adapter',
+      physicalClass: PartPhysicalClass.accessory,
+      label: 'Adaptador de eje',
+      heads: [
+        'adaptador de eje',
+        'adaptadores de eje',
+        'casquillo de eje',
+        'manguito de eje',
+        'axle adapter',
+        'axle bushing',
+        'bushing',
+      ],
+    ),
+    BikePartFamily(
       id: 'bolt',
       physicalClass: PartPhysicalClass.accessory,
       label: 'Pernos',
@@ -610,7 +845,14 @@ class BikePartTaxonomy {
         'tires',
         'tyre',
       ],
-      negativeHeads: ['protector de neumatico', 'palanca de neumatico'],
+      negativeHeads: [
+        'protector de neumatico',
+        'palanca de neumatico',
+        'tapa basica',
+        'tapas basicas',
+        'shift cap',
+        'cable cap',
+      ],
     ),
     BikePartFamily(
       id: 'tube',
@@ -642,13 +884,38 @@ class BikePartTaxonomy {
       label: 'Sellante',
       heads: ['sellante', 'sellantes', 'liquido sellante', 'sealant'],
     ),
+    BikePartFamily(
+      id: 'tubeless_repair_kit',
+      physicalClass: PartPhysicalClass.tool,
+      label: 'Kit de reparación tubeless',
+      heads: [
+        'herramienta de reparacion de bicicletas sin camara',
+        'herramienta de reparacion de neumaticos sin camara',
+        'herramienta de reparacion tubeless',
+        'herramienta reparacion tubeless',
+        'kit de reparacion tubeless',
+        'kit reparacion tubeless',
+        'kit tubeless tripas',
+        'tubeless repair tool',
+        'tubeless repair kit',
+        'tire plug kit',
+      ],
+    ),
 
     // ── Válvulas ──────────────────────────────────────────────────────────
     BikePartFamily(
       id: 'tubeless_valve',
       physicalClass: PartPhysicalClass.valve,
       label: 'Válvula tubeless',
-      heads: ['valvula tubeless', 'valvulas tubeless', 'tubeless valve'],
+      heads: [
+        'valvula tubeless',
+        'valvulas tubeless',
+        'valvula presta',
+        'valvulas presta',
+        'valvula francesa',
+        'presta valve',
+        'tubeless valve',
+      ],
     ),
     BikePartFamily(
       id: 'valve_core',
@@ -701,6 +968,61 @@ class BikePartTaxonomy {
 
     // ── Cables, luces, seguridad, carga ───────────────────────────────────
     BikePartFamily(
+      id: 'cable_end_cap',
+      physicalClass: PartPhysicalClass.control,
+      label: 'Terminal o tope de piola',
+      heads: [
+        'terminal de piola',
+        'terminales de piola',
+        'terminal de cable',
+        'terminales de cable',
+        'tope de funda',
+        'topes de funda',
+        'tope terminal',
+        'tapa basica',
+        'tapas basicas',
+        'tapa para cable',
+        'tapas para cable',
+        'tapa de extremo de cable exterior',
+        'tapas de extremo de cable exterior',
+        'tapa de extremos de cable exterior',
+        'tapas de extremos de cable exterior',
+        'punta de cable',
+        'puntas de cable',
+        'carcasa de punta de cable',
+        'carcasas de punta de cable',
+        'punta de piola',
+        'puntas de piola',
+        'capuchon de piola',
+        'capuchones de piola',
+        'capuchon piola',
+        'capuchones piola',
+        'inner cable tip',
+        'inner cable tips',
+        'cable tip',
+        'cable tips',
+        'cable crimp',
+        'cable crimps',
+        'cable end cap',
+        'cable end caps',
+        'cable cap',
+        'cable caps',
+        'housing ferrule',
+        'housing ferrules',
+        'cable ferrule',
+        'cable ferrules',
+        'shift cable cap',
+        'shift cable caps',
+        'shift cap',
+        'shift caps',
+        'brake cable cap',
+        'brake cable caps',
+        'brake cap',
+        'brake caps',
+      ],
+      absorbs: ['cable_housing'],
+    ),
+    BikePartFamily(
       id: 'cable_housing',
       physicalClass: PartPhysicalClass.control,
       label: 'Piola y funda',
@@ -713,6 +1035,15 @@ class BikePartTaxonomy {
         'cable de cambio',
         'housing',
         'cable interior',
+      ],
+      negativeHeads: [
+        'funda de asiento',
+        'fundas de asiento',
+        'funda de sillin',
+        'cubre asiento',
+        'cubre asientos',
+        'saddle cover',
+        'seat cover',
       ],
     ),
     BikePartFamily(
@@ -731,7 +1062,17 @@ class BikePartTaxonomy {
       id: 'bell',
       physicalClass: PartPhysicalClass.accessory,
       label: 'Timbre',
-      heads: ['timbre', 'timbres', 'bell', 'bocina'],
+      heads: [
+        'timbre',
+        'timbres',
+        'campanilla',
+        'campanillas',
+        'claxon',
+        'claxones',
+        'bell',
+        'bocina',
+        'horn',
+      ],
     ),
     BikePartFamily(
       id: 'mirror',
@@ -750,9 +1091,44 @@ class BikePartTaxonomy {
         'porta bidon',
         'portabidon',
         'porta botella',
+        'porta botellas',
         'portabotella',
+        'portabotellas',
+        'soporte de botella de agua',
+        'soportes de botella de agua',
+        'soporte para botella de agua',
+        'soportes para botella de agua',
+        'soporte de botella',
+        'soportes de botella',
+        'soporte para botella',
+        'soportes para botella',
+        'water bottle cage',
+        'water bottle holder',
         'bottle cage',
+        'bottle cages',
+        'bottle holder',
+        'bottle holders',
       ],
+    ),
+    BikePartFamily(
+      id: 'applicator_bottle',
+      physicalClass: PartPhysicalClass.accessory,
+      label: 'Botella aplicadora',
+      heads: [
+        'botella aplicadora',
+        'botellas aplicadoras',
+        'botella dosificadora',
+        'botellas dosificadoras',
+        'squeeze bottle',
+        'squeeze bottles',
+        'applicator bottle',
+        'applicator bottles',
+        'squirt container',
+        'squirt containers',
+        'glue bottle',
+        'glue bottles',
+      ],
+      absorbs: ['bottle'],
     ),
     BikePartFamily(
       id: 'bottle',
@@ -766,6 +1142,34 @@ class BikePartTaxonomy {
         'caramagiola',
         'water bottle',
       ],
+      negativeHeads: [
+        'porta botella',
+        'porta botellas',
+        'portabotella',
+        'portabotellas',
+        'soporte de botella',
+        'soportes de botella',
+        'soporte para botella',
+        'soportes para botella',
+        'water bottle cage',
+        'water bottle holder',
+        'bottle cage',
+        'bottle cages',
+        'bottle holder',
+        'bottle holders',
+        'botella aplicadora',
+        'botellas aplicadoras',
+        'botella dosificadora',
+        'botellas dosificadoras',
+        'squeeze bottle',
+        'squeeze bottles',
+        'applicator bottle',
+        'applicator bottles',
+        'squirt container',
+        'squirt containers',
+        'glue bottle',
+        'glue bottles',
+      ],
     ),
     BikePartFamily(
       id: 'phone_mount',
@@ -775,6 +1179,25 @@ class BikePartTaxonomy {
         'porta celular',
         'portacelular',
         'soporte de celular',
+        'soportes de celular',
+        'soporte para celular',
+        'soportes para celular',
+        'soporte celular',
+        'soportes celulares',
+        'porta telefono',
+        'porta telefonos',
+        'portatelefono',
+        'portatelefonos',
+        'soporte de telefono',
+        'soportes de telefono',
+        'soporte para telefono',
+        'soportes para telefono',
+        'soporte telefono',
+        'soportes telefonos',
+        'smartphone mount',
+        'smartphone holder',
+        'mobile phone mount',
+        'mobile phone holder',
         'phone mount',
         'phone holder',
       ],
@@ -845,6 +1268,20 @@ class BikePartTaxonomy {
       ],
     ),
     BikePartFamily(
+      id: 'valve_core_tool',
+      physicalClass: PartPhysicalClass.tool,
+      label: 'Extractor de obús',
+      heads: [
+        'extractor de nucleo de valvula',
+        'extractor nucleo de valvula',
+        'extractor de obus',
+        'extractor obus',
+        'herramienta de nucleo de valvula',
+        'valve core remover',
+        'valve core tool',
+      ],
+    ),
+    BikePartFamily(
       id: 'puller_tool',
       physicalClass: PartPhysicalClass.tool,
       label: 'Extractor',
@@ -855,6 +1292,7 @@ class BikePartTaxonomy {
         'sacabielas',
         'saca bielas',
       ],
+      genericHeads: ['extractor', 'extractores', 'puller'],
     ),
     BikePartFamily(
       id: 'pump',
@@ -877,6 +1315,7 @@ class BikePartTaxonomy {
         'tool',
         'tools',
       ],
+      genericHeads: ['herramienta', 'herramientas', 'tool', 'tools'],
     ),
     BikePartFamily(
       id: 'lubricant',
@@ -914,7 +1353,18 @@ class BikePartTaxonomy {
     final phrases = <BikePartHeadPhrase>[
       for (final family in families)
         for (final head in family.heads)
-          BikePartHeadPhrase(phrase: head, familyId: family.id),
+          BikePartHeadPhrase(
+            phrase: head,
+            familyId: family.id,
+            isGenericWithinClass: family.genericHeads.contains(head),
+          ),
+      for (final family in families)
+        for (final head in family.ambiguousHeads)
+          BikePartHeadPhrase(
+            phrase: head,
+            familyId: family.id,
+            requiresContext: true,
+          ),
     ];
     phrases.sort((left, right) {
       final byLength = right.phrase.length.compareTo(left.phrase.length);
@@ -964,8 +1414,20 @@ class BikePartTaxonomy {
 
 /// One head noun and the family it identifies.
 class BikePartHeadPhrase {
-  const BikePartHeadPhrase({required this.phrase, required this.familyId});
+  const BikePartHeadPhrase({
+    required this.phrase,
+    required this.familyId,
+    this.requiresContext = false,
+    this.isGenericWithinClass = false,
+  });
 
   final String phrase;
   final String familyId;
+
+  /// The phrase names this family only when one of the family's context words
+  /// is present in the same text.
+  final bool requiresContext;
+
+  /// Whether this phrase is only a catch-all for its physical class.
+  final bool isGenericWithinClass;
 }

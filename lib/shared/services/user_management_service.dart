@@ -7,6 +7,7 @@ import '../utils/auth_input_validation.dart';
 enum EmployeeErpLinkState {
   available,
   pendingInvitation,
+  workerToErpPending,
   erpLinked,
   workerActive,
   workerSuspended,
@@ -116,8 +117,14 @@ class EmployeeAccessState {
     required this.erpUserId,
     required this.erpProfileActive,
     required this.pendingInvitation,
+    required this.pendingInvitationId,
+    required this.pendingInvitationEmail,
+    required this.pendingInvitationCreatedAt,
+    required this.pendingTransitionFromWorker,
     required this.workerAccessExists,
     required this.workerAccessActive,
+    required this.workerPortalAccountId,
+    required this.workerAuthUserId,
     required this.workerUsername,
     required this.linkState,
   });
@@ -130,8 +137,15 @@ class EmployeeAccessState {
     final erpUserId = json['erpUserId'];
     final erpProfileActive = json['erpProfileActive'];
     final pendingInvitation = json['pendingInvitation'];
+    final pendingInvitationId = json['pendingInvitationId'];
+    final pendingInvitationEmail = json['pendingInvitationEmail'];
+    final pendingInvitationCreatedAt = json['pendingInvitationCreatedAt'];
+    final pendingTransitionFromWorker =
+        json['pendingTransitionFromWorker'] ?? false;
     final workerAccessExists = json['workerAccessExists'];
     final workerAccessActive = json['workerAccessActive'];
+    final workerPortalAccountId = json['workerPortalAccountId'];
+    final workerAuthUserId = json['workerAuthUserId'];
     final workerUsername = json['workerUsername'];
     final rawLinkState = json['linkState'];
 
@@ -143,10 +157,17 @@ class EmployeeAccessState {
         status.trim().isEmpty ||
         erpProfileActive is! bool ||
         pendingInvitation is! bool ||
+        pendingTransitionFromWorker is! bool ||
         workerAccessExists is! bool ||
         workerAccessActive is! bool ||
         (email != null && email is! String) ||
         (erpUserId != null && erpUserId is! String) ||
+        (pendingInvitationId != null && pendingInvitationId is! String) ||
+        (pendingInvitationEmail != null && pendingInvitationEmail is! String) ||
+        (pendingInvitationCreatedAt != null &&
+            pendingInvitationCreatedAt is! String) ||
+        (workerPortalAccountId != null && workerPortalAccountId is! String) ||
+        (workerAuthUserId != null && workerAuthUserId is! String) ||
         (workerUsername != null && workerUsername is! String) ||
         rawLinkState is! String) {
       throw const FormatException(
@@ -157,6 +178,7 @@ class EmployeeAccessState {
     final parsedLinkState = switch (rawLinkState) {
       'available' => EmployeeErpLinkState.available,
       'pending_invitation' => EmployeeErpLinkState.pendingInvitation,
+      'worker_to_erp_pending' => EmployeeErpLinkState.workerToErpPending,
       'erp_linked' => EmployeeErpLinkState.erpLinked,
       'worker_active' => EmployeeErpLinkState.workerActive,
       'worker_suspended' => EmployeeErpLinkState.workerSuspended,
@@ -171,14 +193,36 @@ class EmployeeAccessState {
         workerUsername is String && workerUsername.trim().isNotEmpty
             ? workerUsername.trim()
             : null;
+    final normalizedPendingInvitationId =
+        _normalizedOptionalString(pendingInvitationId);
+    final normalizedPendingInvitationEmail =
+        _normalizedOptionalString(pendingInvitationEmail);
+    final normalizedWorkerPortalAccountId =
+        _normalizedOptionalString(workerPortalAccountId);
+    final normalizedWorkerAuthUserId =
+        _normalizedOptionalString(workerAuthUserId);
 
     final evidenceMatchesState = switch (parsedLinkState) {
       EmployeeErpLinkState.available => normalizedErpUserId == null &&
           !pendingInvitation &&
           !workerAccessExists &&
           !workerAccessActive,
-      EmployeeErpLinkState.pendingInvitation =>
-        normalizedErpUserId == null && pendingInvitation && !workerAccessActive,
+      EmployeeErpLinkState.pendingInvitation => normalizedErpUserId == null &&
+          pendingInvitation &&
+          !pendingTransitionFromWorker &&
+          normalizedPendingInvitationId != null &&
+          normalizedPendingInvitationEmail != null &&
+          !workerAccessActive,
+      EmployeeErpLinkState.workerToErpPending => normalizedErpUserId == null &&
+          pendingInvitation &&
+          pendingTransitionFromWorker &&
+          normalizedPendingInvitationId != null &&
+          normalizedPendingInvitationEmail != null &&
+          workerAccessExists &&
+          workerAccessActive &&
+          normalizedWorkerPortalAccountId != null &&
+          normalizedWorkerAuthUserId != null &&
+          normalizedWorkerUsername != null,
       EmployeeErpLinkState.erpLinked => normalizedErpUserId != null &&
           !pendingInvitation &&
           !workerAccessActive,
@@ -186,11 +230,15 @@ class EmployeeAccessState {
           !pendingInvitation &&
           workerAccessExists &&
           workerAccessActive &&
+          normalizedWorkerPortalAccountId != null &&
+          normalizedWorkerAuthUserId != null &&
           normalizedWorkerUsername != null,
       EmployeeErpLinkState.workerSuspended => normalizedErpUserId == null &&
           !pendingInvitation &&
           workerAccessExists &&
           !workerAccessActive &&
+          normalizedWorkerPortalAccountId != null &&
+          normalizedWorkerAuthUserId != null &&
           normalizedWorkerUsername != null,
       EmployeeErpLinkState.inconsistent => true,
     };
@@ -203,8 +251,15 @@ class EmployeeAccessState {
       erpUserId: normalizedErpUserId,
       erpProfileActive: erpProfileActive,
       pendingInvitation: pendingInvitation,
+      pendingInvitationId: normalizedPendingInvitationId,
+      pendingInvitationEmail: normalizedPendingInvitationEmail,
+      pendingInvitationCreatedAt:
+          _normalizedOptionalString(pendingInvitationCreatedAt),
+      pendingTransitionFromWorker: pendingTransitionFromWorker,
       workerAccessExists: workerAccessExists,
       workerAccessActive: workerAccessActive,
+      workerPortalAccountId: normalizedWorkerPortalAccountId,
+      workerAuthUserId: normalizedWorkerAuthUserId,
       workerUsername: normalizedWorkerUsername,
       linkState: evidenceMatchesState
           ? parsedLinkState
@@ -219,8 +274,14 @@ class EmployeeAccessState {
   final String? erpUserId;
   final bool erpProfileActive;
   final bool pendingInvitation;
+  final String? pendingInvitationId;
+  final String? pendingInvitationEmail;
+  final String? pendingInvitationCreatedAt;
+  final bool pendingTransitionFromWorker;
   final bool workerAccessExists;
   final bool workerAccessActive;
+  final String? workerPortalAccountId;
+  final String? workerAuthUserId;
   final String? workerUsername;
   final EmployeeErpLinkState linkState;
 
@@ -229,7 +290,13 @@ class EmployeeAccessState {
   bool get canReceiveErpLink =>
       isActiveEmployee &&
       (linkState == EmployeeErpLinkState.available ||
+          linkState == EmployeeErpLinkState.workerActive ||
           linkState == EmployeeErpLinkState.workerSuspended);
+}
+
+String? _normalizedOptionalString(dynamic value) {
+  final normalized = value is String ? value.trim() : '';
+  return normalized.isEmpty ? null : normalized;
 }
 
 List<EmployeeAccessState> parseEmployeeAccessStates(dynamic value) {
@@ -298,13 +365,19 @@ class UserManagementException implements Exception {
 String localizedUserManagementError(String? code) {
   return switch (code) {
     'worker_access_conflict' =>
-      'Este trabajador tiene un acceso activo en la app de trabajadores. Suspéndelo antes de vincular o invitar una cuenta ERP.',
+      'Este trabajador usa Worker Space. Elige la transición guiada para moverlo a ERP sin perder sus tareas.',
     'worker_identity_conflict' =>
       'Ese correo pertenece a una identidad de Worker Space. Retira primero ese acceso antes de usarlo como cuenta ERP.',
     'employee_erp_link_conflict' =>
       'El trabajador o el usuario ya está vinculado a otra cuenta ERP. Revisa el vínculo actual antes de continuar.',
     'employee_erp_link_state_changed' =>
       'El vínculo cambió mientras trabajabas. La consola se actualizará para que revises el estado antes de intentarlo nuevamente.',
+    'employee_access_transition_invalid' =>
+      'El acceso cambió mientras trabajabas. Actualiza la ficha y vuelve a iniciar la transición.',
+    'self_access_transition_forbidden' =>
+      'No puedes cambiar tu propia sesión activa a Worker Space. Debe hacerlo otro administrador.',
+    'worker_username_conflict' =>
+      'Ese usuario de Worker Space ya pertenece a otro trabajador.',
     'pending_invitation_exists' =>
       'Ya existe una invitación pendiente para ese correo o trabajador. Reenvíala o cancélala desde Invitaciones.',
     'staff_membership_inactive' =>
@@ -533,6 +606,7 @@ class UserManagementService {
     required Map<String, bool> permissions,
     String? name,
     String? employeeId,
+    bool transitionFromWorker = false,
   }) async {
     final result = await _invokeAdmin<Map<String, dynamic>>({
       'action': 'create_internal_invitation',
@@ -541,6 +615,7 @@ class UserManagementService {
       'permissions': permissions,
       'name': name,
       'employeeId': employeeId,
+      'transitionFromWorker': transitionFromWorker,
     });
     if (result['success'] != true || result['emailSent'] != true) {
       throw Exception('No se pudo enviar el correo de invitación.');
@@ -551,11 +626,13 @@ class UserManagementService {
   Future<InvitationIdentityCheck> checkInternalInvitationIdentity({
     required String email,
     String? employeeId,
+    bool transitionFromWorker = false,
   }) async {
     final result = await _invokeAdmin<Map<String, dynamic>>({
       'action': 'check_internal_invitation_identity',
       'email': email,
       'employeeId': employeeId,
+      'transitionFromWorker': transitionFromWorker,
     });
     return InvitationIdentityCheck.fromJson(result);
   }
@@ -680,6 +757,22 @@ class UserManagementService {
     return access;
   }
 
+  Future<EmployeeAccessState> getEmployeeAccessState({
+    required String employeeId,
+  }) async {
+    final result = await _invokeAdmin<Map<String, dynamic>>({
+      'action': 'get_employee_access_state',
+      'employeeId': employeeId,
+    });
+    final state = EmployeeAccessState.fromJson(result);
+    if (state.employeeId != employeeId) {
+      throw const FormatException(
+        'La respuesta de acceso no corresponde al trabajador solicitado.',
+      );
+    }
+    return state;
+  }
+
   Future<Map<String, dynamic>> resetWorkerPortalPassword({
     required String employeeId,
     required String password,
@@ -708,6 +801,22 @@ class UserManagementService {
       'action': 'set_worker_portal_access',
       'employeeId': employeeId,
       'isActive': isActive,
+    });
+  }
+
+  Future<Map<String, dynamic>> switchErpUserToWorker({
+    required String userId,
+    required String employeeId,
+    required String username,
+    required String password,
+  }) {
+    _validateAdminManagedPassword(password);
+    return _invokeAdmin<Map<String, dynamic>>({
+      'action': 'switch_erp_user_to_worker',
+      'userId': userId,
+      'employeeId': employeeId,
+      'username': username,
+      'password': password,
     });
   }
 

@@ -3,17 +3,6 @@ import 'package:flutter/scheduler.dart';
 
 import '../../bikeshop/models/bikeshop_models.dart';
 
-String _debugJobNumbers(List<MechanicJob> jobs) {
-  final numbers = jobs
-      .take(12)
-      .map((job) => job.jobNumber ?? job.id ?? 'sin-numero')
-      .join(', ');
-  if (jobs.length <= 12) {
-    return numbers;
-  }
-  return '$numbers, ... +${jobs.length - 12}';
-}
-
 /// Current app context that the global AI assistant should answer from.
 ///
 /// The right toolbar lives outside individual module pages, so pages can publish
@@ -27,9 +16,7 @@ class AIAssistantContextService extends ChangeNotifier {
   bool _isDisposed = false;
 
   AIAssistantContextService() {
-    debugPrint(
-      '[AI_CTX][ContextService.init] created id=${identityHashCode(this)}',
-    );
+    if (kDebugMode) debugPrint('[AI_CTX] Context service created.');
   }
 
   List<MechanicJob> get visibleJobs => _visibleJobs;
@@ -42,11 +29,9 @@ class AIAssistantContextService extends ChangeNotifier {
     required List<MechanicJob> jobs,
     required String scopeLabel,
   }) {
-    debugPrint(
-      '[AI_CTX][ContextService.set] id=${identityHashCode(this)} '
-      'count=${jobs.length} scope="$scopeLabel" '
-      'jobs=[${_debugJobNumbers(jobs)}]',
-    );
+    if (kDebugMode) {
+      debugPrint('[AI_CTX] Visible jobs context updated.');
+    }
     _visibleJobs = List<MechanicJob>.unmodifiable(jobs);
     _visibleJobsScopeLabel = scopeLabel;
     _hasVisibleJobsContext = true;
@@ -63,12 +48,7 @@ class AIAssistantContextService extends ChangeNotifier {
       return;
     }
 
-    debugPrint(
-      '[AI_CTX][ContextService.clear] id=${identityHashCode(this)} '
-      'previousCount=${_visibleJobs.length} '
-      'previousScope="$_visibleJobsScopeLabel" '
-      'jobs=[${_debugJobNumbers(_visibleJobs)}]',
-    );
+    if (kDebugMode) debugPrint('[AI_CTX] Visible jobs context cleared.');
     _visibleJobs = const [];
     _visibleJobsScopeLabel = null;
     _hasVisibleJobsContext = false;

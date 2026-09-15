@@ -1,6 +1,10 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import {
+  transcodeOpusToWav,
+  VOICE_NOTE_PLAYBACK_CONTENT_TYPE,
+} from "../_shared/voice_note_transcode.ts";
+import {
   attachmentReference,
   buildPrivateMessagingAttachmentPath,
   isCanonicalPrivateAttachmentPath,
@@ -198,6 +202,10 @@ serve(async (req) => {
   }
   const messageId = stringValue(body.messageId);
   if (!messageId) return jsonResponse({ error: "messageId is required" }, 400);
+  // `playback`: the WAV twin of a voice note, for players that cannot decode
+  // OGG/Opus. Falls back to the original when no twin exists.
+  const wantsPlayback = stringValue((body as JsonRecord).variant) === "playback";
+  const playbackPathOf = (record: JsonRecord) => stringValue(record.playback_storage_path);
 
   // This RLS read is the authorization boundary. The service-role client is
   // used only after the caller proves visibility of this exact message.
@@ -239,8 +247,9 @@ serve(async (req) => {
       .maybeSingle();
     if (!attachment) return jsonResponse({ error: "Attachment reference is invalid" }, 409);
     try {
+      const playbackPath = wantsPlayback ? playbackPathOf(metadata) : undefined;
       return jsonResponse({
-        url: await signedUrl(adminClient, reference.path),
+        url: await signedUrl(adminClient, playbackPath ?? reference.path),
         metadata: {},
         already_hydrated: true,
       });
@@ -469,14 +478,40 @@ serve(async (req) => {
     return jsonResponse({ error: "Unable to register WhatsApp media" }, 500);
   }
 
-  const metadataUpdates = attachmentReference({
-    attachmentId,
-    storagePath,
-    filename,
-    extension: preflight.extension,
-    contentType: preflight.contentType,
-    sizeBytes: bytes.byteLength,
-  });
+  const metadataUpdates: JsonRecord = {
+    ...attachmentReference({
+      attachmentId,
+      storagePath,
+      filename,
+      extension: preflight.extension,
+      contentType: preflight.contentType,
+      sizeBytes: bytes.byteLength,
+    }),
+  };
+
+  // A voice note is OGG/Opus; Apple players cannot decode it. Keep the
+  // original as the record and store a small WAV twin for playback. A failed
+  // transcode costs only the twin: the note is still stored and downloadable.
+  if (preflight.contentType === "audio/ogg") {
+    const wav = await transcodeOpusToWav(bytes);
+    if (wav) {
+      const playbackPath = `${storagePath}.wav`;
+      const { error: twinError } = await adminClient.storage
+        .from(PRIVATE_MESSAGING_BUCKET)
+        .upload(
+          playbackPath,
+          new Blob([wav.slice().buffer as ArrayBuffer], { type: VOICE_NOTE_PLAYBACK_CONTENT_TYPE }),
+          { contentType: VOICE_NOTE_PLAYBACK_CONTENT_TYPE, upsert: true },
+        );
+      if (twinError) {
+        console.error("❌ [WHATSAPP-MEDIA] Voice note playback twin upload failed", twinError);
+      } else {
+        metadataUpdates.playback_storage_path = playbackPath;
+        metadataUpdates.playback_content_type = VOICE_NOTE_PLAYBACK_CONTENT_TYPE;
+      }
+    }
+  }
+
   const { error: updateError } = await adminClient
     .from("messages")
     .update({ metadata: { ...metadata, ...metadataUpdates } })
@@ -490,8 +525,9 @@ serve(async (req) => {
   }
 
   try {
+    const playbackPath = wantsPlayback ? playbackPathOf(metadataUpdates) : undefined;
     return jsonResponse({
-      url: await signedUrl(adminClient, storagePath),
+      url: await signedUrl(adminClient, playbackPath ?? storagePath),
       metadata: metadataUpdates,
       already_hydrated: false,
     });

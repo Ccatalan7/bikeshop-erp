@@ -42,6 +42,19 @@ String withNotificationOpenRequest(
   ).toString();
 }
 
+/// Pseudo-ruta de una notificación cuyo destino es una herramienta del rail,
+/// no una ruta de GoRouter. El panel de notificaciones la intercepta y abre
+/// la bandeja de Tareas directamente en esa tarea.
+const String taskToolRoutePrefix = 'tool:tasks';
+
+String buildTaskToolRoute(String taskId) =>
+    '$taskToolRoutePrefix?taskId=${Uri.encodeComponent(taskId)}';
+
+String? taskIdFromToolRoute(String route) {
+  if (!route.startsWith(taskToolRoutePrefix)) return null;
+  return Uri.tryParse(route)?.queryParameters['taskId'];
+}
+
 String resolveErpNotificationRoute(Map<String, dynamic> row) {
   final type = _text(row['type']);
   final entityType = _text(row['entity_type']);
@@ -50,19 +63,48 @@ String resolveErpNotificationRoute(Map<String, dynamic> row) {
       : const <String, dynamic>{};
   final storedRoute = _text(row['route']);
 
+  if (entityType == 'smart_task') {
+    final taskId = _firstText([row['entity_id'], data['task_id']]);
+    if (taskId != null) return buildTaskToolRoute(taskId);
+  }
+
   // Meta interaction URLs go through the dedicated trusted-host validator at
   // navigation time. Keep their exact stored destination intact here.
   if (type.startsWith('meta_') && storedRoute.isNotEmpty) {
     return storedRoute;
   }
 
+  // The payment row no longer exists after an audited reversal. Its durable
+  // activity therefore opens the surviving invoice instead of constructing a
+  // dead exact-payment destination from `entity_id`.
+  if (type == 'sales_payment_voided') {
+    final invoiceId = _firstText([data['invoice_id']]);
+    if (invoiceId != null) {
+      return '/sales/invoices/${Uri.encodeComponent(invoiceId)}';
+    }
+    return storedRoute.isEmpty ? '/sales/invoices' : storedRoute;
+  }
+
+  // Archived jobs and physically deleted expenses no longer have a live
+  // exact-detail destination. Their durable activity opens the canonical
+  // module projection instead of manufacturing a dead entity route.
+  if (type == 'mechanic_job_archived') {
+    return storedRoute.isEmpty ? '/taller/pegas' : storedRoute;
+  }
+  if (type == 'expense_deleted') {
+    return storedRoute.isEmpty ? '/accounting/expenses' : storedRoute;
+  }
+
   final entityId = _firstText([
     row['entity_id'],
     switch (type) {
-      'mechanic_job_created' => data['job_id'],
+      'mechanic_job_created' || 'mechanic_job_archived' => data['job_id'],
       'sales_payment_received' => data['payment_id'],
-      'expense_recorded' => data['expense_id'],
-      'online_order_created' => data['order_id'],
+      'expense_recorded' ||
+      'expense_voided' ||
+      'expense_deleted' =>
+        data['expense_id'],
+      'online_order_created' || 'online_order_cancelled' => data['order_id'],
       'whatsapp_catalog_approved' => data['product_id'],
       _ => null,
     },
@@ -81,12 +123,16 @@ String resolveErpNotificationRoute(Map<String, dynamic> row) {
     ).toString();
   }
 
-  if ((type == 'expense_recorded' || entityType == 'expense') &&
+  if ((type == 'expense_recorded' ||
+          type == 'expense_voided' ||
+          entityType == 'expense') &&
       entityId != null) {
     return '/accounting/expenses/${Uri.encodeComponent(entityId)}';
   }
 
-  if ((type == 'online_order_created' || entityType == 'online_order') &&
+  if ((type == 'online_order_created' ||
+          type == 'online_order_cancelled' ||
+          entityType == 'online_order') &&
       entityId != null) {
     return Uri(
       path: '/website/orders',
@@ -145,6 +191,7 @@ bool _hasConcreteNotificationTarget(Uri uri) {
   };
   if (uri.queryParameters.keys.any(identityKeys.contains)) return true;
   if (RegExp(r'^/taller/pegas/[^/]+$').hasMatch(uri.path)) return true;
+  if (RegExp(r'^/sales/invoices/[^/]+$').hasMatch(uri.path)) return true;
   if (RegExp(r'^/accounting/expenses/[^/]+$').hasMatch(uri.path)) return true;
   return RegExp(r'^/inventory/products/[^/]+/edit$').hasMatch(uri.path);
 }

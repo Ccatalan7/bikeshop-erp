@@ -1,0 +1,165 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="referrer" content="no-referrer">
+    <meta name="robots" content="noindex">
+    <meta http-equiv="Cache-Control" content="no-store">
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'none'; img-src 'self'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'"
+    >
+    <title>Abriendo Viñabike ERP</title>
+    <!--
+      Puente de enlace compartido. WhatsApp sólo abre enlaces https; esta
+      página, en cuanto carga, entrega la ruta a la app de escritorio por el
+      esquema vinabike:// y no arranca la app web completa. Es estática a
+      propósito: pesa unos KB y responde antes de que se note el navegador.
+    -->
+    <script>
+      (function () {
+        var params = new URLSearchParams(window.location.search || '');
+        var route = (params.get('route') || '').trim();
+        var title = (params.get('title') || '').trim();
+        if (!route || route.charAt(0) !== '/' || route.indexOf('//') === 0) {
+          window.vinabikeHandoff = null;
+          return;
+        }
+        window.vinabikeHandoff = {
+          route: route,
+          title: title || 'Viñabike ERP',
+          appUrl: 'vinabike://app/open?route=' + encodeURIComponent(route) +
+            '&title=' + encodeURIComponent(title),
+          webUrl: 'https://project-vinabike.web.app' + route
+        };
+        // La entrega a la app se dispara al final del cuerpo: si se hace acá,
+        // en el <head>, Chromium cancela el parseo del resto del documento y
+        // la página de respaldo (botones) queda vacía.
+      })();
+    </script>
+    <style>
+      :root {
+        color-scheme: light;
+        font-family: Arial, sans-serif;
+        background: #f4f6f8;
+        color: #1f2937;
+      }
+
+      body {
+        min-height: 100vh;
+        margin: 0;
+        display: grid;
+        place-items: center;
+        padding: 24px;
+        box-sizing: border-box;
+      }
+
+      main {
+        width: min(100%, 460px);
+        box-sizing: border-box;
+        padding: 32px;
+        border: 1px solid #e5e7eb;
+        border-radius: 16px;
+        background: #fff;
+        text-align: center;
+      }
+
+      .brand {
+        margin: 0 auto 20px;
+        width: 56px;
+        height: 56px;
+      }
+
+      h1 {
+        margin: 0 0 8px;
+        font-size: 20px;
+      }
+
+      p {
+        margin: 0 0 20px;
+        line-height: 1.5;
+        color: #4b5563;
+      }
+
+      .route {
+        display: block;
+        margin: 0 0 24px;
+        font-family: Menlo, Consolas, monospace;
+        font-size: 14px;
+        color: #111827;
+      }
+
+      .button {
+        display: inline-block;
+        box-sizing: border-box;
+        width: 100%;
+        padding: 12px 16px;
+        border-radius: 10px;
+        text-decoration: none;
+        font-weight: 600;
+        background: #1668bd;
+        color: #fff;
+      }
+
+      .button.secondary {
+        margin-top: 10px;
+        background: transparent;
+        color: #1668bd;
+        border: 1px solid #b9d6f2;
+      }
+
+      .hint {
+        margin: 20px 0 0;
+        font-size: 13px;
+        color: #6b7280;
+      }
+
+      [hidden] {
+        display: none !important;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <img class="brand" src="/vinabike-logo.png" alt="">
+      <h1 id="heading">Abriendo Viñabike ERP…</h1>
+      <p id="lead">Si la app no se abrió sola, ábrela con el botón.</p>
+      <strong class="route" id="route"></strong>
+      <a class="button" id="open" href="#" hidden>Abrir en la app</a>
+      <a class="button secondary" id="web" href="#" hidden>Abrir en el navegador</a>
+      <p class="hint" id="hint" hidden>Puedes cerrar esta pestaña.</p>
+    </main>
+    <script>
+      (function () {
+        var handoff = window.vinabikeHandoff;
+        var heading = document.getElementById('heading');
+        var lead = document.getElementById('lead');
+        var route = document.getElementById('route');
+        var open = document.getElementById('open');
+        var web = document.getElementById('web');
+        var hint = document.getElementById('hint');
+        if (!handoff) {
+          heading.textContent = 'Este enlace no trae una página del ERP';
+          lead.textContent = 'Pídele a quien lo envió que lo copie de nuevo ' +
+            'desde «Copiar enlace de página».';
+          return;
+        }
+        document.title = handoff.title + ' · Viñabike ERP';
+        route.textContent = handoff.title;
+        open.href = handoff.appUrl;
+        open.hidden = false;
+        web.href = handoff.webUrl;
+        web.hidden = false;
+        hint.hidden = false;
+        // Sin demora: el navegador sólo es el trámite para llegar a la app.
+        window.location.replace(handoff.appUrl);
+        // Una pestaña abierta desde otra app rara vez se deja cerrar por
+        // script; si el navegador lo permite, mejor.
+        window.setTimeout(function () {
+          try { window.close(); } catch (e) { /* queda la pestaña */ }
+        }, 1500);
+      })();
+    </script>
+  </body>
+</html>

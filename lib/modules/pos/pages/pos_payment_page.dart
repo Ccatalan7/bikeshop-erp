@@ -11,6 +11,8 @@ import '../../crm/models/crm_models.dart' as crm_models;
 import '../../crm/services/customer_service.dart';
 import '../../../shared/models/customer.dart' as shared_customer;
 import '../../../shared/services/tenant_service.dart';
+import '../../../shared/models/payment_method.dart' as shared_payment;
+import '../../../shared/services/payment_method_service.dart';
 
 class POSPaymentPage extends StatefulWidget {
   const POSPaymentPage({super.key});
@@ -35,7 +37,6 @@ class _POSPaymentPageState extends State<POSPaymentPage> {
   @override
   void initState() {
     super.initState();
-    _selectedPaymentMethod = PaymentMethod.cash;
     final customerService = context.read<CustomerService>();
     if (customerService.hasListCustomersCache) {
       _customers = customerService.cachedListCustomers
@@ -52,9 +53,20 @@ class _POSPaymentPageState extends State<POSPaymentPage> {
         _amountReceived = posService.cartTotal;
         _amountController.text = posService.cartTotal.toStringAsFixed(0);
       });
+      _loadPaymentMethods();
     });
 
     _loadCustomers();
+  }
+
+  Future<void> _loadPaymentMethods() async {
+    final service = context.read<PaymentMethodService>();
+    await service.loadPaymentMethods();
+    if (!mounted || _selectedPaymentMethod != null) return;
+    final first = service.incomingPaymentMethods.firstOrNull;
+    if (first != null) {
+      setState(() => _selectedPaymentMethod = _legacyEnvelopeFor(first));
+    }
   }
 
   @override
@@ -324,22 +336,28 @@ class _POSPaymentPageState extends State<POSPaymentPage> {
                       ),
                     ),
                     const SizedBox(height: 16),
-                    PaymentMethodSelector(
-                      paymentMethods: PaymentMethod.defaultMethods,
-                      selectedMethod: _selectedPaymentMethod,
-                      showAmountInput:
-                          false, // Parent page handles amount input
-                      onMethodSelected: (method) {
-                        setState(() {
-                          _selectedPaymentMethod = method;
-                          if (method != PaymentMethod.cash) {
-                            _amountReceived = posService.cartTotal;
-                          }
-                        });
+                    Consumer<PaymentMethodService>(
+                      builder: (context, methodService, _) {
+                        final methods = methodService.incomingPaymentMethods
+                            .map(_legacyEnvelopeFor)
+                            .toList(growable: false);
+                        return PaymentMethodSelector(
+                          paymentMethods: methods,
+                          selectedMethod: _selectedPaymentMethod,
+                          showAmountInput: false,
+                          onMethodSelected: (method) {
+                            setState(() {
+                              _selectedPaymentMethod = method;
+                              if (method.type != PaymentType.cash) {
+                                _amountReceived = posService.cartTotal;
+                              }
+                            });
+                          },
+                        );
                       },
                     ),
                     const SizedBox(height: 24),
-                    if (_selectedPaymentMethod == PaymentMethod.cash) ...[
+                    if (_selectedPaymentMethod?.type == PaymentType.cash) ...[
                       Text(
                         'Monto Recibido',
                         style: theme.textTheme.titleLarge?.copyWith(
@@ -417,6 +435,22 @@ class _POSPaymentPageState extends State<POSPaymentPage> {
           ),
         ),
       ],
+    );
+  }
+
+  PaymentMethod _legacyEnvelopeFor(shared_payment.PaymentMethod method) {
+    final type = switch (method.code.toLowerCase()) {
+      'cash' => PaymentType.cash,
+      'transfer' => PaymentType.transfer,
+      'check' || 'voucher' => PaymentType.voucher,
+      _ when method.isCardInstrument => PaymentType.card,
+      _ => PaymentType.cash,
+    };
+    return PaymentMethod(
+      id: method.id,
+      type: type,
+      name: method.name,
+      requiresChange: type == PaymentType.cash,
     );
   }
 }

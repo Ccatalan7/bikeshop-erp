@@ -39,6 +39,29 @@ Shared visual truth comes from `GUÍA GENERAL Viñabike - Componentes` in Design
 project `ERP Bikeshop UI Mockups` through `DesignSync`. Claude participates
 only when the owner explicitly requests an independent proposal or review.
 
+### Abrir DesignSync: el id va explícito, `list_projects` NO sirve
+
+**`projectId = a0fa3196-6315-4b96-bde7-7cc801e7a74e`** (`ERP Bikeshop UI
+Mockups`). Pásalo a `get_file` / `list_files` **siempre**.
+
+`DesignSync list_projects` devuelve `[]` **por diseño**: lista sólo proyectos de
+tipo *design-system*, y éste es `PROJECT_TYPE_PROJECT`. **Un `[]` no significa
+que falte autorización.** Ya costó dos sesiones bloqueadas concluyendo que el
+dueño tenía que aprobar algo; no hay nada que aprobar. Si dudas, compruébalo con
+`get_project` sobre ese id: devuelve `canEdit: true`.
+
+Las tres rutas que se usan casi siempre:
+
+- `GUÍA GENERAL Viñabike - Componentes.dc.html` — componentes compartidos.
+- `Arquitectura de Paletas - Viñabike.dc.html` — roles y modo oscuro.
+- `<módulo>.dc.html` (p. ej. `Compras · Asistente inteligente navegable.dc.html`)
+  — la composición, que el `spec.json` **no** trae.
+
+`get_file` sobre >50 KB guarda a disco y sólo te entra un preview: se greppea,
+no se carga. La guía **ya pasó el cap de 256 KiB** y se corta en 262 144 bytes
+**sin avisar** — si un rol no aparece, puede estar fuera del corte, no ausente.
+Procedimiento completo en `docs/development/DESIGN_HANDOFF_SYNC_CONTRACT.md`.
+
 - **Every visual value comes from a Design file, read with `DesignSync`.**
   Colour, radius, shadow, border, spacing, font, height. Reading them off a
   screenshot of the Design window, or estimating them, is prohibited. A value
@@ -126,12 +149,15 @@ No escribas el relato de la sesión, ni lo que ya se ve en el código o en git.
   suspension. Work sequentially in one session until the owner lifts it.
   Browser, Computer Use, DesignSync and the native debug tooling remain
   available.
-  **Corrección del dueño, 2026-08-09:** una tarea de implementar, arreglar,
-  terminar, ship o deploy incluye el rollout productivo normal, no destructivo
-  y ya revisado. Claude entrega migraciones, funciones y despliegues in-scope a
-  Codex para ejecución guardada, read-back y smoke; no devuelve al dueño una
-  confirmación rutinaria ni conserva un `no production writes` de un subtask
-  anterior después de una instrucción posterior de terminar. Análisis,
+  **Corrección del dueño, 2026-08-09, precisada el 2026-08-20:** una tarea de
+  implementar, arreglar, terminar, ship o deploy incluye el rollout productivo
+  normal, no destructivo y ya revisado, y **Claude lo corre**. Migraciones
+  in-scope van por `scripts/db/deploy_migration.sh` con
+  `VINABIKE_DB_WRITE_CONFIRM=production` y su archivo `--verify`; el hook no las
+  deniega —verificado corriendo, no leyendo, el 2026-08-20—. No se le entrega el
+  SQL a Codex ni se le devuelve al dueño una confirmación rutinaria, y no se
+  conserva un `no production writes` de un subtask anterior después de una
+  instrucción posterior de terminar. Lo que se reporta es el read-back. Análisis,
   diagnóstico, draft y `local-only` siguen read-only mientras sean la
   instrucción vigente. Reparaciones destructivas, rotación de credenciales,
   targets ambiguos, publicación más amplia y cambios ajenos al alcance sí

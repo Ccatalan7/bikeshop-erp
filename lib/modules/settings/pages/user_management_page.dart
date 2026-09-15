@@ -222,6 +222,7 @@ class _UserManagementPageState extends State<UserManagementPage> {
       final tenant = await tenantFuture;
 
       if (!mounted || !_hasManagementAccess) return;
+      String? inviteEmployeeId;
       setState(() {
         _staffUsers = _listFrom(overview['staffUsers']);
         _customerAccounts = _listFrom(overview['customerAccounts']);
@@ -230,17 +231,40 @@ class _UserManagementPageState extends State<UserManagementPage> {
             parseEmployeeAccessStates(overview['employeeAccessStates']);
         _currentTenant = tenant;
         final requestedSelection = _resolveRequestedSelection();
+        final requestedEmployee =
+            _openRequest?.target == UserManagementTarget.employee &&
+                    _openRequest?.targetId != null
+                ? _employeeAccessById(_openRequest!.targetId)
+                : null;
+        final shouldOpenEmployeeInvitation = requestedSelection == null &&
+            requestedEmployee != null &&
+            _canSelectEmployee(requestedEmployee);
+        if (shouldOpenEmployeeInvitation) {
+          inviteEmployeeId = requestedEmployee.employeeId;
+        }
         _selectedItem =
             _openRequest == null ? _resolveSelection() : requestedSelection;
-        _requestedTargetUnavailable =
-            _openRequest?.target != null && requestedSelection == null;
+        _requestedTargetUnavailable = _openRequest?.target != null &&
+            requestedSelection == null &&
+            !shouldOpenEmployeeInvitation;
         _compactShowingDetail =
             _openRequest?.target != null && requestedSelection != null;
         if (_openRequest?.target != null) {
           _compactSelectionWasExplicit = requestedSelection != null;
         }
+        if (shouldOpenEmployeeInvitation) {
+          _openRequest = null;
+        }
         _isLoading = false;
       });
+      if (inviteEmployeeId != null) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!mounted) return;
+          unawaited(
+            _showInviteStaffDialog(initialEmployeeId: inviteEmployeeId),
+          );
+        });
+      }
     } catch (_) {
       if (!mounted) return;
       setState(() {
@@ -432,16 +456,20 @@ class _UserManagementPageState extends State<UserManagementPage> {
 
   String _employeeStateLabel(EmployeeAccessState employee) {
     if (!employee.isActiveEmployee) return 'Trabajador inactivo';
-    if (employee.pendingInvitation ||
-        _pendingInvitationForEmployee(employee.employeeId) != null) {
+    if (employee.linkState != EmployeeErpLinkState.workerToErpPending &&
+        (employee.pendingInvitation ||
+            _pendingInvitationForEmployee(employee.employeeId) != null)) {
       return 'Invitación pendiente';
     }
     return switch (employee.linkState) {
       EmployeeErpLinkState.available => 'Disponible para vincular',
       EmployeeErpLinkState.pendingInvitation => 'Invitación pendiente',
+      EmployeeErpLinkState.workerToErpPending =>
+        'Worker activo · migración a ERP pendiente',
       EmployeeErpLinkState.erpLinked =>
         'Vinculado a ${_staffIdentityLabel(employee.erpUserId)}',
-      EmployeeErpLinkState.workerActive => 'App de trabajadores activa',
+      EmployeeErpLinkState.workerActive =>
+        'Worker Space activo · puede migrarse',
       EmployeeErpLinkState.workerSuspended =>
         'App de trabajadores suspendida · puede migrarse',
       EmployeeErpLinkState.inconsistent => 'Requiere revisión',
@@ -456,7 +484,8 @@ class _UserManagementPageState extends State<UserManagementPage> {
       return 'Este trabajador está inactivo y no puede recibir un nuevo acceso ERP.';
     }
     final pending = _pendingInvitationForEmployee(employee.employeeId);
-    if (employee.pendingInvitation || pending != null) {
+    if (employee.linkState != EmployeeErpLinkState.workerToErpPending &&
+        (employee.pendingInvitation || pending != null)) {
       return 'Ya hay una invitación pendiente para este trabajador (${pending?['email'] ?? 'sin email visible'}). Reenvíala o cancélala desde Invitaciones.';
     }
     return switch (employee.linkState) {
@@ -464,10 +493,12 @@ class _UserManagementPageState extends State<UserManagementPage> {
         'Disponible. Al aceptar la invitación, esta cuenta ERP quedará vinculada a ${employee.employeeName}.',
       EmployeeErpLinkState.pendingInvitation =>
         'Ya existe una invitación pendiente para este trabajador.',
+      EmployeeErpLinkState.workerToErpPending =>
+        'Worker Space sigue activo hasta que se acepte la invitación ERP. Puedes reenviarla o cancelarla sin dejar a la persona sin acceso.',
       EmployeeErpLinkState.erpLinked =>
         'Ya está vinculado a ${_staffIdentityLabel(employee.erpUserId)}. Desvincula esa cuenta antes de reasignarlo.',
       EmployeeErpLinkState.workerActive =>
-        'Tiene acceso activo en la app de trabajadores${employee.workerUsername == null ? '' : ' como ${employee.workerUsername}'}. Suspéndelo antes de migrarlo a una cuenta ERP.',
+        'Tiene Worker Space activo${employee.workerUsername == null ? '' : ' como ${employee.workerUsername}'}. La invitación no lo cerrará: al aceptarla, el sistema moverá su acceso y sus tareas abiertas a ERP en una sola operación.',
       EmployeeErpLinkState.workerSuspended =>
         'Su acceso independiente a la app de trabajadores está suspendido. Puedes migrarlo explícitamente a una cuenta ERP; el acceso anterior seguirá suspendido.',
       EmployeeErpLinkState.inconsistent =>
@@ -483,7 +514,8 @@ class _UserManagementPageState extends State<UserManagementPage> {
       return 'Este trabajador está inactivo y no puede recibir un nuevo acceso ERP.';
     }
     final pending = _pendingInvitationForEmployee(employee.employeeId);
-    if (employee.pendingInvitation || pending != null) {
+    if (employee.linkState != EmployeeErpLinkState.workerToErpPending &&
+        (employee.pendingInvitation || pending != null)) {
       return 'Ya existe una invitación pendiente para este trabajador. Reenvíala o cancélala antes de vincular otra cuenta.';
     }
     return switch (employee.linkState) {
@@ -491,10 +523,12 @@ class _UserManagementPageState extends State<UserManagementPage> {
         'Disponible. Esta cuenta ERP quedará vinculada inmediatamente a ${employee.employeeName}.',
       EmployeeErpLinkState.pendingInvitation =>
         'Ya existe una invitación pendiente para este trabajador.',
+      EmployeeErpLinkState.workerToErpPending =>
+        'Ya existe una migración a ERP pendiente. Reenvía o cancela esa invitación antes de elegir otra cuenta.',
       EmployeeErpLinkState.erpLinked =>
         'Ya está vinculado a ${_staffIdentityLabel(employee.erpUserId)}.',
       EmployeeErpLinkState.workerActive =>
-        'Tiene acceso activo en la app de trabajadores. Suspéndelo antes de migrarlo a una cuenta ERP.',
+        'Worker Space está activo. Al confirmar, se cerrarán sus sesiones Worker, se activará esta cuenta ERP y sus tareas abiertas seguirán con la misma persona.',
       EmployeeErpLinkState.workerSuspended =>
         'El acceso independiente de la app está suspendido. Puedes migrarlo explícitamente; ese acceso anterior seguirá suspendido.',
       EmployeeErpLinkState.inconsistent =>
@@ -1202,6 +1236,7 @@ class _UserManagementPageState extends State<UserManagementPage> {
     }
 
     final employee = _employeeStateForStaff(item);
+    final isPrincipalOwner = item['isPrincipalOwner'] == true;
     final userId = _normalizedId(item['id']);
     final declaredEmployeeId = _normalizedId(item['employeeId']);
     final linkNeedsReview = declaredEmployeeId != null
@@ -1219,8 +1254,10 @@ class _UserManagementPageState extends State<UserManagementPage> {
     return _IdentityRowCopy(
       title: title,
       subtitle: email,
-      meta: exception ??
-          '${_roleLabel(item['role'])} · ${employee?.employeeName ?? 'Sin ficha laboral'}',
+      meta: isPrincipalOwner
+          ? 'Identidad de Viñabike · no representa a un trabajador'
+          : exception ??
+              '${_roleLabel(item['role'])} · ${employee?.employeeName ?? 'Sin ficha laboral'}',
       exception: exception,
     );
   }
@@ -1318,6 +1355,7 @@ class _UserManagementPageState extends State<UserManagementPage> {
   Widget _staffDetail(BuildContext context, Map<String, dynamic> user) {
     final currentUserId = Supabase.instance.client.auth.currentUser?.id;
     final isSelf = user['id'] == currentUserId;
+    final isPrincipalOwner = user['isPrincipalOwner'] == true;
     final isActive = user['isActive'] != false;
     final profileActive = user['profileActive'] == true;
     final email = user['email']?.toString() ?? '';
@@ -1331,16 +1369,27 @@ class _UserManagementPageState extends State<UserManagementPage> {
         declaredEmployeeId == employeeState.employeeId;
     final hasDeclaredEmployeeLink =
         declaredEmployeeId != null && declaredEmployeeId.isNotEmpty;
-    final employeeLinkNeedsReview = hasDeclaredEmployeeLink
+    final employeeLinkNeedsReview = !isPrincipalOwner && hasDeclaredEmployeeLink
         ? !hasHealthyEmployeeLink
-        : employeeState?.erpUserId == userId;
+        : !isPrincipalOwner && employeeState?.erpUserId == userId;
 
-    final canChangeEmployee = canChangeEmployeeLink(
-      actionRunning: _isActionRunning,
-      employeeLinkNeedsReview: employeeLinkNeedsReview,
-      profileActive: profileActive,
-      hasHealthyEmployeeLink: hasHealthyEmployeeLink,
+    final hasWorkerTransitionCandidate = _employeeAccessStates.any(
+      (employee) =>
+          employee.isActiveEmployee &&
+          employee.linkState == EmployeeErpLinkState.workerActive &&
+          _canSelectEmployee(employee),
     );
+    final canChangeEmployee = !isPrincipalOwner &&
+        (canChangeEmployeeLink(
+              actionRunning: _isActionRunning,
+              employeeLinkNeedsReview: employeeLinkNeedsReview,
+              profileActive: profileActive,
+              hasHealthyEmployeeLink: hasHealthyEmployeeLink,
+            ) ||
+            (!_isActionRunning &&
+                !employeeLinkNeedsReview &&
+                !profileActive &&
+                hasWorkerTransitionCandidate));
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -1348,7 +1397,9 @@ class _UserManagementPageState extends State<UserManagementPage> {
         _detailHeader(
           context,
           title: displayName,
-          subtitle: 'Usuario interno · ${_roleLabel(user['role'])}',
+          subtitle: isPrincipalOwner
+              ? 'Identidad de la empresa · Owner'
+              : 'Usuario interno · ${_roleLabel(user['role'])}',
           status: isActive ? 'Acceso activo' : 'Acceso restringido',
           statusIsException: !isActive,
         ),
@@ -1384,45 +1435,78 @@ class _UserManagementPageState extends State<UserManagementPage> {
         _detailSection(
           context,
           title: 'Vínculo laboral',
-          description:
-              'Relaciona esta cuenta con la ficha correcta del trabajador.',
+          description: isPrincipalOwner
+              ? 'Esta identidad representa a Viñabike completa, no a una persona de la nómina.'
+              : 'Relaciona esta cuenta con la ficha correcta del trabajador.',
           children: [
             _detailLine(
-              'Trabajador',
-              employeeLinkNeedsReview
-                  ? 'Requiere revisión'
-                  : hasHealthyEmployeeLink
-                      ? employeeState.employeeName
-                      : 'No vinculado',
+              isPrincipalOwner ? 'Tipo de identidad' : 'Trabajador',
+              isPrincipalOwner
+                  ? 'Empresa (owner)'
+                  : employeeLinkNeedsReview
+                      ? 'Requiere revisión'
+                      : hasHealthyEmployeeLink
+                          ? employeeState.employeeName
+                          : 'No vinculado',
             ),
-            const SizedBox(height: 8),
-            Align(
-              alignment: Alignment.centerLeft,
-              child: OutlinedButton.icon(
-                onPressed: !canChangeEmployee
-                    ? null
-                    : hasHealthyEmployeeLink
-                        ? () => _confirmUnlinkEmployee(
-                              user: user,
-                              employee: employeeState,
-                            )
-                        : () => _showLinkEmployeeDialog(user),
-                icon: Icon(
-                  hasHealthyEmployeeLink
-                      ? Icons.link_off_outlined
-                      : Icons.add_link_outlined,
-                  size: 18,
-                ),
-                label: Text(
-                  hasHealthyEmployeeLink
-                      ? 'Desvincular trabajador'
-                      : 'Vincular trabajador',
-                ),
-                style: OutlinedButton.styleFrom(
-                  minimumSize: const Size(48, 48),
+            if (isPrincipalOwner) ...[
+              const SizedBox(height: 10),
+              _noteBox(
+                context,
+                icon: Icons.business_outlined,
+                text:
+                    'No se puede vincular a un trabajador ni mover a Worker Space. Los trabajadores usan identidades separadas para que los cambios de acceso nunca alteren la cuenta principal de la empresa.',
+              ),
+            ] else ...[
+              const SizedBox(height: 8),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: OutlinedButton.icon(
+                  onPressed: !canChangeEmployee
+                      ? null
+                      : hasHealthyEmployeeLink
+                          ? () => _confirmUnlinkEmployee(
+                                user: user,
+                                employee: employeeState,
+                              )
+                          : () => _showLinkEmployeeDialog(user),
+                  icon: Icon(
+                    hasHealthyEmployeeLink
+                        ? Icons.link_off_outlined
+                        : Icons.add_link_outlined,
+                    size: 18,
+                  ),
+                  label: Text(
+                    hasHealthyEmployeeLink
+                        ? 'Desvincular trabajador'
+                        : 'Vincular trabajador',
+                  ),
+                  style: OutlinedButton.styleFrom(
+                    minimumSize: const Size(48, 48),
+                  ),
                 ),
               ),
-            ),
+            ],
+            if (!isPrincipalOwner && hasHealthyEmployeeLink && !isSelf) ...[
+              const SizedBox(height: 8),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: FilledButton.tonalIcon(
+                  key: const ValueKey('staff-switch-to-worker-action'),
+                  onPressed: _isActionRunning
+                      ? null
+                      : () => _showSwitchToWorkerDialog(
+                            user: user,
+                            employee: employeeState,
+                          ),
+                  icon: const Icon(Icons.phone_iphone_outlined, size: 18),
+                  label: const Text('Mover a Worker Space'),
+                  style: FilledButton.styleFrom(
+                    minimumSize: const Size(48, 48),
+                  ),
+                ),
+              ),
+            ],
             if (employeeLinkNeedsReview) ...[
               const SizedBox(height: 10),
               _noteBox(
@@ -1438,7 +1522,9 @@ class _UserManagementPageState extends State<UserManagementPage> {
                 icon: Icons.link_off_outlined,
                 text: hasHealthyEmployeeLink
                     ? 'La cuenta está suspendida, pero el vínculo exacto se conserva para auditoría y puede desvincularse explícitamente.'
-                    : 'Restaura primero el acceso si necesitas vincular esta cuenta a un trabajador.',
+                    : hasWorkerTransitionCandidate
+                        ? 'Esta cuenta ERP está suspendida. Puedes elegir un trabajador con Worker Space activo para mover su acceso y sus tareas a esta cuenta en una sola operación.'
+                        : 'Restaura primero el acceso si necesitas vincular esta cuenta a un trabajador.',
               ),
             ],
           ],
@@ -1455,7 +1541,7 @@ class _UserManagementPageState extends State<UserManagementPage> {
               context,
               icon: isActive ? Icons.tune : Icons.check_circle_outline,
               label: isActive ? 'Editar rol y permisos' : 'Restaurar acceso',
-              onPressed: _isActionRunning || isSelf
+              onPressed: _isActionRunning || isSelf || isPrincipalOwner
                   ? null
                   : isActive
                       ? () => _showEditStaffDialog(user)
@@ -1481,7 +1567,7 @@ class _UserManagementPageState extends State<UserManagementPage> {
               context,
               title: 'Más acciones de acceso',
               children: [
-                if (!isActive && !isSelf)
+                if (!isActive && !isSelf && !isPrincipalOwner)
                   _secondaryAction(
                     context,
                     icon: Icons.tune,
@@ -1514,7 +1600,7 @@ class _UserManagementPageState extends State<UserManagementPage> {
                               () => _userService.sendPasswordReset(email),
                             ),
                   ),
-                if (isActive && !isSelf)
+                if (isActive && !isSelf && !isPrincipalOwner)
                   _secondaryAction(
                     context,
                     icon: Icons.block_outlined,
@@ -1536,7 +1622,7 @@ class _UserManagementPageState extends State<UserManagementPage> {
             _permissionsPreview(context, user['permissions']),
           ],
         ),
-        if (!isSelf)
+        if (!isSelf && !isPrincipalOwner)
           _dangerAction(
             context,
             label: 'Dar de baja cuenta interna',
@@ -1781,6 +1867,17 @@ class _UserManagementPageState extends State<UserManagementPage> {
                 '${invitationEmployee?.employeeName ?? 'este trabajador'} '
                 'usa $driftEmail. Una invitación enviada no cambia de '
                 'destino: cancela y vuelve a invitar.',
+          ),
+        ],
+        if (invitationEmployee?.linkState ==
+            EmployeeErpLinkState.workerToErpPending) ...[
+          const SizedBox(height: 14),
+          const VbNotice(
+            key: ValueKey('worker-to-erp-pending-notice'),
+            tone: VbNoticeTone.info,
+            title: 'Cambio a ERP pendiente',
+            body:
+                'Worker Space sigue activo hasta que la persona acepte este correo. Al aceptar, sus sesiones Worker se cerrarán y sus tareas abiertas pasarán a la cuenta ERP.',
           ),
         ],
         const SizedBox(height: 22),
@@ -2299,7 +2396,7 @@ class _UserManagementPageState extends State<UserManagementPage> {
     );
   }
 
-  Future<void> _showInviteStaffDialog() async {
+  Future<void> _showInviteStaffDialog({String? initialEmployeeId}) async {
     final formKey = GlobalKey<FormState>();
     final emailController = TextEditingController();
     final nameController = TextEditingController();
@@ -2324,6 +2421,17 @@ class _UserManagementPageState extends State<UserManagementPage> {
     final activeEmployees = _employeeAccessStates
         .where((employee) => employee.isActiveEmployee)
         .toList(growable: false);
+    final initialEmployee = _employeeAccessById(initialEmployeeId);
+    if (initialEmployee != null &&
+        initialEmployee.isActiveEmployee &&
+        _canSelectEmployee(initialEmployee)) {
+      selectedEmployeeKey = initialEmployee.employeeId;
+      selectedEmployee = initialEmployee;
+      previousEmailPrefill = initialEmployee.email;
+      previousNamePrefill = initialEmployee.employeeName;
+      emailController.text = initialEmployee.email ?? '';
+      nameController.text = initialEmployee.employeeName;
+    }
 
     void clearIdentityCheck() {
       identityCheckVersion += 1;
@@ -2346,7 +2454,8 @@ class _UserManagementPageState extends State<UserManagementPage> {
         return Future.value();
       }
       final requestKey =
-          '${email.toLowerCase()}|${selectedEmployee?.employeeId ?? ''}';
+          '${email.toLowerCase()}|${selectedEmployee?.employeeId ?? ''}|'
+          '${selectedEmployee?.linkState == EmployeeErpLinkState.workerActive}';
       final pendingCheck = identityCheckFuture;
       if (pendingCheck != null && identityCheckKey == requestKey) {
         return pendingCheck;
@@ -2369,6 +2478,8 @@ class _UserManagementPageState extends State<UserManagementPage> {
           final result = await _userService.checkInternalInvitationIdentity(
             email: email,
             employeeId: selectedEmployee?.employeeId,
+            transitionFromWorker: selectedEmployee?.linkState ==
+                EmployeeErpLinkState.workerActive,
           );
           if (!dialogOpen || checkVersion != identityCheckVersion) return null;
           updateDialog?.call(() {
@@ -2489,7 +2600,9 @@ class _UserManagementPageState extends State<UserManagementPage> {
                           icon: selectedEmployee == null
                               ? Icons.info_outline
                               : selectedEmployee!.linkState ==
-                                      EmployeeErpLinkState.workerSuspended
+                                          EmployeeErpLinkState.workerActive ||
+                                      selectedEmployee!.linkState ==
+                                          EmployeeErpLinkState.workerSuspended
                                   ? Icons.swap_horiz
                                   : Icons.link_outlined,
                           text: _employeeStateGuidance(selectedEmployee),
@@ -2639,6 +2752,9 @@ class _UserManagementPageState extends State<UserManagementPage> {
                                   ? null
                                   : nameController.text.trim(),
                               employeeId: employeeId,
+                              transitionFromWorker:
+                                  selectedEmployee?.linkState ==
+                                      EmployeeErpLinkState.workerActive,
                             );
                             if (dialogContext.mounted) {
                               Navigator.pop(dialogContext, true);
@@ -2694,8 +2810,14 @@ class _UserManagementPageState extends State<UserManagementPage> {
     final formKey = GlobalKey<FormState>();
     String? selectedEmployeeId;
     EmployeeAccessState? selectedEmployee;
+    final profileActive = user['profileActive'] == true;
     final activeEmployees = _employeeAccessStates
-        .where((employee) => employee.isActiveEmployee)
+        .where(
+          (employee) =>
+              employee.isActiveEmployee &&
+              (profileActive ||
+                  employee.linkState == EmployeeErpLinkState.workerActive),
+        )
         .toList(growable: false);
 
     final employee = await showDialog<EmployeeAccessState>(
@@ -2752,7 +2874,9 @@ class _UserManagementPageState extends State<UserManagementPage> {
                   _noteBox(
                     dialogContext,
                     icon: selectedEmployee?.linkState ==
-                            EmployeeErpLinkState.workerSuspended
+                                EmployeeErpLinkState.workerActive ||
+                            selectedEmployee?.linkState ==
+                                EmployeeErpLinkState.workerSuspended
                         ? Icons.swap_horiz
                         : Icons.info_outline,
                     text: _directEmployeeLinkGuidance(selectedEmployee),
@@ -2811,10 +2935,13 @@ class _UserManagementPageState extends State<UserManagementPage> {
     final accountLabel = _normalizedId(user['email']) ??
         _normalizedId(user['displayName']) ??
         'esta cuenta ERP';
-    final migrationNote = employee.linkState ==
-            EmployeeErpLinkState.workerSuspended
-        ? '\n\nEl acceso independiente de la app de trabajadores permanecerá suspendido.'
-        : '';
+    final migrationNote = switch (employee.linkState) {
+      EmployeeErpLinkState.workerActive =>
+        '\n\nWorker Space seguirá disponible hasta confirmar. Al hacerlo, se cerrarán esas sesiones, se activará esta cuenta ERP y se moverán sus tareas abiertas.',
+      EmployeeErpLinkState.workerSuspended =>
+        '\n\nEl acceso histórico de Worker Space permanecerá suspendido.',
+      _ => '',
+    };
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
@@ -2886,6 +3013,111 @@ class _UserManagementPageState extends State<UserManagementPage> {
         employeeId: employee.employeeId,
       ),
     );
+  }
+
+  Future<void> _showSwitchToWorkerDialog({
+    required Map<String, dynamic> user,
+    required EmployeeAccessState employee,
+  }) async {
+    final userId = _normalizedId(user['id']);
+    if (userId == null) return;
+    final formKey = GlobalKey<FormState>();
+    final suggested = employee.workerUsername ??
+        employee.employeeName
+            .toLowerCase()
+            .replaceAll(RegExp(r'[^a-z0-9._-]+'), '.')
+            .replaceAll(RegExp(r'^\.+|\.+$'), '');
+    final usernameController = TextEditingController(
+      text: suggested.length >= 3 ? suggested : 'trabajador',
+    );
+    final passwordController = TextEditingController();
+    try {
+      final input = await showDialog<({String username, String password})>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          title: const Text('Mover a Worker Space'),
+          content: Form(
+            key: formKey,
+            child: SizedBox(
+              width: 420,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    '${employee.employeeName} dejará de ingresar al ERP. Sus sesiones ERP se cerrarán y sus tareas abiertas pasarán a Worker Space; el historial y los mensajes se conservarán.',
+                  ),
+                  const SizedBox(height: 16),
+                  TextFormField(
+                    key: const ValueKey('switch-worker-username'),
+                    controller: usernameController,
+                    decoration: const InputDecoration(
+                      labelText: 'Usuario Worker Space',
+                      prefixIcon: Icon(Icons.badge_outlined),
+                    ),
+                    validator: (value) {
+                      final normalized = value?.trim().toLowerCase() ?? '';
+                      return RegExp(r'^[a-z0-9][a-z0-9._-]{2,31}$')
+                              .hasMatch(normalized)
+                          ? null
+                          : 'Usa 3 a 32 caracteres válidos';
+                    },
+                  ),
+                  const SizedBox(height: 12),
+                  TextFormField(
+                    key: const ValueKey('switch-worker-password'),
+                    controller: passwordController,
+                    obscureText: true,
+                    decoration: const InputDecoration(
+                      labelText: 'Contraseña temporal',
+                      helperText:
+                          AuthInputValidation.adminManagedPasswordHelper,
+                      prefixIcon: Icon(Icons.lock_reset_outlined),
+                    ),
+                    validator: AuthInputValidation.validateAdminManagedPassword,
+                  ),
+                ],
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const Text('Cancelar'),
+            ),
+            FilledButton.icon(
+              onPressed: () {
+                if (!formKey.currentState!.validate()) return;
+                Navigator.pop(
+                  dialogContext,
+                  (
+                    username: usernameController.text.trim().toLowerCase(),
+                    password: passwordController.text,
+                  ),
+                );
+              },
+              icon: const Icon(Icons.swap_horiz),
+              label: const Text('Confirmar cambio'),
+            ),
+          ],
+        ),
+      );
+      if (input == null || !mounted) return;
+      await _runAction(
+        'Acceso movido a Worker Space',
+        () async {
+          await _userService.switchErpUserToWorker(
+            userId: userId,
+            employeeId: employee.employeeId,
+            username: input.username,
+            password: input.password,
+          );
+        },
+      );
+    } finally {
+      usernameController.dispose();
+      passwordController.dispose();
+    }
   }
 
   Future<void> _showEditStaffDialog(Map<String, dynamic> user) async {

@@ -1,8 +1,19 @@
 # Bike Workshop Compatibility Concepts
 
-Last updated: 2026-04-27
+Last updated: 2026-09-06 (versioned ficha baseline and scoped chain evaluation)
 Status: Living technical doctrine companion
 Scope: canonical compatibility semantics for bike profile truth, product ficha truth, diagnosis and service gating, and compatibility scoring
+
+**2026-09-06, identity ownership:** commercial category is a fallback, not the
+owner of a product's technical class. The pending product-template binding
+contract gives all readers the same resolved family and active facts. Facts
+preserved outside that template remain evidence for review; they cannot satisfy
+technical filters or produce a compatible recommendation. An unavailable
+explicit binding yields caution, never a fallback to a different category
+family. Numeric validity, nominal identity, completeness of purchase criteria
+and OEM mechanical approval are separate conclusions. Global sanitation of all
+catalogue families precedes product fill; see
+[the audited scope](docs/development/product-specs-research-2026-09-05/global-audit-and-sanitation-2026-09-06.md).
 
 ## Why This File Exists
 
@@ -34,24 +45,61 @@ When a task changes compatibility semantics, product ficha meaning, diagnosis or
 
 ## Evidence Standard
 
-Compatibility rules documented here should come from the intersection of four sources:
+**Correction, 2026-09-05:** mechanical validity and software behavior have
+different evidence. Production/schema/code prove what the ERP currently does;
+they cannot overrule a physical interface or manufacturer restriction. Tests
+prove the implemented interpretation only when their fixtures have independent
+domain evidence. An old test is not proof that a combination works on a bike.
 
-1. Live production inspection.
-2. Current schema and code.
-3. Primary external workshop-standard references: Sheldon Brown and Park Tool.
-4. Focused executable validation such as unit tests or scorer regressions.
+Use Sheldon Brown and Park Tool as the owner's required workshop foundations,
+and model/generation-specific manufacturer manuals and compatibility tables
+for exact claims. Compare scope and revision before resolving disagreement;
+do not promote a historical interchangeability tip into universal approval.
 
-This file is not a place for guessed bike-tech folklore.
+The current source-backed learning is
+[bicycle compatibility knowledge](docs/architecture/bicycle-compatibility-knowledge.md).
+The [ficha architecture](docs/architecture/product-technical-specifications-contract.md)
+and [family matrix](docs/architecture/product-spec-family-matrix.md) define the
+target contract. They supersede older universal singular-ecosystem and
+width-derived-speed doctrine in this file. KMC may support multiple brands;
+store the supported combinations and conditions without inventing cross-products.
+Unknown coverage stays unknown. Delivered scope and runtime proof are recorded
+in the [implementation result](docs/development/product-specs-research-2026-09-05/implementation-result.md).
 
-Open browser research is also allowed and often necessary, but it is secondary to the sources above.
+Generic search snippets, reseller copy and forum reports do not establish a
+confirmed mechanical rule. Preserve source, scope, limitations and unresolved
+conflicts. Re-audit live schema and writers before extending the target.
 
-Use broader browser search to:
+### Implemented distinctions — 2026-09-06
 
-- corroborate edge cases
-- inspect manufacturer technical documents or service manuals
-- study standards tables, diagrams, and fit notes when Sheldon Brown or Park Tool do not cover the seam directly
+- Missing prerequisite: pending knowledge. The editor explains the prerequisite;
+  existing known facts remain public and writable. A missing mode is not proof
+  that eighteen previously published chain fichas are contradictory.
+- Explicit false condition, invalid vocabulary/type or contradiction with a
+  selected exact reference: blocking issue, including at the server boundary.
+- Unmapped technical family: no assessment; do not label a tool or accessory as
+  needing a compatibility repair merely because it has no template.
+- Exact exclusive claim with an unknown bike platform: caution naming that
+  platform. eGlide's 9/10/11 LINKGLIDE scope survives even without bike platform
+  data. A known contrary platform is incompatible with that claim.
+- Chain speed count or nominal/pin width alone: no green installation result.
+  Manual KMC 6/7/8 plus 11/128 raises a request to verify the exact model/source,
+  not a made-up universal physical prohibition. Binding the documented X8 EU
+  edition makes a contradictory declared width a reference conflict.
 
-But do not let generic search results, ecommerce copy, forum hearsay, or unverified blog summaries outrank live production inspection, schema/code reality, or the primary external references.
+The consumer uses `get_product_spec_contexts_v1`, normalized facts and scoped
+reference claims. Historical ecosystem/profile fields no longer determine chain
+compatibility. The initial three manufacturer editions are explicitly bounded;
+other model coverage remains unknown until supported by its own evidence.
+
+The chain/connector extension (`20260906103000`, verified 2026-09-06) treats
+a connector's declared chain class separately from the bicycle's cog count.
+Its consumer names documented target chains and exclusions and asks for the
+installed chain identity; missing identity cannot produce a green fit result.
+Model-specific reuse/direction and complete connector counts are separate facts.
+Linking a reference preserves independent matching observations and evidence;
+it must not reattribute them to catalog and erase them on later detach. See the
+[second delivery](docs/development/product-specs-research-2026-09-05/chain-connector-implementation-2026-09-06.md).
 
 ## Core Doctrine
 
@@ -88,12 +136,10 @@ If a compatibility concept matters, it must exist as a first-class persisted str
 
 Broad family or ecosystem claims are not the same thing as exact downstream platform truth.
 
-Canonical pattern:
-
-- top branch or mode
-- broad primary ecosystem anchor when the family truly needs one
-- optional declared compatible ecosystems
-- exact downstream platform or profile fields
+The 2026-09-05 target separates identity/variant, intrinsic interfaces and scoped
+compatibility relationships. Each family decides its prerequisites. A broad
+ecosystem may summarize a documented relationship; it is not a mandatory owner
+for every component or an input that creates exact platform compatibility.
 
 Do not silently expand a broad claim into an exact one.
 
@@ -157,16 +203,13 @@ These are the minimum upstream facts that already unlock real compatibility work
 
 #### Drivetrain semantic stack
 
-For modern drivetrain ficha semantics, the concepts must stay separated in this order:
-
-1. drivetrain mode or top branch
-2. primary ecosystem anchor when truly required
-3. declared compatible ecosystems when packaging explicitly claims them
-4. exact downstream refinement such as `drivetrain_platform`
-5. control-specific refinement such as `shift_actuation_family`
-6. chain-specific refinement such as `chain_profile_family`
-
-Do not overload one broad field and pretend it resolves the whole stack.
+For the next drivetrain ficha contract, resolve type/function and identity as
+far as evidence allows, then ask the component's actual interface questions.
+Keep drivetrain mode, exact platform, control actuation and chain geometry
+distinct. A supported combination binds system, generations/speeds and
+conditions together; independent multi-selects must not create their cross-product.
+The [family matrix](docs/architecture/product-spec-family-matrix.md) defines
+family-specific prerequisites. There is no universal ecosystem-first stack.
 
 #### Core drivetrain rules
 
@@ -175,7 +218,7 @@ Do not overload one broad field and pretend it resolves the whole stack.
 - rear-cog compatibility is not solved by speed alone; body family, range, spacer needs, and body-generation exceptions still matter.
 - `cassette`, `freewheel`, and `fixed_cog` templates must not expose broad ecosystem-anchor fields as if they were the real rear-cog seam.
 - cassette spacers must keep `freehub_type` explicit and keep `spacer_thickness_mm` as measured truth.
-- chain-family semantics need more than one broad width bucket. `chain_width_family` is only a safe top-level seam for true single-speed or BMX style chains; modern derailleur chains also need the bounded refinement `chain_outer_width_mm`.
+- chain width is an intrinsic measurement with a defined method and provenance. Distinguish nominal inner width, measured outer width and pin length. An outer measurement can inform an investigation but cannot certify supported speeds/profile or require an arbitrary closed list of dimensions. Use the identity and declared relationships for compatibility; retain measurements when available.
 - `shifter` ficha behavior must gate by `shifter_position`.
 - left or front shifters hide rear-side seams such as `drivetrain_speeds`, `rear_cog_count`, `shift_actuation_family`, and `drivetrain_platform`.
 - right or rear shifters hide front-chainring-count semantics.

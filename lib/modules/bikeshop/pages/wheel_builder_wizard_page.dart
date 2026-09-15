@@ -18,32 +18,32 @@ enum BuildType { fullWheel, replaceHub, replaceRim }
 
 class _WheelBuilderWizardPageState extends State<WheelBuilderWizardPage> {
   int _currentStep = 0;
-  
+
   // Step 0: Bike selection
   Bike? _selectedBike;
   BuildType _buildType = BuildType.fullWheel;
   String _wheelPosition = 'rear'; // 'front' or 'rear'
-  
+
   // Pre-filled specs from bike
   String? _wheelSize; // 29", 27.5", 26", 700c
   int _spokeCount = 32; // Default 32
   double? _frontHubSpacing; // From bike (e.g., 100mm, 110mm)
   double? _rearHubSpacing; // From bike (e.g., 142mm, 148mm)
-  
+
   // Selected components
   WheelHub? _selectedHub;
   WheelRim? _selectedRim;
   int _crossPattern = 3; // Default to 3-cross
-  
+
   // Available components (filtered)
   List<Bike> _bikes = [];
   List<WheelHub> _allHubs = [];
   List<WheelRim> _allRims = [];
-  
+
   // Calculated results
   Map<String, dynamic>? _buildResult;
   bool _isCalculating = false;
-  
+
   @override
   void initState() {
     super.initState();
@@ -54,7 +54,7 @@ class _WheelBuilderWizardPageState extends State<WheelBuilderWizardPage> {
   Future<void> _loadBikes() async {
     final bikeService = context.read<BikeshopService>();
     final bikes = await bikeService.getBikes();
-    
+
     setState(() {
       _bikes = bikes;
     });
@@ -62,10 +62,10 @@ class _WheelBuilderWizardPageState extends State<WheelBuilderWizardPage> {
 
   Future<void> _loadAllComponents() async {
     final service = context.read<WheelBuildingService>();
-    
+
     final hubs = await service.getHubs();
     final rims = await service.getRims();
-    
+
     setState(() {
       _allHubs = hubs;
       _allRims = rims;
@@ -94,12 +94,12 @@ class _WheelBuilderWizardPageState extends State<WheelBuilderWizardPage> {
       // If only replacing rim, we're keeping existing hub - show all hubs (user won't select)
       return _allHubs;
     }
-    
+
     // For fullWheel and replaceHub: filter hubs by spoke count, position, AND OLD measurement
     return _allHubs.where((h) {
       bool matchesSpokes = h.spokeHoles == _spokeCount;
       bool matchesPosition = h.hubType == _wheelPosition;
-      
+
       // Filter by OLD (Over Locknut Dimension) based on wheel position
       bool matchesOLD = true;
       if (_wheelPosition == 'front' && _frontHubSpacing != null) {
@@ -107,7 +107,7 @@ class _WheelBuilderWizardPageState extends State<WheelBuilderWizardPage> {
       } else if (_wheelPosition == 'rear' && _rearHubSpacing != null) {
         matchesOLD = h.oldMm == _rearHubSpacing;
       }
-      
+
       return matchesSpokes && matchesPosition && matchesOLD;
     }).toList();
   }
@@ -125,9 +125,9 @@ class _WheelBuilderWizardPageState extends State<WheelBuilderWizardPage> {
 
   Future<void> _calculateBuild() async {
     if (_selectedHub == null || _selectedRim == null) return;
-    
+
     setState(() => _isCalculating = true);
-    
+
     try {
       final service = context.read<WheelBuildingService>();
       final result = await service.calculateWheelBuild(
@@ -135,7 +135,7 @@ class _WheelBuilderWizardPageState extends State<WheelBuilderWizardPage> {
         rim: _selectedRim!,
         crossPattern: _crossPattern,
       );
-      
+
       setState(() {
         _buildResult = result;
         _isCalculating = false;
@@ -160,7 +160,7 @@ class _WheelBuilderWizardPageState extends State<WheelBuilderWizardPage> {
         return;
       }
     }
-    
+
     // Step 1: Hub
     if (_currentStep == 1 && _selectedHub == null) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -168,7 +168,7 @@ class _WheelBuilderWizardPageState extends State<WheelBuilderWizardPage> {
       );
       return;
     }
-    
+
     // Auto-select factory rim when entering rim step (if replacing hub only)
     if (_currentStep == 1 &&
         _buildType == BuildType.replaceHub &&
@@ -193,7 +193,7 @@ class _WheelBuilderWizardPageState extends State<WheelBuilderWizardPage> {
         }
       });
     }
-    
+
     // Step 2: Rim
     if (_currentStep == 2 && _selectedRim == null) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -201,12 +201,12 @@ class _WheelBuilderWizardPageState extends State<WheelBuilderWizardPage> {
       );
       return;
     }
-    
+
     // Step 3: Lacing - calculate
     if (_currentStep == 3) {
       _calculateBuild();
     }
-    
+
     if (_currentStep < 4) {
       setState(() => _currentStep++);
     }
@@ -234,13 +234,13 @@ class _WheelBuilderWizardPageState extends State<WheelBuilderWizardPage> {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('🚀 Seeding test data...')),
       );
-      
+
       await seedBikesAndWheels();
-      
+
       // Reload data
       await _loadBikes();
       await _loadAllComponents();
-      
+
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -349,7 +349,7 @@ class _WheelBuilderWizardPageState extends State<WheelBuilderWizardPage> {
               ],
             ),
           ),
-          
+
           // Main content area
           Expanded(
             child: Column(
@@ -366,7 +366,7 @@ class _WheelBuilderWizardPageState extends State<WheelBuilderWizardPage> {
                     ],
                   ),
                 ),
-                
+
                 // Navigation buttons
                 Container(
                   padding: const EdgeInsets.all(16),
@@ -418,11 +418,11 @@ class _WheelBuilderWizardPageState extends State<WheelBuilderWizardPage> {
           Text(
             'Choose the bike and what you\'re building or replacing',
             style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-              color: Colors.grey.shade600,
-            ),
+                  color: Colors.grey.shade600,
+                ),
           ),
           const SizedBox(height: 32),
-          
+
           // Bike Selection
           Card(
             child: Padding(
@@ -479,7 +479,7 @@ class _WheelBuilderWizardPageState extends State<WheelBuilderWizardPage> {
             ),
           ),
           const SizedBox(height: 24),
-          
+
           // Build Type Selection
           Card(
             child: Padding(
@@ -533,7 +533,7 @@ class _WheelBuilderWizardPageState extends State<WheelBuilderWizardPage> {
             ),
           ),
           const SizedBox(height: 24),
-          
+
           // Wheel Position Selection (Front or Rear)
           Card(
             child: Padding(
@@ -587,7 +587,7 @@ class _WheelBuilderWizardPageState extends State<WheelBuilderWizardPage> {
             ),
           ),
           const SizedBox(height: 24),
-          
+
           // Pre-filled Specs (if bike selected)
           if (_selectedBike != null)
             Card(
@@ -606,9 +606,9 @@ class _WheelBuilderWizardPageState extends State<WheelBuilderWizardPage> {
                           'Pre-filled Specifications',
                           style:
                               Theme.of(context).textTheme.titleMedium?.copyWith(
-                            color: Colors.blue.shade700,
-                            fontWeight: FontWeight.bold,
-                          ),
+                                    color: Colors.blue.shade700,
+                                    fontWeight: FontWeight.bold,
+                                  ),
                         ),
                       ],
                     ),
@@ -672,8 +672,8 @@ class _WheelBuilderWizardPageState extends State<WheelBuilderWizardPage> {
           Text(
             'Choose the hub for your wheel build',
             style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-              color: Colors.grey.shade600,
-            ),
+                  color: Colors.grey.shade600,
+                ),
           ),
           const SizedBox(height: 24),
           if (_filteredHubs.isEmpty)
@@ -703,7 +703,7 @@ class _WheelBuilderWizardPageState extends State<WheelBuilderWizardPage> {
               itemBuilder: (context, index) {
                 final hub = _filteredHubs[index];
                 final isSelected = _selectedHub?.id == hub.id;
-                
+
                 return Card(
                   elevation: isSelected ? 8 : 2,
                   color: isSelected
@@ -736,7 +736,7 @@ class _WheelBuilderWizardPageState extends State<WheelBuilderWizardPage> {
                                       ?.copyWith(
                                         fontWeight:
                                             isSelected ? FontWeight.bold : null,
-                                  ),
+                                      ),
                                   maxLines: 2,
                                   overflow: TextOverflow.ellipsis,
                                 ),
@@ -771,7 +771,7 @@ class _WheelBuilderWizardPageState extends State<WheelBuilderWizardPage> {
   Widget _buildRimSelectionStep() {
     // Use pre-filtered rims from getter (already filtered by wheel size and spoke count)
     final compatibleRims = _filteredRims;
-    
+
     return SingleChildScrollView(
       padding: const EdgeInsets.all(24),
       child: Column(
@@ -787,8 +787,8 @@ class _WheelBuilderWizardPageState extends State<WheelBuilderWizardPage> {
                 ? 'Showing $_wheelSize rims compatible with ${_spokeCount}H hubs'
                 : 'Choose the rim for your wheel build',
             style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-              color: Colors.grey.shade600,
-            ),
+                  color: Colors.grey.shade600,
+                ),
           ),
           const SizedBox(height: 24),
           if (compatibleRims.isEmpty)
@@ -820,7 +820,7 @@ class _WheelBuilderWizardPageState extends State<WheelBuilderWizardPage> {
               itemBuilder: (context, index) {
                 final rim = compatibleRims[index];
                 final isSelected = _selectedRim?.id == rim.id;
-                
+
                 return Card(
                   elevation: isSelected ? 8 : 2,
                   color: isSelected
@@ -853,7 +853,7 @@ class _WheelBuilderWizardPageState extends State<WheelBuilderWizardPage> {
                                       ?.copyWith(
                                         fontWeight:
                                             isSelected ? FontWeight.bold : null,
-                                  ),
+                                      ),
                                   maxLines: 2,
                                   overflow: TextOverflow.ellipsis,
                                 ),
@@ -899,11 +899,11 @@ class _WheelBuilderWizardPageState extends State<WheelBuilderWizardPage> {
           Text(
             'Select how the spokes will cross each other',
             style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-              color: Colors.grey.shade600,
-            ),
+                  color: Colors.grey.shade600,
+                ),
           ),
           const SizedBox(height: 24),
-          
+
           // Lacing pattern options
           Wrap(
             spacing: 16,
@@ -973,13 +973,13 @@ class _WheelBuilderWizardPageState extends State<WheelBuilderWizardPage> {
         ),
       );
     }
-    
+
     if (_buildResult == null) {
       return const Center(
         child: Text('Click Calculate to see results'),
       );
     }
-    
+
     final error = _buildResult!['error'];
     if (error != null) {
       return Center(
@@ -1002,14 +1002,14 @@ class _WheelBuilderWizardPageState extends State<WheelBuilderWizardPage> {
         ),
       );
     }
-    
+
     final leftLength = _buildResult!['left_spoke_length_mm'] as double;
     final rightLength = _buildResult!['right_spoke_length_mm'] as double;
     final compatibleLeftSpokes =
         _buildResult!['compatible_left_spokes'] as List;
     final compatibleRightSpokes =
         _buildResult!['compatible_right_spokes'] as List;
-    
+
     return SingleChildScrollView(
       padding: const EdgeInsets.all(24),
       child: Column(
@@ -1026,7 +1026,7 @@ class _WheelBuilderWizardPageState extends State<WheelBuilderWizardPage> {
             ],
           ),
           const SizedBox(height: 24),
-          
+
           // Build summary card
           Card(
             child: Padding(
@@ -1054,7 +1054,7 @@ class _WheelBuilderWizardPageState extends State<WheelBuilderWizardPage> {
             ),
           ),
           const SizedBox(height: 24),
-          
+
           // Spoke lengths
           Row(
             children: [
@@ -1083,9 +1083,9 @@ class _WheelBuilderWizardPageState extends State<WheelBuilderWizardPage> {
                               .textTheme
                               .headlineLarge
                               ?.copyWith(
-                            color: Colors.blue.shade700,
-                            fontWeight: FontWeight.bold,
-                          ),
+                                color: Colors.blue.shade700,
+                                fontWeight: FontWeight.bold,
+                              ),
                         ),
                       ],
                     ),
@@ -1119,9 +1119,9 @@ class _WheelBuilderWizardPageState extends State<WheelBuilderWizardPage> {
                               .textTheme
                               .headlineLarge
                               ?.copyWith(
-                            color: Colors.orange.shade700,
-                            fontWeight: FontWeight.bold,
-                          ),
+                                color: Colors.orange.shade700,
+                                fontWeight: FontWeight.bold,
+                              ),
                         ),
                       ],
                     ),
@@ -1131,14 +1131,14 @@ class _WheelBuilderWizardPageState extends State<WheelBuilderWizardPage> {
             ],
           ),
           const SizedBox(height: 24),
-          
+
           // Compatible spokes
           Text(
             'Recommended Spokes',
             style: Theme.of(context).textTheme.titleLarge,
           ),
           const SizedBox(height: 12),
-          
+
           if (compatibleLeftSpokes.isEmpty && compatibleRightSpokes.isEmpty)
             Card(
               color: Colors.orange.shade50,
@@ -1179,7 +1179,7 @@ class _WheelBuilderWizardPageState extends State<WheelBuilderWizardPage> {
                                 0;
                             final diff =
                                 spoke['length_difference_mm'] as double;
-                            
+
                             return ListTile(
                               leading: CircleAvatar(
                                 backgroundColor:
@@ -1225,7 +1225,7 @@ class _WheelBuilderWizardPageState extends State<WheelBuilderWizardPage> {
                                 0;
                             final diff =
                                 spoke['length_difference_mm'] as double;
-                            
+
                             return ListTile(
                               leading: CircleAvatar(
                                 backgroundColor:
@@ -1373,8 +1373,8 @@ class _LacingPatternCard extends StatelessWidget {
                     Text(
                       name,
                       style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        fontWeight: isSelected ? FontWeight.bold : null,
-                      ),
+                            fontWeight: isSelected ? FontWeight.bold : null,
+                          ),
                     ),
                     const Spacer(),
                     if (isSelected)
@@ -1414,14 +1414,14 @@ class _SummaryRow extends StatelessWidget {
           Text(
             label,
             style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-              color: Colors.grey.shade600,
-            ),
+                  color: Colors.grey.shade600,
+                ),
           ),
           Text(
             value,
             style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-              fontWeight: FontWeight.bold,
-            ),
+                  fontWeight: FontWeight.bold,
+                ),
           ),
         ],
       ),

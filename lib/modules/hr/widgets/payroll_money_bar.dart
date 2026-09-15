@@ -213,14 +213,27 @@ class PayrollMoneyBar extends StatelessWidget {
                 return Row(
                   children: [
                     Flexible(child: figuresRow),
-                    const Spacer(),
-                    // A long primary label (e.g. «Comprometer N semanas y
-                    // aplicar conciliación») must truncate at medium widths
-                    // instead of overflowing the bar.
-                    for (var index = 0; index < actions.length; index++) ...[
-                      Flexible(child: actions[index]),
-                      if (index < actions.length - 1) const SizedBox(width: 8),
-                    ],
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.end,
+                        children: [
+                          // La pista de acciones consume el espacio restante
+                          // y alinea su contenido al final. Los botones siguen
+                          // acotados para que el rótulo largo pueda envolver.
+                          for (var index = 0;
+                              index < actions.length;
+                              index++) ...[
+                            Flexible(
+                              fit: FlexFit.loose,
+                              child: actions[index],
+                            ),
+                            if (index < actions.length - 1)
+                              const SizedBox(width: 8),
+                          ],
+                        ],
+                      ),
+                    ),
                   ],
                 );
               },

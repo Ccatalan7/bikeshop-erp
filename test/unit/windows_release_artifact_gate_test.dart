@@ -78,6 +78,28 @@ void main() {
     expect(workflow, contains('installer_sha256 = \$installerHash'));
   });
 
+  test('Windows release enables the same production AI gateway as macOS', () {
+    final buildStep = workflow.substring(
+      workflow.indexOf('- name: Build Windows release'),
+      workflow.indexOf(
+        '- name: Validate Windows runtime bundle without launching it',
+      ),
+    );
+    expect(buildStep, contains('secrets.SUPABASE_PUBLISHABLE_KEY'));
+    expect(buildStep, contains('sb_publishable_*'));
+    expect(buildStep, contains('--dart-define=AI_AGENT_GATEWAY_ENABLED=true'));
+    expect(
+      buildStep,
+      contains(
+        r'--dart-define=SUPABASE_PUBLISHABLE_KEY="$env:SUPABASE_PUBLISHABLE_KEY"',
+      ),
+    );
+    expect(
+      workflow,
+      contains('scripts/tests/windows_installer_release_discovery_test.ps1'),
+    );
+  });
+
   test('Windows consumes qualified proof or runs its standalone fallback', () {
     final integrityJob = workflow.indexOf('\n  integrity:');
     final qualificationJob = workflow.indexOf('\n  qualification:');
@@ -111,9 +133,6 @@ void main() {
     final geminiReleaseNotesSecret = workflow.indexOf(
       r'GEMINI_RELEASE_API_KEY: ${{ secrets.GEMINI_RELEASE_API_KEY }}',
     );
-    final openAiReleaseNotesSecret = workflow.indexOf(
-      r'OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}',
-    );
     final baseResolution = workflow.indexOf(
       'resolve_previous_release_commit.sh',
       checkout,
@@ -138,7 +157,6 @@ void main() {
       ),
     );
     expect(geminiReleaseNotesSecret, greaterThan(publishJob));
-    expect(openAiReleaseNotesSecret, greaterThan(geminiReleaseNotesSecret));
     expect(
       workflow,
       contains(
@@ -149,7 +167,7 @@ void main() {
       RegExp(r'secrets\.GEMINI_RELEASE_API_KEY').allMatches(workflow).length,
       1,
     );
-    expect(RegExp(r'secrets\.OPENAI_API_KEY').allMatches(workflow).length, 1);
+    expect(RegExp(r'secrets\.OPENAI_API_KEY').allMatches(workflow), isEmpty);
     expect(generation, greaterThan(baseResolution));
     expect(
       workflow.substring(generation, merge),
@@ -174,9 +192,12 @@ void main() {
     );
     expect(distributionRunbook, contains('GEMINI_RELEASE_API_KEY'));
     expect(distributionRunbook, contains('gemini-3.1-flash-lite'));
-    expect(distributionRunbook, contains('OPENAI_API_KEY'));
     expect(distributionRunbook, contains('deterministic fallback'));
     expect(distributionRunbook, contains('human reviewers'));
+    expect(
+      distributionRunbook,
+      contains('standard workflows do not call\nCodex'),
+    );
   });
 
   test('release-note baseline ignores a current-SHA retry', () {

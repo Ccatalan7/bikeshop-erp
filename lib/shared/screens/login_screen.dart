@@ -351,204 +351,207 @@ class _LoginScreenState extends State<LoginScreen> {
       value: vinabikeSystemOverlayStyleFor(background),
       child: Scaffold(
         body: Center(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(32.0),
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 400),
-            child: Form(
-              key: _formKey,
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  // Logo
-                  const Icon(
-                    Icons.pedal_bike,
-                    size: 80,
-                    color: Colors.blue,
-                  ),
-                  const SizedBox(height: 16),
-
-                  // Title
-                  const Text(
-                    'Vinabike ERP',
-                    style: TextStyle(
-                      fontSize: 32,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    'Sistema de Gestión Integral',
-                    style: TextStyle(
-                      fontSize: 16,
-                      color: Colors.grey[600],
-                    ),
-                  ),
-                  const SizedBox(height: 48),
-
-                  // Shop Name Field (only in register mode)
-                  if (_isRegisterMode) ...[
-                    TextFormField(
-                      key: const ValueKey('signup-shop-name'),
-                      controller: _shopNameController,
-                      decoration: const InputDecoration(
-                        labelText: 'Nombre de tu Tienda',
-                        prefixIcon: Icon(Icons.store),
-                        hintText: 'Ej: Vinabike',
-                        helperText: 'Se usará para preparar tu nueva tienda',
-                      ),
-                      validator: (value) => _isRegisterMode
-                          ? AuthInputValidation.validateShopName(value)
-                          : null,
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(32.0),
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 400),
+              child: Form(
+                key: _formKey,
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    // Logo
+                    const Icon(
+                      Icons.pedal_bike,
+                      size: 80,
+                      color: Colors.blue,
                     ),
                     const SizedBox(height: 16),
-                  ],
 
-                  // Email Field
-                  TextFormField(
-                    key: const ValueKey('auth-email'),
-                    controller: _emailController,
-                    keyboardType: TextInputType.emailAddress,
-                    decoration: const InputDecoration(
-                      labelText: 'Correo Electrónico',
-                      prefixIcon: Icon(Icons.email),
-                    ),
-                    validator: AuthInputValidation.validateEmail,
-                  ),
-                  const SizedBox(height: 16),
-
-                  // Password Field
-                  TextFormField(
-                    key: ValueKey(
-                      _isRegisterMode ? 'signup-password' : 'login-password',
-                    ),
-                    controller: _passwordController,
-                    obscureText: _obscurePassword,
-                    decoration: InputDecoration(
-                      labelText: 'Contraseña',
-                      prefixIcon: const Icon(Icons.lock),
-                      suffixIcon: IconButton(
-                        icon: Icon(
-                          _obscurePassword
-                              ? Icons.visibility
-                              : Icons.visibility_off,
-                        ),
-                        onPressed: () {
-                          setState(() => _obscurePassword = !_obscurePassword);
-                        },
+                    // Title
+                    const Text(
+                      'Vinabike ERP',
+                      style: TextStyle(
+                        fontSize: 32,
+                        fontWeight: FontWeight.bold,
                       ),
-                      helperText: _isRegisterMode
-                          ? AuthInputValidation.strongPasswordHelper
-                          : null,
                     ),
-                    validator: (value) => AuthInputValidation.validatePassword(
-                      value,
-                      isNewPassword: _isRegisterMode,
+                    const SizedBox(height: 8),
+                    Text(
+                      'Sistema de Gestión Integral',
+                      style: TextStyle(
+                        fontSize: 16,
+                        color: Colors.grey[600],
+                      ),
                     ),
-                  ),
+                    const SizedBox(height: 48),
 
-                  // Forgot Password Link (only in login mode)
-                  if (!_isRegisterMode) ...[
+                    // Shop Name Field (only in register mode)
+                    if (_isRegisterMode) ...[
+                      TextFormField(
+                        key: const ValueKey('signup-shop-name'),
+                        controller: _shopNameController,
+                        decoration: const InputDecoration(
+                          labelText: 'Nombre de tu Tienda',
+                          prefixIcon: Icon(Icons.store),
+                          hintText: 'Ej: Vinabike',
+                          helperText: 'Se usará para preparar tu nueva tienda',
+                        ),
+                        validator: (value) => _isRegisterMode
+                            ? AuthInputValidation.validateShopName(value)
+                            : null,
+                      ),
+                      const SizedBox(height: 16),
+                    ],
+
+                    // Email Field
+                    TextFormField(
+                      key: const ValueKey('auth-email'),
+                      controller: _emailController,
+                      keyboardType: TextInputType.emailAddress,
+                      decoration: const InputDecoration(
+                        labelText: 'Correo Electrónico',
+                        prefixIcon: Icon(Icons.email),
+                      ),
+                      validator: AuthInputValidation.validateEmail,
+                    ),
+                    const SizedBox(height: 16),
+
+                    // Password Field
+                    TextFormField(
+                      key: ValueKey(
+                        _isRegisterMode ? 'signup-password' : 'login-password',
+                      ),
+                      controller: _passwordController,
+                      obscureText: _obscurePassword,
+                      decoration: InputDecoration(
+                        labelText: 'Contraseña',
+                        prefixIcon: const Icon(Icons.lock),
+                        suffixIcon: IconButton(
+                          icon: Icon(
+                            _obscurePassword
+                                ? Icons.visibility
+                                : Icons.visibility_off,
+                          ),
+                          onPressed: () {
+                            setState(
+                                () => _obscurePassword = !_obscurePassword);
+                          },
+                        ),
+                        helperText: _isRegisterMode
+                            ? AuthInputValidation.strongPasswordHelper
+                            : null,
+                      ),
+                      validator: (value) =>
+                          AuthInputValidation.validatePassword(
+                        value,
+                        isNewPassword: _isRegisterMode,
+                      ),
+                    ),
+
+                    // Forgot Password Link (only in login mode)
+                    if (!_isRegisterMode) ...[
+                      Align(
+                        alignment: Alignment.centerRight,
+                        child: TextButton(
+                          onPressed: () {
+                            showDialog(
+                              context: context,
+                              builder: (context) =>
+                                  const ForgotPasswordDialog(),
+                            );
+                          },
+                          child: const Text('¿Olvidaste tu contraseña?'),
+                        ),
+                      ),
+                    ],
+
+                    const SizedBox(height: 24),
+
+                    if (_isRegisterMode) ...[
+                      TextFormField(
+                        key: const ValueKey('signup-password-confirmation'),
+                        controller: _confirmPasswordController,
+                        obscureText: _obscurePassword,
+                        decoration: const InputDecoration(
+                          labelText: 'Confirmar Contraseña',
+                          prefixIcon: Icon(Icons.lock_outline),
+                        ),
+                        validator: (value) => !_isRegisterMode
+                            ? null
+                            : AuthInputValidation.validatePasswordConfirmation(
+                                value,
+                                password: _passwordController.text,
+                              ),
+                      ),
+                      const SizedBox(height: 24),
+                    ],
+
+                    // Sign In Button
+                    AppButton(
+                      text: _isRegisterMode ? 'Crear Cuenta' : 'Iniciar Sesión',
+                      onPressed: _isLoading
+                          ? null
+                          : _isRegisterMode
+                              ? _register
+                              : _signIn,
+                      isLoading: _isLoading,
+                      width: double.infinity,
+                    ),
+                    const SizedBox(height: 16),
+
+                    // OAuth is an access path for identities already assigned to
+                    // this ERP. New tenant owners must use the explicit signup
+                    // form so the server receives the required shop metadata.
+                    if (!_isRegisterMode) ...[
+                      Row(
+                        children: [
+                          const Expanded(child: Divider()),
+                          Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 16),
+                            child: Text(
+                              'o continuar con',
+                              style: TextStyle(
+                                color: Colors.grey[600],
+                                fontSize: 14,
+                              ),
+                            ),
+                          ),
+                          const Expanded(child: Divider()),
+                        ],
+                      ),
+                      const SizedBox(height: 16),
+                      OutlinedButton.icon(
+                        key: const ValueKey('existing-account-google-login'),
+                        onPressed: _isLoading ? null : _signInWithGoogle,
+                        icon: Image.network(
+                          'https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg',
+                          height: 20,
+                          width: 20,
+                          errorBuilder: (context, error, stackTrace) =>
+                              const Icon(Icons.g_mobiledata, size: 20),
+                        ),
+                        label: const Text(
+                            'Ingresar con Google (cuenta existente)'),
+                        style: OutlinedButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(vertical: 16),
+                          minimumSize: const Size(double.infinity, 48),
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                    ],
+
                     Align(
                       alignment: Alignment.centerRight,
                       child: TextButton(
-                        onPressed: () {
-                          showDialog(
-                            context: context,
-                            builder: (context) => const ForgotPasswordDialog(),
-                          );
-                        },
-                        child: const Text('¿Olvidaste tu contraseña?'),
-                      ),
-                    ),
-                  ],
-
-                  const SizedBox(height: 24),
-
-                  if (_isRegisterMode) ...[
-                    TextFormField(
-                      key: const ValueKey('signup-password-confirmation'),
-                      controller: _confirmPasswordController,
-                      obscureText: _obscurePassword,
-                      decoration: const InputDecoration(
-                        labelText: 'Confirmar Contraseña',
-                        prefixIcon: Icon(Icons.lock_outline),
-                      ),
-                      validator: (value) => !_isRegisterMode
-                          ? null
-                          : AuthInputValidation.validatePasswordConfirmation(
-                              value,
-                              password: _passwordController.text,
-                            ),
-                    ),
-                    const SizedBox(height: 24),
-                  ],
-
-                  // Sign In Button
-                  AppButton(
-                    text: _isRegisterMode ? 'Crear Cuenta' : 'Iniciar Sesión',
-                    onPressed: _isLoading
-                        ? null
-                        : _isRegisterMode
-                            ? _register
-                            : _signIn,
-                    isLoading: _isLoading,
-                    width: double.infinity,
-                  ),
-                  const SizedBox(height: 16),
-
-                  // OAuth is an access path for identities already assigned to
-                  // this ERP. New tenant owners must use the explicit signup
-                  // form so the server receives the required shop metadata.
-                  if (!_isRegisterMode) ...[
-                    Row(
-                      children: [
-                        const Expanded(child: Divider()),
-                        Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 16),
-                          child: Text(
-                            'o continuar con',
-                            style: TextStyle(
-                              color: Colors.grey[600],
-                              fontSize: 14,
-                            ),
-                          ),
+                        onPressed: _isLoading ? null : _toggleAuthMode,
+                        child: Text(
+                          _isRegisterMode
+                              ? '¿Ya tienes cuenta? Inicia sesión'
+                              : '¿No tienes cuenta? Regístrate',
                         ),
-                        const Expanded(child: Divider()),
-                      ],
-                    ),
-                    const SizedBox(height: 16),
-                    OutlinedButton.icon(
-                      key: const ValueKey('existing-account-google-login'),
-                      onPressed: _isLoading ? null : _signInWithGoogle,
-                      icon: Image.network(
-                        'https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg',
-                        height: 20,
-                        width: 20,
-                        errorBuilder: (context, error, stackTrace) =>
-                            const Icon(Icons.g_mobiledata, size: 20),
-                      ),
-                      label:
-                          const Text('Ingresar con Google (cuenta existente)'),
-                      style: OutlinedButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(vertical: 16),
-                        minimumSize: const Size(double.infinity, 48),
                       ),
                     ),
-                    const SizedBox(height: 16),
-                  ],
-
-                  Align(
-                    alignment: Alignment.centerRight,
-                    child: TextButton(
-                      onPressed: _isLoading ? null : _toggleAuthMode,
-                      child: Text(
-                        _isRegisterMode
-                            ? '¿Ya tienes cuenta? Inicia sesión'
-                            : '¿No tienes cuenta? Regístrate',
-                      ),
-                    ),
-                  ),
                     const SizedBox(height: 32),
                   ],
                 ),

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -16,12 +18,14 @@ class EntityChatSidebar extends StatefulWidget {
   final String entityType; // 'job', 'invoice', etc.
   final String entityId;
   final String entityTitle; // For display, e.g., "Trabajo #123"
+  final bool deferLoadingUntilExpanded;
 
   const EntityChatSidebar({
     super.key,
     required this.entityType,
     required this.entityId,
     required this.entityTitle,
+    this.deferLoadingUntilExpanded = false,
   });
 
   @override
@@ -45,6 +49,7 @@ class _EntityChatSidebarState extends State<EntityChatSidebar> {
   final Set<String> _deletingConversationIds = {};
   double _expandedWidth = _defaultExpandedWidth;
   RealtimeChannel? _realtimeChannel;
+  bool _hasStartedLoading = false;
 
   int get _unreadCount =>
       _conversations.fold<int>(0, (sum, item) => sum + item.unreadCount);
@@ -63,11 +68,12 @@ class _EntityChatSidebarState extends State<EntityChatSidebar> {
   void initState() {
     super.initState();
     _loadSavedWidth();
-    // Defer provider access to after first frame
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _loadConversations();
-      _subscribeToUpdates();
-    });
+    if (!widget.deferLoadingUntilExpanded) {
+      // Defer provider access to after first frame.
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _startConversationLoading();
+      });
+    }
   }
 
   Future<void> _loadSavedWidth() async {
@@ -117,6 +123,18 @@ class _EntityChatSidebarState extends State<EntityChatSidebar> {
     } catch (e) {
       debugPrint('MessagingService not available: $e');
     }
+  }
+
+  void _startConversationLoading() {
+    if (!mounted || _hasStartedLoading) return;
+    _hasStartedLoading = true;
+    _subscribeToUpdates();
+    unawaited(_loadConversations());
+  }
+
+  void _expandSidebar() {
+    _safeSetState(() => _isExpanded = true);
+    _startConversationLoading();
   }
 
   Future<void> _loadConversations() async {
@@ -546,7 +564,7 @@ class _EntityChatSidebarState extends State<EntityChatSidebar> {
         : theme.colorScheme.onSurfaceVariant;
 
     return InkWell(
-      onTap: () => _safeSetState(() => _isExpanded = true),
+      onTap: _expandSidebar,
       child: Column(
         children: [
           const SizedBox(height: 16),

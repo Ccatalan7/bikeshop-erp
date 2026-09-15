@@ -85,7 +85,7 @@ class SmartJobRecommendationService {
     final dataGaps = <String>[];
     final tenantId = await TenantService().getTenantId();
     final chainSpeed = _resolveChainSpeed(bikeProfile, dataGaps);
-    final categoryMatch = await _loadChainCategoryIds(
+    final productMatch = await _loadChainProductIds(
       tenantId: tenantId,
       dataGaps: dataGaps,
     );
@@ -93,7 +93,7 @@ class SmartJobRecommendationService {
     final recommendations = <SmartJobRecommendation>[
       ...await _loadChainProductRecommendations(
         tenantId: tenantId,
-        categoryMatch: categoryMatch,
+        productMatch: productMatch,
         chainSpeed: chainSpeed,
         bike: bike,
         bikeProfile: bikeProfile,
@@ -307,60 +307,43 @@ class SmartJobRecommendationService {
     return candidates.take(2).toList(growable: false);
   }
 
-  Future<_ChainCategoryMatch> _loadChainCategoryIds({
+  Future<_ChainProductMatch> _loadChainProductIds({
     required String? tenantId,
     required List<String> dataGaps,
   }) async {
     try {
-      var mappingQuery = _client
-          .from('category_tech_mappings')
-          .select('category_id, technical_family')
-          .eq('status', 'active')
-          .inFilter('technical_family', const ['chain', 'bike_chain']);
-
-      if (tenantId != null && tenantId.isNotEmpty) {
-        mappingQuery = mappingQuery.eq('tenant_id', tenantId);
-      }
-
-      final rows = await mappingQuery;
-      final categoryIds = <String>{
-        for (final raw in rows as List)
-          if ((raw as Map)['category_id']?.toString().isNotEmpty == true)
-            raw['category_id'].toString(),
-      };
-
-      if (categoryIds.isNotEmpty) {
-        return _ChainCategoryMatch(
-          categoryIds: categoryIds.toList(growable: false),
-          fromTechnicalFamily: true,
-        );
-      }
+      final rows = await _client.rpc('get_product_ids_for_spec_family_v1',
+          params: {'p_family': 'chain'});
+      return _ChainProductMatch(
+        productIds:
+            (rows as List).map((id) => id.toString()).toList(growable: false),
+      );
     } catch (_) {
-      dataGaps.add('No se pudo leer el puente técnico de categorías.');
+      dataGaps.add('No se pudieron leer las fichas asignadas a los productos.');
     }
 
     dataGaps.add(
-      'No hay categoría mapeada a technical_family = chain para usar el motor de compatibilidad.',
+      'No se pudo resolver la familia técnica de los productos.',
     );
-    return const _ChainCategoryMatch();
+    return const _ChainProductMatch();
   }
 
   Future<List<SmartJobRecommendation>> _loadChainProductRecommendations({
     required String? tenantId,
-    required _ChainCategoryMatch categoryMatch,
+    required _ChainProductMatch productMatch,
     required int? chainSpeed,
     required Bike? bike,
     required BikeProfile? bikeProfile,
     required List<String> dataGaps,
   }) async {
-    if (categoryMatch.categoryIds.isEmpty) return const [];
+    if (productMatch.productIds.isEmpty) return const [];
 
     var productQuery = _client
         .from('products')
         .select(Product.listPreviewSelect)
         .eq('is_active', true)
         .eq('product_type', 'product')
-        .inFilter('category_id', categoryMatch.categoryIds);
+        .inFilter('id', productMatch.productIds);
 
     if (tenantId != null && tenantId.isNotEmpty) {
       productQuery = productQuery.eq('tenant_id', tenantId);
@@ -397,12 +380,10 @@ class SmartJobRecommendationService {
       }
 
       final facts = <String>[
-        categoryMatch.fromTechnicalFamily
-            ? 'Familia técnica: cadena'
-            : 'Categoría: Cadenas',
+        'Familia técnica: cadena',
       ];
       final dataGaps = <String>[];
-      var score = categoryMatch.fromTechnicalFamily ? 70 : 45;
+      var score = 70;
 
       if (chainSpeed != null) {
         score += 70;
@@ -652,12 +633,10 @@ class SmartJobRecommendationService {
   }
 }
 
-class _ChainCategoryMatch {
-  final List<String> categoryIds;
-  final bool fromTechnicalFamily;
+class _ChainProductMatch {
+  final List<String> productIds;
 
-  const _ChainCategoryMatch({
-    this.categoryIds = const [],
-    this.fromTechnicalFamily = false,
+  const _ChainProductMatch({
+    this.productIds = const [],
   });
 }

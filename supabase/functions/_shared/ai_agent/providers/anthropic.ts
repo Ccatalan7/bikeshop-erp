@@ -13,7 +13,7 @@ import {
   logicalModelRoles,
   type StrictJsonSchema,
 } from "../contracts.ts";
-import { type AgentModelProvider, ProviderError } from "./provider.ts";
+import { type AgentModelProvider, ProviderError, requiredToolNameFor } from "./provider.ts";
 import { discardProviderBody, readProviderJson } from "./http.ts";
 
 const DEFAULT_ANTHROPIC_ENDPOINT = "https://api.anthropic.com/v1/messages";
@@ -77,9 +77,10 @@ export function createAnthropicMessagesProvider(
 
   return {
     id: "anthropic",
+    modelFor: (role) => modelByRole[role],
     async generate(request, signal) {
       if (signal.aborted) {
-        throw new ProviderError("provider_unavailable", 503, true);
+        throw new ProviderError("provider_unavailable", 503, false);
       }
       const model = modelByRole[request.modelRole];
       const continuation = decodeAnthropicContinuation(
@@ -92,6 +93,7 @@ export function createAnthropicMessagesProvider(
       if (hasToolContinuation !== (continuation.groups.length > 0)) {
         throw invalidProviderResponse();
       }
+      const requiredToolName = requiredToolNameFor(request);
       const tools = anthropicTools(request.tools);
       const toolNames = new Set(request.tools.map((tool) => tool.name));
       const payload = {
@@ -104,6 +106,13 @@ export function createAnthropicMessagesProvider(
           toolNames,
         ),
         tools: tools.length > 0 ? tools : undefined,
+        tool_choice: requiredToolName
+          ? {
+            type: "tool",
+            name: requiredToolName,
+            disable_parallel_tool_use: true,
+          }
+          : undefined,
         thinking: { type: "adaptive", display: "omitted" },
         output_config: { effort: effortByRole[request.modelRole] },
       };
@@ -121,7 +130,7 @@ export function createAnthropicMessagesProvider(
           signal,
         });
       } catch (_) {
-        throw new ProviderError("provider_unavailable", 503, true);
+        throw new ProviderError("provider_unavailable", 503, !signal.aborted);
       }
 
       if (!response.ok) {

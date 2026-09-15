@@ -219,7 +219,9 @@ void main() {
     expect(chatWindowSource, contains('_MessageGrouping'));
     expect(chatWindowSource, contains('_showJumpToLatest'));
     expect(chatWindowSource, contains('Ir al mensaje más reciente'));
-    expect(chatWindowSource, contains('SelectionArea('));
+    // Message selection/copy and gesture arbitration are exercised by
+    // chat_reply_and_draft_test and chat_message_interactions_test.
+    // A SelectionArea here intercepts the bubble's long press.
   });
 
   test('the narrow composer exposes one progressive action menu', () {

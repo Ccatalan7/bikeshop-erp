@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:uuid/uuid.dart';
 import '../../../shared/services/database_service.dart';
 import '../../../shared/services/tenant_service.dart';
 import '../models/bikeshop_models.dart';
@@ -183,6 +184,7 @@ class JobStatusService extends ChangeNotifier {
     bool triggersStart = false,
     bool triggersCompletion = false,
     bool triggersDelivery = false,
+    bool promptsSupplyNeedCapture = false,
   }) async {
     try {
       final tenantId = await _tenantService.getTenantId();
@@ -205,10 +207,14 @@ class JobStatusService extends ChangeNotifier {
         triggersStart: triggersStart,
         triggersCompletion: triggersCompletion,
         triggersDelivery: triggersDelivery,
+        promptsSupplyNeedCapture: false,
       );
 
       final result = await _db.insert('job_statuses', status.toJson());
-      final created = JobStatusCustom.fromJson(result);
+      var created = JobStatusCustom.fromJson(result);
+      if (promptsSupplyNeedCapture) {
+        created = await _setSupplyNeedCaptureCapability(created, true);
+      }
 
       _statuses.add(created);
       _statuses.sort((a, b) => a.sortOrder.compareTo(b.sortOrder));
@@ -228,11 +234,25 @@ class JobStatusService extends ChangeNotifier {
     try {
       if (status.id == null) throw Exception('Status ID required');
 
-      await _db.update('job_statuses', status.id!, status.toJson());
+      final current = getStatusById(status.id);
+      final requestedCapability = status.promptsSupplyNeedCapture;
+      final statusFields = status.toJson()
+        ..remove('prompts_supply_need_capture');
+
+      await _db.update('job_statuses', status.id!, statusFields);
+      var persisted = status.copyWith(
+        promptsSupplyNeedCapture: current?.promptsSupplyNeedCapture ?? false,
+      );
+      if (current?.promptsSupplyNeedCapture != requestedCapability) {
+        persisted = await _setSupplyNeedCaptureCapability(
+          persisted,
+          requestedCapability,
+        );
+      }
 
       final index = _statuses.indexWhere((s) => s.id == status.id);
       if (index != -1) {
-        _statuses[index] = status;
+        _statuses[index] = persisted;
         _statuses.sort((a, b) => a.sortOrder.compareTo(b.sortOrder));
         notifyListeners();
       }
@@ -244,6 +264,30 @@ class JobStatusService extends ChangeNotifier {
       notifyListeners();
       return false;
     }
+  }
+
+  Future<JobStatusCustom> _setSupplyNeedCaptureCapability(
+    JobStatusCustom status,
+    bool enabled,
+  ) async {
+    final statusId = status.id;
+    if (statusId == null) throw Exception('Status ID required');
+    final response = await _db.rpc(
+      'set_job_status_supply_need_capability_v1',
+      params: {
+        'p_status_id': statusId,
+        'p_enabled': enabled,
+        'p_operation_key': const Uuid().v4(),
+      },
+    );
+    if (response is! Map || response['status'] is! Map) {
+      throw const FormatException(
+        'El servidor no devolvió la capacidad guardada.',
+      );
+    }
+    return JobStatusCustom.fromJson(
+      Map<String, dynamic>.from(response['status'] as Map),
+    );
   }
 
   /// Delete a custom status (only non-system statuses)

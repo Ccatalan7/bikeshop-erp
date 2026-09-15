@@ -137,9 +137,10 @@ void main() {
 
     expect(
       service,
-      contains("'purchase_invoice_list_read_model'"),
+      contains("'purchase_invoice_list_read_model_v2'"),
       reason:
-          'The first list query must combine invoice and physical fulfillment.',
+          'The first list query must combine invoice, physical fulfillment, '
+          'and source-document context.',
     );
     expect(
       service,

@@ -58,6 +58,9 @@ import '../widgets/workshop_board_compact_view.dart';
 import '../widgets/workshop_mobile_bike_chooser.dart';
 import '../widgets/workshop_mobile_payment_workspace.dart';
 import '../widgets/workshop_status_filter_header.dart';
+import '../widgets/job_supply_needs_panel.dart';
+import '../../purchases/models/intelligent_purchasing_models.dart';
+import '../../purchases/services/intelligent_purchasing_service.dart';
 import 'bike_form_dialog.dart';
 import 'mechanic_job_form_page.dart';
 
@@ -322,6 +325,7 @@ class _PegasTablePageState extends State<PegasTablePage>
   late JobStatusService _jobStatusService;
   late SalesService _salesService;
   late AIAssistantContextService _aiAssistantContextService;
+  late IntelligentPurchasingService _intelligentPurchasingService;
   final Object _aiAssistantContextOwner = Object();
   final TenantService _tenantService = TenantService();
 
@@ -342,6 +346,7 @@ class _PegasTablePageState extends State<PegasTablePage>
   Map<String, List<MechanicJobItem>> _jobItemsMap = {};
   Map<String, String> _productImages = {};
   Map<String, List<MechanicJobBike>> _jobBikesMap = {}; // Multi-bike support
+  Map<String, JobSupplyAttention> _supplyAttentionByJob = const {};
 
   // Expanded rows (multi-bike display)
   final Set<String> _expandedJobIds = {};
@@ -473,6 +478,7 @@ class _PegasTablePageState extends State<PegasTablePage>
     _customerService = Provider.of<CustomerService>(context, listen: false);
     _jobStatusService = Provider.of<JobStatusService>(context, listen: false);
     _salesService = Provider.of<SalesService>(context, listen: false);
+    _intelligentPurchasingService = IntelligentPurchasingService();
     _aiAssistantContextService =
         Provider.of<AIAssistantContextService>(context, listen: false);
     _ganttHorizontalScrollController.addListener(_rememberGanttScroll);
@@ -822,6 +828,27 @@ class _PegasTablePageState extends State<PegasTablePage>
     if (jobToRefresh != null) {
       _loadJobDetails(jobToRefresh!);
     }
+  }
+
+  /// Applies the exact row acknowledged by the status command without
+  /// disturbing the rest of the Jobs read model, filters, sort or selection.
+  void _applyAuthoritativeJobUpdate(MechanicJob updatedJob) {
+    if (!mounted) return;
+
+    setState(() {
+      final jobs = List<MechanicJob>.from(_jobs);
+      final index = jobs.indexWhere((job) => job.id == updatedJob.id);
+      if (index >= 0) {
+        jobs[index] = updatedJob;
+      } else {
+        jobs.add(updatedJob);
+      }
+      _jobs = jobs;
+      if (_selectedJob?.id == updatedJob.id) {
+        _selectedJob = updatedJob;
+      }
+    });
+    _applyFiltersAndSort();
   }
 
   /// Mark that we're starting a local operation (to suppress unnecessary reloads)
@@ -1244,20 +1271,14 @@ class _PegasTablePageState extends State<PegasTablePage>
       final bikes = results[2] as List<Bike>;
       final invoices = results[3] as List<Invoice>;
       final jobBikesMap = results[4] as Map<String, List<MechanicJobBike>>;
-      Map<String, List<MechanicJobItem>> jobItemsMap = const {};
-      try {
-        jobItemsMap = await _bikeshopService.getJobItemsForJobs(
-          jobs
-              .where((job) =>
-                  job.isSaleWorkflow ||
-                  job.isQuotationWorkflow ||
-                  job.modeNeedsReview)
-              .map((job) => job.id)
-              .whereType<String>(),
-        );
-      } catch (error) {
-        debugPrint('Could not load compact job item summaries: $error');
-      }
+      final companionResults = await Future.wait<Object>([
+        _loadCompactJobItemSummaries(jobs),
+        _loadJobSupplyAttentionSummaries(jobs),
+      ]);
+      final jobItemsMap =
+          companionResults[0] as Map<String, List<MechanicJobItem>>;
+      final supplyAttentionByJob =
+          companionResults[1] as Map<String, JobSupplyAttention>;
 
       final customerMap = _buildCustomerMap(customers);
       final bikeMap = _buildBikeMap(bikes);
@@ -1277,6 +1298,7 @@ class _PegasTablePageState extends State<PegasTablePage>
           _invoices = invoiceMap;
           _jobBikesMap = jobBikesMap;
           _jobItemsMap = jobItemsMap;
+          _supplyAttentionByJob = supplyAttentionByJob;
           _isLoading = false;
         });
         _applyFiltersAndSort();
@@ -1313,6 +1335,100 @@ class _PegasTablePageState extends State<PegasTablePage>
       // A real failure of the CURRENT load keeps its explicit outcome for a
       // caller that awaited it to verify its own operation.
       if (rethrowErrors) rethrow;
+    }
+  }
+
+  Future<Map<String, List<MechanicJobItem>>> _loadCompactJobItemSummaries(
+    List<MechanicJob> jobs,
+  ) async {
+    try {
+      return await _bikeshopService.getJobItemsForJobs(
+        jobs
+            .where((job) =>
+                job.isSaleWorkflow ||
+                job.isQuotationWorkflow ||
+                job.modeNeedsReview)
+            .map((job) => job.id)
+            .whereType<String>(),
+      );
+    } catch (error) {
+      debugPrint('Could not load compact job item summaries: $error');
+      return const {};
+    }
+  }
+
+  Future<Map<String, JobSupplyAttention>> _loadJobSupplyAttentionSummaries(
+    List<MechanicJob> jobs,
+  ) async {
+    try {
+      return await _intelligentPurchasingService.fetchJobSupplyAttention(
+        jobs.map((job) => job.id).whereType<String>(),
+      );
+    } catch (error) {
+      debugPrint('Could not load job supply attention: $error');
+      return const {};
+    }
+  }
+
+  void _setSupplyAttentionCapability(
+    MechanicJob job,
+    JobStatusCustom status,
+  ) {
+    final jobId = job.id;
+    if (!mounted || jobId == null) return;
+    final current = _supplyAttentionByJob[jobId];
+    final active = current?.activeNeedCount ?? 0;
+    setState(() {
+      _supplyAttentionByJob = {
+        ..._supplyAttentionByJob,
+        jobId: JobSupplyAttention(
+          jobId: jobId,
+          promptsSupplyNeedCapture: status.promptsSupplyNeedCapture,
+          activeNeedCount: active,
+          unresolvedIdentityCount: current?.unresolvedIdentityCount ?? 0,
+          requiresCapture: status.promptsSupplyNeedCapture && active == 0,
+          latestNeedUpdatedAt: current?.latestNeedUpdatedAt,
+        ),
+      };
+    });
+  }
+
+  void _recordSupplyNeedCreated(MechanicJob job, SupplyNeed need) {
+    final jobId = job.id;
+    if (!mounted || jobId == null) return;
+    final current = _supplyAttentionByJob[jobId];
+    setState(() {
+      _supplyAttentionByJob = {
+        ..._supplyAttentionByJob,
+        jobId: JobSupplyAttention(
+          jobId: jobId,
+          promptsSupplyNeedCapture: current?.promptsSupplyNeedCapture ??
+              job.customStatus?.promptsSupplyNeedCapture == true,
+          activeNeedCount: (current?.activeNeedCount ?? 0) + 1,
+          unresolvedIdentityCount: (current?.unresolvedIdentityCount ?? 0) +
+              (need.hasConfirmedProduct ? 0 : 1),
+          requiresCapture: false,
+          latestNeedUpdatedAt: need.updatedAt,
+        ),
+      };
+    });
+  }
+
+  Future<void> _refreshSupplyAttention(String? jobId) async {
+    if (jobId == null) return;
+    try {
+      final result =
+          await _intelligentPurchasingService.fetchJobSupplyAttention([jobId]);
+      final attention = result[jobId];
+      if (!mounted || attention == null) return;
+      setState(() {
+        _supplyAttentionByJob = {
+          ..._supplyAttentionByJob,
+          jobId: attention,
+        };
+      });
+    } catch (error) {
+      debugPrint('Could not refresh job supply attention: $error');
     }
   }
 
@@ -1773,25 +1889,19 @@ class _PegasTablePageState extends State<PegasTablePage>
       // Smart filter (Activos, Completados, etc.) - uses phase
       switch (_statusFilter) {
         case 'active':
-          if (job.isSaleWorkflow) {
-            if (!isMechanicJobSaleActive(job, invoice)) return false;
-            break;
-          }
-          if (job.isStandaloneQuotation &&
-              (job.effectiveQuotationStatus == QuotationStatus.rejected ||
-                  job.effectiveQuotationStatus == QuotationStatus.expired)) {
+          final customer = _customers[job.customerId];
+          final bike = _bikes[job.bikeId];
+          if (!isMechanicJobOperationallyActive(
+            job,
+            invoice: invoice,
+            customerName: customer?.name,
+            bikeName: bike?.displayName,
+            bikeBrand: bike?.brand,
+            bikeModel: bike?.model,
+            bikeSerialNumber: bike?.serialNumber,
+          )) {
             return false;
           }
-          // Activos: include Terminados/Finalizados.
-          // Filter out only: Cancelados, and Entregados that are already paid.
-          if (job.status == JobStatus.cancelado) return false;
-
-          if (isDelivered && isInvoicedEffective && isPaidEffective) {
-            return false;
-          }
-
-          // Also exclude finished warranties from active list
-          if (isFinishedWarranty) return false;
           break;
         case 'warranty_completed':
           if (!isFinishedWarranty) return false;
@@ -5463,6 +5573,16 @@ class _PegasTablePageState extends State<PegasTablePage>
     late final Color color;
     String? metaText;
     VoidCallback? onTap;
+    final supplyAttention =
+        job.id == null ? null : _supplyAttentionByJob[job.id!];
+    final activeSupplyNeeds = supplyAttention?.activeNeedCount ?? 0;
+    final supplyMetaText = activeSupplyNeeds > 0
+        ? activeSupplyNeeds == 1
+            ? '1 repuesto registrado'
+            : '$activeSupplyNeeds repuestos registrados'
+        : supplyAttention?.requiresCapture == true
+            ? 'Repuestos sin definir'
+            : null;
 
     if (job.deletedAt != null) {
       label = 'Eliminado';
@@ -5487,9 +5607,10 @@ class _PegasTablePageState extends State<PegasTablePage>
     } else {
       label = job.statusDisplayName;
       color = _operationalStatusColor(job);
-      metaText = job.isServiceBudget
-          ? job.proposalStatusDisplayName
-          : _serviceWarrantyMeta(job);
+      metaText = supplyMetaText ??
+          (job.isServiceBudget
+              ? job.proposalStatusDisplayName
+              : _serviceWarrantyMeta(job));
       onTap = () => _showStatusMenu(job);
     }
 
@@ -5497,7 +5618,11 @@ class _PegasTablePageState extends State<PegasTablePage>
         toBeginningOfSentenceCase(label.trim().toLowerCase());
     final age = job.isStandaloneQuotation
         ? null
-        : _formatMobileRelativeTime(job.statusUpdatedAt);
+        : _formatMobileRelativeTime(
+            activeSupplyNeeds > 0
+                ? supplyAttention?.latestNeedUpdatedAt ?? job.statusUpdatedAt
+                : job.statusUpdatedAt,
+          );
     final theme = Theme.of(context);
 
     return Semantics(
@@ -6356,6 +6481,7 @@ class _PegasTablePageState extends State<PegasTablePage>
     VoidCallback? onTap,
     double maxWidth = 132,
     bool compact = false,
+    String? tooltip,
   }) {
     return OperationalStatusBadge(
       label: label,
@@ -6366,6 +6492,7 @@ class _PegasTablePageState extends State<PegasTablePage>
       onTap: onTap,
       maxWidth: maxWidth,
       compact: compact,
+      tooltip: tooltip,
     );
   }
 
@@ -7595,6 +7722,24 @@ class _PegasTablePageState extends State<PegasTablePage>
         final statusUpdatedAt = job.statusUpdatedAt;
         final proposalMeta =
             job.isServiceBudget ? job.proposalStatusDisplayName : null;
+        final supplyAttention =
+            job.id == null ? null : _supplyAttentionByJob[job.id!];
+        final requiresSupplyCapture = supplyAttention?.requiresCapture == true;
+        final activeSupplyNeedCount = supplyAttention?.activeNeedCount ?? 0;
+        final unresolvedSupplyNeedCount =
+            supplyAttention?.unresolvedIdentityCount ?? 0;
+        final supplyMetaText = activeSupplyNeedCount > 0
+            ? activeSupplyNeedCount == 1
+                ? unresolvedSupplyNeedCount > 0
+                    ? '1 repuesto · identificar'
+                    : '1 repuesto registrado'
+                : unresolvedSupplyNeedCount > 0
+                    ? '$activeSupplyNeedCount repuestos · '
+                        '$unresolvedSupplyNeedCount por identificar'
+                    : '$activeSupplyNeedCount repuestos registrados'
+            : requiresSupplyCapture
+                ? 'Repuestos sin definir'
+                : null;
         return LayoutBuilder(
           builder: (context, constraints) {
             final chipWidth =
@@ -7609,15 +7754,32 @@ class _PegasTablePageState extends State<PegasTablePage>
                 builder: (chipContext) => _buildStatusBadge(
                   label: statusName,
                   accentColor: statusColor,
-                  timestamp: job.isStandaloneQuotation ? null : statusUpdatedAt,
-                  metaText: proposalMeta ?? _serviceWarrantyMeta(job),
-                  metaIcon: proposalMeta == null
-                      ? Icons.shield_outlined
-                      : Icons.request_quote_outlined,
+                  timestamp: job.isStandaloneQuotation
+                      ? null
+                      : activeSupplyNeedCount > 0
+                          ? supplyAttention?.latestNeedUpdatedAt ??
+                              statusUpdatedAt
+                          : statusUpdatedAt,
+                  metaText: supplyMetaText ??
+                      proposalMeta ??
+                      _serviceWarrantyMeta(job),
+                  metaIcon: supplyMetaText != null
+                      ? Icons.inventory_2_outlined
+                      : proposalMeta == null
+                          ? Icons.shield_outlined
+                          : Icons.request_quote_outlined,
                   onTap: job.isSaleWorkflow
                       ? null
                       : () => _showStatusMenu(job, anchorContext: chipContext),
                   maxWidth: chipWidth,
+                  tooltip: supplyMetaText == null
+                      ? null
+                      : activeSupplyNeedCount == 0
+                          ? 'Esperando repuestos: todavía no se registró qué falta.'
+                          : '$activeSupplyNeedCount necesidad(es) vinculada(s) '
+                              'a este trabajo; $unresolvedSupplyNeedCount '
+                              'pendiente(s) de identificar. Abre para ver, '
+                              'editar o continuar en Compras.',
                 ),
               ),
             );
@@ -8216,6 +8378,9 @@ class _PegasTablePageState extends State<PegasTablePage>
                     children: [
                       Expanded(
                         child: Semantics(
+                          key: ValueKey(
+                            'workshop-job-proposal-items-${job.id}',
+                          ),
                           button: true,
                           excludeSemantics: true,
                           label:
@@ -11009,7 +11174,11 @@ class _PegasTablePageState extends State<PegasTablePage>
     }
   }
 
-  void _showStatusMenu(MechanicJob job, {BuildContext? anchorContext}) {
+  void _showStatusMenu(
+    MechanicJob job, {
+    BuildContext? anchorContext,
+    bool initiallyCapturingSupplyNeed = false,
+  }) {
     if (job.isSaleWorkflow) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -11036,6 +11205,7 @@ class _PegasTablePageState extends State<PegasTablePage>
           job,
           popoverContext,
           asPopover: true,
+          initiallyCapturingSupplyNeed: initiallyCapturingSupplyNeed,
         ),
       );
       return;
@@ -11043,7 +11213,11 @@ class _PegasTablePageState extends State<PegasTablePage>
 
     showDialog(
       context: context,
-      builder: (dialogContext) => _buildStatusManager(job, dialogContext),
+      builder: (dialogContext) => _buildStatusManager(
+        job,
+        dialogContext,
+        initiallyCapturingSupplyNeed: initiallyCapturingSupplyNeed,
+      ),
     );
   }
 
@@ -11051,16 +11225,33 @@ class _PegasTablePageState extends State<PegasTablePage>
     MechanicJob job,
     BuildContext hostContext, {
     bool asPopover = false,
+    bool initiallyCapturingSupplyNeed = false,
   }) {
     final dialogContext = hostContext;
     return _StatusManagerDialog(
       asPopover: asPopover,
+      initiallyCapturingSupplyNeed: initiallyCapturingSupplyNeed,
       job: job,
+      jobBikes: _jobBikesMap[job.id] ?? const <MechanicJobBike>[],
+      supplyAttention: job.id == null ? null : _supplyAttentionByJob[job.id!],
       jobStatusService: _jobStatusService,
       warrantyPaymentReviewRequired: _hasWarrantyPaymentEvidence(job),
-      onStatusSelected: (status) async {
+      onStatusSelected: (status) => _updateJobToCustomStatus(job, status),
+      onSupplyNeedCreated: (need) => _recordSupplyNeedCreated(job, need),
+      onSupplyNeedUpdated: (need) {
+        unawaited(_refreshSupplyAttention(job.id));
+      },
+      onSupplyNeedResolve: (needId) {
         Navigator.pop(dialogContext);
-        await _updateJobToCustomStatus(job, status);
+        if (!mounted) return;
+        final route = Uri(
+          path: '/purchases/assistant',
+          queryParameters: {
+            'need': needId,
+            if (job.id != null) 'job': job.id!,
+          },
+        ).toString();
+        context.push(route);
       },
       onWarrantyOutcomeSelected: (outcome) async {
         Navigator.pop(dialogContext);
@@ -11533,21 +11724,23 @@ class _PegasTablePageState extends State<PegasTablePage>
     return result;
   }
 
-  Future<void> _updateJobToCustomStatus(
+  Future<bool> _updateJobToCustomStatus(
       MechanicJob job, JobStatusCustom newStatus) async {
-    if (job.id == null ||
-        newStatus.id == null ||
-        newStatus.id == job.statusId) {
-      return;
+    if (job.id == null || newStatus.id == null) return false;
+    if (newStatus.id == job.statusId) {
+      _setSupplyAttentionCapability(job, newStatus);
+      return true;
     }
     _startLocalOperation();
     try {
-      await _bikeshopService.transitionJobStatus(
+      final updatedJob = await _bikeshopService.transitionJobStatus(
         job.id!,
         newStatus.id!,
         operationKey: const Uuid().v4(),
+        targetStatus: newStatus,
       );
-      await _loadData();
+      _applyAuthoritativeJobUpdate(updatedJob);
+      _setSupplyAttentionCapability(updatedJob, newStatus);
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -11557,6 +11750,7 @@ class _PegasTablePageState extends State<PegasTablePage>
           ),
         );
       }
+      return true;
     } catch (e) {
       await _loadData();
       if (mounted) {
@@ -11567,6 +11761,7 @@ class _PegasTablePageState extends State<PegasTablePage>
           ),
         );
       }
+      return false;
     } finally {
       // Always end the local operation, whether success or failure
       _endLocalOperation();
@@ -11579,17 +11774,33 @@ class _PegasTablePageState extends State<PegasTablePage>
       context: context,
       builder: (dialogContext) => _StatusManagerDialog(
         job: job,
+        jobBikes: _jobBikesMap[job.id] ?? const <MechanicJobBike>[],
+        supplyAttention: job.id == null ? null : _supplyAttentionByJob[job.id!],
         jobStatusService: _jobStatusService,
-        onStatusSelected: (status) async {
+        onStatusSelected: (status) =>
+            _updateJobBikeToCustomStatus(job, jobBike, status),
+        initialSupplyJobBikeId: jobBike.id,
+        onSupplyNeedCreated: (need) => _recordSupplyNeedCreated(job, need),
+        onSupplyNeedUpdated: (_) => unawaited(_refreshSupplyAttention(job.id)),
+        onSupplyNeedResolve: (needId) {
           Navigator.pop(dialogContext);
-          await _updateJobBikeToCustomStatus(job, jobBike, status);
+          if (!mounted) return;
+          context.push(
+            Uri(
+              path: '/purchases/assistant',
+              queryParameters: {
+                'need': needId,
+                if (job.id != null) 'job': job.id!,
+              },
+            ).toString(),
+          );
         },
       ),
     );
   }
 
   /// Update the status of a specific bike in a multi-bike job
-  Future<void> _updateJobBikeToCustomStatus(MechanicJob job,
+  Future<bool> _updateJobBikeToCustomStatus(MechanicJob job,
       MechanicJobBike jobBike, JobStatusCustom newStatus) async {
     // Start local operation to suppress reload from realtime notifications
     _startLocalOperation();
@@ -11628,6 +11839,7 @@ class _PegasTablePageState extends State<PegasTablePage>
           ),
         );
       }
+      return true;
     } catch (e) {
       // Revert on error
       debugPrint(
@@ -11652,6 +11864,7 @@ class _PegasTablePageState extends State<PegasTablePage>
           ),
         );
       }
+      return false;
     } finally {
       _endLocalOperation();
     }
@@ -12300,17 +12513,21 @@ class _PegasTablePageState extends State<PegasTablePage>
     try {
       for (var job in selectedJobs) {
         try {
-          await _bikeshopService.transitionJobStatus(
+          final updatedJob = await _bikeshopService.transitionJobStatus(
             job.id!,
             newCustomStatus.id!,
             operationKey: const Uuid().v4(),
+            targetStatus: newCustomStatus,
           );
+          _applyAuthoritativeJobUpdate(updatedJob);
           succeeded++;
         } catch (error) {
           failures.add('${job.jobNumber ?? job.id}: $error');
         }
       }
-      await _loadData();
+      if (failures.isNotEmpty) {
+        await _loadData();
+      }
       if (mounted) {
         setState(_selectedJobIds.clear);
         ScaffoldMessenger.of(context).showSnackBar(
@@ -13026,9 +13243,27 @@ class _PegasTablePageState extends State<PegasTablePage>
       customers: customersMap,
       bikes: bikesMap,
       onRefreshNeeded: _loadData,
+      onStatusChangeRequested: _changeStatusFromCalendar,
       useCompactLayout: ResponsiveViewport.usesCompactShell(context),
       session: _calendarSession,
     );
+  }
+
+  Future<bool> _changeStatusFromCalendar(
+    MechanicJob job,
+    JobStatusCustom status,
+  ) async {
+    final succeeded = await _updateJobToCustomStatus(job, status);
+    if (!succeeded || !mounted || !status.promptsSupplyNeedCapture) {
+      return succeeded;
+    }
+    final updated = _jobs.cast<MechanicJob?>().firstWhere(
+              (candidate) => candidate?.id == job.id,
+              orElse: () => job,
+            ) ??
+        job;
+    _showStatusMenu(updated, initiallyCapturingSupplyNeed: true);
+    return true;
   }
 
   // ========== GANTT VIEW (Notion-style Timeline) ==========
@@ -13579,8 +13814,13 @@ class ColumnConfig {
 
 class _StatusManagerDialog extends StatefulWidget {
   final MechanicJob job;
+  final List<MechanicJobBike> jobBikes;
+  final JobSupplyAttention? supplyAttention;
   final JobStatusService jobStatusService;
-  final Function(JobStatusCustom) onStatusSelected;
+  final Future<bool> Function(JobStatusCustom) onStatusSelected;
+  final ValueChanged<String>? onSupplyNeedResolve;
+  final ValueChanged<SupplyNeed>? onSupplyNeedCreated;
+  final ValueChanged<SupplyNeed>? onSupplyNeedUpdated;
   final Future<void> Function(WarrantyOutcome)? onWarrantyOutcomeSelected;
   final Future<void> Function(QuotationStatus)? onQuotationStatusSelected;
   final bool warrantyPaymentReviewRequired;
@@ -13588,15 +13828,24 @@ class _StatusManagerDialog extends StatefulWidget {
   /// Render as an anchored popover surface instead of a centred dialog.
   /// Set by callers that have a trigger to anchor to; see guide S-05.
   final bool asPopover;
+  final bool initiallyCapturingSupplyNeed;
+  final String? initialSupplyJobBikeId;
 
   const _StatusManagerDialog({
     required this.job,
+    this.jobBikes = const <MechanicJobBike>[],
+    this.supplyAttention,
     required this.jobStatusService,
     required this.onStatusSelected,
+    this.onSupplyNeedResolve,
+    this.onSupplyNeedCreated,
+    this.onSupplyNeedUpdated,
     this.onWarrantyOutcomeSelected,
     this.onQuotationStatusSelected,
     this.warrantyPaymentReviewRequired = false,
     this.asPopover = false,
+    this.initiallyCapturingSupplyNeed = false,
+    this.initialSupplyJobBikeId,
   });
 
   @override
@@ -13605,10 +13854,16 @@ class _StatusManagerDialog extends StatefulWidget {
 
 class _StatusManagerDialogState extends State<_StatusManagerDialog> {
   bool _isEditMode = false;
+  bool _isChangingStatus = false;
+  bool _isCapturingSupplyNeed = false;
+  bool _supplyCaptureHasOpened = false;
+  bool _supplyPanelStartsCreating = true;
+  JobSupplyAttention? _localSupplyAttention;
   JobStatusCustom? _editingStatus;
   final _nameController = TextEditingController();
   String _selectedColor = '#6B7280';
   StatusPhase _selectedPhase = StatusPhase.inProgress;
+  bool _promptsSupplyNeedCapture = false;
 
   // 18 preset colors
   static const List<String> _colors = [
@@ -13633,6 +13888,14 @@ class _StatusManagerDialogState extends State<_StatusManagerDialog> {
   ];
 
   @override
+  void initState() {
+    super.initState();
+    _localSupplyAttention = widget.supplyAttention;
+    _isCapturingSupplyNeed = widget.initiallyCapturingSupplyNeed;
+    _supplyCaptureHasOpened = widget.initiallyCapturingSupplyNeed;
+  }
+
+  @override
   void dispose() {
     _nameController.dispose();
     super.dispose();
@@ -13645,6 +13908,7 @@ class _StatusManagerDialogState extends State<_StatusManagerDialog> {
       _nameController.text = status?.name ?? '';
       _selectedColor = status?.color ?? '#6B7280';
       _selectedPhase = status?.phase ?? StatusPhase.inProgress;
+      _promptsSupplyNeedCapture = status?.promptsSupplyNeedCapture ?? false;
     });
   }
 
@@ -13655,7 +13919,84 @@ class _StatusManagerDialogState extends State<_StatusManagerDialog> {
       _nameController.clear();
       _selectedColor = '#6B7280';
       _selectedPhase = StatusPhase.inProgress;
+      _promptsSupplyNeedCapture = false;
     });
+  }
+
+  void _openSupplyPanel({required bool create}) {
+    FocusScope.of(context).unfocus();
+    setState(() {
+      if (!_supplyCaptureHasOpened) {
+        _supplyPanelStartsCreating = create;
+      }
+      _isCapturingSupplyNeed = true;
+      _supplyCaptureHasOpened = true;
+    });
+  }
+
+  void _supplyNeedCreated(SupplyNeed need) {
+    final current = _localSupplyAttention;
+    setState(() {
+      _localSupplyAttention = JobSupplyAttention(
+        jobId: widget.job.id ?? '',
+        promptsSupplyNeedCapture: current?.promptsSupplyNeedCapture ?? true,
+        activeNeedCount: (current?.activeNeedCount ?? 0) + 1,
+        unresolvedIdentityCount: (current?.unresolvedIdentityCount ?? 0) +
+            (need.hasConfirmedProduct ? 0 : 1),
+        requiresCapture: false,
+        latestNeedUpdatedAt: need.updatedAt,
+      );
+    });
+    widget.onSupplyNeedCreated?.call(need);
+  }
+
+  void _supplyNeedUpdated(SupplyNeed need) {
+    final current = _localSupplyAttention;
+    if (current != null) {
+      setState(() {
+        _localSupplyAttention = JobSupplyAttention(
+          jobId: current.jobId,
+          promptsSupplyNeedCapture: current.promptsSupplyNeedCapture,
+          activeNeedCount: current.activeNeedCount,
+          unresolvedIdentityCount: current.unresolvedIdentityCount,
+          requiresCapture: false,
+          latestNeedUpdatedAt: need.updatedAt,
+        );
+      });
+    }
+    widget.onSupplyNeedUpdated?.call(need);
+  }
+
+  Future<void> _selectStatus(JobStatusCustom status) async {
+    if (_isChangingStatus) return;
+    setState(() => _isChangingStatus = true);
+    final succeeded = await widget.onStatusSelected(status);
+    if (!mounted) return;
+    if (!succeeded) {
+      setState(() => _isChangingStatus = false);
+      return;
+    }
+
+    final currentAttention = _localSupplyAttention;
+    final activeNeeds = currentAttention?.activeNeedCount ?? 0;
+    _localSupplyAttention = JobSupplyAttention(
+      jobId: widget.job.id ?? '',
+      promptsSupplyNeedCapture: status.promptsSupplyNeedCapture,
+      activeNeedCount: activeNeeds,
+      unresolvedIdentityCount: currentAttention?.unresolvedIdentityCount ?? 0,
+      requiresCapture: status.promptsSupplyNeedCapture && activeNeeds == 0,
+      latestNeedUpdatedAt: currentAttention?.latestNeedUpdatedAt,
+    );
+
+    final shouldCapture = status.promptsSupplyNeedCapture &&
+        widget.onSupplyNeedResolve != null &&
+        !widget.job.isStandaloneQuotation;
+    if (shouldCapture) {
+      setState(() => _isChangingStatus = false);
+      _openSupplyPanel(create: true);
+      return;
+    }
+    Navigator.pop(context);
   }
 
   Future<void> _saveStatus() async {
@@ -13669,6 +14010,7 @@ class _StatusManagerDialogState extends State<_StatusManagerDialog> {
           name: name,
           color: _selectedColor,
           phase: _selectedPhase,
+          promptsSupplyNeedCapture: _promptsSupplyNeedCapture,
         );
         await widget.jobStatusService.updateStatus(updated);
       } else {
@@ -13682,6 +14024,7 @@ class _StatusManagerDialogState extends State<_StatusManagerDialog> {
           code: code,
           color: _selectedColor,
           phase: _selectedPhase,
+          promptsSupplyNeedCapture: _promptsSupplyNeedCapture,
         );
       }
       _cancelEditing();
@@ -13734,6 +14077,44 @@ class _StatusManagerDialogState extends State<_StatusManagerDialog> {
     }
   }
 
+  Widget _buildSupplyTraceEntry(BuildContext context) {
+    final attention = _localSupplyAttention;
+    final active = attention?.activeNeedCount ?? 0;
+    final unresolved = attention?.unresolvedIdentityCount ?? 0;
+    final latest = attention?.latestNeedUpdatedAt;
+    final subtitle = active == 0
+        ? 'Todavía no se registró qué falta para continuar.'
+        : <String>[
+            active == 1 ? '1 repuesto activo' : '$active repuestos activos',
+            if (unresolved > 0)
+              unresolved == 1
+                  ? '1 por identificar'
+                  : '$unresolved por identificar',
+            if (latest != null)
+              'actualizado ${DateFormat('dd/MM · HH:mm').format(latest.toLocal())}',
+          ].join(' · ');
+    return ListTile(
+      key: const ValueKey('workshop-supply-trace-entry'),
+      contentPadding: EdgeInsets.zero,
+      leading: Icon(
+        active == 0
+            ? Icons.add_shopping_cart_outlined
+            : Icons.inventory_2_outlined,
+        color: Theme.of(context).colorScheme.primary,
+      ),
+      title: Text(active == 0 ? 'Definir repuestos' : 'Repuestos del trabajo'),
+      subtitle: Text(subtitle),
+      trailing: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(active == 0 ? 'Registrar' : 'Ver'),
+          const Icon(Icons.chevron_right),
+        ],
+      ),
+      onTap: () => _openSupplyPanel(create: active == 0),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return ListenableBuilder(
@@ -13743,82 +14124,148 @@ class _StatusManagerDialogState extends State<_StatusManagerDialog> {
         final currentStatusId =
             widget.job.statusId ?? widget.job.customStatus?.id;
         final usesCompactLayout = ResponsiveViewport.usesCompactShell(context);
+        final activeSupplyNeedCount =
+            _localSupplyAttention?.activeNeedCount ?? 0;
+        final showsSupplyTrace =
+            _localSupplyAttention?.promptsSupplyNeedCapture == true ||
+                widget.job.customStatus?.promptsSupplyNeedCapture == true ||
+                activeSupplyNeedCount > 0;
 
         final dialogTitle = Row(
           children: [
+            if (_isCapturingSupplyNeed)
+              IconButton(
+                key: const ValueKey('supply-need-back-to-statuses'),
+                icon: const Icon(
+                  Icons.arrow_back,
+                  size: 20,
+                  semanticLabel: 'Volver a estados',
+                ),
+                tooltip: 'Volver a estados',
+                constraints: BoxConstraints.tight(const Size(48, 48)),
+                onPressed: () {
+                  FocusScope.of(context).unfocus();
+                  setState(() => _isCapturingSupplyNeed = false);
+                },
+              ),
             Expanded(
-              child: Text(_isEditMode
-                  ? (_editingStatus != null ? 'Editar Estado' : 'Nuevo Estado')
-                  : widget.job.isStandaloneQuotation
-                      ? 'Gestionar ${widget.job.proposalDocumentLabelLower}'
-                      : widget.job.isServiceBudget
-                          ? 'Estado operativo y presupuesto'
-                          : 'Cambiar Estado'),
+              child: Text(_isCapturingSupplyNeed
+                  ? 'Repuestos del trabajo'
+                  : _isEditMode
+                      ? (_editingStatus != null
+                          ? 'Editar Estado'
+                          : 'Nuevo Estado')
+                      : widget.job.isStandaloneQuotation
+                          ? 'Gestionar ${widget.job.proposalDocumentLabelLower}'
+                          : widget.job.isServiceBudget
+                              ? 'Estado operativo y presupuesto'
+                              : 'Cambiar Estado'),
             ),
-            if (!_isEditMode && !widget.job.isStandaloneQuotation)
+            if (!_isCapturingSupplyNeed &&
+                !_isEditMode &&
+                !widget.job.isStandaloneQuotation)
               IconButton(
                 icon: const Icon(Icons.add_circle_outline, size: 22),
                 tooltip: 'Agregar estado',
                 constraints: BoxConstraints.tight(const Size(48, 48)),
                 onPressed: () => _startEditing(null),
               ),
+            if (_isCapturingSupplyNeed)
+              IconButton(
+                icon: const Icon(Icons.close, size: 20),
+                tooltip: 'Cerrar',
+                constraints: BoxConstraints.tight(const Size(48, 48)),
+                onPressed: () => Navigator.pop(context),
+              ),
           ],
         );
 
+        final statusContent = _isEditMode
+            ? _buildEditForm()
+            : Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  if (widget.job.jobType == JobType.warranty)
+                    _buildWarrantyOutcomeSection(),
+                  if (widget.job.isQuotationWorkflow)
+                    _buildQuotationStatusSection(),
+                  if (widget.job.jobType == JobType.warranty ||
+                      widget.job.isServiceBudget)
+                    const Divider(height: 16),
+                  if (showsSupplyTrace &&
+                      !widget.job.isStandaloneQuotation) ...[
+                    _buildSupplyTraceEntry(context),
+                    const Divider(height: 16),
+                  ],
+                  if (!widget.job.isStandaloneQuotation)
+                    Flexible(
+                      child: _buildStatusList(statusesByPhase, currentStatusId),
+                    ),
+                ],
+              );
+        final supplyContent = JobSupplyNeedsPanel(
+          job: widget.job,
+          jobBikes: widget.jobBikes,
+          initiallyCreating: _supplyPanelStartsCreating,
+          initialJobBikeId: widget.initialSupplyJobBikeId,
+          onNeedCreated: _supplyNeedCreated,
+          onNeedUpdated: _supplyNeedUpdated,
+          onResolve: (need) => widget.onSupplyNeedResolve?.call(need.id),
+        );
+        final activeContent = !_supplyCaptureHasOpened
+            ? statusContent
+            : Stack(
+                fit: StackFit.loose,
+                children: [
+                  Offstage(
+                    offstage: _isCapturingSupplyNeed,
+                    child: statusContent,
+                  ),
+                  Offstage(
+                    offstage: !_isCapturingSupplyNeed,
+                    child: supplyContent,
+                  ),
+                ],
+              );
         final dialogContent = SizedBox(
           width: usesCompactLayout ? double.maxFinite : 360,
-          child: _isEditMode
-              ? _buildEditForm()
-              : Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    if (widget.job.jobType == JobType.warranty)
-                      _buildWarrantyOutcomeSection(),
-                    if (widget.job.isQuotationWorkflow)
-                      _buildQuotationStatusSection(),
-                    if (widget.job.jobType == JobType.warranty ||
-                        widget.job.isServiceBudget)
-                      const Divider(height: 16),
-                    if (!widget.job.isStandaloneQuotation)
-                      Flexible(
-                          child: _buildStatusList(
-                              statusesByPhase, currentStatusId)),
-                  ],
-                ),
+          child: activeContent,
         );
 
-        final dialogActions = _isEditMode
-            ? [
-                TextButton(
-                  onPressed: _cancelEditing,
-                  style: usesCompactLayout
-                      ? TextButton.styleFrom(
-                          minimumSize: const Size(88, 48),
-                        )
-                      : null,
-                  child: const Text('Cancelar'),
-                ),
-                FilledButton(
-                  onPressed: _saveStatus,
-                  style: usesCompactLayout
-                      ? FilledButton.styleFrom(
-                          minimumSize: const Size(96, 48),
-                        )
-                      : null,
-                  child: const Text('Guardar'),
-                ),
-              ]
-            : [
-                TextButton(
-                    onPressed: () => Navigator.pop(context),
-                    style: usesCompactLayout
-                        ? TextButton.styleFrom(
-                            minimumSize: const Size(72, 48),
-                          )
-                        : null,
-                    child: const Text('Cerrar')),
-              ];
+        final dialogActions = _isCapturingSupplyNeed
+            ? const <Widget>[]
+            : _isEditMode
+                ? [
+                    TextButton(
+                      onPressed: _cancelEditing,
+                      style: usesCompactLayout
+                          ? TextButton.styleFrom(
+                              minimumSize: const Size(88, 48),
+                            )
+                          : null,
+                      child: const Text('Cancelar'),
+                    ),
+                    FilledButton(
+                      onPressed: _saveStatus,
+                      style: usesCompactLayout
+                          ? FilledButton.styleFrom(
+                              minimumSize: const Size(96, 48),
+                            )
+                          : null,
+                      child: const Text('Guardar'),
+                    ),
+                  ]
+                : [
+                    TextButton(
+                        onPressed: () => Navigator.pop(context),
+                        style: usesCompactLayout
+                            ? TextButton.styleFrom(
+                                minimumSize: const Size(72, 48),
+                              )
+                            : null,
+                        child: const Text('Cerrar')),
+                  ];
 
         // Guide S-05: a select opens as a popover anchored to its trigger, and
         // "jamás un modal centrado". The centred AlertDialog stays only for the
@@ -13845,13 +14292,14 @@ class _StatusManagerDialogState extends State<_StatusManagerDialog> {
                     child: dialogContent,
                   ),
                 ),
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(8, 2, 8, 8),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.end,
-                    children: dialogActions,
+                if (dialogActions.isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(8, 2, 8, 8),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.end,
+                      children: dialogActions,
+                    ),
                   ),
-                ),
               ],
             ),
           );
@@ -14166,6 +14614,18 @@ class _StatusManagerDialogState extends State<_StatusManagerDialog> {
           ),
           const SizedBox(height: 16),
 
+          SwitchListTile.adaptive(
+            contentPadding: EdgeInsets.zero,
+            title: const Text('Solicitar captura de repuestos'),
+            subtitle: const Text(
+              'Después de cambiar a este estado, invita a definir los productos necesarios.',
+            ),
+            value: _promptsSupplyNeedCapture,
+            onChanged: (value) =>
+                setState(() => _promptsSupplyNeedCapture = value),
+          ),
+          const SizedBox(height: 8),
+
           // Color picker
           const Text('Color',
               style: TextStyle(fontWeight: FontWeight.w500, fontSize: 13)),
@@ -14472,7 +14932,8 @@ class _StatusManagerDialogState extends State<_StatusManagerDialog> {
                   selected: isSelected,
                   label: 'Cambiar estado a ${status.name}',
                   child: InkWell(
-                    onTap: () => widget.onStatusSelected(status),
+                    onTap:
+                        _isChangingStatus ? null : () => _selectStatus(status),
                     borderRadius: BorderRadius.circular(10),
                     child: Padding(
                       padding: const EdgeInsets.symmetric(
@@ -14585,7 +15046,7 @@ class _StatusManagerDialogState extends State<_StatusManagerDialog> {
       key: key,
       color: Colors.transparent,
       child: InkWell(
-        onTap: () => widget.onStatusSelected(status),
+        onTap: _isChangingStatus ? null : () => _selectStatus(status),
         borderRadius: BorderRadius.circular(8),
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),

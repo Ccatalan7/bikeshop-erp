@@ -99,6 +99,12 @@ varios triggers pueden repetir la misma consulta sin aportar frescura.
     nueva publicó antes del callback. La regresión mínima desmonta el publisher
     real bajo el provider y prueba tanto ausencia de excepción como protección
     contra un clear obsoleto.
+16. **Un payload nullable no es un estado de carga.** `null` puede ser un dato
+    ausente o un fallo cerrado legítimo; no puede significar también «el request
+    sigue vivo». Loading, dato listo y error tienen discriminadores separados,
+    y toda espera externa posee un límite que desemboca en error visible y
+    retry. La regresión completa primero un request con `null` y deja otro sin
+    completar hasta el timeout: ninguno puede conservar un spinner perpetuo.
 
 ## 4. Flujo de referencia
 
@@ -188,17 +194,194 @@ Comportamiento vigente:
 - `_surgicalUpdateJob` y `_surgicalRemoveJob` siguen siendo dueños de los
   deltas realtime; no se sustituyeron por recargas completas.
 
+**Corrección 2026-08-24 — transición de estado sin recarga universal.**
+`transition_mechanic_job_status` ya devolvía la fila base autoritativa, pero la
+tabla la descartaba y esperaba otra `_loadData` de toda la mesa. El servicio
+ahora fusiona ese snapshot en el caché del lease exacto, preserva únicamente
+las proyecciones derivadas del mismo trabajo/tenant y la superficie reemplaza
+esa fila sin perder filtros, orden, selección ni scroll. La ficha del estado
+elegido sólo decora el snapshot cuando coincide en ID y tenant; nunca sustituye
+la autoridad del RPC. La proyección temporal se reconcilia después con una
+lectura acotada y guardas de status/`updated_at`, por lo que una respuesta lenta
+no puede revertir una transición posterior. Un resultado fallido o todavía
+ambiguo sí invalida y recarga: esa sigue siendo la frontera segura.
+
+La transición tampoco hace una prelectura del trabajo: el recibo inmutable ya
+contiene el estado anterior para el evento de término. Los tres hidratadores
+independientes de una carga completa —objeto recibido, garantía de servicio y
+métricas— salen en paralelo, igual que los lotes acotados de atención de
+abastecimiento. La regresión vive en
+`test/unit/workshop_job_status_cache_reconciliation_test.dart` y prueba el
+merge tenant/job, la ausencia de `_loadData` en éxito y la concurrencia de los
+lotes; la falla conserva el fallback autoritativo.
+
 Esto protege el flujo multiusuario: un cambio de trabajos hecho desde otro
 cliente llega por el canal tenant-scoped, actualiza la fila/cache y repinta la
 tabla sin reiniciar toda la colección. Las proyecciones derivadas que no tienen
 evento suficiente todavía pueden requerir una reconciliación acotada; eso debe
 documentarse por consumidor, no ocultarse bajo un reload universal.
 
+**Corrección 2026-08-26 — el snapshot cacheado debe aceptar cambios de
+cardinalidad.** La hidratación paralela anterior devolvía una
+`List.generate(..., growable: false)`. Reemplazar una fila existente seguía
+funcionando y por eso la transición de estado era instantánea, pero un INSERT
+realtime fallaba en `_cachedJobs.add` con `Unsupported operation: Cannot add to
+a fixed-length list`; Notificaciones veía el alta mientras Trabajos quedaba
+obsoleto hasta un refresh completo. DELETE tenía la misma incompatibilidad
+latente. El reconciliador de la colección ahora aplica insert/update/delete
+sobre una copia growable y publica esa proyección, aunque el snapshot entrante
+sea fixed-length. La regresión debe comenzar deliberadamente con una lista de
+tamaño fijo y probar las tres operaciones; probar sólo el reemplazo de estado
+no certifica actualizaciones quirúrgicas.
+
 El cierre actual prueba ownership entre cargas completas y conserva el camino
 realtime que ya existía. No pretende certificar por sí solo toda la futura
 adopción app-wide. En particular, cualquier cambio posterior que mezcle un
 snapshot completo con deltas realtime simultáneos debe añadir la regresión de
 interleaving del apartado 9 antes de ampliar o extraer el coordinador.
+
+### 6.1 Editores compuestos: verdad exacta antes que catálogos secundarios
+
+**Validado el 2026-08-13 en el editor de Trabajos.** Abrir un registro existente
+no autoriza a poner todos los catálogos que sus controles podrían usar en el
+camino bloqueante. El editor separa ahora dos conjuntos:
+
+- el agregado exacto que protege la edición —trabajo, estado financiero
+  vinculado, cliente, bicicletas, líneas, productos referenciados y metadatos
+  de servicio de esas líneas— se lee antes de habilitar el formulario y falla
+  cerrado si queda incompleto;
+- los universos de selección que no explican el registro actual —todos los
+  clientes, una vista previa de productos, estados alternativos, componentes y
+  chat colapsado— se cargan sólo cuando el operador abre el control que los
+  necesita, o desde una caché elegible ya disponible.
+
+Una precarga invisible de miles de filas no es «background refresh» útil si
+compite por red, RPC o CPU con el primer estado operable. Un control colapsado
+o sin foco no inicia su consulta por existir en el árbol. Al abrirse, toma su
+propio ticket/request serial y conserva sus estados de carga/error locales.
+
+Cuando cada fila del agregado necesita la misma metadata relacional, el owner
+agrupa primero las identidades y carga mappings, targets y preguntas por lote.
+No se permite un waterfall por fila. La regresión mínima debe probar tanto que
+el editor existente retorna antes del catálogo amplio como que los consumidores
+dormidos no ejecutan lecturas antes de una interacción explícita.
+
+Referencias vigentes:
+
+- `lib/modules/bikeshop/pages/mechanic_job_form_page.dart`
+- `lib/modules/bikeshop/services/service_wizard_service.dart`
+- `lib/shared/widgets/product_autocomplete_field.dart`
+- `lib/modules/messaging/widgets/entity_chat_sidebar.dart`
+- `test/unit/mechanic_job_editor_loading_contract_test.dart`
+- `test/unit/service_wizard_batch_loading_test.dart`
+- `test/widgets/product_autocomplete_field_test.dart`
+- `test/widgets/entity_chat_sidebar_deferred_loading_test.dart`
+
+### 6.2 Proveedores con cuota: reconciliar la proyección, no cada fila
+
+**Corrección 2026-08-15 — Gmail.** Reconciliar las 500 filas cacheadas mediante
+un `messages.get` por fila preservaba correctamente el estado leído/no leído
+entre dispositivos, pero dejó de ser una lectura válida bajo el límite vigente
+de Gmail de 6.000 unidades por usuario/proyecto/minuto: cada `messages.get`
+cuesta 20, por lo que un solo refresh consumía más de 10.000 unidades y
+producía 429 antes de considerar otro dispositivo.
+
+La proyección acotada de Inbox se recompone ahora con las identidades de los
+500 mensajes más recientes y las identidades de los 500 no leídos más
+recientes. Cualquier no leído dentro de la primera ventana necesariamente está
+en la segunda; así se derivan pertenencia a Inbox y estado leído para todo el
+caché mediante listas baratas. Sólo los IDs nuevos visibles y los reemplazos
+necesarios para llenar huecos del caché exigen detalle completo, con el mismo
+límite de una página. Un ID cacheado ausente de la ventana autoritativa se
+elimina, y cualquier 5xx al leer detalle se propaga: no se convierte una
+respuesta parcial en éxito. El 429 tiene el contrato diferido acotado que
+sigue.
+
+La regresión mínima vive en
+`supabase/functions/_shared/gmail_mail_contract_test.ts` y debe comprobar que
+un snapshot mezcla leído/no leído, deduplica IDs y omite correos archivados sin
+emitir consultas por fila. Si el proveedor ofrece un cursor de cambios
+confiable por cliente, éste puede reemplazar el snapshot periódico; el cursor
+compartido de una suscripción push no sirve como cursor consumible por varios
+dispositivos.
+
+**Corrección 2026-08-15 — contrato integral Gmail/Zoho.** Un 429 activa un
+cortacircuito durable por cuenta y proveedor antes de cualquier otra llamada a
+su API. `Retry-After` puede venir como segundos, fecha HTTP, timestamp dentro
+del payload o no venir: el backend lo normaliza a una ventana acotada y usa
+cinco minutos cuando el proveedor no publica la duración. Como `Retry-After`
+es un límite inferior y no garantiza que la ventana móvil ya drenó, cualquier
+reanudación espera además un minuto de resguardo y las listas que reconstruyen
+Gmail se ejecutan secuencialmente. Si el primer intento posterior vuelve a ser
+rechazado, el backend duplica de manera durable la espera por intento hasta una
+hora; un éxito autoritativo limpia tanto el contador como el cooldown. Esto
+también cubre los 429 de Gmail por ancho de banda o límites diarios, que Google
+documenta que pueden persistir durante varias horas aunque el timestamp de
+reintento avance de quince en quince minutos. El estado vive en
+`email_accounts.provider_metadata`, por lo que una segunda sesión o dispositivo
+adopta el mismo cooldown en vez de volver a presionar la cuota.
+
+La app transforma ese resultado en
+`EmailProviderRateLimitException`, conserva todas las filas conocidas, no
+publica una frescura ficticia y omite el proveedor hasta el vencimiento. Esto
+es un resultado explícitamente diferido, no una lectura fresca: sólo se usa
+cuando existe caché conocida; un primer montaje vacío sigue fallando cerrado.
+La frescura se registra además por proveedor: una cuenta diferida no vuelve
+«fresca» a la bandeja completa, pero tampoco puede provocar que otra cuenta que
+acaba de responder sea consultada repetidamente por eventos de fondo durante
+los siguientes 30 segundos.
+Al vencer, la siguiente lectura exitosa limpia el cooldown tanto local como
+servidor. La regresión compartida vive en
+`supabase/functions/_shared/mail_provider_rate_limit_test.ts` y
+`test/unit/mail_folder_read_model_test.dart`; todo proveedor nuevo de Correo
+debe adoptar este contrato antes de entrar al polling unificado.
+
+Zoho ya entrega el resumen de cada correo dentro de la lista y no necesita un
+detalle por fila. Su Inbox usa ahora el máximo documentado de 200 mensajes por
+página para que una reconciliación de 500 filas requiera como máximo tres
+listas, no diez. El cortacircuito de `zoho-oauth` cubre lecturas, mutaciones y
+envíos; el de Gmail cubre Inbox, detalle, adjuntos, mutaciones, envíos y la
+renovación de push. Si el proveedor no divulga el período de bloqueo, el
+fallback impide que el polling de varios dispositivos lo prolongue. Gmail
+conserva además la respuesta diferida retrocompatible para las versiones ya
+instaladas.
+
+### 6.3 Una bandeja parcial no tiene un filtro definitivo
+
+**Diagnóstico y corrección comprobados el 2026-09-04.** En
+`QuickSupplierMessagesPanel`, los hints del `ChatProvider` pueden mostrar ya
+el documento y su estado mientras `_invoicesBySupplierId` sigue vacío. Los
+hints se restauran de una caché persistente; el índice de compras depende de
+otra carga y de la caché en memoria de `PurchaseService`. Un hot restart vuelve
+a exponer esa diferencia de disponibilidad.
+
+El vacío inicial se entrega a `ConversationActivity.hasActiveSupplierWork`
+como si significara «no tiene compras»: un hilo abierto pasa el filtro Activos.
+Cuando llegan las compras, un vínculo sin mensajes y con compras solamente
+recibidas deja de pasar. Además, `_buildSupplierResult` publica el teléfono
+cuando todavía no encuentra una compra relevante y lo reemplaza por el monto
+al encontrarla. El resultado observado fue **8 → 6 filas y teléfono → monto**,
+reproducido con compras diferidas en la misma instancia del panel. No requiere
+un cambio en el hint ni desmontar la bandeja.
+
+La caché de proveedores por sí sola no certifica que el índice de compras esté
+listo. `_isLoadingSuppliers` tampoco lo representa: se activa sólo cuando no
+hay proveedores. Un filtro cuyo resultado depende de compras debe distinguir
+**pendiente, cargado vacío y cargado con datos**, y la publicación inicial debe
+usar un conjunto coherente para identidad, pertenencia, contador y metadata.
+
+La regresión mínima debe dejar pendiente la lectura de compras, inspeccionar
+el primer frame y luego completarla, con hilos vacíos, compras abiertas y
+compras recibidas con mensajes. Una prueba que empieza con ambas cachés llenas
+o inspecciona sólo después de completar todos los futures no detecta el salto.
+
+La implementación publica proveedores y compras juntos, comparte la lectura en
+curso de `PurchaseService` por autoridad y reconoce una caché vacía completa.
+La apertura con caché completa sigue siendo inmediata; una carga inicial fallida
+ofrece reintento y un refresh fallido conserva el último conjunto. Tanto el panel
+rápido como `/chat` omiten contadores provisionales. Guardas:
+`quick_supplier_messages_panel_loading_test.dart` y
+`purchase_invoice_list_loading_test.dart`.
 
 ## 7. Antipatrones que una revisión debe rechazar
 
@@ -265,6 +448,17 @@ Agregar telemetría de desarrollo o métricas de bajo ruido para:
 
 La optimización se considera efectiva cuando reduce lecturas y latencia sin
 perder frescura, aislamiento, errores reales ni actualizaciones multiusuario.
+
+### Una selección conocida no espera a sus datos derivados (2026-09-07)
+
+En el ingreso OCR, el selector ya devolvía el proveedor completo, pero su nombre
+se publicaba sólo después de verificar todas las líneas contra inventario. La
+latencia de esas consultas parecía una selección ignorada. La selección y su
+plantilla local se publican al cerrar el selector; los vínculos anteriores se
+invalidan y la verificación conserva su estado y su bloqueo de continuación.
+Su resultado sólo puede publicarse si sigue vigente la generación del documento.
+La regresión mantiene las consultas pendientes y comprueba el nombre visible
+antes de resolverlas, además de rechazar resultados tras reemplazar el documento.
 
 ## 9. Regresiones mínimas por consumidor
 

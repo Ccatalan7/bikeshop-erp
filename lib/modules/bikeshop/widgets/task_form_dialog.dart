@@ -11,6 +11,75 @@ import '../../../shared/services/user_management_service.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'task_link_dialog.dart';
 
+/// Construcción PURA del modelo que guarda el diálogo, extraída para poder
+/// probar el contrato: editar jamás reescribe la identidad (tipo, visibilidad,
+/// versión, autor), y nota/privada no cargan responsable ni estado de tarea.
+@visibleForTesting
+TaskModel buildTaskFormSaveModel({
+  required TaskModel? editing,
+  required String tenantId,
+  required String fallbackCreatorId,
+  required String title,
+  required String description,
+  required TaskPriority priority,
+  required TaskStatus selectedStatus,
+  required DateTime? dueDate,
+  required String? assignedToId,
+  required String? assigneeName,
+  required String? linkedJobId,
+  required String? linkedJobNumber,
+  required String? linkedPurchaseInvoiceId,
+  required String? linkedPurchaseInvoiceNumber,
+  required String? linkedSalesInvoiceId,
+  required String? linkedSalesInvoiceNumber,
+  required String? linkedCustomerId,
+  required String? linkedCustomerName,
+  required String? linkedSupplierId,
+  required String? linkedSupplierName,
+  required List<Map<String, dynamic>> attachments,
+}) {
+  final isNote = editing?.kind == TaskKind.note;
+  final isPrivate = editing?.visibility == TaskVisibility.private;
+  return TaskModel(
+    id: editing?.id,
+    tenantId: tenantId,
+    title: title,
+    description: description,
+    priority: priority,
+    status: isNote ? (editing?.status ?? selectedStatus) : selectedStatus,
+    dueDate: dueDate,
+    assignedTo: (isNote || isPrivate) ? null : assignedToId,
+    createdBy: editing?.createdBy ?? fallbackCreatorId,
+    kind: editing?.kind ?? TaskKind.task,
+    visibility: editing?.visibility ?? TaskVisibility.team,
+    version: editing?.version ?? 1,
+    linkedJobId: isPrivate ? null : linkedJobId,
+    linkedJobNumber: linkedJobNumber,
+    linkedPurchaseInvoiceId: linkedPurchaseInvoiceId,
+    linkedPurchaseInvoiceNumber: linkedPurchaseInvoiceNumber,
+    linkedSalesInvoiceId: linkedSalesInvoiceId,
+    linkedSalesInvoiceNumber: linkedSalesInvoiceNumber,
+    linkedCustomerId: linkedCustomerId,
+    linkedCustomerName: linkedCustomerName,
+    linkedSupplierId: linkedSupplierId,
+    linkedSupplierName: linkedSupplierName,
+    assigneeName: assigneeName,
+    attachments: attachments,
+  );
+}
+
+/// El diálogo legado no ofrece «Bloquear» sin pedir motivo. Sin embargo, al
+/// editar una tarea ya bloqueada debe conservar el valor actual para que el
+/// dropdown sea válido y la tarea pueda corregirse o salir del bloqueo.
+@visibleForTesting
+List<TaskStatus> taskFormStatusOptions(TaskModel? editing) => [
+      TaskStatus.pending,
+      TaskStatus.inProgress,
+      if (editing?.status == TaskStatus.blocked) TaskStatus.blocked,
+      TaskStatus.completed,
+      TaskStatus.cancelled,
+    ];
+
 class TaskFormDialog extends StatefulWidget {
   final TaskModel? taskToEdit;
   final String? prefillJobId;
@@ -220,16 +289,17 @@ class _TaskFormDialogState extends State<TaskFormDialog> {
         throw Exception('Usuario no autenticado o tenant no definido');
       }
 
-      final task = TaskModel(
-        id: widget.taskToEdit?.id,
+      final task = buildTaskFormSaveModel(
+        editing: widget.taskToEdit,
         tenantId: tenantId,
+        fallbackCreatorId: activeUser.id,
         title: _titleController.text.trim(),
         description: _descriptionController.text.trim(),
         priority: _selectedPriority,
-        status: _selectedStatus,
+        selectedStatus: _selectedStatus,
         dueDate: _dueDate,
-        assignedTo: _assignedToId,
-        createdBy: widget.taskToEdit?.createdBy ?? activeUser.id,
+        assignedToId: _assignedToId,
+        assigneeName: _assigneeName,
         linkedJobId: _linkedJobId,
         linkedJobNumber: _linkedJobNumber,
         linkedPurchaseInvoiceId: _linkedPurchaseInvoiceId,
@@ -242,7 +312,6 @@ class _TaskFormDialogState extends State<TaskFormDialog> {
         linkedSupplierId:
             widget.taskToEdit?.linkedSupplierId ?? widget.prefillSupplierId,
         linkedSupplierName: _linkedSupplierName,
-        assigneeName: _assigneeName,
         attachments: _existingAttachments,
       );
 
@@ -448,6 +517,16 @@ class _TaskFormDialogState extends State<TaskFormDialog> {
                             child: CircularProgressIndicator(),
                           ),
                         )
+                      else if (widget.taskToEdit?.kind == TaskKind.note ||
+                          widget.taskToEdit?.visibility ==
+                              TaskVisibility.private)
+                        const InputDecorator(
+                          decoration: InputDecoration(
+                            labelText: 'Asignar a',
+                            border: OutlineInputBorder(),
+                          ),
+                          child: Text('No aplica: nota o tarea personal'),
+                        )
                       else
                         DropdownButtonFormField<String?>(
                           isExpanded: true,
@@ -648,25 +727,41 @@ class _TaskFormDialogState extends State<TaskFormDialog> {
         if (value != null) setState(() => _selectedPriority = value);
       },
     );
-    final statusField = DropdownButtonFormField<TaskStatus>(
-      key: const ValueKey('task-form-status'),
-      isExpanded: true,
-      initialValue: _selectedStatus,
-      decoration: const InputDecoration(
-        labelText: 'Estado',
-        border: OutlineInputBorder(),
-      ),
-      items: const [
-        DropdownMenuItem(value: TaskStatus.pending, child: Text('Pendiente')),
-        DropdownMenuItem(value: TaskStatus.inProgress, child: Text('En Curso')),
-        DropdownMenuItem(
-            value: TaskStatus.completed, child: Text('Completada')),
-        DropdownMenuItem(value: TaskStatus.cancelled, child: Text('Cancelada')),
-      ],
-      onChanged: (value) {
-        if (value != null) setState(() => _selectedStatus = value);
-      },
-    );
+    final isNote = widget.taskToEdit?.kind == TaskKind.note;
+    final Widget statusField = isNote
+        ? const InputDecorator(
+            decoration: InputDecoration(
+              labelText: 'Estado',
+              border: OutlineInputBorder(),
+            ),
+            child: Text('Nota — se archiva o restaura desde la lista'),
+          )
+        : DropdownButtonFormField<TaskStatus>(
+            key: const ValueKey('task-form-status'),
+            isExpanded: true,
+            initialValue: _selectedStatus,
+            decoration: const InputDecoration(
+              labelText: 'Estado',
+              border: OutlineInputBorder(),
+            ),
+            items: taskFormStatusOptions(widget.taskToEdit)
+                .map(
+                  (status) => DropdownMenuItem(
+                    value: status,
+                    child: Text(switch (status) {
+                      TaskStatus.pending => 'Pendiente',
+                      TaskStatus.inProgress => 'En Curso',
+                      TaskStatus.blocked => 'Bloqueada',
+                      TaskStatus.completed => 'Completada',
+                      TaskStatus.cancelled => 'Cancelada',
+                    }),
+                  ),
+                )
+                .toList(growable: false),
+            onChanged: (value) {
+              if (value != null) setState(() => _selectedStatus = value);
+            },
+          );
 
     if (isCompact) {
       return Column(

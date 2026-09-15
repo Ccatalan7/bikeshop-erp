@@ -9,6 +9,13 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:vinabike_erp/modules/ai_assistant/services/ai_service.dart';
 import 'package:vinabike_erp/shared/services/gemini_proxy_service.dart';
 
+const _cacheLeaves = <AIProductCategoryLeaf>[
+  AIProductCategoryLeaf(
+    id: 'leaf-components',
+    path: 'Componentes / Otros componentes',
+  ),
+];
+
 void main() {
   test(
       'different images with identical headers never share a clean-name result',
@@ -17,11 +24,13 @@ void main() {
     final service = AIAssistantService(geminiProxy: proxy);
     final commonHeader = List<int>.generate(64, (index) => index);
 
-    final first = await service.cleanProductTitleFromImage(
+    final first = await _cleanStrict(
+      service,
       rawTitle: 'Producto de prueba',
       imageBytes: Uint8List.fromList([...commonHeader, 1]),
     );
-    final second = await service.cleanProductTitleFromImage(
+    final second = await _cleanStrict(
+      service,
       rawTitle: 'Producto de prueba',
       imageBytes: Uint8List.fromList([...commonHeader, 2]),
     );
@@ -38,11 +47,13 @@ void main() {
     final service = AIAssistantService(geminiProxy: proxy);
     final bytes = Uint8List.fromList(List<int>.generate(80, (index) => index));
 
-    final first = service.cleanProductTitleFromImage(
+    final first = _cleanStrict(
+      service,
       rawTitle: 'Mismo producto',
       imageBytes: bytes,
     );
-    final second = service.cleanProductTitleFromImage(
+    final second = _cleanStrict(
+      service,
       rawTitle: 'Mismo producto',
       imageBytes: bytes,
     );
@@ -56,7 +67,7 @@ void main() {
     service.dispose();
   });
 
-  test('stalled image URL is bounded and identical requests share the fallback',
+  test('stalled image URL is bounded and identical requests share the attempt',
       () async {
     final proxy = _CountingGeminiProxy();
     var clientCount = 0;
@@ -70,11 +81,13 @@ void main() {
       },
     );
 
-    final first = service.cleanProductTitleFromImage(
+    final first = _cleanStrict(
+      service,
       rawTitle: 'Producto remoto',
       imageUrl: 'https://example.com/product.jpg',
     );
-    final second = service.cleanProductTitleFromImage(
+    final second = _cleanStrict(
+      service,
       rawTitle: 'Producto remoto',
       imageUrl: 'https://example.com/product.jpg',
     );
@@ -82,18 +95,21 @@ void main() {
       const Duration(seconds: 1),
     );
 
-    expect(clientCount, 1);
+    expect(clientCount, 2,
+        reason: 'un load compartido conserva los dos intentos acotados');
     expect(imageClient.isClosed, isTrue);
-    expect(proxy.calls, 1);
+    expect(proxy.calls, 0);
     expect(proxy.callsWithInlineImage, 0);
-    expect(results[0]?.cleanedName, results[1]?.cleanedName);
+    expect(results, everyElement(isNull));
 
-    await service.cleanProductTitleFromImage(
+    await _cleanStrict(
+      service,
       rawTitle: 'Producto remoto',
       imageUrl: 'https://example.com/product.jpg',
     );
-    expect(clientCount, 1);
-    expect(proxy.calls, 1);
+    expect(clientCount, 4,
+        reason: 'un fallo de evidencia no queda cacheado como identidad');
+    expect(proxy.calls, 0);
     service.dispose();
   });
 
@@ -110,13 +126,14 @@ void main() {
       ),
     );
 
-    final result = await service.cleanProductTitleFromImage(
+    final result = await _cleanStrict(
+      service,
       rawTitle: 'Producto remoto',
       imageUrl: 'https://example.com/product.jpg',
     );
 
-    expect(result, isNotNull);
-    expect(proxy.calls, 1);
+    expect(result, isNull);
+    expect(proxy.calls, 0);
     expect(proxy.callsWithInlineImage, 0);
     service.dispose();
   });
@@ -138,13 +155,14 @@ void main() {
       ),
     );
 
-    final result = await service.cleanProductTitleFromImage(
+    final result = await _cleanStrict(
+      service,
       rawTitle: 'Producto remoto',
       imageUrl: 'https://example.com/oversized.jpg',
     );
 
-    expect(result, isNotNull);
-    expect(proxy.calls, 1);
+    expect(result, isNull);
+    expect(proxy.calls, 0);
     expect(proxy.callsWithInlineImage, 0);
     service.dispose();
   });
@@ -162,7 +180,8 @@ void main() {
       ),
     );
 
-    final result = await service.cleanProductTitleFromImage(
+    final result = await _cleanStrict(
+      service,
       rawTitle: 'Producto remoto',
       imageUrl: 'https://example.com/product.jpg',
     );
@@ -173,6 +192,23 @@ void main() {
     service.dispose();
   });
 }
+
+Future<AICleanedProductName?> _cleanStrict(
+  AIAssistantService service, {
+  required String rawTitle,
+  Uint8List? imageBytes,
+  String? imageUrl,
+}) =>
+    service.cleanProductTitleFromImage(
+      rawTitle: rawTitle,
+      imageBytes: imageBytes,
+      imageUrl: imageUrl,
+      rowRevision: '1',
+      categoryTreeKey: 'tree-cache-test',
+      catalogKey: 'catalog-cache-test',
+      activeLeafCategories: _cacheLeaves,
+      requireLeafAuthority: true,
+    );
 
 class _StalledImageClient extends http.BaseClient {
   final StreamController<List<int>> _body = StreamController<List<int>>();
@@ -221,10 +257,49 @@ class _CountingGeminiProxy extends GeminiProxyService {
     await gate?.future;
     return GeminiProxyGenerateResult(
       text: jsonEncode({
+        'schema_version': AIAssistantService.productIdentitySchemaVersion,
+        'prompt_version': AIAssistantService.productIdentityPromptKey,
+        'model_id': model,
         'cleaned_name': 'Producto $sequence',
-        'component_type': 'componente',
-        'category_name': 'Componentes',
-        'confidence': 0.9,
+        'identity': {
+          'object': {'label': 'componente', 'confidence': 0.9},
+          'manufacturer': {
+            'value': null,
+            'asserted': false,
+            'evidence': 'none',
+          },
+          'models': <Map<String, Object?>>[],
+          'specs': <Map<String, Object?>>[],
+          'fitment': <String>[],
+          'composition': {
+            'kind': 'single',
+            'components': <Map<String, Object?>>[
+              {'label': 'componente', 'role': 'primary', 'qty': 1},
+            ],
+          },
+          'packaging': {
+            'count': 1,
+            'unit_token': 'pieza',
+            'source': 'name',
+          },
+          'leaf_proposals': <Map<String, Object?>>[
+            {
+              'category_id': 'L001',
+              'confidence': 0.9,
+              'basis': <String>['object', 'image'],
+            },
+          ],
+          'evidence_used': <String>['photo', 'original_supplier_title'],
+          'abstain_reason': null,
+          'reason': 'La evidencia identifica un componente.',
+        },
+        'vision': {
+          'primary_type': 'componente',
+          'catalog_terms': <String>['componente'],
+          'excluded_terms': <String>[],
+          'confidence': 0.9,
+          'visual_summary': 'Componente visible en la imagen.',
+        },
       }),
       functionCalls: const [],
     );

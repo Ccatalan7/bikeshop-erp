@@ -56,6 +56,10 @@ db-query-file environment file:
     #!/usr/bin/env bash
     exec bash scripts/db/query.sh "{{environment}}" --file "{{file}}"
 
+db-migration-status *migrations:
+    #!/usr/bin/env bash
+    exec bash scripts/db/migration_status.sh {{migrations}}
+
 db-trace environment kind id:
     #!/usr/bin/env bash
     exec bash scripts/db/trace.sh "{{environment}}" "{{kind}}" "{{id}}"

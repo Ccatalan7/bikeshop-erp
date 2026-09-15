@@ -25,6 +25,16 @@ void main() {
       expect(diagnostic.label, 'Token/OAuth');
     });
 
+    test('classifies the sanitized retry exhaustion copy as network', () {
+      final diagnostic = MailErrorDiagnostic.fromMessage(
+        'No se pudo actualizar Zoho Mail: Red/API: la conexión falló '
+        'temporalmente. Mostrando correos guardados.',
+      );
+
+      expect(diagnostic.kind, MailErrorKind.network);
+      expect(diagnostic.label, 'Red/API');
+    });
+
     test('classifies a missing Zoho group scope as permissions', () {
       final diagnostic = MailErrorDiagnostic.fromMessage(
         'Permisos Zoho insuficientes: falta el scope '

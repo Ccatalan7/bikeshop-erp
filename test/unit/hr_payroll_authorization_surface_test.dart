@@ -23,7 +23,7 @@ void main() {
     );
     expect(
       routes,
-      contains('child: erp.PayrollReconciliationPage()'),
+      contains('child: erp.PayrollReconciliationPage('),
       reason: 'The reconciliation route must share accounting authority.',
     );
     for (final path in const [

@@ -86,7 +86,7 @@ class _WheelRimsPageState extends State<WheelRimsPage> {
         onSave: (rimData) async {
           try {
             final service = context.read<WheelBuildingService>();
-            
+
             // Convert map to WheelRim object
             final rimModel = WheelRim(
               id: rim?.id,
@@ -105,7 +105,7 @@ class _WheelRimsPageState extends State<WheelRimsPage> {
               rimType: rimData['rim_type'],
               isActive: rim?.isActive ?? true,
             );
-            
+
             if (rim == null) {
               await service.createRim(rimModel);
             } else {
@@ -385,7 +385,7 @@ class _RimFormDialogState extends State<_RimFormDialog> {
   late TextEditingController _internalWidthController;
   late TextEditingController _externalWidthController;
   late TextEditingController _rimDepthController;
-  
+
   String _wheelSize = '700c';
   int _spokeHoles = 32;
   String _brakeType = 'disc';
@@ -407,7 +407,7 @@ class _RimFormDialogState extends State<_RimFormDialog> {
         TextEditingController(text: rim?.externalWidthMm?.toString() ?? '');
     _rimDepthController =
         TextEditingController(text: rim?.rimDepthMm?.toString() ?? '');
-    
+
     if (rim != null) {
       _wheelSize = rim.wheelSize;
       _spokeHoles = rim.spokeHoles;
@@ -478,7 +478,7 @@ class _RimFormDialogState extends State<_RimFormDialog> {
                         ],
                       ),
                       const SizedBox(height: 16),
-                      
+
                       Row(
                         children: [
                           Expanded(
@@ -534,7 +534,7 @@ class _RimFormDialogState extends State<_RimFormDialog> {
                         ],
                       ),
                       const SizedBox(height: 16),
-                      
+
                       // Critical measurement
                       Row(
                         children: [
@@ -577,7 +577,7 @@ class _RimFormDialogState extends State<_RimFormDialog> {
                         ],
                       ),
                       const SizedBox(height: 16),
-                      
+
                       // Width measurements
                       Row(
                         children: [
@@ -621,7 +621,7 @@ class _RimFormDialogState extends State<_RimFormDialog> {
                         ],
                       ),
                       const SizedBox(height: 16),
-                      
+
                       // Compatibility
                       Row(
                         children: [
@@ -700,10 +700,10 @@ class _RimFormDialogState extends State<_RimFormDialog> {
                               double.parse(_internalWidthController.text),
                           'external_width_mm':
                               _externalWidthController.text.isEmpty
-                              ? null 
-                              : double.parse(_externalWidthController.text),
-                          'rim_depth_mm': _rimDepthController.text.isEmpty 
-                              ? null 
+                                  ? null
+                                  : double.parse(_externalWidthController.text),
+                          'rim_depth_mm': _rimDepthController.text.isEmpty
+                              ? null
                               : double.parse(_rimDepthController.text),
                           'brake_type': _brakeType,
                           'rim_type': _rimType,

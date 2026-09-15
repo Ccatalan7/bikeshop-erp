@@ -268,7 +268,7 @@ class GarageGrid extends StatelessWidget {
                     const SizedBox(height: 10),
                     OutlinedButton.icon(
                       onPressed: () => PublicStoreLayout.navigateToHref(
-                        context, '/tienda/cuenta/bicicletas'),
+                          context, '/tienda/cuenta/bicicletas'),
                       icon: const Icon(Icons.add, size: 16),
                       label: const Text('Agregar Bicicleta',
                           style: TextStyle(fontSize: 12)),
@@ -587,7 +587,7 @@ class QuickReorderWidget extends StatelessWidget {
                     fontSize: 16)),
             TextButton(
               onPressed: () =>
-                PublicStoreLayout.navigateToHref(context, '/productos'),
+                  PublicStoreLayout.navigateToHref(context, '/productos'),
               style: TextButton.styleFrom(
                   padding: EdgeInsets.zero, minimumSize: Size.zero),
               child: Text('Ver todo',

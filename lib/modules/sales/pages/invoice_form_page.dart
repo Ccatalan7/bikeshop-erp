@@ -28,7 +28,8 @@ import '../../crm/models/crm_models.dart';
 import '../../crm/services/customer_service.dart';
 import '../../bikeshop/models/bikeshop_models.dart';
 import '../../bikeshop/services/bikeshop_service.dart';
-import '../../inventory/pages/product_form_page.dart';
+import '../../inventory/widgets/product_detail_sheet.dart';
+import '../../inventory/widgets/product_editor_dialog.dart';
 import '../../messaging/widgets/entity_chat_sidebar.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
@@ -936,9 +937,10 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
     try {
       final updated =
           await _salesService.updateInvoiceStatus(invoiceId, newStatus);
+      // The service already read the row back after the update; fetching it
+      // a second time here only added a round trip to every transition.
       if (updated != null && mounted) {
         _applyInvoice(updated);
-        await _refreshInvoiceById(invoiceId);
       } else if (mounted) {
         await _refreshInvoiceById(invoiceId);
       }
@@ -3965,10 +3967,21 @@ class _InvoiceLineEntry {
   Widget? _cachedSmartProductField;
   bool? _cachedCanEdit;
 
+  /// Host context from the latest build. The field below is cached across
+  /// hover rebuilds, so a closure captured at first build would hold a
+  /// context that may already be gone.
+  BuildContext? _hostContext;
+
+  void invalidateSmartProductFieldCache() {
+    _cachedSmartProductField = null;
+    _cachedCanEdit = null;
+  }
+
   Widget buildSmartProductField(BuildContext context, ThemeData theme,
       bool canEdit, VoidCallback onUpdate, VoidCallback onAutoAdd,
       {String? defaultJobBikeId,
       List<MechanicJobBike> availableJobBikes = const []}) {
+    _hostContext = context;
     // Return cached widget if nothing meaningful changed
     // Only rebuild if canEdit changes (not on hover which doesn't change canEdit)
     if (_cachedSmartProductField != null && _cachedCanEdit == canEdit) {
@@ -3992,8 +4005,8 @@ class _InvoiceLineEntry {
       focusNode: productNameFocusNode,
       descriptionController: descriptionController,
       onAutoAddLine: onAutoAdd,
-      onEditProduct: (p) => _showEditProductDialog(context, p),
-      onShowProductDetails: (p) => _showProductDetailsPane(context, p, theme),
+      onEditProduct: _editCatalogProduct,
+      onShowProductDetails: _showProductDetails,
       onProductChanged: (selection) {
         if (selection == null) {
           // Product cleared
@@ -4034,156 +4047,34 @@ class _InvoiceLineEntry {
     return _cachedSmartProductField!;
   }
 
-  void _showEditProductDialog(BuildContext context, Product product) {
-    showDialog(
+  /// Opens the canonical product editor and, if it saved, re-reads the
+  /// product into the line's card. The line keeps its own name and price —
+  /// what was sold at the time — the card shows the product as it now is.
+  Future<void> _editCatalogProduct(Product catalogProduct) async {
+    final context = _hostContext;
+    final id = catalogProduct.id?.trim() ?? '';
+    if (context == null || id.isEmpty) return;
+    final inventory = context.read<shared_inventory.InventoryService>();
+    final saved = await showProductEditorDialog(
       context: context,
-      barrierDismissible: false,
-      builder: (context) => Dialog(
-        backgroundColor: Colors.transparent,
-        insetPadding: const EdgeInsets.all(16),
-        child: Container(
-          constraints: const BoxConstraints(maxWidth: 900, maxHeight: 700),
-          decoration: BoxDecoration(
-            color: Theme.of(context).scaffoldBackgroundColor,
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(12),
-            child: ProductFormPage(productId: product.id, showInDialog: true),
-          ),
-        ),
-      ),
+      productId: id,
     );
+    if (saved != true) return;
+    final refreshed = await inventory.getProductById(id, forceRefresh: true);
+    if (refreshed == null) return;
+    product = refreshed;
+    invalidateSmartProductFieldCache();
+    _listener?.call();
   }
 
-  void _showProductDetailsPane(
-      BuildContext context, Product product, ThemeData theme) {
-    showGeneralDialog(
+  Future<void> _showProductDetails(Product catalogProduct) async {
+    final context = _hostContext;
+    final id = catalogProduct.id?.trim() ?? '';
+    if (context == null || id.isEmpty) return;
+    await showProductDetailSheet(
       context: context,
-      barrierDismissible: true,
-      barrierLabel: 'Product Details',
-      barrierColor: Colors.black54,
-      transitionDuration: const Duration(milliseconds: 300),
-      pageBuilder: (context, anim1, anim2) {
-        return Align(
-          alignment: Alignment.centerRight,
-          child: Material(
-            elevation: 8,
-            child: Container(
-              width: 400,
-              height: MediaQuery.of(context).size.height,
-              color: theme.scaffoldBackgroundColor,
-              child: Column(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      border:
-                          Border(bottom: BorderSide(color: theme.dividerColor)),
-                    ),
-                    child: Row(
-                      children: [
-                        Icon(Icons.inventory_2_outlined,
-                            color: theme.colorScheme.primary),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Text('Detalles del artículo',
-                              style: theme.textTheme.titleLarge),
-                        ),
-                        IconButton(
-                            icon: const Icon(Icons.close),
-                            onPressed: () => Navigator.of(context).pop()),
-                      ],
-                    ),
-                  ),
-                  Expanded(
-                    child: SingleChildScrollView(
-                      padding: const EdgeInsets.all(16),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          if (product.imageUrl != null &&
-                              product.imageUrl!.isNotEmpty)
-                            Center(
-                              child: Container(
-                                width: 200,
-                                height: 200,
-                                decoration: BoxDecoration(
-                                  borderRadius: BorderRadius.circular(8),
-                                  border: Border.all(color: theme.dividerColor),
-                                ),
-                                child: ClipRRect(
-                                  borderRadius: BorderRadius.circular(8),
-                                  child: Image.network(product.imageUrl!,
-                                      fit: BoxFit.cover,
-                                      errorBuilder: (_, __, ___) => const Icon(
-                                          Icons.inventory_2_outlined,
-                                          size: 80)),
-                                ),
-                              ),
-                            ),
-                          const SizedBox(height: 24),
-                          Text(product.name,
-                              style: theme.textTheme.headlineSmall
-                                  ?.copyWith(fontWeight: FontWeight.bold)),
-                          const SizedBox(height: 16),
-                          _detailRow('SKU', product.sku),
-                          if (product.description != null &&
-                              product.description!.isNotEmpty) ...[
-                            const SizedBox(height: 16),
-                            Text('Descripción',
-                                style: theme.textTheme.labelLarge),
-                            const SizedBox(height: 4),
-                            Text(product.description!),
-                          ],
-                          const SizedBox(height: 16),
-                          _detailRow('Precio',
-                              '\$${product.price.toStringAsFixed(0)}'),
-                          _detailRow(
-                              'Costo', '\$${product.cost.toStringAsFixed(0)}'),
-                          _detailRow(
-                            product.isSet ? 'Juegos disponibles' : 'Stock',
-                            '${product.availableStockQuantity}',
-                          ),
-                          if (product.brand != null &&
-                              product.brand!.isNotEmpty)
-                            _detailRow('Marca', product.brand!),
-                          if (product.model != null &&
-                              product.model!.isNotEmpty)
-                            _detailRow('Modelo', product.model!),
-                        ],
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        );
-      },
-      transitionBuilder: (context, anim1, anim2, child) {
-        return SlideTransition(
-          position: Tween<Offset>(begin: const Offset(1, 0), end: Offset.zero)
-              .animate(CurvedAnimation(parent: anim1, curve: Curves.easeOut)),
-          child: child,
-        );
-      },
-    );
-  }
-
-  Widget _detailRow(String label, String value) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 12),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          SizedBox(
-              width: 100,
-              child: Text(label,
-                  style: const TextStyle(fontWeight: FontWeight.w600))),
-          Expanded(child: Text(value)),
-        ],
-      ),
+      productId: id,
+      onEdit: () => _editCatalogProduct(catalogProduct),
     );
   }
 }

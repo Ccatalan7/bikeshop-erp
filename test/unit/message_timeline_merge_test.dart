@@ -261,4 +261,57 @@ void main() {
       isFalse,
     );
   });
+
+  test('a published attachment reconciles its optimistic row by attachment id',
+      () {
+    // The registry's publish command writes the message row on the server,
+    // which knows the attachment id but never the client id the composer
+    // used for its optimistic bubble.
+    final optimistic = Message(
+      id: 'temp-file-1',
+      conversationId: 'conv-1',
+      senderId: 'user-1',
+      content: 'foto.jpg',
+      type: 'image',
+      metadata: const {
+        'pending': true,
+        'client_message_id': 'temp-file-1',
+        'attachment_id': 'att-9',
+      },
+      createdAt: DateTime.utc(2026, 9, 3, 12),
+      isMe: true,
+    );
+    final published = Message(
+      id: 'srv-1',
+      conversationId: 'conv-1',
+      senderId: 'user-1',
+      content: 'foto.jpg',
+      type: 'image',
+      metadata: const {'attachment_id': 'att-9', 'storage_path': 'p/x.jpg'},
+      createdAt: DateTime.utc(2026, 9, 3, 12, 0, 5),
+      messageSequence: 7,
+    );
+    final other = Message(
+      id: 'srv-2',
+      conversationId: 'conv-1',
+      senderId: 'user-1',
+      content: 'foto.jpg',
+      type: 'image',
+      metadata: const {'attachment_id': 'att-10'},
+      createdAt: DateTime.utc(2026, 9, 3, 12, 0, 6),
+      messageSequence: 8,
+    );
+    expect(
+      hasMatchingServerMessage(optimistic: optimistic, serverMessages: [other]),
+      isFalse,
+      reason: 'Same file name and time are not the same attachment.',
+    );
+    expect(
+      hasMatchingServerMessage(
+        optimistic: optimistic,
+        serverMessages: [other, published],
+      ),
+      isTrue,
+    );
+  });
 }

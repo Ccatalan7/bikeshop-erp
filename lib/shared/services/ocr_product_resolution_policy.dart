@@ -5,6 +5,10 @@ enum OcrProductResolutionState {
   unsearched,
   searching,
   reviewRequired,
+
+  /// Matching stopped safely because identity evidence conflicted or AI could
+  /// not decide. This is not evidence that the product is new.
+  abstained,
   noCandidates,
   newProduct,
   failed,
@@ -33,6 +37,30 @@ class OcrProductResolutionSnapshot {
 
 class OcrProductResolutionPolicy {
   const OcrProductResolutionPolicy._();
+
+  /// Restored drafts can retain the search state that preceded a supplier
+  /// receipt. A verified receipt ends that search; actual pending work still
+  /// blocks review while it completes.
+  static bool isReviewBusy({
+    required OcrProductResolutionState state,
+    required bool hasSupplierResolution,
+    required bool hasActiveWork,
+  }) =>
+      hasActiveWork ||
+      (state == OcrProductResolutionState.searching && !hasSupplierResolution);
+
+  static bool canConfirmNew(
+          {required bool requiresDuplicateReview,
+          required OcrProductResolutionState state}) =>
+      !requiresDuplicateReview ||
+      switch (state) {
+        OcrProductResolutionState.reviewRequired ||
+        OcrProductResolutionState.abstained ||
+        OcrProductResolutionState.noCandidates ||
+        OcrProductResolutionState.newProduct =>
+          true,
+        _ => false,
+      };
 
   static bool canCreate({
     required Iterable<OcrProductResolutionSnapshot> lines,

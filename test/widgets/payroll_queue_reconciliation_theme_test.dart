@@ -48,17 +48,11 @@ void main() {
             .first,
       );
       final weekStatusDecoration = weekStatus.decoration! as BoxDecoration;
-      // The accent CTA is owned by PayrollAccentAction; its Material is the
-      // first descendant under the keyed subtree.
+      // The row action itself owns the keyed Material.
       final paymentAction = tester.widget<Material>(
-        find
-            .descendant(
-              of: find.byKey(
-                const ValueKey<String>('payroll-row-action-Persona temática'),
-              ),
-              matching: find.byType(Material),
-            )
-            .first,
+        find.byKey(
+          const ValueKey<String>('payroll-row-action-Persona temática'),
+        ),
       );
       final paidStatus = tester.widget<Material>(
         find.byKey(
@@ -71,7 +65,7 @@ void main() {
         weekStatusDecoration.color,
         theme.extension<VinabikeThemeRoles>()!.warning.container,
       );
-      expect(paymentAction.color, theme.colorScheme.primary);
+      expect(paymentAction.color, theme.colorScheme.surface);
       expect(
         paidStatus.color,
         theme.extension<VinabikeThemeRoles>()!.success.container,

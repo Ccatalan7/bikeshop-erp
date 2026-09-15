@@ -2,15 +2,25 @@ import 'dart:io';
 
 import 'package:flutter/foundation.dart' show ValueKey;
 import 'package:flutter_test/flutter_test.dart';
+import 'package:vinabike_erp/modules/inventory/models/inventory_models.dart'
+    as inventory_models;
 import 'package:vinabike_erp/modules/purchases/pages/purchase_invoice_form_page.dart';
+import 'package:vinabike_erp/shared/models/supplier_variant_resolution.dart';
+import 'package:vinabike_erp/shared/services/invoice_parser_service.dart';
+import 'package:vinabike_erp/shared/widgets/ocr_upload_widget.dart';
 
 void main() {
   final source = File(
     'lib/shared/widgets/ocr_upload_widget.dart',
   ).readAsStringSync();
   final workspace = File(
-    'lib/shared/widgets/ocr_product_review_workspace.dart',
-  ).readAsStringSync();
+        'lib/shared/widgets/ocr_product_review_workspace.dart',
+      ).readAsStringSync() +
+      File('lib/shared/widgets/ocr_product_review_steps.dart')
+          .readAsStringSync() +
+      File('lib/shared/widgets/ocr_identity_table.dart').readAsStringSync() +
+      File('lib/shared/widgets/ocr_purchase_amounts_table.dart')
+          .readAsStringSync();
   final purchaseForm = File(
     'lib/modules/purchases/pages/purchase_invoice_form_page.dart',
   ).readAsStringSync();
@@ -177,11 +187,114 @@ void main() {
     expect(
       source,
       contains(
-        'else\n'
+        'else ...[\n'
         '                    for (var index = 0;',
       ),
     );
     expect(source, contains('productRow(data.lineItems[index], index)'));
+  });
+
+  test('preview projects a composite as real inventory lines once', () {
+    const frontId = '20000000-0000-4000-8000-000000000001';
+    const rearId = '20000000-0000-4000-8000-000000000002';
+    final evidence = SupplierOptionEvidence(
+      variantKey: 'sku:immutable-bucklos-set',
+      packCount: 2,
+      rawUnitToken: 'pcs',
+    );
+    final resolution = SupplierVariantResolution.fromLookupJson(
+      <String, dynamic>{
+        'status': 'resolved',
+        'authoritative': true,
+        'id': '10000000-0000-4000-8000-000000000001',
+        'tenant_id': '10000000-0000-4000-8000-000000000002',
+        'supplier_id': '10000000-0000-4000-8000-000000000003',
+        'listing_id': '1005005789807730',
+        'variant_key': evidence.variantKey.value,
+        'revision_number': 1,
+        'state': 'active',
+        'resolution_kind': 'composite',
+        'option_evidence_hash': evidence.sha256Hex,
+        'option_pack_count': 2,
+        'option_unit_class': 'piece',
+        'pack_evidence_conflict': false,
+        'edge_set_hash':
+            'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+        'operation_id': '10000000-0000-4000-8000-000000000004',
+        'request_fingerprint':
+            'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
+        'decision_source': 'operator_confirmed',
+        'decision_evidence_hash':
+            'cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc',
+        'decision_evidence': <String, dynamic>{
+          'confirmation_surface': 'purchase_invoice_ocr',
+        },
+        'edges': <Map<String, dynamic>>[
+          <String, dynamic>{
+            'edge_id': '30000000-0000-4000-8000-000000000001',
+            'edge_ordinal': 1,
+            'product_id': frontId,
+            'catalog_units_per_purchase': 1,
+            'allocation_ratio': 0.5,
+            'component_role': 'front',
+          },
+          <String, dynamic>{
+            'edge_id': '30000000-0000-4000-8000-000000000002',
+            'edge_ordinal': 2,
+            'product_id': rearId,
+            'catalog_units_per_purchase': 1,
+            'allocation_ratio': 0.5,
+            'component_role': 'rear',
+          },
+        ],
+      },
+    );
+    final item = ParsedLineItem(
+      description: 'BUCKLOS Front-Rear Calipers',
+      sourcePurchaseQuantity: 3,
+      quantity: 3,
+      total: 35737,
+      supplierResolution: resolution,
+    );
+    inventory_models.Product product(
+      String id,
+      String sku,
+      String name,
+    ) =>
+        inventory_models.Product(
+          id: id,
+          tenantId: '10000000-0000-4000-8000-000000000002',
+          sku: sku,
+          name: name,
+          price: 0,
+          cost: 0,
+        );
+
+    final components = buildOcrPreviewResolutionComponents(
+      item: item,
+      productsById: <String, inventory_models.Product>{
+        frontId: product(frontId, 'AE0145', 'Caliper delantero BUCKLOS'),
+        rearId: product(rearId, 'AE0144', 'Caliper trasero BUCKLOS'),
+      },
+    );
+
+    expect(resolution.isResolved, isTrue);
+    expect(components, hasLength(2));
+    expect(
+      components.map((component) => component.displayLabel),
+      <String>[
+        '3 × AE0145 · delantero · Caliper delantero BUCKLOS',
+        '3 × AE0144 · trasero · Caliper trasero BUCKLOS',
+      ],
+    );
+    expect(
+      buildOcrPreviewResolutionComponents(
+        item: item,
+        productsById: const <String, inventory_models.Product>{},
+      ),
+      isEmpty,
+      reason: 'the preview must never display only part of a source graph',
+    );
   });
 
   test('preview has one neutral handoff into product review', () {
@@ -202,27 +315,26 @@ void main() {
     expect(
       source,
       contains(
-        "'Revisar \$unresolved producto\${unresolved == 1 ? '' : 's'}'",
+        "'Revisar productos · \$unresolved por decidir'",
       ),
     );
   });
 
-  test('AliExpress verification keeps exact supplier lookup and skips names',
-      () {
+  test('AliExpress verification never treats supplier SKU as catalog SKU', () {
     final verifyOne = _section(
       source,
       'Future<ParsedLineItem> _verifySingleProduct',
       'ParsedLineItem _clearProductResolution',
     );
-    final supplierLookup = _section(
-      verifyOne,
-      '// PRIORITY 2: Try to find by Supplier Code',
-      '// PRIORITY 3: Fall back to searching by name',
-    );
     final nameLookup = verifyOne.substring(
       verifyOne.indexOf('// PRIORITY 3: Fall back to searching by name'),
     );
-    expect(supplierLookup, isNot(contains('allowNameFallback')));
+    expect(verifyOne, contains('bool allowCatalogCodeLookup = true'));
+    expect(
+      verifyOne,
+      matches(RegExp(r'if \(allowCatalogCodeLookup &&.*?getProductBySku',
+          dotAll: true)),
+    );
     expect(nameLookup, contains('if (allowNameFallback &&'));
 
     final batchVerification = _section(
@@ -232,13 +344,26 @@ void main() {
     );
     expect(
       batchVerification,
-      contains(
-        'final allowNameFallback = !_looksLikeAliExpressInvoice(invoice);',
-      ),
+      contains('final isAliExpress = _looksLikeAliExpressInvoice(invoice);'),
     );
     expect(
       batchVerification,
       contains('allowNameFallback: allowNameFallback'),
+    );
+    expect(
+      batchVerification,
+      contains('allowCatalogCodeLookup: !isAliExpress'),
+    );
+
+    final manualLink = _section(
+      source,
+      'Future<bool> _useExistingProductForEntry',
+      'void _changeProductDecision',
+    );
+    expect(manualLink, isNot(contains('_rememberAliExpressResolution(')));
+    expect(
+      manualLink,
+      contains('entry.identityProduct = product'),
     );
   });
 
@@ -288,9 +413,66 @@ void main() {
       brandOwner,
       contains('ProductCatalogSemanticEvidenceKind.explicitBrand'),
     );
+    expect(brandOwner, isNot(contains('entry.aiSuggestedBrandName')));
+  });
+
+  test('object-first category resolution still reconciles the brand', () {
+    final semantics = _section(
+      source,
+      'void _applyCanonicalProductSemantics',
+      'ProductCategoryResolution? _resolveObjectFirstCategory',
+    );
+    expect(semantics, contains('var categoryOutcomeHandled = false;'));
+    expect(semantics, contains('if (!categoryOutcomeHandled &&'));
+    final afterObjectResolution = semantics.substring(
+      semantics.indexOf('final objectCategory ='),
+    );
+    final beforeBrandResolution = afterObjectResolution.substring(
+      0,
+      afterObjectResolution.indexOf('if (!entry.brandUserEdited) {'),
+    );
+    expect(beforeBrandResolution, isNot(contains('continue;')));
+  });
+
+  test('only catalog reconciliation or an operator writes selectedBrand', () {
+    final aiInputs = _section(
+      source,
+      'Future<void> _aiCleanProductNamesForEntries',
+      'void _applyCanonicalProductSemantics',
+    );
+    expect(aiInputs, contains('entry.aiSuggestedBrandName = addonBrand'));
+    expect(aiInputs, contains('entry.aiSuggestedBrandName = result.brand'));
+    expect(aiInputs, isNot(contains('entry.selectedBrand =')));
+    expect(aiInputs, isNot(contains('scanBrandInName')));
+
+    final canonical = _section(
+      source,
+      'void _applyCanonicalProductSemantics',
+      'ProductCategoryResolution? _resolveObjectFirstCategory',
+    );
+    expect(canonical, contains('if (!entry.brandUserEdited) {'));
     expect(
-      brandOwner,
-      contains('ProductCatalogSemanticEvidenceKind.rejectedBrandHint'),
+      canonical,
+      contains('entry.selectedBrand = resolution.brand;'),
+    );
+    expect(
+      canonical,
+      isNot(contains('entry.aiSuggestedBrandName = resolution.brand')),
+    );
+
+    final operatorWrites = RegExp(
+      r'entry\.selectedBrand\s*=(?!=)',
+    ).allMatches(source).length;
+    expect(
+      operatorWrites,
+      4,
+      reason:
+          'dropdown, sibling reuse, strict AI catalog lookup, and canonical reconciliation are the only writers',
+    );
+    expect(
+      source,
+      contains('event: \'investigation.catalog_brand_resolution\''),
+      reason: 'la escritura AI sólo acepta una marca real del catálogo',
     );
   });
 
@@ -298,7 +480,7 @@ void main() {
       () {
     expect(source, contains('int _bulkReviewGeneration = 0;'));
     expect(source, contains('if (!_ownsBulkReview(reviewGeneration)) return;'));
-    expect(source, contains('onBack: _closeBulkReview'));
+    expect(source, contains('onBack: _backProductReviewStep'));
     expect(
       source,
       contains(
@@ -308,73 +490,23 @@ void main() {
     );
     expect(
       workspace,
-      contains("key: Key('ocr-review-copy-sibling-\${line.id}')"),
+      contains('onCopySibling'),
       reason: 'la variante hermana sigue reutilizable sin ocupar una tarjeta',
     );
     expect(
       workspace,
-      contains("label: const Text('Buscar pendientes')"),
+      contains("label: 'Reintentar pendientes'"),
       reason: 'la acción de lote sigue disponible en el encabezado',
     );
     expect(
       workspace,
-      contains("primaryKey: Key('ocr-review-search-\${line.id}')"),
+      contains("key: Key('ocr-review-retry-\${line.id}')"),
       reason: 'y la fila sin revisar conserva la suya',
     );
   });
 
-  test('la conciliación es una tabla fluida, no una lona de ancho fijo', () {
-    expect(workspace, contains("key: const Key('ocr-review-batch')"));
-    expect(workspace, contains("key: const Key('ocr-review-table')"));
-    expect(workspace, contains("key: const Key('ocr-review-table-header')"));
-
-    // Contratos rechazados por el dueño el 2026-08-09. No vuelven.
-    expect(workspace, isNot(contains('_minimumWidth = 1680')));
-    expect(workspace, isNot(contains('scrollDirection: Axis.horizontal')));
-    expect(workspace, isNot(contains('DataTable(')));
-    expect(workspace, isNot(contains('dataRowMaxHeight')));
-    expect(workspace, isNot(contains('class _DesktopAlternativesBand')));
-    expect(workspace, isNot(contains('_SearchableDropdown')));
-
-    // Una fila por línea, en orden de factura, de alto uniforme.
-    expect(
-      workspace,
-      contains('for (var index = 0; index < lines.length; index++)'),
-    );
-    expect(workspace, contains('static const double rowHeight = 60;'));
-    expect(
-      workspace,
-      contains("key: ValueKey<String>('ocr-review-row-\${lines[index].id}')"),
-    );
-    // Alto mínimo, no fijo: una fila con una validación pendiente crece para
-    // decirla en vez de recortarla.
-    expect(
-      workspace,
-      contains('minHeight: _ReconciliationTable.rowHeight'),
-    );
-    expect(
-        workspace,
-        isNot(contains(
-            'SizedBox(\n          height: _ReconciliationTable.rowHeight')));
-    // El nivel de columnas se decide con el ancho real que recibe la tabla.
-    expect(workspace, contains('enum _TableTier'));
-    expect(workspace, contains('double _requiredWidth('));
-    expect(workspace, contains('_TableTier? _tierFor(double inner)'));
-  });
-
-  test('el ancho decide la composición, no una tabla que se encoge', () {
-    expect(
-      workspace,
-      contains('static const double touchBreakpoint = 900;'),
-    );
-    expect(
-      workspace,
-      contains('static const double fullTableBreakpoint = 1180;'),
-    );
-    expect(workspace, contains('class _CompactLineList'));
-    // Compacto es una lista con divisores, no una pared de tarjetas.
-    expect(workspace, contains('Divider(height: 1, thickness: 1'));
-  });
+  // Responsive geometry, batch ordering and draft preservation are exercised
+  // by ocr_product_review_workspace_test.dart against rendered widgets.
 
   test('categoría y marca usan el selector canónico buscable', () {
     expect(workspace, contains('VbSearchableSelect<Category>'));
@@ -408,28 +540,93 @@ void main() {
     expect(workspace, contains("key: const Key('ocr-review-back')"));
   });
 
-  test('el pie dice la verdad sobre lo que falta, no un futuro conteo', () {
-    // El defecto que vio el dueño en runtime: «Crear 7 productos» antes de que
-    // existiera ninguna de esas siete decisiones.
-    expect(source, contains('String _bulkPrimaryLabel('));
-    expect(
-      source,
-      contains(
-        'entry.resolutionState == OcrProductResolutionState.newProduct',
-      ),
-      reason: 'sólo cuenta las filas realmente confirmadas como nuevas',
-    );
-    expect(source, contains("'Faltan \$undecidedCount '"));
-    expect(source, contains("'Completa \$incompleteCount '"));
-    expect(source, contains("if (confirmedNewCount == 0) return 'Continuar';"));
-    expect(
-      source,
-      isNot(contains("'Crear \$selectedNewCount producto")),
-      reason: 'el conteo viejo contaba filas sin decidir',
-    );
+  test('el avance separa identidad, confirmación económica y creación', () {
+    final advance = _section(source, 'void _advanceProductReviewStep()',
+        'Future<void> _assistNewProductDrafts');
+    final select = _section(source, 'Future<bool> _useExistingProductForEntry',
+        'void _changeProductDecision');
+    expect(select, contains('entry.identityProduct = product'));
+    expect(select, isNot(contains('matchedProductId:')));
+    expect(select, isNot(contains('_useSupplierVariantResolutionForEntry(')));
+    expect(advance, contains('_confirmPurchaseAmounts(entry)'));
+    expect(advance, contains('OcrPurchaseReviewFlow.amountsComplete'));
+    expect(advance, contains('OcrPurchaseReviewStep.newProducts'));
+    expect(source, contains("'Confirmar y continuar a la factura'"));
   });
 
-  test('decidir «nuevo» reserva el SKU AE de esa fila en ese momento', () {
+  test('la regla de compras anteriores se ve, se aplica sola y deja regla', () {
+    // (a) Entering step 2 applies a rule that names the chosen product.
+    final advance = _section(source, 'void _advanceProductReviewStep()',
+        'Future<void> _applyRememberedRulesOnAmountsEntry()');
+    expect(advance, contains('_applyRememberedRulesOnAmountsEntry()'));
+    expect(advance, contains('_leaveAmountsStep()'));
+    final autoApply = _section(
+        source,
+        'Future<void> _applyRememberedRulesOnAmountsEntry()',
+        'void _rejectRememberedResolution(');
+    expect(autoApply, contains('entry.supplierRulePending'));
+    expect(autoApply,
+        contains('rule.edges.any((edge) => edge.productId == productId)'),
+        reason: 'a rule naming another product is never applied silently');
+    expect(autoApply, contains('await _acceptRememberedResolution(entry)'));
+
+    // (b) The batch button waits for every rule to be applied or changed.
+    final guard = _section(source, 'bool _canAdvanceProductReview()',
+        'String get _productReviewPrimaryLabel');
+    expect(guard, contains('OcrPurchaseReviewFlow.rulesSettled'));
+    final reason = _section(source, 'String? get _productReviewBlockingReason',
+        'void _backProductReviewStep()');
+    expect(reason, contains('OcrPurchaseReviewFlow.pendingRuleCount'));
+    expect(reason, contains('regla de compras anteriores'));
+    final decisions = _section(
+        source,
+        'Iterable<OcrPurchaseReviewDecision> get _reviewDecisions',
+        'bool _canAdvanceProductReview()');
+    expect(decisions, contains('rulePending: entry.supplierRulePending'));
+
+    // (c) Leaving step 2 writes one rule per confirmed link, sequentially,
+    // never from the manual link itself, and never blocking the purchase.
+    final remember = _section(source,
+        'Future<void> _rememberLinkedProductRules()', 'bool _ruleSaysExactly(');
+    expect(RegExp(r'_rememberAliExpressResolution\(').allMatches(remember),
+        hasLength(1));
+    expect(remember, contains('purchaseConversion: amounts.conversion'));
+    expect(remember, contains("'purchase_invoice_ocr_amounts_review'"));
+    expect(remember, contains('entry.supplierResolutionAccepted'),
+        reason: 'an applied composition already is the rule');
+    expect(remember, contains('entry.supplierRuleRejected'),
+        reason: 'a changed rule is superseded, an equal one is left alone');
+    expect(remember, isNot(contains('unawaited(')),
+        reason: 'rules are written one after another, never stacked');
+    expect(remember, contains('no se guardó la regla'));
+    final manualLink = _section(
+        source,
+        'Future<bool> _useExistingProductForEntry',
+        'void _changeProductDecision');
+    expect(manualLink, isNot(contains('_rememberAliExpressResolution(')));
+
+    // The row says whose decision the rule is.
+    final attribution = _section(
+        source,
+        'String? _ruleAttributionFor(_NewProductEntry entry)',
+        'String? get _currentOperatorId');
+    expect(attribution, contains("'confirmada por ti'"));
+    expect(attribution, contains("'migrada de las compras anteriores'"));
+    expect(attribution, contains("'guardada ahora"));
+  });
+
+  test('marcar nuevo es local y crear reserva el SKU por fila', () {
+    final mark = _section(source, 'Future<void> _prepareNewProductForEntry(',
+        'Future<void> _acceptRememberedResolution(');
+    expect(mark, contains('OcrProductIdentityDecision.newProduct'));
+    expect(mark, isNot(contains('_ensureReservedSkuForEntry(')));
+    expect(mark, isNot(contains('_confirmNewProductForEntry(')));
+    final finalize = _section(
+        source,
+        'Future<void> _finalizeNewProductDrafts()',
+        'void _confirmPurchaseAmounts(');
+    expect(finalize, contains('await _confirmNewProductForEntry(entry)'));
+    expect(finalize, contains('await _createBulkProducts()'));
     expect(source, contains('Future<void> _confirmNewProductForEntry('));
     expect(source, contains('Future<void> _ensureReservedSkuForEntry('));
     expect(source, contains('await _ensureReservedSkuForEntry(entry)'));
@@ -501,33 +698,243 @@ void main() {
     );
   });
 
-  test('el overlay pregunta más que la fila, y con el mismo probe', () {
-    // Una compuerta saca a un producto de la RECOMENDACIÓN, nunca de la vista.
-    // El overlay se abre justo porque la única respuesta de la fila no sirvió.
-    expect(source, contains('ProductDuplicateShortlistScope.operatorChoice'));
-    expect(source, contains('onLoadOptions:'));
-    expect(source, contains('ProductDuplicateProbe _duplicateProbeFor('));
+  test('el host real ejecuta autoridad, investigación y matching en ese orden',
+      () {
+    final flow = _section(
+      source,
+      'Future<void> _checkSimilarProductsForNewEntries',
+      'void _reconcileListingGroupResults()',
+    );
+    _expectInOrder(flow, const <String>[
+      'lookupAuthority: () async {',
+      'await _resolveSupplierVariantResolution(current)',
+      'investigate: () async {',
+      '_investigateProductEntriesAIPrimary(',
+      'match: (_) => duplicateMatcher.resolveCandidates(',
+    ]);
+    expect(flow, contains('ProductIdentityReviewCoordinator<'));
+    expect(source, contains('requireAIPrimaryInvestigation: true'));
+    expect(
+      flow,
+      isNot(contains('_aiCleanProductNamesForEntries(')),
+      reason: 'el cleaner legado no puede sustituir la investigación primaria',
+    );
+  });
+
+  test('una revisión de fila posee un receipt y una sola recomputación', () {
+    final investigation = _section(
+      source,
+      'Future<void> _investigateProductEntriesAIPrimary',
+      'Future<void> _aiCleanProductNamesForEntries',
+    );
+    final entry = source.substring(source.indexOf('class _NewProductEntry'));
+    expect(investigation, contains('entry.resolutionRevision'));
+    expect(
+      investigation,
+      contains('!entry.ownsInvestigationForRevision(entry.resolutionRevision)'),
+    );
+    expect(investigation, contains('entry.aiInvestigationRevision = revision'));
+    expect(entry, contains('AIProductIdentityInvestigation? aiInvestigation;'));
+    expect(entry, contains('int? aiInvestigationRevision;'));
+    expect(entry, contains('resolutionRevision++;'));
+    expect(entry, contains('aiInvestigation = null;'));
+    expect(entry, contains('aiInvestigationRevision = null;'));
+    expect(source, contains('const Duration(milliseconds: 450)'));
+    expect(source, contains('_scheduleAIIdentityRecompute(entry)'));
+  });
+
+  test('el picker muestra la decisión cacheada sin recomputar al abrir', () {
+    expect(source, contains('entry.duplicateResult?.operatorChoices'));
+    expect(source, contains('entry.duplicateResult?.categoryConflicts'));
     expect(
       source,
-      contains('probe: _duplicateProbeFor(current)'),
-      reason: 'fila y overlay preguntan exactamente lo mismo',
+      contains('!candidate.isReviewOnlyFamilyScope'),
+      reason: 'recall manual sin familia no se presenta como viable',
     );
-    expect(picker, contains('onLoadOptions'));
+    expect(
+      source,
+      contains('_currentSemanticReviewSummary(entry)'),
+      reason: 'la fila no debe renderizar un fallo de familia ya resuelto',
+    );
+    expect(
+      source,
+      contains(
+        "replaceFirst('No se pudo determinar la familia del producto.', '')",
+      ),
+      reason: 'sólo se retira la cláusula obsoleta, no otros conflictos',
+    );
+    expect(
+      source,
+      contains(
+        'cachedChoices.where((candidate) => candidate.isRuledOut).length',
+      ),
+      reason: 'los descartados conservan su propio conteo honesto',
+    );
+    expect(source, contains('current.markSearchResult('));
+    expect(
+      source,
+      contains('supplierResolutionProposal: resolutionProposal'),
+      reason: 'la misma decisión cacheada debe conservar la descomposición',
+    );
+    expect(source, isNot(contains('onLoadOptions:')));
+    expect(source, isNot(contains('_loadCandidateOptions(')));
+    expect(
+      source,
+      isNot(contains('ProductDuplicateShortlistScope.operatorChoice')),
+    );
+    expect(picker, isNot(contains('onLoadOptions')));
+    expect(
+      picker,
+      contains(
+        'final offered = orderOcrCandidateChoices(widget.candidates);',
+      ),
+      reason: 'el picker usa la misma prioridad estable que la fila',
+    );
+    expect(
+      source,
+      contains(
+        'final rowCandidates = orderOcrCandidateChoices(cachedChoices);',
+      ),
+      reason: 'la fila no sustituye el primer resultado por un conflicto',
+    );
     expect(picker, contains('ocr-candidate-ruled-out-heading'));
-    expect(picker, contains("'Descartado'"));
+    expect(picker, contains('ocr-candidate-category-conflicts-heading'));
+    expect(picker, contains('widget.categoryConflicts'));
+    expect(source, contains('allowCreateNew: !forComposition'));
+    expect(picker, contains('widget.allowCreateNew'));
+    expect(
+      picker,
+      contains(
+        'Buscar nombre, SKU o marca',
+      ),
+    );
+  });
+
+  test('probe, categoría y resolución conservan el título del proveedor', () {
+    final probe = _section(
+      source,
+      'ProductDuplicateProbe _duplicateProbeFor(',
+      'OcrProductReviewLine _buildProductReviewLine(',
+    );
+    final category = _section(
+      source,
+      'ProductCategoryResolution? _resolveObjectFirstCategory(',
+      'String? _duplicateMatcherCategoryName(',
+    );
+    final resolution = _section(
+      source,
+      'Future<SupplierVariantResolution?> _rememberAliExpressResolution(',
+      'Future<void> _uploadSelectedEntryImageForCreation(',
+    );
+
+    expect(probe, contains('sourceTitle: entry.supplierIdentityTitle'));
+    expect(
+      probe,
+      contains(
+        'selectedVariant: _aliExpressVariantLabelForLine(entry.originalItem)',
+      ),
+      reason: 'la variante elegida viaja como evidencia propia, no se '
+          'reconstruye desde el título del menú',
+    );
+    expect(
+        category, contains('final sourceTitle = entry.supplierIdentityTitle'));
+    expect(category, contains('sourceTitle: sourceTitle'));
+    expect(
+      resolution,
+      contains("'source_title': entry.supplierIdentityTitle"),
+    );
+    expect(
+      source,
+      contains('String get supplierIdentityTitle {'),
+      reason: 'los tres consumidores dependen de una sola evidencia inmutable',
+    );
+  });
+
+  test('un error del grafo de proveedor no cae al matcher', () {
+    final graphLookup = _section(
+      source,
+      'Future<SupplierVariantResolution?> _resolveSupplierVariantResolution(',
+      'Future<bool> _useSupplierVariantResolutionForEntry(',
+    );
+    final matcherCoordinator = _section(
+      source,
+      'Future<void> _checkSimilarProductsForNewEntries',
+      'void _reconcileListingGroupResults()',
+    );
+
+    expect(
+      graphLookup,
+      contains(
+        'result.status == SupplierVariantResolutionStatus.notFound',
+      ),
+      reason: 'sólo una ausencia comprobada habilita el matcher',
+    );
+    expect(graphLookup, contains('throw StateError('));
+    expect(
+      matcherCoordinator,
+      isNot(contains('catch (resolutionError)')),
+      reason: 'un error de autoridad no equivale a que el alias no exista',
+    );
+  });
+
+  test('la resolución exacta exige variante inmutable y receipt verificado',
+      () {
+    final immutableVariant = _section(
+      source,
+      'String? _aliExpressImmutableVariantKeyForLine(',
+      'String? _aliExpressVariantLabelForLine(',
+    );
+    final resolveGraph = _section(
+      source,
+      'Future<SupplierVariantResolution?> _resolveSupplierVariantResolution(',
+      'Future<bool> _useSupplierVariantResolutionForEntry(',
+    );
+    final rememberGraph = _section(
+      source,
+      'Future<SupplierVariantResolution?> _rememberAliExpressResolution(',
+      'Future<void> _uploadSelectedEntryImageForCreation(',
+    );
+
+    expect(immutableVariant, contains(r"r'^VARIANT_KEY:\s*(.+)$'"));
+    expect(
+      immutableVariant,
+      contains(
+        "if (!value.startsWith('sku:') && !value.startsWith('props:'))",
+      ),
+    );
+    expect(immutableVariant, isNot(contains("return 'default'")));
+    expect(immutableVariant, isNot(contains('imageSegment')));
+    expect(
+      resolveGraph,
+      contains('_supplierOptionEvidenceForLine(entry.originalItem)'),
+    );
+    expect(
+      rememberGraph,
+      contains('_supplierOptionEvidenceForLine(entry.originalItem)'),
+    );
+    expect(resolveGraph, contains('.resolve('));
+    expect(resolveGraph, contains('if (result.isResolved) return result;'));
+    expect(
+      resolveGraph,
+      contains(
+        'result.status == SupplierVariantResolutionStatus.notFound',
+      ),
+    );
+    expect(rememberGraph, contains('.remember('));
+    expect(rememberGraph, contains('SupplierVariantResolutionKind.single'));
+    expect(rememberGraph, contains("'source_line_key': sourceLineKey"));
+    expect(source, isNot(contains('resolveSupplierProductAlias(')));
+    expect(source, isNot(contains('rememberSupplierProductAlias(')));
   });
 
   test('el embudo de cierre devuelve a la vista previa con identidad ERP', () {
-    // Vincular escribe la identidad ERP en la línea de la factura…
-    final link = _section(
-      source,
-      'Future<bool> _useExistingProductForEntry',
-      'Future<bool> _rememberAliExpressAlias',
-    );
-    expect(link, contains('matchedProductId: productId'));
-    expect(link, contains('matchedProductName: product.name'));
-    expect(link, contains('existsInDatabase: true'));
-    expect(link, contains('_parsedData = parsedData.copyWith(lineItems:'));
+    final confirm = _section(source, 'void _confirmPurchaseAmounts(',
+        'Future<void> _confirmNewProductForEntry');
+    expect(confirm, contains('entry.purchaseAmounts'));
+    expect(confirm, contains('.apply(entry.originalItem, product: product'));
+    expect(confirm,
+        contains('_parsedData = _parsedData!.copyWith(lineItems: items)'));
+    expect(confirm, contains('entry.purchaseAmountsConfirmed = true'));
 
     // …y crear hace lo mismo, y sólo entonces cierra la revisión.
     final create = _section(
@@ -535,8 +942,12 @@ void main() {
       'Future<void> _createBulkProducts() async {',
       'Future<void> _pickImage',
     );
-    expect(create, contains('matchedProductId: savedProduct.id'));
-    expect(create, contains('sku: savedProduct.sku'));
+    expect(
+        create,
+        matches(RegExp(
+            r'conversion[\s.]*applyToLine\(\s*createdEntry.originalItem')));
+    expect(create,
+        matches(RegExp(r'product: savedProduct,\s*resolution: learned')));
     expect(
       create,
       contains('_showBulkCreate = _newProductEntries.any('),
@@ -760,15 +1171,16 @@ void main() {
   });
 
   test('critical creation blocks every OCR exit owner until it settles', () {
-    expect(
-      source,
-      contains(
-        'bool get blocksOwnerExit =>\n'
-        '      _creatingProducts || _isApplyingResult || _anyRowReservingSku;',
-      ),
-      reason:
-          'una reserva en vuelo también es una operación que no se abandona',
-    );
+    final exitStart = source.indexOf('bool get blocksOwnerExit');
+    final exit = source.substring(exitStart, source.indexOf(';', exitStart));
+    for (final flag in [
+      '_creatingProducts',
+      '_finalizingNewProducts',
+      '_isApplyingResult',
+      '_anyRowReservingSku'
+    ]) {
+      expect(exit, contains(flag));
+    }
     expect(source, contains('if (blocksOwnerExit)'));
     expect(source, contains('readOnly: _creatingProducts'));
     expect(

@@ -29,11 +29,11 @@ void main() {
     test('keeps reconciliation distinct from the payroll queue', () {
       expect(
         getRouteTitle('/hr/payroll/reconcile'),
-        'Conciliar nóminas',
+        'Importar cartola',
       );
       expect(
         getRouteTitle('/hr/payroll/reconcile?import=statement-1'),
-        'Conciliar nóminas',
+        'Importar cartola',
       );
     });
   });

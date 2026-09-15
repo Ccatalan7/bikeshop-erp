@@ -1081,3 +1081,59 @@ A mobile, tablet, or responsive UI change is complete only when:
 - `canonical-ui-surfaces.md` reflects the affected hosts; and
 - any multi-iteration learning is captured once in the validated record format
   above.
+
+
+### Mensajería: arbitraje de gestos (2026-09-04)
+
+En el historial de chat, la pulsación de la burbuja abre reacciones, la pulsación
+fuera de ella selecciona la fila y un deslizamiento horizontal deliberado cita.
+El scroll vertical, un recorrido corto, el sentido opuesto o una cancelación no
+citan. Durante selección, tocar imagen/enlace cambia la selección sin abrirlos.
+La selección de texto de un `SelectionArea` ancestro no debe disputar esos
+reconocedores; copiar sigue disponible mediante la selección de mensajes.
+Cancelar, Back/Escape y un cambio de chat/sesión liberan la selección. Verificar
+las mismas acciones en el componente compartido y en un dispositivo, además de
+los hosts del registro canónico; una prueba aislada no detecta que las pestañas
+del workspace estén cubriendo los botones en escritorio. Regresión mínima:
+`chat_message_interactions_test.dart`, `chat_reply_and_draft_test.dart` y
+`integration_test/messaging_gestures_device_test.dart`.
+
+
+### Mensajería: verificar el host completo (corrección 2026-09-04)
+
+Un gesto probado en una burbuja aislada no verifica la pantalla que lo hospeda.
+La bandeja abierta desde un action del `AppBar` capturaba su `IconButtonTheme`:
+en oscuro los botones de selección heredaban tinta de shell sobre la superficie
+de la conversación (contraste 1,06:1). Cambiar sólo el `ColorScheme` del chat no
+corrige esa herencia. `CompactMessagingViewport` restituye el tema de controles
+de la aplicación y comparte la misma frontera de superficie, Scaffold/teclado
+y SafeArea entre `CompactChatRoute` y la bandeja del right toolbar.
+
+La conversación es un espacio de trabajo sostenido: en teléfono usa el viewport
+completo, con volver/contexto/opciones en una sola cabecera. Seleccionar sustituye
+esa cabecera; no agrega otra fila. Las referencias completas siguen en los
+detalles del contacto y las citas son contenido referenciado, no avisos E-04.
+
+Corrección del contrato anterior de inset: `ChatWindow` no consume el borde del
+sistema; por eso su host completo sí reserva también el inferior. La afirmación
+anterior `bottom: false` sólo se comprobaba buscando texto en el código. La
+regresión exige renderizar ambas entradas con selección y teclado, en claro y
+oscuro, y conservar el borrador al volver. Los hosts embebidos del escritorio
+siguen delegando los insets al shell.
+
+El indicador de la ventana WhatsApp conserva reloj, barra y tiempo restante por
+preferencia explícita del dueño; sus estados consumen los tonos de éxito/atención
+del tema, sin sustituir esa lectura gráfica por una sola etiqueta.
+
+
+### Revisión OCR: conservar lote y borrador al recomponer (2026-09-05)
+
+La composición compacta conserva las tres decisiones del escritorio: identificar,
+revisar cantidades/costos y preparar productos nuevos. La primera compara origen
+y producto real; la última muestra todos los campos nuevos agrupados, sin obligar
+a abrir y cerrar cada fila. Reducir el ancho no debe convertir la edición masiva
+en una búsqueda de desplegables. Los controladores pertenecen al borrador;
+recomponer no descarta lo escrito. La regresión cruza 900 px con una edición
+pendiente y verifica el mismo valor. Etiquetas y procedencia pueden envolver
+sin desbordar sus campos. El buscador se comprueba con teclado visible y cierre
+alcanzable, no sólo con una captura sin IME.

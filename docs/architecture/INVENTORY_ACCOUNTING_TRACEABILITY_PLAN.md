@@ -27,10 +27,13 @@ Reversals, retries, failures, and historical repairs must remain visible and lin
 
 ## Non-Negotiable Guardrails
 
-1. Read `.github/copilot-instructions.md` and `supabase/sql/core_schema.sql` before work. Read `../../BIKE_WORKSHOP_MASTER_SCHEMA.md` before changing job/invoice behavior.
+1. Read `.github/copilot-instructions.md` and the live catalog/current standalone migrations before work. `supabase/sql/core_schema.sql` is optional historical context only. Read `../../BIKE_WORKSHOP_MASTER_SCHEMA.md` before changing job/invoice behavior.
 2. Inspect first, fix second. Production investigation is read-only and tenant-filtered; when using the SQL Editor interactively, run one query at a time.
 3. Inspect the live definitions with `pg_get_functiondef`, `pg_get_triggerdef`, and `pg_trigger`; do not assume production matches the repository.
-4. Treat `supabase/sql/core_schema.sql` as canonical. Mirror every migration there and keep both forms idempotent. Every standalone SQL file must state deployment status.
+4. Treat the live production catalog plus migration history as authoritative.
+   Every change is one unique idempotent standalone migration; its exact remote
+   history row is the deployment stamp. `core_schema.sql` is incomplete and
+   never a deploy gate.
 5. Search existing objects before adding tables, columns, functions, or triggers. Evaluate `user_activity_log`, `stock_adjustments`, `product_bulk_edit_history`, `stock_movements`, `journal_entries`, and `payment_integrity_backfill_audit` first.
 6. Preserve tenant isolation and actor attribution. `SECURITY DEFINER` functions must validate tenant and role explicitly.
 7. Never silently clamp stock or update only one stock column. Reject insufficient stock unless a deliberate negative-stock policy is documented and tested.
@@ -46,7 +49,8 @@ Reversals, retries, failures, and historical repairs must remain visible and lin
 
 Every schema, trigger, RPC, Edge Function, or inventory/accounting UI change must pass:
 
-1. Clean canonical-schema bootstrap and the complete pgTAP suite.
+1. Focused local pgTAP plus a production-derived schema compatibility session;
+   the legacy `core_schema.sql` fixture may supplement but cannot prove parity.
 2. Complete Flutter tests plus analyzer checks for affected modules.
 3. Production-schema drift comparison for touched tables, functions, triggers, constraints, grants, and RLS.
 4. Authenticated smoke tests using real employee-role semantics and N/N-1/N-2 payload contracts.

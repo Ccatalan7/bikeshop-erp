@@ -4,10 +4,13 @@ import '../../../shared/services/tenant_service.dart';
 import '../models/conversation.dart';
 import '../models/conversation_context_hint.dart';
 import '../models/message.dart';
+import '../models/message_reaction.dart';
 import '../utils/conversation_activity.dart';
 import '../utils/whatsapp_message_filters.dart';
 import 'messaging_attachment_service.dart';
 import 'messaging_command_idempotency_store.dart';
+import 'whatsapp_cloud_service.dart';
+import '../../../shared/utils/supplier_whatsapp_phone.dart';
 // For VoidCallback
 
 class MessageReceiptRealtimeUpdate {
@@ -15,10 +18,15 @@ class MessageReceiptRealtimeUpdate {
   final String messageId;
   final String externalStatus;
 
+  /// The row as realtime delivered it: enough to paint the receipt without
+  /// another round trip to the server.
+  final Map<String, dynamic> record;
+
   const MessageReceiptRealtimeUpdate({
     required this.conversationId,
     required this.messageId,
     required this.externalStatus,
+    this.record = const {},
   });
 }
 
@@ -32,6 +40,84 @@ class MessageHistoryPage {
     required this.hasMore,
     required this.nextBeforeSequence,
   });
+}
+
+@visibleForTesting
+String? resolveSupplierMessagingContactName(Map<String, dynamic>? supplier) {
+  if (supplier == null) return null;
+
+  final salesRepresentative = supplier['sales_rep_name']?.toString().trim();
+  if (salesRepresentative != null && salesRepresentative.isNotEmpty) {
+    return salesRepresentative.split(RegExp(r'\s+')).first;
+  }
+
+  final contactPerson = supplier['contact_person']?.toString().trim();
+  return contactPerson == null || contactPerson.isEmpty
+      ? null
+      : contactPerson.split(RegExp(r'\s+')).first;
+}
+
+/// Every row the inbox context chips may need, fetched in one read. It is a
+/// superset: the selection rules stay in [_fetchContextHintsForConversations].
+class _ContextHintRows {
+  final List<Map<String, dynamic>> bindings;
+  final List<Map<String, dynamic>> supplierContacts;
+  final List<Map<String, dynamic>> suppliers;
+  final List<Map<String, dynamic>> customers;
+  final List<Map<String, dynamic>> salesInvoices;
+  final List<Map<String, dynamic>> purchaseInvoices;
+  final List<Map<String, dynamic>> onlineOrders;
+  final List<Map<String, dynamic>> jobs;
+  final List<Map<String, dynamic>> bikes;
+  final List<Map<String, dynamic>> jobBikes;
+
+  const _ContextHintRows({
+    required this.bindings,
+    required this.supplierContacts,
+    required this.suppliers,
+    required this.customers,
+    required this.salesInvoices,
+    required this.purchaseInvoices,
+    required this.onlineOrders,
+    required this.jobs,
+    required this.bikes,
+    required this.jobBikes,
+  });
+
+  static List<Map<String, dynamic>> _rows(dynamic value) {
+    if (value is! List) return const [];
+    return value
+        .whereType<Map>()
+        .map((row) => Map<String, dynamic>.from(row))
+        .toList(growable: false);
+  }
+
+  factory _ContextHintRows.fromJson(dynamic json) {
+    final map = json is Map ? json : const {};
+    return _ContextHintRows(
+      bindings: _rows(map['bindings']),
+      supplierContacts: _rows(map['supplier_contacts']),
+      suppliers: _rows(map['suppliers']),
+      customers: _rows(map['customers']),
+      salesInvoices: _rows(map['sales_invoices']),
+      purchaseInvoices: _rows(map['purchase_invoices']),
+      onlineOrders: _rows(map['online_orders']),
+      jobs: _rows(map['mechanic_jobs']),
+      bikes: _rows(map['bikes']),
+      jobBikes: _rows(map['mechanic_job_bikes']),
+    );
+  }
+
+  static List<Map<String, dynamic>> where(
+    List<Map<String, dynamic>> rows,
+    String column,
+    Set<String> values,
+  ) {
+    if (values.isEmpty) return const [];
+    return rows
+        .where((row) => values.contains(row[column]?.toString()))
+        .toList(growable: false);
+  }
 }
 
 class MessagingService {
@@ -297,6 +383,8 @@ class MessagingService {
     final contextIdByConversation = <String, String?>{};
     final customerIdByConversation = <String, String>{};
     final contactNameByConversation = <String, String>{};
+    final supplierContactIdByConversation = <String, String>{};
+    final supplierContactRowsById = <String, Map<String, dynamic>>{};
     final phoneByConversation = <String, String>{};
     final explicitJobIds = <String>{};
     final explicitInvoiceIds = <String>{};
@@ -335,6 +423,29 @@ class MessagingService {
       }
     }
 
+    // One read brings every row the rules below may need (a superset); the
+    // fifteen dependent round trips it replaces took about four seconds.
+    late final _ContextHintRows rows;
+    try {
+      rows = _ContextHintRows.fromJson(
+        await _client.rpc(
+          'inbox_context_hint_rows_v1',
+          params: {
+            'p_conversation_ids': conversationRows.keys.toList(),
+            'p_job_ids': explicitJobIds.toList(),
+            'p_invoice_ids': explicitInvoiceIds.toList(),
+            'p_purchase_invoice_ids': explicitPurchaseInvoiceIds.toList(),
+            'p_order_ids': orderIds.toList(),
+            'p_creator_ids': creatorIds.toList(),
+            'p_supplier_ids': supplierIdByConversation.values.toSet().toList(),
+          },
+        ),
+      );
+    } catch (e) {
+      debugPrint('⚠️ Error loading context hint rows: $e');
+      return {};
+    }
+
     final customerRowsById = <String, Map<String, dynamic>>{};
     final customerRowsByAuthId = <String, Map<String, dynamic>>{};
 
@@ -349,30 +460,14 @@ class MessagingService {
     Future<void> loadCustomersByIds(Set<String> ids) async {
       final missingIds = ids.where((id) => !customerRowsById.containsKey(id));
       if (missingIds.isEmpty) return;
-      try {
-        dynamic query = _client.from('customers').select(
-              'id, auth_user_id, name, phone, image_url',
-            );
-        if (tenantId != null && tenantId.isNotEmpty) {
-          query = query.eq('tenant_id', tenantId);
-        }
-        final rows = await query.inFilter('id', missingIds.toList());
-        for (final row in rows as List) {
-          captureCustomer(row);
-        }
-      } catch (e) {
-        debugPrint('⚠️ Error loading context customers: $e');
+      for (final row
+          in _ContextHintRows.where(rows.customers, 'id', missingIds.toSet())) {
+        captureCustomer(row);
       }
     }
 
     try {
-      final ids = conversationRows.keys.toList();
-      final bindings = await _client
-          .from('whatsapp_conversation_bindings')
-          .select(
-            'conversation_id, customer_id, contact_name, external_phone_number',
-          )
-          .inFilter('conversation_id', ids);
+      final bindings = rows.bindings;
 
       final phoneCandidatesByConversation = <String, Set<String>>{};
       final allPhoneCandidates = <String>{};
@@ -390,6 +485,10 @@ class MessagingService {
         if (contactName != null) {
           contactNameByConversation[conversationId] = contactName;
         }
+        final supplierContactId = _text(binding['supplier_contact_id']);
+        if (supplierContactId != null) {
+          supplierContactIdByConversation[conversationId] = supplierContactId;
+        }
 
         final phone = _text(binding['external_phone_number']);
         if (phone != null) {
@@ -400,17 +499,24 @@ class MessagingService {
         }
       }
 
-      if (allPhoneCandidates.isNotEmpty) {
-        dynamic query = _client.from('customers').select(
-              'id, auth_user_id, name, phone, image_url',
-            );
-        if (tenantId != null && tenantId.isNotEmpty) {
-          query = query.eq('tenant_id', tenantId);
-        }
-        final customersByPhone = await query.inFilter(
-          'phone',
-          allPhoneCandidates.toList(),
+      // La persona del hilo, cuando el vínculo la conoce: manda sobre
+      // cualquier deducción por número o nombre de perfil.
+      if (supplierContactIdByConversation.isNotEmpty) {
+        final contactRows = _ContextHintRows.where(
+          rows.supplierContacts,
+          'id',
+          supplierContactIdByConversation.values.toSet(),
         );
+        for (final rawContact in contactRows as List) {
+          final contact = _rowMap(rawContact);
+          final contactId = _text(contact['id']);
+          if (contactId != null) supplierContactRowsById[contactId] = contact;
+        }
+      }
+
+      if (allPhoneCandidates.isNotEmpty) {
+        final customersByPhone =
+            _ContextHintRows.where(rows.customers, 'phone', allPhoneCandidates);
         for (final rawCustomer in customersByPhone as List) {
           final customer = _rowMap(rawCustomer);
           captureCustomer(customer);
@@ -431,14 +537,7 @@ class MessagingService {
     final supplierRowsById = <String, Map<String, dynamic>>{};
     final supplierPhoneCandidatesById = <String, Set<String>>{};
     try {
-      dynamic query = _client.from('suppliers').select(
-            'id, name, phone, sales_rep_phone, is_active',
-          );
-      if (tenantId != null && tenantId.isNotEmpty) {
-        query = query.eq('tenant_id', tenantId);
-      }
-      final rows = await query;
-      for (final rawSupplier in rows as List) {
+      for (final rawSupplier in rows.suppliers) {
         final supplier = _rowMap(rawSupplier);
         final supplierId = _text(supplier['id']);
         if (supplierId == null) continue;
@@ -479,14 +578,11 @@ class MessagingService {
 
     if (creatorIds.isNotEmpty) {
       try {
-        dynamic query = _client.from('customers').select(
-              'id, auth_user_id, name, phone, image_url',
-            );
-        if (tenantId != null && tenantId.isNotEmpty) {
-          query = query.eq('tenant_id', tenantId);
-        }
-        final rows = await query.inFilter('auth_user_id', creatorIds.toList());
-        for (final row in rows as List) {
+        for (final row in _ContextHintRows.where(
+          rows.customers,
+          'auth_user_id',
+          creatorIds,
+        )) {
           captureCustomer(row);
         }
         for (final entry in conversationRows.entries) {
@@ -507,21 +603,13 @@ class MessagingService {
     Future<void> loadInvoicesByIds(Set<String> ids) async {
       final missingIds = ids.where((id) => !invoiceRowsById.containsKey(id));
       if (missingIds.isEmpty) return;
-      try {
-        dynamic query = _client.from('sales_invoices').select(
-              'id, customer_id, customer_name, invoice_number, status, total, balance, date',
-            );
-        if (tenantId != null && tenantId.isNotEmpty) {
-          query = query.eq('tenant_id', tenantId);
-        }
-        final rows = await query.inFilter('id', missingIds.toList());
-        for (final row in rows as List) {
-          final invoice = _rowMap(row);
-          final id = _text(invoice['id']);
-          if (id != null) invoiceRowsById[id] = invoice;
-        }
-      } catch (e) {
-        debugPrint('⚠️ Error loading context invoices: $e');
+      for (final invoice in _ContextHintRows.where(
+        rows.salesInvoices,
+        'id',
+        missingIds.toSet(),
+      )) {
+        final id = _text(invoice['id']);
+        if (id != null) invoiceRowsById[id] = invoice;
       }
     }
 
@@ -532,21 +620,13 @@ class MessagingService {
       final missingIds =
           ids.where((id) => !purchaseInvoiceRowsById.containsKey(id));
       if (missingIds.isEmpty) return;
-      try {
-        dynamic query = _client.from('purchase_invoices').select(
-              'id, supplier_id, supplier_name, invoice_number, status, total, balance, date, due_date, updated_at',
-            );
-        if (tenantId != null && tenantId.isNotEmpty) {
-          query = query.eq('tenant_id', tenantId);
-        }
-        final rows = await query.inFilter('id', missingIds.toList());
-        for (final row in rows as List) {
-          final invoice = _rowMap(row);
-          final id = _text(invoice['id']);
-          if (id != null) purchaseInvoiceRowsById[id] = invoice;
-        }
-      } catch (e) {
-        debugPrint('⚠️ Error loading context purchase invoices: $e');
+      for (final invoice in _ContextHintRows.where(
+        rows.purchaseInvoices,
+        'id',
+        missingIds.toSet(),
+      )) {
+        final id = _text(invoice['id']);
+        if (id != null) purchaseInvoiceRowsById[id] = invoice;
       }
     }
 
@@ -572,15 +652,9 @@ class MessagingService {
 
     if (orderIds.isNotEmpty) {
       try {
-        dynamic query = _client.from('online_orders').select(
-              'id, customer_id, customer_name, customer_phone',
-            );
-        if (tenantId != null && tenantId.isNotEmpty) {
-          query = query.eq('tenant_id', tenantId);
-        }
-        final rows = await query.inFilter('id', orderIds.toList());
         final ordersById = <String, Map<String, dynamic>>{};
-        for (final row in rows as List) {
+        for (final row
+            in _ContextHintRows.where(rows.onlineOrders, 'id', orderIds)) {
           final order = _rowMap(row);
           final id = _text(order['id']);
           if (id != null) ordersById[id] = order;
@@ -610,17 +684,12 @@ class MessagingService {
     final supplierIds = supplierIdByConversation.values.toSet();
     if (supplierIds.isNotEmpty) {
       try {
-        dynamic query = _client.from('purchase_invoices').select(
-              'id, supplier_id, supplier_name, invoice_number, status, total, balance, date, due_date, updated_at',
-            );
-        if (tenantId != null && tenantId.isNotEmpty) {
-          query = query.eq('tenant_id', tenantId);
-        }
-        final rows = await query
-            .inFilter('supplier_id', supplierIds.toList())
-            .order('date', ascending: false)
-            .limit(500);
-        for (final rawInvoice in rows as List) {
+        // The bundle is ordered by date, newest first, like the former read.
+        for (final rawInvoice in _ContextHintRows.where(
+          rows.purchaseInvoices,
+          'supplier_id',
+          supplierIds,
+        )) {
           final invoice = _rowMap(rawInvoice);
           final invoiceId = _text(invoice['id']);
           if (invoiceId != null) purchaseInvoiceRowsById[invoiceId] = invoice;
@@ -658,23 +727,9 @@ class MessagingService {
     Future<void> loadJobsByIds(Set<String> ids) async {
       final missingIds = ids.where((id) => !jobRowsById.containsKey(id));
       if (missingIds.isEmpty) return;
-      try {
-        dynamic query = _client.from('mechanic_jobs').select('''
-          id, tenant_id, customer_id, bike_id, job_number, status, status_id,
-          status_updated_at, invoice_id, arrival_date, updated_at,
-          job_status:job_statuses(name, color)
-        ''');
-        if (tenantId != null && tenantId.isNotEmpty) {
-          query = query.eq('tenant_id', tenantId);
-        }
-        final rows = await query
-            .inFilter('id', missingIds.toList())
-            .isFilter('deleted_at', null);
-        for (final row in rows as List) {
-          captureJob(row);
-        }
-      } catch (e) {
-        debugPrint('⚠️ Error loading explicit job context hints: $e');
+      for (final row
+          in _ContextHintRows.where(rows.jobs, 'id', missingIds.toSet())) {
+        captureJob(row);
       }
     }
 
@@ -688,23 +743,12 @@ class MessagingService {
 
     final invoiceIdsNeedingJob = {...explicitInvoiceIds};
     if (invoiceIdsNeedingJob.isNotEmpty) {
-      try {
-        dynamic query = _client.from('mechanic_jobs').select('''
-          id, tenant_id, customer_id, bike_id, job_number, status, status_id,
-          status_updated_at, invoice_id, arrival_date, updated_at,
-          job_status:job_statuses(name, color)
-        ''');
-        if (tenantId != null && tenantId.isNotEmpty) {
-          query = query.eq('tenant_id', tenantId);
-        }
-        final rows = await query
-            .inFilter('invoice_id', invoiceIdsNeedingJob.toList())
-            .isFilter('deleted_at', null);
-        for (final row in rows as List) {
-          captureJob(row);
-        }
-      } catch (e) {
-        debugPrint('⚠️ Error loading invoice job context hints: $e');
+      for (final row in _ContextHintRows.where(
+        rows.jobs,
+        'invoice_id',
+        invoiceIdsNeedingJob,
+      )) {
+        captureJob(row);
       }
     }
 
@@ -714,21 +758,11 @@ class MessagingService {
     final customerIds = customerIdByConversation.values.toSet();
     if (customerIds.isNotEmpty) {
       try {
-        dynamic query = _client.from('mechanic_jobs').select('''
-          id, tenant_id, customer_id, bike_id, job_number, status, status_id,
-          status_updated_at, invoice_id, arrival_date, updated_at,
-          job_status:job_statuses(name, color)
-        ''');
-        if (tenantId != null && tenantId.isNotEmpty) {
-          query = query.eq('tenant_id', tenantId);
-        }
-        final rows = await query
-            .inFilter('customer_id', customerIds.toList())
-            .isFilter('deleted_at', null)
-            .order('updated_at', ascending: false)
-            .limit(300);
-        final jobs = (rows as List).map(_rowMap).where(_isOpenJob).toList()
-          ..sort((a, b) => _jobSortDate(b).compareTo(_jobSortDate(a)));
+        final jobs =
+            _ContextHintRows.where(rows.jobs, 'customer_id', customerIds)
+                .where(_isOpenJob)
+                .toList()
+              ..sort((a, b) => _jobSortDate(b).compareTo(_jobSortDate(a)));
         for (final job in jobs) {
           captureJob(job);
           final customerId = _text(job['customer_id']);
@@ -778,35 +812,20 @@ class MessagingService {
     }
 
     if (bikeIds.isNotEmpty) {
-      try {
-        dynamic query = _client.from('bikes').select('id, brand, model, year');
-        if (tenantId != null && tenantId.isNotEmpty) {
-          query = query.eq('tenant_id', tenantId);
-        }
-        final rows = await query.inFilter('id', bikeIds.toList());
-        for (final row in rows as List) {
-          final bike = _rowMap(row);
-          final id = _text(bike['id']);
-          if (id != null) bikeRowsById[id] = bike;
-        }
-      } catch (e) {
-        debugPrint('⚠️ Error loading context bikes: $e');
+      for (final bike in _ContextHintRows.where(rows.bikes, 'id', bikeIds)) {
+        final id = _text(bike['id']);
+        if (id != null) bikeRowsById[id] = bike;
       }
     }
 
     if (selectedJobIds.isNotEmpty) {
       try {
-        dynamic query = _client.from('mechanic_job_bikes').select('''
-          job_id, bike_id, order_index,
-          bike:bikes(id, brand, model, year)
-        ''');
-        if (tenantId != null && tenantId.isNotEmpty) {
-          query = query.eq('tenant_id', tenantId);
-        }
-        final rows = await query
-            .inFilter('job_id', selectedJobIds.toList())
-            .order('order_index');
-        for (final rawRow in rows as List) {
+        // The bundle is ordered by order_index, like the former read.
+        for (final rawRow in _ContextHintRows.where(
+          rows.jobBikes,
+          'job_id',
+          selectedJobIds,
+        )) {
           final row = _rowMap(rawRow);
           final jobId = _text(row['job_id']);
           if (jobId == null || bikeNameByJobId.containsKey(jobId)) continue;
@@ -850,6 +869,10 @@ class MessagingService {
           ? null
           : bikeNameByJobId[jobId] ?? _bikeNameFromRow(bikeRowsById[bikeId]);
 
+      final linkedContactId = supplierContactIdByConversation[conversationId];
+      final linkedContact = linkedContactId == null
+          ? null
+          : supplierContactRowsById[linkedContactId];
       final hint = ConversationContextHint(
         customerId: customerId,
         customerName: _text(customer == null ? null : customer['name']) ??
@@ -890,6 +913,28 @@ class MessagingService {
             _text(supplier == null ? null : supplier['sales_rep_phone']) ??
                 _text(supplier == null ? null : supplier['phone']) ??
                 phoneByConversation[conversationId],
+        contactPersonName:
+            (linkedContact == null ? null : _text(linkedContact['name'])) ??
+                (supplier == null
+                    ? null
+                    : supplierContactPersonName(
+                        supplierName: _text(supplier['name']),
+                        bindingContactName:
+                            contactNameByConversation[conversationId],
+                        threadPhone: phoneByConversation[conversationId],
+                        salesRepName: _text(supplier['sales_rep_name']),
+                        salesRepPhone: _text(supplier['sales_rep_phone']),
+                      )),
+        contactPersonId:
+            linkedContact == null ? null : _text(linkedContact['id']),
+        contactPersonRole:
+            linkedContact == null ? null : _text(linkedContact['role']),
+        contactPersonIsActive:
+            linkedContact == null ? null : linkedContact['is_active'] != false,
+        contactPersonIsPrimary:
+            linkedContact == null ? null : linkedContact['is_primary'] == true,
+        supplierPrimaryContactName:
+            supplier == null ? null : _text(supplier['sales_rep_name']),
         purchaseInvoiceId:
             purchaseInvoice == null ? null : _text(purchaseInvoice['id']),
         purchaseInvoiceNumber: purchaseInvoice == null
@@ -1008,6 +1053,20 @@ class MessagingService {
 
   /// Fetch conversations for the current user with unread counts
   /// [type] filter: 'internal' or 'support'
+  /// The inbox list in the PostgREST embed shape (`conversation_participants`
+  /// and `conversation_contexts` inside each row), decided once per
+  /// conversation on the server. The former three embedded selects paid
+  /// row-level security per embedded row: 735-900 ms of server time.
+  Future<List<dynamic>> _loadInboxConversationRows(String? type) async {
+    final rows = await _client.rpc(
+      'inbox_conversations_v1',
+      params: {'p_type': type},
+    ) as List<dynamic>;
+    return rows
+        .map((row) => Map<String, dynamic>.from(row as Map))
+        .toList(growable: false);
+  }
+
   Future<List<Conversation>> getConversations({
     String? type,
     bool includeContextHints = true,
@@ -1015,72 +1074,20 @@ class MessagingService {
     final userId = currentUserId;
     if (userId == null) return [];
     final stopwatch = Stopwatch()..start();
-    final conversationSelect = includeContextHints
-        ? '*, conversation_participants(user_id), conversation_contexts(*)'
-        : '''
-          id, type, channel, is_group, counterparty_type, status, title,
-          context_type, context_id,
-          updated_at, last_message_at, staff_last_read_at,
-          staff_last_read_message_sequence, created_by,
-          conversation_participants(user_id)
-        ''';
-    final internalConversationSelect = includeContextHints
-        ? '*, conversation_participants!inner(user_id), conversation_contexts(*)'
-        : '''
-          id, type, channel, is_group, counterparty_type, status, title,
-          context_type, context_id,
-          updated_at, last_message_at, staff_last_read_at,
-          staff_last_read_message_sequence, created_by,
-          conversation_participants!inner(user_id)
-        ''';
-
     List<dynamic> data = [];
 
     if (type == 'support') {
       // For support chats: show ALL support conversations (shared inbox)
-      final response = await _client
-          .from('conversations')
-          .select(conversationSelect)
-          .eq('type', 'support')
-          .order('last_message_at', ascending: false);
-      data = response as List<dynamic>;
+      data = await _loadInboxConversationRows('support');
       debugPrint('📬 Support chats loaded: ${data.length}');
     } else if (type == 'internal') {
       // For internal chats: only show ones where user is a participant
-      final response = await _client
-          .from('conversations')
-          .select(internalConversationSelect)
-          .eq('type', 'internal')
-          .order('last_message_at', ascending: false);
-      data = response as List<dynamic>;
+      data = await _loadInboxConversationRows('internal');
       debugPrint('💬 Internal chats loaded: ${data.length}');
     } else {
-      // No filter: get both internal (participated) and support (all)
-      final responses = await Future.wait([
-        _client
-            .from('conversations')
-            .select(internalConversationSelect)
-            .eq('type', 'internal')
-            .order('last_message_at', ascending: false),
-        _client
-            .from('conversations')
-            .select(conversationSelect)
-            .eq('type', 'support')
-            .order('last_message_at', ascending: false),
-      ]);
-      final internalResponse = responses[0] as List;
-      final supportResponse = responses[1] as List;
-
-      debugPrint('💬 Internal chats: ${internalResponse.length}');
-      debugPrint('📬 Support chats: ${supportResponse.length}');
-
-      data = [...internalResponse, ...supportResponse];
-      // Sort by last_message_at
-      data.sort((a, b) {
-        final aTime = a['last_message_at'] ?? a['updated_at'];
-        final bTime = b['last_message_at'] ?? b['updated_at'];
-        return bTime.compareTo(aTime);
-      });
+      // No filter: internal (participated) and support (all), already
+      // ordered by activity on the server.
+      data = await _loadInboxConversationRows(null);
       debugPrint('📊 Total conversations: ${data.length}');
     }
     _debugInboxService(
@@ -1319,16 +1326,13 @@ class MessagingService {
     if (conversationIds.isEmpty) return {};
 
     try {
-      final limit = (conversationIds.length * 8).clamp(50, 500).toInt();
-      final rows = await _client
-          .from('messages')
-          .select(
-            'id, conversation_id, content, type, sender_id, created_at, message_sequence, metadata, message_direction, external_status',
-          )
-          .inFilter('conversation_id', conversationIds.toList())
-          .order('message_sequence', ascending: false)
-          .order('created_at', ascending: false)
-          .limit(limit);
+      // One read that decides access once per conversation and returns the
+      // three newest rows of each, newest first. The former cross-conversation
+      // sort paid row-level security per message row (2.1 s on average).
+      final rows = await _client.rpc(
+        'inbox_latest_messages_v1',
+        params: {'p_conversation_ids': conversationIds.toList()},
+      ) as List<dynamic>;
 
       final latestByConversation = <String, Map<String, dynamic>>{};
       for (final row in rows) {
@@ -1671,6 +1675,127 @@ class MessagingService {
         });
   }
 
+  /// Reacciones de una conversación, agrupadas por mensaje.
+  ///
+  /// Van por separado del timeline porque viven en su propia tabla: `messages`
+  /// se transmite por realtime y un stream de Supabase no puede traer una
+  /// relación embebida. Mezclarlas en el mensaje obligaría a recargar el
+  /// timeline entero cada vez que alguien pone un emoji.
+  Future<Map<String, List<MessageReaction>>> getReactionsForConversation(
+    String conversationId,
+  ) async {
+    final response = await _client
+        .from('message_reactions')
+        .select(
+          'id, message_id, emoji, reactor_user_id, reactor_wa_id, '
+          'reactor_name, created_at',
+        )
+        .eq('conversation_id', conversationId);
+    return _groupReactionsByMessage(response as List<dynamic>);
+  }
+
+  /// Realtime de reacciones de una conversación.
+  Stream<Map<String, List<MessageReaction>>> getReactionsStream(
+    String conversationId,
+  ) {
+    return _client
+        .from('message_reactions')
+        .stream(primaryKey: ['id'])
+        .eq('conversation_id', conversationId)
+        .map((rows) => _groupReactionsByMessage(rows));
+  }
+
+  Map<String, List<MessageReaction>> _groupReactionsByMessage(
+    List<dynamic> rows,
+  ) {
+    final grouped = <String, List<MessageReaction>>{};
+    for (final row in rows) {
+      final reaction = MessageReaction.fromJson(
+        Map<String, dynamic>.from(row as Map),
+      );
+      grouped.putIfAbsent(reaction.messageId, () => []).add(reaction);
+    }
+    return grouped;
+  }
+
+  /// Pone o reemplaza la reacción del usuario actual sobre un mensaje.
+  ///
+  /// El índice único de (mensaje, reactor) hace que reemplazar sea un upsert y
+  /// no un segundo chip: es la regla de WhatsApp, y la impone el motor.
+  Future<void> setMyReaction({
+    required String messageId,
+    required String conversationId,
+    required String emoji,
+  }) async {
+    final userId = currentUserId;
+    if (userId == null) {
+      throw StateError('No hay sesión para reaccionar');
+    }
+    // El inquilino se resuelve aquí y no en la UI: `Conversation` no lo lleva y
+    // adivinarlo en la capa de arriba es cómo se filtran datos entre tenants.
+    final tenantId = await TenantService().getTenantId();
+    if (tenantId == null || tenantId.isEmpty) {
+      throw StateError('No hay inquilino resuelto para reaccionar');
+    }
+    await _client.from('message_reactions').upsert(
+      {
+        'tenant_id': tenantId,
+        'message_id': messageId,
+        'conversation_id': conversationId,
+        'reactor_user_id': userId,
+        'emoji': emoji,
+        'updated_at': DateTime.now().toUtc().toIso8601String(),
+      },
+      onConflict: 'message_id, reactor_key',
+    );
+  }
+
+  /// Reacciona a un mensaje de WhatsApp: lo manda al contacto y deja que la
+  /// función de envío escriba la fila sólo si Meta la aceptó.
+  ///
+  /// [emoji] vacío la retira.
+  Future<void> sendWhatsAppReaction({
+    required Message message,
+    required String emoji,
+  }) async {
+    final externalMessageId =
+        message.metadata['external_message_id']?.toString();
+    if (externalMessageId == null || externalMessageId.isEmpty) {
+      // Un mensaje que nunca salió por WhatsApp no tiene a qué apuntar allá.
+      throw StateError('Este mensaje no existe en WhatsApp');
+    }
+
+    final bindings = await _client
+        .from('whatsapp_conversation_bindings')
+        .select('external_phone_number')
+        .eq('conversation_id', message.conversationId)
+        .limit(1);
+    final phone = (bindings as List).isEmpty
+        ? null
+        : (bindings.first as Map)['external_phone_number']?.toString();
+    if (phone == null || phone.trim().isEmpty) {
+      throw StateError('La conversación no tiene teléfono de WhatsApp');
+    }
+
+    await WhatsAppCloudService().sendReaction(
+      phoneNumber: phone,
+      conversationId: message.conversationId,
+      messageId: message.id,
+      externalMessageId: externalMessageId,
+      emoji: emoji,
+    );
+  }
+
+  Future<void> removeMyReaction({required String messageId}) async {
+    final userId = currentUserId;
+    if (userId == null) return;
+    await _client
+        .from('message_reactions')
+        .delete()
+        .eq('message_id', messageId)
+        .eq('reactor_user_id', userId);
+  }
+
   /// Reads one immutable page immediately before [beforeSequence]. Realtime
   /// continues to own the latest page; callers merge this older snapshot into
   /// their current timeline so a late response can never replace live rows.
@@ -1776,28 +1901,21 @@ class MessagingService {
     final ids = conversationIds.where((id) => id.isNotEmpty).toSet();
     if (ids.isEmpty) return const {};
 
-    final rows = await Future.wait(
-      ids.map(
-        (conversationId) => _client
-            .from('messages')
-            .select()
-            .eq('conversation_id', conversationId)
-            .order('message_sequence', ascending: false)
-            .order('created_at', ascending: false)
-            .limit(1)
-            .maybeSingle(),
-      ),
-    );
+    // One round trip for every conversation instead of one per conversation.
+    final rows = await _client.rpc(
+      'inbox_latest_messages_v1',
+      params: {'p_conversation_ids': ids.toList()},
+    ) as List<dynamic>;
 
     final latest = <String, Message>{};
     for (final row in rows) {
       if (row == null) continue;
       final message = Message.fromJson(
-        Map<String, dynamic>.from(row),
+        Map<String, dynamic>.from(row as Map),
         currentUserId: currentUserId,
       );
       if (isUnsupportedWhatsAppCompanionMessage(message)) continue;
-      latest[message.conversationId] = message;
+      latest.putIfAbsent(message.conversationId, () => message);
     }
     return latest;
   }
@@ -1808,6 +1926,7 @@ class MessagingService {
     required String content,
     String type = 'text',
     Map<String, dynamic>? metadata,
+    String? threadRootMessageId,
     List<String>? participantIds, // Optional: for push notifications
   }) async {
     if (currentUserId == null) throw Exception('Not authenticated');
@@ -1817,7 +1936,13 @@ class MessagingService {
       'sender_id': currentUserId,
       'content': content,
       'type': type,
-      'metadata': metadata ?? {},
+      'metadata': {
+        ...?metadata,
+        if (threadRootMessageId != null)
+          'thread_root_message_id': threadRootMessageId,
+      },
+      if (threadRootMessageId != null)
+        'thread_root_message_id': threadRootMessageId,
     });
     // Trigger updates conversation timestamp automatically via DB trigger
   }
@@ -2062,6 +2187,7 @@ class MessagingService {
       conversationId: conversationId,
       messageId: messageId,
       externalStatus: externalStatus,
+      record: Map<String, dynamic>.from(record),
     );
   }
 
@@ -2472,13 +2598,77 @@ class MessagingService {
     }
   }
 
+  /// Resolves the human contact configured on the canonical supplier profile.
+  ///
+  /// The WhatsApp binding intentionally keeps the supplier/company name for
+  /// inbox identity. Supplier templates instead greet only the first name of
+  /// the configured sales representative (or contact person) and fail closed
+  /// when neither exists.
+  Future<String?> getSupplierTemplateContactName({
+    required String conversationId,
+    String? supplierId,
+    bool rethrowOnError = false,
+  }) async {
+    try {
+      final tenantId = (await TenantService().getTenantId())?.trim();
+      if (tenantId == null || tenantId.isEmpty) return null;
+
+      var resolvedSupplierId = _text(supplierId);
+      if (resolvedSupplierId == null) {
+        final conversation = await _client
+            .from('conversations')
+            .select(
+              'context_type, context_id, conversation_contexts(context_type, context_id, is_primary)',
+            )
+            .eq('tenant_id', tenantId)
+            .eq('id', conversationId)
+            .limit(1)
+            .maybeSingle();
+
+        if (conversation != null) {
+          final (contextType, contextId) =
+              _primaryContextFromConversation(conversation);
+          if (contextType == 'supplier') {
+            resolvedSupplierId = contextId;
+          } else if (contextType == 'purchase_invoice' && contextId != null) {
+            final purchase = await _client
+                .from('purchase_invoices')
+                .select('supplier_id')
+                .eq('tenant_id', tenantId)
+                .eq('id', contextId)
+                .limit(1)
+                .maybeSingle();
+            resolvedSupplierId = _text(purchase?['supplier_id']);
+          }
+        }
+      }
+
+      if (resolvedSupplierId == null) return null;
+      final supplier = await _client
+          .from('suppliers')
+          .select('sales_rep_name, contact_person')
+          .eq('tenant_id', tenantId)
+          .eq('id', resolvedSupplierId)
+          .limit(1)
+          .maybeSingle();
+      return resolveSupplierMessagingContactName(supplier);
+    } catch (error) {
+      debugPrint(
+        '⚠️ Error resolving supplier WhatsApp template contact: $error',
+      );
+      if (rethrowOnError) rethrow;
+      return null;
+    }
+  }
+
   /// Resolve the customer contact for a support conversation.
   ///
   /// Prefers an existing WhatsApp binding and falls back to the customer
   /// participant linked through `customers.auth_user_id`.
   Future<Map<String, dynamic>?> getSupportConversationContact(
-    String conversationId,
-  ) async {
+    String conversationId, {
+    bool rethrowOnError = false,
+  }) async {
     try {
       Future<Map<String, dynamic>?> loadCustomerById(String? customerId) async {
         if (customerId == null || customerId.isEmpty) {
@@ -2748,6 +2938,7 @@ class MessagingService {
       return null;
     } catch (e) {
       debugPrint('⚠️ Error resolving support conversation contact: $e');
+      if (rethrowOnError) rethrow;
       return null;
     }
   }

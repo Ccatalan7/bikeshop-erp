@@ -23,22 +23,22 @@ class _BluetoothScannerPageState extends State<BluetoothScannerPage> {
   @override
   void initState() {
     super.initState();
-    
+
     // Check if platform is supported
     _isPlatformSupported = _checkPlatformSupport();
-    
+
     if (!_isPlatformSupported) {
       return;
     }
-    
+
     _scannerService = BluetoothScannerService();
-    
+
     // Listen to barcode scans
     _scannerService.barcodeStream.listen((barcode) {
       setState(() {
         _lastScannedBarcode = barcode;
       });
-      
+
       // Show snackbar with scanned barcode
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -48,7 +48,7 @@ class _BluetoothScannerPageState extends State<BluetoothScannerPage> {
         ),
       );
     });
-    
+
     _checkBluetoothStatus();
   }
 
@@ -102,10 +102,10 @@ class _BluetoothScannerPageState extends State<BluetoothScannerPage> {
           ElevatedButton(
             onPressed: () async {
               Navigator.of(context).pop();
-              
+
               // Request permissions
               final granted = await _scannerService.requestPermissions();
-              
+
               if (granted) {
                 if (mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
@@ -120,7 +120,7 @@ class _BluetoothScannerPageState extends State<BluetoothScannerPage> {
                 // Check if permanently denied
                 final permanentlyDenied =
                     await _scannerService.hasPermissionsDenied();
-                
+
                 if (mounted) {
                   if (permanentlyDenied) {
                     _showOpenSettingsDialog();
@@ -275,8 +275,8 @@ class _BluetoothScannerPageState extends State<BluetoothScannerPage> {
                   'Los lectores de código de barras Bluetooth están disponibles en Windows, Android e iOS. '
                   'Usa un lector USB/teclado cuando trabajes desde la versión web.',
                   style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: Colors.grey[600],
-                  ),
+                        color: Colors.grey[600],
+                      ),
                   textAlign: TextAlign.center,
                 ),
               ],

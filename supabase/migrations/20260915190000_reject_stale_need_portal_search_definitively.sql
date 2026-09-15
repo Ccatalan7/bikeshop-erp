@@ -11,11 +11,12 @@
 -- lib/modules/hr/services/payroll_employee_payment_method_command.dart).
 --
 -- Deployed live on 2026-09-15 19:01 UTC through the owner-authorised Supabase
--- MCP connector; the storm stopped within the same minute. The feature's own
--- migrations are not in this repository's governed stream (they were deployed
--- from another checkout), so this file only replaces the function when the
--- feature's tables exist and is a no-op elsewhere. The checkout that owns the
--- feature must carry the same body.
+-- MCP connector; the storm stopped within the same minute. The previous body of
+-- this function lives in 20260829160000_supply_need_refinement_modes.sql on the
+-- working branch (`smartpegas1.0`, five weeks ahead of `main` at the time);
+-- this file supersedes only its rejection errcode, replaces the function when
+-- the feature's tables exist, and is a no-op on a database that never received
+-- the feature.
 
 do $migration$
 begin

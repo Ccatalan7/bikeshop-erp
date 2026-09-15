@@ -1,0 +1,433 @@
+{
+  "source": {
+    "receiptId": "22006b7e-8f8a-406f-a71d-af988d662a75",
+    "needId": "b9484ed6-52d8-45cb-8b50-540caabf1d4e",
+    "interpretationRevision": 3,
+    "coverage": "word_search_only; incomplete",
+    "note": "Lectura original de producción, copiada por consulta SELECT. Los hechos de IA son las afirmaciones originales del lector, no afirmaciones verificadas independientemente."
+  },
+  "request": {
+    "description": "Pastillas de freno para Shimano BR-MT200, resina, sin aletas de refrigeración",
+    "categoryId": "7c580490-496d-4c12-b0ce-1239466b9359",
+    "categoryPath": "Componentes / Frenos / Pastillas",
+    "technicalFamily": "brake_pad",
+    "quantity": 6,
+    "unit": "juego",
+    "predicates": [
+      {
+        "field": "brake_system",
+        "operator": "eq",
+        "values": [
+          "Shimano"
+        ]
+      },
+      {
+        "field": "compound_type",
+        "operator": "eq",
+        "values": [
+          "Orgánico"
+        ]
+      },
+      {
+        "field": "pad_finned",
+        "operator": "eq",
+        "values": [
+          false
+        ]
+      }
+    ]
+  },
+  "fields": [
+    {
+      "key": "brake_system",
+      "unit": null,
+      "label": "Sistema de Freno",
+      "data_type": "single_select",
+      "description": null,
+      "is_required": false,
+      "allowed_values": [
+        "Shimano",
+        "SRAM",
+        "Magura",
+        "Tektro",
+        "Hayes",
+        "Bengal",
+        "TRP",
+        "Hope",
+        "Promax",
+        "Genérico"
+      ],
+      "validation_rules": {}
+    },
+    {
+      "key": "compound_type",
+      "unit": null,
+      "label": "Compuesto",
+      "data_type": "single_select",
+      "description": null,
+      "is_required": true,
+      "allowed_values": [
+        "Metálico",
+        "Orgánico",
+        "Semi-Metálico",
+        "Cerámico"
+      ],
+      "validation_rules": {}
+    },
+    {
+      "key": "pad_spring_included",
+      "unit": null,
+      "label": "Incluye Resorte",
+      "data_type": "boolean",
+      "description": null,
+      "is_required": false,
+      "allowed_values": [],
+      "validation_rules": {}
+    },
+    {
+      "key": "pad_finned",
+      "unit": null,
+      "label": "Con Aletas de Calor",
+      "data_type": "boolean",
+      "description": null,
+      "is_required": false,
+      "allowed_values": [],
+      "validation_rules": {}
+    },
+    {
+      "key": "pad_shape_code",
+      "unit": null,
+      "label": "Código de Forma (Pastilla)",
+      "data_type": "text",
+      "description": null,
+      "is_required": true,
+      "allowed_values": [],
+      "validation_rules": {}
+    },
+    {
+      "key": "brake_type",
+      "unit": null,
+      "label": "Tipo de Freno",
+      "data_type": "single_select",
+      "description": null,
+      "is_required": true,
+      "allowed_values": [
+        "Disco Hidráulico",
+        "Disco Mecánico",
+        "V-Brake",
+        "Cantilever"
+      ],
+      "validation_rules": {}
+    },
+    {
+      "key": "pad_compatibility_note",
+      "unit": null,
+      "label": "Compatibilidad de Pastilla (nota)",
+      "data_type": "text",
+      "description": null,
+      "is_required": false,
+      "allowed_values": [],
+      "validation_rules": {}
+    },
+    {
+      "key": "brake_position",
+      "unit": null,
+      "label": "Posición",
+      "data_type": "single_select",
+      "description": null,
+      "is_required": false,
+      "allowed_values": [
+        "Delantero",
+        "Trasero",
+        "Universal"
+      ],
+      "validation_rules": {}
+    }
+  ],
+  "matches": [
+    {
+      "code": "17977",
+      "name": "PASTILLA FRENO DISCO A10YS",
+      "brand": "TEKTRO",
+      "rowText": "17977 PASTILLA FRENO DISCO A10YS TEKTRO TAIWAN $ 5.890",
+      "priceNet": 5890,
+      "matchState": "conflict",
+      "provenFields": [],
+      "missingFields": [
+        "pad_finned",
+        "compound_type"
+      ],
+      "observedFacts": {
+        "brake_type": "Disco Hidráulico",
+        "brake_system": "Tektro",
+        "supplier_object_head": "PASTILLA FRENO DISCO",
+        "matches_requested_object": false
+      },
+      "technicalFacts": {
+        "brake_type": "Disco Hidráulico",
+        "brake_system": "Tektro",
+        "supplier_object_head": "PASTILLA FRENO DISCO",
+        "matches_requested_object": false
+      },
+      "conflictingFields": [
+        "product_family",
+        "brake_system"
+      ]
+    },
+    {
+      "code": "10587",
+      "name": "PASTILLA FRENO DISCO BP-10/SP-10",
+      "brand": "TAIWAN",
+      "rowText": "10587 PASTILLA FRENO DISCO BP-10/SP-10 TAIWAN TAIWAN $ 3.030",
+      "priceNet": 3030,
+      "matchState": "conflict",
+      "provenFields": [],
+      "missingFields": [
+        "pad_finned",
+        "compound_type",
+        "brake_system"
+      ],
+      "observedFacts": {
+        "brake_type": "Disco Hidráulico",
+        "supplier_object_head": "PASTILLA FRENO DISCO",
+        "matches_requested_object": false
+      },
+      "technicalFacts": {
+        "brake_type": "Disco Hidráulico",
+        "supplier_object_head": "PASTILLA FRENO DISCO",
+        "matches_requested_object": false
+      },
+      "conflictingFields": [
+        "product_family"
+      ]
+    },
+    {
+      "code": "16466",
+      "name": "PASTILLA FRENO DISCO BP-52 (SHIMANO XTR 2011)",
+      "brand": "TAIWAN",
+      "rowText": "16466 PASTILLA FRENO DISCO BP-52 (SHIMANO XTR 2011) TAIWAN TAIWAN $ 2.990",
+      "priceNet": 2990,
+      "matchState": "conflict",
+      "provenFields": [
+        "brake_system"
+      ],
+      "missingFields": [
+        "pad_finned",
+        "compound_type"
+      ],
+      "observedFacts": {
+        "brake_type": "Disco Hidráulico",
+        "brake_system": "Shimano",
+        "supplier_object_head": "PASTILLA FRENO DISCO",
+        "matches_requested_object": false
+      },
+      "technicalFacts": {
+        "brake_type": "Disco Hidráulico",
+        "brake_system": "Shimano",
+        "supplier_object_head": "PASTILLA FRENO DISCO",
+        "matches_requested_object": false
+      },
+      "conflictingFields": [
+        "product_family"
+      ]
+    },
+    {
+      "code": "2005",
+      "name": "PASTILLA FRENO DISCO BR-555",
+      "brand": "SHIMANO",
+      "rowText": "2005 PASTILLA FRENO DISCO BR-555 SHIMANO JAPON $ 6.789",
+      "priceNet": 6789,
+      "matchState": "conflict",
+      "provenFields": [
+        "brake_system"
+      ],
+      "missingFields": [
+        "pad_finned",
+        "compound_type"
+      ],
+      "observedFacts": {
+        "brake_type": "Disco Hidráulico",
+        "brake_system": "Shimano",
+        "supplier_object_head": "PASTILLA FRENO DISCO",
+        "matches_requested_object": false
+      },
+      "technicalFacts": {
+        "brake_type": "Disco Hidráulico",
+        "brake_system": "Shimano",
+        "supplier_object_head": "PASTILLA FRENO DISCO",
+        "matches_requested_object": false
+      },
+      "conflictingFields": [
+        "product_family"
+      ]
+    },
+    {
+      "code": "8479",
+      "name": "PASTILLA FRENO DISCO CLARA/LOUISE 2002",
+      "brand": "MAGURA",
+      "rowText": "8479 PASTILLA FRENO DISCO CLARA/LOUISE 2002 MAGURA ALEMANIA $ 20.540",
+      "priceNet": 20540,
+      "matchState": "conflict",
+      "provenFields": [],
+      "missingFields": [
+        "pad_finned",
+        "compound_type"
+      ],
+      "observedFacts": {
+        "brake_type": "Disco Hidráulico",
+        "brake_system": "Magura",
+        "supplier_object_head": "PASTILLA FRENO DISCO",
+        "matches_requested_object": false
+      },
+      "technicalFacts": {
+        "brake_type": "Disco Hidráulico",
+        "brake_system": "Magura",
+        "supplier_object_head": "PASTILLA FRENO DISCO",
+        "matches_requested_object": false
+      },
+      "conflictingFields": [
+        "product_family",
+        "brake_system"
+      ]
+    },
+    {
+      "code": "14176",
+      "name": "PASTILLA FRENO DISCO D40.11",
+      "brand": "TEKTRO",
+      "rowText": "14176 PASTILLA FRENO DISCO D40.11 TEKTRO TAIWAN $ 5.859",
+      "priceNet": 5859,
+      "matchState": "conflict",
+      "provenFields": [],
+      "missingFields": [
+        "pad_finned",
+        "compound_type"
+      ],
+      "observedFacts": {
+        "brake_type": "Disco Hidráulico",
+        "brake_system": "Tektro",
+        "supplier_object_head": "PASTILLA FRENO DISCO",
+        "matches_requested_object": false
+      },
+      "technicalFacts": {
+        "brake_type": "Disco Hidráulico",
+        "brake_system": "Tektro",
+        "supplier_object_head": "PASTILLA FRENO DISCO",
+        "matches_requested_object": false
+      },
+      "conflictingFields": [
+        "product_family",
+        "brake_system"
+      ]
+    },
+    {
+      "code": "10679",
+      "name": "PASTILLA FRENO DISCO DBP-01 (HAYES Y PROMAX)",
+      "brand": "UNION",
+      "rowText": "10679 PASTILLA FRENO DISCO DBP-01 (HAYES Y PROMAX) UNION TAIWAN $ 3.204",
+      "priceNet": 3204,
+      "matchState": "conflict",
+      "provenFields": [],
+      "missingFields": [
+        "pad_finned",
+        "compound_type",
+        "brake_system"
+      ],
+      "observedFacts": {
+        "brake_type": "Disco Hidráulico",
+        "supplier_object_head": "PASTILLA FRENO DISCO",
+        "matches_requested_object": false
+      },
+      "technicalFacts": {
+        "brake_type": "Disco Hidráulico",
+        "supplier_object_head": "PASTILLA FRENO DISCO",
+        "matches_requested_object": false
+      },
+      "conflictingFields": [
+        "product_family"
+      ]
+    },
+    {
+      "code": "10684",
+      "name": "PASTILLA FRENO DISCO DBP-11 (AVID)",
+      "brand": "UNION",
+      "rowText": "10684 PASTILLA FRENO DISCO DBP-11 (AVID) UNION TAIWAN $ 3.204",
+      "priceNet": 3204,
+      "matchState": "conflict",
+      "provenFields": [],
+      "missingFields": [
+        "pad_finned",
+        "compound_type",
+        "brake_system"
+      ],
+      "observedFacts": {
+        "brake_type": "Disco Hidráulico",
+        "supplier_object_head": "PASTILLA FRENO DISCO",
+        "matches_requested_object": false
+      },
+      "technicalFacts": {
+        "brake_type": "Disco Hidráulico",
+        "supplier_object_head": "PASTILLA FRENO DISCO",
+        "matches_requested_object": false
+      },
+      "conflictingFields": [
+        "product_family"
+      ]
+    },
+    {
+      "code": "16403",
+      "name": "PASTILLA FRENO DISCO DBP-23 (ZOOM)",
+      "brand": "UNION",
+      "rowText": "16403 PASTILLA FRENO DISCO DBP-23 (ZOOM) UNION TAIWAN $ 3.205",
+      "priceNet": 3205,
+      "matchState": "conflict",
+      "provenFields": [],
+      "missingFields": [
+        "pad_finned",
+        "compound_type",
+        "brake_system"
+      ],
+      "observedFacts": {
+        "brake_type": "Disco Hidráulico",
+        "supplier_object_head": "PASTILLA FRENO DISCO",
+        "matches_requested_object": false
+      },
+      "technicalFacts": {
+        "brake_type": "Disco Hidráulico",
+        "supplier_object_head": "PASTILLA FRENO DISCO",
+        "matches_requested_object": false
+      },
+      "conflictingFields": [
+        "product_family"
+      ]
+    },
+    {
+      "code": "10699",
+      "name": "PASTILLA FRENO DISCO DBP-40 (HAYES Stroker Ryde)",
+      "brand": "UNION",
+      "rowText": "10699 PASTILLA FRENO DISCO DBP-40 (HAYES Stroker Ryde) UNION TAIWAN $ 3.204",
+      "priceNet": 3204,
+      "matchState": "conflict",
+      "provenFields": [],
+      "missingFields": [
+        "pad_finned",
+        "compound_type"
+      ],
+      "observedFacts": {
+        "brake_type": "Disco Hidráulico",
+        "brake_system": "Hayes",
+        "supplier_object_head": "PASTILLA FRENO DISCO",
+        "matches_requested_object": false
+      },
+      "technicalFacts": {
+        "brake_type": "Disco Hidráulico",
+        "brake_system": "Hayes",
+        "supplier_object_head": "PASTILLA FRENO DISCO",
+        "matches_requested_object": false
+      },
+      "conflictingFields": [
+        "product_family",
+        "brake_system"
+      ]
+    }
+  ]
+}

@@ -7,8 +7,11 @@
 // The application's name. By default this is also the title of the Flutter window.
 PRODUCT_NAME = vinabike_erp
 
-// The application's bundle identifier
-PRODUCT_BUNDLE_IDENTIFIER = com.vinabike.vinabikeErp
+// The application's bundle identifier is supplied by the active build
+// configuration. Debug must use its own macOS sandbox/container so its
+// Supabase session, SharedPreferences, SQLite caches, and WebKit data cannot
+// overwrite the installed release app.
+PRODUCT_BUNDLE_IDENTIFIER = $(VINABIKE_PRODUCT_BUNDLE_IDENTIFIER)
 
 // The copyright displayed in application information
 PRODUCT_COPYRIGHT = Copyright © 2025 com.vinabike. All rights reserved.

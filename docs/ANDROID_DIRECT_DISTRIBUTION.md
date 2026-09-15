@@ -111,13 +111,14 @@ Ctrl+Shift+B -> Publish ERP Update (Windows + Android)
 
 Each task safely fast-forwards a behind branch when it does not overlap local
 work, runs the pinned Flutter dependency resolution, creates at most one shared
-commit, asks local Codex at most once for one bounded shared note candidate,
-pushes once, then starts the selected desktop publisher and Android publisher
-in parallel in separate VS Code terminal panes. The Android child consumes a
-short-lived schema-v2 exact-SHA state file inside `.git`; it never creates
-another commit or push. Before dispatch, it requires the local branch, clean
-worktree, `HEAD`, live remote branch, release-note base, and candidate checksum
-to match that shared state.
+commit, resolves a common release-note range covering both installed channels,
+and pushes once. Preparation writes a short-lived schema-v2 exact-SHA state
+inside `.git`. The qualifier binds one canonical `ERP Integrity Gate` run and
+upgrades the state to schema v3. The macOS task uses dispatch-only qualification
+so the two platform workflows can start in parallel; each independently waits
+for that exact gate to succeed before publication. The Android child never
+creates another commit or push and rechecks the checkout, branch, local and
+remote commit, note range, and qualification binding.
 
 The protected cross-platform path dispatches the already-registered
 `.github/workflows/macos-release.yml` entrypoint with
@@ -134,10 +135,12 @@ CI selects `max(committed build number, latest live build number + 1)` so a
 Windows workstation does not need the Supabase credential or Android signing
 material.
 
-The workflow accepts only a size-bounded, checksummed local Codex candidate and
-an exact release-note base commit. Protected CI independently reconstructs the
-committed range and validates the candidate. Invalid or unavailable AI output
-falls back to deterministic Spanish notes without blocking the update. The
+**Correction 2026-08-31:** the local-Codex note instructions above were stale
+after the 2026-08-24 release change. Preparation binds only the exact range;
+protected CI generates notes with Gemini Flash and independently validates
+their evidence. Local Codex candidates are not part of the standard publisher.
+Invalid or unavailable AI output falls back to deterministic Spanish notes
+without blocking the update. The
 structured `release_notes` object is bound to the Android manifest commit so the
 installed app can show the same user-friendly `Novedades` content as desktop
 releases.

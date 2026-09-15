@@ -91,7 +91,10 @@ void main() {
     );
     final stage = preparation.indexOf('git add -A');
     final commit = preparation.indexOf('git commit -m');
-    final codex = preparation.indexOf('Get-LocalCodexCandidate', commit);
+    final gemini = preparation.indexOf(
+      'Gemini Flash will generate the shared release notes inside protected CI.',
+      commit,
+    );
     final push = preparation.indexOf('git push origin');
     final remoteReadback = preparation.indexOf('git ls-remote', push);
     final stateWrite = preparation.indexOf('schema_version = 2', push);
@@ -102,8 +105,8 @@ void main() {
     expect(dependencies, greaterThan(fastForward));
     expect(stage, greaterThan(dependencies));
     expect(commit, greaterThan(stage));
-    expect(codex, greaterThan(commit));
-    expect(push, greaterThan(codex));
+    expect(gemini, greaterThan(commit));
+    expect(push, greaterThan(gemini));
     expect(remoteReadback, greaterThan(push));
     expect(stateWrite, greaterThan(remoteReadback));
     expect(RegExp(r'git commit -m').allMatches(preparation), hasLength(1));
@@ -114,20 +117,12 @@ void main() {
     );
     expect(preparation, contains("targets = @('windows', 'android')"));
     expect(preparation, contains('candidate_sha256 = \$candidateSha256'));
-    expect(preparation, contains('Get-ReusableCodexCandidate'));
-    expect(
-      preparation,
-      contains("(Get-ObjectProperty \$state 'schema_version') -ne 2 -and"),
-    );
-    expect(
-      preparation,
-      contains("(Get-ObjectProperty \$state 'schema_version') -ne 3"),
-    );
-    expect(
-      preparation,
-      contains('Reusing the exact Codex candidate already bound'),
-    );
-    expect(preparation, contains('--git-bin \$git.Source |'));
+    expect(preparation, contains("\$candidateBase64 = ''"));
+    expect(preparation, contains("\$candidateSha256 = ''"));
+    expect(preparation, isNot(contains('Get-LocalCodexCandidate')));
+    expect(preparation, isNot(contains('Get-ReusableCodexCandidate')));
+    expect(preparation, isNot(contains('generate_codex_release_notes.mjs')));
+    expect(preparation.toLowerCase(), isNot(contains('codex')));
     expect(preparation, contains('Out-Host'));
     expect(preparation, contains('Protect-PrivateStateFile'));
     expect(
@@ -173,7 +168,8 @@ void main() {
     );
   });
 
-  test('Windows dispatch carries exact source and shared Codex metadata', () {
+  test('Windows dispatch carries exact source and legacy-empty note metadata',
+      () {
     expect(
       windowsPublisher,
       contains('expected_commit = \$headSha'),
@@ -203,14 +199,8 @@ void main() {
     );
     expect(windowsPublisher, contains('ConvertTo-Json -Compress'));
     expect(windowsPublisher, contains('--json'));
-    expect(
-      preparation,
-      allOf(
-        contains('generate_codex_release_notes.mjs'),
-        contains('--git-bin \$git.Source'),
-        contains('--codex-bin \$codex.Source'),
-      ),
-    );
+    expect(preparation, contains("\$candidateBase64 = ''"));
+    expect(preparation, contains("\$candidateSha256 = ''"));
   });
 
   test('exact published Windows commit is an idempotent success', () {
@@ -291,12 +281,14 @@ void main() {
       contains('Publish ERP Update (Windows + Android)'),
     );
     expect(runbook, contains('at most one new commit'));
-    expect(runbook, contains('Codex CLI once'));
-    expect(runbook, contains('same validated Codex candidate'));
+    expect(runbook, contains('Gemini Flash generates'));
+    expect(runbook, contains('same exact'));
+    expect(runbook, isNot(contains('Codex CLI once')));
+    expect(runbook, isNot(contains('same validated Codex candidate')));
     expect(runbook, contains('separate GitHub Actions workflows'));
     expect(runbook, contains('common `Novedades` baseline'));
     expect(runbook, contains('Missing, expired, non-ancestral, or'));
-    expect(runbook, contains('same handoff after its'));
+    expect(runbook, contains('handoff after its'));
     expect(runbook, contains('schema-v3 qualification upgrade'));
     expect(runbook, contains('deterministic fallback'));
   });

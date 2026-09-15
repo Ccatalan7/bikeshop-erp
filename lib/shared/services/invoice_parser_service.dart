@@ -1,5 +1,7 @@
 import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
 
+import '../models/supplier_variant_resolution.dart';
+
 /// Parsed invoice data extracted from OCR text
 class ParsedInvoice {
   final String? rut; // Chilean tax ID (e.g., "12.345.678-9")
@@ -8,6 +10,12 @@ class ParsedInvoice {
   final double? total; // Total amount
   final double? netAmount; // Document net amount, when explicitly stated
   final double? taxAmount; // Document tax amount, when explicitly stated
+  /// ISO 4217 currency carried by the source document when it is known.
+  ///
+  /// Money stays numeric elsewhere in the legacy OCR model, so supplier
+  /// resolution keeps the currency beside it instead of assuming CLP when a
+  /// durable source line is prepared.
+  final String? currencyCode;
   final String? supplierName; // Vendor/supplier name
   final List<ParsedLineItem> lineItems; // Extracted line items
   final String rawText; // Full extracted text for debugging
@@ -19,6 +27,7 @@ class ParsedInvoice {
     this.total,
     this.netAmount,
     this.taxAmount,
+    this.currencyCode,
     this.supplierName,
     this.lineItems = const [],
     required this.rawText,
@@ -31,6 +40,7 @@ class ParsedInvoice {
     double? total,
     double? netAmount,
     double? taxAmount,
+    String? currencyCode,
     String? supplierName,
     List<ParsedLineItem>? lineItems,
     String? rawText,
@@ -42,6 +52,7 @@ class ParsedInvoice {
       total: total ?? this.total,
       netAmount: netAmount ?? this.netAmount,
       taxAmount: taxAmount ?? this.taxAmount,
+      currencyCode: currencyCode ?? this.currencyCode,
       supplierName: supplierName ?? this.supplierName,
       lineItems: lineItems ?? this.lineItems,
       rawText: rawText ?? this.rawText,
@@ -52,6 +63,7 @@ class ParsedInvoice {
   String toString() {
     return 'ParsedInvoice(rut: $rut, number: $invoiceNumber, date: $date, '
         'net: $netAmount, tax: $taxAmount, total: $total, '
+        'currency: $currencyCode, '
         'supplier: $supplierName, items: $lineItems)';
   }
 }
@@ -59,10 +71,43 @@ class ParsedInvoice {
 /// Line item extracted from invoice
 class ParsedLineItem {
   final String description;
+
+  /// Supplier-authored product-line title, without the selected option.
+  ///
+  /// [description] remains the operator-facing line and may include
+  /// `(BLACK)`; variant identity travels independently below.
+  final String? lineTitle;
+  final String? variantLabel;
+  final String? variantKey;
   final String? sku;
   final String? rawRowText;
   final String? imageUrl;
   final String? productUrl;
+
+  /// Quantity bought from the supplier before catalog-unit resolution.
+  ///
+  /// For AliExpress this is deliberately kept separate from any pack evidence:
+  /// buying `2` listings whose selected option says `4 pairs` is still a source
+  /// purchase quantity of `2` until a matched catalog product defines its unit.
+  final double? sourcePurchaseQuantity;
+
+  /// Supplier price per purchased option before landed-cost allocation.
+  /// This is a commercial row discriminator, not catalog identity or cost.
+  final double? sourcePurchaseUnitPrice;
+
+  /// Explicit count printed by the supplier for the selected pack/option.
+  /// This is evidence only; it must not multiply [quantity] before resolution.
+  final int? rawPackCount;
+
+  /// Supplier unit lexeme attached to [rawPackCount] (`pcs`, `pares`, etc.).
+  /// It is intentionally not translated into a catalog inventory unit here.
+  final String? rawUnitToken;
+  final bool rawPackEvidenceConflict;
+
+  /// Supplier order identities contributing to this consolidated source row.
+  /// They are evidence/audit context, never catalog-product identity.
+  final List<String> sourceOrderNumbers;
+  final SupplierVariantResolution? supplierResolution;
   final double? quantity;
   final double? unitPrice;
   final double? total;
@@ -80,10 +125,20 @@ class ParsedLineItem {
 
   ParsedLineItem({
     required this.description,
+    this.lineTitle,
+    this.variantLabel,
+    this.variantKey,
     this.sku,
     this.rawRowText,
     this.imageUrl,
     this.productUrl,
+    this.sourcePurchaseQuantity,
+    this.sourcePurchaseUnitPrice,
+    this.rawPackCount,
+    this.rawUnitToken,
+    this.rawPackEvidenceConflict = false,
+    this.sourceOrderNumbers = const <String>[],
+    this.supplierResolution,
     this.quantity,
     this.unitPrice,
     this.total,
@@ -98,13 +153,154 @@ class ParsedLineItem {
     this.currentStock,
   });
 
+  factory ParsedLineItem.fromJson(Map<String, dynamic> json) {
+    return ParsedLineItem(
+      description: json['description']?.toString() ?? '',
+      lineTitle: _nullableText(json['lineTitle'] ?? json['line_title']),
+      variantLabel:
+          _nullableText(json['variantLabel'] ?? json['variant_label']),
+      variantKey: _nullableText(json['variantKey'] ?? json['variant_key']),
+      sku: _nullableText(json['sku']),
+      rawRowText: _nullableText(json['rawRowText'] ?? json['raw_row_text']),
+      imageUrl: _nullableText(json['imageUrl'] ?? json['image_url']),
+      productUrl: _nullableText(json['productUrl'] ?? json['product_url']),
+      sourcePurchaseQuantity: _nullableDouble(
+        json['sourcePurchaseQuantity'] ?? json['source_purchase_quantity'],
+      ),
+      sourcePurchaseUnitPrice: _nullableDouble(
+        json['sourcePurchaseUnitPrice'] ?? json['source_purchase_unit_price'],
+      ),
+      rawPackCount:
+          _nullableInt(json['rawPackCount'] ?? json['raw_pack_count']),
+      rawUnitToken:
+          _nullableText(json['rawUnitToken'] ?? json['raw_unit_token']),
+      rawPackEvidenceConflict: json['rawPackEvidenceConflict'] == true ||
+          json['raw_pack_evidence_conflict'] == true,
+      sourceOrderNumbers: _stringList(
+        json['sourceOrderNumbers'] ?? json['source_order_numbers'],
+      ),
+      supplierResolution: _supplierResolution(
+        json['supplierResolution'] ?? json['supplier_resolution'],
+      ),
+      quantity: _nullableDouble(json['quantity']),
+      unitPrice: _nullableDouble(json['unitPrice'] ?? json['unit_price']),
+      total: _nullableDouble(json['total']),
+      discount: _nullableDouble(json['discount']),
+      discountRate:
+          _nullableDouble(json['discountRate'] ?? json['discount_rate']),
+      discountInferred:
+          json['discountInferred'] == true || json['discount_inferred'] == true,
+      wasAutoAdjusted:
+          json['wasAutoAdjusted'] == true || json['was_auto_adjusted'] == true,
+      adjustmentSummary: _nullableText(
+        json['adjustmentSummary'] ?? json['adjustment_summary'],
+      ),
+      existsInDatabase: json['existsInDatabase'] as bool? ??
+          json['exists_in_database'] as bool?,
+      matchedProductId: _nullableText(
+        json['matchedProductId'] ?? json['matched_product_id'],
+      ),
+      matchedProductName: _nullableText(
+        json['matchedProductName'] ?? json['matched_product_name'],
+      ),
+      currentStock: _nullableInt(json['currentStock'] ?? json['current_stock']),
+    );
+  }
+
+  Map<String, dynamic> toJson() => <String, dynamic>{
+        'description': description,
+        'lineTitle': lineTitle,
+        'variantLabel': variantLabel,
+        'variantKey': variantKey,
+        'sku': sku,
+        'rawRowText': rawRowText,
+        'imageUrl': imageUrl,
+        'productUrl': productUrl,
+        'sourcePurchaseQuantity': sourcePurchaseQuantity,
+        'sourcePurchaseUnitPrice': sourcePurchaseUnitPrice,
+        'rawPackCount': rawPackCount,
+        'rawUnitToken': rawUnitToken,
+        'rawPackEvidenceConflict': rawPackEvidenceConflict,
+        'sourceOrderNumbers': sourceOrderNumbers,
+        if (supplierResolution != null)
+          'supplierResolution': supplierResolution!.toJson(),
+        'quantity': quantity,
+        'unitPrice': unitPrice,
+        'total': total,
+        'discount': discount,
+        'discountRate': discountRate,
+        'discountInferred': discountInferred,
+        'wasAutoAdjusted': wasAutoAdjusted,
+        'adjustmentSummary': adjustmentSummary,
+        'existsInDatabase': existsInDatabase,
+        'matchedProductId': matchedProductId,
+        'matchedProductName': matchedProductName,
+        'currentStock': currentStock,
+      };
+
+  static String? _nullableText(dynamic value) {
+    final text = value?.toString().trim();
+    return text == null || text.isEmpty ? null : text;
+  }
+
+  static double? _nullableDouble(dynamic value) {
+    if (value is num) return value.toDouble();
+    final text = value?.toString().trim();
+    if (text == null || text.isEmpty) return null;
+    return double.tryParse(text.replaceAll(',', '.'));
+  }
+
+  static int? _nullableInt(dynamic value) {
+    if (value is num) return value.toInt();
+    return _nullableDouble(value)?.toInt();
+  }
+
+  static List<String> _stringList(dynamic value) {
+    final values = value is Iterable
+        ? value
+        : value == null
+            ? const <dynamic>[]
+            : value.toString().split(',');
+    final normalized = values
+        .map((entry) => entry?.toString().trim() ?? '')
+        .where((entry) => entry.isNotEmpty)
+        .toSet()
+        .toList()
+      ..sort();
+    return List<String>.unmodifiable(normalized);
+  }
+
+  static SupplierVariantResolution? _supplierResolution(dynamic value) {
+    if (value is! Map) return null;
+    final normalized = value.map(
+      (key, raw) => MapEntry(key.toString(), raw),
+    );
+    final resolution = SupplierVariantResolution.fromLookupJson(normalized);
+    return resolution.isResolved ? resolution : null;
+  }
+
+  /// One exact graph can resolve a line even when it expands to many products.
+  bool get hasAuthoritativeCatalogResolution =>
+      supplierResolution?.isResolved == true;
+
   /// Create a copy with updated verification fields
   ParsedLineItem copyWith({
     String? description,
+    String? lineTitle,
+    String? variantLabel,
+    String? variantKey,
     String? sku,
     String? rawRowText,
     String? imageUrl,
     String? productUrl,
+    double? sourcePurchaseQuantity,
+    double? sourcePurchaseUnitPrice,
+    int? rawPackCount,
+    String? rawUnitToken,
+    bool? rawPackEvidenceConflict,
+    List<String>? sourceOrderNumbers,
+    SupplierVariantResolution? supplierResolution,
+    bool clearSupplierResolution = false,
     double? quantity,
     double? unitPrice,
     double? total,
@@ -120,10 +316,25 @@ class ParsedLineItem {
   }) {
     return ParsedLineItem(
       description: description ?? this.description,
+      lineTitle: lineTitle ?? this.lineTitle,
+      variantLabel: variantLabel ?? this.variantLabel,
+      variantKey: variantKey ?? this.variantKey,
       sku: sku ?? this.sku,
       rawRowText: rawRowText ?? this.rawRowText,
       imageUrl: imageUrl ?? this.imageUrl,
       productUrl: productUrl ?? this.productUrl,
+      sourcePurchaseQuantity:
+          sourcePurchaseQuantity ?? this.sourcePurchaseQuantity,
+      sourcePurchaseUnitPrice:
+          sourcePurchaseUnitPrice ?? this.sourcePurchaseUnitPrice,
+      rawPackCount: rawPackCount ?? this.rawPackCount,
+      rawUnitToken: rawUnitToken ?? this.rawUnitToken,
+      rawPackEvidenceConflict:
+          rawPackEvidenceConflict ?? this.rawPackEvidenceConflict,
+      sourceOrderNumbers: sourceOrderNumbers ?? this.sourceOrderNumbers,
+      supplierResolution: clearSupplierResolution
+          ? null
+          : supplierResolution ?? this.supplierResolution,
       quantity: quantity ?? this.quantity,
       unitPrice: unitPrice ?? this.unitPrice,
       total: total ?? this.total,
@@ -141,7 +352,15 @@ class ParsedLineItem {
 
   @override
   String toString() {
-    return 'LineItem($description, sku: $sku, qty: $quantity, price: $unitPrice, total: $total, discount: $discount, rate: $discountRate, inferred: $discountInferred, adjusted: $wasAutoAdjusted, exists: $existsInDatabase)';
+    return 'LineItem($description, sku: $sku, sourceQty: '
+        '$sourcePurchaseQuantity at $sourcePurchaseUnitPrice, '
+        'pack: $rawPackCount $rawUnitToken, '
+        'packConflict: $rawPackEvidenceConflict, '
+        'orders: ${sourceOrderNumbers.join(',')}, '
+        'qty: $quantity, price: $unitPrice, total: $total, '
+        'discount: $discount, rate: $discountRate, '
+        'inferred: $discountInferred, adjusted: $wasAutoAdjusted, '
+        'exists: $existsInDatabase)';
   }
 }
 
@@ -163,16 +382,34 @@ class _GeneratedAliExpressAmountRow {
 
 class _GeneratedAliExpressProductBlock {
   final String description;
+  final String? lineTitle;
+  final String? variantLabel;
+  final String? variantKey;
   final String? sku;
   final String? imageUrl;
   final String? productUrl;
+  final double? sourcePurchaseQuantity;
+  final double? sourcePurchaseUnitPrice;
+  final int? rawPackCount;
+  final String? rawUnitToken;
+  final bool rawPackEvidenceConflict;
+  final List<String> sourceOrderNumbers;
   final String rawText;
 
   const _GeneratedAliExpressProductBlock({
     required this.description,
+    this.lineTitle,
+    this.variantLabel,
+    this.variantKey,
     this.sku,
     this.imageUrl,
     this.productUrl,
+    this.sourcePurchaseQuantity,
+    this.sourcePurchaseUnitPrice,
+    this.rawPackCount,
+    this.rawUnitToken,
+    this.rawPackEvidenceConflict = false,
+    this.sourceOrderNumbers = const <String>[],
     required this.rawText,
   });
 }
@@ -500,8 +737,7 @@ class InvoiceParserService {
     }
     if (netLabelIndex < 0 || taxLabelIndex < 0) return null;
 
-    final start =
-        netLabelIndex < taxLabelIndex ? netLabelIndex : taxLabelIndex;
+    final start = netLabelIndex < taxLabelIndex ? netLabelIndex : taxLabelIndex;
     final amounts = <double>[];
     for (var i = start + 1; i < lines.length && amounts.length < 2; i++) {
       final normalized = _normalizeInvoiceSearchText(lines[i]);
@@ -517,10 +753,8 @@ class InvoiceParserService {
     }
     if (amounts.length < 2) return null;
 
-    final netAmount =
-        amounts[0] >= amounts[1] ? amounts[0] : amounts[1];
-    final taxAmount =
-        amounts[0] < amounts[1] ? amounts[0] : amounts[1];
+    final netAmount = amounts[0] >= amounts[1] ? amounts[0] : amounts[1];
+    final taxAmount = amounts[0] < amounts[1] ? amounts[0] : amounts[1];
     return (netAmount, taxAmount);
   }
 
@@ -1166,14 +1400,17 @@ class InvoiceParserService {
         lines.any((line) => line.toUpperCase().contains('IMPORTE'));
     if (!looksGenerated) return const [];
 
-    final amountRows = _extractGeneratedAliExpressAmountRows(lines);
+    final amountRowsByNumber = <int, _GeneratedAliExpressAmountRow>{
+      for (final row in _extractGeneratedAliExpressAmountRows(lines))
+        row.rowNumber: row,
+    };
     final productBlocks = _extractGeneratedAliExpressProductBlocks(lines);
     if (productBlocks.isEmpty) return const [];
 
     final items = <ParsedLineItem>[];
     for (var i = 0; i < productBlocks.length && i < 100; i++) {
       final product = productBlocks[i];
-      final amount = i < amountRows.length ? amountRows[i] : null;
+      final amount = amountRowsByNumber[i + 1];
       final description = _cleanGeneratedDescription(product.description);
       if (description.isEmpty &&
           (product.sku == null || product.sku!.isEmpty)) {
@@ -1184,6 +1421,9 @@ class InvoiceParserService {
         description: description.isEmpty
             ? product.sku ?? 'AliExpress item'
             : description,
+        lineTitle: product.lineTitle,
+        variantLabel: product.variantLabel,
+        variantKey: product.variantKey,
         sku: product.sku,
         rawRowText: [
           if (amount != null) amount.rawText,
@@ -1191,7 +1431,16 @@ class InvoiceParserService {
         ].join('\n').trim(),
         imageUrl: product.imageUrl,
         productUrl: product.productUrl,
-        quantity: amount?.quantity,
+        sourcePurchaseQuantity:
+            product.sourcePurchaseQuantity ?? amount?.quantity,
+        sourcePurchaseUnitPrice: product.sourcePurchaseUnitPrice,
+        rawPackCount: product.rawPackCount,
+        rawUnitToken: product.rawUnitToken,
+        rawPackEvidenceConflict: product.rawPackEvidenceConflict,
+        sourceOrderNumbers: product.sourceOrderNumbers,
+        // Generated AliExpress rows carry the supplier purchase quantity here.
+        // Pack evidence remains separate until catalog resolution.
+        quantity: product.sourcePurchaseQuantity ?? amount?.quantity,
         unitPrice: amount?.unitPrice,
         total: amount?.total,
       ));
@@ -1222,33 +1471,29 @@ class InvoiceParserService {
     }
 
     final rows = <_GeneratedAliExpressAmountRow>[];
-    var expectedIndex = 1;
-    var cursor = tableStart;
+    var rowStart = _findGeneratedAmountRowStart(
+      lines,
+      tableStart,
+      tableEnd,
+      1,
+    );
 
-    while (cursor < tableEnd && expectedIndex <= 100) {
-      final rowStart = _findGeneratedAmountRowStart(
-        lines,
-        cursor,
-        tableEnd,
-        expectedIndex,
-      );
-      if (rowStart < 0) break;
-
-      final nextRowStart = _findGeneratedAmountRowStart(
+    while (rowStart >= 0 && rowStart < tableEnd && rows.length < 100) {
+      final rowNumber = int.tryParse(lines[rowStart].trim());
+      if (rowNumber == null || rowNumber <= 0 || rowNumber > 100) break;
+      final nextRowStart = _findNextGeneratedAmountRowStart(
         lines,
         rowStart + 1,
         tableEnd,
-        expectedIndex + 1,
+        afterRowNumber: rowNumber,
       );
       final rowEnd = nextRowStart < 0 ? tableEnd : nextRowStart;
       final row = _parseGeneratedAliExpressAmountRow(
         lines.sublist(rowStart, rowEnd),
-        expectedIndex,
+        rowNumber,
       );
       if (row != null) rows.add(row);
-
-      cursor = rowEnd;
-      expectedIndex++;
+      rowStart = nextRowStart;
     }
 
     return rows;
@@ -1263,6 +1508,36 @@ class InvoiceParserService {
     final expected = expectedIndex.toString();
     for (var i = start; i < end; i++) {
       if (lines[i].trim() != expected) continue;
+      final lookaheadEnd = (i + 12).clamp(0, end).toInt();
+      final window = lines.sublist(i + 1, lookaheadEnd);
+      final hasQuantity =
+          window.any((line) => _looksLikeGeneratedPlainNumber(line.trim()));
+      final amountCount = window
+          .where((line) => _parseSignedGeneratedMoneyLine(line) != null)
+          .length;
+      if (hasQuantity && amountCount >= 2) return i;
+    }
+    return -1;
+  }
+
+  int _findNextGeneratedAmountRowStart(
+    List<String> lines,
+    int start,
+    int end, {
+    required int afterRowNumber,
+  }) {
+    var precedingAmountCount = 0;
+    for (var i = start; i < end; i++) {
+      if (_parseSignedGeneratedMoneyLine(lines[i]) != null) {
+        precedingAmountCount++;
+        continue;
+      }
+      if (precedingAmountCount < 2) continue;
+
+      final candidate = int.tryParse(lines[i].trim());
+      if (candidate == null || candidate <= afterRowNumber || candidate > 100) {
+        continue;
+      }
       final lookaheadEnd = (i + 12).clamp(0, end).toInt();
       final window = lines.sublist(i + 1, lookaheadEnd);
       final hasQuantity =
@@ -1368,6 +1643,17 @@ class InvoiceParserService {
 
       String? imageUrl;
       String? productUrl;
+      String? lineTitle;
+      String? variantLabel;
+      String? variantKey;
+      double? sourcePurchaseQuantity;
+      double? sourcePurchaseUnitPrice;
+      int? rawPackCount;
+      String? rawUnitToken;
+      var rawPackEvidenceConflict = false;
+      var sourceOrderNumbers = const <String>[];
+      double? legacyUnitsPerPurchase;
+      String? legacyInventoryUnit;
       var cursor = skuIndex + 1;
       while (cursor < lines.length) {
         if (_isGeneratedDescriptionStart(lines, cursor)) break;
@@ -1379,6 +1665,82 @@ class InvoiceParserService {
         }
 
         rawRowBuffer.writeln(line);
+        final extractedLineTitle = _extractMetadataValue(line, 'LINE_TITLE') ??
+            _extractMetadataValue(line, 'ORIGINAL_TITLE');
+        if (extractedLineTitle != null) {
+          lineTitle = extractedLineTitle;
+          cursor++;
+          continue;
+        }
+        final extractedVariant = _extractMetadataValue(line, 'VARIANT');
+        if (extractedVariant != null) {
+          variantLabel = extractedVariant;
+          cursor++;
+          continue;
+        }
+        final extractedVariantKey = _extractMetadataValue(line, 'VARIANT_KEY');
+        if (extractedVariantKey != null) {
+          variantKey = extractedVariantKey;
+          cursor++;
+          continue;
+        }
+        final extractedSourceQuantity =
+            _extractMetadataNumber(line, 'SOURCE_PURCHASE_QUANTITY');
+        if (extractedSourceQuantity != null && extractedSourceQuantity > 0) {
+          sourcePurchaseQuantity = extractedSourceQuantity;
+          cursor++;
+          continue;
+        }
+        final extractedSourceUnitPrice =
+            _extractMetadataNumber(line, 'SOURCE_PURCHASE_UNIT_PRICE');
+        if (extractedSourceUnitPrice != null && extractedSourceUnitPrice >= 0) {
+          sourcePurchaseUnitPrice = extractedSourceUnitPrice;
+          cursor++;
+          continue;
+        }
+        final extractedRawPackCount =
+            _extractMetadataPositiveInt(line, 'RAW_PACK_COUNT');
+        if (extractedRawPackCount != null) {
+          rawPackCount = extractedRawPackCount;
+          cursor++;
+          continue;
+        }
+        final extractedRawUnitToken =
+            _extractMetadataValue(line, 'RAW_UNIT_TOKEN');
+        if (extractedRawUnitToken != null) {
+          rawUnitToken = extractedRawUnitToken;
+          cursor++;
+          continue;
+        }
+        if (_extractMetadataBoolean(line, 'RAW_PACK_EVIDENCE_CONFLICT') ==
+            true) {
+          rawPackEvidenceConflict = true;
+          cursor++;
+          continue;
+        }
+        final extractedSourceOrders =
+            _extractMetadataValue(line, 'SOURCE_ORDERS');
+        if (extractedSourceOrders != null) {
+          sourceOrderNumbers = ParsedLineItem._stringList(
+            extractedSourceOrders,
+          );
+          cursor++;
+          continue;
+        }
+        final extractedLegacyUnits =
+            _extractMetadataNumber(line, 'UNITS_PER_PURCHASE');
+        if (extractedLegacyUnits != null && extractedLegacyUnits > 1) {
+          legacyUnitsPerPurchase = extractedLegacyUnits;
+          cursor++;
+          continue;
+        }
+        final extractedLegacyInventoryUnit =
+            _extractMetadataValue(line, 'INVENTORY_UNIT');
+        if (extractedLegacyInventoryUnit != null) {
+          legacyInventoryUnit = extractedLegacyInventoryUnit;
+          cursor++;
+          continue;
+        }
         final extractedImageUrl = _extractMetadataUrl(line, 'IMAGE_URL');
         if (extractedImageUrl != null) {
           imageUrl = extractedImageUrl;
@@ -1399,11 +1761,28 @@ class InvoiceParserService {
 
       final description =
           _cleanGeneratedDescription(descriptionLines.join(' '));
+      if (rawPackCount == null &&
+          rawUnitToken == null &&
+          legacyUnitsPerPurchase != null &&
+          legacyUnitsPerPurchase == legacyUnitsPerPurchase.roundToDouble() &&
+          legacyInventoryUnit != null) {
+        rawPackCount = legacyUnitsPerPurchase.toInt();
+        rawUnitToken = legacyInventoryUnit;
+      }
       blocks.add(_GeneratedAliExpressProductBlock(
         description: description,
+        lineTitle: lineTitle,
+        variantLabel: variantLabel,
+        variantKey: variantKey,
         sku: sku,
         imageUrl: imageUrl,
         productUrl: productUrl,
+        sourcePurchaseQuantity: sourcePurchaseQuantity,
+        sourcePurchaseUnitPrice: sourcePurchaseUnitPrice,
+        rawPackCount: rawPackCount,
+        rawUnitToken: rawUnitToken,
+        rawPackEvidenceConflict: rawPackEvidenceConflict,
+        sourceOrderNumbers: sourceOrderNumbers,
         rawText: rawRowBuffer.toString().trim(),
       ));
       i = cursor;
@@ -1450,6 +1829,17 @@ class InvoiceParserService {
     if (_looksLikeGeneratedAmount(trimmed)) return true;
     if (_looksLikeGeneratedPlainNumber(trimmed)) return true;
     if (_isMetadataLine(trimmed, 'ORIGINAL_TITLE') ||
+        _isMetadataLine(trimmed, 'LINE_TITLE') ||
+        _isMetadataLine(trimmed, 'VARIANT') ||
+        _isMetadataLine(trimmed, 'VARIANT_KEY') ||
+        _isMetadataLine(trimmed, 'SOURCE_PURCHASE_QUANTITY') ||
+        _isMetadataLine(trimmed, 'SOURCE_PURCHASE_UNIT_PRICE') ||
+        _isMetadataLine(trimmed, 'RAW_PACK_COUNT') ||
+        _isMetadataLine(trimmed, 'RAW_UNIT_TOKEN') ||
+        _isMetadataLine(trimmed, 'RAW_PACK_EVIDENCE_CONFLICT') ||
+        _isMetadataLine(trimmed, 'SOURCE_ORDERS') ||
+        _isMetadataLine(trimmed, 'UNITS_PER_PURCHASE') ||
+        _isMetadataLine(trimmed, 'INVENTORY_UNIT') ||
         _isMetadataLine(trimmed, 'PRODUCT_URL') ||
         _isMetadataLine(trimmed, 'IMAGE_URL')) {
       return true;
@@ -1535,6 +1925,19 @@ class InvoiceParserService {
             RegExp(r'\s*ORIGINAL_TITLE\s*:.*$',
                 caseSensitive: false, dotAll: true),
             '')
+        .replaceAll(
+            RegExp(r'\s*LINE_TITLE\s*:.*$', caseSensitive: false, dotAll: true),
+            '')
+        .replaceAll(
+            RegExp(r'\s*VARIANT(?:_KEY)?\s*:.*$',
+                caseSensitive: false, dotAll: true),
+            '')
+        .replaceAll(
+            RegExp(
+                r'\s*(?:SOURCE_PURCHASE_QUANTITY|SOURCE_PURCHASE_UNIT_PRICE|RAW_PACK_COUNT|RAW_UNIT_TOKEN|RAW_PACK_EVIDENCE_CONFLICT|SOURCE_ORDERS|UNITS_PER_PURCHASE|INVENTORY_UNIT)\s*:.*$',
+                caseSensitive: false,
+                dotAll: true),
+            '')
         .replaceAll(RegExp(r'\s+'), ' ')
         .trim();
   }
@@ -1555,6 +1958,34 @@ class InvoiceParserService {
     final value = match?.group(1)?.trim();
     if (value == null || value.isEmpty) return null;
     return value;
+  }
+
+  String? _extractMetadataValue(String line, String key) {
+    final match = RegExp('^$key\\s*:\\s*(.+)' r'$', caseSensitive: false)
+        .firstMatch(line.trim());
+    final value = match?.group(1)?.trim();
+    return value == null || value.isEmpty ? null : value;
+  }
+
+  double? _extractMetadataNumber(String line, String key) {
+    final value = _extractMetadataValue(line, key);
+    if (value == null) return null;
+    return double.tryParse(value.replaceAll(',', '.'));
+  }
+
+  int? _extractMetadataPositiveInt(String line, String key) {
+    final value = _extractMetadataNumber(line, key);
+    if (value == null || value <= 0 || value != value.roundToDouble()) {
+      return null;
+    }
+    return value.toInt();
+  }
+
+  bool? _extractMetadataBoolean(String line, String key) {
+    final value = _extractMetadataValue(line, key)?.toLowerCase();
+    if (value == 'true') return true;
+    if (value == 'false') return false;
+    return null;
   }
 
   bool _isMetadataLine(String line, String key) {

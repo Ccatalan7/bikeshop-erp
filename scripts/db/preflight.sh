@@ -47,5 +47,8 @@ cat <<'NEXT'
 All SQL goes through scripts/db/query.sh; the CLI never runs SQL.
 Hosted reads: BEGIN READ ONLY, 30s timeout, 200-row cap, sensitive-column guard.
 Writes need VINABIKE_DB_WRITE_CONFIRM and the owner's authorization in the task.
+Hosted schema changes use scripts/db/deploy_migration.sh; direct migration files
+and core_schema.sql are rejected. scripts/db/migration_status.sh reads the
+authoritative production stamp.
 Contract: docs/development/AGENT_DATABASE_CONTRACT.md
 NEXT

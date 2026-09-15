@@ -37,7 +37,9 @@ enum ProductDuplicateMatchTier {
   possible,
 
   /// The same kind of object, ruled out by a gate that is stated in words.
-  /// Only ever offered inside the picker, never as a row's recommendation.
+  /// It is never a recommendation. The review row may expose the first one as
+  /// a clearly-labelled manual lead when no survivor exists, using the exact
+  /// same order as the picker so the operator can overrule a misread gate.
   ruledOut,
 }
 
@@ -60,6 +62,9 @@ class ProductDuplicateCandidate {
     required this.variantMismatch,
     required this.hasProductImage,
     this.matchedModelCodes = const <String>{},
+    this.isReviewOnlyFamilyScope = false,
+    this.lineConfidence,
+    this.variantAgreement = false,
   });
 
   final Product product;
@@ -87,6 +92,17 @@ class ProductDuplicateCandidate {
 
   /// Manufacturer model codes shared with the invoice line.
   final Set<String> matchedModelCodes;
+
+  /// The catalog row had no product family of its own and was admitted only
+  /// because it occupies the exact active category leaf selected for the
+  /// invoice row. It is manual recall, never automatic identity evidence.
+  final bool isReviewOnlyFamilyScope;
+
+  /// Product-line ordering strength before a selected-option tie-break.
+  final double? lineConfidence;
+
+  /// Whether the selected supplier option explicitly agrees with this row.
+  final bool variantAgreement;
 
   bool get isExactIdentity => matchTier == ProductDuplicateMatchTier.exact;
 

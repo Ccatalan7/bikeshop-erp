@@ -4,6 +4,14 @@ Estado: activo
 Superficie canónica: `/hr/payroll`  
 Flujo OCR: `/hr/payroll/reconcile`
 
+> **Enmienda de producto vigente — 2026-08-11.** El flujo OCR de cartola es una
+> ayuda para preparar pagos, no el owner de una conciliación bancaria completa.
+> Sólo lee, encuentra candidatos y precarga evidencia en el único
+> `PayrollPaymentWorkspace`. No registra pagos, no compone efectivo/anticipos,
+> no confirma semanas y no exige resolver los movimientos no utilizados. Esta
+> enmienda reemplaza cualquier descripción histórica inferior que diga lo
+> contrario.
+
 ## 1. Resultado terminal
 
 Nóminas queda terminada cuando una persona autorizada puede, sin recurrir a
@@ -17,8 +25,9 @@ pantallas legacy ni estados “próximamente”:
 5. comprometer el borrador para reconocer obligaciones una sola vez y dejar que
    la semana pase automáticamente a `partial`/`paid` a medida que se registran
    sus resoluciones;
-6. importar PDF, imagen o captura de cámara, revisar las propuestas del OCR y
-   aplicar una conciliación idempotente;
+6. importar PDF, imagen o captura de cámara, revisar candidatos del OCR y usar
+   los seleccionados como precarga del workspace de pago, sin bloquear por el
+   resto de la cartola;
 7. revisar el historial, cada pago y su evidencia;
 8. completar los mismos flujos en desktop, tablet y teléfono;
 9. usar la nueva composición integral de `MainLayout`, workspace chrome y
@@ -67,6 +76,28 @@ el orden de la sección 8.
 
 - El trabajo cotidiano es pagar y cerrar semanas. OCR es una utilidad
   secundaria para resolver acumulación; no es el CTA dominante permanente.
+- `PayrollPaymentWorkspace` y `PayrollPaymentWorkspaceController` son el único
+  editor de pago. La cola los abre en alcance persona/semana y OCR los abre en
+  batch con semanas ordenadas por fecha descendente y personas agrupadas dentro
+  de cada una; ambos hosts comparten controles, ecuaciones, borrador,
+  validaciones, comando y resultado.
+- El batch OCR es el cuarto paso de ancho completo de `Importar cartola`: todas
+  las obligaciones positivas de todas las semanas abiertas permanecen visibles
+  a la vez, con o sin calce OCR. La selección previa sólo precarga evidencia;
+  nunca elimina trabajadores. Cada fila ofrece su método y resumen monetario,
+  el detalle flexible se expande bajo esa misma fila y una sola acción registra
+  el lote atómicamente. El side sheet queda reservado para el pago individual
+  iniciado desde Nóminas.
+- El workspace permite múltiples piernas por sueldo —transferencias, efectivo y
+  anticipos, completos o parciales— con método, cuenta, fecha, referencia y
+  evidencia propios. Reembolsos, gastos del negocio y otros conceptos no
+  salariales son conceptos contables separados con descripción, cuenta y monto.
+  Cada uno declara si ya estaba incluido en el total de nómina —cubre y
+  reclasifica esa porción, sin aumentar el desembolso— o si se suma aparte. La
+  decisión nunca se infiere y ningún modo cambia horas ni tarifa.
+- OCR sólo sugiere y precarga calces directos. Las filas de cartola no elegidas
+  son un resultado válido, no se clasifican por obligación y no bloquean la
+  continuación al workspace de pago.
 - Asistencias es dueña de los registros fuente y origina el snapshot semanal.
   Mientras siga en `draft`, el editor canónico de Nóminas permite ajustar horas
   y tarifa tanto en el preview como al reabrir el borrador, sin escribir esos

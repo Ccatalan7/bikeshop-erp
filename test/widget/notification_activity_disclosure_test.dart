@@ -1,7 +1,7 @@
 import 'dart:ui' show Tristate;
 
 import 'package:flutter/material.dart';
-import 'package:flutter/semantics.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
@@ -46,6 +46,15 @@ void main() {
     testWidgets('a payment always names the method', (tester) async {
       await _pumpBriefing(tester, rows: [_paymentRow()]);
 
+      expect(find.text('FV-00917 · \$30.000 · Transferencia'), findsOneWidget);
+    });
+
+    testWidgets('a voided payment remains truthful historical activity', (
+      tester,
+    ) async {
+      await _pumpBriefing(tester, rows: [_voidedPaymentRow()]);
+
+      expect(find.text('Pago anulado'), findsOneWidget);
       expect(find.text('FV-00917 · \$30.000 · Transferencia'), findsOneWidget);
     });
 
@@ -109,6 +118,32 @@ void main() {
 
       expect(find.text('PG-00492 · Claudia Arcos'), findsOneWidget);
     });
+
+    testWidgets(
+        'a backdated payment stays in recent activity and names its date',
+        (tester) async {
+      final row = _paymentRow(body: 'FV-00918 · \$72.000');
+      final recorded = _fixtureCreatedAt();
+      final occurred = recorded.subtract(const Duration(days: 4));
+      row
+        ..['created_at'] = recorded.toUtc().toIso8601String()
+        ..['occurred_at'] = occurred.toUtc().toIso8601String();
+
+      await _pumpBriefing(tester, rows: [row]);
+
+      final occurredChile = _chileDayOf(occurred);
+      expect(find.text('Nuevo pago recibido'), findsOneWidget);
+      expect(
+        find.textContaining(
+          'Registrado hoy · pago del ${occurredChile.day}',
+        ),
+        findsOneWidget,
+      );
+      final movementTotal = tester
+          .element(find.text('movimientos'))
+          .findAncestorWidgetOfExactType<Column>();
+      expect((movementTotal!.children.first as Text).data, '0');
+    });
   });
 
   group('disclosure', () {
@@ -125,7 +160,7 @@ void main() {
           collapsed.getSemanticsData().hasAction(SemanticsAction.tap), isTrue);
       expect(collapsed.flagsCollection.isButton, isTrue);
       expect(collapsed.flagsCollection.isExpanded, Tristate.isFalse);
-      expect(collapsed.label, contains('Ver la solicitud del cliente'));
+      expect(collapsed.label, contains('Ver el detalle del trabajo'));
       expect(collapsed.label, isNot(contains('Ocultar')));
 
       await tester.tap(find.text('Nuevo trabajo'));
@@ -134,6 +169,8 @@ void main() {
       expect(find.text('SOLICITUD DEL CLIENTE'), findsOneWidget);
       expect(
           find.text('Revisión de frenos y cambio de cadena'), findsOneWidget);
+      expect(find.text('REGISTRÓ'), findsOneWidget);
+      expect(find.text('Guille'), findsOneWidget);
       expect(find.text('Abrir trabajo'), findsOneWidget);
       expect(find.text('Ocultar'), findsOneWidget);
       expect(find.text('Detalles'), findsNothing);
@@ -141,7 +178,7 @@ void main() {
       final expanded = _headerSemanticsOf(tester, 'Ocultar');
       expect(expanded.flagsCollection.isButton, isTrue);
       expect(expanded.flagsCollection.isExpanded, Tristate.isTrue);
-      expect(expanded.label, contains('Ocultar la solicitud del cliente'));
+      expect(expanded.label, contains('Ocultar el detalle del trabajo'));
 
       await tester.tap(find.text('Nuevo trabajo'));
       await _settle(tester);
@@ -150,6 +187,31 @@ void main() {
       expect(find.text('Abrir trabajo'), findsNothing);
       expect(find.text('Detalles'), findsOneWidget);
       expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('a job can disclose its registrant without a client request', (
+      tester,
+    ) async {
+      await _pumpBriefing(
+        tester,
+        rows: [
+          _jobRow(
+            id: 'job-actor-only',
+            data: const {
+              'job_id': 'job-actor-only',
+              'recorded_by_name': 'Tania Soto',
+            },
+          ),
+        ],
+      );
+
+      await tester.tap(find.text('Nuevo trabajo'));
+      await _settle(tester);
+
+      expect(find.text('SOLICITUD DEL CLIENTE'), findsNothing);
+      expect(find.text('REGISTRÓ'), findsOneWidget);
+      expect(find.text('Tania Soto'), findsOneWidget);
+      expect(find.text('Abrir trabajo'), findsOneWidget);
     });
 
     testWidgets('only one row stays open', (tester) async {
@@ -257,6 +319,37 @@ void main() {
       final expenseRoute = Uri.parse(workspace.routes.last);
       expect(expenseRoute.path, '/accounting/expenses/expense-1');
       expect(expenseRoute.queryParameters['openRequest'], isNotEmpty);
+    });
+
+    testWidgets('a voided payment opens its invoice and names both actors', (
+      tester,
+    ) async {
+      final workspace = _RecordingWorkspaceManager();
+      addTearDown(workspace.dispose);
+
+      await _pumpBriefing(
+        tester,
+        rows: [_voidedPaymentRow()],
+        workspace: workspace,
+      );
+
+      await tester.tap(find.text('Pago anulado'));
+      await _settle(tester);
+
+      expect(find.text('REGISTRÓ'), findsOneWidget);
+      expect(find.text('Guille'), findsOneWidget);
+      expect(find.text('ANULÓ'), findsOneWidget);
+      expect(find.text('Vicente Díaz'), findsOneWidget);
+      expect(find.text('Abrir factura'), findsOneWidget);
+      expect(find.text('Abrir pago'), findsNothing);
+
+      await tester.tap(find.text('Abrir factura'));
+      await _settle(tester);
+
+      expect(workspace.routes, hasLength(1));
+      final invoiceRoute = Uri.parse(workspace.routes.single);
+      expect(invoiceRoute.path, '/sales/invoices/invoice-1');
+      expect(invoiceRoute.queryParameters['openRequest'], isNotEmpty);
     });
 
     testWidgets('a payment disclosure omits every field the payload lacks', (
@@ -620,9 +713,16 @@ void main() {
       // The toolbar panel itself is 272 wide on a 320px phone once the 48px
       // rail is gone. The viewport stays 320 — panel width and viewport class
       // are two different inputs and must not be conflated.
+      final payment = _paymentRow();
+      final recorded = _fixtureCreatedAt();
+      final occurred = recorded.subtract(const Duration(days: 4));
+      payment
+        ..['created_at'] = recorded.toUtc().toIso8601String()
+        ..['occurred_at'] = occurred.toUtc().toIso8601String();
+
       await _pumpBriefing(
         tester,
-        rows: [_paymentRow(), _jobRow()],
+        rows: [payment, _jobRow()],
         surfaceSize: const Size(320, 900),
         panelWidth: 272,
       );
@@ -640,6 +740,24 @@ void main() {
       expect(subtitle.data, endsWith(' · Transferencia'));
       expect(subtitle.maxLines, 2);
       expect(subtitle.overflow, TextOverflow.ellipsis);
+      final occurredChile = _chileDayOf(occurred);
+      final dateHint = tester.widget<Text>(
+        find.textContaining(
+          'Registrado hoy · pago del ${occurredChile.day}',
+        ),
+      );
+      expect(dateHint.maxLines, 2);
+      expect(
+        tester
+            .renderObject<RenderParagraph>(
+              find.textContaining(
+                'Registrado hoy · pago del ${occurredChile.day}',
+              ),
+            )
+            .didExceedMaxLines,
+        isFalse,
+      );
+      expect(tester.takeException(), isNull);
 
       await _revealRow(tester, 'Nuevo trabajo');
       await tester.tap(find.text('Nuevo trabajo'));
@@ -911,9 +1029,18 @@ double _activityRowHeight(WidgetTester tester, String title) {
 // Row builders (shapes mirror the production `erp_notifications` payloads)
 // ---------------------------------------------------------------------------
 
-/// One fixed instant, recent enough to fall inside `Hoy` in Chile.
-DateTime _fixtureCreatedAt() =>
-    DateTime.now().subtract(const Duration(minutes: 2));
+/// One deterministic instant inside the current Chilean business day.
+///
+/// `now - 2 minutes` crosses midnight in Santiago during a real release gate
+/// and turns every activity fixture into "yesterday" at once. Midnight at the
+/// start of the already-current Chilean day is always inside `Hoy` and never
+/// lies after the digest's live upper bound.
+DateTime _fixtureCreatedAt() {
+  tzdata.initializeTimeZones();
+  final location = tz.getLocation('America/Santiago');
+  final now = tz.TZDateTime.now(location);
+  return tz.TZDateTime(location, now.year, now.month, now.day).toUtc();
+}
 
 tz.TZDateTime _chileDayOf(DateTime instant) {
   tzdata.initializeTimeZones();
@@ -968,6 +1095,7 @@ Map<String, dynamic> _jobRow({
           'customer_name': 'Claudia Arcos',
           'bike_label': 'Oxford Orion 4 · Negro',
           'client_request': 'Revisión de frenos y cambio de cadena',
+          'recorded_by_name': 'Guille',
           'priority': 'NORMAL',
           'status': 'PENDIENTE',
         },
@@ -993,6 +1121,26 @@ Map<String, dynamic> _paymentRow({
           'customer_name': 'Claudia Arcos',
           'recorded_by_name': 'Guille',
         },
+  );
+}
+
+Map<String, dynamic> _voidedPaymentRow({String id = 'payment-voided-1'}) {
+  return _row(
+    id: id,
+    type: 'sales_payment_voided',
+    title: 'Pago anulado',
+    body: 'FV-00917 · \$30.000',
+    entityId: id,
+    data: {
+      'payment_id': id,
+      'invoice_id': 'invoice-1',
+      'invoice_reference': 'FV-00917',
+      'payment_method': 'Transferencia',
+      'customer_name': 'Claudia Arcos',
+      'recorded_by_name': 'Guille',
+      'voided_by_name': 'Vicente Díaz',
+      'is_voided': true,
+    },
   );
 }
 

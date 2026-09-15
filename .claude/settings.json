@@ -38,6 +38,14 @@
       "Bash(bash scripts/db/ensure_local.sh)",
       "Bash(bash scripts/db/query.sh --help)",
       "Bash(bash scripts/db/query.sh local *)",
+      "Bash(bash scripts/db/query.sh production *)",
+      "Bash(bash scripts/db/query.sh staging *)",
+      "Bash(bash scripts/db/query.sh production --file *)",
+      "Bash(VINABIKE_DB_WRITE_CONFIRM=production bash scripts/db/query.sh production *)",
+      "Bash(VINABIKE_DB_WRITE_CONFIRM=production just db-query production *)",
+      "Bash(just db-query production *)",
+      "Bash(just db-query-file production *)",
+      "Bash(just db-trace production *)",
       "Bash(bash scripts/db/test.sh *)",
       "Bash(bash scripts/db/trace.sh *)",
       "Bash(bash scripts/db/drift.sh *)",
@@ -71,9 +79,7 @@
       "Bash(bash scripts/release/*)",
       "Bash(scripts/release/*)",
       "Bash(bash scripts/publish_*)",
-      "Bash(scripts/publish_*)",
-      "Bash(just db-query production *--write*)",
-      "Bash(bash scripts/db/query.sh production *--write*)"
+      "Bash(scripts/publish_*)"
     ],
     "deny": [
       "Bash(supabase db *)",

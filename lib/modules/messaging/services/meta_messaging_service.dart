@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../models/message.dart';
+import '../../../shared/services/supabase_functions_region.dart';
 
 enum MetaSendOutcome { accepted, rejected, outcomeUnknown }
 
@@ -421,6 +422,7 @@ class MetaMessagingService {
     try {
       final response = await _client.functions.invoke(
         'meta-send',
+        headers: kSupabaseFunctionsRegionHeaders,
         body: {
           'conversationId': conversationId,
           'message': message,

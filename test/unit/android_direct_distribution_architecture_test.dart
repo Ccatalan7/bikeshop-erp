@@ -39,6 +39,20 @@ void main() {
     expect(publisher, contains('chunk_size=6291456'));
     expect(publisher, contains('Tus-Resumable: 1.0.0'));
     expect(publisher, contains('--split-per-abi'));
+    expect(
+      publisher,
+      contains('--dart-define=AI_AGENT_GATEWAY_ENABLED=true'),
+    );
+    expect(
+      publisher,
+      contains(
+        '--dart-define=SUPABASE_PUBLISHABLE_KEY="\$SUPABASE_PUBLISHABLE_KEY"',
+      ),
+    );
+    expect(
+      publisher,
+      contains('Vinabike ERP Supabase publishable key'),
+    );
     expect(publisher, contains('app-arm64-v8a-release.apk'));
     expect(publisher, contains('ANDROID_ARM64_VERSION_CODE_OFFSET=2000'));
     expect(publisher, contains(r'"$AAPT" dump badging "$APK_PATH"'));
@@ -155,7 +169,7 @@ void main() {
     expect(
       workflow,
       contains(
-        "notes \${{ inputs.release_notes_candidate_sha256 || 'fallback' }}",
+        "notes \${{ inputs.release_notes_candidate_sha256 || 'gemini' }}",
       ),
     );
     expect(workflow, contains('environment: Production'));
@@ -207,6 +221,7 @@ void main() {
       r'${{ secrets.ANDROID_RELEASE_KEY_PASSWORD }}',
       r'${{ secrets.ANDROID_RELEASE_KEY_ALIAS }}',
       r'${{ secrets.SUPABASE_RELEASE_SECRET }}',
+      r'${{ secrets.SUPABASE_PUBLISHABLE_KEY }}',
     ]) {
       expect(workflow.indexOf(secret), greaterThan(productionBoundary));
     }
@@ -221,12 +236,20 @@ void main() {
       workflow,
       contains('VINABIKE_ANDROID_RELEASE_NOTES_FROM_COMMIT:'),
     );
-    expect(workflow, contains('CODEX_RELEASE_NOTES_CANDIDATE_B64='));
-    expect(workflow, contains("CODEX_CANDIDATE_B64=''"));
     expect(
-      workflow.indexOf("CODEX_CANDIDATE_B64=''"),
-      lessThan(workflow.indexOf('generate_release_notes.mjs')),
+      workflow,
+      contains(
+        r'GEMINI_RELEASE_API_KEY: ${{ secrets.GEMINI_RELEASE_API_KEY }}',
+      ),
     );
+    expect(
+      workflow,
+      contains(
+        r"GEMINI_RELEASE_NOTES_MODEL: ${{ vars.GEMINI_RELEASE_NOTES_MODEL || 'gemini-3.1-flash-lite' }}",
+      ),
+    );
+    expect(workflow, isNot(contains('CODEX_RELEASE_NOTES_CANDIDATE_B64')));
+    expect(workflow, isNot(contains('OPENAI_API_KEY')));
     expect(
       compactWorkflow,
       contains(r'if [[ "$EXPECTED_COMMIT" != "$GITHUB_SHA" ]]'),

@@ -4,32 +4,32 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 /// Run this from Flutter to populate the app with testing data
 Future<void> seedBikesAndWheels() async {
   final supabase = Supabase.instance.client;
-  
+
   print('🚀 Starting comprehensive bike & wheel building data seed...');
-  
+
   try {
     // Get current user's tenant_id
     final userId = supabase.auth.currentUser?.id;
     if (userId == null) {
       throw Exception('No user logged in!');
     }
-    
+
     print('📋 Fetching tenant_id for user: $userId');
     final userProfile = await supabase
         .from('user_profiles')
         .select('tenant_id')
         .eq('user_id', userId)
         .single();
-    
+
     final tenantId = userProfile['tenant_id'] as String;
     print('✅ Found tenant_id: $tenantId');
-    
+
     // ============================================================================
     // 0. CLEANUP - Delete existing demo data to prevent duplicates
     // ============================================================================
-    
+
     print('🧹 Cleaning up existing demo data...');
-    
+
     // Delete in correct order (builds → spokes → rims → hubs → bikes)
     await supabase.from('wheel_builds').delete().eq('tenant_id', tenantId);
     await supabase.from('wheel_spokes').delete().eq('tenant_id', tenantId);
@@ -39,15 +39,15 @@ Future<void> seedBikesAndWheels() async {
         .eq('tenant_id', tenantId); // Delete bikes before rims
     await supabase.from('wheel_rims').delete().eq('tenant_id', tenantId);
     await supabase.from('wheel_hubs').delete().eq('tenant_id', tenantId);
-    
+
     print('✅ Cleanup complete');
-    
+
     // ============================================================================
     // 1. CREATE INVENTORY CUSTOMER (bikes require customer_id)
     // ============================================================================
-    
+
     print('📦 Creating shop inventory customer...');
-    
+
     // Check if inventory customer exists
     final existingCustomer = await supabase
         .from('customers')
@@ -55,7 +55,7 @@ Future<void> seedBikesAndWheels() async {
         .eq('tenant_id', tenantId)
         .eq('email', 'inventory@shop.local')
         .maybeSingle();
-    
+
     String inventoryCustomerId;
     if (existingCustomer != null) {
       inventoryCustomerId = existingCustomer['id'] as String;
@@ -73,17 +73,17 @@ Future<void> seedBikesAndWheels() async {
           })
           .select()
           .single();
-      
+
       inventoryCustomerId = newCustomer['id'] as String;
       print('✅ Created inventory customer: $inventoryCustomerId');
     }
-    
+
     // ============================================================================
     // 2. RIMS FIRST - We need rim IDs to link to bikes
     // ============================================================================
-    
+
     print('📦 Adding rims...');
-    
+
     final rimsData = [
       // 29" Rims
       {
@@ -129,12 +129,12 @@ Future<void> seedBikesAndWheels() async {
         'notes': 'XC race rim, lightweight',
       },
     ];
-    
+
     final insertedRims =
         await supabase.from('wheel_rims').insert(rimsData).select();
-    
+
     print('✅ Added ${insertedRims.length} rims');
-    
+
     // Get rim IDs by name for linking to bikes
     final dtSwissXM421Id = insertedRims
         .firstWhere((r) => r['name'].contains('DT Swiss XM421'))['id'];
@@ -142,16 +142,16 @@ Future<void> seedBikesAndWheels() async {
         .firstWhere((r) => r['name'].contains('Stan\'s NoTubes Arch'))['id'];
     final wtbKomId =
         insertedRims.firstWhere((r) => r['name'].contains('WTB KOM'))['id'];
-    
+
     print(
         '📋 Rim IDs: DT Swiss=$dtSwissXM421Id, Stan\'s=$stansArchId, WTB=$wtbKomId');
-    
+
     // ============================================================================
     // 3. BIKES - Link to specific factory rims
     // ============================================================================
-    
+
     print('🚴 Adding bikes...');
-    
+
     final bikesData = [
       // Mountain Bikes - 29" (Boost spacing: 110mm front, 148mm rear)
       {
@@ -208,7 +208,7 @@ Future<void> seedBikesAndWheels() async {
         'purchase_price': 450000,
         'notes': 'Entry-level trail bike, Boost spacing (110/148mm)',
       },
-      
+
       // Mountain Bikes - 27.5" (28H hubs, 142mm rear for XC)
       {
         'tenant_id': tenantId,
@@ -244,7 +244,7 @@ Future<void> seedBikesAndWheels() async {
         'purchase_price': 520000,
         'notes': 'Women\'s trail bike, standard spacing (100/142mm)',
       },
-      
+
       // Mountain Bikes - 26" (vintage - QR spacing 135mm rear)
       {
         'tenant_id': tenantId,
@@ -263,7 +263,7 @@ Future<void> seedBikesAndWheels() async {
         'purchase_price': 280000,
         'notes': 'Classic 26" MTB with QR spacing (100/135mm)',
       },
-      
+
       // Road Bikes - 700c (100mm front, 142mm rear disc)
       {
         'tenant_id': tenantId,
@@ -316,7 +316,7 @@ Future<void> seedBikesAndWheels() async {
         'purchase_price': 1600000,
         'notes': 'Endurance road bike with disc brakes (100/142mm)',
       },
-      
+
       // Gravel Bike - 700c (32H for durability, 142mm rear)
       {
         'tenant_id': tenantId,
@@ -336,17 +336,17 @@ Future<void> seedBikesAndWheels() async {
         'notes': 'Gravel/adventure bike, disc brake spacing (100/142mm)',
       },
     ];
-    
+
     await supabase.from('bikes').insert(bikesData);
-    
+
     print('✅ Added ${bikesData.length} bikes');
-    
+
     // ============================================================================
     // 2. HUBS - Front and Rear for different standards
     // ============================================================================
-    
+
     print('📦 Adding hubs...');
-    
+
     final hubsData = [
       // 32H Hubs (most common for MTB)
       {
@@ -429,7 +429,7 @@ Future<void> seedBikesAndWheels() async {
         'driver_type': 'cassette',
         'notes': 'Instant engagement, USA-made premium hub, Boost',
       },
-      
+
       // 28H Hubs (common for road/gravel)
       {
         'tenant_id': tenantId,
@@ -479,7 +479,7 @@ Future<void> seedBikesAndWheels() async {
         'driver_type': 'cassette',
         'notes': 'Legendary durability, made in USA (12x142mm)',
       },
-      
+
       // 24H Hubs (lightweight road)
       {
         'tenant_id': tenantId,
@@ -514,17 +514,17 @@ Future<void> seedBikesAndWheels() async {
         'notes': 'Italian racing hub, ultra-light (12x142mm)',
       },
     ];
-    
+
     await supabase.from('wheel_hubs').insert(hubsData);
-    
+
     print('✅ Added ${hubsData.length} hubs');
-    
+
     // ============================================================================
     // 4. SPOKES - Common lengths
     // ============================================================================
-    
+
     print('📦 Adding spokes...');
-    
+
     final spokesData = [
       {
         'tenant_id': tenantId,
@@ -647,15 +647,15 @@ Future<void> seedBikesAndWheels() async {
         'notes': 'Ultra-light butted 2.0/1.5mm, straight-pull',
       },
     ];
-    
+
     await supabase.from('wheel_spokes').insert(spokesData);
-    
+
     print('✅ Added ${spokesData.length} spokes');
-    
+
     // ============================================================================
     // 5. SUMMARY
     // ============================================================================
-    
+
     print('\n✨ Seed complete! Summary:');
     print('  🚴 Bikes: ${bikesData.length}');
     print('     - 3x 29" MTB');

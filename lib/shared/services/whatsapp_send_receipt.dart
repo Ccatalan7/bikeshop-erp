@@ -18,7 +18,12 @@ class WhatsAppSendReceipt {
   final String? resolvedMessageText;
   final String? messageId;
   final String? externalMessageId;
+  final String? deliveryStrategy;
   final bool unsafeToFallback;
+
+  /// Database acceptance is durable even before Meta supplies its identifier.
+  final bool isQueued;
+  final String externalStatus;
 
   const WhatsAppSendReceipt({
     required this.deliveryMethod,
@@ -27,7 +32,10 @@ class WhatsAppSendReceipt {
     this.resolvedMessageText,
     this.messageId,
     this.externalMessageId,
+    this.deliveryStrategy,
     this.unsafeToFallback = false,
+    this.isQueued = false,
+    this.externalStatus = 'accepted',
   });
 
   bool get isSuccess =>
@@ -38,8 +46,8 @@ class WhatsAppSendReceipt {
       deliveryMethod == WhatsAppDeliveryMethod.cloudApi &&
       messageId != null &&
       messageId!.isNotEmpty &&
-      externalMessageId != null &&
-      externalMessageId!.isNotEmpty;
+      (isQueued ||
+          (externalMessageId != null && externalMessageId!.isNotEmpty));
 
   bool get errorRequiresServerFix => errorCode == expiredAccessTokenErrorCode;
 
@@ -53,7 +61,10 @@ class WhatsAppSendReceipt {
     String? resolvedMessageText,
     String? messageId,
     String? externalMessageId,
+    String? deliveryStrategy,
     bool? unsafeToFallback,
+    bool? isQueued,
+    String? externalStatus,
   }) {
     return WhatsAppSendReceipt(
       deliveryMethod: deliveryMethod ?? this.deliveryMethod,
@@ -63,7 +74,10 @@ class WhatsAppSendReceipt {
       resolvedMessageText: resolvedMessageText ?? this.resolvedMessageText,
       messageId: messageId ?? this.messageId,
       externalMessageId: externalMessageId ?? this.externalMessageId,
+      deliveryStrategy: deliveryStrategy ?? this.deliveryStrategy,
       unsafeToFallback: unsafeToFallback ?? this.unsafeToFallback,
+      isQueued: isQueued ?? this.isQueued,
+      externalStatus: externalStatus ?? this.externalStatus,
     );
   }
 }
@@ -75,7 +89,18 @@ bool isDurableWhatsAppSendPayload(Object? data) {
   final messageId = data['message_id']?.toString().trim() ?? '';
   final externalMessageId =
       data['external_message_id']?.toString().trim() ?? '';
-  return messageId.isNotEmpty && externalMessageId.isNotEmpty;
+  return messageId.isNotEmpty &&
+      (externalMessageId.isNotEmpty ||
+          (data['queued'] == true &&
+              const {
+                'queued',
+                'accepted',
+                'sent',
+                'delivered',
+                'read',
+                'failed',
+                'outcome_unknown'
+              }.contains(data['external_status'])));
 }
 
 WhatsAppSendReceipt parseDurableWhatsAppSendReceipt(
@@ -90,7 +115,11 @@ WhatsAppSendReceipt parseDurableWhatsAppSendReceipt(
     deliveryMethod: WhatsAppDeliveryMethod.cloudApi,
     resolvedMessageText: resolvedMessageText,
     messageId: payload['message_id']!.toString().trim(),
-    externalMessageId: payload['external_message_id']!.toString().trim(),
+    externalMessageId: payload['external_message_id']?.toString().trim(),
+    deliveryStrategy: payload['delivery_strategy']?.toString().trim(),
+    isQueued: payload['queued'] == true,
+    externalStatus: payload['external_status']?.toString() ?? 'accepted',
+    unsafeToFallback: payload['queued'] == true,
   );
 }
 

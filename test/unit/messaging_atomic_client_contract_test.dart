@@ -37,9 +37,16 @@ void main() {
   test('message sequence survives client projections and orders reads', () {
     expect(providerSource, contains('latestMessageByTimelineOrder('));
     expect(
-      RegExp(r'messageSequence: (?:optimisticMessage|existing)\.messageSequence')
+      // Match complete direct copies, not the prefix of the realtime fallback.
+      RegExp(r'messageSequence: (?:optimisticMessage|existing)\.messageSequence,')
           .allMatches(providerSource),
       hasLength(4),
+    );
+    expect(
+      providerSource,
+      contains(
+        'messageSequence: existing.messageSequence ?? message.messageSequence,',
+      ),
     );
     expect(
       serviceSource,

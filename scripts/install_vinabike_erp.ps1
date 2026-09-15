@@ -340,39 +340,47 @@ function Ensure-Shortcuts {
 }
 
 function Get-LatestRelease {
-    $releases = Invoke-GitHubJson "https://api.github.com/repos/$Repo/releases?per_page=30"
+    # macOS and Windows share the release list. A single page can contain no
+    # Windows build at all. Match the app's bounded 10 x 100 discovery budget.
+    $pageSize = 100
+    $maxPages = 10
+    for ($page = 1; $page -le $maxPages; $page++) {
+        $releasePage = Invoke-GitHubJson "https://api.github.com/repos/$Repo/releases?per_page=$pageSize&page=$page"
+        $releases = @($releasePage)
 
-    foreach ($release in @($releases)) {
-        if ($release.draft -or $release.prerelease -or -not $release.assets) {
-            continue
+        foreach ($release in $releases) {
+            if ($release.draft -or $release.prerelease -or -not $release.assets) {
+                continue
+            }
+
+            $zipAsset = $release.assets |
+                Where-Object { $_.name -match '^vinabike_erp_windows_.*\.zip$' } |
+                Select-Object -First 1
+
+            if (-not $zipAsset) {
+                continue
+            }
+
+            $hashAssetName = "$($zipAsset.name).sha256"
+            $hashAsset = $release.assets |
+                Where-Object { $_.name -eq $hashAssetName } |
+                Select-Object -First 1
+
+            if (-not $hashAsset) {
+                continue
+            }
+
+            return [pscustomobject]@{
+                Tag = $release.tag_name
+                Name = $release.name
+                ZipAsset = $zipAsset
+                HashAsset = $hashAsset
+            }
         }
-
-        $zipAsset = $release.assets |
-            Where-Object { $_.name -match '^vinabike_erp_windows_.*\.zip$' } |
-            Select-Object -First 1
-
-        if (-not $zipAsset) {
-            continue
-        }
-
-        $hashAssetName = "$($zipAsset.name).sha256"
-        $hashAsset = $release.assets |
-            Where-Object { $_.name -eq $hashAssetName } |
-            Select-Object -First 1
-
-        if (-not $hashAsset) {
-            continue
-        }
-
-        return [pscustomobject]@{
-            Tag = $release.tag_name
-            Name = $release.name
-            ZipAsset = $zipAsset
-            HashAsset = $hashAsset
-        }
+        if ($releases.Count -lt $pageSize) { break }
     }
 
-    throw "No published GitHub release for $Repo contains a Windows zip and checksum."
+    throw "No published GitHub release for $Repo contains a Windows zip and checksum within the latest 1000 releases."
 }
 
 function Copy-StagedAppInPlace {

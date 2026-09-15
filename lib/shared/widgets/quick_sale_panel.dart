@@ -429,7 +429,7 @@ class _QuickSalePanelState extends State<QuickSalePanel> {
     if (_selectedPaymentMethod == null) return;
 
     // ⚠️ WARN when paying with card but no IVA — same logic as POS dashboard
-    if (_selectedPaymentMethod!.code == 'card' &&
+    if (_selectedPaymentMethod!.isCardInstrument &&
         _taxTreatment == TaxTreatment.noTax) {
       final result = await showDialog<String>(
         context: context,
@@ -1882,7 +1882,7 @@ class _QuickSalePanelState extends State<QuickSalePanel> {
   // ═══════════════════════════════════════════════════════════════════
   Widget _buildPaymentStep(ThemeData theme, bool isDark) {
     final paymentMethodService = context.watch<PaymentMethodService>();
-    final methods = paymentMethodService.paymentMethods
+    final methods = paymentMethodService.incomingPaymentMethods
         .where((m) => m.isActive)
         .toList()
       ..sort((a, b) => a.sortOrder.compareTo(b.sortOrder));
@@ -2164,6 +2164,9 @@ class _QuickSalePanelState extends State<QuickSalePanel> {
         icon = Icons.payments_outlined;
         break;
       case 'card':
+      case 'card_debit':
+      case 'card_credit':
+      case 'card_prepaid':
         icon = Icons.credit_card;
         break;
       case 'transfer':

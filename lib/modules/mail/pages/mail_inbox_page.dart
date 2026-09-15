@@ -345,7 +345,8 @@ class _MailInboxPageState extends State<MailInboxPage> {
       String? replySubject,
       String? quotedContent,
       bool replyAll = false,
-      String? initialProviderId}) {
+      String? initialProviderId,
+      Email? replySource}) {
     showDialog(
       context: context,
       builder: (context) => ComposeEmailDialog(
@@ -357,6 +358,7 @@ class _MailInboxPageState extends State<MailInboxPage> {
         replySubject: replySubject,
         quotedContent: quotedContent,
         replyAll: replyAll,
+        replySource: replySource,
       ),
     );
   }
@@ -390,6 +392,7 @@ ${email.content ?? email.summary ?? ''}
       quotedContent: quoted,
       replyAll: replyAll,
       initialProviderId: email.providerId,
+      replySource: email,
     );
   }
 
@@ -1289,8 +1292,7 @@ ${email.content ?? email.summary ?? ''}
           child: EmailListItemUnified(
             email: email,
             isSelected: isSelected,
-            showsRecipient:
-                _manager.activeFolder.showsRecipientAsCounterpart,
+            showsRecipient: _manager.activeFolder.showsRecipientAsCounterpart,
             onTap: () => _selectEmail(email),
           ),
         );

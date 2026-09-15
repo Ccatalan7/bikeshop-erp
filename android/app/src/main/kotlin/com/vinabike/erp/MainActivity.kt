@@ -12,10 +12,14 @@ import java.io.File
 
 class MainActivity : FlutterActivity() {
     private val updateChannelName = "com.vinabike.erp/android_update"
+    private val htmlPdfChannelName = "com.vinabike.erp/html_pdf_renderer"
     private var pendingInstallerPath: String? = null
+    private var htmlPdfRenderer: HtmlPdfRenderer? = null
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
+
+        configureHtmlPdfRenderer(flutterEngine)
 
         MethodChannel(
             flutterEngine.dartExecutor.binaryMessenger,
@@ -66,6 +70,52 @@ class MainActivity : FlutterActivity() {
 
                 else -> result.notImplemented()
             }
+        }
+    }
+
+    private fun configureHtmlPdfRenderer(flutterEngine: FlutterEngine) {
+        val renderer = htmlPdfRenderer ?: HtmlPdfRenderer(applicationContext).also {
+            htmlPdfRenderer = it
+        }
+
+        MethodChannel(
+            flutterEngine.dartExecutor.binaryMessenger,
+            htmlPdfChannelName,
+        ).setMethodCallHandler { call, result ->
+            if (call.method != "renderHtml") {
+                result.notImplemented()
+                return@setMethodCallHandler
+            }
+
+            val html = call.argument<String>("html")
+            val viewportWidth = call.argument<Double>("viewportWidth")
+            val viewportHeight = call.argument<Double>("viewportHeight")
+            if (html.isNullOrBlank() || viewportWidth == null || viewportHeight == null) {
+                result.error(
+                    "invalid_html_pdf_request",
+                    "Faltan los datos necesarios para generar el PDF.",
+                    null,
+                )
+                return@setMethodCallHandler
+            }
+
+            renderer.render(
+                html = html,
+                viewportWidthPoints = viewportWidth,
+                viewportHeightPoints = viewportHeight,
+                readySelector = call.argument<String>("readySelector"),
+                readyFlag = call.argument<String>("readyFlag"),
+                timeoutMillis = (call.argument<Number>("timeoutMillis")?.toLong() ?: 25_000L),
+                result = object : HtmlPdfRenderer.Result {
+                    override fun onSuccess(document: ByteArray) {
+                        result.success(document)
+                    }
+
+                    override fun onError(code: String, message: String) {
+                        result.error(code, message, null)
+                    }
+                },
+            )
         }
     }
 

@@ -1,6 +1,7 @@
 enum TaskStatus {
   pending,
   inProgress,
+  blocked,
   completed,
   cancelled,
 }
@@ -10,6 +11,48 @@ enum TaskPriority {
   normal,
   high,
   urgent,
+}
+
+/// Una nota es captura rápida sin ciclo de ejecución ni asignado; una tarea
+/// es trabajo con responsable. El servidor rechaza notas asignadas.
+enum TaskKind { task, note }
+
+/// `private` sólo existe para su creador (y asignado). `team` y `company`
+/// comparten alcance de tenant hoy; se distinguen en el dato para cuando
+/// exista estructura de equipos.
+enum TaskVisibility { private, team, company }
+
+/// Contexto principal opcional de una tarea o nota.
+///
+/// La tarea sigue siendo una entidad neutral: este valor sólo agrega el lugar
+/// del ERP al que pertenece. Taller conserva un segundo nivel propio para sus
+/// servicios; los demás módulos enlazan una única entidad completa.
+enum TaskContextKind {
+  none,
+  workshopJob,
+  customer,
+  supplier,
+  salesInvoice,
+  purchaseInvoice,
+}
+
+/// Proyección mínima y navegable de una entidad vinculable desde Tareas.
+class TaskContextTarget {
+  const TaskContextTarget({
+    required this.kind,
+    required this.id,
+    required this.label,
+    required this.route,
+    this.context,
+    this.searchText,
+  });
+
+  final TaskContextKind kind;
+  final String id;
+  final String label;
+  final String route;
+  final String? context;
+  final String? searchText;
 }
 
 class TaskModel {
@@ -46,6 +89,18 @@ class TaskModel {
   // Attachments: list of {name, url, type, size, uploaded_at}
   final List<Map<String, dynamic>> attachments;
 
+  // Work-tray lifecycle (kernel 20260826220000)
+  final TaskKind kind;
+  final TaskVisibility visibility;
+  final int version;
+  final DateTime? assignedAt;
+  final DateTime? acknowledgedAt;
+  final DateTime? startedAt;
+  final DateTime? completedAt;
+  final String? completedBy;
+  final DateTime? blockedAt;
+  final String? blockedReason;
+
   final DateTime createdAt;
   final DateTime updatedAt;
 
@@ -72,6 +127,16 @@ class TaskModel {
     this.linkedCustomerName,
     this.linkedSupplierName,
     this.attachments = const [],
+    this.kind = TaskKind.task,
+    this.visibility = TaskVisibility.team,
+    this.version = 1,
+    this.assignedAt,
+    this.acknowledgedAt,
+    this.startedAt,
+    this.completedAt,
+    this.completedBy,
+    this.blockedAt,
+    this.blockedReason,
     DateTime? createdAt,
     DateTime? updatedAt,
   })  : createdAt = createdAt ?? DateTime.now(),
@@ -81,6 +146,8 @@ class TaskModel {
     switch (value) {
       case 'in_progress':
         return TaskStatus.inProgress;
+      case 'blocked':
+        return TaskStatus.blocked;
       case 'completed':
         return TaskStatus.completed;
       case 'cancelled':
@@ -96,6 +163,8 @@ class TaskModel {
     switch (status) {
       case TaskStatus.inProgress:
         return 'in_progress';
+      case TaskStatus.blocked:
+        return 'blocked';
       case TaskStatus.completed:
         return 'completed';
       case TaskStatus.cancelled:
@@ -104,6 +173,37 @@ class TaskModel {
         return 'pending';
     }
   }
+
+  static TaskKind _parseKind(String? value) =>
+      value == 'note' ? TaskKind.note : TaskKind.task;
+
+  static TaskVisibility _parseVisibility(String? value) {
+    switch (value) {
+      case 'private':
+        return TaskVisibility.private;
+      case 'company':
+        return TaskVisibility.company;
+      default:
+        return TaskVisibility.team;
+    }
+  }
+
+  static String kindToString(TaskKind kind) =>
+      kind == TaskKind.note ? 'note' : 'task';
+
+  static String visibilityToString(TaskVisibility visibility) {
+    switch (visibility) {
+      case TaskVisibility.private:
+        return 'private';
+      case TaskVisibility.team:
+        return 'team';
+      case TaskVisibility.company:
+        return 'company';
+    }
+  }
+
+  static DateTime? _parseDate(dynamic value) =>
+      value == null ? null : DateTime.tryParse(value.toString());
 
   static TaskPriority _parsePriority(String? value) {
     switch (value) {
@@ -161,6 +261,16 @@ class TaskModel {
           ? List<Map<String, dynamic>>.from((json['attachments'] as List)
               .map((e) => Map<String, dynamic>.from(e)))
           : [],
+      kind: _parseKind(json['task_kind']?.toString()),
+      visibility: _parseVisibility(json['visibility']?.toString()),
+      version: (json['version'] as num?)?.toInt() ?? 1,
+      assignedAt: _parseDate(json['assigned_at']),
+      acknowledgedAt: _parseDate(json['acknowledged_at']),
+      startedAt: _parseDate(json['started_at']),
+      completedAt: _parseDate(json['completed_at']),
+      completedBy: json['completed_by']?.toString(),
+      blockedAt: _parseDate(json['blocked_at']),
+      blockedReason: json['blocked_reason']?.toString(),
       createdAt: json['created_at'] != null
           ? DateTime.parse(json['created_at'])
           : DateTime.now(),
@@ -169,6 +279,8 @@ class TaskModel {
           : DateTime.now(),
     );
   }
+
+  static String statusToString(TaskStatus status) => _statusToString(status);
 
   Map<String, dynamic> toJson() {
     final json = {
@@ -186,6 +298,8 @@ class TaskModel {
       'linked_customer_id': linkedCustomerId,
       'linked_supplier_id': linkedSupplierId,
       'attachments': attachments,
+      'task_kind': kindToString(kind),
+      'visibility': visibilityToString(visibility),
       'created_at': createdAt.toIso8601String(),
       'updated_at': updatedAt.toIso8601String(),
     };
@@ -222,6 +336,16 @@ class TaskModel {
     String? linkedCustomerName,
     String? linkedSupplierName,
     List<Map<String, dynamic>>? attachments,
+    TaskKind? kind,
+    TaskVisibility? visibility,
+    int? version,
+    DateTime? assignedAt,
+    DateTime? acknowledgedAt,
+    DateTime? startedAt,
+    DateTime? completedAt,
+    String? completedBy,
+    DateTime? blockedAt,
+    String? blockedReason,
     DateTime? createdAt,
     DateTime? updatedAt,
   }) {
@@ -251,8 +375,77 @@ class TaskModel {
       linkedCustomerName: linkedCustomerName ?? this.linkedCustomerName,
       linkedSupplierName: linkedSupplierName ?? this.linkedSupplierName,
       attachments: attachments ?? this.attachments,
+      kind: kind ?? this.kind,
+      visibility: visibility ?? this.visibility,
+      version: version ?? this.version,
+      assignedAt: assignedAt ?? this.assignedAt,
+      acknowledgedAt: acknowledgedAt ?? this.acknowledgedAt,
+      startedAt: startedAt ?? this.startedAt,
+      completedAt: completedAt ?? this.completedAt,
+      completedBy: completedBy ?? this.completedBy,
+      blockedAt: blockedAt ?? this.blockedAt,
+      blockedReason: blockedReason ?? this.blockedReason,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
     );
   }
+
+  bool get isDone =>
+      status == TaskStatus.completed || status == TaskStatus.cancelled;
+  bool get isBlocked => status == TaskStatus.blocked;
+
+  TaskContextKind get contextKind {
+    if (linkedJobId != null) return TaskContextKind.workshopJob;
+    if (linkedCustomerId != null) return TaskContextKind.customer;
+    if (linkedSupplierId != null) return TaskContextKind.supplier;
+    if (linkedSalesInvoiceId != null) return TaskContextKind.salesInvoice;
+    if (linkedPurchaseInvoiceId != null) return TaskContextKind.purchaseInvoice;
+    return TaskContextKind.none;
+  }
+
+  /// Contextos no-Taller. Taller se representa con su cabecera y sus servicios
+  /// reales porque tiene una jerarquía adicional que este resumen no aplana.
+  TaskContextTarget? get linkedContextTarget {
+    if (linkedCustomerId != null) {
+      return TaskContextTarget(
+        kind: TaskContextKind.customer,
+        id: linkedCustomerId!,
+        label: linkedCustomerName ?? 'Cliente',
+        route: '/clientes/${Uri.encodeComponent(linkedCustomerId!)}',
+      );
+    }
+    if (linkedSupplierId != null) {
+      return TaskContextTarget(
+        kind: TaskContextKind.supplier,
+        id: linkedSupplierId!,
+        label: linkedSupplierName ?? 'Proveedor',
+        route: '/purchases/suppliers/${Uri.encodeComponent(linkedSupplierId!)}',
+      );
+    }
+    if (linkedSalesInvoiceId != null) {
+      return TaskContextTarget(
+        kind: TaskContextKind.salesInvoice,
+        id: linkedSalesInvoiceId!,
+        label: linkedSalesInvoiceNumber == null
+            ? 'Venta'
+            : 'Venta #$linkedSalesInvoiceNumber',
+        route: '/sales/invoices/${Uri.encodeComponent(linkedSalesInvoiceId!)}',
+      );
+    }
+    if (linkedPurchaseInvoiceId != null) {
+      return TaskContextTarget(
+        kind: TaskContextKind.purchaseInvoice,
+        id: linkedPurchaseInvoiceId!,
+        label: linkedPurchaseInvoiceNumber == null
+            ? 'Compra'
+            : 'Compra #$linkedPurchaseInvoiceNumber',
+        route: '/purchases/${Uri.encodeComponent(linkedPurchaseInvoiceId!)}',
+      );
+    }
+    return null;
+  }
+
+  /// «Por aceptar» para el asignado: asignada y sin acuse de recibo.
+  bool get awaitsAcknowledgement =>
+      assignedTo != null && acknowledgedAt == null && !isDone;
 }

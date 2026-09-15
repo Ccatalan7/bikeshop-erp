@@ -3,8 +3,24 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  test('historical notifications use a tenant-safe paginated half-open range',
-      () {
+  test('today unread refresh publishes only the newest Chile-day query', () {
+    final service = File(
+      'lib/shared/services/notification_service.dart',
+    ).readAsStringSync();
+
+    expect(service, contains('int _todayUnreadCountRequestEpoch = 0'));
+    expect(
+      service,
+      contains('final requestEpoch = ++_todayUnreadCountRequestEpoch'),
+    );
+    expect(
+      service,
+      contains('_todayUnreadCountRequestEpoch == requestEpoch'),
+    );
+    expect(service, contains('NotificationDigestPeriod.today'));
+  });
+
+  test('historical notifications merge recorded and economic ranges by id', () {
     final service = File(
       'lib/shared/services/notification_service.dart',
     ).readAsStringSync();
@@ -17,8 +33,12 @@ void main() {
     expect(method, contains('final tenantId = _notificationScopeTenantId'));
     expect(method, contains('final generation = _notificationScopeGeneration'));
     expect(method, contains(".eq('tenant_id', tenantId)"));
-    expect(method, contains(".gte('created_at', startUtc.toIso8601String())"));
-    expect(method, contains(".lt('created_at', endUtc.toIso8601String())"));
+    expect(method, contains("loadBy('created_at')"));
+    expect(method, contains("loadBy('occurred_at')"));
+    expect(method, contains('.gte(timestamp, startUtc.toIso8601String())'));
+    expect(method, contains('.lt(timestamp, endUtc.toIso8601String())'));
+    expect(method, contains("final byId = <String, Map<String, dynamic>>{}"));
+    expect(method, contains("byId[id] = row"));
     expect(method, contains('.range('));
     expect(method, contains('_historicalNotificationPageSize'));
     expect(method, contains('generation != _notificationScopeGeneration'));

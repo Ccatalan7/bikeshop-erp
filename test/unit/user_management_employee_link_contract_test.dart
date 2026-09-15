@@ -13,6 +13,11 @@ void main() {
     String status = 'active',
     bool erpProfileActive = false,
     bool pendingInvitation = false,
+    bool pendingTransitionFromWorker = false,
+    String? pendingInvitationId,
+    String? pendingInvitationEmail,
+    String? workerPortalAccountId,
+    String? workerAuthUserId,
   }) {
     return {
       'employeeId': 'employee-1',
@@ -22,8 +27,14 @@ void main() {
       'erpUserId': erpUserId,
       'erpProfileActive': erpProfileActive,
       'pendingInvitation': pendingInvitation,
+      'pendingInvitationId': pendingInvitationId,
+      'pendingInvitationEmail': pendingInvitationEmail,
+      'pendingInvitationCreatedAt': null,
+      'pendingTransitionFromWorker': pendingTransitionFromWorker,
       'workerAccessExists': workerAccessExists,
       'workerAccessActive': workerAccessActive,
+      'workerPortalAccountId': workerPortalAccountId,
+      'workerAuthUserId': workerAuthUserId,
       'workerUsername': workerUsername,
       'linkState': linkState,
     };
@@ -38,6 +49,8 @@ void main() {
       employeeState(
         linkState: 'pending_invitation',
         pendingInvitation: true,
+        pendingInvitationId: 'invite-pending',
+        pendingInvitationEmail: 'ana.erp@example.com',
       ),
     );
     expect(pending.linkState, EmployeeErpLinkState.pendingInvitation);
@@ -48,6 +61,8 @@ void main() {
         linkState: 'worker_suspended',
         workerAccessExists: true,
         workerUsername: 'ana.mecanica',
+        workerPortalAccountId: 'portal-suspended',
+        workerAuthUserId: 'worker-auth-suspended',
       ),
     );
     expect(suspended.linkState, EmployeeErpLinkState.workerSuspended);
@@ -59,10 +74,32 @@ void main() {
         workerAccessExists: true,
         workerAccessActive: true,
         workerUsername: 'ana.mecanica',
+        workerPortalAccountId: 'portal-active',
+        workerAuthUserId: 'worker-auth-active',
       ),
     );
     expect(activeWorker.linkState, EmployeeErpLinkState.workerActive);
-    expect(activeWorker.canReceiveErpLink, isFalse);
+    expect(activeWorker.canReceiveErpLink, isTrue);
+
+    final transitionPending = EmployeeAccessState.fromJson(
+      employeeState(
+        linkState: 'worker_to_erp_pending',
+        pendingInvitation: true,
+        pendingTransitionFromWorker: true,
+        pendingInvitationId: 'invite-1',
+        pendingInvitationEmail: 'ana.erp@example.com',
+        workerAccessExists: true,
+        workerAccessActive: true,
+        workerUsername: 'ana.mecanica',
+        workerPortalAccountId: 'portal-1',
+        workerAuthUserId: 'worker-auth-1',
+      ),
+    );
+    expect(
+      transitionPending.linkState,
+      EmployeeErpLinkState.workerToErpPending,
+    );
+    expect(transitionPending.canReceiveErpLink, isFalse);
 
     final suspendedErpProfile = EmployeeAccessState.fromJson(
       employeeState(
@@ -114,7 +151,7 @@ void main() {
   test('link conflicts are localized without exposing backend text', () {
     expect(
       localizedUserManagementError('worker_access_conflict'),
-      contains('app de trabajadores'),
+      contains('Worker Space'),
     );
     expect(
       localizedUserManagementError('worker_identity_conflict'),
@@ -340,5 +377,39 @@ void main() {
       surfaces,
       contains('never infer a match from equal names or emails'),
     );
+  });
+
+  test('the HR editor delegates access to the canonical employee profile', () {
+    final employeeList = File(
+      'lib/modules/hr/pages/employee_list_page.dart',
+    ).readAsStringSync();
+    final employeeDetail = File(
+      'lib/modules/hr/pages/employee_detail_page.dart',
+    ).readAsStringSync();
+    final userManagement = File(
+      'lib/modules/settings/pages/user_management_page.dart',
+    ).readAsStringSync();
+    final hrService = File(
+      'lib/modules/hr/services/hr_service.dart',
+    ).readAsStringSync();
+
+    expect(employeeList, contains('Acceso de la persona'));
+    expect(
+      employeeList,
+      contains('Esta ficha laboral no crea una cuenta automáticamente'),
+    );
+    expect(employeeList, contains('employee-form-open-access-profile'));
+    expect(
+      employeeList,
+      contains("context.push('/hr/employees/\$accessEmployeeId')"),
+    );
+    expect(employeeList, isNot(contains('Otorgar acceso al sistema ERP')));
+    expect(employeeList, isNot(contains('_grantSystemAccess')));
+    expect(employeeDetail, contains('UserManagementTarget.employee'));
+    expect(
+      userManagement,
+      contains('_showInviteStaffDialog(initialEmployeeId: inviteEmployeeId)'),
+    );
+    expect(hrService, isNot(contains('createUserForEmployee')));
   });
 }

@@ -918,6 +918,60 @@ void main() {
     }
   });
 
+  test('sales rep update is a narrow replay-safe supplier command', () async {
+    final supplierId = _uuid(75);
+    final operationId = _uuid(76);
+    final command = UpdateSupplierSalesRepCommand(
+      operationId: operationId,
+      supplierId: supplierId,
+      expectedUpdatedAt: DateTime.utc(2026, 9, 2, 12),
+      name: ' Victor ',
+      phone: '+56934867574',
+      email: '   ',
+    );
+    // Un espacio en blanco es «sin dato»; el nombre se guarda sin espacios.
+    expect(command.toJson(), {
+      'name': 'Victor',
+      'phone': '+56934867574',
+      'email': null,
+    });
+    final gateway = _FakeCommandGateway(
+      operationResponses: {
+        'updateSalesRep': {
+          'tenant_id': tenantA,
+          'supplier_id': supplierId,
+          'operation_id': operationId,
+          'updated_at': '2026-09-02T12:05:00Z',
+          'sales_rep': {
+            'name': 'Victor',
+            'phone': '+56934867574',
+            'email': null,
+          },
+          'idempotent_replay': false,
+        },
+      },
+    );
+    final service = SupplierRelationshipService(
+      tenantService: _tenantService({'user-a': tenantA}),
+      repository: _FakeRelationshipRepository(),
+      legacyRepository: _FakeLegacyRepository(),
+      commandGateway: gateway,
+    );
+
+    final result = await service.updateSalesRep(command);
+
+    expect(gateway.lastOperation, 'updateSalesRep');
+    expect(gateway.lastTenantId, tenantA);
+    expect(identical(gateway.lastCommand, command), isTrue);
+    expect(result.supplierId, supplierId);
+    expect(result.operationId, operationId);
+    expect(result.name, 'Victor');
+    expect(result.phone, '+56934867574');
+    expect(result.email, isNull);
+    expect(result.updatedAt, DateTime.utc(2026, 9, 2, 12, 5));
+    expect(result.idempotentReplay, isFalse);
+  });
+
   test('OCR template update is a narrow replay-safe supplier command',
       () async {
     final supplierId = _uuid(73);
@@ -1207,6 +1261,13 @@ typedef _CandidateLoader = Future<List<Map<String, dynamic>>> Function({
 });
 
 class _FakeRelationshipRepository implements SupplierRelationshipRepository {
+  @override
+  Future<List<Map<String, dynamic>>> fetchContactRows({
+    required String tenantId,
+    required String supplierId,
+  }) async =>
+      const [];
+
   _FakeRelationshipRepository({
     this.profiles = const [],
     this.definitions = const {},
@@ -1521,11 +1582,41 @@ class _FakeCommandGateway implements SupplierRelationshipCommandGateway {
   }
 
   @override
+  Future<Map<String, dynamic>> saveContact({
+    required String tenantId,
+    required SaveSupplierContactCommand command,
+  }) async =>
+      _record('saveContact', tenantId, command);
+
+  @override
+  Future<Map<String, dynamic>> setContactStatus({
+    required String tenantId,
+    required SetSupplierContactStatusCommand command,
+  }) async =>
+      _record('setContactStatus', tenantId, command);
+
+  @override
+  Future<Map<String, dynamic>> updateImageUrl({
+    required String tenantId,
+    required String supplierId,
+    required String? imageUrl,
+  }) async =>
+      _record('updateImageUrl', tenantId, {'id': supplierId, 'url': imageUrl});
+
+  @override
   Future<Map<String, dynamic>> updateOcrTemplate({
     required String tenantId,
     required UpdateSupplierOcrTemplateCommand command,
   }) async {
     return _record('updateOcrTemplate', tenantId, command);
+  }
+
+  @override
+  Future<Map<String, dynamic>> updateSalesRep({
+    required String tenantId,
+    required UpdateSupplierSalesRepCommand command,
+  }) async {
+    return _record('updateSalesRep', tenantId, command);
   }
 
   @override
