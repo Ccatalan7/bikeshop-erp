@@ -259,6 +259,35 @@ metadata. A production gate must additionally scan the complete JSON tree
 read-only, because checking only the canonical array can turn an unexpected
 legacy shape into a false zero.
 
+## Cloud sessions: the wrapper cannot reach production, the Supabase MCP can
+
+**2026-09-15, decisión del dueño.** A Claude Code session running in the
+cloud (claude.ai/code) has no keychain, no `SUPABASE_DB_PASSWORD`, no Supabase
+CLI, and its network policy blocks TCP 5432/6543 to
+`aws-1-sa-east-1.pooler.supabase.com` (`pg_isready` gets no response). The
+wrapper is therefore unusable there, and a CPU alert stayed undiagnosed for a
+round because the agent reported "no credentials" instead of using an
+integration. The owner's instruction: «dime cuál es la mejor integración de
+Claude con Supabase y configurémosla, no seas limitado».
+
+The accepted path for cloud sessions is the official Supabase MCP connector,
+scoped to the production project and read-only:
+
+```
+https://mcp.supabase.com/mcp?project_ref=xzdvtzdqjeyqxnkqprtf&read_only=true
+```
+
+added in claude.ai → Settings → Connectors → *Add custom connector*, then
+authorised with the owner's Supabase login. Its `execute_sql` runs in a
+read-only transaction on the server side, but it does not carry the wrapper's
+journal, row cap, or sensitive-column guard, so in that mode: name the columns
+you need, never star-project a table listed in
+`scripts/db/sensitive_tables.txt`, add `limit` to every row-returning query,
+and keep results out of committed files. Writes remain wrapper-only: a
+migration or fix found from the cloud is deployed from the owner's machine or
+by Codex through `scripts/db/query.sh … --write`, exactly as before. Dropping
+`read_only=true` is an owner decision, not an agent default.
+
 ## Credentials
 
 Check presence, never print values, connection strings, or credential-bearing
