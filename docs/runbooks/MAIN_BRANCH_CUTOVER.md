@@ -1,6 +1,8 @@
 # Transición canónica de `smartpegas1.0` a `main`
 
-- Estado: **ruta simplificada vigente (sección 0); transición no ejecutada**
+- Estado: **transición ejecutada el 2026-09-15 por la ruta simplificada
+  (sección 0) a través del PR #29; en observación (paso 7) hasta el
+  2026-09-22 como mínimo; `smartpegas1.0` todavía no se retira**
 - Propietario de la decisión: dueño del repositorio
 - Clase de cambio: Git/GitHub de alto impacto, con un despliegue web productivo
 - Última revisión del diseño: 2026-09-15 (sección 0); 2026-07-29 (secciones 1-19)
@@ -69,6 +71,13 @@ la suite más «Static analysis and packaged web build») y `Secret Scan`. Si
 GitHub muestra un check requerido en estado *expected* que nunca llega, el
 nombre guardado en la protección de `main` está obsoleto: corregir únicamente
 ese contexto como en 12.1 y volver a leer la protección completa.
+Ejecutado el 2026-09-15 como PR #29 con cabeza en la rama de agente
+`claude/gifted-fermi-otkemj`, que ya contenía `smartpegas1.0` (`2c16b78`) más
+el paso 0: equivale a fusionar el paso 0 en `smartpegas1.0` primero, y el
+paso 6 deja ambas ramas en `P`. La primera corrida de `PR Integrity` cayó por
+un guard de arquitectura que buscaba un nombre de método renombrado en el
+último commit del Mac (`analyzer clean` no es `flutter test`); se corrigió en
+el mismo PR sin tocar el invariante.
 
 **Paso 4 · Merge.** Botón «Merge pull request» → «Create a merge commit». Nunca
 squash ni rebase: ambos cambian los SHA que los manifests de release citan.
