@@ -1,0 +1,327 @@
+{
+  "schema_version": 1,
+  "title": "Delta de dominio: dos contraejemplos OEM, alcance de volume_l y presión de herramienta",
+  "author": "Claude (revisor independiente)",
+  "prepared_on": "2026-09-07",
+  "purpose": "Integración inmediata. No es un plan.",
+  "catalogue": {
+    "artifact": "all-family-port-cardinality-integrated-2026-09-07.json",
+    "artifact_sha256": "16459826fee4c589cce37243afe4e159317212ddf1d47d6d6f1d76f9b3fadf15"
+  },
+  "corrections_accepted_from_root": [
+    "kit_members: mi lectura era de USO de plantilla. Extender el helper a light, fender y training_wheel es un cambio de uso y no exige mutar la definición compartida ni a los otros 20 usuarios. Acepto y retiro la palabra «forward que nombre a las 23».",
+    "Son 9 definiciones reutilizadas en la preimagen viva, no 8: mis 8 contaban sólo las reutilizadas del primer packet y dejaban fuera spec_evidence_source. Corregido a 9.",
+    "MA-2: no generalizo que json = criterio inútil. Lo que medí es que el consumidor no filtra por rol ni por allowed_when; qué hacer con las tablas de filas depende de sus consumidores, y lo revisas tú."
+  ],
+  "sources": [
+    {
+      "id": "S1",
+      "url": "https://www.topeak.com/global/en/product/407-HYBRIDROCKET-HP",
+      "read": "verbatim",
+      "quotes": [
+        "Road mini pump, CO2 inflator, or both. The choice is yours!",
+        "The mini-sized pump and integrated CO2 inflator lets you choose between pumping, inflating with CO2 or a combination of both.",
+        "Capacity: 160 psi / 11 bar",
+        "Volume Per Stroke: 23 cc",
+        "Use only Topeak 16g CO2 cartridges",
+        "Included 1 threaded 16g CO2 cartridge",
+        "SmartHead ThreadLock w/ integrated dust cap. Fits Presta / Schrader valves"
+      ],
+      "confirms": "Un solo producto es minibomba y inflador CO2, con cartucho de 16 g roscado incluido."
+    },
+    {
+      "id": "S2",
+      "url": "https://www.topeak.com/storage/app/media/download/product-manual/HybridRocket%20HP/hybridrockethpmtgb0712.pdf",
+      "read": "ilegible",
+      "note": "El PDF se descargó (425,8 KB) pero no se pudo extraer texto ni renderizar —pdftoppm no está instalado—. No sustituyo su contenido por una lectura plausible: la evidencia que uso es S1, que ya es del fabricante y es textual."
+    },
+    {
+      "id": "S3",
+      "url": "https://www.camelbak.com/product/m.u.l.e.%C2%AE-5-waist-pack-with-crux%C2%AE-1.5l-lumbar-reservoir/CB-2815.html",
+      "read": "parcial",
+      "quotes": [
+        "M.U.L.E.® 5 Waist Pack with Crux® 1.5L Lumbar Reservoir",
+        "waist pack"
+      ],
+      "also": [
+        "https://uk.camelbak.com/…/38624.html y la variante irlandesa titulan «M.U.L.E.® 5L Waist Pack with Crux® 1.5L Lumbar Reservoir», con la L explícita"
+      ],
+      "confirms": "Es una riñonera y el depósito Crux 1.5 L viene incluido: está en el propio nombre del producto y en el SKU.",
+      "not_readable": "La tabla de especificaciones se renderiza por JavaScript y no llegó en ninguna de las tres páginas. NO pude leer si los 5 L son capacidad total incluyendo el depósito o sólo carga. No lo deduzco."
+    }
+  ],
+  "findings": [
+    {
+      "id": "DL-1",
+      "template": "pump",
+      "root_proposal": "facet booleano co2_inflation_capable",
+      "defect_confirmed": true,
+      "today": "pump_kind es single_select y co2_cartridge_configurations está allowed_when pump_kind in [\"Inflador CO2\",\"Cartucho CO2 (recarga)\"]. El HYBRIDROCKET HP obliga a elegir: con «De mano / mini» se bloquea la tabla que el fabricante sí declara (16 g, roscado, 1 incluido); con «Inflador CO2» se le cambia el nombre a un producto que el OEM llama mini pump. valve_heads_supported no discrimina: es requerido en los dos casos.",
+      "verdict": "La propuesta es correcta en la forma y suficiente, con una corrección de alcance.",
+      "critique": [
+        {
+          "point": "Alcance del facet",
+          "severity": "corregir",
+          "text": "Como disyunción —tabla permitida si el tipo es dedicado O facet=true— un pump_kind «Inflador CO2» con co2_inflation_capable=false queda almacenable y sin dueño: la tabla se permite igual y la contradicción se guarda. Acótalo con allowed_when pump_kind in [\"De mano / mini\",\"De pie\",\"Otro\",\"Compresor / eléctrica\"], donde el facet añade información. Es el mismo movimiento de un solo dueño que ya aplicaste en light."
+        },
+        {
+          "point": "Ausencia no es false",
+          "severity": "correcto",
+          "text": "Se sostiene solo por el motor: un boolean false es un valor CONOCIDO y cierra la tabla; ausente deja allowed_when en unknown y la tabla queda pendiente, no bloqueada. No hace falta regla extra."
+        },
+        {
+          "point": "Cartucho incluido vs capacidad del inflador",
+          "severity": "no agregar nada",
+          "text": "Ya está representado y no necesita campo nuevo. configuration_kind separa «Cartucho de esta presentación» —con included_quantity requerido— de «Cartucho compatible declarado» —con counterpart_model requerido—. El HYBRIDROCKET HP usa las dos filas: la presentación con included_quantity 1, y la compatibilidad declarada «Use only Topeak 16g CO2 cartridges»."
+        },
+        {
+          "point": "El modo CO2 ya tiene dónde vivir",
+          "severity": "informativo",
+          "text": "pump_pressure_specifications es allowed_when always y su quantity_kind incluye «Presión orientativa CO2 para la configuración indicada» con configuration requerido, así que el segundo modo de operación es expresable en cuanto el facet abra la tabla. Por eso el facet basta y no hace falta un pump_kind múltiple."
+        }
+      ],
+      "affected_definitions": {
+        "pump_kind": [
+          "pump"
+        ],
+        "co2_cartridge_configurations": [
+          "pump"
+        ],
+        "note": "Ninguna de las dos es global publicada; la corrección es autocontenida en pump."
+      },
+      "cases": [
+        {
+          "kind": "positivo",
+          "values": {
+            "pump_kind": "De mano / mini",
+            "co2_inflation_capable": true,
+            "co2_cartridge_configurations": "1 fila: Cartucho de esta presentación, 16 g, roscado, incluido 1"
+          },
+          "expect": "sin incidencia — éste es el HYBRIDROCKET HP"
+        },
+        {
+          "kind": "negativo",
+          "values": {
+            "pump_kind": "De mano / mini",
+            "co2_inflation_capable": false,
+            "co2_cartridge_configurations": "1 fila"
+          },
+          "expect": "field_applicability bloqueante"
+        },
+        {
+          "kind": "negativo",
+          "values": {
+            "pump_kind": "Inflador CO2",
+            "co2_inflation_capable": false
+          },
+          "expect": "con la corrección de alcance: inexpresable. Hoy: se guarda una contradicción sin dueño"
+        },
+        {
+          "kind": "desconocido",
+          "values": {
+            "pump_kind": "De mano / mini",
+            "co2_inflation_capable": null,
+            "co2_cartridge_configurations": "1 fila"
+          },
+          "expect": "aplicabilidad unknown: la fila se conserva y queda pendiente, sin bloquear ni certificar"
+        }
+      ]
+    },
+    {
+      "id": "DL-2",
+      "template": "rider_bag",
+      "root_proposal": "agregar Riñonera / bolso de cintura y reservoir_included",
+      "defect_confirmed": true,
+      "today": "bag_kind sólo admite Mochila, Mochila de hidratación, Cubre-mochila y Otro. Y reservoir_l está allowed_when bag_kind = «Mochila de hidratación». Con «Otro» el volumen es expresable pero el depósito no, así que la M.U.L.E. 5 no se puede representar sin mentir en el tipo.",
+      "verdict": "Correcta, con una advertencia sobre el segundo volumen.",
+      "critique": [
+        {
+          "point": "El append es seguro",
+          "severity": "correcto",
+          "text": "bag_kind sólo lo usa rider_bag y no está entre las definiciones globales publicadas."
+        },
+        {
+          "point": "Encadenar la capacidad al hecho y no al tipo",
+          "severity": "correcto",
+          "text": "Es el arreglo real: hoy el depósito cuelga de un bag_kind, y debe colgar de tener depósito. reservoir_included=false cierra reservoir_l de forma definitiva; ausente lo deja pendiente, que es lo que pediste."
+        },
+        {
+          "point": "La capacidad de alojamiento NO puede compartir campo",
+          "severity": "corregir",
+          "text": "«Capacidad de alojamiento para depósito comprado aparte» es otra medida: la del compartimento, no la del depósito entregado. Ponerlas en reservoir_l bajo un booleano repone el defecto que ya cerraste en light (AG02) y en consumer_electronics (AG06): dos medidas en un campo. Deja reservoir_l como la capacidad del depósito INCLUIDO, y no agregues el segundo campo ahora: no tengo ninguna fuente en la mano que lo exija. Cuando aparezca, va con clave propia."
+        },
+        {
+          "point": "No extender el par fits_volume a la riñonera",
+          "severity": "advertencia",
+          "text": "fits_volume_min_l / fits_volume_max_l están acotados a «Cubre-mochila», donde son un rango real de mochilas que cubre, y tienen scalar_ordered_pairs. En una riñonera «lo que le cabe» sería la capacidad de alojamiento del punto anterior, no un rango: no reutilices ese par."
+        }
+      ],
+      "affected_definitions": {
+        "bag_kind": [
+          "rider_bag"
+        ],
+        "reservoir_l": [
+          "rider_bag"
+        ],
+        "note": "Ambas de una sola familia; ninguna es global publicada."
+      },
+      "cases": [
+        {
+          "kind": "positivo",
+          "values": {
+            "bag_kind": "Riñonera / bolso de cintura",
+            "reservoir_included": true,
+            "reservoir_l": "1.5",
+            "volume_l": "5",
+            "volume_basis": "Total declarado por el fabricante"
+          },
+          "expect": "sin incidencia — ésta es la M.U.L.E. 5 con Crux 1.5 L"
+        },
+        {
+          "kind": "negativo",
+          "values": {
+            "reservoir_included": false,
+            "reservoir_l": "1.5"
+          },
+          "expect": "field_applicability bloqueante"
+        },
+        {
+          "kind": "desconocido",
+          "values": {
+            "bag_kind": "Riñonera / bolso de cintura",
+            "reservoir_included": null,
+            "reservoir_l": "1.5"
+          },
+          "expect": "pendiente, no bloqueante: la cifra se conserva sin certificar que venga incluido"
+        }
+      ]
+    },
+    {
+      "id": "DL-3",
+      "topic": "alcance de volume_l",
+      "decision": "token de alcance, no helper y no regla de suma",
+      "why_the_helper_no_longer_suffices": "La M.U.L.E. 5 declara DOS volúmenes para un producto: 5 L el bolso y 1,5 L el depósito. Y no pude leer en ninguna de las tres páginas de CamelBak si esos 5 L incluyen el depósito. Esa ambigüedad, que a mí me dejó sin respuesta con la fuente delante, es exactamente la que va a tener el operador. Un helper no se filtra, no se compara y no se audita; un token sí.",
+      "decision_detail": [
+        "volume_l guarda la capacidad que el fabricante imprime para el producto tal como se vende, en sus propias palabras, con el alcance declarado y nunca deducido.",
+        "Se agrega volume_basis, con la forma de quantity_kind que ya aprobaste en pump_pressure_specifications: «Total declarado por el fabricante», «Sólo carga», «Por unidad del conjunto», «Desconocido / sin confirmar».",
+        "Ninguna regla calcula carga = total − depósito. Con la fuente sin leer, esa resta sería inventar la lectura.",
+        "El eje unidad-versus-conjunto es de bike_bag, no de rider_bag: bag_member_configurations ya lleva volume_l por miembro con configuration y measurement_reference, así que en filas ya está resuelto y al escalar sólo le falta decir cuál de las dos lecturas trae.",
+        "Sigue sin regla de suma: 40 con dos miembros de 20 no se bloquea. Lo cerraste tú en el caso negativo de AG05."
+      ],
+      "affected": {
+        "volume_l": [
+          "bike_bag",
+          "rider_bag"
+        ],
+        "note": "Los dos usuarios están en este bloque y volume_l no es global publicada: el cambio es autocontenido."
+      },
+      "cases": [
+        {
+          "kind": "positivo",
+          "values": {
+            "volume_l": "5",
+            "volume_basis": "Total declarado por el fabricante"
+          },
+          "expect": "sin incidencia"
+        },
+        {
+          "kind": "negativo",
+          "values": {
+            "volume_l": "5",
+            "volume_basis": null
+          },
+          "expect": "pendiente no bloqueante, no un error: la cifra sin alcance se conserva y se pide. Bloquearla tiraría los volúmenes que ya se registren bien."
+        },
+        {
+          "kind": "desconocido",
+          "values": {
+            "volume_l": "5",
+            "volume_basis": "Desconocido / sin confirmar"
+          },
+          "expect": "igual que ausente: hasKnownSpecValue trata ese token como ausencia, así que la ficha queda pendiente. Es lo correcto, y conviene saberlo antes de esperar que el token cierre nada."
+        }
+      ]
+    },
+    {
+      "id": "DL-4",
+      "topic": "MA-3, presión de herramienta",
+      "question": "¿basta un helper?",
+      "answer": "No. Falta representación.",
+      "evidence": "El propio HYBRIDROCKET HP lo demuestra en la fuente: «Capacity: 160 psi / 11 bar». El fabricante declara dos unidades para una magnitud, y no son el mismo número —11 bar son 159,5 psi, así que redondeó—. Un helper sobre max_pressure_psi no puede guardar dos valores, ni decir cuál imprimió el fabricante, ni registrar que el par es una sola declaración.",
+      "already_solved_next_door": "pump ya lo resolvió: pump_pressure_specifications tiene quantity_kind, value, unit en {psi, bar} y configuration requerido. workshop_tool no tiene nada de eso.",
+      "honest_limit": "Verifiqué el fenómeno de doble unidad en una fuente primaria de este bloque, pero es una bomba, no una herramienta de taller. No tengo en la mano un producto workshop_tool que declare ambas unidades. La conclusión se sostiene igual porque max_pressure_psi es la MISMA definición en las dos familias.",
+      "minimal_change": "workshop_tool.max_pressure_psi a legacy con allowed_when never, y una tabla de filas propia con quantity_kind / value / unit.",
+      "do_not_reuse": "No reutilices pump_pressure_specifications: su quantity_kind es de bomba —«Fondo de escala del manómetro», «Presión orientativa CO2 para la configuración indicada»— y no describe una llave dinamométrica ni una prensa.",
+      "cases": [
+        {
+          "kind": "positivo",
+          "v": "herramienta con presión declarada sólo en psi",
+          "expect": "una fila psi; sin incidencia"
+        },
+        {
+          "kind": "positivo",
+          "v": "declarada como «160 psi / 11 bar»",
+          "expect": "dos filas, una por unidad, ambas leídas"
+        },
+        {
+          "kind": "negativo",
+          "v": "una sola cifra con la unidad deducida por conversión",
+          "expect": "no se registra: convertir no es leer"
+        },
+        {
+          "kind": "desconocido",
+          "v": "sin presión declarada",
+          "expect": "pendiente, no bloqueante"
+        }
+      ]
+    },
+    {
+      "id": "DL-5",
+      "kind": "hallazgo nuevo",
+      "template": "pump",
+      "severity": "defecto concreto",
+      "title": "La retirada de max_pressure_psi en pump quedó a medias: legacy no impide llenar",
+      "evidence": "pump.max_pressure_psi es role legacy pero allowed_when always. En light los cinco escalares retirados llevan allowed_when never. role=legacy sólo lo saca de ser extremo de coherencia; no impide que se guarde un valor. Así que hoy una bomba puede llevar max_pressure_psi=160 y a la vez una fila de pump_pressure_specifications que diga 11 bar: dos dueños de una magnitud, que es justo lo que cerraste en AG06 para rated_power_w.",
+      "minimal_change": "pump.max_pressure_psi.allowed_when = never, igual que light.",
+      "affected": {
+        "max_pressure_psi": [
+          "workshop_tool",
+          "pump"
+        ],
+        "note": "No es global publicada. Ver DL-4 para el otro usuario."
+      },
+      "cases": [
+        {
+          "kind": "positivo",
+          "v": "sólo filas de pump_pressure_specifications",
+          "expect": "sin incidencia"
+        },
+        {
+          "kind": "negativo",
+          "v": "max_pressure_psi=160 y una fila de 11 bar",
+          "expect": "hoy ACEPTADO; con el cambio, field_applicability bloqueante"
+        },
+        {
+          "kind": "desconocido",
+          "v": "ninguno de los dos",
+          "expect": "pendiente, no bloqueante"
+        }
+      ]
+    }
+  ],
+  "counts": {
+    "oem_sources_verified": 2,
+    "oem_sources_unreadable": 1,
+    "root_proposals_reviewed": 2,
+    "root_proposals_accepted_with_correction": 2,
+    "new_findings": 1,
+    "decisions_made": 2,
+    "executable_cases": 17
+  },
+  "gates_unchanged": {
+    "fill_allowed": false,
+    "compatibility_rules_integrated": false,
+    "all_product_assignment_review_complete": false,
+    "all_family_domain_review_complete": false
+  }
+}

@@ -1,0 +1,442 @@
+{
+  "schema_version": 1,
+  "title": "Presencia mínima por grupo de columnas alternativas: contrato para los 12 campos de G01",
+  "author": "Claude (revisor independiente)",
+  "prepared_on": "2026-09-07",
+  "scope": "Los 12 campos que citan G01. Define el grupo mínimo realmente necesario en cada uno, no un motor. Root implementa el motor mínimo sobre este contrato en archivos separados.",
+  "catalogue": {
+    "artifact": "all-family-port-cardinality-integrated-2026-09-07.json",
+    "artifact_sha256": "16459826fee4c589cce37243afe4e159317212ddf1d47d6d6f1d76f9b3fadf15"
+  },
+  "boundaries": "Sólo propuesta y evidencia. Sin cambios de código, catálogo, productos ni base de datos, sin subagentes, sin escribir hechos y sin abrir llenado.",
+  "justification_standard": "Ninguna entrada se justifica porque un operador inventado sea rechazado. Cada grupo propuesto se apoya en una fila que hoy pasa sin ningún diagnóstico de su contenido y en por qué ese dato falta en ese contexto de trabajo. Dos de los doce campos no necesitan ningún grupo y quedan escritos como tales.",
+  "measured_evidence": "Medido con una sonda temporal ya borrada: una fila con sólo sus columnas requeridas llenas no produce ninguna incidencia de fila en las doce tablas. La única excepción es light_mode_configurations, que emite row_reference_pending por el enlace del miembro, no por el contenido del modo.",
+  "semantics": {
+    "issue_kind": "pendiente no bloqueante",
+    "not_certification": "Satisfacer el grupo no acredita compatibilidad ni aprobación: sólo dice que la fila dejó de estar muda.",
+    "alternatives_are_not_conjunction": "Un grupo alternativo se satisface con una vía. Exigir todas convertiría formas distintas de publicar el mismo hecho en datos inventados."
+  },
+  "records": [
+    {
+      "field": "eyewear_lens_configurations",
+      "definition_id": "5adb00e1-e791-5bde-b953-750f9b7674ea",
+      "label": "Lentes de esta presentación y sus propiedades",
+      "class": "grupo_incondicional",
+      "minimal_presence_group": {
+        "at_least_one_of": [
+          "category_min",
+          "category_max",
+          "vlt_min_pct",
+          "vlt_max_pct"
+        ]
+      },
+      "undiagnosed_case_today": "Una fila con sólo `model` pasa limpia. Un lente «Photochromic Grey» queda registrado sin ninguna clase óptica, que es justo el dato con el que se decide si sirve para rodar de noche.",
+      "why_the_data_is_missing_in_that_context": "El fabricante publica la clase óptica de una sola de las dos formas: unos catálogos dan la categoría de filtro y otros el porcentaje de transmisión. El operador copia el nombre del lente y el tinte de la página comercial, donde muchas veces no aparece ninguna de las dos.",
+      "user_case_positive": {
+        "row": {
+          "model": "Photochromic Grey",
+          "vlt_min_pct": "20",
+          "vlt_max_pct": "75"
+        },
+        "expected": "sin pendiente: el grupo está satisfecho por la vía del porcentaje"
+      },
+      "user_case_pending": {
+        "row": {
+          "model": "Photochromic Grey",
+          "tint": "Gris"
+        },
+        "expected": "pendiente no bloqueante sobre el grupo: falta la clase óptica por cualquiera de las dos vías"
+      },
+      "prerequisites": [
+        "operador de presencia sobre un grupo de columnas"
+      ],
+      "new_discriminator_required_first": null,
+      "note": "Las dos vías son expresiones alternativas del mismo hecho; exigir las dos sería inventar un dato.",
+      "expected_issue_kind": "pendiente no bloqueante; un dato que falta es incompletitud, nunca contradicción"
+    },
+    {
+      "field": "bag_member_configurations",
+      "definition_id": "104a6948-a864-5c61-a291-740088376e7f",
+      "label": "Miembros del bolso (alforjas, módulos)",
+      "class": "grupo_incondicional",
+      "minimal_presence_group": {
+        "at_least_one_of": [
+          "volume_l",
+          "width_mm",
+          "height_mm",
+          "depth_mm"
+        ]
+      },
+      "undiagnosed_case_today": "Una fila con `member` y `position` pasa limpia y no dice cuánto carga ese miembro, que es el dato por el que se compra una alforja.",
+      "why_the_data_is_missing_in_that_context": "Las alforjas se publican por litros o por medidas exteriores, rara vez por las dos. Cuando el operador transcribe el conjunto, anota el miembro y su posición desde la foto y deja la capacidad para cuando aparezca la ficha.",
+      "user_case_positive": {
+        "row": {
+          "member": "Alforja izquierda",
+          "position": "Lateral izquierda",
+          "volume_l": "20"
+        },
+        "expected": "sin pendiente"
+      },
+      "user_case_pending": {
+        "row": {
+          "member": "Alforja izquierda",
+          "position": "Lateral izquierda"
+        },
+        "expected": "pendiente no bloqueante: ni litros ni medidas"
+      },
+      "prerequisites": [
+        "operador de presencia sobre un grupo de columnas"
+      ],
+      "new_discriminator_required_first": null,
+      "note": "Litros y medidas son dos formas de declarar la misma capacidad.",
+      "expected_issue_kind": "pendiente no bloqueante; un dato que falta es incompletitud, nunca contradicción"
+    },
+    {
+      "field": "brake_assembly_configurations",
+      "definition_id": "a5753255-ac9d-5c52-a14a-3b9f57fe85a0",
+      "label": "Circuitos incluidos, separados por posición",
+      "class": "grupo_incondicional",
+      "minimal_presence_group": {
+        "at_least_one_of": [
+          "lever_model",
+          "caliper_model"
+        ]
+      },
+      "undiagnosed_case_today": "Una fila con `circuit_id`, `position` y `source_url` pasa limpia sin nombrar un solo componente del circuito, que es lo único que hace de esa fila un ensamblaje.",
+      "why_the_data_is_missing_in_that_context": "La fila se crea para sostener el identificador de circuito y la posición mientras el operador todavía está copiando los nombres de los componentes desde otra pestaña.",
+      "user_case_positive": {
+        "row": {
+          "circuit_id": "c1",
+          "position": "Delantero",
+          "source_url": "https://…",
+          "caliper_model": "MT200"
+        },
+        "expected": "sin pendiente"
+      },
+      "user_case_pending": {
+        "row": {
+          "circuit_id": "c1",
+          "position": "Delantero",
+          "source_url": "https://…"
+        },
+        "expected": "pendiente no bloqueante: el circuito no nombra manilla ni cáliper"
+      },
+      "prerequisites": [
+        "operador de presencia sobre un grupo de columnas"
+      ],
+      "new_discriminator_required_first": null,
+      "note": null,
+      "expected_issue_kind": "pendiente no bloqueante; un dato que falta es incompletitud, nunca contradicción"
+    },
+    {
+      "field": "light_mode_configurations",
+      "definition_id": "4dbc2261-fbda-5a2e-8400-3611d3d7a78a",
+      "label": "Modos por luz (lúmenes y autonomía juntos)",
+      "class": "grupo_incondicional",
+      "minimal_presence_group": {
+        "at_least_one_of": [
+          "lumens",
+          "runtime_h",
+          "runtime_max_h"
+        ]
+      },
+      "undiagnosed_case_today": "Una fila con `member_id` y `mode` pasa limpia. Como cada fila es una observación y no un modo, una observación sin ninguna cifra no documenta nada: es una fila que sólo repite el nombre del modo.",
+      "why_the_data_is_missing_in_that_context": "Los nombres de los modos salen de la lista del manual y las cifras de una tabla aparte que el operador transcribe después, o que la fuente no publica para todos los modos.",
+      "user_case_positive": {
+        "row": {
+          "member_id": "m1",
+          "mode": "High",
+          "lumens": "500"
+        },
+        "expected": "sin pendiente"
+      },
+      "user_case_pending": {
+        "row": {
+          "member_id": "m1",
+          "mode": "High"
+        },
+        "expected": "pendiente no bloqueante: la observación no trae lúmenes ni autonomía"
+      },
+      "prerequisites": [
+        "operador de presencia sobre un grupo de columnas"
+      ],
+      "new_discriminator_required_first": null,
+      "note": "No sustituye a la cardinalidad que retiraste: esto no cuenta modos, sólo evita observaciones vacías.",
+      "expected_issue_kind": "pendiente no bloqueante; un dato que falta es incompletitud, nunca contradicción"
+    },
+    {
+      "field": "brake_bleed_ports",
+      "definition_id": "2132bfb4-5e72-5826-9f5b-5b73039de39b",
+      "label": "Puertos de purga del modelo",
+      "class": "grupo_incondicional",
+      "minimal_presence_group": {
+        "at_least_one_of": [
+          "connection_spec",
+          "tool_interface"
+        ]
+      },
+      "undiagnosed_case_today": "Una fila con `component_role`, `port_id` y `source_url` pasa limpia diciendo únicamente que existe un puerto, sin rosca ni herramienta: un mecánico no puede actuar con eso.",
+      "why_the_data_is_missing_in_that_context": "El dato de purga vive en el manual de servicio y la fila se crea desde la página de producto, que sólo dice que el modelo tiene puerto.",
+      "user_case_positive": {
+        "row": {
+          "component_role": "Cáliper",
+          "port_id": "p1",
+          "source_url": "https://…",
+          "tool_interface": "Jeringa Shimano"
+        },
+        "expected": "sin pendiente"
+      },
+      "user_case_pending": {
+        "row": {
+          "component_role": "Cáliper",
+          "port_id": "p1",
+          "source_url": "https://…"
+        },
+        "expected": "pendiente no bloqueante: ni rosca ni interfaz de herramienta"
+      },
+      "prerequisites": [
+        "operador de presencia sobre un grupo de columnas"
+      ],
+      "new_discriminator_required_first": null,
+      "note": null,
+      "expected_issue_kind": "pendiente no bloqueante; un dato que falta es incompletitud, nunca contradicción"
+    },
+    {
+      "field": "brake_hydraulic_connections",
+      "definition_id": "3d0e43ef-5414-5814-9267-c6b20b77e41b",
+      "label": "Mangueras y conexiones por extremo",
+      "class": "grupo_incondicional",
+      "minimal_presence_group": {
+        "at_least_one_of": [
+          "fitting_model",
+          "connection_spec"
+        ]
+      },
+      "undiagnosed_case_today": "Una fila con las siete columnas requeridas pasa limpia nombrando componente y manguera sin decir cómo se conectan, que es la pregunta que la tabla existe para responder.",
+      "why_the_data_is_missing_in_that_context": "Marca y modelo del componente y de la manguera vienen del catálogo comercial; cómo acoplan viene del manual, y son dos documentos distintos.",
+      "user_case_positive": {
+        "row": {
+          "component_role": "Cáliper",
+          "end_role": "Entrada",
+          "component_brand": "Shimano",
+          "component_model": "MT200",
+          "hose_brand": "Shimano",
+          "hose_model": "SM-BH59",
+          "source_url": "https://…",
+          "connection_spec": "M8 oliva + inserto"
+        },
+        "expected": "sin pendiente"
+      },
+      "user_case_pending": {
+        "row": {
+          "component_role": "Cáliper",
+          "end_role": "Entrada",
+          "component_brand": "Shimano",
+          "component_model": "MT200",
+          "hose_brand": "Shimano",
+          "hose_model": "SM-BH59",
+          "source_url": "https://…"
+        },
+        "expected": "pendiente no bloqueante: ni conector ni especificación de conexión"
+      },
+      "prerequisites": [
+        "operador de presencia sobre un grupo de columnas"
+      ],
+      "new_discriminator_required_first": null,
+      "note": null,
+      "expected_issue_kind": "pendiente no bloqueante; un dato que falta es incompletitud, nunca contradicción"
+    },
+    {
+      "field": "rack_top_interface",
+      "definition_id": "e07ea256-12be-5927-8efb-5e56bcfa8bf3",
+      "label": "Interfaces superiores declaradas (por configuración)",
+      "class": "grupo_incondicional",
+      "minimal_presence_group": {
+        "at_least_one_of": [
+          "counterpart_model",
+          "configuration"
+        ]
+      },
+      "undiagnosed_case_today": "Una fila con sólo `interface` pasa limpia: declara una interfaz sin decir contra qué se verificó, y una interfaz sin contraparte no acredita montaje.",
+      "why_the_data_is_missing_in_that_context": "El nombre de la interfaz se copia del material comercial —«MIK», «Snapit»— sin la contraparte contra la que se verificó, porque la página no la nombra.",
+      "user_case_positive": {
+        "row": {
+          "interface": "MIK",
+          "counterpart_model": "Racktime Standit 2.0"
+        },
+        "expected": "sin pendiente"
+      },
+      "user_case_pending": {
+        "row": {
+          "interface": "MIK"
+        },
+        "expected": "pendiente no bloqueante: ni contraparte ni configuración"
+      },
+      "prerequisites": [
+        "operador de presencia sobre un grupo de columnas"
+      ],
+      "new_discriminator_required_first": null,
+      "note": "Las dos tablas comparten esquema y comparten la carencia.",
+      "expected_issue_kind": "pendiente no bloqueante; un dato que falta es incompletitud, nunca contradicción"
+    },
+    {
+      "field": "bag_rack_interface",
+      "definition_id": "e1a71a9a-30a6-5f53-93c6-a005d80a4f88",
+      "label": "Interfaces bolso a parrilla declaradas (por configuración)",
+      "class": "grupo_incondicional",
+      "minimal_presence_group": {
+        "at_least_one_of": [
+          "counterpart_model",
+          "configuration"
+        ]
+      },
+      "undiagnosed_case_today": "Una fila con sólo `interface` pasa limpia: declara una interfaz sin decir contra qué se verificó, y una interfaz sin contraparte no acredita montaje.",
+      "why_the_data_is_missing_in_that_context": "El nombre de la interfaz se copia del material comercial —«MIK», «Snapit»— sin la contraparte contra la que se verificó, porque la página no la nombra.",
+      "user_case_positive": {
+        "row": {
+          "interface": "MIK",
+          "counterpart_model": "Racktime Standit 2.0"
+        },
+        "expected": "sin pendiente"
+      },
+      "user_case_pending": {
+        "row": {
+          "interface": "MIK"
+        },
+        "expected": "pendiente no bloqueante: ni contraparte ni configuración"
+      },
+      "prerequisites": [
+        "operador de presencia sobre un grupo de columnas"
+      ],
+      "new_discriminator_required_first": null,
+      "note": "Las dos tablas comparten esquema y comparten la carencia.",
+      "expected_issue_kind": "pendiente no bloqueante; un dato que falta es incompletitud, nunca contradicción"
+    },
+    {
+      "field": "rack_mount_configurations",
+      "definition_id": "29b3b9e5-5263-592c-9cbd-3e90a9bc9942",
+      "label": "Puntos de anclaje de la parrilla (uno por fila)",
+      "class": "grupo_condicional",
+      "minimal_presence_group": {
+        "when": {
+          "field": "mount_point",
+          "operator": "in",
+          "value": [
+            "Correas a tirantes (sin ojales)",
+            "Abrazadera a tija",
+            "Abrazaderas de manubrio"
+          ]
+        },
+        "at_least_one_of": [
+          "tube_diameter_min_mm",
+          "tube_diameter_max_mm"
+        ]
+      },
+      "undiagnosed_case_today": "Una fila con `mount_point` = «Abrazadera a tija» pasa limpia sin ningún diámetro: una abrazadera sin rango de tubo no se puede contrastar con ninguna bicicleta.",
+      "why_the_data_is_missing_in_that_context": "El rango de diámetro sólo aparece en la ficha técnica; el operador registra el punto de anclaje desde la foto del producto.",
+      "user_case_positive": {
+        "row": {
+          "mount_point": "Abrazadera a tija",
+          "tube_diameter_min_mm": "25.4",
+          "tube_diameter_max_mm": "31.8"
+        },
+        "expected": "sin pendiente"
+      },
+      "user_case_pending": {
+        "row": {
+          "mount_point": "Abrazadera a tija"
+        },
+        "expected": "pendiente no bloqueante sobre el grupo de diámetro"
+      },
+      "prerequisites": [
+        "operador de presencia sobre un grupo de columnas"
+      ],
+      "new_discriminator_required_first": null,
+      "note": "La condición se puede escribir hoy sin discriminante nuevo porque `mount_point` ya es un token cerrado. Los anclajes por ojal y por eje quedan fuera a propósito: ahí el diámetro de tubo no es el dato de calce.",
+      "expected_issue_kind": "pendiente no bloqueante; un dato que falta es incompletitud, nunca contradicción"
+    },
+    {
+      "field": "fastener_kit_members",
+      "definition_id": "26435d8f-5009-5600-8699-2f5cdf751b55",
+      "label": "Miembros del kit de fijación",
+      "class": "requiere_discriminante_primero",
+      "minimal_presence_group": {
+        "at_least_one_of": [
+          "thread_nominal",
+          "thread_pitch_mm",
+          "thread_tpi"
+        ],
+        "would_be_conditioned_on": "que el miembro sea roscado"
+      },
+      "undiagnosed_case_today": "Una fila con `member_role` y `quantity` pasa limpia. «Tornillo, 4» sin ninguna expresión de rosca no se puede contrastar con nada.",
+      "why_the_data_is_missing_in_that_context": "El kit se registra desde el envase, que enumera piezas y cantidades; la designación de rosca está en la ficha del fabricante o hay que medirla.",
+      "user_case_positive": {
+        "row": {
+          "member_role": "Tornillo",
+          "quantity": "4",
+          "thread_nominal": "M5"
+        },
+        "expected": "sin pendiente"
+      },
+      "user_case_pending": {
+        "row": {
+          "member_role": "Tornillo",
+          "quantity": "4"
+        },
+        "expected": "pendiente no bloqueante, sólo para miembros roscados"
+      },
+      "prerequisites": [
+        "un vocabulario cerrado que distinga miembro roscado de arandela o espaciador",
+        "operador de presencia sobre un grupo de columnas"
+      ],
+      "new_discriminator_required_first": "`member_role` es texto libre hoy, así que la condición no se puede escribir sin adivinar qué palabras significan «roscado». Primero el discriminante, después la presencia.",
+      "note": "Paso y TPI son dos expresiones alternativas del mismo hecho y la designación nominal es una tercera: exigir las tres sería inventar datos. Park documenta roscas expresadas en TPI junto a diámetros métricos, así que ninguna de las dos vías es la canónica.",
+      "expected_issue_kind": "pendiente no bloqueante; un dato que falta es incompletitud, nunca contradicción"
+    },
+    {
+      "field": "pedal_bearing_configurations",
+      "definition_id": "588a7a4d-bd99-5b6b-948b-f423cf53043d",
+      "label": "Apoyos y rodamientos del pedal",
+      "class": "sin_requisito_de_presencia",
+      "minimal_presence_group": null,
+      "undiagnosed_case_today": "La fila mínima pasa limpia, pero eso no es un defecto aquí: no hay dato ausente que la vuelva muda.",
+      "why_the_data_is_missing_in_that_context": "La fila ya dice dónde y de qué construcción es el apoyo; `model` y `conditions` enriquecen una afirmación que ya está completa. Un grupo de presencia aquí exigiría un dato que muchos fabricantes no publican y no cambiaría lo que la fila afirma.",
+      "user_case_positive": null,
+      "user_case_pending": null,
+      "prerequisites": [],
+      "new_discriminator_required_first": null,
+      "note": "Lo digo explícitamente para no convertir un límite de expresión en una regla: que `exists` sea rechazado no prueba que esta tabla valide mal.",
+      "expected_issue_kind": null
+    },
+    {
+      "field": "rim_brake_mount_fitments",
+      "definition_id": "8b59fe62-3508-59c0-a707-69ffeb3094ea",
+      "label": "Montajes de freno de llanta documentados",
+      "class": "sin_requisito_de_presencia",
+      "minimal_presence_group": null,
+      "undiagnosed_case_today": "La fila mínima pasa limpia, pero eso no es un defecto aquí: no hay dato ausente que la vuelva muda.",
+      "why_the_data_is_missing_in_that_context": "Posición, especificación de montaje, modelo de freno y fuente ya identifican un calce documentado. Los tres pares de geometría refinan una fila que ya es accionable.",
+      "user_case_positive": null,
+      "user_case_pending": null,
+      "prerequisites": [],
+      "new_discriminator_required_first": null,
+      "note": "Lo digo explícitamente para no convertir un límite de expresión en una regla: que `exists` sea rechazado no prueba que esta tabla valide mal.",
+      "expected_issue_kind": null
+    }
+  ],
+  "counts": {
+    "fields": 12,
+    "by_class": {
+      "grupo_incondicional": 8,
+      "grupo_condicional": 1,
+      "requiere_discriminante_primero": 1,
+      "sin_requisito_de_presencia": 2
+    }
+  },
+  "gates": {
+    "publication": false,
+    "fill": false,
+    "assignment": false,
+    "mechanical_approval": false
+  }
+}

@@ -1,0 +1,2513 @@
+{
+ "schema_version": 1,
+ "title": "Ruedas, dirección, rodamientos y suspensión: paquete implementable W01–W11",
+ "author": "Claude (Opus 5); root adjudica e integra",
+ "prepared_on": "2026-09-07",
+ "status": "propuesta; nada aplicado; llenado, asignación y publicación siguen en cero",
+ "target": {
+  "base": "all-family-reviewed-fields-integrated-2026-09-07.json",
+  "base_sha256": "f3178bd3c860c421d2365961fe3ff057581d2d038bb999bc59f5f0f959937072",
+  "compiler": "scripts/inventory/product_spec_field_patches.py",
+  "ops_used": [
+   "add_field",
+   "replace_definition_label",
+   "replace_field_contract",
+   "replace_template_coherence"
+  ],
+  "root_must_supply_before_extensions": {
+   "WSS-W05-label-headset_upper_shis": {
+    "labels": {
+     "present": false,
+     "value": null
+    }
+   },
+   "WSS-W05-label-headset_lower_shis": {
+    "labels": {
+     "present": false,
+     "value": null
+    }
+   },
+   "WSS-W07-fork-max_tire_width-label": {
+    "labels": {
+     "present": false,
+     "value": null
+    }
+   }
+  },
+  "source_review": {
+   "file": "wheels-steering-suspension-source-review-2026-09-06.md",
+   "sha256": "5daff142da819a55670b750385a9d77fafb211f84658971abc052b159ca7d430"
+  }
+ },
+ "representation_vs_approval": "Cada parche cambia qué se puede escribir, nunca qué se aprueba. Ningún campo de este paquete emite compatibilidad: los pares neumático↔llanta, horquilla↔cuadro, amortiguador↔cuadro y radio↔niple siguen necesitando una relación con fuente. Las fuentes OEM se citan por la FORMA del dato que exigen; su verificación mecánica pertenece a la revisión W del 2026-09-06 y no se repite aquí.",
+ "sources": {
+  "S-CONTI-HOOKLESS": {
+   "title": "Continental — Hookless vs. Hooked Rims",
+   "url": "https://www.continental-tires.com/us/en/tire-knowledge/hookless-vs-hooked-rims/",
+   "grade": "oem_page (citada en la revisión W del 2026-09-06; no releída en esta ronda)",
+   "claim_shape": "El límite depende de la variante del neumático y del perfil de la llanta: GP 5000 S TR 700×28c en hookless queda en 23 mm internos y 5,0 bar; 700×30c en 25 mm y 4,5 bar. Manda el menor de los dos componentes."
+  },
+  "S-ZIPP-TUBE": {
+   "title": "Zipp — cámara en llanta hookless con neumático tubeless",
+   "url": "https://support.zipp.com/hc/en-us/articles/7868244824731-Can-you-run-a-tube-in-a-Zipp-hookless-rim-with-a-tubeless-tire",
+   "grade": "oem_page (citada en la revisión W; no releída)",
+   "claim_shape": "El método de montaje (con cámara) no elimina el requisito de neumático tubeless en hookless: método y perfil son ejes distintos."
+  },
+  "S-SHELDON-TIRE": {
+   "title": "Sheldon Brown — Tire Sizing",
+   "url": "https://www.sheldonbrown.com/tire-sizing.html",
+   "grade": "reference_general",
+   "claim_shape": "BSD es el código de asiento; la guía histórica ancho/llanta es orientación, no homologación."
+  },
+  "S-PARK-TUBELESS": {
+   "title": "Park Tool — Tubeless Tire Compatibility",
+   "url": "https://www.parktool.com/en-us/blog/repair-help/tubeless-tire-compatibility",
+   "grade": "reference_general",
+   "claim_shape": "Compatibilidad tubeless se declara por par llanta/neumático, no por un booleano de un lado."
+  },
+  "S-ROCKSHOX-FIT": {
+   "title": "RockShox — Rear Suspension Fitment",
+   "url": "https://www.sram.com/en/service/articles/RockShox-fitment-article",
+   "grade": "oem_page (citada en la revisión W; no releída)",
+   "claim_shape": "Aviso de posible contacto del depósito RC2T con Specialized Demo 2020+ al comprimir; variantes por modelo/talla; carrera del amortiguador ≠ recorrido de rueda."
+  },
+  "S-ENDURO-MAX": {
+   "title": "Enduro Bearings — Help Center, MAX de pivote en mazas",
+   "url": "https://cycling.endurobearings.com/en-ca/apps/help-center",
+   "grade": "oem_page (citada en la revisión W; no releída)",
+   "claim_shape": "Misma envolvente ID/OD/ancho con construcción y destino distintos: MAX de pivote desaconsejado en maza por retención de bolas, sellado y cargas."
+  },
+  "S-CANECREEK-40": {
+   "title": "Cane Creek — Forty, especificación y selectores",
+   "url": "https://www.canecreek.com/products/40",
+   "grade": "oem_page (citada en la revisión W; no releída)",
+   "claim_shape": "Pares de ángulo 36×45 y 45×45; conjuntos superiores, inferiores y completos; códigos 62/40 y 49/38.1."
+  },
+  "S-CANECREEK-HS": {
+   "title": "Cane Creek — Everything you need to know about Headsets",
+   "url": "https://support.canecreek.com/support/solutions/articles/62000202657-full-article-everything-you-need-to-know-about-headsets-",
+   "grade": "oem_page (citada en la revisión W; no releída)",
+   "claim_shape": "Un tubo de 44 mm admite ZS44/28.6 + EC44/30 y ZS44/28.6 + ZS44/30: el alojamiento no queda descrito por el SHIS del conjunto original."
+  },
+  "S-PARK-HEADSET": {
+   "title": "Park Tool — Headset Standards",
+   "url": "https://www.parktool.com/en-us/blog/repair-help/headset-standards",
+   "grade": "reference_general",
+   "claim_shape": "Diámetro de alojamiento, de cazoleta y de rodamiento se publican en columnas distintas."
+  },
+  "S-FOX40-2013": {
+   "title": "FOX 2013 — Installing the 40 (manual)",
+   "url": "https://tech.ridefox.com/fox_tech_center/owners_manuals/013/Content/Forks/40/40withDMS_Installation.html",
+   "grade": "oem_manual (citado en la revisión W; no releído)",
+   "claim_shape": "Columna 40 mm/26\": neumático inflado ≤694 mm de pico, ≤670 mm de borde, ≤71 mm de ancho; corona direct mount con stack total 105–166,8 mm. Límites de esa generación."
+  },
+  "S-SURLY-PACKRAT": {
+   "title": "Surly — Pack Rat, ficha y framesheet 85-000633_INST_A",
+   "url": "https://surlybikes.com/uploads/downloads/surly-pack-rat-framesheet-85-000633_INST.pdf",
+   "grade": "oem_manual (citado en la revisión W; no releído)",
+   "claim_shape": "Espaciado Gnot-rite de 132,5 mm entre punteras que admite mazas de 130 o 135 mm, por diseño de ese cuadro."
+  },
+  "S-PARK-TAP": {
+   "title": "Park Tool — TAP-TA-SET (juego de machos de eje pasante)",
+   "url": "https://www.parktool.com/en-us/product/thru-axle-tap-set-tap-ta-set",
+   "grade": "reference_general",
+   "claim_shape": "El juego enumera M12×1,0/1,5/1,75 y M20×1,0/1,5/1,75."
+  },
+  "S-ROBERTAXLE-LIG601": {
+   "title": "Robert Axle Project — LIG601",
+   "url": "https://robertaxleproject.com/product/lightning-bolt-on-axle-rear-12-mm-x-174-mm-x-1-75-thread/",
+   "grade": "oem_page (citada en la revisión W; no releída)",
+   "claim_shape": "12 mm × 174 mm × 1,75: la longitud del eje es un dato distinto del estándar de maza."
+  },
+  "S-SAPIM": {
+   "title": "Sapim — folleto 2018, p. 8, párrafo «Thread»",
+   "url": "https://www.sapim.be/sites/default/files/Sapim%20brochure%202018%20def%20A5%202018-Taiwanese%20LR.pdf",
+   "grade": "oem_manual (citado en la revisión W; no releído)",
+   "claim_shape": "La rosca se lamina, no se corta; la del radio estándar de 2 mm se denomina FG 2.3 mm."
+  },
+  "S-SHELDON-SPOKE": {
+   "title": "Sheldon Brown / John Allen — Measurements for Spoke-Length Calculations",
+   "url": "https://www.sheldonbrown.com/spoke-length.html",
+   "grade": "reference_general",
+   "claim_shape": "El margen depende del método de cálculo, la compensación por tensado y el niple; no hay ±1 mm universal."
+  },
+  "S-ENGINE": {
+   "title": "Motor real: product_spec_rows.dart, product_spec_template_rules.dart, product_spec_coherence.dart, migración 0200 desplegada",
+   "url": null,
+   "grade": "structural (lectura de código 2026-09-07)",
+   "claim_shape": "Condiciones sólo sobre escalares; sin condiciones por celda (2200 local, no publicado); vínculos entre filas por row.id dentro de un producto; pares escalares con misma unidad."
+  },
+  "S-BASE": {
+   "title": "Catálogo integrado all-family-reviewed-fields-integrated-2026-09-07.json (f3178bd3c860c421…)",
+   "url": null,
+   "grade": "structural",
+   "claim_shape": "Estado real de campos, roles y contratos tras integrar A y B."
+  }
+ },
+ "findings": [
+  {
+   "id": "W01",
+   "severity": "P1",
+   "title": "Neumático/llanta: faltan perfil del talón y límites de ambos fabricantes",
+   "status": "no resuelto por A/B; corrección real",
+   "evidence_in_base": "La base tiene tire_bead_type (construcción del talón: alambre/plegable/tubular), dos booleanos tubeless_ready y un tire_max_pressure_psi único; rim.tire_width_range_mm sólo lleva ancho mín/máx y fuente. Ningún campo distingue hooked de hookless ni ata presión a la configuración.",
+   "residual": "La intersección de límites (23 mm del neumático manda sobre 25 mm de la llanta) es una regla de compatibilidad entre dos productos: no la cierra este paquete.",
+   "patch_ids": [
+    "WSS-W01-rim-rim_bead_profile",
+    "WSS-W01-wheel-rim_bead_profile",
+    "WSS-W01-tire-configurations",
+    "WSS-W01-tire-max_pressure-label"
+   ],
+   "approval_gate": "Aprobación mecánica pendiente: requiere relación neumático↔llanta con intersección y fuente por par."
+  },
+  {
+   "id": "W02",
+   "severity": "P1",
+   "title": "Amortiguador/cuadro: las tres medidas no resuelven la interferencia",
+   "status": "no resuelto por A/B; corrección parcial (representación)",
+   "evidence_in_base": "rear_shock conserva eye_to_eye_mm, stroke_mm y un único shock_mount_kind; mounting_hardware_included es un booleano de contenido; frame.rear_shock_size es texto libre.",
+   "residual": "Envolvente/depósito durante el recorrido, identidad y generación del par amortiguador↔cuadro y talla no son campos de un producto: son relaciones OEM con estado aprobado/excluido/pendiente. Este paquete no las crea.",
+   "patch_ids": [
+    "WSS-W02-shock-ends",
+    "WSS-W02-hardware-label"
+   ],
+   "approval_gate": "Aprobación mecánica pendiente: el aviso de contacto RC2T/Demo no se convierte en exclusión universal ni la coincidencia de tres medidas en aprobación."
+  },
+  {
+   "id": "W03",
+   "severity": "P1",
+   "title": "Rodamientos: envolvente y código corto no equivalen a función compatible",
+   "status": "no resuelto por A/B; corrección real",
+   "evidence_in_base": "La base conserva bearing_size_code como texto único, bearing_construction con «Cartucho sellado» indiviso y bearing_application como declaración con evidencia. La envolvente (ID/OD/ancho) sigue disponible.",
+   "residual": "La equivalencia OEM entre referencias concretas es una relación, no un campo.",
+   "patch_ids": [
+    "WSS-W03-size_code-label",
+    "WSS-W03-dimensional_code",
+    "WSS-W03-internal_construction",
+    "WSS-W03-seal_kind",
+    "WSS-W03-application-label"
+   ],
+   "approval_gate": "Aprobación mecánica pendiente: misma envolvente con función desconocida no puede producir «compatible»."
+  },
+  {
+   "id": "W04",
+   "severity": "P1",
+   "title": "Dirección: un ángulo escalar no representa los dos biseles",
+   "status": "parcialmente resuelto por A/B; corrección real pendiente",
+   "evidence_in_base": "A/B ya partió el escalar en bearing_inner_contact_angle_deg y bearing_outer_contact_angle_deg, condicionados a bearing_application = Dirección. Eso resuelve el par para un rodamiento suelto.",
+   "residual": "No se cierra por existir las dos columnas: la plantilla headset (el producto que el taller vende) no tiene ángulos ni representación por extremo, y el par no era exigible ni con destino «Dirección».",
+   "patch_ids": [
+    "WSS-W04-headset-bearings",
+    "WSS-W04-bearing-require-bearing_inner_contact_angle_deg",
+    "WSS-W04-bearing-require-bearing_outer_contact_angle_deg"
+   ],
+   "approval_gate": "Aprobación mecánica pendiente: un ángulo faltante no confirma montaje."
+  },
+  {
+   "id": "W05",
+   "severity": "P2",
+   "title": "SHIS del conjunto no es un identificador único del alojamiento del cuadro",
+   "status": "no resuelto por A/B; corrección real",
+   "evidence_in_base": "frame.headset_upper_shis y headset_lower_shis siguen siendo texto obligatorio siempre, sin puertos separados.",
+   "residual": "El stack total y la longitud de espiga disponible siguen siendo del montaje, no del cuadro solo.",
+   "patch_ids": [
+    "WSS-W05-frame-ports",
+    "WSS-W05-frame-upper_shis-optional",
+    "WSS-W05-frame-lower_shis-optional",
+    "WSS-W05-label-headset_upper_shis",
+    "WSS-W05-label-headset_lower_shis"
+   ],
+   "approval_gate": "Aprobación mecánica pendiente: superar el control de alojamiento no aprueba el montaje completo."
+  },
+  {
+   "id": "W06",
+   "severity": "P2",
+   "title": "Dirección: posiciones parciales y códigos válidos quedan fuera",
+   "status": "resuelto por A/B",
+   "evidence_in_base": "headset_part_scope (Superior/Inferior/Completa) existe y condiciona ambos extremos: allowed_when y required_when de headset_upper_shis piden Superior o Completa, y los del inferior Inferior o Completa. Los dos SHIS son text libre, sin expresión regular cerrada: ZS62/40 y EC49/38.1 se guardan tal cual.",
+   "residual": "El registro ampliable de combinaciones documentadas sigue siendo un asunto de vocabulario, no de esquema: un texto que pasa no queda aprobado por eso.",
+   "patch_ids": [],
+   "approval_gate": null
+  },
+  {
+   "id": "W07",
+   "severity": "P1",
+   "title": "Horquilla: falta envolvente del neumático y geometría admitida por el cuadro",
+   "status": "no resuelto por A/B; corrección real",
+   "evidence_in_base": "fork tiene bead_seat_diameter_mm, un max_tire_width_mm único, travel_mm y fork_offset_mm sin contraparte, y ninguna longitud eje-corona ni stack de corona.",
+   "residual": "Las restricciones del cuadro por modelo y talla (geometría, tipo de corona, recorrido admitido) son del cuadro y de la relación, no de la horquilla; este paquete no las crea.",
+   "patch_ids": [
+    "WSS-W07-fork-clearance",
+    "WSS-W07-fork-axle_to_crown",
+    "WSS-W07-fork-crown_stack_min_mm",
+    "WSS-W07-fork-crown_stack_max_mm",
+    "WSS-W07-fork-stack-pair",
+    "WSS-W07-fork-max_tire_width-label"
+   ],
+   "approval_gate": "Aprobación mecánica pendiente: la coincidencia de dirección no confirma geometría."
+  },
+  {
+   "id": "W08",
+   "severity": "P2",
+   "title": "OLD: `integer` pierde 132,5 mm y la igualdad universal rechaza un caso OEM",
+   "status": "parcialmente resuelto por A/B; corrección real pendiente",
+   "evidence_in_base": "hub_old_mm, frame.rear_hub_old_mm y wheel.hub_old_mm son number con positive y sin integer: 132,5 se almacena exacto. hub_spacing_mm (lista cerrada 100–157) quedó como legacy.",
+   "residual": "No se cierra por el tipo decimal: las mazas nominales que una puntera acepta no tienen dónde escribirse, y esa lista es la mitad del caso Surly.",
+   "patch_ids": [
+    "WSS-W08-frame-dropout"
+   ],
+   "approval_gate": "Aprobación mecánica pendiente: aceptar 130 y 135 sólo dentro del alcance documentado por ese fabricante."
+  },
+  {
+   "id": "W09",
+   "severity": "P2",
+   "title": "Eje pasante: vocabulario incompleto y retención separada de OLD",
+   "status": "resuelto por A/B",
+   "evidence_in_base": "thru_axle_thread incluye M12×1,75 y M20×1,0/1,5/1,75 además del par original; la plantilla wheel_retention separa thru_axle_diameter_mm, thru_axle_length_mm y target_hub_old_mm, y el requisito de rosca está condicionado a retention_kind = Eje pasante (en hub, fork y frame, al tipo de eje). El LIG601 12×174×1,75 se representa sin unknown artificial y un QR no queda pendiente por falta de rosca.",
+   "residual": "La denominación literal del fabricante no tiene campo propio y va en spec_evidence_source: no propongo un segundo dueño de la misma rosca, por la misma razón que en el saneamiento de luces.",
+   "patch_ids": [],
+   "approval_gate": "Aprobación mecánica pendiente: una ficha dimensional del eje no confirma una bicicleta concreta."
+  },
+  {
+   "id": "W10",
+   "severity": "P2",
+   "title": "Radio: calibre del alambre no es diámetro de rosca",
+   "status": "no resuelto por A/B; corrección real",
+   "evidence_in_base": "spoke_gauge y spoke_thread_diameter_mm coexisten, pero el segundo sigue rotulado como diámetro de rosca; nipple_thread es una lista de calibres (14G/15G/13G).",
+   "residual": "La referencia compatible OEM para sistemas propietarios sigue siendo una relación entre productos.",
+   "patch_ids": [
+    "WSS-W10-spoke-thread-label",
+    "WSS-W10-spoke-thread_standard",
+    "WSS-W10-nipple-thread_standard",
+    "WSS-W10-nipple-thread-label"
+   ],
+   "approval_gate": "Aprobación mecánica pendiente: la designación no aprueba el par radio↔niple sin la referencia del fabricante."
+  },
+  {
+   "id": "W11",
+   "severity": "P2",
+   "title": "Radiado: ±1 mm y mismo número de agujeros no son leyes universales",
+   "status": "no resuelto; fuera del alcance de campos",
+   "evidence_in_base": "spoke_length_mm existe; el conteo de agujeros existe en rim.spoke_hole_count y hub.spoke_hole_count. Nada de eso es una receta de armado.",
+   "residual": "Las dos reglas que el hallazgo rechaza (±1 mm y conteos iguales) son reglas de compatibilidad, no campos: no hay parche que las corrija. La receta de armado (lado, geometría, patrón, método de cálculo, compensación, niple) sería un campo de filas nuevo y no lo propongo sin que el dueño confirme que el taller registra armados; ver decisión D-W11.",
+   "patch_ids": [],
+   "approval_gate": "Aprobación mecánica pendiente: un cálculo sin metadato de compensación no produce un bloqueo por un milímetro."
+  }
+ ],
+ "new_definitions": {
+  "rim_bead_profile": {
+   "key": "rim_bead_profile",
+   "origin": "new",
+   "id": null,
+   "label": "Perfil del talón de la llanta",
+   "data_type": "single_select",
+   "unit": null,
+   "allowed_values": [
+    "Con gancho (hooked)",
+    "Sin gancho (hookless)",
+    "Tubular / de pegar",
+    "Otro",
+    "Desconocido / sin confirmar"
+   ],
+   "validation_rules": {},
+   "used_by": []
+  },
+  "tire_rim_configurations": {
+   "key": "tire_rim_configurations",
+   "origin": "new",
+   "id": null,
+   "label": "Configuraciones de llanta admitidas por el fabricante del neumático",
+   "data_type": "json",
+   "unit": null,
+   "allowed_values": [],
+   "validation_rules": {
+    "row_label": "Configuración de llanta",
+    "rows_schema": {
+     "version": 1,
+     "columns": [
+      {
+       "key": "tire_variant",
+       "label": "Variante del neumático",
+       "type": "text",
+       "required": true
+      },
+      {
+       "key": "rim_bead_profile",
+       "label": "Perfil de la llanta",
+       "type": "token",
+       "required": true,
+       "allowed_values": [
+        "Con gancho (hooked)",
+        "Sin gancho (hookless)",
+        "Tubular / de pegar",
+        "Otro",
+        "Desconocido / sin confirmar"
+       ]
+      },
+      {
+       "key": "mounting_method",
+       "label": "Método de montaje",
+       "type": "token",
+       "required": true,
+       "allowed_values": [
+        "Con cámara",
+        "Tubeless",
+        "Tubular",
+        "Desconocido / sin confirmar"
+       ]
+      },
+      {
+       "key": "rim_internal_width_min_mm",
+       "label": "Ancho interior mínimo",
+       "type": "decimal",
+       "unit": "mm",
+       "validation": {
+        "positive": true
+       }
+      },
+      {
+       "key": "rim_internal_width_max_mm",
+       "label": "Ancho interior máximo",
+       "type": "decimal",
+       "unit": "mm",
+       "validation": {
+        "positive": true
+       }
+      },
+      {
+       "key": "max_pressure_bar",
+       "label": "Presión máxima en esta configuración",
+       "type": "decimal",
+       "unit": "bar",
+       "validation": {
+        "positive": true
+       }
+      },
+      {
+       "key": "max_pressure_psi",
+       "label": "Presión máxima en esta configuración",
+       "type": "decimal",
+       "unit": "psi",
+       "validation": {
+        "positive": true
+       }
+      },
+      {
+       "key": "source_url",
+       "label": "Fuente",
+       "type": "url"
+      }
+     ],
+     "ordered_pairs": [
+      [
+       "rim_internal_width_min_mm",
+       "rim_internal_width_max_mm"
+      ]
+     ],
+     "unique_by": [
+      [
+       "tire_variant",
+       "rim_bead_profile",
+       "mounting_method"
+      ]
+     ]
+    }
+   },
+   "used_by": []
+  },
+  "shock_end_configurations": {
+   "key": "shock_end_configurations",
+   "origin": "new",
+   "id": null,
+   "label": "Fijación por extremo del amortiguador",
+   "data_type": "json",
+   "unit": null,
+   "allowed_values": [],
+   "validation_rules": {
+    "row_label": "Configuración",
+    "rows_schema": {
+     "version": 1,
+     "columns": [
+      {
+       "key": "end_position",
+       "label": "Extremo",
+       "type": "token",
+       "required": true,
+       "allowed_values": [
+        "Superior",
+        "Inferior"
+       ]
+      },
+      {
+       "key": "mount_kind",
+       "label": "Tipo de fijación",
+       "type": "token",
+       "required": true,
+       "allowed_values": [
+        "Ojal estándar",
+        "Trunnion",
+        "Otro",
+        "Desconocido / sin confirmar"
+       ]
+      },
+      {
+       "key": "hardware_width_mm",
+       "label": "Ancho del hardware",
+       "type": "decimal",
+       "unit": "mm",
+       "validation": {
+        "positive": true
+       }
+      },
+      {
+       "key": "bolt_diameter_mm",
+       "label": "Diámetro del perno",
+       "type": "decimal",
+       "unit": "mm",
+       "validation": {
+        "positive": true
+       }
+      },
+      {
+       "key": "hardware_reference",
+       "label": "Referencia del hardware / adaptador",
+       "type": "text"
+      },
+      {
+       "key": "source_url",
+       "label": "Fuente",
+       "type": "url"
+      }
+     ],
+     "unique_by": [
+      [
+       "end_position"
+      ]
+     ]
+    }
+   },
+   "used_by": []
+  },
+  "bearing_dimensional_code": {
+   "key": "bearing_dimensional_code",
+   "origin": "new",
+   "id": null,
+   "label": "Código dimensional normalizado (sin sufijos)",
+   "data_type": "text",
+   "unit": null,
+   "allowed_values": [],
+   "validation_rules": {},
+   "used_by": []
+  },
+  "bearing_internal_construction": {
+   "key": "bearing_internal_construction",
+   "origin": "new",
+   "id": null,
+   "label": "Construcción interna del rodamiento",
+   "data_type": "single_select",
+   "unit": null,
+   "allowed_values": [
+    "Radial de bolas, retención estándar",
+    "MAX / sin canal de llenado",
+    "Contacto angular",
+    "Agujas",
+    "Otro",
+    "Desconocido / sin confirmar"
+   ],
+   "validation_rules": {},
+   "used_by": []
+  },
+  "bearing_seal_kind": {
+   "key": "bearing_seal_kind",
+   "origin": "new",
+   "id": null,
+   "label": "Sellado declarado",
+   "data_type": "single_select",
+   "unit": null,
+   "allowed_values": [
+    "2RS (goma, doble)",
+    "LLB / LLU",
+    "Blindado (2Z)",
+    "Abierto",
+    "Otro",
+    "Desconocido / sin confirmar"
+   ],
+   "validation_rules": {},
+   "used_by": []
+  },
+  "headset_bearing_configurations": {
+   "key": "headset_bearing_configurations",
+   "origin": "new",
+   "id": null,
+   "label": "Rodamientos de la dirección por extremo",
+   "data_type": "json",
+   "unit": null,
+   "allowed_values": [],
+   "validation_rules": {
+    "row_label": "Configuración",
+    "rows_schema": {
+     "version": 1,
+     "columns": [
+      {
+       "key": "position",
+       "label": "Extremo",
+       "type": "token",
+       "required": true,
+       "allowed_values": [
+        "Superior",
+        "Inferior"
+       ]
+      },
+      {
+       "key": "inner_contact_angle_deg",
+       "label": "Ángulo interno",
+       "type": "decimal",
+       "unit": "°",
+       "validation": {
+        "positive": true
+       }
+      },
+      {
+       "key": "outer_contact_angle_deg",
+       "label": "Ángulo externo",
+       "type": "decimal",
+       "unit": "°",
+       "validation": {
+        "positive": true
+       }
+      },
+      {
+       "key": "bearing_outer_diameter_mm",
+       "label": "Diámetro exterior",
+       "type": "decimal",
+       "unit": "mm",
+       "validation": {
+        "positive": true
+       }
+      },
+      {
+       "key": "bearing_inner_diameter_mm",
+       "label": "Diámetro interior",
+       "type": "decimal",
+       "unit": "mm",
+       "validation": {
+        "positive": true
+       }
+      },
+      {
+       "key": "bearing_height_mm",
+       "label": "Altura",
+       "type": "decimal",
+       "unit": "mm",
+       "validation": {
+        "positive": true
+       }
+      },
+      {
+       "key": "seat_type",
+       "label": "Asiento",
+       "type": "token",
+       "allowed_values": [
+        "IS (integrado)",
+        "ZS (semi-integrado)",
+        "EC (externo)",
+        "Roscado",
+        "Otro",
+        "Desconocido / sin confirmar"
+       ]
+      },
+      {
+       "key": "bearing_reference",
+       "label": "Referencia del rodamiento",
+       "type": "text"
+      },
+      {
+       "key": "source_url",
+       "label": "Fuente",
+       "type": "url"
+      }
+     ],
+     "unique_by": [
+      [
+       "position"
+      ]
+     ]
+    }
+   },
+   "used_by": []
+  },
+  "headset_port_configurations": {
+   "key": "headset_port_configurations",
+   "origin": "new",
+   "id": null,
+   "label": "Alojamientos de dirección del cuadro por extremo",
+   "data_type": "json",
+   "unit": null,
+   "allowed_values": [],
+   "validation_rules": {
+    "row_label": "Configuración",
+    "rows_schema": {
+     "version": 1,
+     "columns": [
+      {
+       "key": "position",
+       "label": "Extremo",
+       "type": "token",
+       "required": true,
+       "allowed_values": [
+        "Superior",
+        "Inferior"
+       ]
+      },
+      {
+       "key": "seat_type",
+       "label": "Tipo de asiento",
+       "type": "token",
+       "required": true,
+       "allowed_values": [
+        "IS (integrado)",
+        "ZS (semi-integrado)",
+        "EC (externo)",
+        "Roscado",
+        "Otro",
+        "Desconocido / sin confirmar"
+       ]
+      },
+      {
+       "key": "housing_diameter_mm",
+       "label": "Diámetro nominal del alojamiento",
+       "type": "decimal",
+       "unit": "mm",
+       "validation": {
+        "positive": true
+       }
+      },
+      {
+       "key": "housing_depth_mm",
+       "label": "Profundidad admisible",
+       "type": "decimal",
+       "unit": "mm",
+       "validation": {
+        "positive": true
+       }
+      },
+      {
+       "key": "measured_diameter_mm",
+       "label": "Diámetro medido (si se midió)",
+       "type": "decimal",
+       "unit": "mm",
+       "validation": {
+        "positive": true
+       }
+      },
+      {
+       "key": "source_url",
+       "label": "Fuente",
+       "type": "url"
+      }
+     ],
+     "unique_by": [
+      [
+       "position"
+      ]
+     ]
+    }
+   },
+   "used_by": []
+  },
+  "fork_tire_clearance_configurations": {
+   "key": "fork_tire_clearance_configurations",
+   "origin": "new",
+   "id": null,
+   "label": "Envolvente de neumático admitida por la horquilla",
+   "data_type": "json",
+   "unit": null,
+   "allowed_values": [],
+   "validation_rules": {
+    "row_label": "Configuración",
+    "rows_schema": {
+     "version": 1,
+     "columns": [
+      {
+       "key": "bead_seat_diameter_mm",
+       "label": "BSD de la rueda",
+       "type": "integer",
+       "unit": "mm",
+       "required": true,
+       "validation": {
+        "positive": true
+       }
+      },
+      {
+       "key": "max_tire_width_mm",
+       "label": "Ancho máximo",
+       "type": "decimal",
+       "unit": "mm",
+       "required": true,
+       "validation": {
+        "positive": true
+       }
+      },
+      {
+       "key": "max_inflated_diameter_mm",
+       "label": "Diámetro exterior inflado máximo",
+       "type": "decimal",
+       "unit": "mm",
+       "validation": {
+        "positive": true
+       }
+      },
+      {
+       "key": "max_inflated_shoulder_diameter_mm",
+       "label": "Diámetro de borde inflado máximo",
+       "type": "decimal",
+       "unit": "mm",
+       "validation": {
+        "positive": true
+       }
+      },
+      {
+       "key": "measurement_method",
+       "label": "Método de medición declarado",
+       "type": "text"
+      },
+      {
+       "key": "source_url",
+       "label": "Fuente",
+       "type": "url"
+      }
+     ],
+     "unique_by": [
+      [
+       "bead_seat_diameter_mm",
+       "max_tire_width_mm"
+      ]
+     ]
+    }
+   },
+   "used_by": []
+  },
+  "axle_to_crown_mm": {
+   "key": "axle_to_crown_mm",
+   "origin": "new",
+   "id": null,
+   "label": "Longitud eje-corona",
+   "data_type": "number",
+   "unit": "mm",
+   "allowed_values": [],
+   "validation_rules": {
+    "positive": true
+   },
+   "used_by": []
+  },
+  "crown_stack_min_mm": {
+   "key": "crown_stack_min_mm",
+   "origin": "new",
+   "id": null,
+   "label": "Stack total mínimo de la corona (direct mount)",
+   "data_type": "number",
+   "unit": "mm",
+   "allowed_values": [],
+   "validation_rules": {
+    "positive": true
+   },
+   "used_by": []
+  },
+  "crown_stack_max_mm": {
+   "key": "crown_stack_max_mm",
+   "origin": "new",
+   "id": null,
+   "label": "Stack total máximo de la corona (direct mount)",
+   "data_type": "number",
+   "unit": "mm",
+   "allowed_values": [],
+   "validation_rules": {
+    "positive": true
+   },
+   "used_by": []
+  },
+  "dropout_hub_acceptance_configurations": {
+   "key": "dropout_hub_acceptance_configurations",
+   "origin": "new",
+   "id": null,
+   "label": "Mazas admitidas por las punteras según el fabricante",
+   "data_type": "json",
+   "unit": null,
+   "allowed_values": [],
+   "validation_rules": {
+    "row_label": "Configuración",
+    "rows_schema": {
+     "version": 1,
+     "columns": [
+      {
+       "key": "position",
+       "label": "Extremo",
+       "type": "token",
+       "required": true,
+       "allowed_values": [
+        "Delantera",
+        "Trasera"
+       ]
+      },
+      {
+       "key": "accepted_hub_old_mm",
+       "label": "OLD de maza admitido",
+       "type": "decimal",
+       "unit": "mm",
+       "required": true,
+       "validation": {
+        "positive": true
+       }
+      },
+      {
+       "key": "retention_kind",
+       "label": "Retención",
+       "type": "token",
+       "required": true,
+       "allowed_values": [
+        "Cierre rápido",
+        "Eje pasante",
+        "Tuerca de eje",
+        "Otro",
+        "Desconocido / sin confirmar"
+       ]
+      },
+      {
+       "key": "scope_note",
+       "label": "Alcance declarado por el fabricante",
+       "type": "text"
+      },
+      {
+       "key": "source_url",
+       "label": "Fuente",
+       "type": "url"
+      }
+     ],
+     "unique_by": [
+      [
+       "position",
+       "accepted_hub_old_mm",
+       "retention_kind"
+      ]
+     ]
+    }
+   },
+   "used_by": []
+  },
+  "spoke_thread_standard": {
+   "key": "spoke_thread_standard",
+   "origin": "new",
+   "id": null,
+   "label": "Designación de la rosca declarada por el fabricante (por ejemplo FG 2.3)",
+   "data_type": "text",
+   "unit": null,
+   "allowed_values": [],
+   "validation_rules": {},
+   "used_by": []
+  },
+  "nipple_thread_standard": {
+   "key": "nipple_thread_standard",
+   "origin": "new",
+   "id": null,
+   "label": "Designación de la rosca del niple declarada por el fabricante",
+   "data_type": "text",
+   "unit": null,
+   "allowed_values": [],
+   "validation_rules": {},
+   "used_by": []
+  }
+ },
+ "patches": [
+  {
+   "id": "WSS-W01-rim-rim_bead_profile",
+   "finding": "W01",
+   "op": "add_field",
+   "template": "rim",
+   "key": "rim_bead_profile",
+   "before": null,
+   "after": {
+    "field_entry": {
+     "key": "rim_bead_profile",
+     "section_key": "measurement",
+     "sort_order": 200,
+     "is_required": false,
+     "visibility_rules": [],
+     "option_rules": [],
+     "constraint_rules": []
+    },
+    "definition_used_by_append": "rim",
+    "roles": "measurement",
+    "semantic_roles": "compatibility",
+    "allowed_when": {
+     "kind": "always"
+    },
+    "required_when": {
+     "kind": "never"
+    },
+    "evidence_requirements": "oem_spec"
+   },
+   "source_ids": [
+    "S-CONTI-HOOKLESS",
+    "S-PARK-TUBELESS"
+   ],
+   "scope": "Sólo la plantilla rim. Hookless y hooked no son el mismo asiento y hoy no se distinguen; tubeless_ready es otro eje.",
+   "counter_case": "Una llanta hookless con rim_tubeless_ready=true no autoriza cualquier neumático tubeless: falta el límite del neumático."
+  },
+  {
+   "id": "WSS-W01-wheel-rim_bead_profile",
+   "finding": "W01",
+   "op": "add_field",
+   "template": "wheel",
+   "key": "rim_bead_profile",
+   "before": null,
+   "after": {
+    "field_entry": {
+     "key": "rim_bead_profile",
+     "section_key": "measurement",
+     "sort_order": 200,
+     "is_required": false,
+     "visibility_rules": [],
+     "option_rules": [],
+     "constraint_rules": []
+    },
+    "definition_used_by_append": "wheel",
+    "roles": "measurement",
+    "semantic_roles": "compatibility",
+    "allowed_when": {
+     "kind": "always"
+    },
+    "required_when": {
+     "kind": "never"
+    },
+    "evidence_requirements": "oem_spec"
+   },
+   "source_ids": [
+    "S-CONTI-HOOKLESS",
+    "S-PARK-TUBELESS"
+   ],
+   "scope": "Sólo la plantilla wheel. Hookless y hooked no son el mismo asiento y hoy no se distinguen; tubeless_ready es otro eje.",
+   "counter_case": "Una llanta hookless con rim_tubeless_ready=true no autoriza cualquier neumático tubeless: falta el límite del neumático."
+  },
+  {
+   "id": "WSS-W01-tire-configurations",
+   "finding": "W01",
+   "op": "add_field",
+   "template": "tire",
+   "key": "tire_rim_configurations",
+   "before": null,
+   "after": {
+    "field_entry": {
+     "key": "tire_rim_configurations",
+     "section_key": "measurement",
+     "sort_order": 210,
+     "is_required": false,
+     "visibility_rules": [],
+     "option_rules": [],
+     "constraint_rules": []
+    },
+    "definition_used_by_append": "tire",
+    "roles": "measurement",
+    "semantic_roles": "compatibility",
+    "allowed_when": {
+     "kind": "always"
+    },
+    "required_when": {
+     "kind": "never"
+    },
+    "evidence_requirements": "oem_spec",
+    "prerequisites": [
+     "spec_evidence_source"
+    ]
+   },
+   "source_ids": [
+    "S-CONTI-HOOKLESS",
+    "S-ZIPP-TUBE",
+    "S-SHELDON-TIRE"
+   ],
+   "scope": "El límite es por variante × perfil × método: 28c hookless 23 mm y 5,0 bar; 30c hookless 25 mm y 4,5 bar. Una presión única del producto no representa dos montajes.",
+   "counter_case": "La fila de 30c no autoriza la 28c; 4,5 bar no se reemplaza por el máximo de otra variante ni por el de hooked."
+  },
+  {
+   "id": "WSS-W01-tire-max_pressure-label",
+   "finding": "W01",
+   "op": "replace_definition_label",
+   "template": null,
+   "key": "tire_max_pressure_psi",
+   "before": "Presión máxima del neumático declarada",
+   "after": "Presión máxima de portada declarada por el fabricante (no es el mínimo de las configuraciones)",
+   "source_ids": [
+    "S-CONTI-HOOKLESS",
+    "S-BASE"
+   ],
+   "scope": "El escalar sigue siendo el titular OEM y conserva su dueño; el detalle por configuración vive en las filas. Ni el escalar se deriva de las filas ni las filas lo niegan.",
+   "counter_case": "Un neumático con 8 bar de portada y una fila hookless de 4,5 bar no es contradicción: son dos afirmaciones del fabricante con alcance distinto."
+  },
+  {
+   "id": "WSS-W02-shock-ends",
+   "finding": "W02",
+   "op": "add_field",
+   "template": "rear_shock",
+   "key": "shock_end_configurations",
+   "before": null,
+   "after": {
+    "field_entry": {
+     "key": "shock_end_configurations",
+     "section_key": "measurement",
+     "sort_order": 210,
+     "is_required": false,
+     "visibility_rules": [],
+     "option_rules": [],
+     "constraint_rules": []
+    },
+    "definition_used_by_append": "rear_shock",
+    "roles": "measurement",
+    "semantic_roles": "compatibility",
+    "allowed_when": {
+     "kind": "always"
+    },
+    "required_when": {
+     "kind": "never"
+    },
+    "evidence_requirements": "oem_spec",
+    "prerequisites": [
+     "spec_evidence_source"
+    ]
+   },
+   "source_ids": [
+    "S-ROCKSHOX-FIT"
+   ],
+   "scope": "Cada extremo tiene su tipo, ancho y perno: hoy sólo hay un shock_mount_kind para todo el amortiguador. Una fila por extremo, identificada por posición.",
+   "counter_case": "Trunnion arriba y ojal abajo dejaba de ser representable con un solo escalar; el hardware incluido no dice para qué cuadro sirve."
+  },
+  {
+   "id": "WSS-W02-hardware-label",
+   "finding": "W02",
+   "op": "replace_definition_label",
+   "template": null,
+   "key": "mounting_hardware_included",
+   "before": "Incluye herrajes de montaje",
+   "after": "Incluye hardware de montaje (contenido del envase; no afirma que sirva para un cuadro concreto)",
+   "source_ids": [
+    "S-ROCKSHOX-FIT"
+   ],
+   "scope": "Sólo el rótulo: «incluido» dejaba leerse como «apropiado para este cuadro».",
+   "counter_case": "Un amortiguador con hardware incluido y contacto documentado del depósito con un cuadro sigue pendiente de resolución."
+  },
+  {
+   "id": "WSS-W03-size_code-label",
+   "finding": "W03",
+   "op": "replace_definition_label",
+   "template": null,
+   "key": "bearing_size_code",
+   "before": "Código rodamiento",
+   "after": "Designación del fabricante, literal y con sufijos (por ejemplo 6902 2RS MAX)",
+   "source_ids": [
+    "S-ENDURO-MAX"
+   ],
+   "scope": "Rótulo de la definición, compartida por bearing, bottom_bracket y bottom_bracket_bearing: en las tres el campo es la designación del fabricante, así que el cambio vale para todas.",
+   "counter_case": "Registrar «6902» a secas borra la diferencia entre un MAX de pivote y un rodamiento de maza del mismo tamaño."
+  },
+  {
+   "id": "WSS-W03-dimensional_code",
+   "finding": "W03",
+   "op": "add_field",
+   "template": "bearing",
+   "key": "bearing_dimensional_code",
+   "before": null,
+   "after": {
+    "field_entry": {
+     "key": "bearing_dimensional_code",
+     "section_key": "measurement",
+     "sort_order": 210,
+     "is_required": false,
+     "visibility_rules": [],
+     "option_rules": [],
+     "constraint_rules": []
+    },
+    "definition_used_by_append": "bearing",
+    "roles": "measurement",
+    "semantic_roles": "compatibility",
+    "allowed_when": {
+     "kind": "when",
+     "rows": [
+      [
+       {
+        "field": "bearing_construction",
+        "operator": "eq",
+        "value_type": "token",
+        "value": "Cartucho sellado"
+       }
+      ]
+     ]
+    },
+    "required_when": {
+     "kind": "never"
+    },
+    "evidence_requirements": "oem_spec"
+   },
+   "source_ids": [
+    "S-ENDURO-MAX",
+    "S-BASE"
+   ],
+   "scope": "Segundo dueño legítimo: el literal del fabricante y el código dimensional normalizado son dos hechos, como en el saneamiento de luces.",
+   "counter_case": "Dos rodamientos con el mismo código dimensional y distinta designación no son intercambiables por eso."
+  },
+  {
+   "id": "WSS-W03-internal_construction",
+   "finding": "W03",
+   "op": "add_field",
+   "template": "bearing",
+   "key": "bearing_internal_construction",
+   "before": null,
+   "after": {
+    "field_entry": {
+     "key": "bearing_internal_construction",
+     "section_key": "measurement",
+     "sort_order": 220,
+     "is_required": false,
+     "visibility_rules": [],
+     "option_rules": [],
+     "constraint_rules": []
+    },
+    "definition_used_by_append": "bearing",
+    "roles": "measurement",
+    "semantic_roles": "compatibility",
+    "allowed_when": {
+     "kind": "when",
+     "rows": [
+      [
+       {
+        "field": "bearing_construction",
+        "operator": "eq",
+        "value_type": "token",
+        "value": "Cartucho sellado"
+       }
+      ]
+     ]
+    },
+    "required_when": {
+     "kind": "never"
+    },
+    "evidence_requirements": "oem_spec"
+   },
+   "source_ids": [
+    "S-ENDURO-MAX"
+   ],
+   "scope": "ID/OD/ancho es filtro de envolvente; la retención de bolas y el destino previsto son otro hecho.",
+   "counter_case": "MAX (sin canal de llenado) y radial estándar comparten envolvente y no comparten uso."
+  },
+  {
+   "id": "WSS-W03-seal_kind",
+   "finding": "W03",
+   "op": "add_field",
+   "template": "bearing",
+   "key": "bearing_seal_kind",
+   "before": null,
+   "after": {
+    "field_entry": {
+     "key": "bearing_seal_kind",
+     "section_key": "measurement",
+     "sort_order": 230,
+     "is_required": false,
+     "visibility_rules": [],
+     "option_rules": [],
+     "constraint_rules": []
+    },
+    "definition_used_by_append": "bearing",
+    "roles": "measurement",
+    "semantic_roles": "compatibility",
+    "allowed_when": {
+     "kind": "when",
+     "rows": [
+      [
+       {
+        "field": "bearing_construction",
+        "operator": "eq",
+        "value_type": "token",
+        "value": "Cartucho sellado"
+       }
+      ]
+     ]
+    },
+    "required_when": {
+     "kind": "never"
+    },
+    "evidence_requirements": "oem_spec"
+   },
+   "source_ids": [
+    "S-ENDURO-MAX"
+   ],
+   "scope": "El sellado y la lubricación cambian el destino funcional y viajan en el sufijo de la designación.",
+   "counter_case": "Un 2RS y un blindado 2Z de la misma envolvente no cubren el mismo uso."
+  },
+  {
+   "id": "WSS-W03-application-label",
+   "finding": "W03",
+   "op": "replace_definition_label",
+   "template": null,
+   "key": "bearing_application",
+   "before": "Aplicación del Rodamiento",
+   "after": "Destino funcional declarado por el fabricante (orientación; no aprueba el montaje)",
+   "source_ids": [
+    "S-ENDURO-MAX"
+   ],
+   "scope": "Sólo el rótulo: el campo es una declaración con evidencia, no una interfaz.",
+   "counter_case": "«Cabe» y «aprobado para este uso» deben producir resultados distintos."
+  },
+  {
+   "id": "WSS-W04-headset-bearings",
+   "finding": "W04",
+   "op": "add_field",
+   "template": "headset",
+   "key": "headset_bearing_configurations",
+   "before": null,
+   "after": {
+    "field_entry": {
+     "key": "headset_bearing_configurations",
+     "section_key": "measurement",
+     "sort_order": 210,
+     "is_required": false,
+     "visibility_rules": [],
+     "option_rules": [],
+     "constraint_rules": []
+    },
+    "definition_used_by_append": "headset",
+    "roles": "measurement",
+    "semantic_roles": "compatibility",
+    "allowed_when": {
+     "kind": "always"
+    },
+    "required_when": {
+     "kind": "never"
+    },
+    "evidence_requirements": "oem_spec",
+    "prerequisites": [
+     "spec_evidence_source"
+    ]
+   },
+   "source_ids": [
+    "S-CANECREEK-40",
+    "S-PARK-HEADSET"
+   ],
+   "scope": "Una dirección completa lleva dos rodamientos con pares de ángulos propios; hoy la plantilla headset no tiene ningún ángulo. Una fila por extremo vendido.",
+   "counter_case": "No mezclar el superior de una alternativa con el inferior de otra; 36×45 y 45×45 no se colapsan a «45»."
+  },
+  {
+   "id": "WSS-W04-bearing-require-bearing_inner_contact_angle_deg",
+   "finding": "W04",
+   "op": "replace_field_contract",
+   "template": "bearing",
+   "key": "bearing_inner_contact_angle_deg",
+   "before": {
+    "required_when": {
+     "kind": "never"
+    }
+   },
+   "after": {
+    "required_when": {
+     "kind": "when",
+     "rows": [
+      [
+       {
+        "field": "bearing_application",
+        "operator": "eq",
+        "value_type": "token",
+        "value": "Dirección"
+       }
+      ]
+     ]
+    }
+   },
+   "source_ids": [
+    "S-CANECREEK-40"
+   ],
+   "scope": "El propio hallazgo señala que la nota exige el par y el contrato no lo pedía. La exigencia es no bloqueante (required_missing) y sólo cuando el destino declarado es dirección.",
+   "counter_case": "Un rodamiento de dirección sin ángulo declarado queda pendiente, nunca aprobado por defecto."
+  },
+  {
+   "id": "WSS-W04-bearing-require-bearing_outer_contact_angle_deg",
+   "finding": "W04",
+   "op": "replace_field_contract",
+   "template": "bearing",
+   "key": "bearing_outer_contact_angle_deg",
+   "before": {
+    "required_when": {
+     "kind": "never"
+    }
+   },
+   "after": {
+    "required_when": {
+     "kind": "when",
+     "rows": [
+      [
+       {
+        "field": "bearing_application",
+        "operator": "eq",
+        "value_type": "token",
+        "value": "Dirección"
+       }
+      ]
+     ]
+    }
+   },
+   "source_ids": [
+    "S-CANECREEK-40"
+   ],
+   "scope": "El propio hallazgo señala que la nota exige el par y el contrato no lo pedía. La exigencia es no bloqueante (required_missing) y sólo cuando el destino declarado es dirección.",
+   "counter_case": "Un rodamiento de dirección sin ángulo declarado queda pendiente, nunca aprobado por defecto."
+  },
+  {
+   "id": "WSS-W05-frame-ports",
+   "finding": "W05",
+   "op": "add_field",
+   "template": "frame",
+   "key": "headset_port_configurations",
+   "before": null,
+   "after": {
+    "field_entry": {
+     "key": "headset_port_configurations",
+     "section_key": "measurement",
+     "sort_order": 210,
+     "is_required": false,
+     "visibility_rules": [],
+     "option_rules": [],
+     "constraint_rules": []
+    },
+    "definition_used_by_append": "frame",
+    "roles": "measurement",
+    "semantic_roles": "compatibility",
+    "allowed_when": {
+     "kind": "always"
+    },
+    "required_when": {
+     "kind": "never"
+    },
+    "evidence_requirements": "oem_spec"
+   },
+   "source_ids": [
+    "S-CANECREEK-HS",
+    "S-PARK-HEADSET"
+   ],
+   "scope": "El alojamiento del cuadro es un puerto con tipo, diámetro nominal y profundidad; el código nominal, la dimensión medida y la tolerancia son significados distintos.",
+   "counter_case": "Un tubo de 44 mm admite EC44/30 y ZS44/30: el SHIS del conjunto original no es la lista de lo aceptable."
+  },
+  {
+   "id": "WSS-W05-frame-upper_shis-optional",
+   "finding": "W05",
+   "op": "replace_field_contract",
+   "template": "frame",
+   "key": "headset_upper_shis",
+   "before": {
+    "required_when": {
+     "kind": "always"
+    }
+   },
+   "after": {
+    "required_when": {
+     "kind": "never"
+    }
+   },
+   "source_ids": [
+    "S-CANECREEK-HS"
+   ],
+   "scope": "El SHIS del cuadro pasa a evidencia de la configuración original y deja de ser obligatorio: exigirlo siempre obliga a inventar un código donde sólo hay un alojamiento medido.",
+   "counter_case": "Un cuadro con alojamiento conocido y sin SHIS publicado queda pendiente, no inválido."
+  },
+  {
+   "id": "WSS-W05-frame-lower_shis-optional",
+   "finding": "W05",
+   "op": "replace_field_contract",
+   "template": "frame",
+   "key": "headset_lower_shis",
+   "before": {
+    "required_when": {
+     "kind": "always"
+    }
+   },
+   "after": {
+    "required_when": {
+     "kind": "never"
+    }
+   },
+   "source_ids": [
+    "S-CANECREEK-HS"
+   ],
+   "scope": "Igual que el superior.",
+   "counter_case": "Igual que el superior."
+  },
+  {
+   "id": "WSS-W05-label-headset_upper_shis",
+   "finding": "W05",
+   "op": "replace_field_contract",
+   "template": "frame",
+   "key": "headset_upper_shis",
+   "before": {},
+   "after": {
+    "labels": "SHIS superior de la dirección original (evidencia de configuración, no lista exhaustiva)"
+   },
+   "source_ids": [
+    "S-CANECREEK-HS"
+   ],
+   "scope": "Sólo en la plantilla frame. La definición la comparten headset, bicycle y frame: en una dirección el SHIS es su propio código y ese rótulo no debe cambiar, así que se anula por plantilla en vez de reescribir la definición.",
+   "counter_case": "Confundir la dirección original del cuadro con todas las aceptables bloquea alternativas válidas; cambiar el rótulo global habría roto el significado en la dirección.",
+   "requires_before_extensions": {
+    "labels": {
+     "present": false,
+     "value": null
+    }
+   }
+  },
+  {
+   "id": "WSS-W05-label-headset_lower_shis",
+   "finding": "W05",
+   "op": "replace_field_contract",
+   "template": "frame",
+   "key": "headset_lower_shis",
+   "before": {},
+   "after": {
+    "labels": "SHIS inferior de la dirección original (evidencia de configuración, no lista exhaustiva)"
+   },
+   "source_ids": [
+    "S-CANECREEK-HS"
+   ],
+   "scope": "Sólo en la plantilla frame. La definición la comparten headset, bicycle y frame: en una dirección el SHIS es su propio código y ese rótulo no debe cambiar, así que se anula por plantilla en vez de reescribir la definición.",
+   "counter_case": "Confundir la dirección original del cuadro con todas las aceptables bloquea alternativas válidas; cambiar el rótulo global habría roto el significado en la dirección.",
+   "requires_before_extensions": {
+    "labels": {
+     "present": false,
+     "value": null
+    }
+   }
+  },
+  {
+   "id": "WSS-W07-fork-clearance",
+   "finding": "W07",
+   "op": "add_field",
+   "template": "fork",
+   "key": "fork_tire_clearance_configurations",
+   "before": null,
+   "after": {
+    "field_entry": {
+     "key": "fork_tire_clearance_configurations",
+     "section_key": "measurement",
+     "sort_order": 210,
+     "is_required": false,
+     "visibility_rules": [],
+     "option_rules": [],
+     "constraint_rules": []
+    },
+    "definition_used_by_append": "fork",
+    "roles": "measurement",
+    "semantic_roles": "compatibility",
+    "allowed_when": {
+     "kind": "always"
+    },
+    "required_when": {
+     "kind": "never"
+    },
+    "evidence_requirements": "oem_spec",
+    "prerequisites": [
+     "spec_evidence_source"
+    ]
+   },
+   "source_ids": [
+    "S-FOX40-2013"
+   ],
+   "scope": "La envolvente es por rueda: la FOX 40 de 2013 en 26\" limita pico 694 mm, borde 670 mm y ancho 71 mm. Ancho y nominal por separado no bastan.",
+   "counter_case": "Un neumático de 70 mm de ancho con 695 mm de pico pasa el ancho y queda fuera de la envolvente. Los límites de esta generación no se extienden a otras."
+  },
+  {
+   "id": "WSS-W07-fork-axle_to_crown",
+   "finding": "W07",
+   "op": "add_field",
+   "template": "fork",
+   "key": "axle_to_crown_mm",
+   "before": null,
+   "after": {
+    "field_entry": {
+     "key": "axle_to_crown_mm",
+     "section_key": "measurement",
+     "sort_order": 220,
+     "is_required": false,
+     "visibility_rules": [],
+     "option_rules": [],
+     "constraint_rules": []
+    },
+    "definition_used_by_append": "fork",
+    "roles": "measurement",
+    "semantic_roles": "compatibility",
+    "allowed_when": {
+     "kind": "always"
+    },
+    "required_when": {
+     "kind": "never"
+    },
+    "evidence_requirements": "oem_spec"
+   },
+   "source_ids": [
+    "S-FOX40-2013"
+   ],
+   "scope": "Geometría que el cuadro exige y hoy no existe en la horquilla.",
+   "counter_case": "travel_mm y fork_offset_mm no sustituyen la longitud eje-corona."
+  },
+  {
+   "id": "WSS-W07-fork-crown_stack_min_mm",
+   "finding": "W07",
+   "op": "add_field",
+   "template": "fork",
+   "key": "crown_stack_min_mm",
+   "before": null,
+   "after": {
+    "field_entry": {
+     "key": "crown_stack_min_mm",
+     "section_key": "measurement",
+     "sort_order": 230,
+     "is_required": false,
+     "visibility_rules": [],
+     "option_rules": [],
+     "constraint_rules": []
+    },
+    "definition_used_by_append": "fork",
+    "roles": "measurement",
+    "semantic_roles": "compatibility",
+    "allowed_when": {
+     "kind": "when",
+     "rows": [
+      [
+       {
+        "field": "fork_kind",
+        "operator": "in",
+        "value_type": "token",
+        "value": [
+         "Suspensión (muelle)",
+         "Suspensión (aire)"
+        ]
+       }
+      ]
+     ]
+    },
+    "required_when": {
+     "kind": "never"
+    },
+    "evidence_requirements": "oem_spec"
+   },
+   "source_ids": [
+    "S-FOX40-2013"
+   ],
+   "scope": "El manual FOX exige comprobar el stack total 105–166,8 mm para la corona direct mount.",
+   "counter_case": "Un stack fuera del rango no se aprueba porque la dirección coincida."
+  },
+  {
+   "id": "WSS-W07-fork-crown_stack_max_mm",
+   "finding": "W07",
+   "op": "add_field",
+   "template": "fork",
+   "key": "crown_stack_max_mm",
+   "before": null,
+   "after": {
+    "field_entry": {
+     "key": "crown_stack_max_mm",
+     "section_key": "measurement",
+     "sort_order": 240,
+     "is_required": false,
+     "visibility_rules": [],
+     "option_rules": [],
+     "constraint_rules": []
+    },
+    "definition_used_by_append": "fork",
+    "roles": "measurement",
+    "semantic_roles": "compatibility",
+    "allowed_when": {
+     "kind": "when",
+     "rows": [
+      [
+       {
+        "field": "fork_kind",
+        "operator": "in",
+        "value_type": "token",
+        "value": [
+         "Suspensión (muelle)",
+         "Suspensión (aire)"
+        ]
+       }
+      ]
+     ]
+    },
+    "required_when": {
+     "kind": "never"
+    },
+    "evidence_requirements": "oem_spec"
+   },
+   "source_ids": [
+    "S-FOX40-2013"
+   ],
+   "scope": "El manual FOX exige comprobar el stack total 105–166,8 mm para la corona direct mount.",
+   "counter_case": "Un stack fuera del rango no se aprueba porque la dirección coincida."
+  },
+  {
+   "id": "WSS-W07-fork-stack-pair",
+   "finding": "W07",
+   "op": "replace_template_coherence",
+   "template": "fork",
+   "key": "scalar_ordered_pairs",
+   "before": {
+    "present": false,
+    "value": null
+   },
+   "after": [
+    [
+     "crown_stack_min_mm",
+     "crown_stack_max_mm"
+    ]
+   ],
+   "source_ids": [
+    "S-FOX40-2013",
+    "S-ENGINE"
+   ],
+   "scope": "Ambos extremos son number en mm: el par es válido para el evaluador desplegado en 0200. Se aplica en la misma migración que los dos campos.",
+   "counter_case": "Un mínimo mayor que el máximo se marca en los dos campos; la igualdad es válida."
+  },
+  {
+   "id": "WSS-W07-fork-max_tire_width-label",
+   "finding": "W07",
+   "op": "replace_field_contract",
+   "template": "fork",
+   "key": "max_tire_width_mm",
+   "before": {},
+   "after": {
+    "labels": "Ancho máximo de neumático declarado por el fabricante (titular; el detalle por rueda vive en las configuraciones)"
+   },
+   "source_ids": [
+    "S-FOX40-2013",
+    "S-BASE"
+   ],
+   "scope": "Sólo en fork. La definición la comparten fender, bicycle y frame, que no reciben filas de envolvente: se anula por plantilla y allí conserva su rótulo.",
+   "counter_case": "Una horquilla con 71 mm de titular y una fila de 26\" con 71 mm y pico 694 no es duplicado: la fila añade la envolvente.",
+   "requires_before_extensions": {
+    "labels": {
+     "present": false,
+     "value": null
+    }
+   }
+  },
+  {
+   "id": "WSS-W08-frame-dropout",
+   "finding": "W08",
+   "op": "add_field",
+   "template": "frame",
+   "key": "dropout_hub_acceptance_configurations",
+   "before": null,
+   "after": {
+    "field_entry": {
+     "key": "dropout_hub_acceptance_configurations",
+     "section_key": "measurement",
+     "sort_order": 220,
+     "is_required": false,
+     "visibility_rules": [],
+     "option_rules": [],
+     "constraint_rules": []
+    },
+    "definition_used_by_append": "frame",
+    "roles": "measurement",
+    "semantic_roles": "compatibility",
+    "allowed_when": {
+     "kind": "always"
+    },
+    "required_when": {
+     "kind": "never"
+    },
+    "evidence_requirements": "oem_spec",
+    "prerequisites": [
+     "spec_evidence_source"
+    ]
+   },
+   "source_ids": [
+    "S-SURLY-PACKRAT"
+   ],
+   "scope": "El ancho físico entre punteras (rear_hub_old_mm, ya decimal) y las mazas nominales aceptadas son dos hechos. El Pack Rat mide 132,5 y acepta 130 y 135 por diseño.",
+   "counter_case": "No se redondea 132,5 ni se crea un intervalo abierto: 131 no queda aceptado y 130↔135 no se vuelve intercambiabilidad general."
+  },
+  {
+   "id": "WSS-W10-spoke-thread-label",
+   "finding": "W10",
+   "op": "replace_definition_label",
+   "template": null,
+   "key": "spoke_thread_diameter_mm",
+   "before": "Diámetro nominal de rosca del rayo",
+   "after": "Diámetro del alambre en la zona roscada, medido (mm)",
+   "source_ids": [
+    "S-SAPIM"
+   ],
+   "scope": "El campo pasa a nombrar lo que sí es: una medición del alambre. No se copia 14G → 2,0 mm.",
+   "counter_case": "Un radio de 2 mm cuya rosca Sapim llama FG 2.3 no tiene «2,3 mm de diámetro de alambre»."
+  },
+  {
+   "id": "WSS-W10-spoke-thread_standard",
+   "finding": "W10",
+   "op": "add_field",
+   "template": "spoke",
+   "key": "spoke_thread_standard",
+   "before": null,
+   "after": {
+    "field_entry": {
+     "key": "spoke_thread_standard",
+     "section_key": "measurement",
+     "sort_order": 210,
+     "is_required": false,
+     "visibility_rules": [],
+     "option_rules": [],
+     "constraint_rules": []
+    },
+    "definition_used_by_append": "spoke",
+    "roles": "measurement",
+    "semantic_roles": "compatibility",
+    "allowed_when": {
+     "kind": "always"
+    },
+    "required_when": {
+     "kind": "never"
+    },
+    "evidence_requirements": "oem_spec"
+   },
+   "source_ids": [
+    "S-SAPIM"
+   ],
+   "scope": "La rosca laminada tiene su propia designación, distinta del calibre del alambre.",
+   "counter_case": "Registrar sólo «14G» pierde la designación con la que el niple se elige."
+  },
+  {
+   "id": "WSS-W10-nipple-thread_standard",
+   "finding": "W10",
+   "op": "add_field",
+   "template": "spoke_nipple",
+   "key": "nipple_thread_standard",
+   "before": null,
+   "after": {
+    "field_entry": {
+     "key": "nipple_thread_standard",
+     "section_key": "measurement",
+     "sort_order": 210,
+     "is_required": false,
+     "visibility_rules": [],
+     "option_rules": [],
+     "constraint_rules": []
+    },
+    "definition_used_by_append": "spoke_nipple",
+    "roles": "measurement",
+    "semantic_roles": "compatibility",
+    "allowed_when": {
+     "kind": "always"
+    },
+    "required_when": {
+     "kind": "never"
+    },
+    "evidence_requirements": "oem_spec"
+   },
+   "source_ids": [
+    "S-SAPIM"
+   ],
+   "scope": "La misma convención en los dos lados: sin ella, un radio FG 2.3 y su niple «14G» parecen incompatibles.",
+   "counter_case": "La normalización documentada conserva ambos significados; ninguno se deduce del otro."
+  },
+  {
+   "id": "WSS-W10-nipple-thread-label",
+   "finding": "W10",
+   "op": "replace_definition_label",
+   "template": null,
+   "key": "nipple_thread",
+   "before": "Rosca del niple",
+   "after": "Calibre de radio declarado por el fabricante del niple (designación comercial)",
+   "source_ids": [
+    "S-SAPIM"
+   ],
+   "scope": "El campo es una lista de calibres comerciales, no una rosca medida.",
+   "counter_case": "Un niple «14G» no declara por sí solo la rosca con la que engrana."
+  }
+ ],
+ "engine_gaps": [
+  {
+   "id": "E1",
+   "gap": "Condiciones por celda dentro de una fila (aplicabilidad y obligatoriedad).",
+   "cases": [
+    "max_pressure_bar exigible sólo cuando mounting_method = Tubeless",
+    "max_inflated_diameter_mm exigible cuando el manual publica envolvente",
+    "hardware_width_mm sólo con mount_kind = Ojal estándar"
+   ],
+   "status": "La migración 2200 (row_conditions) está local y en revisión: este paquete NO depende de ella y deja esas celdas opcionales."
+  },
+  {
+   "id": "E2",
+   "gap": "Consistencia fila ↔ escalar.",
+   "cases": [
+    "tire_max_pressure_psi frente a las presiones por configuración",
+    "fork.max_tire_width_mm frente a las filas de envolvente",
+    "frame.rear_hub_old_mm frente a las mazas aceptadas",
+    "headset_part_scope frente a las filas de rodamiento por extremo"
+   ],
+   "status": "No expresable. Ninguna de estas parejas es duplicación: son titular declarado y detalle conocido, como en el saneamiento de luces."
+  },
+  {
+   "id": "E3",
+   "gap": "Referencias entre filas de dos productos distintos (neumático ↔ llanta, horquilla ↔ cuadro, amortiguador ↔ cuadro).",
+   "cases": [
+    "intersectar 23 mm del neumático con 25 mm de la llanta",
+    "envolvente FOX frente a la rueda concreta"
+   ],
+   "status": "Fuera del contrato de coherencia por diseño: eso son relaciones con fuente, no coherencia interna de una ficha."
+  },
+  {
+   "id": "E4",
+   "gap": "Comparación numérica entre filas y escalares (mínimos, máximos, intersecciones).",
+   "cases": [
+    "la presión menor de dos componentes manda"
+   ],
+   "status": "No se propone: convertir una intersección en regla automática produce aprobaciones que ninguna fuente respalda."
+  },
+  {
+   "id": "E5",
+   "gap": "Los consumidores (filtro técnico del asistente y facetas) todavía no leen columnas de filas.",
+   "cases": [
+    "buscar neumáticos por presión admitida en hookless",
+    "buscar direcciones por ángulo de contacto"
+   ],
+   "status": "Compuerta técnica previa a mover detalle a filas, no trabajo manual del dueño. Es la misma G7 del bloque de luces."
+  }
+ ],
+ "decisions_for_root": [
+  {
+   "id": "D-W11",
+   "question": "¿El taller registra recetas de armado de rueda?",
+   "recommendation": "Si las registra, el campo mínimo es una fila por lado con geometría, patrón, método de cálculo, compensación y niple; si no, W11 se cierra como asunto de relaciones y no se agrega campo. No lo decido yo: no hay evidencia en el catálogo de que se armen ruedas a medida."
+  },
+  {
+   "id": "D-W02",
+   "question": "¿Dónde vive la aprobación amortiguador↔cuadro?",
+   "recommendation": "En relaciones con identidad, generación y talla, con estado aprobado / excluido / pendiente y su fuente. Los campos de este paquete describen el amortiguador; ninguno afirma que sirva para un cuadro."
+  },
+  {
+   "id": "D-W01",
+   "question": "¿Se conserva tire_max_pressure_psi ahora que hay presión por configuración?",
+   "recommendation": "Sí. Es el titular del fabricante y tiene su propio significado; retirarlo repetiría el error que root corrigió en luces al confundir total declarado con detalle parcial."
+  }
+ ],
+ "fixtures": [
+  {
+   "id": "tire_gp5000_two_variants_hookless",
+   "template": "tire",
+   "kind": "valid",
+   "source_ids": [
+    "S-CONTI-HOOKLESS"
+   ],
+   "values": {
+    "bead_seat_diameter_mm": "622",
+    "tire_bead_type": "Talón plegable",
+    "tire_tubeless_ready": true,
+    "tire_max_pressure_psi": "102",
+    "spec_evidence_source": "Continental, Hookless vs. Hooked Rims",
+    "tire_rim_configurations": {
+     "schema_version": 1,
+     "rows": [
+      {
+       "id": "c1",
+       "values": {
+        "tire_variant": "700x28c",
+        "rim_bead_profile": "Sin gancho (hookless)",
+        "mounting_method": "Tubeless",
+        "rim_internal_width_min_mm": "23",
+        "rim_internal_width_max_mm": "23",
+        "max_pressure_bar": "5.0"
+       },
+       "sources": [
+        "https://www.continental-tires.com/us/en/tire-knowledge/hookless-vs-hooked-rims/"
+       ]
+      },
+      {
+       "id": "c2",
+       "values": {
+        "tire_variant": "700x30c",
+        "rim_bead_profile": "Sin gancho (hookless)",
+        "mounting_method": "Tubeless",
+        "rim_internal_width_min_mm": "25",
+        "rim_internal_width_max_mm": "25",
+        "max_pressure_bar": "4.5"
+       },
+       "sources": [
+        "https://www.continental-tires.com/us/en/tire-knowledge/hookless-vs-hooked-rims/"
+       ]
+      }
+     ]
+    }
+   },
+   "expected_issues": [],
+   "note": "Dos variantes del mismo modelo con límites distintos. El titular de 102 psi convive con 5,0 bar de la configuración hookless: no es contradicción, es otro alcance (E2)."
+  },
+  {
+   "id": "tire_pressure_of_another_variant",
+   "template": "tire",
+   "kind": "contradictory_undetectable",
+   "source_ids": [
+    "S-CONTI-HOOKLESS",
+    "S-ENGINE"
+   ],
+   "values": {
+    "tire_rim_configurations": {
+     "schema_version": 1,
+     "rows": [
+      {
+       "id": "c1",
+       "values": {
+        "tire_variant": "700x28c",
+        "rim_bead_profile": "Sin gancho (hookless)",
+        "mounting_method": "Tubeless",
+        "rim_internal_width_min_mm": "25",
+        "rim_internal_width_max_mm": "25",
+        "max_pressure_bar": "4.5"
+       },
+       "sources": [
+        "https://www.continental-tires.com/us/en/tire-knowledge/hookless-vs-hooked-rims/"
+       ]
+      }
+     ]
+    }
+   },
+   "expected_issues": [],
+   "note": "La 28c con los límites de la 30c: el motor no puede saberlo. Es error de captura, y la regresión que el hallazgo pide vive en la revisión de la fuente, no en el esquema."
+  },
+  {
+   "id": "tire_hookless_without_configurations",
+   "template": "tire",
+   "kind": "unknown",
+   "source_ids": [
+    "S-ZIPP-TUBE"
+   ],
+   "values": {
+    "bead_seat_diameter_mm": "622",
+    "tire_tubeless_ready": true
+   },
+   "expected_issues": [],
+   "note": "Sin filas, la respuesta para hookless es desconocida. Poner cámara no cambia la exigencia y el booleano de un lado no la resuelve."
+  },
+  {
+   "id": "tire_same_variant_profile_method_twice",
+   "template": "tire",
+   "kind": "contradictory",
+   "source_ids": [
+    "S-ENGINE"
+   ],
+   "values": {
+    "tire_rim_configurations": {
+     "schema_version": 1,
+     "rows": [
+      {
+       "id": "a",
+       "values": {
+        "tire_variant": "700x28c",
+        "rim_bead_profile": "Sin gancho (hookless)",
+        "mounting_method": "Tubeless",
+        "max_pressure_bar": "5.0"
+       },
+       "sources": [
+        "https://www.continental-tires.com/us/en/tire-knowledge/hookless-vs-hooked-rims/"
+       ]
+      },
+      {
+       "id": "b",
+       "values": {
+        "tire_variant": "700x28c",
+        "rim_bead_profile": "Sin gancho (hookless)",
+        "mounting_method": "Tubeless",
+        "max_pressure_bar": "7.0"
+       },
+       "sources": [
+        "https://www.continental-tires.com/us/en/tire-knowledge/hookless-vs-hooked-rims/"
+       ]
+      }
+     ]
+    }
+   },
+   "expected_issues": [
+    {
+     "code": "row_shape",
+     "field": "tire_rim_configurations",
+     "blocking": true
+    }
+   ],
+   "note": "unique_by [variante, perfil, método] rechaza dos presiones para la misma configuración."
+  },
+  {
+   "id": "shock_trunnion_top_eyelet_bottom",
+   "template": "rear_shock",
+   "kind": "valid",
+   "source_ids": [
+    "S-ROCKSHOX-FIT"
+   ],
+   "values": {
+    "eye_to_eye_mm": "205",
+    "stroke_mm": "65",
+    "shock_mount_kind": "Trunnion",
+    "mounting_hardware_included": true,
+    "spec_evidence_source": "RockShox Rear Suspension Fitment",
+    "shock_end_configurations": {
+     "schema_version": 1,
+     "rows": [
+      {
+       "id": "e1",
+       "values": {
+        "end_position": "Superior",
+        "mount_kind": "Trunnion",
+        "hardware_width_mm": "30",
+        "bolt_diameter_mm": "8"
+       },
+       "sources": []
+      },
+      {
+       "id": "e2",
+       "values": {
+        "end_position": "Inferior",
+        "mount_kind": "Ojal estándar",
+        "hardware_width_mm": "30",
+        "bolt_diameter_mm": "8"
+       },
+       "sources": []
+      }
+     ]
+    }
+   },
+   "expected_issues": [],
+   "note": "Campo dependiente de posición: cada extremo lleva su fijación. El hardware incluido no afirma nada sobre un cuadro; el contacto del depósito sigue siendo relación pendiente."
+  },
+  {
+   "id": "shock_two_rows_same_end",
+   "template": "rear_shock",
+   "kind": "contradictory",
+   "source_ids": [
+    "S-ENGINE"
+   ],
+   "values": {
+    "shock_end_configurations": {
+     "schema_version": 1,
+     "rows": [
+      {
+       "id": "a",
+       "values": {
+        "end_position": "Superior",
+        "mount_kind": "Trunnion"
+       },
+       "sources": []
+      },
+      {
+       "id": "b",
+       "values": {
+        "end_position": "Superior",
+        "mount_kind": "Ojal estándar"
+       },
+       "sources": []
+      }
+     ]
+    }
+   },
+   "expected_issues": [
+    {
+     "code": "row_shape",
+     "field": "shock_end_configurations",
+     "blocking": true
+    }
+   ],
+   "note": "unique_by [extremo]."
+  },
+  {
+   "id": "bearing_same_envelope_different_construction",
+   "template": "bearing",
+   "kind": "valid",
+   "source_ids": [
+    "S-ENDURO-MAX"
+   ],
+   "values": {
+    "bearing_construction": "Cartucho sellado",
+    "bearing_size_code": "6902 2RS MAX",
+    "bearing_dimensional_code": "6902",
+    "bearing_internal_construction": "MAX / sin canal de llenado",
+    "bearing_seal_kind": "2RS (goma, doble)",
+    "bearing_inner_diameter_mm": "15",
+    "bearing_outer_diameter_mm": "28",
+    "bearing_width_mm": "7",
+    "bearing_application": "Otro",
+    "spec_evidence_source": "Enduro Help Center"
+   },
+   "expected_issues": [],
+   "note": "Misma envolvente que un rodamiento de maza y construcción distinta: ahora se distingue. «Cabe» sigue sin significar «aprobado»."
+  },
+  {
+   "id": "headset_bearing_angles_per_end",
+   "template": "headset",
+   "kind": "valid",
+   "source_ids": [
+    "S-CANECREEK-40"
+   ],
+   "values": {
+    "headset_part_scope": "Completa",
+    "headset_upper_shis": "ZS44/28.6",
+    "headset_lower_shis": "EC44/40",
+    "spec_evidence_source": "Cane Creek Forty",
+    "headset_bearing_configurations": {
+     "schema_version": 1,
+     "rows": [
+      {
+       "id": "u",
+       "values": {
+        "position": "Superior",
+        "inner_contact_angle_deg": "36",
+        "outer_contact_angle_deg": "45",
+        "seat_type": "ZS (semi-integrado)"
+       },
+       "sources": [
+        "https://www.canecreek.com/products/40"
+       ]
+      },
+      {
+       "id": "l",
+       "values": {
+        "position": "Inferior",
+        "inner_contact_angle_deg": "45",
+        "outer_contact_angle_deg": "45",
+        "seat_type": "EC (externo)"
+       },
+       "sources": [
+        "https://www.canecreek.com/products/40"
+       ]
+      }
+     ]
+    }
+   },
+   "expected_issues": [],
+   "note": "Campo dependiente de posición: 36×45 arriba y 45×45 abajo dejan de colapsar en «45»."
+  },
+  {
+   "id": "headset_lower_only_scope",
+   "template": "headset",
+   "kind": "valid",
+   "source_ids": [
+    "S-CANECREEK-40"
+   ],
+   "values": {
+    "headset_part_scope": "Inferior",
+    "headset_lower_shis": "EC49/38.1",
+    "headset_bearing_configurations": {
+     "schema_version": 1,
+     "rows": [
+      {
+       "id": "l",
+       "values": {
+        "position": "Inferior",
+        "inner_contact_angle_deg": "45",
+        "outer_contact_angle_deg": "45"
+       },
+       "sources": [
+        "https://www.canecreek.com/products/40"
+       ]
+      }
+     ]
+    }
+   },
+   "expected_issues": [],
+   "note": "W06 ya resuelto: una mitad inferior no exige inventar el extremo superior y EC49/38.1 se guarda porque el campo es texto."
+  },
+  {
+   "id": "bearing_headset_without_angles",
+   "template": "bearing",
+   "kind": "unknown",
+   "source_ids": [
+    "S-CANECREEK-40"
+   ],
+   "values": {
+    "bearing_construction": "Cartucho sellado",
+    "bearing_application": "Dirección",
+    "bearing_size_code": "MH-P08",
+    "spec_evidence_source": "Catálogo del fabricante"
+   },
+   "expected_issues": [
+    {
+     "code": "required_missing",
+     "field": "bearing_inner_contact_angle_deg",
+     "blocking": false
+    },
+    {
+     "code": "required_missing",
+     "field": "bearing_outer_contact_angle_deg",
+     "blocking": false
+    }
+   ],
+   "note": "Con destino «Dirección» el par pasa a exigible y su ausencia queda pendiente, no aprobada. Antes de este parche no se pedía."
+  },
+  {
+   "id": "frame_44_housing_two_alternatives",
+   "template": "frame",
+   "kind": "valid",
+   "source_ids": [
+    "S-CANECREEK-HS"
+   ],
+   "values": {
+    "headset_upper_shis": "ZS44/28.6",
+    "headset_lower_shis": "EC44/30",
+    "headset_port_configurations": {
+     "schema_version": 1,
+     "rows": [
+      {
+       "id": "u",
+       "values": {
+        "position": "Superior",
+        "seat_type": "ZS (semi-integrado)",
+        "housing_diameter_mm": "44"
+       },
+       "sources": []
+      },
+      {
+       "id": "l",
+       "values": {
+        "position": "Inferior",
+        "seat_type": "ZS (semi-integrado)",
+        "housing_diameter_mm": "44"
+       },
+       "sources": []
+      }
+     ]
+    }
+   },
+   "expected_issues": [],
+   "note": "El alojamiento de 44 mm admite EC44/30 y ZS44/30; el SHIS registrado es la configuración original y no cierra la lista."
+  },
+  {
+   "id": "frame_housing_without_shis",
+   "template": "frame",
+   "kind": "unknown",
+   "source_ids": [
+    "S-PARK-HEADSET"
+   ],
+   "values": {
+    "headset_port_configurations": {
+     "schema_version": 1,
+     "rows": [
+      {
+       "id": "l",
+       "values": {
+        "position": "Inferior",
+        "seat_type": "ZS (semi-integrado)",
+        "measured_diameter_mm": "41.8"
+       },
+       "sources": []
+      }
+     ]
+    }
+   },
+   "expected_issues": [],
+   "note": "Diámetro medido de 41,8 sin código: el redondeo a IS42 es una convención declarada, no una medición, y no se escribe solo. Antes del parche el SHIS era obligatorio y obligaba a inventarlo."
+  },
+  {
+   "id": "fork_fox40_envelope",
+   "template": "fork",
+   "kind": "valid",
+   "source_ids": [
+    "S-FOX40-2013"
+   ],
+   "values": {
+    "fork_kind": "Suspensión (aire)",
+    "bead_seat_diameter_mm": "559",
+    "max_tire_width_mm": "71",
+    "travel_mm": "203",
+    "axle_to_crown_mm": "580",
+    "crown_stack_min_mm": "105",
+    "crown_stack_max_mm": "166.8",
+    "spec_evidence_source": "FOX 2013, Installing the 40",
+    "fork_tire_clearance_configurations": {
+     "schema_version": 1,
+     "rows": [
+      {
+       "id": "c",
+       "values": {
+        "bead_seat_diameter_mm": 559,
+        "max_tire_width_mm": "71",
+        "max_inflated_diameter_mm": "694",
+        "max_inflated_shoulder_diameter_mm": "670",
+        "measurement_method": "Diámetro de pico y de borde, neumático inflado"
+       },
+       "sources": [
+        "https://tech.ridefox.com/fox_tech_center/owners_manuals/013/Content/Forks/40/40withDMS_Installation.html"
+       ]
+      }
+     ]
+    }
+   },
+   "expected_issues": [],
+   "note": "El caso construido de 70 mm de ancho y 695 mm de pico queda fuera aunque pase el ancho. Límites de esta generación, no de la familia."
+  },
+  {
+   "id": "fork_stack_inverted",
+   "template": "fork",
+   "kind": "contradictory",
+   "source_ids": [
+    "S-FOX40-2013",
+    "S-ENGINE"
+   ],
+   "values": {
+    "fork_kind": "Suspensión (aire)",
+    "crown_stack_min_mm": "166.8",
+    "crown_stack_max_mm": "105"
+   },
+   "expected_issues": [
+    {
+     "code": "range_order",
+     "field": "crown_stack_min_mm",
+     "blocking": true
+    },
+    {
+     "code": "range_order",
+     "field": "crown_stack_max_mm",
+     "blocking": true
+    }
+   ],
+   "note": "El par escalar del contrato 0200 marca los dos extremos."
+  },
+  {
+   "id": "frame_surly_gnot_rite",
+   "template": "frame",
+   "kind": "valid",
+   "source_ids": [
+    "S-SURLY-PACKRAT"
+   ],
+   "values": {
+    "rear_hub_old_mm": "132.5",
+    "rear_axle_type": "Cierre rápido 10 mm (trasero)",
+    "spec_evidence_source": "Surly Pack Rat framesheet 85-000633_INST_A",
+    "dropout_hub_acceptance_configurations": {
+     "schema_version": 1,
+     "rows": [
+      {
+       "id": "a",
+       "values": {
+        "position": "Trasera",
+        "accepted_hub_old_mm": "130",
+        "retention_kind": "Cierre rápido",
+        "scope_note": "Gnot-rite: el fabricante declara 130 y 135 para este cuadro"
+       },
+       "sources": [
+        "https://surlybikes.com/uploads/downloads/surly-pack-rat-framesheet-85-000633_INST.pdf"
+       ]
+      },
+      {
+       "id": "b",
+       "values": {
+        "position": "Trasera",
+        "accepted_hub_old_mm": "135",
+        "retention_kind": "Cierre rápido",
+        "scope_note": "Gnot-rite: el fabricante declara 130 y 135 para este cuadro"
+       },
+       "sources": [
+        "https://surlybikes.com/uploads/downloads/surly-pack-rat-framesheet-85-000633_INST.pdf"
+       ]
+      }
+     ]
+    }
+   },
+   "expected_issues": [],
+   "note": "132,5 se guarda exacto (ya era decimal) y las mazas aceptadas son filas. 131 no queda aceptado y esto no autoriza forzar otro cuadro."
+  },
+  {
+   "id": "frame_dropout_open_interval",
+   "template": "frame",
+   "kind": "contradictory_undetectable",
+   "source_ids": [
+    "S-ENGINE"
+   ],
+   "values": {
+    "rear_hub_old_mm": "132.5",
+    "dropout_hub_acceptance_configurations": {
+     "schema_version": 1,
+     "rows": [
+      {
+       "id": "a",
+       "values": {
+        "position": "Trasera",
+        "accepted_hub_old_mm": "131",
+        "retention_kind": "Cierre rápido"
+       },
+       "sources": []
+      }
+     ]
+    }
+   },
+   "expected_issues": [],
+   "note": "Nada impide escribir 131: la fuente Surly no lo declara. El esquema no inventa el intervalo, pero tampoco detecta una fila sin respaldo (E2/E3)."
+  },
+  {
+   "id": "spoke_sapim_2mm_fg23",
+   "template": "spoke",
+   "kind": "valid",
+   "source_ids": [
+    "S-SAPIM"
+   ],
+   "values": {
+    "spoke_gauge": "14G",
+    "spoke_thread_diameter_mm": "2.0",
+    "spoke_thread_standard": "FG 2.3",
+    "spoke_length_mm": "294",
+    "spec_evidence_source": "Sapim, folleto 2018, p. 8"
+   },
+   "expected_issues": [],
+   "note": "Alambre de 2,0 mm medido y rosca FG 2.3 declarada: dos hechos. Con el rótulo anterior parecían el mismo y se contradecían."
+  },
+  {
+   "id": "spoke_nipple_pair_naming",
+   "template": "spoke_nipple",
+   "kind": "valid",
+   "source_ids": [
+    "S-SAPIM"
+   ],
+   "values": {
+    "nipple_thread": "14G",
+    "nipple_thread_standard": "FG 2.3",
+    "nipple_length_mm": "12"
+   },
+   "expected_issues": [],
+   "note": "El niple declara la misma convención: un radio FG 2.3 y este niple dejan de parecer incompatibles."
+  },
+  {
+   "id": "spoke_thread_standard_unknown",
+   "template": "spoke",
+   "kind": "unknown",
+   "source_ids": [
+    "S-SAPIM"
+   ],
+   "values": {
+    "spoke_gauge": "14G",
+    "spoke_length_mm": "260"
+   },
+   "expected_issues": [],
+   "note": "Sin designación publicada, la rosca queda desconocida: no se deriva de 14G."
+  }
+ ],
+ "preimage_verification": {
+  "checks": "rótulo, coherencia de plantilla, entrada de campo nueva y buckets de contrato comparados contra la base congelada, imitando product_spec_field_patches.py",
+  "errors": []
+ },
+ "gates": [
+  "Ninguna definición nueva de este paquete existe en la base: todas son origin new y no exigen migración de hechos.",
+  "WSS-W07-fork-stack-pair se aplica en la misma migración que los dos campos de stack, o el guard rechaza la plantilla.",
+  "La migración 2200 (row_conditions) está local y en revisión: ningún parche de este paquete la requiere.",
+  "Los consumidores deben leer columnas de filas antes de que el detalle migre a filas (E5): compuerta técnica, no tarea del dueño.",
+  "Ningún parche autoriza llenado, asignación ni publicación."
+ ],
+ "stats": {
+  "findings": 11,
+  "resolved_by_ab": 2,
+  "patches": 30,
+  "new_definitions": 15,
+  "fixtures": 19,
+  "fixtures_by_kind": {
+   "valid": 10,
+   "contradictory_undetectable": 2,
+   "unknown": 4,
+   "contradictory": 3
+  },
+  "engine_gaps": 5
+ }
+}

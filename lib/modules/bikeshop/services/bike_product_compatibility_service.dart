@@ -55,6 +55,7 @@ class BikeProductCompatibilityService {
     'piston_count',
     'reach_adjust',
     'rotor_diameter_mm',
+    'rotor_diameter_mm_value',
     'rotor_floating',
     'rotor_material',
     'rotor_mount_type',
@@ -184,10 +185,10 @@ class BikeProductCompatibilityService {
 
     final assessments = <String, ProductCompatibilityAssessment>{};
     for (final product in products) {
-      if ((_productSpecCache[product.id]?.values['__spec_issues'] as List? ??
-              [])
-          .whereType<Map>()
-          .any((issue) => issue['code'] != 'unmapped')) {
+      final specValues = _productSpecCache[product.id]?.values ?? const {};
+      final specIssues =
+          (specValues['__spec_issues'] as List? ?? []).whereType<Map>();
+      if (_hasBlockingSpecIssues(specValues)) {
         assessments[product.id] = const ProductCompatibilityAssessment.caution(
             detail:
                 'Ficha con datos pendientes de revisión; confirma sus requisitos.',
@@ -202,19 +203,36 @@ class BikeProductCompatibilityService {
       final detailedAssessment = _assessDetailedCompatibility(
         compatibilityContext: compatibilityContext,
         technicalMapping: technicalMapping,
-        specValues: _productSpecCache[product.id]?.values ?? const {},
+        specValues: specValues,
       );
       final resolvedAssessment = _mergeAssessments(
         familyAssessment: familyAssessment,
         detailedAssessment: detailedAssessment,
       );
       if (resolvedAssessment != null) {
-        assessments[product.id] = resolvedAssessment;
+        // Incompleteness cannot erase a known physical contradiction. It also
+        // cannot promote a nominal positive while the ficha remains incomplete.
+        assessments[product.id] =
+            resolvedAssessment.level == ProductCompatibilityLevel.compatible &&
+                    specIssues.any((issue) => issue['blocking'] == false)
+                ? ProductCompatibilityAssessment.caution(
+                    detail:
+                        '${resolvedAssessment.detail ?? 'Coincidencia nominal'}. La ficha aún tiene datos pendientes de confirmar.',
+                    sortPriority: 36,
+                  )
+                : resolvedAssessment;
       }
     }
 
     return assessments;
   }
+
+  bool _hasBlockingSpecIssues(Map<String, dynamic> specValues) =>
+      (specValues['__spec_issues'] as List? ?? []).whereType<Map>().any(
+            (issue) =>
+                issue['code'] == 'template_unavailable' ||
+                (issue['code'] != 'unmapped' && issue['blocking'] != false),
+          );
 
   @visibleForTesting
   void primeCompatibilityCaches({
@@ -394,11 +412,12 @@ class BikeProductCompatibilityService {
           return _assessShifterFamilyCompatibility(compatibilityContext);
         case 'crankset':
         case 'chainring':
-        case 'drivetrain_kit':
           return _assessCrankDriveFamilyCompatibility(
             compatibilityContext,
             label: _drivetrainFamilyLabel(semanticKey),
           );
+        case 'drivetrain_kit':
+          return _assessDrivetrainKitCompatibility();
         case 'bottom_bracket_axle':
         case 'bottom_bracket_cup':
         case 'bottom_bracket_bearing':
@@ -571,11 +590,7 @@ class BikeProductCompatibilityService {
             familyLabel: _drivetrainFamilyLabel(semanticKey),
           );
         case 'drivetrain_kit':
-          return _assessDetailedDrivetrainKitCompatibility(
-            compatibilityContext: compatibilityContext,
-            specValues: specValues,
-            familyLabel: _drivetrainFamilyLabel(semanticKey),
-          );
+          return _assessDrivetrainKitCompatibility();
         case 'chainring':
           return _assessDetailedChainringCompatibility(
             compatibilityContext: compatibilityContext,
@@ -609,7 +624,7 @@ class BikeProductCompatibilityService {
     required _BikeCompatibilityContext compatibilityContext,
     required Map<String, dynamic> specValues,
   }) {
-    if ((specValues['__spec_issues'] as List? ?? []).isNotEmpty) {
+    if (_hasBlockingSpecIssues(specValues)) {
       return const ProductCompatibilityAssessment.caution(
           detail:
               'Cadena; revisa los conflictos o datos pendientes de su ficha.',
@@ -1416,35 +1431,14 @@ class BikeProductCompatibilityService {
     ];
   }
 
-  ProductCompatibilityAssessment? _assessDetailedDrivetrainKitCompatibility({
-    required _BikeCompatibilityContext compatibilityContext,
-    required Map<String, dynamic> specValues,
-    required String familyLabel,
-  }) {
-    final baseAssessment = _assessDetailedCranksetCompatibility(
-      compatibilityContext: compatibilityContext,
-      specValues: specValues,
-      familyLabel: familyLabel,
-    );
-    if (baseAssessment == null ||
-        baseAssessment.level == ProductCompatibilityLevel.incompatible) {
-      return baseAssessment;
-    }
-
-    const suffix =
-        'falta confirmar parte trasera de la transmisión y contenido real del kit';
-    final baseDetail = baseAssessment.detail;
-    final detail = baseDetail == null || baseDetail.trim().isEmpty
-        ? '$familyLabel; $suffix'
-        : baseDetail.contains('parte trasera')
-            ? baseDetail
-            : '$baseDetail; $suffix';
-
-    return ProductCompatibilityAssessment.caution(
-      detail: detail,
-      sortPriority: baseAssessment.level == ProductCompatibilityLevel.compatible
-          ? 24
-          : baseAssessment.sortPriority,
+  ProductCompatibilityAssessment _assessDrivetrainKitCompatibility() {
+    // A package can contain different component families. Neither the bike's
+    // current crank system nor unscoped package fields describe its members.
+    // Member profiles and the assembly relations must be assessed explicitly.
+    return const ProductCompatibilityAssessment.caution(
+      detail:
+          'Kit de transmisión; falta comprobar la ficha y el montaje de cada componente incluido, además de las uniones del conjunto.',
+      sortPriority: 34,
     );
   }
 
@@ -2214,7 +2208,10 @@ class BikeProductCompatibilityService {
     required _BikeCompatibilityContext compatibilityContext,
     required Map<String, dynamic> specValues,
   }) {
-    final productRotorSize = _parseRotorSize(specValues['rotor_diameter_mm']);
+    // A retired selection may contain an assembly pair such as 180/160.
+    // Only the piece's numeric successor is a nominal rotor diameter.
+    final productRotorSize =
+        _parseProductRotorDiameter(specValues['rotor_diameter_mm_value']);
     final productWheel =
         canonicalBrakeWheelValue(specValues['brake_position']?.toString());
     final productFluidType =
@@ -2383,6 +2380,23 @@ class BikeProductCompatibilityService {
 
     final match = RegExp(r'(140|160|180|203)').firstMatch(rawText);
     return match == null ? null : int.tryParse(match.group(1)!);
+  }
+
+  int? _parseProductRotorDiameter(Object? value) {
+    // The bicycle context currently represents whole millimetres. Preserve
+    // uncertainty for decimals instead of rounding into a matching diameter.
+    final number = value is num
+        ? value
+        : value is String && RegExp(r'^\d+(?:\.0+)?$').hasMatch(value)
+            ? num.tryParse(value)
+            : null;
+    if (number == null ||
+        !number.isFinite ||
+        number <= 0 ||
+        number != number.truncateToDouble()) {
+      return null;
+    }
+    return number.toInt();
   }
 
   int? _parseIntValue(dynamic rawValue) {

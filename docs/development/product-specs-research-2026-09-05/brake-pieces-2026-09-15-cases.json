@@ -1,0 +1,1853 @@
+{
+  "schema_version": 1,
+  "catalogue_sha256": "b75223767b51cc3ae694991e5e62b8398595137c0ec1ae344a6158c081ebc4d8",
+  "cases": [
+    {
+      "id": "brake_local_hydraulic_no_external_hose",
+      "template": "brake_caliper",
+      "values": {
+        "braking_surface": "Disco",
+        "brake_actuation": "Híbrido (cable a hidráulico)",
+        "brake_external_hose_connection": false,
+        "brake_piece_hydraulic_ports": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "port_id": "Fixture hose",
+                "end_role": "Entrada",
+                "connection_spec": "Fixture hose",
+                "source_scope": "Apartado sintético",
+                "source_url": "https://example.invalid/synthetic"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "kind": "synthetic_negative",
+      "source_urls": [],
+      "evidence_kind": "synthetic_invariant_not_oem_facts",
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false,
+      "expected_blocking": [
+        {
+          "code": "field_applicability",
+          "field": "brake_piece_hydraulic_ports"
+        }
+      ],
+      "successor_translation": "el código de sistema de latiguillo era un escalar junto a una tabla de conexiones que ya lo dice con su modelo y su fuente; la afirmación pasa a la tabla, que se admite bajo la misma declaración de conexión externa.",
+      "expected_sql_blocking": [
+        {
+          "code": "field_applicability",
+          "field": "brake_piece_hydraulic_ports"
+        }
+      ]
+    },
+    {
+      "id": "brake_external_hose_known",
+      "template": "brake_caliper",
+      "values": {
+        "braking_surface": "Disco",
+        "brake_actuation": "Híbrido (cable a hidráulico)",
+        "brake_external_hose_connection": true,
+        "brake_piece_hydraulic_ports": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "port_id": "Fixture hose",
+                "end_role": "Entrada",
+                "connection_spec": "Fixture hose",
+                "source_scope": "Apartado sintético",
+                "source_url": "https://example.invalid/synthetic"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "kind": "synthetic_partial_representation",
+      "source_urls": [],
+      "evidence_kind": "synthetic_invariant_not_oem_facts",
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false,
+      "expected_blocking": [],
+      "successor_translation": "el código de sistema de latiguillo era un escalar junto a una tabla de conexiones que ya lo dice con su modelo y su fuente; la afirmación pasa a la tabla, que se admite bajo la misma declaración de conexión externa.",
+      "expected_sql_blocking": []
+    },
+    {
+      "id": "brake_external_hose_unknown",
+      "template": "brake_caliper",
+      "values": {
+        "braking_surface": "Disco",
+        "brake_actuation": "Híbrido (cable a hidráulico)",
+        "brake_piece_hydraulic_ports": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "port_id": "Fixture hose",
+                "end_role": "Entrada",
+                "connection_spec": "Fixture hose",
+                "source_scope": "Apartado sintético",
+                "source_url": "https://example.invalid/synthetic"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "kind": "synthetic_partial_representation",
+      "source_urls": [],
+      "evidence_kind": "synthetic_invariant_not_oem_facts",
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false,
+      "expected_blocking": [],
+      "successor_translation": "el código de sistema de latiguillo era un escalar junto a una tabla de conexiones que ya lo dice con su modelo y su fuente; la afirmación pasa a la tabla, que se admite bajo la misma declaración de conexión externa.",
+      "expected_sql_blocking": []
+    },
+    {
+      "id": "brake_disc_rotor_nominal",
+      "template": "brake_caliper",
+      "values": {
+        "braking_surface": "Disco",
+        "brake_actuation": "Híbrido (cable a hidráulico)",
+        "rotor_size_recipe": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "position": "Delantero",
+                "rotor_diameter_mm": "160",
+                "frame_mount": "Post Mount",
+                "adapter_required": false,
+                "accepted_rotor_thickness_mm": "1.8",
+                "source_url": "https://example.invalid/synthetic",
+                "configuration": "Receta de la fixture 1"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "kind": "synthetic_partial_representation",
+      "source_urls": [],
+      "evidence_kind": "synthetic_invariant_not_oem_facts",
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false,
+      "expected_blocking": [],
+      "successor_translation": "el espesor admitido deja de ser una cifra suelta del producto y pasa a la receta de rotor, junto al montaje y la posición que lo admiten y con la fuente de esa misma fila. La expectativa se conserva: en un cáliper de llanta no hay receta que llenar, así que sigue siendo un rechazo.",
+      "expected_sql_blocking": []
+    },
+    {
+      "id": "brake_rim_cannot_have_rotor_nominal",
+      "template": "brake_caliper",
+      "values": {
+        "braking_surface": "Llanta",
+        "brake_actuation": "Híbrido (cable a hidráulico)",
+        "rotor_size_recipe": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "position": "Delantero",
+                "rotor_diameter_mm": "160",
+                "frame_mount": "Post Mount",
+                "adapter_required": false,
+                "accepted_rotor_thickness_mm": "1.8",
+                "source_url": "https://example.invalid/synthetic",
+                "configuration": "Receta de la fixture 1"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "kind": "synthetic_negative",
+      "source_urls": [],
+      "evidence_kind": "synthetic_invariant_not_oem_facts",
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false,
+      "expected_blocking": [
+        {
+          "code": "field_applicability",
+          "field": "rotor_size_recipe"
+        }
+      ],
+      "successor_translation": "el espesor admitido deja de ser una cifra suelta del producto y pasa a la receta de rotor, junto al montaje y la posición que lo admiten y con la fuente de esa misma fila. La expectativa se conserva: en un cáliper de llanta no hay receta que llenar, así que sigue siendo un rechazo.",
+      "expected_sql_blocking": [
+        {
+          "code": "field_applicability",
+          "field": "rotor_size_recipe"
+        }
+      ]
+    },
+    {
+      "id": "brake_missing_model_fluid_source_remains_partial",
+      "template": "brake_caliper",
+      "values": {
+        "braking_surface": "Disco",
+        "brake_actuation": "Hidráulico",
+        "brake_model_fluid_approvals": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "f",
+              "values": {
+                "system_brand": "Fixture",
+                "system_model": "Fixture",
+                "fluid_class": "DOT 4"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "kind": "synthetic_partial_representation",
+      "source_urls": [],
+      "evidence_kind": "synthetic_invariant_not_oem_facts",
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false,
+      "expected_blocking": [],
+      "expected_sql_blocking": []
+    },
+    {
+      "id": "bkx_fluid_is_declared_with_its_system_and_source",
+      "template": "brake_caliper",
+      "values": {
+        "braking_surface": "Disco",
+        "brake_actuation": "Hidráulico",
+        "brake_model_fluid_approvals": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "system_brand": "Marca sintética",
+                "system_model": "Modelo sintético",
+                "fluid_class": "Aceite Mineral",
+                "source_url": "https://example.invalid/synthetic",
+                "generation": "Edición de fixture sintética"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "expected_sql_blocking": []
+    },
+    {
+      "id": "bkx_two_fluids_are_two_approvals",
+      "template": "brake_caliper",
+      "values": {
+        "braking_surface": "Disco",
+        "brake_actuation": "Hidráulico",
+        "brake_model_fluid_approvals": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "system_brand": "Marca sintética",
+                "system_model": "Modelo sintético",
+                "fluid_class": "Aceite Mineral",
+                "source_url": "https://example.invalid/synthetic",
+                "generation": "Edición de fixture sintética"
+              },
+              "sources": []
+            },
+            {
+              "id": "r2",
+              "values": {
+                "system_brand": "Marca sintética",
+                "system_model": "Modelo sintético",
+                "fluid_class": "DOT 4",
+                "source_url": "https://example.invalid/synthetic",
+                "generation": "Edición de fixture sintética"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "expected_sql_blocking": []
+    },
+    {
+      "id": "bkx_the_same_approval_twice_blocks",
+      "template": "brake_caliper",
+      "values": {
+        "braking_surface": "Disco",
+        "brake_actuation": "Hidráulico",
+        "brake_model_fluid_approvals": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "system_brand": "Marca sintética",
+                "system_model": "Modelo sintético",
+                "fluid_class": "Aceite Mineral",
+                "source_url": "https://example.invalid/synthetic",
+                "generation": "Edición de fixture sintética",
+                "fluid_product": "Producto de fixture sintética"
+              },
+              "sources": []
+            },
+            {
+              "id": "r2",
+              "values": {
+                "system_brand": "Marca sintética",
+                "system_model": "Modelo sintético",
+                "fluid_class": "Aceite Mineral",
+                "source_url": "https://example.invalid/synthetic",
+                "fluid_product": "Producto de fixture sintética",
+                "generation": "Edición de fixture sintética"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [
+        {
+          "code": "row_shape",
+          "field": "brake_model_fluid_approvals"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "predecessor_values": {
+        "braking_surface": "Disco",
+        "brake_actuation": "Hidráulico",
+        "brake_model_fluid_approvals": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "system_brand": "Marca sintética",
+                "system_model": "Modelo sintético",
+                "fluid_class": "Aceite Mineral",
+                "source_url": "https://example.invalid/synthetic",
+                "generation": "Edición de fixture sintética"
+              },
+              "sources": []
+            },
+            {
+              "id": "r2",
+              "values": {
+                "system_brand": "Marca sintética",
+                "system_model": "Modelo sintético",
+                "fluid_class": "Aceite Mineral",
+                "source_url": "https://example.invalid/synthetic",
+                "fluid_product": "Otro",
+                "generation": "Edición de fixture sintética"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "root_adjudication": "La prueba de duplicación identifica ahora el mismo producto. Antes comparaba uno no identificado con otro distinto, lo que no demostraba dos respuestas a la misma aprobación. El caso bkr_distinct_oem_fluid_products_are_distinct_claims conserva la posibilidad de aprobaciones explícitas a dos productos.",
+      "expected_sql_blocking": [
+        {
+          "code": "row_shape",
+          "field": "brake_model_fluid_approvals"
+        }
+      ]
+    },
+    {
+      "id": "bkx_accepted_thickness_lives_in_its_recipe",
+      "template": "brake_caliper",
+      "values": {
+        "braking_surface": "Disco",
+        "brake_actuation": "Hidráulico",
+        "rotor_size_recipe": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "position": "Delantero",
+                "rotor_diameter_mm": "160",
+                "frame_mount": "Post Mount",
+                "adapter_required": false,
+                "source_url": "https://example.invalid/synthetic",
+                "accepted_rotor_thickness_mm": "1.8",
+                "configuration": "Receta de la fixture 1"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "expected_sql_blocking": []
+    },
+    {
+      "id": "bkx_front_and_rear_keep_their_own_recipe",
+      "template": "brake_caliper",
+      "values": {
+        "braking_surface": "Disco",
+        "brake_actuation": "Hidráulico",
+        "rotor_size_recipe": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "position": "Delantero",
+                "rotor_diameter_mm": "160",
+                "frame_mount": "Post Mount",
+                "adapter_required": false,
+                "source_url": "https://example.invalid/synthetic",
+                "configuration": "Receta de la fixture 1"
+              },
+              "sources": []
+            },
+            {
+              "id": "r2",
+              "values": {
+                "position": "Trasero",
+                "rotor_diameter_mm": "180",
+                "frame_mount": "Post Mount",
+                "adapter_required": false,
+                "source_url": "https://example.invalid/synthetic",
+                "configuration": "Receta de la fixture 2"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "expected_sql_blocking": []
+    },
+    {
+      "id": "bkx_the_same_recipe_twice_blocks",
+      "template": "brake_caliper",
+      "values": {
+        "braking_surface": "Disco",
+        "brake_actuation": "Hidráulico",
+        "rotor_size_recipe": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "position": "Delantero",
+                "rotor_diameter_mm": "160",
+                "frame_mount": "Post Mount",
+                "adapter_required": false,
+                "source_url": "https://example.invalid/synthetic",
+                "configuration": "Receta de la fixture 1"
+              },
+              "sources": []
+            },
+            {
+              "id": "r2",
+              "values": {
+                "position": "Delantero",
+                "rotor_diameter_mm": "160",
+                "frame_mount": "Post Mount",
+                "adapter_required": true,
+                "source_url": "https://example.invalid/synthetic",
+                "configuration": "Receta de la fixture 1"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [
+        {
+          "code": "row_shape",
+          "field": "rotor_size_recipe"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "expected_sql_blocking": [
+        {
+          "code": "row_shape",
+          "field": "rotor_size_recipe"
+        }
+      ]
+    },
+    {
+      "id": "bkx_a_rim_caliper_has_no_rotor_recipe",
+      "template": "brake_caliper",
+      "values": {
+        "braking_surface": "Llanta",
+        "brake_actuation": "Mecánico (cable)",
+        "rotor_size_recipe": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "position": "Delantero",
+                "rotor_diameter_mm": "160",
+                "frame_mount": "Post Mount",
+                "adapter_required": false,
+                "source_url": "https://example.invalid/synthetic",
+                "configuration": "Receta de la fixture 1"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [
+        {
+          "code": "field_applicability",
+          "field": "rotor_size_recipe"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "expected_sql_blocking": [
+        {
+          "code": "field_applicability",
+          "field": "rotor_size_recipe"
+        }
+      ]
+    },
+    {
+      "id": "bkx_a_rim_caliper_has_no_piston_count",
+      "template": "brake_caliper",
+      "values": {
+        "braking_surface": "Llanta",
+        "brake_actuation": "Mecánico (cable)",
+        "piston_count_value": "2"
+      },
+      "expected_blocking": [
+        {
+          "code": "field_applicability",
+          "field": "piston_count_value"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "expected_sql_blocking": [
+        {
+          "code": "field_applicability",
+          "field": "piston_count_value"
+        }
+      ]
+    },
+    {
+      "id": "bkx_a_hydraulic_caliper_requires_no_cable_pull",
+      "template": "brake_caliper",
+      "values": {
+        "braking_surface": "Disco",
+        "brake_actuation": "Hidráulico",
+        "cable_pull_required": "Tiro corto (ruta / cantilever / caliper)"
+      },
+      "expected_blocking": [
+        {
+          "code": "field_applicability",
+          "field": "cable_pull_required"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "expected_sql_blocking": [
+        {
+          "code": "field_applicability",
+          "field": "cable_pull_required"
+        }
+      ]
+    },
+    {
+      "id": "bkx_an_undeclared_compound_leaves_its_name_pending",
+      "template": "brake_pad",
+      "values": {
+        "braking_surface": "Disco",
+        "brake_pad_oem_compound": "Resina"
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "expected_issue_subset": [],
+      "expected_sql_issue_subset": [],
+      "root_adjudication": "La etiqueta literal no exige inventar la clase; ésta puede seguir pendiente.",
+      "expected_sql_blocking": []
+    },
+    {
+      "id": "bkx_a_declared_compound_keeps_its_commercial_name",
+      "template": "brake_pad",
+      "values": {
+        "braking_surface": "Disco",
+        "compound_type": "Orgánico",
+        "brake_pad_oem_compound": "Resina J04C"
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "expected_sql_blocking": []
+    },
+    {
+      "id": "bkx_a_rim_pad_has_no_disc_compound",
+      "template": "brake_pad",
+      "values": {
+        "braking_surface": "Llanta",
+        "compound_type": "Orgánico"
+      },
+      "expected_blocking": [
+        {
+          "code": "field_applicability",
+          "field": "compound_type"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "expected_sql_blocking": [
+        {
+          "code": "field_applicability",
+          "field": "compound_type"
+        }
+      ]
+    },
+    {
+      "id": "bkx_the_same_caliper_claimed_twice_blocks",
+      "template": "brake_pad",
+      "values": {
+        "braking_surface": "Disco",
+        "compatible_caliper_models": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "brand": "Marca sintética",
+                "model": "Modelo sintético",
+                "source_url": "https://example.invalid/synthetic",
+                "generation": "Edición de fixture sintética",
+                "variant": "Variante de fixture sintética"
+              },
+              "sources": []
+            },
+            {
+              "id": "r2",
+              "values": {
+                "brand": "Marca sintética",
+                "model": "Modelo sintético",
+                "source_url": "https://example.invalid/synthetic",
+                "conditions": "Otra cosa",
+                "generation": "Edición de fixture sintética",
+                "variant": "Variante de fixture sintética"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [
+        {
+          "code": "row_shape",
+          "field": "compatible_caliper_models"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "expected_sql_blocking": [
+        {
+          "code": "row_shape",
+          "field": "compatible_caliper_models"
+        }
+      ]
+    },
+    {
+      "id": "bkx_two_calipers_are_two_claims",
+      "template": "brake_pad",
+      "values": {
+        "braking_surface": "Disco",
+        "compatible_caliper_models": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "brand": "Marca sintética",
+                "model": "Modelo sintético",
+                "source_url": "https://example.invalid/synthetic",
+                "generation": "Edición de fixture sintética",
+                "variant": "Variante de fixture sintética"
+              },
+              "sources": []
+            },
+            {
+              "id": "r2",
+              "values": {
+                "brand": "Marca sintética",
+                "model": "Otro modelo",
+                "source_url": "https://example.invalid/synthetic",
+                "generation": "Edición de fixture sintética",
+                "variant": "Variante de fixture sintética"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "expected_sql_blocking": []
+    },
+    {
+      "id": "bkx_a_rotor_states_nominal_and_wear_limit",
+      "template": "rotor",
+      "values": {
+        "rotor_nominal_thickness_mm": "1.8",
+        "rotor_wear_limit_mm": "1.5"
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "expected_sql_blocking": []
+    },
+    {
+      "id": "bkx_a_wear_limit_above_the_nominal_blocks",
+      "template": "rotor",
+      "values": {
+        "rotor_nominal_thickness_mm": "1.5",
+        "rotor_wear_limit_mm": "1.8"
+      },
+      "expected_blocking": [
+        {
+          "code": "range_order",
+          "field": "rotor_wear_limit_mm"
+        },
+        {
+          "code": "range_order",
+          "field": "rotor_nominal_thickness_mm"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "expected_sql_blocking": [
+        {
+          "code": "range_order",
+          "field": "rotor_nominal_thickness_mm"
+        },
+        {
+          "code": "range_order",
+          "field": "rotor_wear_limit_mm"
+        }
+      ]
+    },
+    {
+      "id": "bkx_equal_nominal_and_limit_are_admissible",
+      "template": "rotor",
+      "values": {
+        "rotor_nominal_thickness_mm": "1.8",
+        "rotor_wear_limit_mm": "1.8"
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "expected_sql_blocking": []
+    },
+    {
+      "id": "bkx_two_makers_two_limits_for_the_same_nominal",
+      "template": "rotor",
+      "values": {
+        "rotor_nominal_thickness_mm": "1.8",
+        "rotor_wear_limit_mm": "1.52",
+        "spec_evidence_source": "Ficha del fabricante"
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "expected_sql_blocking": []
+    },
+    {
+      "id": "bkx_a_rotor_without_its_material_leaves_the_restriction_pending",
+      "template": "rotor",
+      "values": {
+        "rotor_thickness_mm": "1.8",
+        "spec_evidence_source": "Ficha",
+        "pad_compound_restriction": "Sólo resina"
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "expected_issue_subset": [],
+      "expected_sql_issue_subset": [],
+      "root_adjudication": "La restricción explícita puede conocerse aunque no se haya identificado el metal.",
+      "expected_sql_blocking": []
+    },
+    {
+      "id": "bkx_a_rotor_with_its_material_may_restrict",
+      "template": "rotor",
+      "values": {
+        "rotor_material": "Acero Inoxidable",
+        "pad_compound_restriction": "Sólo resina"
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "expected_sql_blocking": []
+    },
+    {
+      "id": "bkr_rotor_keeps_unowned_tool_as_legacy_with_no_mount",
+      "template": "rotor",
+      "values": {
+        "rotor_thickness_mm": "1.8",
+        "spec_evidence_source": "Ficha",
+        "tool_size_mm": "T25"
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "expected_issue_subset": [],
+      "expected_sql_issue_subset": [],
+      "predecessor_case_id": "bkx_a_rotor_without_its_mount_leaves_the_tool_pending",
+      "predecessor_values": {
+        "rotor_thickness_mm": "1.8",
+        "spec_evidence_source": "Ficha",
+        "tool_size_mm": "T25"
+      },
+      "forbidden_issue_fields": [
+        "tool_size_mm"
+      ],
+      "root_adjudication": "Esta fixture sólo conserva una lectura legacy sin dueño. Centerlock + T25 NO es un caso de compatibilidad aceptada: el campo se retira de la ficha activa y no se publica como propiedad del rotor. Park identifica la herramienta por la interfaz de la fijación concreta.",
+      "expected_sql_blocking": []
+    },
+    {
+      "id": "bkr_rotor_keeps_unowned_tool_as_legacy_with_mount",
+      "template": "rotor",
+      "values": {
+        "rotor_mount_type": "Centerlock",
+        "spec_evidence_source": "Ficha",
+        "tool_size_mm": "T25"
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "predecessor_case_id": "bkx_a_rotor_with_its_mount_declares_its_tool",
+      "predecessor_values": {
+        "rotor_mount_type": "Centerlock",
+        "spec_evidence_source": "Ficha",
+        "tool_size_mm": "T25"
+      },
+      "forbidden_issue_fields": [
+        "tool_size_mm"
+      ],
+      "root_adjudication": "Esta fixture sólo conserva una lectura legacy sin dueño. Centerlock + T25 NO es un caso de compatibilidad aceptada: el campo se retira de la ficha activa y no se publica como propiedad del rotor. Park identifica la herramienta por la interfaz de la fijación concreta.",
+      "expected_sql_blocking": []
+    },
+    {
+      "id": "bkx_a_hybrid_caliper_may_convert_inside_itself",
+      "template": "brake_caliper",
+      "values": {
+        "braking_surface": "Disco",
+        "brake_actuation": "Híbrido (cable a hidráulico)",
+        "brake_conversion_location": "En esta pieza"
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "expected_sql_blocking": []
+    },
+    {
+      "id": "bkx_a_hydraulic_caliper_declares_no_conversion",
+      "template": "brake_caliper",
+      "values": {
+        "braking_surface": "Disco",
+        "brake_actuation": "Hidráulico",
+        "brake_conversion_location": "En esta pieza"
+      },
+      "expected_blocking": [
+        {
+          "code": "field_applicability",
+          "field": "brake_conversion_location"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "expected_sql_blocking": [
+        {
+          "code": "field_applicability",
+          "field": "brake_conversion_location"
+        }
+      ]
+    },
+    {
+      "id": "bkx_a_caliper_keeps_inlet_and_bleed_port_separate",
+      "template": "brake_caliper",
+      "values": {
+        "braking_surface": "Disco",
+        "brake_actuation": "Hidráulico",
+        "brake_external_hose_connection": true,
+        "brake_piece_hydraulic_ports": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "port_id": "entrada",
+                "end_role": "Entrada",
+                "fitting_model": "Oliva sintética",
+                "source_scope": "A",
+                "source_url": "https://example.invalid/synthetic"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "brake_bleed_ports": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r2",
+              "sources": [],
+              "values": {
+                "component_role": "Cáliper",
+                "port_id": "purga",
+                "source_url": "https://example.invalid/synthetic"
+              }
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "expected_sql_blocking": []
+    },
+    {
+      "id": "bkx_the_same_port_twice_blocks",
+      "template": "brake_caliper",
+      "values": {
+        "braking_surface": "Disco",
+        "brake_actuation": "Hidráulico",
+        "brake_external_hose_connection": true,
+        "brake_piece_hydraulic_ports": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "port_id": "entrada",
+                "end_role": "Entrada",
+                "source_scope": "A",
+                "source_url": "https://example.invalid/synthetic"
+              },
+              "sources": []
+            },
+            {
+              "id": "r2",
+              "values": {
+                "port_id": "entrada",
+                "end_role": "Salida",
+                "source_scope": "Otro",
+                "source_url": "https://example.invalid/synthetic"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [
+        {
+          "code": "row_shape",
+          "field": "brake_piece_hydraulic_ports"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "expected_sql_blocking": [
+        {
+          "code": "row_shape",
+          "field": "brake_piece_hydraulic_ports"
+        }
+      ]
+    },
+    {
+      "id": "bkx_a_caliper_without_an_outside_end_has_no_ports",
+      "template": "brake_caliper",
+      "values": {
+        "braking_surface": "Disco",
+        "brake_actuation": "Hidráulico",
+        "brake_external_hose_connection": false,
+        "brake_piece_hydraulic_ports": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "port_id": "entrada",
+                "end_role": "Entrada",
+                "source_scope": "A",
+                "source_url": "https://example.invalid/synthetic"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [
+        {
+          "code": "field_applicability",
+          "field": "brake_piece_hydraulic_ports"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "expected_sql_blocking": [
+        {
+          "code": "field_applicability",
+          "field": "brake_piece_hydraulic_ports"
+        }
+      ]
+    },
+    {
+      "id": "bkx_a_caliper_without_its_surface_is_pending",
+      "template": "brake_caliper",
+      "values": {
+        "spec_evidence_source": "Ficha"
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "expected_issue_subset": [
+        {
+          "code": "required_missing",
+          "field": "braking_surface",
+          "blocking": false
+        }
+      ],
+      "expected_sql_issue_subset": [
+        {
+          "code": "required_missing",
+          "field": "braking_surface",
+          "blocking": false
+        }
+      ],
+      "expected_sql_blocking": []
+    },
+    {
+      "id": "bkx_a_pad_without_its_surface_is_pending",
+      "template": "brake_pad",
+      "values": {
+        "spec_evidence_source": "Ficha"
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "expected_issue_subset": [
+        {
+          "code": "required_missing",
+          "field": "braking_surface",
+          "blocking": false
+        }
+      ],
+      "expected_sql_issue_subset": [
+        {
+          "code": "required_missing",
+          "field": "braking_surface",
+          "blocking": false
+        }
+      ],
+      "expected_sql_blocking": []
+    },
+    {
+      "id": "bkr_another_source_cannot_duplicate_an_approved_fluid",
+      "template": "brake_caliper",
+      "values": {
+        "braking_surface": "Disco",
+        "brake_actuation": "Hidráulico",
+        "brake_model_fluid_approvals": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "system_brand": "Marca sintética",
+                "system_model": "Modelo sintético",
+                "generation": "Edición sintética",
+                "fluid_class": "Aceite Mineral",
+                "fluid_product": "Producto sintético A",
+                "source_url": "https://example.invalid/brake-root-fixture"
+              },
+              "sources": []
+            },
+            {
+              "id": "r2",
+              "values": {
+                "system_brand": "Marca sintética",
+                "system_model": "Modelo sintético",
+                "generation": "Edición sintética",
+                "fluid_class": "Aceite Mineral",
+                "fluid_product": "Producto sintético A",
+                "source_url": "https://example.invalid/another-paragraph"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [
+        {
+          "code": "row_shape",
+          "field": "brake_model_fluid_approvals"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "expected_sql_blocking": [
+        {
+          "code": "row_shape",
+          "field": "brake_model_fluid_approvals"
+        }
+      ]
+    },
+    {
+      "id": "bkr_distinct_oem_fluid_products_are_distinct_claims",
+      "template": "brake_caliper",
+      "values": {
+        "braking_surface": "Disco",
+        "brake_actuation": "Hidráulico",
+        "brake_model_fluid_approvals": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "system_brand": "Marca sintética",
+                "system_model": "Modelo sintético",
+                "generation": "Edición sintética",
+                "fluid_class": "Aceite Mineral",
+                "fluid_product": "Producto sintético A",
+                "source_url": "https://example.invalid/brake-root-fixture"
+              },
+              "sources": []
+            },
+            {
+              "id": "r2",
+              "values": {
+                "system_brand": "Marca sintética",
+                "system_model": "Modelo sintético",
+                "generation": "Edición sintética",
+                "fluid_class": "Aceite Mineral",
+                "fluid_product": "Producto sintético B",
+                "source_url": "https://example.invalid/brake-root-fixture"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "expected_sql_blocking": []
+    },
+    {
+      "id": "bkr_mineral_class_does_not_identify_the_approved_product",
+      "template": "brake_caliper",
+      "values": {
+        "braking_surface": "Disco",
+        "brake_actuation": "Hidráulico",
+        "brake_model_fluid_approvals": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "system_brand": "Marca sintética",
+                "system_model": "Modelo sintético",
+                "generation": "Edición sintética",
+                "fluid_class": "Aceite Mineral",
+                "source_url": "https://example.invalid/brake-root-fixture"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "expected_issue_subset": [
+        {
+          "code": "row_required_missing",
+          "field": "brake_model_fluid_approvals",
+          "blocking": false
+        }
+      ],
+      "expected_sql_issue_subset": [
+        {
+          "code": "row_required_missing",
+          "field": "brake_model_fluid_approvals",
+          "blocking": false
+        }
+      ],
+      "expected_sql_blocking": []
+    },
+    {
+      "id": "bkr_literal_compound_can_precede_technical_classification",
+      "template": "brake_pad",
+      "values": {
+        "braking_surface": "Disco",
+        "brake_pad_oem_compound": "Nombre comercial sintético",
+        "spec_evidence_source": "https://example.invalid/brake-root-fixture"
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "expected_sql_blocking": []
+    },
+    {
+      "id": "bkr_rotor_restriction_does_not_require_guessing_the_track_metal",
+      "template": "rotor",
+      "values": {
+        "pad_compound_restriction": "Sólo resina",
+        "spec_evidence_source": "https://example.invalid/brake-root-fixture"
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "expected_sql_blocking": []
+    },
+    {
+      "id": "bkr_caliper_cannot_claim_a_lever_bleed_port",
+      "template": "brake_caliper",
+      "values": {
+        "braking_surface": "Disco",
+        "brake_actuation": "Hidráulico",
+        "brake_bleed_ports": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "component_role": "Maneta",
+                "port_id": "p",
+                "source_url": "https://example.invalid/brake-root-fixture"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [
+        {
+          "code": "row_option",
+          "field": "brake_bleed_ports"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "expected_sql_blocking": [
+        {
+          "code": "row_option",
+          "field": "brake_bleed_ports"
+        }
+      ]
+    },
+    {
+      "id": "brake_piece_disc_mount_is_pending",
+      "template": "brake_caliper",
+      "values": {
+        "braking_surface": "Disco",
+        "brake_actuation": "Mecánico (cable)"
+      },
+      "kind": "synthetic_boundary",
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "expected_blocking": [],
+      "expected_issue_subset": [
+        {
+          "code": "required_missing",
+          "field": "caliper_mount_interface",
+          "blocking": false
+        }
+      ],
+      "forbidden_issue_fields": [
+        "rotor_size_recipe"
+      ],
+      "expected_sql_blocking": [],
+      "expected_sql_issue_subset": [
+        {
+          "code": "required_missing",
+          "field": "caliper_mount_interface",
+          "blocking": false
+        }
+      ]
+    },
+    {
+      "id": "brake_piece_disc_mount_without_adapter_table",
+      "template": "brake_caliper",
+      "values": {
+        "braking_surface": "Disco",
+        "brake_actuation": "Mecánico (cable)",
+        "caliper_mount_interface": "Flat Mount"
+      },
+      "kind": "synthetic_boundary",
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "expected_blocking": [],
+      "expected_issue_subset": [],
+      "forbidden_issue_fields": [
+        "caliper_mount_interface",
+        "rotor_size_recipe"
+      ],
+      "expected_sql_blocking": [],
+      "expected_sql_issue_subset": []
+    },
+    {
+      "id": "brake_piece_disc_mount_cannot_be_multivalued",
+      "template": "brake_caliper",
+      "values": {
+        "braking_surface": "Disco",
+        "brake_actuation": "Mecánico (cable)",
+        "caliper_mount_interface": [
+          "Flat Mount",
+          "Post Mount"
+        ]
+      },
+      "kind": "synthetic_boundary",
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "expected_blocking": [
+        {
+          "code": "cardinality",
+          "field": "caliper_mount_interface"
+        }
+      ],
+      "expected_issue_subset": [],
+      "forbidden_issue_fields": [],
+      "expected_sql_blocking": [
+        {
+          "code": "field_constraint",
+          "field": "caliper_mount_interface"
+        }
+      ],
+      "expected_sql_issue_subset": []
+    },
+    {
+      "id": "brake_piece_recipe_cannot_override_caliper_mount",
+      "template": "brake_caliper",
+      "values": {
+        "braking_surface": "Disco",
+        "brake_actuation": "Mecánico (cable)",
+        "caliper_mount_interface": "Flat Mount",
+        "rotor_size_recipe": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "sources": [],
+              "values": {
+                "configuration": "Synthetic fitment",
+                "position": "Delantero",
+                "rotor_diameter_mm": "160",
+                "frame_mount": "Post Mount",
+                "adapter_required": false,
+                "source_url": "https://example.invalid/fitment",
+                "caliper_mount": "Post Mount"
+              }
+            }
+          ]
+        }
+      },
+      "kind": "synthetic_boundary",
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "expected_blocking": [
+        {
+          "code": "row_field_applicability",
+          "field": "rotor_size_recipe"
+        }
+      ],
+      "expected_issue_subset": [],
+      "forbidden_issue_fields": [],
+      "expected_sql_blocking": [
+        {
+          "code": "row_field_applicability",
+          "field": "rotor_size_recipe"
+        }
+      ],
+      "expected_sql_issue_subset": []
+    },
+    {
+      "id": "brake_piece_recipe_cannot_override_caliper_model",
+      "template": "brake_caliper",
+      "values": {
+        "braking_surface": "Disco",
+        "brake_actuation": "Mecánico (cable)",
+        "caliper_mount_interface": "Flat Mount",
+        "rotor_size_recipe": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "sources": [],
+              "values": {
+                "configuration": "Synthetic fitment",
+                "position": "Delantero",
+                "rotor_diameter_mm": "160",
+                "frame_mount": "Post Mount",
+                "adapter_required": false,
+                "source_url": "https://example.invalid/fitment",
+                "caliper_model": "Another model"
+              }
+            }
+          ]
+        }
+      },
+      "kind": "synthetic_boundary",
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "expected_blocking": [
+        {
+          "code": "row_field_applicability",
+          "field": "rotor_size_recipe"
+        }
+      ],
+      "expected_issue_subset": [],
+      "forbidden_issue_fields": [],
+      "expected_sql_blocking": [
+        {
+          "code": "row_field_applicability",
+          "field": "rotor_size_recipe"
+        }
+      ],
+      "expected_sql_issue_subset": []
+    },
+    {
+      "id": "brake_piece_hybrid_conversion_is_inside",
+      "template": "brake_caliper",
+      "values": {
+        "braking_surface": "Disco",
+        "brake_actuation": "Híbrido (cable a hidráulico)",
+        "brake_conversion_location": "En un dispositivo externo"
+      },
+      "kind": "synthetic_boundary",
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "expected_blocking": [
+        {
+          "code": "constraint",
+          "field": "brake_conversion_location"
+        }
+      ],
+      "expected_issue_subset": [],
+      "forbidden_issue_fields": [],
+      "expected_sql_blocking": [
+        {
+          "code": "field_constraint",
+          "field": "brake_conversion_location"
+        }
+      ],
+      "expected_sql_issue_subset": []
+    },
+    {
+      "id": "brake_piece_hub_brake_is_not_a_caliper",
+      "template": "brake_caliper",
+      "values": {
+        "braking_surface": "Maza (banda / tambor / rodillo)"
+      },
+      "kind": "synthetic_boundary",
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "expected_blocking": [
+        {
+          "code": "constraint",
+          "field": "braking_surface"
+        }
+      ],
+      "expected_issue_subset": [],
+      "forbidden_issue_fields": [],
+      "expected_sql_blocking": [
+        {
+          "code": "field_constraint",
+          "field": "braking_surface"
+        }
+      ],
+      "expected_sql_issue_subset": []
+    },
+    {
+      "id": "brake_piece_caliper_port_Entrada",
+      "template": "brake_caliper",
+      "values": {
+        "braking_surface": "Disco",
+        "brake_actuation": "Hidráulico",
+        "brake_external_hose_connection": true,
+        "brake_piece_hydraulic_ports": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "p1",
+              "sources": [],
+              "values": {
+                "port_id": "p1",
+                "end_role": "Entrada",
+                "source_scope": "Synthetic inlet",
+                "source_url": "https://example.invalid/port"
+              }
+            }
+          ]
+        }
+      },
+      "kind": "synthetic_boundary",
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "expected_blocking": [],
+      "expected_issue_subset": [],
+      "forbidden_issue_fields": [],
+      "expected_sql_blocking": [],
+      "expected_sql_issue_subset": []
+    },
+    {
+      "id": "brake_piece_caliper_port_Salida",
+      "template": "brake_caliper",
+      "values": {
+        "braking_surface": "Disco",
+        "brake_actuation": "Hidráulico",
+        "brake_external_hose_connection": true,
+        "brake_piece_hydraulic_ports": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "p1",
+              "sources": [],
+              "values": {
+                "port_id": "p1",
+                "end_role": "Salida",
+                "source_scope": "Synthetic inlet",
+                "source_url": "https://example.invalid/port"
+              }
+            }
+          ]
+        }
+      },
+      "kind": "synthetic_boundary",
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "expected_blocking": [
+        {
+          "code": "row_option",
+          "field": "brake_piece_hydraulic_ports"
+        }
+      ],
+      "expected_issue_subset": [],
+      "forbidden_issue_fields": [],
+      "expected_sql_blocking": [
+        {
+          "code": "row_option",
+          "field": "brake_piece_hydraulic_ports"
+        }
+      ],
+      "expected_sql_issue_subset": []
+    },
+    {
+      "id": "brake_piece_caliper_port_Purgador",
+      "template": "brake_caliper",
+      "values": {
+        "braking_surface": "Disco",
+        "brake_actuation": "Hidráulico",
+        "brake_external_hose_connection": true,
+        "brake_piece_hydraulic_ports": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "p1",
+              "sources": [],
+              "values": {
+                "port_id": "p1",
+                "end_role": "Purgador",
+                "source_scope": "Synthetic inlet",
+                "source_url": "https://example.invalid/port"
+              }
+            }
+          ]
+        }
+      },
+      "kind": "synthetic_boundary",
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "expected_blocking": [
+        {
+          "code": "row_option",
+          "field": "brake_piece_hydraulic_ports"
+        }
+      ],
+      "expected_issue_subset": [],
+      "forbidden_issue_fields": [],
+      "expected_sql_blocking": [
+        {
+          "code": "row_option",
+          "field": "brake_piece_hydraulic_ports"
+        }
+      ],
+      "expected_sql_issue_subset": []
+    },
+    {
+      "id": "brake_piece_rim_construction_pending",
+      "template": "brake_pad",
+      "values": {
+        "braking_surface": "Llanta"
+      },
+      "kind": "synthetic_boundary",
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "expected_blocking": [],
+      "expected_issue_subset": [
+        {
+          "code": "required_missing",
+          "field": "rim_pad_construction",
+          "blocking": false
+        }
+      ],
+      "forbidden_issue_fields": [],
+      "expected_sql_blocking": [],
+      "expected_sql_issue_subset": [
+        {
+          "code": "required_missing",
+          "field": "rim_pad_construction",
+          "blocking": false
+        }
+      ]
+    },
+    {
+      "id": "brake_piece_holder_stud_pending_Una pieza",
+      "template": "brake_pad",
+      "values": {
+        "braking_surface": "Llanta",
+        "rim_pad_construction": "Una pieza"
+      },
+      "kind": "synthetic_boundary",
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "expected_blocking": [],
+      "expected_issue_subset": [
+        {
+          "code": "required_missing",
+          "field": "rim_pad_stud_type",
+          "blocking": false
+        }
+      ],
+      "forbidden_issue_fields": [],
+      "expected_sql_blocking": [],
+      "expected_sql_issue_subset": [
+        {
+          "code": "required_missing",
+          "field": "rim_pad_stud_type",
+          "blocking": false
+        }
+      ]
+    },
+    {
+      "id": "brake_piece_holder_stud_pending_Cartucho (porta-goma)",
+      "template": "brake_pad",
+      "values": {
+        "braking_surface": "Llanta",
+        "rim_pad_construction": "Cartucho (porta-goma)"
+      },
+      "kind": "synthetic_boundary",
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "expected_blocking": [],
+      "expected_issue_subset": [
+        {
+          "code": "required_missing",
+          "field": "rim_pad_stud_type",
+          "blocking": false
+        }
+      ],
+      "forbidden_issue_fields": [],
+      "expected_sql_blocking": [],
+      "expected_sql_issue_subset": [
+        {
+          "code": "required_missing",
+          "field": "rim_pad_stud_type",
+          "blocking": false
+        }
+      ]
+    },
+    {
+      "id": "brake_piece_cartridge_insert_has_no_stud",
+      "template": "brake_pad",
+      "values": {
+        "braking_surface": "Llanta",
+        "rim_pad_construction": "Recambio de cartucho"
+      },
+      "kind": "synthetic_boundary",
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "expected_blocking": [],
+      "expected_issue_subset": [],
+      "forbidden_issue_fields": [
+        "rim_pad_stud_type"
+      ],
+      "expected_sql_blocking": [],
+      "expected_sql_issue_subset": []
+    },
+    {
+      "id": "brake_piece_cartridge_insert_cannot_claim_holder_stud",
+      "template": "brake_pad",
+      "values": {
+        "braking_surface": "Llanta",
+        "rim_pad_construction": "Recambio de cartucho",
+        "rim_pad_stud_type": "Espárrago roscado"
+      },
+      "kind": "synthetic_boundary",
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "expected_blocking": [
+        {
+          "code": "field_applicability",
+          "field": "rim_pad_stud_type"
+        }
+      ],
+      "expected_issue_subset": [],
+      "forbidden_issue_fields": [],
+      "expected_sql_blocking": [
+        {
+          "code": "field_applicability",
+          "field": "rim_pad_stud_type"
+        }
+      ],
+      "expected_sql_issue_subset": []
+    },
+    {
+      "id": "brake_piece_rim_caliper_pad_attachment_pending",
+      "template": "brake_caliper",
+      "values": {
+        "braking_surface": "Llanta",
+        "brake_actuation": "Mecánico (cable)"
+      },
+      "kind": "synthetic_boundary",
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "expected_blocking": [],
+      "expected_issue_subset": [
+        {
+          "code": "required_missing",
+          "field": "rim_pad_stud_type",
+          "blocking": false
+        }
+      ],
+      "forbidden_issue_fields": [],
+      "expected_sql_blocking": [],
+      "expected_sql_issue_subset": [
+        {
+          "code": "required_missing",
+          "field": "rim_pad_stud_type",
+          "blocking": false
+        }
+      ]
+    },
+    {
+      "id": "brake_piece_rim_caliper_pad_attachment_declared",
+      "template": "brake_caliper",
+      "values": {
+        "braking_surface": "Llanta",
+        "brake_actuation": "Mecánico (cable)",
+        "rim_pad_stud_type": "Poste liso"
+      },
+      "kind": "synthetic_boundary",
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "expected_blocking": [],
+      "expected_issue_subset": [],
+      "forbidden_issue_fields": [
+        "rim_pad_stud_type"
+      ],
+      "expected_sql_blocking": [],
+      "expected_sql_issue_subset": []
+    }
+  ],
+  "pending_cases": []
+}

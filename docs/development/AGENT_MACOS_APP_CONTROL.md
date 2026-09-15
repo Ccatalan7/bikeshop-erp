@@ -438,6 +438,17 @@ Keep `click X Y` for what has no identity — a canvas, a chart, a spot inside a
 image — and for testing the OS event path itself. For anything with a key or a
 label, use `tap`; never reuse a coordinate from an earlier frame.
 
+**2026-09-15 — una coincidencia única puede ser el control equivocado.** La
+búsqueda por etiqueta admite subcadenas: `Productos` dentro del formulario
+coincidió con el texto del interruptor «Los productos inactivos…», no con el
+módulo de inventario, y cambió el estado activo del borrador. Se cerró sin
+guardar y una lectura autenticada confirmó el estado original. Ante una
+etiqueta corta o un cambio de contexto, ejecutar `find`, comprobar la etiqueta
+completa y el tipo de control, y sólo entonces `tap`. La unicidad no sustituye
+esa identificación. En esta misma sesión, los clics AX movían el foco sin
+activar `Añadir configuración`; el backend `app` del wrapper sí produjo el
+cambio comprobado en la semántica y en un frame actual.
+
 ### Text fields: update Flutter, not only the macOS AX proxy (2026-08-03)
 
 Computer Use can focus a Flutter macOS `TextField` and report it as settable,

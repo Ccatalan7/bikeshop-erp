@@ -1,0 +1,238 @@
+{
+  "schema_version": 1,
+  "snapshot_sha256": "0a21d85a1539c330e661e0c5c1aa2fde0bbf29ddad67a452a018ed767d08b2a6",
+  "captured_at": "2026-09-08T03:50:11.737289+00:00",
+  "templates": 37,
+  "field_uses": 280,
+  "shared_definitions_present": 150,
+  "effective_bindings": {
+    "hub": 48,
+    "rim": 41,
+    "tire": 113,
+    "tube": 137,
+    "chain": 31,
+    "rotor": 18,
+    "spoke": 48,
+    "bearing": 9,
+    "headset": 15,
+    "shifter": 32,
+    "cassette": 29,
+    "crankset": 27,
+    "brake_pad": 53,
+    "chainring": 16,
+    "crank_arm": 7,
+    "fixed_cog": 0,
+    "freewheel": 28,
+    "rim_brake": 24,
+    "rim_strip": 3,
+    "chain_link": 9,
+    "brake_lever": 15,
+    "chain_guide": 3,
+    "brake_caliper": 11,
+    "bottom_bracket": 34,
+    "drivetrain_kit": 1,
+    "tubeless_valve": 8,
+    "cassette_spacer": 3,
+    "rear_derailleur": 35,
+    "front_derailleur": 15,
+    "derailleur_hanger": 23,
+    "derailleur_pulley": 7,
+    "bottom_bracket_cup": 8,
+    "bottom_bracket_axle": 3,
+    "tubeless_consumable": 3,
+    "hydraulic_disc_brake": 3,
+    "mechanical_disc_brake": 0,
+    "bottom_bracket_bearing": 3
+  },
+  "explicit_bindings": {
+    "hub": 0,
+    "rim": 0,
+    "tire": 0,
+    "tube": 0,
+    "chain": 0,
+    "rotor": 0,
+    "spoke": 0,
+    "bearing": 0,
+    "headset": 0,
+    "shifter": 0,
+    "cassette": 0,
+    "crankset": 0,
+    "brake_pad": 0,
+    "chainring": 0,
+    "crank_arm": 0,
+    "fixed_cog": 0,
+    "freewheel": 0,
+    "rim_brake": 0,
+    "rim_strip": 0,
+    "chain_link": 0,
+    "brake_lever": 0,
+    "chain_guide": 0,
+    "brake_caliper": 0,
+    "bottom_bracket": 0,
+    "drivetrain_kit": 0,
+    "tubeless_valve": 0,
+    "cassette_spacer": 0,
+    "rear_derailleur": 0,
+    "front_derailleur": 0,
+    "derailleur_hanger": 0,
+    "derailleur_pulley": 0,
+    "bottom_bracket_cup": 0,
+    "bottom_bracket_axle": 0,
+    "tubeless_consumable": 0,
+    "hydraulic_disc_brake": 0,
+    "mechanical_disc_brake": 0,
+    "bottom_bracket_bearing": 0
+  },
+  "shared_differences_from_frozen": [
+    {
+      "key": "bb_ball_count_per_side",
+      "different_properties": [
+        "allowed_values"
+      ],
+      "decision": "preserve_live_definition_adjudicate_each_use"
+    },
+    {
+      "key": "bb_cup_outer_diameter_mm",
+      "different_properties": [
+        "allowed_values"
+      ],
+      "decision": "preserve_live_definition_adjudicate_each_use"
+    },
+    {
+      "key": "bb_shell_diameter_mm",
+      "different_properties": [
+        "allowed_values"
+      ],
+      "decision": "preserve_live_definition_adjudicate_each_use"
+    },
+    {
+      "key": "bb_shell_width_mm",
+      "different_properties": [
+        "allowed_values"
+      ],
+      "decision": "preserve_live_definition_adjudicate_each_use"
+    },
+    {
+      "key": "bb_spacer_stack_mm",
+      "different_properties": [
+        "allowed_values"
+      ],
+      "decision": "preserve_live_definition_adjudicate_each_use"
+    },
+    {
+      "key": "bearing_application",
+      "different_properties": [
+        "label"
+      ],
+      "decision": "preserve_live_definition_adjudicate_each_use"
+    },
+    {
+      "key": "bearing_size_code",
+      "different_properties": [
+        "label"
+      ],
+      "decision": "preserve_live_definition_adjudicate_each_use"
+    },
+    {
+      "key": "chain_outer_width_mm",
+      "different_properties": [
+        "allowed_values"
+      ],
+      "decision": "preserve_live_definition_adjudicate_each_use"
+    },
+    {
+      "key": "compound_type",
+      "different_properties": [
+        "allowed_values"
+      ],
+      "decision": "preserve_live_definition_adjudicate_each_use"
+    },
+    {
+      "key": "fluid_type",
+      "different_properties": [
+        "allowed_values"
+      ],
+      "decision": "preserve_live_definition_adjudicate_each_use"
+    },
+    {
+      "key": "largest_cog_teeth",
+      "different_properties": [
+        "allowed_values"
+      ],
+      "decision": "preserve_live_definition_adjudicate_each_use"
+    },
+    {
+      "key": "link_count",
+      "different_properties": [
+        "allowed_values"
+      ],
+      "decision": "preserve_live_definition_adjudicate_each_use"
+    },
+    {
+      "key": "mount_standard",
+      "different_properties": [
+        "allowed_values"
+      ],
+      "decision": "preserve_live_definition_adjudicate_each_use"
+    },
+    {
+      "key": "rotor_mount_type",
+      "different_properties": [
+        "allowed_values"
+      ],
+      "decision": "preserve_live_definition_adjudicate_each_use"
+    },
+    {
+      "key": "smallest_cog_teeth",
+      "different_properties": [
+        "allowed_values"
+      ],
+      "decision": "preserve_live_definition_adjudicate_each_use"
+    },
+    {
+      "key": "spindle_diameter_mm",
+      "different_properties": [
+        "allowed_values"
+      ],
+      "decision": "preserve_live_definition_adjudicate_each_use"
+    },
+    {
+      "key": "spindle_interface",
+      "different_properties": [
+        "allowed_values"
+      ],
+      "decision": "preserve_live_definition_adjudicate_each_use"
+    },
+    {
+      "key": "spindle_length_mm",
+      "different_properties": [
+        "allowed_values"
+      ],
+      "decision": "preserve_live_definition_adjudicate_each_use"
+    },
+    {
+      "key": "spoke_gauge",
+      "different_properties": [
+        "allowed_values"
+      ],
+      "decision": "preserve_live_definition_adjudicate_each_use"
+    },
+    {
+      "key": "valve_length_mm",
+      "different_properties": [
+        "allowed_values"
+      ],
+      "decision": "preserve_live_definition_adjudicate_each_use"
+    },
+    {
+      "key": "wheel_position",
+      "different_properties": [
+        "allowed_values"
+      ],
+      "decision": "preserve_live_definition_adjudicate_each_use"
+    }
+  ],
+  "product_writes": false,
+  "publication_authorized": false,
+  "fill_allowed": false
+}

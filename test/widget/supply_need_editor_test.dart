@@ -115,6 +115,122 @@ Future<_Saved> _pump(
 }
 
 void main() {
+  testWidgets('same template gains a field without crashing or losing a draft',
+      (tester) async {
+    await _pump(tester, template: _numericTemplate());
+    final numeric =
+        find.byKey(const ValueKey('need-refinement-value-spoke_holes-0'));
+    await tester.enterText(numeric, '31');
+    final refreshed = SpecTemplate(
+      id: 'tpl-wheel',
+      key: 'wheel',
+      name: 'Ruedas',
+      technicalFamily: 'wheel',
+      contractVersion: 2,
+      fields: [..._numericTemplate().fields, ..._tubeTemplate().fields],
+    );
+    final saved = await _pump(tester, template: refreshed);
+    expect(tester.takeException(), isNull);
+    expect(tester.widget<TextField>(numeric).controller!.text, '31');
+    await tester
+        .tap(find.byKey(const ValueKey('need-refinement-value-valve_type')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('presta').last);
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('need-criteria-save')));
+    await tester.pump();
+    expect(
+        saved.predicates,
+        contains(const SupplyNeedPredicate(
+            field: 'spoke_holes', operator: 'eq', values: [31.0])));
+    expect(
+        saved.predicates,
+        contains(const SupplyNeedPredicate(
+            field: 'valve_type', operator: 'eq', values: ['presta'])));
+  });
+
+  for (final width in <double>[390, 834, 1280]) {
+    testWidgets('prerequisites distinguish a bound from equality at $width',
+        (tester) async {
+      final t = SpecTemplate(
+        id: 'synthetic-request',
+        key: 'synthetic-request',
+        name: 'Synthetic',
+        technicalFamily: 'fixture',
+        fields: [
+          ..._numericTemplate().fields,
+          SpecTemplateField(
+            specDefinitionId: 'detail',
+            sectionKey: 'general',
+            sortOrder: 2,
+            isRequired: false,
+            visibilityRules: const [],
+            definition: const SpecDefinition(
+              id: 'detail',
+              key: 'detail',
+              label: 'Detalle',
+              dataType: 'text',
+              options: [],
+              sortOrder: 2,
+            ),
+          ),
+        ],
+        formContract: const {
+          'rules_version': 2,
+          'allowed_when': {
+            'detail': {
+              'kind': 'when',
+              'rows': [
+                [
+                  {
+                    'field': 'spoke_holes',
+                    'operator': 'gt',
+                    'value_type': 'decimal',
+                    'value': '30',
+                  }
+                ]
+              ]
+            },
+          },
+        },
+      );
+      final saved = await _pump(
+        tester,
+        template: t,
+        size: Size(width, 1000),
+        predicates: const [
+          SupplyNeedPredicate(
+              field: 'spoke_holes', operator: 'gt', values: [30]),
+          SupplyNeedPredicate(
+              field: 'detail', operator: 'eq', values: ['saved']),
+        ],
+      );
+      final detail =
+          find.byKey(const ValueKey('need-refinement-value-detail-0'));
+      expect(detail, findsOneWidget, reason: '>30 is not the value 30');
+      await tester.tap(
+          find.byKey(const ValueKey('need-refinement-operator-spoke_holes')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Igual a').last);
+      await tester.pumpAndSettle();
+      expect(detail, findsNothing,
+          reason: 'exact 30 fails the v2 prerequisite');
+      final save = find.byKey(const ValueKey('need-criteria-save'));
+      await tester.ensureVisible(save);
+      await tester.tap(save);
+      await tester.pump();
+      expect(
+          saved.predicates,
+          contains(const SupplyNeedPredicate(
+              field: 'detail', operator: 'eq', values: ['saved'])));
+      expect(
+          saved.predicates,
+          contains(const SupplyNeedPredicate(
+              field: 'spoke_holes', operator: 'eq', values: [30.0])));
+      expect(tester.takeException(), isNull);
+    });
+  }
+
   testWidgets('la ficha no mezcla descripción ni cantidad', (tester) async {
     await _pump(tester, template: _tubeTemplate());
 

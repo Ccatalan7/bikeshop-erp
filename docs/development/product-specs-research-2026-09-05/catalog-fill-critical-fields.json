@@ -1,0 +1,47 @@
+{
+  "schema_version": 1,
+  "purpose": "Research completeness only. Does not add validation rules or imply fitment.",
+  "families": {
+    "chain": {
+      "identity": [
+        "brand",
+        "model"
+      ],
+      "presentation": [
+        "manufacturer_sku",
+        "link_count"
+      ],
+      "technical": [
+        "drivetrain_mode",
+        "chain_speeds",
+        "chain_width_family"
+      ],
+      "compatibility_evidence": [
+        "documented_scope",
+        "sources"
+      ],
+      "note": "Nominal width and speed do not prove fitment. A model-only reference may leave presentation unresolved; record outer width only when documented with method."
+    },
+    "chain_link": {
+      "identity": [
+        "brand",
+        "model"
+      ],
+      "presentation": [
+        "chain_link_pack_qty"
+      ],
+      "technical": [
+        "chain_connector_type",
+        "chain_connector_target",
+        "chain_link_reusable",
+        "chain_connector_directional"
+      ],
+      "compatibility_evidence": [
+        "target_chain_identity",
+        "exclusions",
+        "sources"
+      ],
+      "note": "Chain class is descriptive. Target-chain identity, not bicycle cog count, determines applicability. Unknown direction or reuse remains unknown."
+    }
+  }
+}

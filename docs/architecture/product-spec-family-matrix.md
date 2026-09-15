@@ -1,9 +1,51 @@
 # Matriz de familias y prerrequisitos de ficha
 
-Diseño: 2026-09-05; estado actualizado el 2026-09-06. **Matriz objetivo de
+Actualización 7 de septiembre, 21:15 LA: mando combinado 32000 aplicado,
+con lectura autenticada y datos preservados. **68 plantillas nuevas activas;
+las correcciones de las 37 originales siguen pendientes.** Saneamiento
+transversal y llenado abiertos; cero asignaciones o llenado nuevos. Evidencia:
+[checkpoint global](../development/product-specs-research-2026-09-05/global-audit-and-sanitation-2026-09-06.md).
+
+Diseño: 2026-09-05; estado actualizado el 2026-09-07. **Matriz objetivo de
 cobertura; la base transversal ya está implementada.** Complementa el
 [contrato de fichas](product-technical-specifications-contract.md) y la
-[base de conocimiento K01–K30](bicycle-compatibility-knowledge.md).
+[base de conocimiento](bicycle-compatibility-knowledge.md).
+
+Las [4 de transmisión pequeña](../development/product-specs-research-2026-09-05/drivetrain-small-parts-integration-2026-09-07.md)
+y [4 de cables de mando](../development/product-specs-research-2026-09-05/control-cable-parts-integration-2026-09-07.md)
+están aplicadas y verificadas a las 02:05:27Z y 02:08:51Z del 8 de septiembre UTC.
+Ese checkpoint histórico alcanzó 57 nuevas activas; los bloques posteriores
+completaron las 68. Siguen las correcciones de las 37 iniciales y el saneamiento transversal. Nuevas asignaciones y llenado siguen en cero.
+
+Las [4 plantillas de suspensión/dirección](../development/product-specs-research-2026-09-05/suspension-headset-parts-integration-2026-09-07.md)
+quedaron aplicadas y verificadas el 2026-09-08 a las 01:24:32Z: horquilla,
+amortiguador, espaciadores y piezas de dirección. Son 49 nuevas activas en
+cinco bloques; faltan 19 nuevas y las correcciones de las 37 iniciales.
+Sin nuevas asignaciones ni llenado.
+
+Las [9 plantillas de piezas de rueda](../development/product-specs-research-2026-09-05/wheel-small-parts-integration-2026-09-07.md)
+quedaron aplicadas y verificadas el 2026-09-08 a las 00:43:49Z: ejes, piezas de
+maza, retención, cabecillas, cinta tubeless, reparadores tubeless/de cámara,
+piezas de válvula y bandas antipinchazo. Son 45 nuevas activas en cuatro bloques,
+sin nuevas asignaciones ni llenado.
+
+Otras [10 plantillas de puntos de contacto](../development/product-specs-research-2026-09-05/contact-points-integration-2026-09-07.md)
+quedaron aplicadas y verificadas a las 23:49:20Z: pedales, pegs, puños,
+recubrimientos de manubrio, manubrios, potencias, tijas, abrazaderas, sillines
+y sus fundas. Son 36 nuevas activas en tres bloques, sin asignaciones ni llenado.
+
+Las [14 plantillas de movilidad y accesorios](../development/product-specs-research-2026-09-05/mobility-accessories-integration-2026-09-07.md)
+quedaron aplicadas y verificadas a las 23:24:21Z: herramientas, luces,
+ciclocomputadores, electrónica, soportes, portaequipajes/canastos, tapabarros,
+patas de apoyo, bolsos de bicicleta/personales, ruedas de aprendizaje,
+protecciones de bicicleta, lentes y bombas. Son 26 plantillas nuevas activas
+en ambos bloques, sin nuevas asignaciones ni llenado.
+
+La [publicación de 12 plantillas no motrices](../development/product-specs-research-2026-09-05/non-drivetrain-publication-integration-2026-09-07.md)
+está aplicada y verificada: bidones, portabidones, candados, timbres/bocinas,
+reflectantes, souvenirs, alimentos/bebidas, ropa, guantes, protecciones,
+cascos y químicos de taller. Son esquemas activos, sin asignaciones ni
+llenado nuevos; el saneamiento de las demás familias sigue abierto.
 
 La matriz define qué debe saber el sistema, qué decisión depende de otra y
 qué falta para declarar compatibilidad. No es una tabla completa de valores
@@ -13,8 +55,8 @@ Cada futura regla necesita casos positivos, negativos y desconocidos, además
 de evidencia propia para sus modelos. Una fila con fuentes base no significa
 que todos los repuestos comerciales de esa familia estén certificados.
 
-El [resultado implementado](../development/product-specs-research-2026-09-05/implementation-result.md)
-usa las 37 plantillas activas, con identidad, roles de campo, requisitos tipados,
+El [resultado inicial](../development/product-specs-research-2026-09-05/implementation-result.md)
+usaba 37 plantillas, con identidad, roles de campo, requisitos tipados,
 fuente y guardado común. Las dependencias específicas nuevas se concentran en
 cadenas/conectores; las demás conservan su visibilidad declarada y validación de
 tipo/vocabulario. Las reglas históricas de opciones son orientativas hasta su

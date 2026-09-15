@@ -4,24 +4,27 @@ import 'product_spec_relation.dart';
 /// A row is one configuration. Its cells and sources stay together; callers
 /// must never turn separate rows into a Cartesian product of possible values.
 class ProductSpecRowSchema {
-  ProductSpecRowSchema._(
-      this.version, this.columns, this.orderedPairs, this.uniqueBy);
+  ProductSpecRowSchema._(this.version, this.columns, this.orderedPairs,
+      this.strictOrderedPairs, this.uniqueBy);
 
   final int version;
   final List<ProductSpecRowColumn> columns;
   final List<List<String>> orderedPairs;
+  final List<List<String>> strictOrderedPairs;
   final List<List<String>> uniqueBy;
 
   factory ProductSpecRowSchema.fromJson(Map<String, dynamic> json) {
-    if (json['version'] != 1 ||
+    if (!{1, 2}.contains(json['version']) ||
         json['columns'] is! List ||
         (json['columns'] as List).isEmpty ||
         json.keys.any((key) => !{
               'version',
               'columns',
               'ordered_pairs',
+              'strict_ordered_pairs',
               'unique_by'
-            }.contains(key))) {
+            }.contains(key)) ||
+        (json.containsKey('strict_ordered_pairs') && json['version'] != 2)) {
       throw const FormatException('El esquema de filas no está disponible.');
     }
     final columns = (json['columns'] as List).map((column) {
@@ -44,7 +47,7 @@ class ProductSpecRowSchema {
             group.isEmpty ||
             group.any((value) => value is! String || !keys.contains(value)) ||
             group.toSet().length != group.length ||
-            (key == 'ordered_pairs' &&
+            ({'ordered_pairs', 'strict_ordered_pairs'}.contains(key) &&
                 (group.length != 2 ||
                     group.any((value) => !{'decimal', 'integer'}.contains(
                         columns
@@ -52,12 +55,40 @@ class ProductSpecRowSchema {
                             .type))))) {
           throw const FormatException('Relación de columnas inválida.');
         }
+        if ({'ordered_pairs', 'strict_ordered_pairs'}.contains(key) &&
+            columns.firstWhere((column) => column.key == group[0]).unit !=
+                columns.firstWhere((column) => column.key == group[1]).unit) {
+          throw const FormatException(
+              'El orden necesita columnas con la misma unidad.');
+        }
         return List<String>.from(group);
       }).toList(growable: false);
     }
 
-    return ProductSpecRowSchema._(
-        1, columns, groups('ordered_pairs'), groups('unique_by'));
+    final ordered = groups('ordered_pairs');
+    final strict = groups('strict_ordered_pairs');
+    final successors = <String, Set<String>>{};
+    for (final pair in [...ordered, ...strict]) {
+      successors.putIfAbsent(pair[0], () => <String>{}).add(pair[1]);
+    }
+    // A cycle of inclusive comparisons can express equality. A cycle with
+    // any strict edge is unsatisfiable when the participating cells are known.
+    for (final pair in strict) {
+      final pending = <String>[pair[1]];
+      final visited = <String>{};
+      while (pending.isNotEmpty) {
+        final key = pending.removeLast();
+        if (key == pair[0]) {
+          throw const FormatException(
+              'El esquema de filas contiene órdenes contradictorios.');
+        }
+        if (visited.add(key)) {
+          pending.addAll(successors[key] ?? const <String>{});
+        }
+      }
+    }
+    return ProductSpecRowSchema._(json['version'] == 1 ? 1 : 2, columns,
+        ordered, strict, groups('unique_by'));
   }
 
   /// Missing cells are an incomplete observation, not a negative declaration.
@@ -110,6 +141,15 @@ class ProductSpecRowSchema {
         if (lower != null && upper != null && lower.compareTo(upper) > 0) {
           throw const FormatException(
               'El límite inferior de una fila supera el superior.');
+        }
+      }
+      for (final pair in strictOrderedPairs) {
+        final lower = specRuleNumber(values[pair[0]]);
+        final upper = specRuleNumber(values[pair[1]]);
+        if (lower != null && upper != null && lower.compareTo(upper) >= 0) {
+          final lowerLabel = columns.firstWhere((c) => c.key == pair[0]).label;
+          final upperLabel = columns.firstWhere((c) => c.key == pair[1]).label;
+          throw FormatException('$lowerLabel debe ser menor que $upperLabel.');
         }
       }
       rows.add(ProductSpecRow(

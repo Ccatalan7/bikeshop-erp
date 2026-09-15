@@ -1,0 +1,1943 @@
+{
+  "schema_version": 1,
+  "title": "All-family physical-port cardinality",
+  "catalogue_sha256": "db035cb385f7d39a1f815c8331195c0939b251b846753fab7a6cb1b33e16a6d6",
+  "independent_review_hashes": [
+    "4cbd9cd4e1ccb2f41ab3249cbaed83fe419689aa6ba1dbb24a5b9dd856bd66d1",
+    "a1c6bfc5fae5c11b3b7f804b240ea36b2a36db2f6e4ba2ff868c061802856820"
+  ],
+  "mechanical_coverage_complete": false,
+  "automatic_fill_authorized": false,
+  "cases": [
+    {
+      "id": "brake_dot5_is_distinct_stock_description",
+      "template": "brake_fluid",
+      "values": {
+        "fluid_type": "DOT 5",
+        "volume_ml": "100"
+      },
+      "kind": "synthetic_partial_representation",
+      "source_urls": [],
+      "evidence_kind": "synthetic_invariant_not_oem_facts",
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false,
+      "expected_blocking": []
+    },
+    {
+      "id": "hy_root_known_supply_length_can_require_cut",
+      "template": "hydraulic_hose",
+      "values": {
+        "hydraulic_hose_members": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "member": "Tramo 1",
+                "hose_model": "Manguera sintética",
+                "quantity": "1",
+                "length_form": "Declarado",
+                "length_mm": "2000",
+                "cut_to_install": true
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "hy_root_unknown_length_is_pending",
+      "template": "hydraulic_hose",
+      "values": {
+        "hydraulic_hose_members": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "member": "Tramo 1",
+                "hose_model": "Manguera sintética",
+                "quantity": "1",
+                "length_form": "Declarado",
+                "cut_to_install": true
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "expected_issue_subset": [
+        {
+          "code": "row_required_missing",
+          "field": "hydraulic_hose_members",
+          "blocking": false
+        }
+      ],
+      "expected_sql_issue_subset": [
+        {
+          "code": "row_required_missing",
+          "field": "hydraulic_hose_members",
+          "blocking": false
+        }
+      ]
+    },
+    {
+      "id": "hy_root_undeclared_length_cannot_keep_number",
+      "template": "hydraulic_hose",
+      "values": {
+        "hydraulic_hose_members": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "member": "Tramo 1",
+                "hose_model": "Manguera sintética",
+                "quantity": "1",
+                "length_form": "No declarado",
+                "length_mm": "2000",
+                "cut_to_install": true
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [
+        {
+          "code": "row_field_applicability",
+          "field": "hydraulic_hose_members"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "hy_root_literal_length_cannot_keep_number",
+      "template": "hydraulic_hose",
+      "values": {
+        "hydraulic_hose_members": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "member": "Tramo 1",
+                "hose_model": "Manguera sintética",
+                "quantity": "1",
+                "length_form": "Designación literal",
+                "length_mm": "2000",
+                "cut_to_install": true,
+                "length_literal": "Longitud OEM"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [
+        {
+          "code": "row_field_applicability",
+          "field": "hydraulic_hose_members"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "hy_root_interior_cannot_exceed_exterior",
+      "template": "hydraulic_hose",
+      "values": {
+        "hydraulic_hose_members": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "member": "Tramo 1",
+                "hose_model": "Manguera sintética",
+                "quantity": "1",
+                "length_form": "Declarado",
+                "length_mm": "2000",
+                "cut_to_install": true,
+                "inner_diameter_mm": "6",
+                "outer_diameter_mm": "5"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [
+        {
+          "code": "row_shape",
+          "field": "hydraulic_hose_members"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "hy_root_zero_quantity_is_not_unknown",
+      "template": "hydraulic_hose",
+      "values": {
+        "hydraulic_hose_members": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "member": "Tramo 1",
+                "hose_model": "Manguera sintética",
+                "quantity": "0",
+                "length_form": "Declarado",
+                "length_mm": "2000",
+                "cut_to_install": true
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [
+        {
+          "code": "row_shape",
+          "field": "hydraulic_hose_members"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "hy_root_different_hose_lengths_stay_scoped",
+      "template": "hydraulic_hose",
+      "values": {
+        "hydraulic_hose_members": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "member": "Tramo 1",
+                "hose_model": "Manguera sintética",
+                "quantity": "1",
+                "length_form": "Declarado",
+                "length_mm": "2000",
+                "cut_to_install": true
+              },
+              "sources": []
+            },
+            {
+              "id": "r2",
+              "values": {
+                "member": "Tramo 2",
+                "hose_model": "Manguera sintética",
+                "quantity": "1",
+                "length_form": "Declarado",
+                "length_mm": "900",
+                "cut_to_install": true
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "hy_root_same_physical_member_cannot_have_two_lengths",
+      "template": "hydraulic_hose",
+      "values": {
+        "hydraulic_hose_members": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "member": "Tramo 1",
+                "hose_model": "Manguera sintética",
+                "quantity": "1",
+                "length_form": "Declarado",
+                "length_mm": "2000",
+                "cut_to_install": true
+              },
+              "sources": []
+            },
+            {
+              "id": "r2",
+              "values": {
+                "member": "Tramo 1",
+                "hose_model": "Manguera sintética",
+                "quantity": "1",
+                "length_form": "Declarado",
+                "length_mm": "900",
+                "cut_to_install": true
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [
+        {
+          "code": "row_shape",
+          "field": "hydraulic_hose_members"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "hy_root_two_factory_caliper_couplers_are_distinct_ends",
+      "template": "hydraulic_hose",
+      "values": {
+        "hydraulic_hose_members": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "member": "Tramo 1",
+                "hose_model": "Pro Hydraulic Hose",
+                "quantity": "1",
+                "length_form": "No declarado",
+                "cut_to_install": true,
+                "source_url": "https://jagwire.com/files/general/2021_Jagwire_AM_Catalog_LowRes.pdf"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "hydraulic_hose_end_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "member_row_id": "r1",
+                "physical_end": "A",
+                "configuration": "Suministro original",
+                "end_role": "Cáliper",
+                "supply": "Preinstalado en el producto",
+                "termination_kind": "Conector rápido",
+                "thread_form": "No declarado",
+                "source_url": "https://jagwire.com/files/general/2021_Jagwire_AM_Catalog_LowRes.pdf"
+              },
+              "sources": []
+            },
+            {
+              "id": "r2",
+              "values": {
+                "member_row_id": "r1",
+                "physical_end": "B",
+                "configuration": "Suministro original",
+                "end_role": "Cáliper",
+                "supply": "Preinstalado en el producto",
+                "termination_kind": "Conector rápido",
+                "thread_form": "No declarado",
+                "source_url": "https://jagwire.com/files/general/2021_Jagwire_AM_Catalog_LowRes.pdf"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [
+        "https://jagwire.com/files/general/2021_Jagwire_AM_Catalog_LowRes.pdf"
+      ]
+    },
+    {
+      "id": "hy_root_one_physical_end_one_supply_configuration",
+      "template": "hydraulic_hose",
+      "values": {
+        "hydraulic_hose_members": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "member": "Tramo 1",
+                "hose_model": "Manguera sintética",
+                "quantity": "1",
+                "length_form": "Declarado",
+                "length_mm": "2000",
+                "cut_to_install": true
+              },
+              "sources": []
+            }
+          ]
+        },
+        "hydraulic_hose_end_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "member_row_id": "r1",
+                "physical_end": "A",
+                "configuration": "Suministro original",
+                "end_role": "Cáliper",
+                "supply": "Preinstalado en el producto",
+                "termination_kind": "Conector rápido",
+                "thread_form": "No declarado"
+              },
+              "sources": []
+            },
+            {
+              "id": "r2",
+              "values": {
+                "member_row_id": "r1",
+                "physical_end": "A",
+                "configuration": "Suministro original",
+                "end_role": "Cáliper",
+                "supply": "Se vende por separado",
+                "termination_kind": "Conector rápido",
+                "thread_form": "No declarado"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [
+        {
+          "code": "row_shape",
+          "field": "hydraulic_hose_end_configurations"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "hy_root_separate_installation_configuration_is_not_a_duplicate",
+      "template": "hydraulic_hose",
+      "values": {
+        "hydraulic_hose_members": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "member": "Tramo 1",
+                "hose_model": "Manguera sintética",
+                "quantity": "1",
+                "length_form": "Declarado",
+                "length_mm": "2000",
+                "cut_to_install": true
+              },
+              "sources": []
+            }
+          ]
+        },
+        "hydraulic_hose_end_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "member_row_id": "r1",
+                "physical_end": "A",
+                "configuration": "Suministro original",
+                "end_role": "Cáliper",
+                "supply": "Preinstalado en el producto",
+                "termination_kind": "Conector rápido",
+                "thread_form": "No declarado"
+              },
+              "sources": []
+            },
+            {
+              "id": "r2",
+              "values": {
+                "member_row_id": "r1",
+                "physical_end": "A",
+                "configuration": "Montaje con adaptador",
+                "end_role": "Cáliper",
+                "supply": "Preinstalado en el producto",
+                "termination_kind": "Conector rápido",
+                "thread_form": "No declarado",
+                "adapter_model": "Adaptador sintético"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "hy_root_end_requires_real_member_link",
+      "template": "hydraulic_hose",
+      "values": {
+        "hydraulic_hose_members": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "member": "Tramo 1",
+                "hose_model": "Manguera sintética",
+                "quantity": "1",
+                "length_form": "Declarado",
+                "length_mm": "2000",
+                "cut_to_install": true
+              },
+              "sources": []
+            }
+          ]
+        },
+        "hydraulic_hose_end_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "member_row_id": "missing",
+                "physical_end": "A",
+                "configuration": "Suministro original",
+                "end_role": "Cáliper",
+                "supply": "Preinstalado en el producto",
+                "termination_kind": "Conector rápido",
+                "thread_form": "No declarado"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [
+        {
+          "code": "row_reference_unresolved",
+          "field": "hydraulic_hose_end_configurations"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "hy_root_diameter_and_pitch_units_are_independent",
+      "template": "hydraulic_hose",
+      "values": {
+        "hydraulic_hose_members": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "member": "Tramo 1",
+                "hose_model": "Manguera sintética",
+                "quantity": "1",
+                "length_form": "Declarado",
+                "length_mm": "2000",
+                "cut_to_install": true
+              },
+              "sources": []
+            }
+          ]
+        },
+        "hydraulic_hose_end_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "member_row_id": "r1",
+                "physical_end": "A",
+                "configuration": "Suministro original",
+                "end_role": "Cáliper",
+                "supply": "Preinstalado en el producto",
+                "termination_kind": "Conector rápido",
+                "thread_form": "Estructurado",
+                "diameter_value": "9",
+                "diameter_unit": "mm",
+                "pitch_value": "26",
+                "pitch_unit": "tpi"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "hy_root_diameter_is_not_a_second_free_text_thread",
+      "template": "hydraulic_hose",
+      "values": {
+        "hydraulic_hose_members": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "member": "Tramo 1",
+                "hose_model": "Manguera sintética",
+                "quantity": "1",
+                "length_form": "Declarado",
+                "length_mm": "2000",
+                "cut_to_install": true
+              },
+              "sources": []
+            }
+          ]
+        },
+        "hydraulic_hose_end_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "member_row_id": "r1",
+                "physical_end": "A",
+                "configuration": "Suministro original",
+                "end_role": "Cáliper",
+                "supply": "Preinstalado en el producto",
+                "termination_kind": "Conector rápido",
+                "thread_form": "Estructurado",
+                "diameter_value": "M8x1.25",
+                "diameter_unit": "mm",
+                "pitch_value": "26",
+                "pitch_unit": "tpi"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [
+        {
+          "code": "row_shape",
+          "field": "hydraulic_hose_end_configurations"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "hy_root_literal_thread_cannot_carry_a_numeric_pitch",
+      "template": "hydraulic_hose",
+      "values": {
+        "hydraulic_hose_members": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "member": "Tramo 1",
+                "hose_model": "Manguera sintética",
+                "quantity": "1",
+                "length_form": "Declarado",
+                "length_mm": "2000",
+                "cut_to_install": true
+              },
+              "sources": []
+            }
+          ]
+        },
+        "hydraulic_hose_end_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "member_row_id": "r1",
+                "physical_end": "A",
+                "configuration": "Suministro original",
+                "end_role": "Cáliper",
+                "supply": "Preinstalado en el producto",
+                "termination_kind": "Conector rápido",
+                "thread_form": "Designación literal",
+                "thread_designation": "M8x0.75",
+                "pitch_value": "26"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [
+        {
+          "code": "row_field_applicability",
+          "field": "hydraulic_hose_end_configurations"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "hy_root_olive_and_insert_keep_own_geometry",
+      "template": "hydraulic_fitting",
+      "values": {
+        "hydraulic_fitting_components": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "component": "Inserto 1",
+                "piece_kind": "Inserto / espiga",
+                "quantity": "1",
+                "oem_code": "Sintético",
+                "thread_form": "Sin rosca"
+              },
+              "sources": []
+            },
+            {
+              "id": "r2",
+              "values": {
+                "component": "Oliva 1",
+                "piece_kind": "Oliva",
+                "quantity": "1",
+                "oem_code": "Sintético",
+                "thread_form": "Sin rosca"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "hy_root_olive_is_not_an_insert",
+      "template": "hydraulic_fitting",
+      "values": {
+        "hydraulic_fitting_components": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "component": "Inserto 1",
+                "piece_kind": "Oliva",
+                "quantity": "1",
+                "oem_code": "Sintético",
+                "thread_form": "Sin rosca",
+                "insert_length_mm": "11.2"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [
+        {
+          "code": "row_field_applicability",
+          "field": "hydraulic_fitting_components"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "hy_root_fitting_applications_link_the_piece",
+      "template": "hydraulic_fitting",
+      "values": {
+        "hydraulic_fitting_components": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "component": "Inserto 1",
+                "piece_kind": "Inserto / espiga",
+                "quantity": "1",
+                "oem_code": "Sintético",
+                "thread_form": "Sin rosca"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "hydraulic_fitting_applications": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "component_row_id": "r1",
+                "configuration": "Montaje sintético",
+                "hose_model": "H1",
+                "hose_edition": "Edición 1",
+                "target_role": "Manguera",
+                "target_model": "H1",
+                "target_edition": "Edición 1",
+                "status": "Compatible declarado",
+                "source_scope": "Caso sintético"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "hy_root_fitting_cannot_reference_missing_piece",
+      "template": "hydraulic_fitting",
+      "values": {
+        "hydraulic_fitting_components": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "component": "Inserto 1",
+                "piece_kind": "Inserto / espiga",
+                "quantity": "1",
+                "oem_code": "Sintético",
+                "thread_form": "Sin rosca"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "hydraulic_fitting_applications": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "component_row_id": "absent",
+                "configuration": "Montaje sintético",
+                "hose_model": "H1",
+                "hose_edition": "Edición 1",
+                "target_role": "Manguera",
+                "target_model": "H1",
+                "target_edition": "Edición 1",
+                "status": "Compatible declarado",
+                "source_scope": "Caso sintético"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [
+        {
+          "code": "row_reference_unresolved",
+          "field": "hydraulic_fitting_applications"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "hy_root_same_application_cannot_also_deny_fit",
+      "template": "hydraulic_fitting",
+      "values": {
+        "hydraulic_fitting_components": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "component": "Inserto 1",
+                "piece_kind": "Inserto / espiga",
+                "quantity": "1",
+                "oem_code": "Sintético",
+                "thread_form": "Sin rosca"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "hydraulic_fitting_applications": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "component_row_id": "r1",
+                "configuration": "Montaje sintético",
+                "hose_model": "H1",
+                "hose_edition": "Edición 1",
+                "target_role": "Manguera",
+                "target_model": "H1",
+                "target_edition": "Edición 1",
+                "status": "Compatible declarado",
+                "source_scope": "Caso sintético"
+              },
+              "sources": []
+            },
+            {
+              "id": "r2",
+              "values": {
+                "component_row_id": "r1",
+                "configuration": "Montaje sintético",
+                "hose_model": "H1",
+                "hose_edition": "Edición 1",
+                "target_role": "Manguera",
+                "target_model": "H1",
+                "target_edition": "Edición 1",
+                "status": "Incompatible declarado",
+                "source_scope": "Caso sintético"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [
+        {
+          "code": "row_shape",
+          "field": "hydraulic_fitting_applications"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "hy_root_fitting_target_editions_are_not_collapsed",
+      "template": "hydraulic_fitting",
+      "values": {
+        "hydraulic_fitting_components": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "component": "Inserto 1",
+                "piece_kind": "Inserto / espiga",
+                "quantity": "1",
+                "oem_code": "Sintético",
+                "thread_form": "Sin rosca"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "hydraulic_fitting_applications": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "component_row_id": "r1",
+                "configuration": "Montaje sintético",
+                "hose_model": "H1",
+                "hose_edition": "Edición 1",
+                "target_role": "Manguera",
+                "target_model": "H1",
+                "target_edition": "Edición 1",
+                "status": "Compatible declarado",
+                "source_scope": "Caso sintético"
+              },
+              "sources": []
+            },
+            {
+              "id": "r2",
+              "values": {
+                "component_row_id": "r1",
+                "configuration": "Montaje sintético",
+                "hose_model": "H1",
+                "hose_edition": "Edición 1",
+                "target_role": "Manguera",
+                "target_model": "H1",
+                "target_edition": "Edición 2",
+                "status": "Incompatible declarado",
+                "source_scope": "Caso sintético"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "hy_root_named_dot_fluid_is_recordable",
+      "template": "brake_fluid",
+      "values": {
+        "brake_fluid_declarations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "container": "Envase A",
+                "quantity": "1",
+                "oem_brand": "Fabricante sintético",
+                "oem_designation": "DOT 5.1 sintético",
+                "volume_ml": "100",
+                "fluid_class": "Fluido DOT",
+                "chemical_base": "Base no silicona",
+                "dot_grade": "DOT 5.1",
+                "source_url": "https://www.ecfr.gov/current/title-49/subtitle-B/chapter-V/part-571/subpart-B/section-571.116"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [
+        "https://www.ecfr.gov/current/title-49/subtitle-B/chapter-V/part-571/subpart-B/section-571.116"
+      ]
+    },
+    {
+      "id": "hy_root_mineral_has_its_own_identity",
+      "template": "brake_fluid",
+      "values": {
+        "brake_fluid_declarations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "container": "Envase A",
+                "quantity": "1",
+                "oem_brand": "Fabricante sintético",
+                "oem_designation": "Aceite mineral sintético",
+                "volume_ml": "100",
+                "fluid_class": "Aceite mineral",
+                "chemical_base": "Base mineral / petróleo",
+                "source_url": "https://www.ecfr.gov/current/title-49/subtitle-B/chapter-V/part-571/subpart-B/section-571.116"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "hy_root_mineral_cannot_claim_dot4",
+      "template": "brake_fluid",
+      "values": {
+        "brake_fluid_declarations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "container": "Envase A",
+                "quantity": "1",
+                "oem_brand": "Fabricante sintético",
+                "oem_designation": "Aceite mineral sintético",
+                "volume_ml": "100",
+                "fluid_class": "Aceite mineral",
+                "chemical_base": "Base mineral / petróleo",
+                "dot_grade": "DOT 4",
+                "source_url": "https://www.ecfr.gov/current/title-49/subtitle-B/chapter-V/part-571/subpart-B/section-571.116"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [
+        {
+          "code": "row_field_applicability",
+          "field": "brake_fluid_declarations"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "hy_root_dot5_is_silicone",
+      "template": "brake_fluid",
+      "values": {
+        "brake_fluid_declarations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "container": "Envase A",
+                "quantity": "1",
+                "oem_brand": "Fabricante sintético",
+                "oem_designation": "DOT 5 sintético",
+                "volume_ml": "100",
+                "fluid_class": "Fluido DOT",
+                "chemical_base": "Base silicona",
+                "dot_grade": "DOT 5",
+                "source_url": "https://www.ecfr.gov/current/title-49/subtitle-B/chapter-V/part-571/subpart-B/section-571.116"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [
+        "https://www.ecfr.gov/current/title-49/subtitle-B/chapter-V/part-571/subpart-B/section-571.116"
+      ]
+    },
+    {
+      "id": "hy_root_dot5_cannot_be_non_silicone",
+      "template": "brake_fluid",
+      "values": {
+        "brake_fluid_declarations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "container": "Envase A",
+                "quantity": "1",
+                "oem_brand": "Fabricante sintético",
+                "oem_designation": "DOT 5.1 sintético",
+                "volume_ml": "100",
+                "fluid_class": "Fluido DOT",
+                "chemical_base": "Base no silicona",
+                "dot_grade": "DOT 5",
+                "source_url": "https://www.ecfr.gov/current/title-49/subtitle-B/chapter-V/part-571/subpart-B/section-571.116"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [
+        {
+          "code": "row_value_conflict",
+          "field": "brake_fluid_declarations"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "hy_root_dot51_cannot_be_silicone",
+      "template": "brake_fluid",
+      "values": {
+        "brake_fluid_declarations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "container": "Envase A",
+                "quantity": "1",
+                "oem_brand": "Fabricante sintético",
+                "oem_designation": "DOT 5.1 sintético",
+                "volume_ml": "100",
+                "fluid_class": "Fluido DOT",
+                "chemical_base": "Base silicona",
+                "dot_grade": "DOT 5.1",
+                "source_url": "https://www.ecfr.gov/current/title-49/subtitle-B/chapter-V/part-571/subpart-B/section-571.116"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [
+        {
+          "code": "row_value_conflict",
+          "field": "brake_fluid_declarations"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "hy_root_same_container_cannot_hold_two_formulations",
+      "template": "brake_fluid",
+      "values": {
+        "brake_fluid_declarations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "container": "Envase A",
+                "quantity": "1",
+                "oem_brand": "Fabricante sintético",
+                "oem_designation": "DOT 5.1 sintético",
+                "volume_ml": "100",
+                "fluid_class": "Fluido DOT",
+                "chemical_base": "Base no silicona",
+                "dot_grade": "DOT 5.1",
+                "source_url": "https://www.ecfr.gov/current/title-49/subtitle-B/chapter-V/part-571/subpart-B/section-571.116"
+              },
+              "sources": []
+            },
+            {
+              "id": "r2",
+              "values": {
+                "container": "Envase A",
+                "quantity": "1",
+                "oem_brand": "Fabricante sintético",
+                "oem_designation": "Aceite mineral sintético",
+                "volume_ml": "100",
+                "fluid_class": "Aceite mineral",
+                "chemical_base": "Base mineral / petróleo",
+                "source_url": "https://www.ecfr.gov/current/title-49/subtitle-B/chapter-V/part-571/subpart-B/section-571.116"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [
+        {
+          "code": "row_shape",
+          "field": "brake_fluid_declarations"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "hy_root_separate_containers_can_hold_different_fluids",
+      "template": "brake_fluid",
+      "values": {
+        "brake_fluid_declarations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "container": "Envase A",
+                "quantity": "1",
+                "oem_brand": "Fabricante sintético",
+                "oem_designation": "DOT 5.1 sintético",
+                "volume_ml": "100",
+                "fluid_class": "Fluido DOT",
+                "chemical_base": "Base no silicona",
+                "dot_grade": "DOT 5.1",
+                "source_url": "https://www.ecfr.gov/current/title-49/subtitle-B/chapter-V/part-571/subpart-B/section-571.116"
+              },
+              "sources": []
+            },
+            {
+              "id": "r2",
+              "values": {
+                "container": "Envase B",
+                "quantity": "1",
+                "oem_brand": "Fabricante sintético",
+                "oem_designation": "Aceite mineral sintético",
+                "volume_ml": "100",
+                "fluid_class": "Aceite mineral",
+                "chemical_base": "Base mineral / petróleo",
+                "source_url": "https://www.ecfr.gov/current/title-49/subtitle-B/chapter-V/part-571/subpart-B/section-571.116"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "hy_root_mineral_standard_not_universally_forbidden",
+      "template": "brake_fluid",
+      "values": {
+        "brake_fluid_declarations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "container": "Envase A",
+                "quantity": "1",
+                "oem_brand": "Fabricante sintético",
+                "oem_designation": "Aceite mineral sintético",
+                "volume_ml": "100",
+                "fluid_class": "Aceite mineral",
+                "chemical_base": "Base mineral / petróleo",
+                "source_url": "https://www.ecfr.gov/current/title-49/subtitle-B/chapter-V/part-571/subpart-B/section-571.116"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "brake_fluid_standard_claims": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "container_row_id": "r1",
+                "standard": "ISO 7308",
+                "edition": "1987",
+                "claim_scope": "Ejemplo de representación; no homologación de este líquido",
+                "source_url": "https://www.iso.org/standard/16724.html"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [
+        "https://www.iso.org/standard/16724.html"
+      ]
+    },
+    {
+      "id": "hy_root_fluid_identity_without_oem_name_remains_pending",
+      "template": "brake_fluid",
+      "values": {
+        "brake_fluid_declarations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "container": "Envase A",
+                "quantity": "1",
+                "oem_brand": "Fabricante sintético",
+                "volume_ml": "100",
+                "fluid_class": "Fluido DOT",
+                "chemical_base": "Base no silicona",
+                "dot_grade": "DOT 5.1",
+                "source_url": "https://www.ecfr.gov/current/title-49/subtitle-B/chapter-V/part-571/subpart-B/section-571.116"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "expected_issue_subset": [
+        {
+          "code": "row_incomplete",
+          "field": "brake_fluid_declarations",
+          "blocking": false
+        }
+      ],
+      "expected_sql_issue_subset": [
+        {
+          "code": "row_incomplete",
+          "field": "brake_fluid_declarations",
+          "blocking": false
+        }
+      ]
+    },
+    {
+      "id": "hy_root_fluid_claim_links_container",
+      "template": "brake_fluid",
+      "values": {
+        "brake_fluid_declarations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "container": "Envase A",
+                "quantity": "1",
+                "oem_brand": "Fabricante sintético",
+                "oem_designation": "DOT 5.1 sintético",
+                "volume_ml": "100",
+                "fluid_class": "Fluido DOT",
+                "chemical_base": "Base no silicona",
+                "dot_grade": "DOT 5.1",
+                "source_url": "https://www.ecfr.gov/current/title-49/subtitle-B/chapter-V/part-571/subpart-B/section-571.116"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "brake_fluid_model_claims": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "container_row_id": "r1",
+                "target_brand": "Fabricante sintético",
+                "target_model": "Freno A",
+                "target_edition": "Edición 1",
+                "configuration": "Circuito A",
+                "source_scope": "Manual A",
+                "status": "Compatible declarado"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "hy_root_fluid_claim_cannot_reference_missing_container",
+      "template": "brake_fluid",
+      "values": {
+        "brake_fluid_declarations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "container": "Envase A",
+                "quantity": "1",
+                "oem_brand": "Fabricante sintético",
+                "oem_designation": "DOT 5.1 sintético",
+                "volume_ml": "100",
+                "fluid_class": "Fluido DOT",
+                "chemical_base": "Base no silicona",
+                "dot_grade": "DOT 5.1",
+                "source_url": "https://www.ecfr.gov/current/title-49/subtitle-B/chapter-V/part-571/subpart-B/section-571.116"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "brake_fluid_model_claims": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "container_row_id": "absent",
+                "target_brand": "Fabricante sintético",
+                "target_model": "Freno A",
+                "target_edition": "Edición 1",
+                "configuration": "Circuito A",
+                "source_scope": "Manual A",
+                "status": "Compatible declarado"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [
+        {
+          "code": "row_reference_unresolved",
+          "field": "brake_fluid_model_claims"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "hy_root_one_exact_fluid_claim_cannot_contradict_itself",
+      "template": "brake_fluid",
+      "values": {
+        "brake_fluid_declarations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "container": "Envase A",
+                "quantity": "1",
+                "oem_brand": "Fabricante sintético",
+                "oem_designation": "DOT 5.1 sintético",
+                "volume_ml": "100",
+                "fluid_class": "Fluido DOT",
+                "chemical_base": "Base no silicona",
+                "dot_grade": "DOT 5.1",
+                "source_url": "https://www.ecfr.gov/current/title-49/subtitle-B/chapter-V/part-571/subpart-B/section-571.116"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "brake_fluid_model_claims": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "container_row_id": "r1",
+                "target_brand": "Fabricante sintético",
+                "target_model": "Freno A",
+                "target_edition": "Edición 1",
+                "configuration": "Circuito A",
+                "source_scope": "Manual A",
+                "status": "Compatible declarado"
+              },
+              "sources": []
+            },
+            {
+              "id": "r2",
+              "values": {
+                "container_row_id": "r1",
+                "target_brand": "Fabricante sintético",
+                "target_model": "Freno A",
+                "target_edition": "Edición 1",
+                "configuration": "Circuito A",
+                "source_scope": "Manual A",
+                "status": "Incompatible declarado"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [
+        {
+          "code": "row_shape",
+          "field": "brake_fluid_model_claims"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "hy_root_different_brake_editions_keep_separate_claims",
+      "template": "brake_fluid",
+      "values": {
+        "brake_fluid_declarations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "container": "Envase A",
+                "quantity": "1",
+                "oem_brand": "Fabricante sintético",
+                "oem_designation": "DOT 5.1 sintético",
+                "volume_ml": "100",
+                "fluid_class": "Fluido DOT",
+                "chemical_base": "Base no silicona",
+                "dot_grade": "DOT 5.1",
+                "source_url": "https://www.ecfr.gov/current/title-49/subtitle-B/chapter-V/part-571/subpart-B/section-571.116"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "brake_fluid_model_claims": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "container_row_id": "r1",
+                "target_brand": "Fabricante sintético",
+                "target_model": "Freno A",
+                "target_edition": "Edición 1",
+                "configuration": "Circuito A",
+                "source_scope": "Manual A",
+                "status": "Compatible declarado"
+              },
+              "sources": []
+            },
+            {
+              "id": "r2",
+              "values": {
+                "container_row_id": "r1",
+                "target_brand": "Fabricante sintético",
+                "target_model": "Freno A",
+                "target_edition": "Edición 2",
+                "configuration": "Circuito A",
+                "source_scope": "Manual A",
+                "status": "Incompatible declarado"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "hy_root_standard_cannot_float_without_container",
+      "template": "brake_fluid",
+      "values": {
+        "brake_fluid_declarations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "container": "Envase A",
+                "quantity": "1",
+                "oem_brand": "Fabricante sintético",
+                "oem_designation": "DOT 5.1 sintético",
+                "volume_ml": "100",
+                "fluid_class": "Fluido DOT",
+                "chemical_base": "Base no silicona",
+                "dot_grade": "DOT 5.1",
+                "source_url": "https://www.ecfr.gov/current/title-49/subtitle-B/chapter-V/part-571/subpart-B/section-571.116"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "brake_fluid_standard_claims": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "container_row_id": "absent",
+                "standard": "Otra referencia documental",
+                "designation": "Norma X",
+                "claim_scope": "Ensayo"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [
+        {
+          "code": "row_reference_unresolved",
+          "field": "brake_fluid_standard_claims"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "hy_root_one_motul_formula_can_declare_dot3_dot4_dot51",
+      "template": "brake_fluid",
+      "values": {
+        "brake_fluid_declarations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "container": "Envase A",
+                "quantity": "1",
+                "oem_brand": "Motul",
+                "oem_designation": "MOTUL DOT 5.1",
+                "fluid_class": "Fluido DOT",
+                "chemical_base": "Base no silicona",
+                "dot_grade": "DOT 5.1",
+                "source_url": "https://azupim01.motul.com/media/motulData/DO/base/DOT_5.1_en_FR_motul_27400_20220113.pdf",
+                "edition": "TDS 01/22",
+                "conforms_dot3": true,
+                "conforms_dot4": true,
+                "conforms_dot51": true
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [
+        "https://azupim01.motul.com/media/motulData/DO/base/DOT_5.1_en_FR_motul_27400_20220113.pdf"
+      ]
+    },
+    {
+      "id": "hy_root_dot51_cannot_also_claim_dot5_silicone_conformance",
+      "template": "brake_fluid",
+      "values": {
+        "brake_fluid_declarations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "container": "Envase A",
+                "quantity": "1",
+                "oem_brand": "Motul",
+                "oem_designation": "MOTUL DOT 5.1",
+                "fluid_class": "Fluido DOT",
+                "chemical_base": "Base no silicona",
+                "dot_grade": "DOT 5.1",
+                "source_url": "https://azupim01.motul.com/media/motulData/DO/base/DOT_5.1_en_FR_motul_27400_20220113.pdf",
+                "edition": "TDS 01/22",
+                "conforms_dot3": true,
+                "conforms_dot4": true,
+                "conforms_dot51": true,
+                "conforms_dot5": true
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [
+        {
+          "code": "row_value_conflict",
+          "field": "brake_fluid_declarations"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "hy_root_other_standards_cannot_hide_another_dot_grade",
+      "template": "brake_fluid",
+      "values": {
+        "brake_fluid_declarations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "container": "Envase A",
+                "quantity": "1",
+                "oem_brand": "Fabricante sintético",
+                "oem_designation": "DOT 5.1 sintético",
+                "volume_ml": "100",
+                "fluid_class": "Fluido DOT",
+                "chemical_base": "Base no silicona",
+                "dot_grade": "DOT 5.1",
+                "source_url": "https://www.ecfr.gov/current/title-49/subtitle-B/chapter-V/part-571/subpart-B/section-571.116"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "brake_fluid_standard_claims": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "container_row_id": "r1",
+                "standard": "DOT 4",
+                "claim_scope": "Norma"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [
+        {
+          "code": "row_shape",
+          "field": "brake_fluid_standard_claims"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "hy_root_unclassified_other_standard_remains_documentary",
+      "template": "brake_fluid",
+      "values": {
+        "brake_fluid_declarations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "container": "Envase A",
+                "quantity": "1",
+                "oem_brand": "Fabricante sintético",
+                "oem_designation": "DOT 5.1 sintético",
+                "volume_ml": "100",
+                "fluid_class": "Fluido DOT",
+                "chemical_base": "Base no silicona",
+                "dot_grade": "DOT 5.1",
+                "source_url": "https://www.ecfr.gov/current/title-49/subtitle-B/chapter-V/part-571/subpart-B/section-571.116"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "brake_fluid_standard_claims": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "container_row_id": "r1",
+                "standard": "Otra referencia documental",
+                "designation": "Norma OEM X",
+                "claim_scope": "Referencia pendiente de adjudicación"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "hy_root_missing_target_edition_is_visible_as_incomplete",
+      "template": "hydraulic_fitting",
+      "values": {
+        "hydraulic_fitting_components": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "component": "Inserto 1",
+                "piece_kind": "Inserto / espiga",
+                "quantity": "1",
+                "oem_code": "Sintético",
+                "thread_form": "Sin rosca"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "hydraulic_fitting_applications": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "component_row_id": "r1",
+                "configuration": "Montaje sintético",
+                "hose_model": "H1",
+                "hose_edition": "Edición 1",
+                "target_role": "Manguera",
+                "target_model": "H1",
+                "status": "Compatible declarado",
+                "source_scope": "Caso sintético"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "expected_issue_subset": [
+        {
+          "code": "row_incomplete",
+          "field": "hydraulic_fitting_applications",
+          "blocking": false
+        }
+      ],
+      "expected_sql_issue_subset": [
+        {
+          "code": "row_incomplete",
+          "field": "hydraulic_fitting_applications",
+          "blocking": false
+        }
+      ]
+    }
+  ],
+  "root_nd_case_overrides": [
+    {
+      "id": "helmet_smith_mainline_certifications_by_row",
+      "reason": "Integral pertenece al eje de construcción, no al uso."
+    },
+    {
+      "id": "helmet_inventory_best_enduro_certificado_sin_norma",
+      "reason": "Se conserva Enduro sin inferir cobertura desde el título."
+    },
+    {
+      "id": "RCF25",
+      "reason": "Una variante distinta del soporte no es montaje de este SKU; se rechaza el token retirado."
+    }
+  ],
+  "root_row_value_case_overrides": [
+    "RCF08",
+    "CPC_GAP_INCLUDED_CLAMP_FALSE"
+  ],
+  "deferred_pressure_fixture_ids": [],
+  "superseded_pressure_fixtures": [
+    "wrfp_hookless_row_maximum_is_not_the_headline",
+    "wrfp_schwalbe_general_maximum_in_bar",
+    "wrfp_unit_without_value_is_pending",
+    "wrfp_value_without_unit_stays_pending"
+  ],
+  "required_server_migration": "20260907025000"
+}

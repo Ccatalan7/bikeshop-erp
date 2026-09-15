@@ -1,0 +1,5552 @@
+{
+  "schema_version": 1,
+  "title": "All-family physical-port cardinality",
+  "catalogue_sha256": "cd477af08f8c39225d8abef182f3ce326145b0be7d1cfe043d579132838e8a44",
+  "independent_review_hashes": [
+    "4cbd9cd4e1ccb2f41ab3249cbaed83fe419689aa6ba1dbb24a5b9dd856bd66d1",
+    "a1c6bfc5fae5c11b3b7f804b240ea36b2a36db2f6e4ba2ff868c061802856820"
+  ],
+  "mechanical_coverage_complete": false,
+  "automatic_fill_authorized": false,
+  "cases": [
+    {
+      "id": "reactiv_photochromic_and_polarized_same_lens",
+      "template": "eyewear",
+      "values": {
+        "eyewear_lens_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "0511372e-8a72-5049-a81c-aec5d368899b",
+              "values": {
+                "model": "REACTIV 2-4 Polarized",
+                "photochromic": true,
+                "polarized": true
+              },
+              "sources": [
+                "https://www.julbo.com/en_gb/sunglasses/photochromic-2-4-polarized-sunglasses"
+              ]
+            }
+          ]
+        }
+      },
+      "kind": "source_scoped_representation",
+      "source_urls": [
+        "https://www.julbo.com/en_gb/sunglasses/photochromic-2-4-polarized-sunglasses"
+      ],
+      "expected_blocking": []
+    },
+    {
+      "id": "workshop_tool_park_ct_3_3",
+      "template": "workshop_tool",
+      "values": {
+        "tool_kind": "Corta cadena",
+        "chain_tool_speeds": [
+          "5",
+          "6",
+          "7",
+          "8",
+          "9",
+          "10",
+          "11",
+          "12"
+        ],
+        "tool_capabilities": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r01",
+              "values": {
+                "operation": "Cortar / extraer remache",
+                "target_standard": "Cadenas5–12v en alcance OEM de CT-3.3",
+                "supported": true,
+                "speeds_min": "5",
+                "speeds_max": "12"
+              },
+              "sources": [
+                "https://www.parktool.com/en-us/product/chain-tool-ct-3-3"
+              ]
+            },
+            {
+              "id": "single-speed",
+              "values": {
+                "operation": "Cortar / extraer remache",
+                "target_standard": "Cadenas1v:1/8 pulg,3/16 pulg y half-link según OEM",
+                "supported": true,
+                "speeds_min": "1",
+                "speeds_max": "1"
+              },
+              "sources": [
+                "https://www.parktool.com/en-us/product/chain-tool-ct-3-3"
+              ]
+            },
+            {
+              "id": "r02",
+              "values": {
+                "operation": "Instalar remache",
+                "target_standard": "Remaches Campagnolo 11/12/13v",
+                "supported": true,
+                "brand_scope": "Campagnolo 11, 12 y 13v"
+              },
+              "sources": [
+                "https://www.parktool.com/en-us/product/chain-tool-ct-3-3"
+              ]
+            },
+            {
+              "id": "r03",
+              "values": {
+                "operation": "Peenar remache",
+                "target_standard": "Remaches Campagnolo 11/12/13v",
+                "supported": false,
+                "brand_scope": "Campagnolo 11, 12 y 13v: «install and remove, but not peen»"
+              },
+              "sources": [
+                "https://www.parktool.com/en-us/product/chain-tool-ct-3-3"
+              ]
+            }
+          ]
+        }
+      },
+      "kind": "oem_revision_scoped",
+      "source_ids": [
+        "E-PT-CT33"
+      ],
+      "source_urls": [
+        "https://www.parktool.com/en-us/product/chain-tool-ct-3-3"
+      ],
+      "expected_blocking": [],
+      "inventory_product": null,
+      "note": "Escenario ND10: la cobertura 5–12v no aprueba peenar; la exclusión OEM se representa con supported=false, no con ausencia de fila.",
+      "review_note": "Separar 1v de5–12v; operaciones Campagnolo tienen alcance propio.",
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false,
+      "root_reconciliation": []
+    },
+    {
+      "id": "workshop_tool_park_fr_5_2_lockring",
+      "template": "workshop_tool",
+      "values": {
+        "tool_kind": "Llave de contratuerca (cassette / rotor)",
+        "tool_capabilities": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r01",
+              "values": {
+                "operation": "Extraer",
+                "target_standard": "Contratuerca de cassette 12 estrías (Shimano, SRAM incl. XD, Chris King, Sun Race, Hugi…)",
+                "supported": true,
+                "interface_measure_mm": "23.4",
+                "brand_scope": "SRAM XD usa la misma FR-5.2 que Shimano HG"
+              },
+              "sources": [
+                "https://www.parktool.com/en-us/blog/repair-help/cassette-removal-and-installation"
+              ]
+            },
+            {
+              "id": "r02",
+              "values": {
+                "operation": "Instalar",
+                "target_standard": "Contratuerca de cassette 12 estrías",
+                "supported": true,
+                "interface_measure_mm": "23.4",
+                "drive_size": "Hexágono1 pulg o llave ajustable"
+              },
+              "sources": [
+                "https://www.parktool.com/en-us/blog/repair-help/cassette-removal-and-installation"
+              ]
+            }
+          ]
+        }
+      },
+      "kind": "oem_revision_scoped",
+      "source_ids": [
+        "E-PT-CASSETTE"
+      ],
+      "source_urls": [
+        "https://www.parktool.com/en-us/blog/repair-help/cassette-removal-and-installation"
+      ],
+      "expected_blocking": [],
+      "inventory_product": null,
+      "note": "La interfaz de extracción (contratuerca) es distinta del spline de instalación del cuerpo: un extractor «HG» no se rechaza sobre XD.",
+      "review_note": "Accionamiento no es par; conservar geometría publicada y no una negativa global por marca.",
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false,
+      "root_reconciliation": []
+    },
+    {
+      "id": "workshop_tool_park_bbt_9",
+      "template": "workshop_tool",
+      "values": {
+        "tool_kind": "Llave de pedalier",
+        "tool_capabilities": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r01",
+              "values": {
+                "operation": "Apretar / aflojar",
+                "target_standard": "Interfaz16muescas, diámetro mayor44–45mm, menor42.7mm; modelos de tabla OEM",
+                "supported": true,
+                "interface_diameter_min_mm": "44",
+                "interface_diameter_max_mm": "45",
+                "interface_minor_diameter_mm": "42.7",
+                "interface_feature_count": "16"
+              },
+              "sources": [
+                "https://www.parktool.com/en-us/product/bottom-bracket-tool-bbt-9"
+              ]
+            },
+            {
+              "id": "r02",
+              "values": {
+                "operation": "Apretar / aflojar",
+                "target_standard": "Tapa de biela Hollowtech II 8 puntas (TL-FC16/18)",
+                "supported": true,
+                "interface_feature_count": "8"
+              },
+              "sources": [
+                "https://www.parktool.com/en-us/product/bottom-bracket-tool-bbt-9"
+              ]
+            },
+            {
+              "id": "r03",
+              "values": {
+                "operation": "Apretar / aflojar",
+                "target_standard": "Contratuerca de rotor Center Lock 16 muescas",
+                "supported": true
+              },
+              "sources": [
+                "https://www.parktool.com/en-us/product/bottom-bracket-tool-bbt-9"
+              ]
+            }
+          ]
+        }
+      },
+      "kind": "oem_revision_scoped",
+      "source_ids": [
+        "E-PT-BBT9"
+      ],
+      "source_urls": [
+        "https://www.parktool.com/en-us/product/bottom-bracket-tool-bbt-9"
+      ],
+      "expected_blocking": [],
+      "inventory_product": null,
+      "note": "Un estándar de copas no equivale a todas las cajas: PF/BB30 no aparecen y quedan desconocidos.",
+      "review_note": "Guardar diámetro mayor44–45, menor42.7 y16muescas; modelos sólo según tabla OEM.",
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false,
+      "root_reconciliation": []
+    },
+    {
+      "id": "workshop_tool_super_b_tb_6616",
+      "template": "workshop_tool",
+      "values": {
+        "tool_kind": "Extractor de biela",
+        "tool_capabilities": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r01",
+              "values": {
+                "operation": "Extraer",
+                "target_standard": "Biela de cuadradillo estándar según descripción OEM",
+                "supported": true,
+                "drive_size": "Hex 8 mm o llave fija 15 mm"
+              },
+              "sources": [
+                "https://www.superbiketool.com/en/product/detail/Bottom_Crank_tool/TB_6616"
+              ]
+            }
+          ]
+        }
+      },
+      "kind": "oem_revision_scoped",
+      "source_ids": [
+        "E-SUPERB-6616",
+        "E-INVENTARIO"
+      ],
+      "source_urls": [
+        "https://www.superbiketool.com/en/product/detail/Bottom_Crank_tool/TB_6616"
+      ],
+      "expected_blocking": [],
+      "inventory_product": "EXTRACTOR DE VOLANTE SUPER B TB-6616 FOR STANDARD SQUARE TYPE",
+      "note": "Producto real del inventario; la página oficial no imprime la rosca del extractor (M22 x 1 no se afirma).",
+      "review_note": "OEM afirma square type; no dice only ni prueba exclusión Octalink/ISIS o toda interfaz JIS/ISO.",
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false,
+      "root_reconciliation": []
+    },
+    {
+      "id": "workshop_tool_park_ib_3_multitool",
+      "template": "workshop_tool",
+      "values": {
+        "tool_kind": "Multiherramienta",
+        "chain_tool_speeds": [
+          "5",
+          "6",
+          "7",
+          "8",
+          "9",
+          "10",
+          "11",
+          "12"
+        ],
+        "tool_bits_included": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "hex-1-5",
+              "values": {
+                "bit_kind": "Hexagonal (Allen)",
+                "size": "1.5 mm",
+                "quantity": "1"
+              },
+              "sources": [
+                "https://www.parktool.com/en-us/product/i-beam-mini-fold-up-with-chain-tool-ib-3"
+              ]
+            },
+            {
+              "id": "hex-2",
+              "values": {
+                "bit_kind": "Hexagonal (Allen)",
+                "size": "2 mm",
+                "quantity": "1"
+              },
+              "sources": [
+                "https://www.parktool.com/en-us/product/i-beam-mini-fold-up-with-chain-tool-ib-3"
+              ]
+            },
+            {
+              "id": "hex-2-5",
+              "values": {
+                "bit_kind": "Hexagonal (Allen)",
+                "size": "2.5 mm",
+                "quantity": "1"
+              },
+              "sources": [
+                "https://www.parktool.com/en-us/product/i-beam-mini-fold-up-with-chain-tool-ib-3"
+              ]
+            },
+            {
+              "id": "hex-3",
+              "values": {
+                "bit_kind": "Hexagonal (Allen)",
+                "size": "3 mm",
+                "quantity": "1"
+              },
+              "sources": [
+                "https://www.parktool.com/en-us/product/i-beam-mini-fold-up-with-chain-tool-ib-3"
+              ]
+            },
+            {
+              "id": "hex-4",
+              "values": {
+                "bit_kind": "Hexagonal (Allen)",
+                "size": "4 mm",
+                "quantity": "1"
+              },
+              "sources": [
+                "https://www.parktool.com/en-us/product/i-beam-mini-fold-up-with-chain-tool-ib-3"
+              ]
+            },
+            {
+              "id": "hex-5",
+              "values": {
+                "bit_kind": "Hexagonal (Allen)",
+                "size": "5 mm",
+                "quantity": "1"
+              },
+              "sources": [
+                "https://www.parktool.com/en-us/product/i-beam-mini-fold-up-with-chain-tool-ib-3"
+              ]
+            },
+            {
+              "id": "hex-6",
+              "values": {
+                "bit_kind": "Hexagonal (Allen)",
+                "size": "6 mm",
+                "quantity": "1"
+              },
+              "sources": [
+                "https://www.parktool.com/en-us/product/i-beam-mini-fold-up-with-chain-tool-ib-3"
+              ]
+            },
+            {
+              "id": "hex-8",
+              "values": {
+                "bit_kind": "Hexagonal (Allen)",
+                "size": "8 mm",
+                "quantity": "1"
+              },
+              "sources": [
+                "https://www.parktool.com/en-us/product/i-beam-mini-fold-up-with-chain-tool-ib-3"
+              ]
+            },
+            {
+              "id": "r02",
+              "values": {
+                "bit_kind": "Torx",
+                "size": "T25",
+                "quantity": "1"
+              },
+              "sources": [
+                "https://www.parktool.com/en-us/product/i-beam-mini-fold-up-with-chain-tool-ib-3"
+              ]
+            },
+            {
+              "id": "r03",
+              "values": {
+                "bit_kind": "Destornillador plano",
+                "quantity": "1"
+              },
+              "sources": [
+                "https://www.parktool.com/en-us/product/i-beam-mini-fold-up-with-chain-tool-ib-3"
+              ]
+            },
+            {
+              "id": "r04",
+              "values": {
+                "bit_kind": "Llave estrella / cerrada",
+                "size": "8 mm",
+                "quantity": "1"
+              },
+              "sources": [
+                "https://www.parktool.com/en-us/product/i-beam-mini-fold-up-with-chain-tool-ib-3"
+              ]
+            },
+            {
+              "id": "spoke-3-23",
+              "values": {
+                "bit_kind": "Llave de rayos",
+                "size": "3.23 mm",
+                "quantity": "1"
+              },
+              "sources": [
+                "https://www.parktool.com/en-us/product/i-beam-mini-fold-up-with-chain-tool-ib-3"
+              ]
+            },
+            {
+              "id": "spoke-3-45",
+              "values": {
+                "bit_kind": "Llave de rayos",
+                "size": "3.45 mm",
+                "quantity": "1"
+              },
+              "sources": [
+                "https://www.parktool.com/en-us/product/i-beam-mini-fold-up-with-chain-tool-ib-3"
+              ]
+            },
+            {
+              "id": "r06",
+              "values": {
+                "bit_kind": "Desmontador",
+                "quantity": "1"
+              },
+              "sources": [
+                "https://www.parktool.com/en-us/product/i-beam-mini-fold-up-with-chain-tool-ib-3"
+              ]
+            },
+            {
+              "id": "r07",
+              "values": {
+                "bit_kind": "Corta cadena",
+                "quantity": "1"
+              },
+              "sources": [
+                "https://www.parktool.com/en-us/product/i-beam-mini-fold-up-with-chain-tool-ib-3"
+              ]
+            }
+          ]
+        },
+        "tool_capabilities": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r01",
+              "values": {
+                "member": "Corta cadena",
+                "operation": "Cortar / extraer remache",
+                "target_standard": "Cadenas 5–12v incl. SRAM 12v Flattop y T-Type",
+                "supported": true,
+                "speeds_min": "5",
+                "speeds_max": "12"
+              },
+              "sources": [
+                "https://www.parktool.com/en-us/product/i-beam-mini-fold-up-with-chain-tool-ib-3"
+              ]
+            },
+            {
+              "id": "r02",
+              "values": {
+                "member": "Corta cadena",
+                "operation": "Peenar remache",
+                "target_standard": "Remaches Campagnolo 11/12/13v",
+                "supported": false
+              },
+              "sources": [
+                "https://www.parktool.com/en-us/product/i-beam-mini-fold-up-with-chain-tool-ib-3"
+              ]
+            }
+          ]
+        }
+      },
+      "kind": "oem_revision_scoped",
+      "source_ids": [
+        "E-PT-IB3"
+      ],
+      "source_urls": [
+        "https://www.parktool.com/en-us/product/i-beam-mini-fold-up-with-chain-tool-ib-3"
+      ],
+      "expected_blocking": [],
+      "inventory_product": null,
+      "note": "Multiherramienta que sí registra velocidades de cadena (antes prohibido por allowed_when) y separa contenido de capacidad.",
+      "review_note": "Una fila por tamaño, llave estrella8mm; las capacidades no se derivan de contenido aplanado.",
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false,
+      "root_reconciliation": []
+    },
+    {
+      "id": "light_cateye_ampp800_viz300_kit",
+      "template": "light",
+      "kind": "documentary_conflict_pending",
+      "source_ids": [
+        "S-CATEYE-WEB",
+        "S-CATEYE-MANUAL-LD810"
+      ],
+      "values": {
+        "light_position": "Juego delantera + trasera",
+        "light_member_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "m-front",
+              "values": {
+                "member_id": "AMPP800 (HL-EL088RC)",
+                "position": "Delantera",
+                "battery_kind": "Li-ion integrada",
+                "battery_capacity_mah": "2500",
+                "charge_connector": "Micro-USB",
+                "ip_rating": "IPX4"
+              },
+              "sources": [
+                "https://www.cateye.com/intl/products/headlights/HL-EL088RC_TL-LD810/"
+              ]
+            },
+            {
+              "id": "m-rear",
+              "values": {
+                "member_id": "ViZ300 (TL-LD810)",
+                "position": "Trasera",
+                "battery_kind": "Li-ion integrada",
+                "battery_capacity_mah": "800",
+                "battery_voltage_v": "3.7",
+                "charge_connector": "Micro-USB",
+                "mount_kind": "Abrazadera de tija",
+                "mount_diameter_min_mm": "21.5",
+                "mount_diameter_max_mm": "32",
+                "mount_circumference_max_mm": "130",
+                "ip_rating": "IPX4",
+                "ip_standard": "JIS C0920 (manual TLLD810/820-201223 1)"
+              },
+              "sources": [
+                "https://www.cateye.com/intl/products/headlights/HL-EL088RC_TL-LD810/",
+                "https://www.cateye.com/intl/support/manual/data/doc/TL-LD810_820_HP_ENG_v1.pdf"
+              ]
+            }
+          ]
+        }
+      },
+      "expected_issues": [
+        {
+          "code": "required_missing",
+          "field": "light_mode_configurations",
+          "blocking": false
+        }
+      ],
+      "note": "Una batería documentada requiere el manual en sources de su fila. Edición del manual y fecha web no se convierten en revisión del miembro. Dos alternativas documentales no son dos modos simultáneos.",
+      "inventory_write": false,
+      "evidence_scope": "Reference/representation example only, never an inventory attribution",
+      "competing_source_observations": [
+        {
+          "mode": "Group Ride",
+          "lumens": "100",
+          "runtime_h": "8",
+          "source_url": "https://www.cateye.com/intl/products/headlights/HL-EL088RC_TL-LD810/",
+          "document_scope": "Anterior a Spec change; fecha de transición/serie física desconocidas"
+        },
+        {
+          "mode": "Group Ride",
+          "lumens": "15",
+          "runtime_h": "10",
+          "source_url": "https://www.cateye.com/intl/products/headlights/HL-EL088RC_TL-LD810/",
+          "document_scope": "Vigente tras Spec change; atribución de unidad física desconocida"
+        }
+      ],
+      "capture_decision": "No canonical Group Ride observation until physical variant is resolved; competing_source_observations is review metadata, not rows_schema DSL.",
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false,
+      "expected_blocking": [],
+      "root_reconciliation": [
+        "Replaced only the research fixture with its corrected OEM/source scope; no product observation was changed."
+      ]
+    },
+    {
+      "id": "light_inventory_ae_kit_pending",
+      "template": "light",
+      "kind": "unknown",
+      "source_ids": [
+        "S-INVENTARIO"
+      ],
+      "inventory_product": "Juego de luces delantera + trasera AE",
+      "values": {},
+      "expected_issues": [
+        {
+          "code": "required_missing",
+          "field": "light_position",
+          "blocking": false
+        },
+        {
+          "code": "required_missing",
+          "field": "light_member_configurations",
+          "blocking": false
+        },
+        {
+          "code": "required_missing",
+          "field": "light_mode_configurations",
+          "blocking": false
+        }
+      ],
+      "note": "El título guía investigación; ni light_position ni una cantidad se asignan desde este fixture al inventario.",
+      "inventory_write": false,
+      "evidence_scope": "Reference/representation example only, never an inventory attribution",
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false,
+      "expected_blocking": [],
+      "root_reconciliation": [
+        "Replaced only the research fixture with its corrected OEM/source scope; no product observation was changed."
+      ]
+    },
+    {
+      "id": "accessory_mount_quad_lock_out_front",
+      "template": "accessory_mount",
+      "values": {
+        "accessory_mount_kind": "Soporte de teléfono",
+        "bike_attachment_kind": "Abrazadera de manubrio",
+        "bar_fit_representation": "Medidas discretas (filas)",
+        "device_attachment_kind": "Interfaz propietaria (carcasa / adaptador)",
+        "device_system": "Quad Lock",
+        "rotation_360": true,
+        "bar_clamp_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r01",
+              "values": {
+                "nominal_diameter_mm": "35",
+                "fit_method": "Directo",
+                "included": true,
+                "mount_revision": "Standard de la oferta actual consultada2026-09-07"
+              },
+              "sources": [
+                "https://www.quadlockcase.com/products/out-front-mount"
+              ]
+            },
+            {
+              "id": "r02",
+              "values": {
+                "nominal_diameter_mm": "31.8",
+                "fit_method": "Con espaciador incluido",
+                "included": true,
+                "mount_revision": "Standard de la oferta actual consultada2026-09-07"
+              },
+              "sources": [
+                "https://www.quadlockcase.com/products/out-front-mount"
+              ]
+            },
+            {
+              "id": "r03",
+              "values": {
+                "nominal_diameter_mm": "25.4",
+                "fit_method": "Con espaciador incluido",
+                "included": true,
+                "mount_revision": "Standard de la oferta actual consultada2026-09-07"
+              },
+              "sources": [
+                "https://www.quadlockcase.com/products/out-front-mount"
+              ]
+            },
+            {
+              "id": "r04",
+              "values": {
+                "nominal_diameter_mm": "22",
+                "fit_method": "Con espaciador incluido",
+                "spacer_or_variant": "OEM escribe «22 mm»; si es 22,2 se resuelve por variante/manual",
+                "included": true,
+                "mount_revision": "Standard de la oferta actual consultada2026-09-07"
+              },
+              "sources": [
+                "https://www.quadlockcase.com/products/out-front-mount"
+              ]
+            }
+          ]
+        }
+      },
+      "kind": "oem_revision_scoped",
+      "source_ids": [
+        "E-QUADLOCK"
+      ],
+      "source_urls": [
+        "https://www.quadlockcase.com/products/out-front-mount"
+      ],
+      "expected_blocking": [],
+      "inventory_product": null,
+      "note": "Escenario ND13: 30 mm no tiene fila → desconocido, no aprobado. El ancho del teléfono no aplica (carcasa propietaria). Cuál medida es «directa» y cuál con espaciador no lo confirma la lectura: la columna fit_method de la fila 35 es hipótesis a confirmar.",
+      "review_note": "Oferta actual Standard; preservar22literal y revisión. No aplicar a stock anterior sin identificar versión.",
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false,
+      "root_reconciliation": []
+    },
+    {
+      "id": "accessory_mount_gub_clamp_range_from_title",
+      "template": "accessory_mount",
+      "values": {
+        "accessory_mount_kind": "Soporte de teléfono",
+        "device_attachment_kind": "Pinza / brazos ajustables",
+        "device_width_min_mm": "55",
+        "device_width_max_mm": "100",
+        "bike_attachment_kind": "Abrazadera de manubrio",
+        "bar_fit_representation": "Desconocido / sin confirmar"
+      },
+      "kind": "inventory_candidate_unverified",
+      "source_ids": [
+        "E-INVENTARIO"
+      ],
+      "source_urls": [],
+      "expected_blocking": [],
+      "inventory_product": "Soporte Teléfono GUB Aluminio Bicicleta 55-100mm Negro",
+      "note": "Producto real: el título declara 55–100 mm de dispositivo (pinza); el lado bicicleta queda desconocido hasta leer el envase/OEM.",
+      "review_note": "Rango del título conserva carácter provisional; zona/diámetros de bicicleta pendientes OEM.",
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false,
+      "root_reconciliation": []
+    },
+    {
+      "id": "cycle_computer_garmin_edge_540",
+      "template": "cycle_computer",
+      "values": {},
+      "kind": "oem_partial_representation",
+      "source_ids": [
+        "E-GARMIN-540"
+      ],
+      "source_urls": [
+        "https://www8.garmin.com/manuals/webhelp/GUID-17DE938E-466A-4746-BDBF-7A6FC1B3A32C/EN-US/GUID-09801A97-361B-4675-AD3A-6ACE25854DB3.html"
+      ],
+      "expected_blocking": [],
+      "inventory_product": null,
+      "note": "Escenario ND21: GNSS y sensores son ejes distintos. El manual dice «ANT+ or Bluetooth» por tipo sin detallar cuál transporte admite cada tipo: las filas por transporte de Radar/Luces/Cambio/eBike/Remoto se dejan sólo en ANT+ como lectura conservadora y se marcan pendientes de confirmar por tipo.",
+      "review_note": "Manual general confirma transportes, no matriz por sensor. Retirar parejas y falsos sin fuente exacta.",
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false,
+      "root_reconciliation": [
+        "Sensor/transport rows own the scoped claims; rejected duplicate booleans are retained here as proposal history."
+      ],
+      "unassigned_proposal_observations": {
+        "sensor_link_ant_plus": true,
+        "sensor_link_bluetooth": true
+      }
+    },
+    {
+      "id": "cycle_computer_wired_11_functions_inventory",
+      "template": "cycle_computer",
+      "values": {
+        "positioning_source": "Sin posicionamiento",
+        "speed_source": "Sensor de rueda (imán / cable)",
+        "functions_count": "11",
+        "wheel_setting": "Desconocido / sin confirmar"
+      },
+      "kind": "inventory_candidate_unverified",
+      "source_ids": [
+        "E-INVENTARIO"
+      ],
+      "source_urls": [],
+      "expected_blocking": [],
+      "inventory_product": "CICLOCOMPUTADOR BICICLETA VELOCIMETRO CON CABLE 11 FUNCIONES",
+      "note": "Producto real: velocímetro con cable; el ajuste de rueda aplica (sensor de rueda) pero su método es desconocido hasta leer el manual.",
+      "review_note": "Cableado y11funciones del título no prueban ausencia de ANT+/Bluetooth/teléfono.",
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false,
+      "root_reconciliation": [
+        "Sensor/transport rows own the scoped claims; rejected duplicate booleans are retained here as proposal history."
+      ],
+      "unassigned_proposal_observations": {
+        "sensor_link_wired": true
+      }
+    },
+    {
+      "id": "consumer_electronics_anker_a2667_ports_and_budget",
+      "template": "consumer_electronics",
+      "kind": "valid",
+      "source_ids": [
+        "S-ANKER-A2667"
+      ],
+      "values": {
+        "device_kind": "Cargador",
+        "rated_power_w": "65",
+        "ports_count": "3",
+        "spec_evidence_source": "Ficha de soporte Anker A2667, leída 2026-09-07",
+        "power_port_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "p-c1",
+              "values": {
+                "port_id": "USB-C 1",
+                "connector": "USB-C",
+                "direction": "Salida",
+                "max_power_w": "65"
+              },
+              "sources": [
+                "https://service.anker.com/product-description/a085g000004x2BVAAY?recordId=a085g000004x2BVAAY"
+              ]
+            },
+            {
+              "id": "p-c2",
+              "values": {
+                "port_id": "USB-C 2",
+                "connector": "USB-C",
+                "direction": "Salida",
+                "max_power_w": "65"
+              },
+              "sources": [
+                "https://service.anker.com/product-description/a085g000004x2BVAAY?recordId=a085g000004x2BVAAY"
+              ]
+            },
+            {
+              "id": "p-a",
+              "values": {
+                "port_id": "USB-A",
+                "connector": "USB-A",
+                "direction": "Salida",
+                "max_power_w": "22.5"
+              },
+              "sources": [
+                "https://service.anker.com/product-description/a085g000004x2BVAAY?recordId=a085g000004x2BVAAY"
+              ]
+            }
+          ]
+        },
+        "power_budget_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "b1",
+              "values": {
+                "configuration": "C1 + C2",
+                "port_id": "p-c1",
+                "power_w": "45"
+              },
+              "sources": [
+                "https://service.anker.com/product-description/a085g000004x2BVAAY?recordId=a085g000004x2BVAAY"
+              ]
+            },
+            {
+              "id": "b2",
+              "values": {
+                "configuration": "C1 + C2",
+                "port_id": "p-c2",
+                "power_w": "20"
+              },
+              "sources": [
+                "https://service.anker.com/product-description/a085g000004x2BVAAY?recordId=a085g000004x2BVAAY"
+              ]
+            },
+            {
+              "id": "b3",
+              "values": {
+                "configuration": "C2 + A",
+                "port_id": "p-c2",
+                "power_w": "12"
+              },
+              "sources": [
+                "https://service.anker.com/product-description/a085g000004x2BVAAY?recordId=a085g000004x2BVAAY"
+              ]
+            },
+            {
+              "id": "b4",
+              "values": {
+                "configuration": "C2 + A",
+                "port_id": "p-a",
+                "power_w": "12"
+              },
+              "sources": [
+                "https://service.anker.com/product-description/a085g000004x2BVAAY?recordId=a085g000004x2BVAAY"
+              ]
+            }
+          ]
+        },
+        "charging_protocol_claim": "PPS; PIQ 3.0; PIQ 2.0 (declaración global de la ficha A2667)"
+      },
+      "expected_issues": [],
+      "note": "Tres puertos y repartos de la ficha exacta. Protocolos se conservan globales: la fuente no los asigna a C1/C2/A. 65 W se interpreta sólo como potencia nominal declarada, nunca suma o máximo agregado calculado. Perfil V/A de salida desconocido en la página leída; input de red no es output.",
+      "inventory_write": false,
+      "evidence_scope": "Reference/representation example only, never an inventory attribution",
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false,
+      "expected_blocking": [],
+      "root_reconciliation": [
+        "Replaced only the research fixture with its corrected OEM/source scope; no product observation was changed."
+      ]
+    },
+    {
+      "id": "consumer_electronics_baseus_65w_model_unknown",
+      "template": "consumer_electronics",
+      "values": {
+        "device_kind": "Cargador",
+        "rated_power_w": "65"
+      },
+      "kind": "inventory_candidate_unverified",
+      "source_ids": [
+        "E-INVENTARIO"
+      ],
+      "source_urls": [],
+      "expected_blocking": [],
+      "inventory_product": "Cargador 65W Baseus",
+      "note": "Producto real «Cargador 65W Baseus» sin modelo identificado: los puertos requeridos faltan → pendiente; no se copian los de Anker.",
+      "review_note": "65W del título no identifica reparto ni modelo; faltan puertos como aviso.",
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false,
+      "root_reconciliation": []
+    },
+    {
+      "id": "consumer_electronics_baseus_cable_100w_label_claim",
+      "template": "consumer_electronics",
+      "values": {
+        "device_kind": "Cable de datos/carga",
+        "connector_a": "USB-C",
+        "connector_b": "USB-C",
+        "cable_power_capacity_w": "100",
+        "cable_data_capability": "Desconocido / sin confirmar"
+      },
+      "kind": "inventory_candidate_unverified",
+      "source_ids": [
+        "E-INVENTARIO"
+      ],
+      "source_urls": [],
+      "expected_blocking": [],
+      "inventory_product": "Baseus Cable Usb-c a Usb-c Carga Rapida 100w",
+      "note": "Producto real: 100 W es la declaración del título/etiqueta (requiere spec_evidence_source); la capacidad de datos no se deduce.",
+      "review_note": "100W es claim del título de cable; no derivar datos, vídeo ni certificación.",
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false,
+      "root_reconciliation": []
+    },
+    {
+      "id": "rack_topeak_tetrarack_m2_no_eyelets",
+      "template": "rack_basket",
+      "values": {
+        "carrier_kind": "Parrilla trasera",
+        "carrier_mount_kind": "Correas a tirantes (sin ojales)",
+        "rack_eyelets_required": false,
+        "rack_top_interface": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "qt",
+              "values": {
+                "interface": "QuickTrack",
+                "counterpart_model": "Topeak MTX / RX TrunkBags",
+                "conditions": "La página no especifica una generación QuickTrack."
+              },
+              "sources": [
+                "https://www.topeak.com/global/en/product/1286-TETRARACK-M2"
+              ]
+            },
+            {
+              "id": "kf",
+              "values": {
+                "interface": "KLICKfix",
+                "conditions": "Alcance tal como lo declara la página; no universalizar modelos."
+              },
+              "sources": [
+                "https://www.topeak.com/global/en/product/1286-TETRARACK-M2"
+              ]
+            },
+            {
+              "id": "snap1",
+              "values": {
+                "interface": "RackTime Snapit",
+                "generation": "1.0"
+              },
+              "sources": [
+                "https://www.topeak.com/global/en/product/1286-TETRARACK-M2"
+              ]
+            },
+            {
+              "id": "snapvario",
+              "values": {
+                "interface": "RackTime Snapit",
+                "generation": "Vario"
+              },
+              "sources": [
+                "https://www.topeak.com/global/en/product/1286-TETRARACK-M2"
+              ]
+            }
+          ]
+        },
+        "max_load_kg": "12",
+        "load_reference": "Parrilla completa",
+        "rack_mount_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r01",
+              "values": {
+                "mount_point": "Correas a tirantes (sin ojales)",
+                "requirement": "tirantes con diámetro > 15 mm; largo de montaje 200 mm",
+                "tube_diameter_min_mm": "15",
+                "span_min_mm": "95",
+                "span_max_mm": "125",
+                "exclusions": "V-brake: no compatible según OEM",
+                "tube_diameter_min_inclusive": false,
+                "mount_length_mm": "200",
+                "advisories": "Carbono: no recomendado según OEM"
+              },
+              "sources": [
+                "https://www.topeak.com/global/en/product/1286-TETRARACK-M2"
+              ]
+            }
+          ]
+        },
+        "spec_evidence_source": "Topeak TA2408M2 página vigente"
+      },
+      "kind": "source_scoped_representation",
+      "source_ids": [
+        "S-TETRARACK"
+      ],
+      "source_urls": [
+        "https://www.topeak.com/global/en/product/1286-TETRARACK-M2"
+      ],
+      "expected_blocking": [],
+      "inventory_product": null,
+      "note": "Varias interfaces declaradas por fila sin asignar generación QuickTrack. >15 conserva extremo abierto. Ausencia de ojales no es incompatibilidad; verificar geometría completa y restricciones de la configuración.",
+      "eligible_for_product_fill": false,
+      "review_findings": [
+        "FB07",
+        "FB08"
+      ],
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false,
+      "root_reconciliation": []
+    },
+    {
+      "id": "bike_bag_topeak_trunkbag_dxp_side_frames_and_conflict",
+      "template": "bike_bag",
+      "values": {
+        "bag_position": "Otro",
+        "attachment": "Sistema de riel (QuickTrack / KLICKfix / RackTime)",
+        "bag_rack_interface": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "qt2",
+              "values": {
+                "interface": "MTX QuickTrack",
+                "generation": "2.0",
+                "counterpart_model": "Topeak MTX QuickTrack2.0 compatible racks"
+              },
+              "sources": [
+                "https://www.topeak.com/global/en/product/1685-MTX-TRUNKBAG-DXP-%28MTX-2.0%29"
+              ]
+            }
+          ]
+        },
+        "auxiliary_part_requirements": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r01",
+              "values": {
+                "configuration": "alforjas laterales desplegadas sobre MTX BeamRack",
+                "part": "MTX Dual Side Frames",
+                "applies_to": "MTX BeamRacks"
+              },
+              "sources": [
+                "https://www.topeak.com/global/en/product/1685-MTX-TRUNKBAG-DXP-%28MTX-2.0%29"
+              ]
+            }
+          ]
+        },
+        "bag_member_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r01",
+              "values": {
+                "member": "cuerpo superior",
+                "position": "Superior"
+              },
+              "sources": [
+                "https://www.topeak.com/global/en/product/1685-MTX-TRUNKBAG-DXP-%28MTX-2.0%29"
+              ]
+            },
+            {
+              "id": "r02",
+              "values": {
+                "member": "alforjas desplegables",
+                "position": "Ambos laterales"
+              },
+              "sources": [
+                "https://www.topeak.com/global/en/product/1685-MTX-TRUNKBAG-DXP-%28MTX-2.0%29"
+              ]
+            }
+          ]
+        },
+        "conflicting_claims": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r01",
+              "values": {
+                "field_key": "volume_l",
+                "value": "19.4",
+                "unit": "L",
+                "source_kind": "Página vigente del fabricante",
+                "source_date": "2026-09-07",
+                "locator": "ficha TT9635B2"
+              },
+              "sources": [
+                "https://www.topeak.com/global/en/product/1685-MTX-TRUNKBAG-DXP-%28MTX-2.0%29"
+              ]
+            },
+            {
+              "id": "r02",
+              "values": {
+                "field_key": "volume_l",
+                "value": "22.6",
+                "unit": "L",
+                "source_kind": "Catálogo oficial",
+                "source_date": "2024",
+                "locator": "entrada TT9635B2 del preview 2024"
+              },
+              "sources": [
+                "https://www.topeak.com/storage/app/media/subsite/de/Download/2024_topeak_new_products_preview.pdf"
+              ]
+            }
+          ]
+        },
+        "spec_evidence_source": "Topeak TT9635B2: página2026-09-07 y catálogo2024"
+      },
+      "kind": "source_scoped_representation",
+      "source_ids": [
+        "S-TRUNKBAG",
+        "S-TOPEAK-2024"
+      ],
+      "source_urls": [
+        "https://www.topeak.com/global/en/product/1685-MTX-TRUNKBAG-DXP-%28MTX-2.0%29",
+        "https://www.topeak.com/storage/app/media/subsite/de/Download/2024_topeak_new_products_preview.pdf"
+      ],
+      "expected_blocking": [],
+      "inventory_product": null,
+      "note": "Dos capacidades discordantes del mismo código siguen como observaciones, volumen escalar vacío. Sideframes requeridos en el uso declarado no prueban que falten en la caja. No asignar dimensiones generales a cuerpo superior/ejes sin referencia. Falta enforcement del conflicto y representación de altura por configuración.",
+      "eligible_for_product_fill": false,
+      "review_findings": [
+        "FB07",
+        "FB09",
+        "FB17",
+        "FB18"
+      ],
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false,
+      "root_reconciliation": []
+    },
+    {
+      "id": "kickstand_hebie_0669e_ksa18_vs_40mm_frame",
+      "template": "kickstand",
+      "values": {
+        "kickstand_mount_kind": "Soporte trasero (kickstand plate)",
+        "kickstand_mount_standard": "KSA 18 (separación 18 mm, 2 pernos)",
+        "mount_hole_spacing_mm": "18",
+        "mount_bolt_count": "2",
+        "nominal_wheel_size_min": "27.5\"",
+        "nominal_wheel_size_max": "29\"",
+        "installed_height_min_mm": "340",
+        "installed_height_max_mm": "390",
+        "frame_requirement_text": "Nur für Rahmen mit entsprechender Aufnahme am Hinterbau",
+        "spec_evidence_source": "hebie.de 0669 E",
+        "kickstand_length_reference": "Altura instalada A según plano Hebie0669E Rev1.0,01.25"
+      },
+      "kind": "source_scoped_representation",
+      "source_ids": [
+        "S-HEBIE18",
+        "S-HEBIE40",
+        "S-HEBIE-MANUAL"
+      ],
+      "source_urls": [
+        "https://www.hebie.de/ABSTELLHELD-18/0669-E",
+        "https://www.hebie.de/ABSTELLHELD-40/0667-E",
+        "https://www.hebie.de/pdf/hebie/9445-ma_abstellheld-18_0669-e_840x297_1.0_web.pdf"
+      ],
+      "expected_blocking": [],
+      "inventory_product": null,
+      "note": "0669E normal: KSA18 y dos pernos corroborados en manual. KSA40 no es montaje directo equivalente; un adaptador requiere evidencia propia. 25kg no se transforma en masa de bicicleta sin alcance explícito.",
+      "eligible_for_product_fill": false,
+      "review_findings": [
+        "FB10",
+        "FB11"
+      ],
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false,
+      "root_reconciliation": []
+    },
+    {
+      "id": "kickstand_inventory_clamp_26_36cm_reference_unknown",
+      "template": "kickstand",
+      "values": {
+        "kickstand_mount_kind": "Abrazadera a vaina",
+        "kickstand_mount_standard": "Abrazadera a vaina",
+        "adjustable_length": true,
+        "kickstand_length_reference": "Desconocido / sin confirmar",
+        "length_min_mm": "260",
+        "length_max_mm": "360"
+      },
+      "kind": "inventory_title_only_candidate",
+      "source_ids": [
+        "E-INVENTARIO"
+      ],
+      "source_urls": [],
+      "expected_blocking": [],
+      "inventory_product": "PATA DE APOYO DE ABRAZADERA AJUSTABLE 26cm-36cm",
+      "note": "Candidato del título congelado; no verificado como hecho OEM. Producto real: 26–36 cm sin saber si es altura instalada o largo de pieza; se declara la referencia como desconocida.",
+      "eligible_for_product_fill": false,
+      "review_findings": [
+        "FB10",
+        "FB11"
+      ],
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false,
+      "root_reconciliation": []
+    },
+    {
+      "id": "pump_lezyne_16g_co2_5pack",
+      "template": "pump",
+      "values": {
+        "pump_kind": "Cartucho CO2 (recarga)",
+        "pack_quantity": "5",
+        "co2_cartridge_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r01",
+              "values": {
+                "gas_mass_g": "16",
+                "threaded": true,
+                "included_quantity": "5",
+                "configuration_kind": "Cartucho de esta presentación"
+              },
+              "sources": [
+                "https://ride.lezyne.com/products/16g-co2-cartridge"
+              ]
+            }
+          ]
+        },
+        "inflation_target_note": "road and low-volume gravel",
+        "spec_evidence_source": "ride.lezyne.com 1-C2-CRTDG-V116P5"
+      },
+      "kind": "source_scoped_representation",
+      "source_ids": [
+        "S-LEZYNE"
+      ],
+      "source_urls": [
+        "https://ride.lezyne.com/products/16g-co2-cartridge"
+      ],
+      "expected_blocking": [],
+      "inventory_product": null,
+      "note": "SKU1-C2-CRTDG-V116P5: gas16g y cinco cartuchos roscados. No llenar peso físico con60g sin alcance. Threaded no prueba rosca exacta ni ajuste de todo inflador; cantidad total/fila aún requieren coherencia ejecutable.",
+      "eligible_for_product_fill": false,
+      "review_findings": [
+        "FB13"
+      ],
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false,
+      "root_reconciliation": []
+    },
+    {
+      "id": "eyewear_julbo_reactiv_2_4_polarized",
+      "template": "eyewear",
+      "values": {
+        "eyewear_lens_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r01",
+              "values": {
+                "model": "REACTIV 2-4 Polarized",
+                "photochromic": true,
+                "polarized": true,
+                "category_min": "2",
+                "category_max": "4",
+                "uv_claim": "100% UV protection"
+              },
+              "sources": [
+                "https://www.julbo.com/en_gb/sunglasses/photochromic-2-4-polarized-sunglasses"
+              ]
+            }
+          ]
+        },
+        "spec_evidence_source": "julbo.com photochromic-2-4-polarized"
+      },
+      "kind": "lens_family_reference_not_eyewear_sku",
+      "source_ids": [
+        "S-JULBO"
+      ],
+      "source_urls": [
+        "https://www.julbo.com/en_gb/sunglasses/photochromic-2-4-polarized-sunglasses"
+      ],
+      "expected_blocking": [],
+      "inventory_product": null,
+      "note": "Familia REACTIV2-4 Polarized: ambas funciones en la misma lente y UV por lente. Presentación incluida desconocida; VLT no completado. No copiar a cualquier gafas Julbo.",
+      "eligible_for_product_fill": false,
+      "review_findings": [
+        "FB20"
+      ],
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false,
+      "root_reconciliation": []
+    },
+    {
+      "id": "eyewear_inventory_scvcn_photochromic_unknown_category",
+      "template": "eyewear",
+      "values": {
+        "eyewear_lens_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r01",
+              "values": {
+                "model": "DZ-S62-PH-08",
+                "photochromic": true
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "kind": "inventory_title_only_candidate",
+      "source_ids": [
+        "E-INVENTARIO"
+      ],
+      "source_urls": [],
+      "expected_blocking": [],
+      "inventory_product": "Lentes SCVCN Fotocromáticos DZ-S62-PH-08",
+      "note": "Candidato exclusivamente del título SCVCN. Retirada URL Sheldon ajena; no sustituir por otra URL formal. Categoría/polarización/UV/contenido siguen sin confirmar y no es hecho listo para guardar.",
+      "eligible_for_product_fill": false,
+      "review_findings": [
+        "FB20"
+      ],
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false,
+      "root_reconciliation": []
+    },
+    {
+      "id": "light_single_ampp800_web_revision",
+      "template": "light",
+      "kind": "valid",
+      "source_ids": [
+        "S-CATEYE-WEB"
+      ],
+      "values": {
+        "light_position": "Delantera",
+        "lumens_claimed": "800",
+        "modes_count": "5",
+        "spec_evidence_source": "Página Cateye HL-EL088RC_TL-LD810, leída 2026-09-07",
+        "light_member_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "m-ampp800",
+              "values": {
+                "member_id": "AMPP800 (HL-EL088RC)",
+                "position": "Delantera",
+                "battery_kind": "Li-ion integrada",
+                "battery_capacity_mah": "2500",
+                "battery_voltage_v": "3.7",
+                "charge_connector": "Micro-USB",
+                "mount_kind": "Abrazadera de manubrio",
+                "mount_diameter_min_mm": "22",
+                "mount_diameter_max_mm": "35",
+                "ip_rating": "IPX4"
+              },
+              "sources": [
+                "https://www.cateye.com/intl/products/headlights/HL-EL088RC_TL-LD810/"
+              ]
+            }
+          ]
+        },
+        "light_mode_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "mo-1",
+              "values": {
+                "member_id": "m-ampp800",
+                "mode": "High",
+                "pattern": "Constante",
+                "lumens": "800",
+                "runtime_h": "1.5"
+              },
+              "sources": [
+                "https://www.cateye.com/intl/products/headlights/HL-EL088RC_TL-LD810/"
+              ]
+            },
+            {
+              "id": "mo-2",
+              "values": {
+                "member_id": "m-ampp800",
+                "mode": "Daytime HyperConstant",
+                "pattern": "Constante + intermitente",
+                "lumens": "800",
+                "lumens_secondary": "200",
+                "runtime_h": "5"
+              },
+              "sources": [
+                "https://www.cateye.com/intl/products/headlights/HL-EL088RC_TL-LD810/"
+              ]
+            },
+            {
+              "id": "mo-3",
+              "values": {
+                "member_id": "m-ampp800",
+                "mode": "Flashing",
+                "pattern": "Intermitente",
+                "lumens": "200",
+                "runtime_h": "30"
+              },
+              "sources": [
+                "https://www.cateye.com/intl/products/headlights/HL-EL088RC_TL-LD810/"
+              ]
+            }
+          ]
+        },
+        "kit_members": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "k-1",
+              "values": {
+                "member_role": "cable",
+                "family": "consumer_electronics",
+                "quantity": "1",
+                "position": "Sin posición",
+                "identity_model": "Cable Micro-USB"
+              },
+              "sources": [
+                "https://www.cateye.com/intl/products/headlights/HL-EL088RC_TL-LD810/"
+              ]
+            }
+          ]
+        }
+      },
+      "expected_issues": [],
+      "note": "AMPP800 OEM example; retrieval date removed from member revision; quantity travels as integer text. Declared totals retained; partial mode detail is not a total.",
+      "inventory_write": false,
+      "evidence_scope": "Reference/representation example only, never an inventory attribution",
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false,
+      "expected_blocking": []
+    },
+    {
+      "id": "light_kit_cateye_group_ride_two_revisions",
+      "template": "light",
+      "kind": "documentary_conflict_pending",
+      "source_ids": [
+        "S-CATEYE-WEB",
+        "S-CATEYE-MANUAL-LD810"
+      ],
+      "values": {
+        "light_position": "Juego delantera + trasera",
+        "light_member_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "m-front",
+              "values": {
+                "member_id": "AMPP800 (HL-EL088RC)",
+                "position": "Delantera",
+                "battery_kind": "Li-ion integrada",
+                "battery_capacity_mah": "2500",
+                "charge_connector": "Micro-USB",
+                "ip_rating": "IPX4"
+              },
+              "sources": [
+                "https://www.cateye.com/intl/products/headlights/HL-EL088RC_TL-LD810/"
+              ]
+            },
+            {
+              "id": "m-rear",
+              "values": {
+                "member_id": "ViZ300 (TL-LD810)",
+                "position": "Trasera",
+                "battery_kind": "Li-ion integrada",
+                "battery_capacity_mah": "800",
+                "battery_voltage_v": "3.7",
+                "charge_connector": "Micro-USB",
+                "mount_kind": "Abrazadera de tija",
+                "mount_diameter_min_mm": "21.5",
+                "mount_diameter_max_mm": "32",
+                "mount_circumference_max_mm": "130",
+                "ip_rating": "IPX4",
+                "ip_standard": "JIS C0920 (manual TLLD810/820-201223 1)"
+              },
+              "sources": [
+                "https://www.cateye.com/intl/products/headlights/HL-EL088RC_TL-LD810/",
+                "https://www.cateye.com/intl/support/manual/data/doc/TL-LD810_820_HP_ENG_v1.pdf"
+              ]
+            }
+          ]
+        }
+      },
+      "expected_issues": [
+        {
+          "code": "required_missing",
+          "field": "light_mode_configurations",
+          "blocking": false
+        }
+      ],
+      "note": "Una batería documentada requiere el manual en sources de su fila. Edición del manual y fecha web no se convierten en revisión del miembro. Dos alternativas documentales no son dos modos simultáneos.",
+      "inventory_write": false,
+      "evidence_scope": "Reference/representation example only, never an inventory attribution",
+      "competing_source_observations": [
+        {
+          "mode": "Group Ride",
+          "lumens": "100",
+          "runtime_h": "8",
+          "source_url": "https://www.cateye.com/intl/products/headlights/HL-EL088RC_TL-LD810/",
+          "document_scope": "Anterior a Spec change; fecha de transición/serie física desconocidas"
+        },
+        {
+          "mode": "Group Ride",
+          "lumens": "15",
+          "runtime_h": "10",
+          "source_url": "https://www.cateye.com/intl/products/headlights/HL-EL088RC_TL-LD810/",
+          "document_scope": "Vigente tras Spec change; atribución de unidad física desconocida"
+        }
+      ],
+      "capture_decision": "No canonical Group Ride observation until physical variant is resolved; competing_source_observations is review metadata, not rows_schema DSL.",
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false,
+      "expected_blocking": []
+    },
+    {
+      "id": "light_kit_same_revision_twice",
+      "template": "light",
+      "kind": "conflict_not_detected_by_row_identity",
+      "source_ids": [
+        "S-CATEYE-WEB"
+      ],
+      "values": {
+        "light_position": "Juego delantera + trasera",
+        "light_mode_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "a",
+              "values": {
+                "member_id": "m-rear",
+                "mode": "Group Ride",
+                "lumens": "100",
+                "runtime_h": "8"
+              },
+              "sources": [
+                "https://www.cateye.com/intl/products/headlights/HL-EL088RC_TL-LD810/"
+              ]
+            },
+            {
+              "id": "b",
+              "values": {
+                "member_id": "m-rear",
+                "mode": "Group Ride",
+                "lumens": "15",
+                "runtime_h": "10"
+              },
+              "sources": [
+                "https://www.cateye.com/intl/products/headlights/HL-EL088RC_TL-LD810/"
+              ]
+            }
+          ]
+        },
+        "spec_evidence_source": "Reproducción sintética del conflicto documental; no adoptar como ficha",
+        "light_member_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "m-rear",
+              "values": {
+                "member_id": "ViZ300 — variante pendiente",
+                "position": "Trasera"
+              },
+              "sources": [
+                "https://www.cateye.com/intl/products/headlights/HL-EL088RC_TL-LD810/"
+              ]
+            }
+          ]
+        }
+      },
+      "expected_issues": [],
+      "note": "Conservar row IDs no deduplica semánticamente; no se fabrica una revisión para solucionar el conflicto. Mismo nombre sólo no prueba misma condición, pero este fixture declara el conflicto de la misma condición.",
+      "inventory_write": false,
+      "evidence_scope": "Reference/representation example only, never an inventory attribution",
+      "capture_decision": "Reject simultaneous canonicalization for the same identified operating condition; row parser alone cannot adjudicate claim conflicts.",
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false,
+      "expected_blocking": []
+    },
+    {
+      "id": "light_kit_group_ride_twice_without_revision_undetectable",
+      "template": "light",
+      "kind": "conflict_not_detected_by_row_identity",
+      "source_ids": [
+        "S-ENGINE"
+      ],
+      "values": {
+        "light_position": "Juego delantera + trasera",
+        "light_mode_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "a",
+              "values": {
+                "member_id": "m-rear",
+                "mode": "Group Ride",
+                "lumens": "100",
+                "runtime_h": "8"
+              },
+              "sources": []
+            },
+            {
+              "id": "b",
+              "values": {
+                "member_id": "m-rear",
+                "mode": "Group Ride",
+                "lumens": "15",
+                "runtime_h": "10"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "spec_evidence_source": "Reproducción sintética del conflicto documental; no adoptar como ficha",
+        "light_member_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "m-rear",
+              "values": {
+                "member_id": "ViZ300 — variante pendiente",
+                "position": "Trasera"
+              },
+              "sources": [
+                "https://www.cateye.com/intl/products/headlights/HL-EL088RC_TL-LD810/"
+              ]
+            }
+          ]
+        }
+      },
+      "expected_issues": [],
+      "note": "Conservar row IDs no deduplica semánticamente; no se fabrica una revisión para solucionar el conflicto. Mismo nombre sólo no prueba misma condición, pero este fixture declara el conflicto de la misma condición.",
+      "inventory_write": false,
+      "evidence_scope": "Reference/representation example only, never an inventory attribution",
+      "capture_decision": "Reject simultaneous canonicalization for the same identified operating condition; row parser alone cannot adjudicate claim conflicts.",
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false,
+      "expected_blocking": []
+    },
+    {
+      "id": "light_single_position_mismatch_undetectable",
+      "template": "light",
+      "kind": "contradictory_undetectable",
+      "source_ids": [
+        "S-ENGINE"
+      ],
+      "values": {
+        "light_position": "Delantera",
+        "light_member_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "m",
+              "values": {
+                "member_id": "X",
+                "position": "Trasera"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_issues": [
+        {
+          "code": "required_missing",
+          "field": "light_mode_configurations",
+          "blocking": false
+        }
+      ],
+      "note": "G2: la fila dice Trasera y el escalar Delantera; hoy nada lo detecta. Se registra para que la carencia tenga caso, no para aceptarlo.",
+      "inventory_write": false,
+      "evidence_scope": "Reference/representation example only, never an inventory attribution",
+      "capture_decision": "Do not mark configuration verified; scalar/member position coherence remains unproven.",
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false,
+      "expected_blocking": []
+    },
+    {
+      "id": "light_kit_member_inside_kit_members_undetectable",
+      "template": "light",
+      "kind": "classified_light_member_in_wrong_table",
+      "source_ids": [
+        "S-ENGINE"
+      ],
+      "values": {
+        "light_position": "Juego delantera + trasera",
+        "kit_members": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "k",
+              "values": {
+                "member_role": "otro",
+                "family": "light",
+                "quantity": "1",
+                "position": "Delantero"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "light_member_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "m",
+              "values": {
+                "member_id": "Delantera X",
+                "position": "Delantera"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_issues": [
+        {
+          "code": "required_missing",
+          "field": "light_mode_configurations",
+          "blocking": false
+        },
+        {
+          "code": "row_option",
+          "field": "kit_members",
+          "row_id": "k",
+          "column": "family",
+          "blocking": true
+        },
+        {
+          "code": "row_prerequisite",
+          "field": "light_member_configurations",
+          "row_id": "m",
+          "column": "power_input_connector",
+          "blocking": false
+        },
+        {
+          "code": "row_prerequisite",
+          "field": "light_member_configurations",
+          "row_id": "m",
+          "column": "power_source_note",
+          "blocking": false
+        }
+      ],
+      "note": "family=light en kit_members es una clasificación en el propietario incorrecto y queda bloqueada. Esto no determina si las filas describen una o dos unidades físicas; esa identidad sigue pendiente. El ID histórico del caso se conserva para trazabilidad.",
+      "inventory_write": false,
+      "evidence_scope": "Reference/representation example only, never an inventory attribution",
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false,
+      "expected_blocking": [
+        {
+          "code": "row_option",
+          "field": "kit_members"
+        }
+      ]
+    },
+    {
+      "id": "computer_garmin_540_sensors_transport_unknown",
+      "template": "cycle_computer",
+      "kind": "scoped_declarations_incomplete",
+      "source_ids": [
+        "GAR-SENSORS"
+      ],
+      "values": {
+        "sensor_support_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "s-0",
+              "values": {
+                "sensor_type": "Velocidad",
+                "transport": "Desconocido / sin confirmar",
+                "supported": true,
+                "scope": "Sensores de velocidad citados por Edge 540; modelo/perfil concreto pendiente"
+              },
+              "sources": [
+                "https://www8.garmin.com/manuals/webhelp/GUID-17DE938E-466A-4746-BDBF-7A6FC1B3A32C/EN-US/GUID-09801A97-361B-4675-AD3A-6ACE25854DB3.html"
+              ]
+            },
+            {
+              "id": "s-1",
+              "values": {
+                "sensor_type": "Cadencia",
+                "transport": "Desconocido / sin confirmar",
+                "supported": true,
+                "scope": "Sensores de cadencia citados por Edge 540; no presupone dispositivo combinado"
+              },
+              "sources": [
+                "https://www8.garmin.com/manuals/webhelp/GUID-17DE938E-466A-4746-BDBF-7A6FC1B3A32C/EN-US/GUID-09801A97-361B-4675-AD3A-6ACE25854DB3.html"
+              ]
+            },
+            {
+              "id": "s-2",
+              "values": {
+                "sensor_type": "Frecuencia cardiaca",
+                "transport": "Desconocido / sin confirmar",
+                "supported": true,
+                "scope": "Modelos de monitor cardiaco citados por el manual Edge 540; no todos los monitores"
+              },
+              "sources": [
+                "https://www8.garmin.com/manuals/webhelp/GUID-17DE938E-466A-4746-BDBF-7A6FC1B3A32C/EN-US/GUID-09801A97-361B-4675-AD3A-6ACE25854DB3.html"
+              ]
+            },
+            {
+              "id": "s-3",
+              "values": {
+                "sensor_type": "Potencia",
+                "transport": "Desconocido / sin confirmar",
+                "supported": true,
+                "scope": "Series Rally o Vector citadas por el manual; generación/perfil concretos pendientes"
+              },
+              "sources": [
+                "https://www8.garmin.com/manuals/webhelp/GUID-17DE938E-466A-4746-BDBF-7A6FC1B3A32C/EN-US/GUID-09801A97-361B-4675-AD3A-6ACE25854DB3.html"
+              ]
+            },
+            {
+              "id": "s-4",
+              "values": {
+                "sensor_type": "Radar",
+                "transport": "Desconocido / sin confirmar",
+                "supported": true,
+                "scope": "Familia Varia de radar trasero citada; modelo/perfil concreto pendiente"
+              },
+              "sources": [
+                "https://www8.garmin.com/manuals/webhelp/GUID-17DE938E-466A-4746-BDBF-7A6FC1B3A32C/EN-US/GUID-09801A97-361B-4675-AD3A-6ACE25854DB3.html"
+              ]
+            },
+            {
+              "id": "s-5",
+              "values": {
+                "sensor_type": "Luces",
+                "transport": "Desconocido / sin confirmar",
+                "supported": true,
+                "scope": "Familia Varia de luces citada; modelo/perfil concreto pendiente"
+              },
+              "sources": [
+                "https://www8.garmin.com/manuals/webhelp/GUID-17DE938E-466A-4746-BDBF-7A6FC1B3A32C/EN-US/GUID-09801A97-361B-4675-AD3A-6ACE25854DB3.html"
+              ]
+            },
+            {
+              "id": "s-6",
+              "values": {
+                "sensor_type": "Cambio electrónico",
+                "transport": "Desconocido / sin confirmar",
+                "supported": true,
+                "scope": "Cambios electrónicos y Shimano Di2 citados; modelo/perfil concreto pendiente"
+              },
+              "sources": [
+                "https://www8.garmin.com/manuals/webhelp/GUID-17DE938E-466A-4746-BDBF-7A6FC1B3A32C/EN-US/GUID-09801A97-361B-4675-AD3A-6ACE25854DB3.html"
+              ]
+            },
+            {
+              "id": "s-7",
+              "values": {
+                "sensor_type": "eBike",
+                "transport": "Desconocido / sin confirmar",
+                "supported": true,
+                "scope": "Sistemas eBike compatibles citados, incluido ejemplo Shimano; no todas las eBikes"
+              },
+              "sources": [
+                "https://www8.garmin.com/manuals/webhelp/GUID-17DE938E-466A-4746-BDBF-7A6FC1B3A32C/EN-US/GUID-09801A97-361B-4675-AD3A-6ACE25854DB3.html"
+              ]
+            },
+            {
+              "id": "s-8",
+              "values": {
+                "sensor_type": "Control remoto",
+                "transport": "Desconocido / sin confirmar",
+                "supported": true,
+                "scope": "Edge Remote citado; no todo control remoto"
+              },
+              "sources": [
+                "https://www8.garmin.com/manuals/webhelp/GUID-17DE938E-466A-4746-BDBF-7A6FC1B3A32C/EN-US/GUID-09801A97-361B-4675-AD3A-6ACE25854DB3.html"
+              ]
+            },
+            {
+              "id": "s-9",
+              "values": {
+                "sensor_type": "Control remoto",
+                "transport": "Desconocido / sin confirmar",
+                "supported": true,
+                "scope": "inReach Remote citado; funciones y modelos específicos pendientes"
+              },
+              "sources": [
+                "https://www8.garmin.com/manuals/webhelp/GUID-17DE938E-466A-4746-BDBF-7A6FC1B3A32C/EN-US/GUID-09801A97-361B-4675-AD3A-6ACE25854DB3.html"
+              ]
+            },
+            {
+              "id": "s-10",
+              "values": {
+                "sensor_type": "Rodillo inteligente",
+                "transport": "Desconocido / sin confirmar",
+                "supported": true,
+                "scope": "Rodillo inteligente compatible según manual; modelo/perfil concreto pendiente"
+              },
+              "sources": [
+                "https://www8.garmin.com/manuals/webhelp/GUID-17DE938E-466A-4746-BDBF-7A6FC1B3A32C/EN-US/GUID-09801A97-361B-4675-AD3A-6ACE25854DB3.html"
+              ]
+            }
+          ]
+        }
+      },
+      "expected_issues": [
+        {
+          "code": "required_missing",
+          "field": "positioning_source",
+          "blocking": false
+        },
+        {
+          "code": "required_missing",
+          "field": "speed_source",
+          "blocking": false
+        },
+        {
+          "code": "row_incomplete",
+          "field": "sensor_support_configurations",
+          "blocking": false
+        }
+      ],
+      "note": "Se conserva alcance OEM de función/serie y transporte desconocido. No afirmar compatibilidad con un modelo arbitrario por su tipo; no deducir Bluetooth+Wi-Fi de enlace telefónico ni GNSS multibanda de esta página de sensores.",
+      "inventory_write": false,
+      "evidence_scope": "Reference/representation example only, never an inventory attribution",
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false,
+      "expected_blocking": []
+    },
+    {
+      "id": "computer_sensor_pair_admitted_and_excluded",
+      "template": "cycle_computer",
+      "kind": "explicit_scope_conflict_pending",
+      "source_ids": [
+        "S-ENGINE"
+      ],
+      "values": {
+        "positioning_source": "GNSS",
+        "speed_source": "GNSS o sensor",
+        "sensor_support_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "a",
+              "values": {
+                "sensor_type": "Velocidad",
+                "transport": "ANT+",
+                "supported": true,
+                "scope": "Mismo modelo, generación, perfil y condición explícitos: contradicción sintética"
+              },
+              "sources": []
+            },
+            {
+              "id": "b",
+              "values": {
+                "sensor_type": "Velocidad",
+                "transport": "ANT+",
+                "supported": false,
+                "scope": "Mismo modelo, generación, perfil y condición explícitos: contradicción sintética"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_issues": [],
+      "note": "Un tipo/transporte repetido con modelos distintos sería válido. Este caso fija el mismo alcance explícito para probar un conflicto lógico; no afirma una incompatibilidad OEM.",
+      "inventory_write": false,
+      "evidence_scope": "Reference/representation example only, never an inventory attribution",
+      "capture_decision": "Reject canonical adoption of the conflicting same-scope claim; row IDs alone do not reject it.",
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false,
+      "expected_blocking": []
+    },
+    {
+      "id": "computer_wired_inventory_speed_source_without_rows_undetectable",
+      "template": "cycle_computer",
+      "kind": "contradictory_undetectable",
+      "source_ids": [
+        "S-INVENTARIO",
+        "S-ENGINE"
+      ],
+      "values": {
+        "positioning_source": "Sin posicionamiento",
+        "speed_source": "Sensor de rueda (imán / cable)",
+        "sensor_support_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "a",
+              "values": {
+                "sensor_type": "Velocidad",
+                "transport": "Cable",
+                "supported": false,
+                "scope": "Exclusión global explícita de velocidad por cable, caso sintético"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_issues": [],
+      "note": "No se atribuye al producto del título. Un rechazo de un sensor concreto no contradice velocidad por otro sensor; este contraejemplo declara exclusión global para que el conflicto sea real.",
+      "inventory_write": false,
+      "evidence_scope": "Reference/representation example only, never an inventory attribution",
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false,
+      "expected_blocking": []
+    },
+    {
+      "id": "charger_anker_a2667_ports_budget_profiles_unknown",
+      "template": "consumer_electronics",
+      "kind": "valid",
+      "source_ids": [
+        "S-ANKER-A2667"
+      ],
+      "values": {
+        "device_kind": "Cargador",
+        "rated_power_w": "65",
+        "ports_count": "3",
+        "spec_evidence_source": "Ficha de soporte Anker A2667, leída 2026-09-07",
+        "power_port_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "p-c1",
+              "values": {
+                "port_id": "USB-C 1",
+                "connector": "USB-C",
+                "direction": "Salida",
+                "max_power_w": "65"
+              },
+              "sources": [
+                "https://service.anker.com/product-description/a085g000004x2BVAAY?recordId=a085g000004x2BVAAY"
+              ]
+            },
+            {
+              "id": "p-c2",
+              "values": {
+                "port_id": "USB-C 2",
+                "connector": "USB-C",
+                "direction": "Salida",
+                "max_power_w": "65"
+              },
+              "sources": [
+                "https://service.anker.com/product-description/a085g000004x2BVAAY?recordId=a085g000004x2BVAAY"
+              ]
+            },
+            {
+              "id": "p-a",
+              "values": {
+                "port_id": "USB-A",
+                "connector": "USB-A",
+                "direction": "Salida",
+                "max_power_w": "22.5"
+              },
+              "sources": [
+                "https://service.anker.com/product-description/a085g000004x2BVAAY?recordId=a085g000004x2BVAAY"
+              ]
+            }
+          ]
+        },
+        "power_budget_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "b1",
+              "values": {
+                "configuration": "C1 + C2",
+                "port_id": "p-c1",
+                "power_w": "45"
+              },
+              "sources": [
+                "https://service.anker.com/product-description/a085g000004x2BVAAY?recordId=a085g000004x2BVAAY"
+              ]
+            },
+            {
+              "id": "b2",
+              "values": {
+                "configuration": "C1 + C2",
+                "port_id": "p-c2",
+                "power_w": "20"
+              },
+              "sources": [
+                "https://service.anker.com/product-description/a085g000004x2BVAAY?recordId=a085g000004x2BVAAY"
+              ]
+            },
+            {
+              "id": "b3",
+              "values": {
+                "configuration": "C2 + A",
+                "port_id": "p-c2",
+                "power_w": "12"
+              },
+              "sources": [
+                "https://service.anker.com/product-description/a085g000004x2BVAAY?recordId=a085g000004x2BVAAY"
+              ]
+            },
+            {
+              "id": "b4",
+              "values": {
+                "configuration": "C2 + A",
+                "port_id": "p-a",
+                "power_w": "12"
+              },
+              "sources": [
+                "https://service.anker.com/product-description/a085g000004x2BVAAY?recordId=a085g000004x2BVAAY"
+              ]
+            }
+          ]
+        },
+        "charging_protocol_claim": "PPS; PIQ 3.0; PIQ 2.0 (declaración global de la ficha A2667)"
+      },
+      "expected_issues": [],
+      "note": "Tres puertos y repartos de la ficha exacta. Protocolos se conservan globales: la fuente no los asigna a C1/C2/A. 65 W se interpreta sólo como potencia nominal declarada, nunca suma o máximo agregado calculado. Perfil V/A de salida desconocido en la página leída; input de red no es output.",
+      "inventory_write": false,
+      "evidence_scope": "Reference/representation example only, never an inventory attribution",
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false,
+      "expected_blocking": []
+    },
+    {
+      "id": "charger_budget_names_ghost_port",
+      "template": "consumer_electronics",
+      "kind": "contradictory",
+      "source_ids": [
+        "S-ENGINE"
+      ],
+      "values": {
+        "device_kind": "Cargador",
+        "power_port_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "p-c1",
+              "values": {
+                "port_id": "USB-C 1",
+                "connector": "USB-C",
+                "direction": "Salida"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "power_budget_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "b",
+              "values": {
+                "configuration": "C1 + C2",
+                "port_id": "p-c2",
+                "power_w": "20"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_issues": [
+        {
+          "code": "prerequisite",
+          "field": "power_budget_configurations",
+          "blocking": false
+        },
+        {
+          "code": "row_reference_unresolved",
+          "field": "power_budget_configurations",
+          "row_id": "b",
+          "blocking": true
+        }
+      ],
+      "note": "Ya implementado (vínculo por row.id).",
+      "inventory_write": false,
+      "evidence_scope": "Reference/representation example only, never an inventory attribution",
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false,
+      "expected_blocking": [
+        {
+          "code": "row_reference_unresolved",
+          "field": "power_budget_configurations"
+        }
+      ]
+    },
+    {
+      "id": "charger_baseus_65w_model_unknown",
+      "template": "consumer_electronics",
+      "kind": "unknown",
+      "source_ids": [
+        "S-INVENTARIO"
+      ],
+      "inventory_product": "Cargador 65W Baseus",
+      "values": {
+        "device_kind": "Cargador"
+      },
+      "expected_issues": [
+        {
+          "code": "required_missing",
+          "field": "power_port_configurations",
+          "blocking": false
+        }
+      ],
+      "note": "Tipo de dispositivo como escenario de investigación. El 65 W del título no se confirma como potencia total; no se copian puertos/protocolos Anker.",
+      "inventory_write": false,
+      "evidence_scope": "Reference/representation example only, never an inventory attribution",
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false,
+      "expected_blocking": []
+    },
+    {
+      "id": "card_literal_without_number",
+      "template": "consumer_electronics",
+      "kind": "unknown",
+      "source_ids": [
+        "S-ENGINE"
+      ],
+      "values": {
+        "device_kind": "Tarjeta de memoria",
+        "storage_capacity_label": "1TB",
+        "spec_evidence_source": "Envase: «1TB», leído en tienda"
+      },
+      "expected_issues": [],
+      "note": "Fixture de lectura literal sin normalización, no tarjeta real investigada. Si la etiqueta usa TB/GB conformes al SI, 1 TB son 1000 GB. 1024 GB no es equivalente; capacidad utilizable y etiquetada deben distinguirse.",
+      "inventory_write": false,
+      "evidence_scope": "Reference/representation example only, never an inventory attribution",
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false,
+      "expected_blocking": []
+    },
+    {
+      "id": "RCF10",
+      "template": "workshop_tool",
+      "field": "tool_capabilities",
+      "kind": "synthetic_regression",
+      "values": {
+        "tool_capabilities": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "operation": "Otra",
+                "target_standard": "Interfaz de prueba",
+                "supported": true,
+                "adapter_required": true
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_row_condition_issues": [
+        {
+          "code": "row_required_missing",
+          "field": "tool_capabilities",
+          "row_id": "r1",
+          "column": "adapter_model",
+          "blocking": false
+        }
+      ],
+      "expected_blocking": [],
+      "source_ids": [
+        "CATALOG",
+        "ENGINE2200"
+      ],
+      "purpose": "Adaptador de herramienta requerido necesita identificarse.",
+      "gap_ids": [],
+      "not_a_mechanical_verdict": true,
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false
+    },
+    {
+      "id": "RCF11",
+      "template": "workshop_tool",
+      "field": "tool_capabilities",
+      "kind": "synthetic_regression",
+      "values": {
+        "tool_capabilities": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "operation": "Otra",
+                "target_standard": "Interfaz de prueba",
+                "supported": false,
+                "adapter_required": false,
+                "adapter_model": "Adaptador evaluado en exclusión"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_row_condition_issues": [],
+      "expected_blocking": [],
+      "source_ids": [
+        "CATALOG",
+        "ENGINE2200"
+      ],
+      "purpose": "Exclusión explícita conserva condiciones y pieza evaluada.",
+      "gap_ids": [],
+      "not_a_mechanical_verdict": true,
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false
+    },
+    {
+      "id": "RCF12",
+      "template": "workshop_tool",
+      "field": "tool_bits_included",
+      "kind": "synthetic_regression",
+      "values": {
+        "tool_kind": "Multiherramienta",
+        "tool_bits_included": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "bit_kind": "Torx",
+                "quantity": "1"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_row_condition_issues": [
+        {
+          "code": "row_required_missing",
+          "field": "tool_bits_included",
+          "row_id": "r1",
+          "column": "size",
+          "blocking": false
+        }
+      ],
+      "expected_blocking": [],
+      "source_ids": [
+        "PARK_IB3"
+      ],
+      "purpose": "Interfaz Torx sin tamaño queda pendiente.",
+      "gap_ids": [],
+      "not_a_mechanical_verdict": true,
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false
+    },
+    {
+      "id": "RCF13",
+      "template": "workshop_tool",
+      "field": "tool_bits_included",
+      "kind": "oem_representation_example",
+      "values": {
+        "tool_kind": "Multiherramienta",
+        "tool_bits_included": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "bit_kind": "Torx",
+                "size": "T25",
+                "quantity": "1"
+              },
+              "sources": [
+                "https://www.parktool.com/en-us/product/i-beam-mini-fold-up-with-chain-tool-ib-3"
+              ]
+            },
+            {
+              "id": "r2",
+              "values": {
+                "bit_kind": "Destornillador plano",
+                "quantity": "1"
+              },
+              "sources": [
+                "https://www.parktool.com/en-us/product/i-beam-mini-fold-up-with-chain-tool-ib-3"
+              ]
+            }
+          ]
+        }
+      },
+      "expected_row_condition_issues": [],
+      "expected_blocking": [],
+      "source_ids": [
+        "PARK_IB3"
+      ],
+      "purpose": "IB-3: T25 y destornillador plano sin medida publicados; no forzar tamaño inventado.",
+      "gap_ids": [],
+      "not_a_mechanical_verdict": true,
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false
+    },
+    {
+      "id": "RCF14",
+      "template": "workshop_tool",
+      "field": "tool_bits_included",
+      "kind": "synthetic_regression",
+      "values": {
+        "tool_kind": "Multiherramienta",
+        "tool_bits_included": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "bit_kind": "Corta cadena",
+                "quantity": "1"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_row_condition_issues": [],
+      "expected_blocking": [],
+      "source_ids": [
+        "CATALOG",
+        "ENGINE2200"
+      ],
+      "purpose": "Un corta cadenas no necesita una medida de bit ficticia.",
+      "gap_ids": [],
+      "not_a_mechanical_verdict": true,
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false
+    },
+    {
+      "id": "RCF15",
+      "template": "light",
+      "field": "light_member_configurations",
+      "kind": "synthetic_regression",
+      "values": {
+        "light_member_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "member_id": "Luz de prueba",
+                "position": "Delantera",
+                "battery_kind": "Alimentación externa (no USB)"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_row_condition_issues": [
+        {
+          "code": "row_required_missing",
+          "field": "light_member_configurations",
+          "row_id": "r1",
+          "column": "power_input_connector",
+          "blocking": false
+        }
+      ],
+      "expected_blocking": [],
+      "source_ids": [
+        "LEZYNE_HV_MANUAL",
+        "CATALOG"
+      ],
+      "purpose": "Entrada externa desconocida: pendiente; no deducir conector de marca de motor.",
+      "gap_ids": [],
+      "not_a_mechanical_verdict": true,
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false
+    },
+    {
+      "id": "RCF16",
+      "template": "light",
+      "field": "light_member_configurations",
+      "kind": "oem_representation_example",
+      "values": {
+        "light_member_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "member_id": "MICRO DRIVE 500 HV",
+                "position": "Delantera",
+                "battery_kind": "Alimentación externa (no USB)",
+                "power_input_connector": "Cable directo: amarillo positivo y negro negativo"
+              },
+              "sources": [
+                "https://cdn.shopify.com/s/files/1/0043/1246/5494/files/73725-MANUAL-Y14-MICRO_LITE_PRO-EBIKE-R0B1.pdf?v=1633510382"
+              ]
+            }
+          ]
+        }
+      },
+      "expected_row_condition_issues": [],
+      "expected_blocking": [],
+      "source_ids": [
+        "LEZYNE_HV_MANUAL"
+      ],
+      "purpose": "Entrada admite cable directo; no exige USB, batería interna ni números eléctricos.",
+      "gap_ids": [],
+      "not_a_mechanical_verdict": true,
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false
+    },
+    {
+      "id": "RCF17",
+      "template": "light",
+      "field": "light_member_configurations",
+      "kind": "synthetic_regression",
+      "values": {
+        "light_member_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "member_id": "Luz de prueba",
+                "position": "Delantera",
+                "battery_kind": "Otra batería / alimentación"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_row_condition_issues": [
+        {
+          "code": "row_required_missing",
+          "field": "light_member_configurations",
+          "row_id": "r1",
+          "column": "power_source_note",
+          "blocking": false
+        }
+      ],
+      "expected_blocking": [],
+      "source_ids": [
+        "CATALOG",
+        "ENGINE2200"
+      ],
+      "purpose": "Otro requiere descripción literal.",
+      "gap_ids": [],
+      "not_a_mechanical_verdict": true,
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false
+    },
+    {
+      "id": "RCF18",
+      "template": "light",
+      "field": "light_member_configurations",
+      "kind": "synthetic_regression",
+      "values": {
+        "light_member_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "member_id": "Luz de prueba",
+                "position": "Delantera",
+                "battery_kind": "Desconocido / sin confirmar"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_row_condition_issues": [
+        {
+          "code": "row_prerequisite",
+          "field": "light_member_configurations",
+          "row_id": "r1",
+          "column": "power_input_connector",
+          "blocking": false
+        },
+        {
+          "code": "row_prerequisite",
+          "field": "light_member_configurations",
+          "row_id": "r1",
+          "column": "power_source_note",
+          "blocking": false
+        }
+      ],
+      "expected_blocking": [],
+      "source_ids": [
+        "CATALOG",
+        "ENGINE2200"
+      ],
+      "purpose": "Desconocido no equivale a una alimentación negativa.",
+      "gap_ids": [],
+      "not_a_mechanical_verdict": true,
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false
+    },
+    {
+      "id": "RCF19",
+      "template": "light",
+      "field": "light_member_configurations",
+      "kind": "synthetic_regression",
+      "values": {
+        "light_member_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "member_id": "Luz de prueba",
+                "position": "Delantera",
+                "battery_kind": "Dinamo",
+                "battery_capacity_mah": "100",
+                "power_source_note": "Reserva documentada de prueba"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_row_condition_issues": [],
+      "expected_blocking": [],
+      "source_ids": [
+        "CATALOG",
+        "ENGINE2200"
+      ],
+      "purpose": "No prohíbe un dato de almacenamiento sólo por alimentación principal; no afirma producto real.",
+      "gap_ids": [],
+      "not_a_mechanical_verdict": true,
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false
+    },
+    {
+      "id": "RCF20",
+      "template": "light",
+      "field": "kit_members",
+      "kind": "synthetic_regression",
+      "values": {
+        "kit_members": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "member_role": "soporte",
+                "family": "light",
+                "quantity": "1",
+                "position": "Sin posición"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_row_condition_issues": [
+        {
+          "code": "row_option",
+          "field": "kit_members",
+          "row_id": "r1",
+          "column": "family",
+          "blocking": true
+        }
+      ],
+      "expected_blocking": [
+        {
+          "code": "row_option",
+          "field": "kit_members"
+        }
+      ],
+      "source_ids": [
+        "CATALOG",
+        "ENGINE2200"
+      ],
+      "purpose": "Luz física explícita debe ir a light_member_configurations, no al contenido auxiliar.",
+      "gap_ids": [],
+      "not_a_mechanical_verdict": true,
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false
+    },
+    {
+      "id": "RCF21",
+      "template": "light",
+      "field": "kit_members",
+      "kind": "synthetic_regression",
+      "values": {
+        "kit_members": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "member_role": "soporte",
+                "family": "accessory_mount",
+                "quantity": "1",
+                "position": "Sin posición"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_row_condition_issues": [],
+      "expected_blocking": [],
+      "source_ids": [
+        "CATALOG",
+        "ENGINE2200"
+      ],
+      "purpose": "Soporte permanece en contenido auxiliar.",
+      "gap_ids": [],
+      "not_a_mechanical_verdict": true,
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false
+    },
+    {
+      "id": "RCF22",
+      "template": "light",
+      "field": "kit_members",
+      "kind": "known_gap_regression",
+      "values": {
+        "kit_members": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "member_role": "soporte",
+                "family": "accessory_mount",
+                "quantity": "1",
+                "position": "Sin posición",
+                "identity_model": "Nombre que parece luz"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_row_condition_issues": [],
+      "expected_blocking": [],
+      "source_ids": [
+        "CATALOG",
+        "ENGINE2200"
+      ],
+      "purpose": "La familia declarada incorrectamente no se detecta por el nombre; hace falta identidad/evidencia.",
+      "gap_ids": [
+        "G05"
+      ],
+      "not_a_mechanical_verdict": true,
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false
+    },
+    {
+      "id": "RCF24",
+      "template": "accessory_mount",
+      "field": "bar_clamp_configurations",
+      "kind": "synthetic_regression",
+      "values": {
+        "accessory_mount_kind": "Soporte de teléfono",
+        "bar_fit_representation": "Medidas discretas (filas)",
+        "bar_clamp_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "nominal_diameter_mm": "31.8",
+                "fit_method": "Con espaciador opcional"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_row_condition_issues": [
+        {
+          "code": "row_required_missing",
+          "field": "bar_clamp_configurations",
+          "row_id": "r1",
+          "column": "spacer_or_variant",
+          "blocking": false
+        }
+      ],
+      "expected_blocking": [],
+      "source_ids": [
+        "CATALOG",
+        "ENGINE2200"
+      ],
+      "purpose": "Espaciador declarado sin identificación queda pendiente.",
+      "gap_ids": [],
+      "not_a_mechanical_verdict": true,
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false
+    },
+    {
+      "id": "RCF25",
+      "template": "accessory_mount",
+      "field": "bar_clamp_configurations",
+      "kind": "synthetic_regression",
+      "values": {
+        "accessory_mount_kind": "Soporte de teléfono",
+        "bar_fit_representation": "Medidas discretas (filas)",
+        "bar_clamp_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "nominal_diameter_mm": "31.8",
+                "fit_method": "Variante / versión distinta",
+                "spacer_or_variant": "Variante publicada de prueba"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_row_condition_issues": [],
+      "expected_blocking": [
+        {
+          "code": "row_shape",
+          "field": "bar_clamp_configurations"
+        }
+      ],
+      "source_ids": [
+        "CATALOG",
+        "ENGINE2200"
+      ],
+      "purpose": "No usa diámetro como identidad de variante.",
+      "gap_ids": [],
+      "not_a_mechanical_verdict": true,
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "note": "Una variante distinta del soporte no es montaje de este SKU; se rechaza el token retirado."
+    },
+    {
+      "id": "RCF26",
+      "template": "accessory_mount",
+      "field": "bar_clamp_configurations",
+      "kind": "synthetic_regression",
+      "values": {
+        "accessory_mount_kind": "Soporte de teléfono",
+        "bar_fit_representation": "Medidas discretas (filas)",
+        "bar_clamp_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "nominal_diameter_mm": "31.8",
+                "fit_method": "Directo",
+                "spacer_or_variant": "Accesorio opcional de prueba",
+                "included": false
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_row_condition_issues": [],
+      "expected_blocking": [],
+      "source_ids": [
+        "CATALOG",
+        "ENGINE2200"
+      ],
+      "purpose": "Directo no borra una pieza opcional.",
+      "gap_ids": [],
+      "not_a_mechanical_verdict": true,
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false
+    },
+    {
+      "id": "RCF31",
+      "template": "pump",
+      "field": "co2_cartridge_configurations",
+      "kind": "oem_representation_example",
+      "values": {
+        "pump_kind": "Cartucho CO2 (recarga)",
+        "co2_cartridge_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "configuration_kind": "Cartucho de esta presentación",
+                "gas_mass_g": "16",
+                "threaded": true,
+                "included_quantity": "5"
+              },
+              "sources": [
+                "https://ride.lezyne.com/products/16g-co2-cartridge"
+              ]
+            }
+          ]
+        }
+      },
+      "expected_row_condition_issues": [
+        {
+          "code": "row_required_missing",
+          "field": "co2_cartridge_configurations",
+          "row_id": "r1",
+          "column": "thread_designation",
+          "blocking": false
+        }
+      ],
+      "expected_blocking": [],
+      "source_ids": [
+        "LEZYNE_CO2"
+      ],
+      "purpose": "Lezyne publica roscado pero no su designación exacta: queda pendiente, no se inventa.",
+      "gap_ids": [],
+      "not_a_mechanical_verdict": true,
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false
+    },
+    {
+      "id": "RCF32",
+      "template": "pump",
+      "field": "co2_cartridge_configurations",
+      "kind": "synthetic_regression",
+      "values": {
+        "pump_kind": "Inflador CO2",
+        "co2_cartridge_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "configuration_kind": "Cartucho compatible declarado",
+                "gas_mass_g": "16",
+                "threaded": false
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_row_condition_issues": [
+        {
+          "code": "row_required_missing",
+          "field": "co2_cartridge_configurations",
+          "row_id": "r1",
+          "column": "counterpart_model",
+          "blocking": false
+        }
+      ],
+      "expected_blocking": [],
+      "source_ids": [
+        "CATALOG",
+        "ENGINE2200"
+      ],
+      "purpose": "Compatibilidad declarada necesita contraparte literal; no se hereda del nombre de stock.",
+      "gap_ids": [],
+      "not_a_mechanical_verdict": true,
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false
+    },
+    {
+      "id": "RCF33",
+      "template": "pump",
+      "field": "co2_cartridge_configurations",
+      "kind": "synthetic_regression",
+      "values": {
+        "pump_kind": "Inflador CO2",
+        "co2_cartridge_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "configuration_kind": "Cartucho compatible declarado",
+                "gas_mass_g": "16",
+                "threaded": false,
+                "counterpart_model": "Alcance OEM sintético",
+                "included_quantity": "0"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_row_condition_issues": [],
+      "expected_blocking": [],
+      "source_ids": [
+        "CATALOG",
+        "ENGINE2200"
+      ],
+      "purpose": "Compatible declarado puede documentar cero incluido; no se prohíbe contenido conocido.",
+      "gap_ids": [],
+      "not_a_mechanical_verdict": true,
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false
+    },
+    {
+      "id": "RCF34",
+      "template": "pump",
+      "field": "co2_cartridge_configurations",
+      "kind": "synthetic_regression",
+      "values": {
+        "pump_kind": "Cartucho CO2 (recarga)",
+        "co2_cartridge_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "configuration_kind": "Cartucho de esta presentación",
+                "gas_mass_g": "16",
+                "threaded": false
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_row_condition_issues": [
+        {
+          "code": "row_required_missing",
+          "field": "co2_cartridge_configurations",
+          "row_id": "r1",
+          "column": "included_quantity",
+          "blocking": false
+        }
+      ],
+      "expected_blocking": [],
+      "source_ids": [
+        "CATALOG",
+        "ENGINE2200"
+      ],
+      "purpose": "La presentación necesita cantidad, sin derivarla de pack_quantity ni otras filas.",
+      "gap_ids": [],
+      "not_a_mechanical_verdict": true,
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false
+    },
+    {
+      "id": "RCF40",
+      "template": "consumer_electronics",
+      "field": "power_port_profile_configurations",
+      "kind": "synthetic_regression",
+      "values": {
+        "device_kind": "Cargador",
+        "power_port_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "p1",
+              "values": {
+                "port_id": "USB-C de prueba",
+                "connector": "USB-C",
+                "direction": "Salida"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "power_port_profile_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "port_id": "p1",
+                "profile_kind": "Rango de tensión",
+                "voltage_v": "5",
+                "source_url": "https://service.anker.com/product-description/a085g000004x2BTAAY/anker-715-charger-nano-ii-65w%3Fref=Home_Page"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_row_condition_issues": [
+        {
+          "code": "row_required_missing",
+          "field": "power_port_profile_configurations",
+          "row_id": "r1",
+          "column": "voltage_max_v",
+          "blocking": false
+        }
+      ],
+      "expected_blocking": [],
+      "source_ids": [
+        "ANKER_A2663"
+      ],
+      "purpose": "Rango con mínimo solamente queda pendiente; nunca rellenar el máximo.",
+      "gap_ids": [],
+      "not_a_mechanical_verdict": true,
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false
+    },
+    {
+      "id": "RCF41",
+      "template": "consumer_electronics",
+      "field": "power_port_profile_configurations",
+      "kind": "oem_representation_example",
+      "values": {
+        "device_kind": "Cargador",
+        "power_port_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "p1",
+              "values": {
+                "port_id": "USB-C de prueba",
+                "connector": "USB-C",
+                "direction": "Salida"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "power_port_profile_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "port_id": "p1",
+                "profile_kind": "Rango de tensión",
+                "voltage_v": "5",
+                "source_url": "https://service.anker.com/product-description/a085g000004x2BTAAY/anker-715-charger-nano-ii-65w%3Fref=Home_Page",
+                "voltage_max_v": "21",
+                "protocol": "PPS"
+              },
+              "sources": [
+                "https://service.anker.com/product-description/a085g000004x2BTAAY/anker-715-charger-nano-ii-65w%3Fref=Home_Page"
+              ]
+            }
+          ]
+        }
+      },
+      "expected_row_condition_issues": [],
+      "expected_blocking": [],
+      "source_ids": [
+        "ANKER_A2663"
+      ],
+      "purpose": "Ambos límites documentados. A/W ausentes se conservan; corriente mal escrita en la página no se corrige por cálculo.",
+      "gap_ids": [],
+      "not_a_mechanical_verdict": true,
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false
+    },
+    {
+      "id": "RCF42",
+      "template": "consumer_electronics",
+      "field": "power_port_profile_configurations",
+      "kind": "synthetic_regression",
+      "values": {
+        "device_kind": "Cargador",
+        "power_port_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "p1",
+              "values": {
+                "port_id": "USB-C de prueba",
+                "connector": "USB-C",
+                "direction": "Salida"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "power_port_profile_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "port_id": "p1",
+                "profile_kind": "Rango de tensión",
+                "source_url": "https://service.anker.com/product-description/a085g000004x2BTAAY/anker-715-charger-nano-ii-65w%3Fref=Home_Page",
+                "voltage_max_v": "21"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_row_condition_issues": [
+        {
+          "code": "row_required_missing",
+          "field": "power_port_profile_configurations",
+          "row_id": "r1",
+          "column": "voltage_v",
+          "blocking": false
+        }
+      ],
+      "expected_blocking": [],
+      "source_ids": [
+        "CATALOG",
+        "ENGINE2200"
+      ],
+      "purpose": "Rango con máximo solamente queda pendiente.",
+      "gap_ids": [],
+      "not_a_mechanical_verdict": true,
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false
+    },
+    {
+      "id": "RCF43",
+      "template": "consumer_electronics",
+      "field": "power_port_profile_configurations",
+      "kind": "synthetic_regression",
+      "values": {
+        "device_kind": "Cargador",
+        "power_port_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "p1",
+              "values": {
+                "port_id": "USB-C de prueba",
+                "connector": "USB-C",
+                "direction": "Salida"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "power_port_profile_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "port_id": "p1",
+                "profile_kind": "Tensión fija",
+                "voltage_v": "5",
+                "source_url": "https://service.anker.com/product-description/a085g000004x2BTAAY/anker-715-charger-nano-ii-65w%3Fref=Home_Page"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_row_condition_issues": [],
+      "expected_blocking": [],
+      "source_ids": [
+        "CATALOG",
+        "ENGINE2200"
+      ],
+      "purpose": "Tensión fija no necesita máximo ni A/W inventados.",
+      "gap_ids": [],
+      "not_a_mechanical_verdict": true,
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false
+    },
+    {
+      "id": "RCF44",
+      "template": "consumer_electronics",
+      "field": "power_port_profile_configurations",
+      "kind": "synthetic_regression",
+      "values": {
+        "device_kind": "Cargador",
+        "power_port_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "p1",
+              "values": {
+                "port_id": "USB-C de prueba",
+                "connector": "USB-C",
+                "direction": "Salida"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "power_port_profile_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "port_id": "p1",
+                "profile_kind": "Otro perfil declarado",
+                "voltage_v": "5",
+                "source_url": "https://service.anker.com/product-description/a085g000004x2BTAAY/anker-715-charger-nano-ii-65w%3Fref=Home_Page"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_row_condition_issues": [
+        {
+          "code": "row_required_missing",
+          "field": "power_port_profile_configurations",
+          "row_id": "r1",
+          "column": "oem_profile_label",
+          "blocking": false
+        }
+      ],
+      "expected_blocking": [],
+      "source_ids": [
+        "CATALOG",
+        "ENGINE2200"
+      ],
+      "purpose": "Otro necesita etiqueta OEM.",
+      "gap_ids": [],
+      "not_a_mechanical_verdict": true,
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false
+    },
+    {
+      "id": "RCF45",
+      "template": "consumer_electronics",
+      "field": "power_port_profile_configurations",
+      "kind": "synthetic_regression",
+      "values": {
+        "device_kind": "Cargador",
+        "power_port_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "p1",
+              "values": {
+                "port_id": "USB-C de prueba",
+                "connector": "USB-C",
+                "direction": "Salida"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "power_port_profile_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "port_id": "p1",
+                "voltage_v": "5",
+                "source_url": "https://service.anker.com/product-description/a085g000004x2BTAAY/anker-715-charger-nano-ii-65w%3Fref=Home_Page"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_row_condition_issues": [
+        {
+          "code": "row_prerequisite",
+          "field": "power_port_profile_configurations",
+          "row_id": "r1",
+          "column": "voltage_max_v",
+          "blocking": false
+        },
+        {
+          "code": "row_prerequisite",
+          "field": "power_port_profile_configurations",
+          "row_id": "r1",
+          "column": "oem_profile_label",
+          "blocking": false
+        }
+      ],
+      "expected_blocking": [],
+      "source_ids": [
+        "CATALOG",
+        "ENGINE2200"
+      ],
+      "purpose": "Tensión conocida no permite inferir tipo de perfil; dependientes ausentes siguen pendientes.",
+      "gap_ids": [],
+      "not_a_mechanical_verdict": true,
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false
+    },
+    {
+      "id": "RCF46",
+      "template": "consumer_electronics",
+      "field": "power_port_profile_configurations",
+      "kind": "synthetic_regression",
+      "values": {
+        "device_kind": "Cargador",
+        "power_port_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "p1",
+              "values": {
+                "port_id": "USB-C de prueba",
+                "connector": "USB-C",
+                "direction": "Salida"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "power_port_profile_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "port_id": "p1",
+                "profile_kind": "Rango de tensión",
+                "voltage_v": "5",
+                "source_url": "https://service.anker.com/product-description/a085g000004x2BTAAY/anker-715-charger-nano-ii-65w%3Fref=Home_Page",
+                "voltage_max_v": "4"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_row_condition_issues": [],
+      "expected_blocking": [
+        {
+          "code": "row_shape",
+          "field": "power_port_profile_configurations"
+        }
+      ],
+      "source_ids": [
+        "CATALOG",
+        "ENGINE2200"
+      ],
+      "purpose": "Rango invertido lo rechaza rows_schema existente, no una regla física nueva.",
+      "gap_ids": [],
+      "not_a_mechanical_verdict": true,
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false
+    },
+    {
+      "id": "RCF48",
+      "template": "light",
+      "field": "light_member_configurations",
+      "kind": "known_gap_regression",
+      "values": {
+        "light_member_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "a",
+              "values": {
+                "member_id": "Luz de prueba",
+                "position": "Delantera",
+                "battery_kind": "Li-ion integrada"
+              },
+              "sources": []
+            },
+            {
+              "id": "b",
+              "values": {
+                "member_id": "Luz de prueba",
+                "position": "Delantera",
+                "battery_kind": "Li-ion integrada"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_row_condition_issues": [],
+      "expected_blocking": [],
+      "source_ids": [
+        "CATALOG",
+        "ENGINE2200"
+      ],
+      "purpose": "Dos nombres iguales no son identidad única ni prueban duplicación; queda revisión de miembros físicos.",
+      "gap_ids": [
+        "G05"
+      ],
+      "not_a_mechanical_verdict": true,
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false
+    },
+    {
+      "id": "rnd_RF4",
+      "template": "workshop_tool",
+      "values": {
+        "tool_kind": "Extractor de cassette / rueda libre",
+        "tool_capabilities": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "a",
+              "values": {
+                "operation": "Extraer",
+                "target_standard": "Shimano HG",
+                "supported": true
+              },
+              "sources": []
+            },
+            {
+              "id": "b",
+              "values": {
+                "operation": "Extraer",
+                "target_standard": "Shimano HG",
+                "supported": false
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "kind": "unresolved_semantic_gap",
+      "note": "Persiste el conflicto documental: no se sustituye por una identidad que rechace configuraciones válidas. No habilita llenado.",
+      "expected_blocking": [],
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false
+    },
+    {
+      "id": "rnd_RF5",
+      "template": "workshop_tool",
+      "values": {
+        "tool_kind": "Extractor de cassette / rueda libre",
+        "tool_capabilities": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "a",
+              "values": {
+                "operation": "Extraer",
+                "target_standard": "Shimano HG",
+                "supported": true
+              },
+              "sources": []
+            },
+            {
+              "id": "b",
+              "values": {
+                "operation": "Instalar",
+                "target_standard": "Shimano HG",
+                "supported": false,
+                "brand_scope": "La interfaz de extracción no es el spline de instalación"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "kind": "synthetic_representation",
+      "note": "Dos operaciones sobre el mismo estándar con resultados distintos: legítimo y es justo la corrección que pedía el hallazgo sobre HG y XD.",
+      "expected_blocking": [],
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false
+    },
+    {
+      "id": "rnd_RF8",
+      "template": "pump",
+      "values": {
+        "pump_kind": "Inflador CO2",
+        "max_pressure_psi": "160"
+      },
+      "kind": "synthetic_representation",
+      "note": "El escalar anterior se conserva como legacy; no expresa la presión canónica con alcance.",
+      "expected_blocking": [],
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false
+    },
+    {
+      "id": "rnd_RF9",
+      "template": "pump",
+      "values": {
+        "pump_kind": "Inflador CO2",
+        "valve_heads_supported": [
+          "Presta (francesa)",
+          "Schrader (americana / auto)"
+        ],
+        "inflation_target_note": "La presión final depende del volumen del neumático",
+        "co2_cartridge_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "a",
+              "values": {
+                "configuration_kind": "Cartucho de esta presentación",
+                "gas_mass_g": "16",
+                "threaded": true,
+                "thread_designation": "3/8-24 UNF",
+                "included_quantity": "2",
+                "gross_weight_g": "48"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "kind": "synthetic_representation",
+      "note": "Valores sintéticos para transporte y campos; no acredita rosca, peso ni contenido de un SKU OEM.",
+      "expected_blocking": [],
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false
+    },
+    {
+      "id": "rnd_RF10",
+      "template": "pump",
+      "values": {
+        "pump_kind": "Inflador CO2",
+        "valve_heads_supported": [
+          "Presta (francesa)"
+        ]
+      },
+      "kind": "synthetic_representation",
+      "note": "Sin cartuchos declarados no se infiere ninguno: la interfaz queda desconocida y no se copia de otro inflador.",
+      "expected_blocking": [],
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false
+    },
+    {
+      "id": "rnd_RF15",
+      "template": "eyewear",
+      "values": {
+        "eyewear_lens_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "a",
+              "values": {
+                "model": "Lente gris",
+                "polarized": true,
+                "photochromic": true
+              },
+              "sources": []
+            },
+            {
+              "id": "b",
+              "values": {
+                "model": "Lente gris",
+                "polarized": false
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "kind": "unresolved_semantic_gap",
+      "note": "Persiste el conflicto documental: no se sustituye por una identidad que rechace configuraciones válidas. No habilita llenado.",
+      "expected_blocking": [],
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false
+    },
+    {
+      "id": "rnd_root_co2_gauge_scale",
+      "template": "pump",
+      "values": {
+        "pump_kind": "Inflador CO2",
+        "pump_pressure_specifications": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "quantity_kind": "Fondo de escala del manómetro",
+                "value": "160",
+                "unit": "psi",
+                "configuration": "Manómetro AirBooster G2"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "kind": "synthetic_representation",
+      "note": "Topeak: el manómetro lee hasta 160 psi. No es promesa de presión final del neumático.",
+      "expected_blocking": [],
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false
+    },
+    {
+      "id": "rnd_root_co2_estimate_incomplete",
+      "template": "pump",
+      "values": {
+        "pump_kind": "Inflador CO2",
+        "pump_pressure_specifications": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "quantity_kind": "Presión orientativa CO2 para la configuración indicada",
+                "value": "100",
+                "unit": "psi",
+                "configuration": "Estimación sin neumático/cartucho confirmado"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "kind": "synthetic_representation",
+      "note": "Contraejemplo de representación; no aprobación de producto.",
+      "expected_blocking": [],
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false,
+      "expected_issue_subset": [
+        {
+          "code": "row_required_missing",
+          "field": "pump_pressure_specifications",
+          "blocking": false
+        }
+      ]
+    },
+    {
+      "id": "rnd_root_co2_estimate_scoped",
+      "template": "pump",
+      "values": {
+        "pump_kind": "Inflador CO2",
+        "pump_pressure_specifications": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "quantity_kind": "Presión orientativa CO2 para la configuración indicada",
+                "value": "100",
+                "unit": "psi",
+                "configuration": "Tabla Topeak CO2 INFLATOR 2021-03",
+                "target_tire": "ROAD 700C x 25",
+                "cartridge_gas_g": "16",
+                "tires_inflated": "1",
+                "conditions": "Valor orientativo de la tabla; respetar límites del neumático y aro"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "kind": "synthetic_representation",
+      "note": "Contraejemplo de representación; no aprobación de producto.",
+      "expected_blocking": [],
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false
+    },
+    {
+      "id": "rnd_root_gauge_is_not_co2_estimate",
+      "template": "pump",
+      "values": {
+        "pump_kind": "Inflador CO2",
+        "pump_pressure_specifications": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "quantity_kind": "Fondo de escala del manómetro",
+                "value": "160",
+                "unit": "psi",
+                "configuration": "Escala del manómetro",
+                "cartridge_gas_g": "16"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "kind": "synthetic_representation",
+      "note": "Contraejemplo de representación; no aprobación de producto.",
+      "expected_blocking": [
+        {
+          "code": "row_field_applicability",
+          "field": "pump_pressure_specifications"
+        }
+      ],
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false
+    },
+    {
+      "id": "rnd_root_tool_distinct_scope",
+      "template": "workshop_tool",
+      "values": {
+        "tool_capabilities": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "operation": "Extraer",
+                "target_standard": "Interfaz declarada",
+                "supported": true,
+                "brand_scope": "Modelo A"
+              },
+              "sources": []
+            },
+            {
+              "id": "r2",
+              "values": {
+                "operation": "Extraer",
+                "target_standard": "Interfaz declarada",
+                "supported": false,
+                "brand_scope": "Modelo B"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "kind": "synthetic_representation",
+      "note": "Contraejemplo de representación; no aprobación de producto.",
+      "expected_blocking": [],
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false
+    },
+    {
+      "id": "rnd_root_bag_expansion_states",
+      "template": "bike_bag",
+      "values": {
+        "bag_member_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "member": "Compartimento superior",
+                "position": "Superior",
+                "configuration": "Cerrado",
+                "height_mm": "215"
+              },
+              "sources": []
+            },
+            {
+              "id": "r2",
+              "values": {
+                "member": "Compartimento superior",
+                "position": "Superior",
+                "configuration": "Expandido",
+                "height_mm": "290"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "kind": "synthetic_representation",
+      "note": "Topeak TT9635B publica una altura variable; el nombre del miembro no identifica el estado medido.",
+      "expected_blocking": [],
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false
+    },
+    {
+      "id": "rnd_root_two_cartridge_counterparts",
+      "template": "pump",
+      "values": {
+        "pump_kind": "Inflador CO2",
+        "co2_cartridge_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "configuration_kind": "Cartucho compatible declarado",
+                "gas_mass_g": "16",
+                "threaded": true,
+                "thread_designation": "Declaración sintética de rosca",
+                "counterpart_model": "Cartucho A"
+              },
+              "sources": []
+            },
+            {
+              "id": "r2",
+              "values": {
+                "configuration_kind": "Cartucho compatible declarado",
+                "gas_mass_g": "16",
+                "threaded": true,
+                "thread_designation": "Declaración sintética de rosca",
+                "counterpart_model": "Cartucho B"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "kind": "synthetic_representation",
+      "note": "Contraejemplo de representación; no aprobación de producto.",
+      "expected_blocking": [],
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false
+    },
+    {
+      "id": "rnd_root_lens_same_name_distinct_scope",
+      "template": "eyewear",
+      "values": {
+        "eyewear_lens_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "model": "Lente gris",
+                "conditions": "Lente izquierda de este par",
+                "polarized": true
+              },
+              "sources": []
+            },
+            {
+              "id": "r2",
+              "values": {
+                "model": "Lente gris",
+                "conditions": "Lente derecha de este par",
+                "polarized": true
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "kind": "synthetic_representation",
+      "note": "Contraejemplo de representación; no aprobación de producto.",
+      "expected_blocking": [],
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false
+    },
+    {
+      "id": "rv_accessory_mount_included_true",
+      "template": "accessory_mount",
+      "values": {
+        "bar_clamp_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "first",
+              "values": {
+                "nominal_diameter_mm": "25.4",
+                "spacer_or_variant": "Pieza sintética",
+                "fit_method": "Con espaciador incluido",
+                "included": true
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "kind": "synthetic_representation",
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false
+    },
+    {
+      "id": "rv_accessory_mount_included_false",
+      "template": "accessory_mount",
+      "values": {
+        "bar_clamp_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "first",
+              "values": {
+                "nominal_diameter_mm": "25.4",
+                "spacer_or_variant": "Pieza sintética",
+                "fit_method": "Con espaciador incluido",
+                "included": false
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "kind": "synthetic_representation",
+      "expected_blocking": [
+        {
+          "code": "row_value_conflict",
+          "field": "bar_clamp_configurations"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "expected_issue_subset": [
+        {
+          "code": "row_value_conflict",
+          "field": "bar_clamp_configurations",
+          "blocking": true
+        }
+      ]
+    },
+    {
+      "id": "rv_accessory_mount_included_unknown",
+      "template": "accessory_mount",
+      "values": {
+        "bar_clamp_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "first",
+              "values": {
+                "nominal_diameter_mm": "25.4",
+                "spacer_or_variant": "Pieza sintética",
+                "fit_method": "Con espaciador incluido"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "kind": "synthetic_representation",
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "expected_issue_subset": [
+        {
+          "code": "row_value_pending",
+          "field": "bar_clamp_configurations",
+          "blocking": false
+        }
+      ]
+    },
+    {
+      "id": "rv_accessory_mount_optional_true",
+      "template": "accessory_mount",
+      "values": {
+        "bar_clamp_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "first",
+              "values": {
+                "nominal_diameter_mm": "25.4",
+                "spacer_or_variant": "Pieza sintética",
+                "fit_method": "Con espaciador opcional",
+                "included": true
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "kind": "synthetic_representation",
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false
+    },
+    {
+      "id": "rv_accessory_mount_optional_false",
+      "template": "accessory_mount",
+      "values": {
+        "bar_clamp_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "first",
+              "values": {
+                "nominal_diameter_mm": "25.4",
+                "spacer_or_variant": "Pieza sintética",
+                "fit_method": "Con espaciador opcional",
+                "included": false
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "kind": "synthetic_representation",
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false
+    },
+    {
+      "id": "rv_accessory_mount_optional_unknown",
+      "template": "accessory_mount",
+      "values": {
+        "bar_clamp_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "first",
+              "values": {
+                "nominal_diameter_mm": "25.4",
+                "spacer_or_variant": "Pieza sintética",
+                "fit_method": "Con espaciador opcional"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "kind": "synthetic_representation",
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false
+    },
+    {
+      "id": "rv_accessory_mount_selector_unknown",
+      "template": "accessory_mount",
+      "values": {
+        "bar_clamp_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "first",
+              "values": {
+                "nominal_diameter_mm": "25.4",
+                "spacer_or_variant": "Pieza sintética",
+                "included": false
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "kind": "synthetic_representation",
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "expected_issue_subset": [
+        {
+          "code": "row_value_pending",
+          "field": "bar_clamp_configurations",
+          "blocking": false
+        }
+      ]
+    },
+    {
+      "id": "rv_accessory_mount_other_row_does_not_complete",
+      "template": "accessory_mount",
+      "values": {
+        "bar_clamp_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "first",
+              "values": {
+                "nominal_diameter_mm": "25.4",
+                "spacer_or_variant": "Pieza sintética",
+                "fit_method": "Con espaciador incluido"
+              },
+              "sources": []
+            },
+            {
+              "id": "second",
+              "values": {
+                "nominal_diameter_mm": "25.4",
+                "spacer_or_variant": "Pieza sintética",
+                "fit_method": "Con espaciador opcional",
+                "included": true
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "kind": "synthetic_representation",
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "expected_issue_subset": [
+        {
+          "code": "row_value_pending",
+          "field": "bar_clamp_configurations",
+          "blocking": false
+        }
+      ]
+    },
+    {
+      "id": "rv_pump_legacy_scalar_not_canonical",
+      "template": "pump",
+      "values": {
+        "pump_kind": "Inflador CO2",
+        "max_pressure_psi": "160"
+      },
+      "forbidden_issue_fields": [
+        "max_pressure_psi"
+      ],
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false
+    },
+    {
+      "id": "rv_pressure_missing_configuration_is_pending",
+      "template": "pump",
+      "values": {
+        "pump_pressure_specifications": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "gauge",
+              "values": {
+                "quantity_kind": "Fondo de escala del manómetro",
+                "value": "160",
+                "unit": "psi"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_issue_subset": [
+        {
+          "code": "row_incomplete",
+          "field": "pump_pressure_specifications",
+          "blocking": false
+        }
+      ],
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false
+    },
+    {
+      "id": "PORT-complete",
+      "template": "consumer_electronics",
+      "values": {
+        "device_kind": "Cargador",
+        "power_port_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "port-0",
+              "values": {
+                "port_id": "Puerto 0",
+                "connector": "USB-C",
+                "direction": "Entrada / salida"
+              },
+              "sources": []
+            },
+            {
+              "id": "port-1",
+              "values": {
+                "port_id": "Puerto 1",
+                "connector": "USB-C",
+                "direction": "Entrada / salida"
+              },
+              "sources": []
+            },
+            {
+              "id": "port-2",
+              "values": {
+                "port_id": "Puerto 2",
+                "connector": "USB-C",
+                "direction": "Entrada / salida"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "ports_count": "3"
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "forbidden_issue_fields": [
+        "power_port_configurations"
+      ]
+    },
+    {
+      "id": "PORT-fewer_ports_pending",
+      "template": "consumer_electronics",
+      "values": {
+        "device_kind": "Cargador",
+        "power_port_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "port-0",
+              "values": {
+                "port_id": "Puerto 0",
+                "connector": "USB-C",
+                "direction": "Entrada / salida"
+              },
+              "sources": []
+            },
+            {
+              "id": "port-1",
+              "values": {
+                "port_id": "Puerto 1",
+                "connector": "USB-C",
+                "direction": "Entrada / salida"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "ports_count": "3"
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "expected_issue_subset": [
+        {
+          "code": "row_cardinality_pending",
+          "field": "power_port_configurations",
+          "blocking": false
+        }
+      ]
+    },
+    {
+      "id": "PORT-extra_port_conflict",
+      "template": "consumer_electronics",
+      "values": {
+        "device_kind": "Cargador",
+        "power_port_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "port-0",
+              "values": {
+                "port_id": "Puerto 0",
+                "connector": "USB-C",
+                "direction": "Entrada / salida"
+              },
+              "sources": []
+            },
+            {
+              "id": "port-1",
+              "values": {
+                "port_id": "Puerto 1",
+                "connector": "USB-C",
+                "direction": "Entrada / salida"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "ports_count": "1"
+      },
+      "expected_blocking": [
+        {
+          "code": "row_cardinality_conflict",
+          "field": "power_port_configurations"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false
+    },
+    {
+      "id": "PORT-unknown_total_pending",
+      "template": "consumer_electronics",
+      "values": {
+        "device_kind": "Cargador",
+        "power_port_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "port-0",
+              "values": {
+                "port_id": "Puerto 0",
+                "connector": "USB-C",
+                "direction": "Entrada / salida"
+              },
+              "sources": []
+            },
+            {
+              "id": "port-1",
+              "values": {
+                "port_id": "Puerto 1",
+                "connector": "USB-C",
+                "direction": "Entrada / salida"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "expected_issue_subset": [
+        {
+          "code": "row_cardinality_pending",
+          "field": "power_port_configurations",
+          "blocking": false
+        }
+      ]
+    },
+    {
+      "id": "PORT-bidirectional_port_is_one",
+      "template": "consumer_electronics",
+      "values": {
+        "device_kind": "Cargador",
+        "power_port_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "port-0",
+              "values": {
+                "port_id": "Puerto 0",
+                "connector": "USB-C",
+                "direction": "Entrada / salida"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "ports_count": "1"
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "forbidden_issue_fields": [
+        "power_port_configurations"
+      ]
+    },
+    {
+      "id": "PORT-zero_keeps_existing_domain",
+      "template": "consumer_electronics",
+      "values": {
+        "device_kind": "Cargador",
+        "ports_count": "0"
+      },
+      "expected_blocking": [
+        {
+          "code": "range",
+          "field": "ports_count"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "expected_sql_blocking": [
+        {
+          "code": "field_constraint",
+          "field": "ports_count"
+        }
+      ]
+    },
+    {
+      "id": "PORT-fraction_is_not_a_count",
+      "template": "consumer_electronics",
+      "values": {
+        "device_kind": "Cargador",
+        "power_port_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "port-0",
+              "values": {
+                "port_id": "Puerto 0",
+                "connector": "USB-C",
+                "direction": "Entrada / salida"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "ports_count": "1.5"
+      },
+      "expected_blocking": [
+        {
+          "code": "integer",
+          "field": "ports_count"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "expected_sql_blocking": [
+        {
+          "code": "field_constraint",
+          "field": "ports_count"
+        }
+      ]
+    },
+    {
+      "id": "PORT-unknown_label_still_counts_occurrence",
+      "template": "consumer_electronics",
+      "values": {
+        "device_kind": "Cargador",
+        "power_port_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "port-0",
+              "values": {
+                "port_id": "Puerto 0",
+                "connector": "USB-C",
+                "direction": "Entrada / salida"
+              },
+              "sources": []
+            },
+            {
+              "id": "port-1",
+              "values": {
+                "connector": "USB-C",
+                "direction": "Entrada / salida"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "ports_count": "1"
+      },
+      "expected_blocking": [
+        {
+          "code": "row_cardinality_conflict",
+          "field": "power_port_configurations"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false
+    },
+    {
+      "id": "PORT-duplicate_named_port_rejected",
+      "template": "consumer_electronics",
+      "values": {
+        "device_kind": "Cargador",
+        "power_port_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "port-0",
+              "values": {
+                "port_id": "Puerto 0",
+                "connector": "USB-C",
+                "direction": "Entrada / salida"
+              },
+              "sources": []
+            },
+            {
+              "id": "port-1",
+              "values": {
+                "port_id": "Puerto 0",
+                "connector": "USB-C",
+                "direction": "Entrada / salida"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "ports_count": "2"
+      },
+      "expected_blocking": [
+        {
+          "code": "row_shape",
+          "field": "power_port_configurations"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false
+    },
+    {
+      "id": "PORT-cable_has_no_port_count_requirement",
+      "template": "consumer_electronics",
+      "values": {
+        "device_kind": "Cable de datos/carga"
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "forbidden_issue_fields": [
+        "power_port_configurations"
+      ]
+    },
+    {
+      "id": "ma_wheel_range_rack_basket",
+      "template": "rack_basket",
+      "values": {
+        "wheel_size_declarations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "kind": "Rango nominal en pulgadas",
+                "min_in": "20",
+                "max_in": "29"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "ma_wheel_reversed_rack_basket",
+      "template": "rack_basket",
+      "values": {
+        "wheel_size_declarations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "kind": "Rango nominal en pulgadas",
+                "min_in": "29",
+                "max_in": "20"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [
+        {
+          "code": "row_shape",
+          "field": "wheel_size_declarations"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "ma_wheel_incomplete_rack_basket",
+      "template": "rack_basket",
+      "values": {
+        "wheel_size_declarations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "kind": "Rango nominal en pulgadas",
+                "min_in": "20"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "expected_issue_subset": [
+        {
+          "code": "row_required_missing",
+          "field": "wheel_size_declarations",
+          "blocking": false
+        }
+      ],
+      "expected_sql_issue_subset": [
+        {
+          "code": "row_required_missing",
+          "field": "wheel_size_declarations",
+          "blocking": false
+        }
+      ]
+    },
+    {
+      "id": "ma_wheel_discrete_rack_basket",
+      "template": "rack_basket",
+      "values": {
+        "wheel_size_declarations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "kind": "Designación nominal",
+                "designation": "700C"
+              },
+              "sources": []
+            },
+            {
+              "id": "r2",
+              "values": {
+                "kind": "Designación nominal",
+                "designation": "29\""
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "ma_wheel_mixed_axis_rack_basket",
+      "template": "rack_basket",
+      "values": {
+        "wheel_size_declarations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "kind": "Designación nominal",
+                "designation": "700C",
+                "min_in": "29"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [
+        {
+          "code": "row_field_applicability",
+          "field": "wheel_size_declarations"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "ma_wheel_range_fender",
+      "template": "fender",
+      "values": {
+        "wheel_size_declarations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "kind": "Rango nominal en pulgadas",
+                "min_in": "20",
+                "max_in": "29"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "ma_wheel_reversed_fender",
+      "template": "fender",
+      "values": {
+        "wheel_size_declarations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "kind": "Rango nominal en pulgadas",
+                "min_in": "29",
+                "max_in": "20"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [
+        {
+          "code": "row_shape",
+          "field": "wheel_size_declarations"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "ma_wheel_incomplete_fender",
+      "template": "fender",
+      "values": {
+        "wheel_size_declarations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "kind": "Rango nominal en pulgadas",
+                "min_in": "20"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "expected_issue_subset": [
+        {
+          "code": "row_required_missing",
+          "field": "wheel_size_declarations",
+          "blocking": false
+        }
+      ],
+      "expected_sql_issue_subset": [
+        {
+          "code": "row_required_missing",
+          "field": "wheel_size_declarations",
+          "blocking": false
+        }
+      ]
+    },
+    {
+      "id": "ma_wheel_discrete_fender",
+      "template": "fender",
+      "values": {
+        "wheel_size_declarations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "kind": "Designación nominal",
+                "designation": "700C"
+              },
+              "sources": []
+            },
+            {
+              "id": "r2",
+              "values": {
+                "kind": "Designación nominal",
+                "designation": "29\""
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "ma_wheel_mixed_axis_fender",
+      "template": "fender",
+      "values": {
+        "wheel_size_declarations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "kind": "Designación nominal",
+                "designation": "700C",
+                "min_in": "29"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [
+        {
+          "code": "row_field_applicability",
+          "field": "wheel_size_declarations"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "ma_wheel_range_kickstand",
+      "template": "kickstand",
+      "values": {
+        "wheel_size_declarations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "kind": "Rango nominal en pulgadas",
+                "min_in": "20",
+                "max_in": "29"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "ma_wheel_reversed_kickstand",
+      "template": "kickstand",
+      "values": {
+        "wheel_size_declarations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "kind": "Rango nominal en pulgadas",
+                "min_in": "29",
+                "max_in": "20"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [
+        {
+          "code": "row_shape",
+          "field": "wheel_size_declarations"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "ma_wheel_incomplete_kickstand",
+      "template": "kickstand",
+      "values": {
+        "wheel_size_declarations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "kind": "Rango nominal en pulgadas",
+                "min_in": "20"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "expected_issue_subset": [
+        {
+          "code": "row_required_missing",
+          "field": "wheel_size_declarations",
+          "blocking": false
+        }
+      ],
+      "expected_sql_issue_subset": [
+        {
+          "code": "row_required_missing",
+          "field": "wheel_size_declarations",
+          "blocking": false
+        }
+      ]
+    },
+    {
+      "id": "ma_wheel_discrete_kickstand",
+      "template": "kickstand",
+      "values": {
+        "wheel_size_declarations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "kind": "Designación nominal",
+                "designation": "700C"
+              },
+              "sources": []
+            },
+            {
+              "id": "r2",
+              "values": {
+                "kind": "Designación nominal",
+                "designation": "29\""
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "ma_wheel_mixed_axis_kickstand",
+      "template": "kickstand",
+      "values": {
+        "wheel_size_declarations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "kind": "Designación nominal",
+                "designation": "700C",
+                "min_in": "29"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [
+        {
+          "code": "row_field_applicability",
+          "field": "wheel_size_declarations"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "ma_wheel_range_training_wheel",
+      "template": "training_wheel",
+      "values": {
+        "wheel_size_declarations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "kind": "Rango nominal en pulgadas",
+                "min_in": "20",
+                "max_in": "29"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "ma_wheel_reversed_training_wheel",
+      "template": "training_wheel",
+      "values": {
+        "wheel_size_declarations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "kind": "Rango nominal en pulgadas",
+                "min_in": "29",
+                "max_in": "20"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [
+        {
+          "code": "row_shape",
+          "field": "wheel_size_declarations"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "ma_wheel_incomplete_training_wheel",
+      "template": "training_wheel",
+      "values": {
+        "wheel_size_declarations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "kind": "Rango nominal en pulgadas",
+                "min_in": "20"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "expected_issue_subset": [
+        {
+          "code": "row_required_missing",
+          "field": "wheel_size_declarations",
+          "blocking": false
+        }
+      ],
+      "expected_sql_issue_subset": [
+        {
+          "code": "row_required_missing",
+          "field": "wheel_size_declarations",
+          "blocking": false
+        }
+      ]
+    },
+    {
+      "id": "ma_wheel_discrete_training_wheel",
+      "template": "training_wheel",
+      "values": {
+        "wheel_size_declarations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "kind": "Designación nominal",
+                "designation": "700C"
+              },
+              "sources": []
+            },
+            {
+              "id": "r2",
+              "values": {
+                "kind": "Designación nominal",
+                "designation": "29\""
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "ma_wheel_mixed_axis_training_wheel",
+      "template": "training_wheel",
+      "values": {
+        "wheel_size_declarations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "kind": "Designación nominal",
+                "designation": "700C",
+                "min_in": "29"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [
+        {
+          "code": "row_field_applicability",
+          "field": "wheel_size_declarations"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "ma_hybrid_pump",
+      "template": "pump",
+      "values": {
+        "pump_kind": "De mano / mini",
+        "co2_inflation_capable": true,
+        "co2_cartridge_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "configuration_kind": "Cartucho de esta presentación",
+                "gas_mass_g": "16",
+                "threaded": true,
+                "included_quantity": "1"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [
+        "https://www.topeak.com/global/en/product/407-HYBRIDROCKET-HP"
+      ]
+    },
+    {
+      "id": "ma_manual_without_co2",
+      "template": "pump",
+      "values": {
+        "pump_kind": "De mano / mini",
+        "co2_inflation_capable": false,
+        "co2_cartridge_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "configuration_kind": "Cartucho compatible declarado",
+                "gas_mass_g": "16",
+                "threaded": true,
+                "counterpart_model": "Synthetic cartridge"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [
+        {
+          "code": "field_applicability",
+          "field": "co2_cartridge_configurations"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "ma_pump_capability_unknown",
+      "template": "pump",
+      "values": {
+        "pump_kind": "De mano / mini",
+        "co2_cartridge_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "configuration_kind": "Cartucho compatible declarado",
+                "gas_mass_g": "16",
+                "threaded": true,
+                "counterpart_model": "Synthetic cartridge"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "expected_issue_subset": [
+        {
+          "code": "prerequisite",
+          "field": "co2_cartridge_configurations",
+          "blocking": false
+        }
+      ],
+      "expected_sql_issue_subset": [
+        {
+          "code": "field_applicability",
+          "field": "co2_cartridge_configurations",
+          "blocking": false
+        }
+      ]
+    },
+    {
+      "id": "ma_dedicated_has_one_capability_owner",
+      "template": "pump",
+      "values": {
+        "pump_kind": "Inflador CO2",
+        "co2_inflation_capable": false
+      },
+      "expected_blocking": [
+        {
+          "code": "field_applicability",
+          "field": "co2_inflation_capable"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "ma_waist_hydration",
+      "template": "rider_bag",
+      "values": {
+        "bag_kind": "Riñonera / bolso de cintura",
+        "reservoir_included": true,
+        "reservoir_l": "1.5"
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [
+        "https://www.camelbak.com/product/m.u.l.e.%C2%AE-5-waist-pack-with-crux%C2%AE-1.5l-lumbar-reservoir/CB-2815.html"
+      ]
+    },
+    {
+      "id": "ma_reservoir_not_included",
+      "template": "rider_bag",
+      "values": {
+        "bag_kind": "Riñonera / bolso de cintura",
+        "reservoir_included": false,
+        "reservoir_l": "1.5"
+      },
+      "expected_blocking": [
+        {
+          "code": "field_applicability",
+          "field": "reservoir_l"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "ma_reservoir_inclusion_unknown",
+      "template": "rider_bag",
+      "values": {
+        "bag_kind": "Riñonera / bolso de cintura",
+        "reservoir_l": "1.5"
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "expected_issue_subset": [
+        {
+          "code": "prerequisite",
+          "field": "reservoir_l",
+          "blocking": false
+        }
+      ],
+      "expected_sql_issue_subset": [
+        {
+          "code": "field_applicability",
+          "field": "reservoir_l",
+          "blocking": false
+        }
+      ]
+    },
+    {
+      "id": "ma_cover_is_not_reservoir",
+      "template": "rider_bag",
+      "values": {
+        "bag_kind": "Cubre-mochila",
+        "reservoir_included": true,
+        "reservoir_l": "1.5"
+      },
+      "expected_blocking": [
+        {
+          "code": "field_applicability",
+          "field": "reservoir_included"
+        },
+        {
+          "code": "field_applicability",
+          "field": "reservoir_l"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "ma_volume_scope_bike_bag",
+      "template": "bike_bag",
+      "values": {
+        "volume_l": "5",
+        "volume_basis": "Sólo carga",
+        "volume_scope": "Producto completo tal como se vende"
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "ma_volume_unknown_bike_bag",
+      "template": "bike_bag",
+      "values": {
+        "volume_l": "5"
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "expected_issue_subset": [
+        {
+          "code": "prerequisite",
+          "field": "volume_l",
+          "blocking": false
+        }
+      ],
+      "expected_sql_issue_subset": [
+        {
+          "code": "prerequisite_missing",
+          "field": "volume_l",
+          "blocking": false
+        }
+      ]
+    },
+    {
+      "id": "ma_volume_scope_rider_bag",
+      "template": "rider_bag",
+      "values": {
+        "bag_kind": "Riñonera / bolso de cintura",
+        "volume_l": "5",
+        "volume_basis": "Sólo carga",
+        "volume_scope": "Producto completo tal como se vende"
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "ma_volume_unknown_rider_bag",
+      "template": "rider_bag",
+      "values": {
+        "volume_l": "5"
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "expected_issue_subset": [
+        {
+          "code": "prerequisite",
+          "field": "volume_l",
+          "blocking": false
+        }
+      ],
+      "expected_sql_issue_subset": [
+        {
+          "code": "prerequisite_missing",
+          "field": "volume_l",
+          "blocking": false
+        }
+      ]
+    },
+    {
+      "id": "ma_tool_printed_units",
+      "template": "workshop_tool",
+      "values": {
+        "tool_pressure_specifications": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "quantity_kind": "Fondo de escala del manómetro",
+                "value": "160",
+                "unit": "psi",
+                "configuration": "Manómetro INF-2"
+              },
+              "sources": []
+            },
+            {
+              "id": "r2",
+              "values": {
+                "quantity_kind": "Fondo de escala del manómetro",
+                "value": "11",
+                "unit": "bar",
+                "configuration": "Manómetro INF-2"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [
+        "https://www.parktool.com/en-us/product/shop-inflator-inf-2"
+      ]
+    },
+    {
+      "id": "ma_tool_missing_unit",
+      "template": "workshop_tool",
+      "values": {
+        "tool_pressure_specifications": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "quantity_kind": "Máximo de trabajo declarado",
+                "value": "11",
+                "configuration": "Synthetic tool"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "expected_issue_subset": [
+        {
+          "code": "row_incomplete",
+          "field": "tool_pressure_specifications",
+          "blocking": false
+        }
+      ],
+      "expected_sql_issue_subset": [
+        {
+          "code": "row_incomplete",
+          "field": "tool_pressure_specifications",
+          "blocking": false
+        }
+      ]
+    }
+  ],
+  "root_nd_case_overrides": [
+    {
+      "id": "helmet_smith_mainline_certifications_by_row",
+      "reason": "Integral pertenece al eje de construcción, no al uso."
+    },
+    {
+      "id": "helmet_inventory_best_enduro_certificado_sin_norma",
+      "reason": "Se conserva Enduro sin inferir cobertura desde el título."
+    },
+    {
+      "id": "RCF25",
+      "reason": "Una variante distinta del soporte no es montaje de este SKU; se rechaza el token retirado."
+    }
+  ],
+  "root_row_value_case_overrides": [
+    "RCF08",
+    "CPC_GAP_INCLUDED_CLAMP_FALSE"
+  ],
+  "deferred_pressure_fixture_ids": [],
+  "superseded_pressure_fixtures": [
+    "wrfp_hookless_row_maximum_is_not_the_headline",
+    "wrfp_schwalbe_general_maximum_in_bar",
+    "wrfp_unit_without_value_is_pending",
+    "wrfp_value_without_unit_stays_pending"
+  ],
+  "required_server_migration": "20260907025000"
+}

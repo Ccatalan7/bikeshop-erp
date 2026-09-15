@@ -1,0 +1,2676 @@
+{
+  "schema_version": 1,
+  "title": "Representation cases after independent A/B review",
+  "catalogue_sha256": "cf8ebeb1e4e7dd32853b8618657a3f25e3f5428158702ef2e0adeb5b89978577",
+  "independent_review_hashes": [
+    "4cbd9cd4e1ccb2f41ab3249cbaed83fe419689aa6ba1dbb24a5b9dd856bd66d1",
+    "a1c6bfc5fae5c11b3b7f804b240ea36b2a36db2f6e4ba2ff868c061802856820"
+  ],
+  "mechanical_coverage_complete": false,
+  "automatic_fill_authorized": false,
+  "cases": [
+    {
+      "id": "mallet_clipless_pins_and_mixed_bearings",
+      "template": "pedal",
+      "values": {
+        "pedal_type": "Automático (clipless)",
+        "replaceable_pins": true,
+        "pedal_bearing_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "a22b9884-d111-5e3f-a557-bb0ba4a10dc6",
+              "values": {
+                "position": "Interior",
+                "construction": "Casquillo",
+                "model": "Igus LL-glide"
+              },
+              "sources": [
+                "https://www.crankbrothers.com/products/mallet-e"
+              ]
+            },
+            {
+              "id": "1c86f95c-36f2-5185-bd83-29825a9ebd7f",
+              "values": {
+                "position": "Exterior",
+                "construction": "Cartucho",
+                "model": "Enduro MAX"
+              },
+              "sources": [
+                "https://www.crankbrothers.com/products/mallet-e"
+              ]
+            }
+          ]
+        },
+        "cleats_included": true,
+        "included_cleat_model": "Standard Release 15° / 20°, 6° float"
+      },
+      "kind": "source_scoped_representation",
+      "source_urls": [
+        "https://www.crankbrothers.com/products/mallet-e"
+      ],
+      "expected_blocking": []
+    },
+    {
+      "id": "absent_cleats_cannot_name_included_model",
+      "template": "pedal",
+      "values": {
+        "cleats_included": false,
+        "included_cleat_model": "Cala sintética"
+      },
+      "kind": "synthetic_negative",
+      "source_urls": [
+        "https://www.crankbrothers.com/products/mallet-e"
+      ],
+      "expected_blocking": [
+        {
+          "code": "field_applicability",
+          "field": "included_cleat_model"
+        }
+      ]
+    },
+    {
+      "id": "quill_adapter_has_two_diameters",
+      "template": "stem",
+      "values": {
+        "stem_kind": "Adaptador quill → ahead",
+        "quill_diameter_mm": "22.2",
+        "quill_adapter_output_diameter_mm": "28.6"
+      },
+      "kind": "synthetic_geometry_not_oem_fitment",
+      "source_urls": [
+        "https://www.parktool.com/en-us/blog/repair-help/stem-removal-installation-quill-stems"
+      ],
+      "expected_blocking": []
+    },
+    {
+      "id": "quill_adapter_has_no_handlebar_clamp",
+      "template": "stem",
+      "values": {
+        "stem_kind": "Adaptador quill → ahead",
+        "bar_clamp_diameter_mm": "31.8"
+      },
+      "kind": "synthetic_negative",
+      "source_urls": [
+        "https://www.parktool.com/en-us/blog/repair-help/stem-removal-installation-quill-stems"
+      ],
+      "expected_blocking": [
+        {
+          "code": "field_applicability",
+          "field": "bar_clamp_diameter_mm"
+        }
+      ]
+    },
+    {
+      "id": "quill_insertion_is_not_ahead_clamp",
+      "template": "stem",
+      "values": {
+        "stem_kind": "Tee de espiga (quill)",
+        "stem_steerer_clamp_diameter_mm": "28.6"
+      },
+      "kind": "synthetic_negative",
+      "source_urls": [
+        "https://www.parktool.com/en-us/blog/repair-help/stem-removal-installation-quill-stems"
+      ],
+      "expected_blocking": [
+        {
+          "code": "field_applicability",
+          "field": "stem_steerer_clamp_diameter_mm"
+        }
+      ]
+    },
+    {
+      "id": "ritchey_rail_coverage_stays_per_optional_kit",
+      "template": "seatpost",
+      "values": {
+        "seatpost_kind": "Rígida",
+        "seatpost_saddle_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "00f0315b-c3d8-5786-b898-e8225417834e",
+              "values": {
+                "rail_geometry": "Oval 7x9 mm",
+                "configuration_state": "Con kit opcional",
+                "model": "WCS Carbon 1-Bolt clampset 7x10",
+                "conditions": "Rieles de carbono; únicamente postes Superlogic y WCS Carbon 1-bolt indicados por OEM."
+              },
+              "sources": [
+                "https://ritcheylogic.com/bike/seatposts/wcs-carbon-1-bolt-seatpost-complete-clampset"
+              ]
+            },
+            {
+              "id": "72c2031f-0bbe-5306-9288-7a776e1f647b",
+              "values": {
+                "rail_geometry": "Oval 7x9.6 mm",
+                "configuration_state": "Con kit opcional",
+                "model": "WCS Carbon 1-Bolt clampset 7x10",
+                "conditions": "Rieles de carbono; únicamente postes Superlogic y WCS Carbon 1-bolt indicados por OEM."
+              },
+              "sources": [
+                "https://ritcheylogic.com/bike/seatposts/wcs-carbon-1-bolt-seatpost-complete-clampset"
+              ]
+            },
+            {
+              "id": "c6bf82d0-4171-5cf7-af9b-2984f703ae22",
+              "values": {
+                "rail_geometry": "Oval 7x10 mm",
+                "configuration_state": "Con kit opcional",
+                "model": "WCS Carbon 1-Bolt clampset 7x10",
+                "conditions": "Rieles de carbono; únicamente postes Superlogic y WCS Carbon 1-bolt indicados por OEM."
+              },
+              "sources": [
+                "https://ritcheylogic.com/bike/seatposts/wcs-carbon-1-bolt-seatpost-complete-clampset"
+              ]
+            }
+          ]
+        }
+      },
+      "kind": "source_scoped_representation",
+      "source_urls": [
+        "https://ritcheylogic.com/bike/seatposts/wcs-carbon-1-bolt-seatpost-complete-clampset"
+      ],
+      "expected_blocking": []
+    },
+    {
+      "id": "shim_cannot_have_seatpost_offset",
+      "template": "seatpost",
+      "values": {
+        "seatpost_kind": "Suplemento (shim)",
+        "seatpost_offset_mm": "20"
+      },
+      "kind": "synthetic_negative",
+      "source_urls": [
+        "https://ritcheylogic.com/bike/seatposts/wcs-carbon-1-bolt-seatpost-complete-clampset"
+      ],
+      "expected_blocking": [
+        {
+          "code": "field_applicability",
+          "field": "seatpost_offset_mm"
+        }
+      ]
+    },
+    {
+      "id": "u_lock_cable_kit_exposes_both_measurements",
+      "template": "lock",
+      "values": {
+        "lock_kind": "Kit U + cable",
+        "inner_width_mm": "83",
+        "inner_height_mm": "178",
+        "cable_length_mm": "1219.2"
+      },
+      "kind": "synthetic_dimensions_source_confirms_kit_kind_only",
+      "source_urls": [
+        "https://www.kryptonitelock.com/en/products/product-information/current-key/002079.html?type=bicycle"
+      ],
+      "expected_blocking": []
+    },
+    {
+      "id": "reactiv_photochromic_and_polarized_same_lens",
+      "template": "eyewear",
+      "values": {
+        "eyewear_lens_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "0511372e-8a72-5049-a81c-aec5d368899b",
+              "values": {
+                "model": "REACTIV 2-4 Polarized",
+                "photochromic": true,
+                "polarized": true
+              },
+              "sources": [
+                "https://www.julbo.com/en_gb/sunglasses/photochromic-2-4-polarized-sunglasses"
+              ]
+            }
+          ]
+        }
+      },
+      "kind": "source_scoped_representation",
+      "source_urls": [
+        "https://www.julbo.com/en_gb/sunglasses/photochromic-2-4-polarized-sunglasses"
+      ],
+      "expected_blocking": []
+    },
+    {
+      "id": "jacket_can_have_long_sleeves",
+      "template": "rider_apparel",
+      "values": {
+        "garment_kind": "Chaqueta",
+        "sleeve": "Larga"
+      },
+      "kind": "source_scoped_representation",
+      "source_urls": [
+        "https://www.castelli-cycling.com/AU/en/Men/Cycling/Top/Jackets/Cold/PERFETTO-RoS-LONG-SLEEVE/p/4519500_383_52_S"
+      ],
+      "expected_blocking": []
+    },
+    {
+      "id": "oem_size_label_is_not_closed_menu",
+      "template": "rider_apparel",
+      "values": {
+        "garment_kind": "Chaqueta",
+        "oem_size_label": "XXXL / código OEM 56"
+      },
+      "kind": "synthetic_label_no_cross_brand_equivalence",
+      "source_urls": [
+        "https://www.castelli-cycling.com/AU/en/Men/Cycling/Top/Jackets/Cold/PERFETTO-RoS-LONG-SLEEVE/p/4519500_383_52_S"
+      ],
+      "expected_blocking": []
+    },
+    {
+      "id": "fastener_hassns_m8_chainring_bolt_pitch_unknown",
+      "template": "fastener",
+      "values": {
+        "fastener_kind": "Perno",
+        "thread": "M8",
+        "declared_purpose": "Perno de plato",
+        "length_datum": "Desconocido / sin confirmar",
+        "length_mm": "8.5",
+        "pack_quantity": "1"
+      },
+      "kind": "inventory_candidate_unverified",
+      "source_ids": [
+        "E-PT-THREAD",
+        "E-INVENTARIO"
+      ],
+      "source_urls": [
+        "https://www.parktool.com/en-us/blog/repair-help/basic-thread-concepts"
+      ],
+      "expected_blocking": [],
+      "inventory_product": "Perno Corona HASSNS M8 8.5mm  NEGRO",
+      "note": "Producto real «Perno Corona HASSNS M8 8.5mm»: el paso 0.75 que Park Tool asocia a pernos de plato NO se escribe desde el uso; queda pendiente hasta etiqueta/OEM. La referencia del largo es desconocida y se declara así.",
+      "review_note": "Título conserva nominal/largo declarado; paso y referencia del largo pendientes de etiqueta/modelo.",
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false,
+      "root_reconciliation": []
+    },
+    {
+      "id": "fastener_rotor_bolt_t25_park_standard_scope",
+      "template": "fastener",
+      "values": {
+        "fastener_kind": "Perno",
+        "thread": "M5",
+        "thread_pitch_mm": "0.8",
+        "thread_hand": "Derecha",
+        "head_drive": "Torx",
+        "torx_size": "T25",
+        "declared_purpose": "Perno de rotor",
+        "strength_class_claim": "Desconocido / sin confirmar"
+      },
+      "kind": "synthetic_representation",
+      "source_ids": [
+        "E-PT-THREAD",
+        "E-INVENTARIO"
+      ],
+      "source_urls": [
+        "https://www.parktool.com/en-us/blog/repair-help/basic-thread-concepts"
+      ],
+      "expected_blocking": [],
+      "inventory_product": "PERNO FRENO DISCO (ROTOR) PARA TORQ T25 ( MINIMO 20 PCS )",
+      "note": "M5 x 0.8 es el estándar de aplicación que Park Tool documenta para pernos de rotor; como dato del SKU sólo vale si la etiqueta/OEM del perno lo confirma (aquí se muestra el alcance, no una medición).",
+      "review_note": "Ilustración de rosca; Park no identifica este SKU ni prueba accionamiento, mano o resistencia particulares.",
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false,
+      "root_reconciliation": []
+    },
+    {
+      "id": "fastener_kit_rows_shape",
+      "template": "fastener",
+      "values": {
+        "fastener_kind": "Kit",
+        "fastener_kit_members": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r01",
+              "values": {
+                "member_role": "Perno de rotor",
+                "thread_nominal": "M5",
+                "thread_pitch_mm": "0.8",
+                "thread_hand": "Derecha",
+                "length_mm": "10",
+                "length_datum": "Bajo cabeza",
+                "head_drive": "T25",
+                "quantity": "12"
+              },
+              "sources": [
+                "https://www.parktool.com/en-us/blog/repair-help/basic-thread-concepts"
+              ]
+            },
+            {
+              "id": "r02",
+              "values": {
+                "member_role": "Golilla",
+                "quantity": "12"
+              },
+              "sources": [
+                "https://www.parktool.com/en-us/blog/repair-help/basic-thread-concepts"
+              ]
+            }
+          ]
+        }
+      },
+      "kind": "synthetic_representation",
+      "source_ids": [
+        "E-PT-THREAD"
+      ],
+      "source_urls": [
+        "https://www.parktool.com/en-us/blog/repair-help/basic-thread-concepts"
+      ],
+      "expected_blocking": [],
+      "inventory_product": null,
+      "note": "Forma de un kit: dos miembros con rosca/largo/cantidad propios. Valores ilustrativos del estándar Park Tool; no es un SKU del inventario.",
+      "review_note": "Kit ilustrativo, no evidencia de SKU; golilla sin rosca inventada.",
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false,
+      "root_reconciliation": []
+    },
+    {
+      "id": "workshop_tool_park_ct_3_3",
+      "template": "workshop_tool",
+      "values": {
+        "tool_kind": "Corta cadena",
+        "chain_tool_speeds": [
+          "5",
+          "6",
+          "7",
+          "8",
+          "9",
+          "10",
+          "11",
+          "12"
+        ],
+        "tool_capabilities": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r01",
+              "values": {
+                "operation": "Cortar / extraer remache",
+                "target_standard": "Cadenas5–12v en alcance OEM de CT-3.3",
+                "supported": true,
+                "speeds_min": "5",
+                "speeds_max": "12"
+              },
+              "sources": [
+                "https://www.parktool.com/en-us/product/chain-tool-ct-3-3"
+              ]
+            },
+            {
+              "id": "single-speed",
+              "values": {
+                "operation": "Cortar / extraer remache",
+                "target_standard": "Cadenas1v:1/8 pulg,3/16 pulg y half-link según OEM",
+                "supported": true,
+                "speeds_min": "1",
+                "speeds_max": "1"
+              },
+              "sources": [
+                "https://www.parktool.com/en-us/product/chain-tool-ct-3-3"
+              ]
+            },
+            {
+              "id": "r02",
+              "values": {
+                "operation": "Instalar remache",
+                "target_standard": "Remaches Campagnolo 11/12/13v",
+                "supported": true,
+                "brand_scope": "Campagnolo 11, 12 y 13v"
+              },
+              "sources": [
+                "https://www.parktool.com/en-us/product/chain-tool-ct-3-3"
+              ]
+            },
+            {
+              "id": "r03",
+              "values": {
+                "operation": "Peenar remache",
+                "target_standard": "Remaches Campagnolo 11/12/13v",
+                "supported": false,
+                "brand_scope": "Campagnolo 11, 12 y 13v: «install and remove, but not peen»"
+              },
+              "sources": [
+                "https://www.parktool.com/en-us/product/chain-tool-ct-3-3"
+              ]
+            }
+          ]
+        }
+      },
+      "kind": "oem_revision_scoped",
+      "source_ids": [
+        "E-PT-CT33"
+      ],
+      "source_urls": [
+        "https://www.parktool.com/en-us/product/chain-tool-ct-3-3"
+      ],
+      "expected_blocking": [],
+      "inventory_product": null,
+      "note": "Escenario ND10: la cobertura 5–12v no aprueba peenar; la exclusión OEM se representa con supported=false, no con ausencia de fila.",
+      "review_note": "Separar 1v de5–12v; operaciones Campagnolo tienen alcance propio.",
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false,
+      "root_reconciliation": []
+    },
+    {
+      "id": "workshop_tool_park_fr_5_2_lockring",
+      "template": "workshop_tool",
+      "values": {
+        "tool_kind": "Llave de contratuerca (cassette / rotor)",
+        "tool_capabilities": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r01",
+              "values": {
+                "operation": "Extraer",
+                "target_standard": "Contratuerca de cassette 12 estrías (Shimano, SRAM incl. XD, Chris King, Sun Race, Hugi…)",
+                "supported": true,
+                "interface_measure_mm": "23.4",
+                "brand_scope": "SRAM XD usa la misma FR-5.2 que Shimano HG"
+              },
+              "sources": [
+                "https://www.parktool.com/en-us/blog/repair-help/cassette-removal-and-installation"
+              ]
+            },
+            {
+              "id": "r02",
+              "values": {
+                "operation": "Instalar",
+                "target_standard": "Contratuerca de cassette 12 estrías",
+                "supported": true,
+                "interface_measure_mm": "23.4",
+                "drive_size": "Hexágono1 pulg o llave ajustable"
+              },
+              "sources": [
+                "https://www.parktool.com/en-us/blog/repair-help/cassette-removal-and-installation"
+              ]
+            }
+          ]
+        }
+      },
+      "kind": "oem_revision_scoped",
+      "source_ids": [
+        "E-PT-CASSETTE"
+      ],
+      "source_urls": [
+        "https://www.parktool.com/en-us/blog/repair-help/cassette-removal-and-installation"
+      ],
+      "expected_blocking": [],
+      "inventory_product": null,
+      "note": "La interfaz de extracción (contratuerca) es distinta del spline de instalación del cuerpo: un extractor «HG» no se rechaza sobre XD.",
+      "review_note": "Accionamiento no es par; conservar geometría publicada y no una negativa global por marca.",
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false,
+      "root_reconciliation": []
+    },
+    {
+      "id": "workshop_tool_park_bbt_9",
+      "template": "workshop_tool",
+      "values": {
+        "tool_kind": "Llave de pedalier",
+        "tool_capabilities": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r01",
+              "values": {
+                "operation": "Apretar / aflojar",
+                "target_standard": "Interfaz16muescas, diámetro mayor44–45mm, menor42.7mm; modelos de tabla OEM",
+                "supported": true,
+                "interface_diameter_min_mm": "44",
+                "interface_diameter_max_mm": "45",
+                "interface_minor_diameter_mm": "42.7",
+                "interface_feature_count": "16"
+              },
+              "sources": [
+                "https://www.parktool.com/en-us/product/bottom-bracket-tool-bbt-9"
+              ]
+            },
+            {
+              "id": "r02",
+              "values": {
+                "operation": "Apretar / aflojar",
+                "target_standard": "Tapa de biela Hollowtech II 8 puntas (TL-FC16/18)",
+                "supported": true,
+                "interface_feature_count": "8"
+              },
+              "sources": [
+                "https://www.parktool.com/en-us/product/bottom-bracket-tool-bbt-9"
+              ]
+            },
+            {
+              "id": "r03",
+              "values": {
+                "operation": "Apretar / aflojar",
+                "target_standard": "Contratuerca de rotor Center Lock 16 muescas",
+                "supported": true
+              },
+              "sources": [
+                "https://www.parktool.com/en-us/product/bottom-bracket-tool-bbt-9"
+              ]
+            }
+          ]
+        }
+      },
+      "kind": "oem_revision_scoped",
+      "source_ids": [
+        "E-PT-BBT9"
+      ],
+      "source_urls": [
+        "https://www.parktool.com/en-us/product/bottom-bracket-tool-bbt-9"
+      ],
+      "expected_blocking": [],
+      "inventory_product": null,
+      "note": "Un estándar de copas no equivale a todas las cajas: PF/BB30 no aparecen y quedan desconocidos.",
+      "review_note": "Guardar diámetro mayor44–45, menor42.7 y16muescas; modelos sólo según tabla OEM.",
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false,
+      "root_reconciliation": []
+    },
+    {
+      "id": "workshop_tool_super_b_tb_6616",
+      "template": "workshop_tool",
+      "values": {
+        "tool_kind": "Extractor de biela",
+        "tool_capabilities": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r01",
+              "values": {
+                "operation": "Extraer",
+                "target_standard": "Biela de cuadradillo estándar según descripción OEM",
+                "supported": true,
+                "drive_size": "Hex 8 mm o llave fija 15 mm"
+              },
+              "sources": [
+                "https://www.superbiketool.com/en/product/detail/Bottom_Crank_tool/TB_6616"
+              ]
+            }
+          ]
+        }
+      },
+      "kind": "oem_revision_scoped",
+      "source_ids": [
+        "E-SUPERB-6616",
+        "E-INVENTARIO"
+      ],
+      "source_urls": [
+        "https://www.superbiketool.com/en/product/detail/Bottom_Crank_tool/TB_6616"
+      ],
+      "expected_blocking": [],
+      "inventory_product": "EXTRACTOR DE VOLANTE SUPER B TB-6616 FOR STANDARD SQUARE TYPE",
+      "note": "Producto real del inventario; la página oficial no imprime la rosca del extractor (M22 x 1 no se afirma).",
+      "review_note": "OEM afirma square type; no dice only ni prueba exclusión Octalink/ISIS o toda interfaz JIS/ISO.",
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false,
+      "root_reconciliation": []
+    },
+    {
+      "id": "workshop_tool_park_ib_3_multitool",
+      "template": "workshop_tool",
+      "values": {
+        "tool_kind": "Multiherramienta",
+        "chain_tool_speeds": [
+          "5",
+          "6",
+          "7",
+          "8",
+          "9",
+          "10",
+          "11",
+          "12"
+        ],
+        "tool_bits_included": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "hex-1-5",
+              "values": {
+                "bit_kind": "Hexagonal (Allen)",
+                "size": "1.5 mm",
+                "quantity": "1"
+              },
+              "sources": [
+                "https://www.parktool.com/en-us/product/i-beam-mini-fold-up-with-chain-tool-ib-3"
+              ]
+            },
+            {
+              "id": "hex-2",
+              "values": {
+                "bit_kind": "Hexagonal (Allen)",
+                "size": "2 mm",
+                "quantity": "1"
+              },
+              "sources": [
+                "https://www.parktool.com/en-us/product/i-beam-mini-fold-up-with-chain-tool-ib-3"
+              ]
+            },
+            {
+              "id": "hex-2-5",
+              "values": {
+                "bit_kind": "Hexagonal (Allen)",
+                "size": "2.5 mm",
+                "quantity": "1"
+              },
+              "sources": [
+                "https://www.parktool.com/en-us/product/i-beam-mini-fold-up-with-chain-tool-ib-3"
+              ]
+            },
+            {
+              "id": "hex-3",
+              "values": {
+                "bit_kind": "Hexagonal (Allen)",
+                "size": "3 mm",
+                "quantity": "1"
+              },
+              "sources": [
+                "https://www.parktool.com/en-us/product/i-beam-mini-fold-up-with-chain-tool-ib-3"
+              ]
+            },
+            {
+              "id": "hex-4",
+              "values": {
+                "bit_kind": "Hexagonal (Allen)",
+                "size": "4 mm",
+                "quantity": "1"
+              },
+              "sources": [
+                "https://www.parktool.com/en-us/product/i-beam-mini-fold-up-with-chain-tool-ib-3"
+              ]
+            },
+            {
+              "id": "hex-5",
+              "values": {
+                "bit_kind": "Hexagonal (Allen)",
+                "size": "5 mm",
+                "quantity": "1"
+              },
+              "sources": [
+                "https://www.parktool.com/en-us/product/i-beam-mini-fold-up-with-chain-tool-ib-3"
+              ]
+            },
+            {
+              "id": "hex-6",
+              "values": {
+                "bit_kind": "Hexagonal (Allen)",
+                "size": "6 mm",
+                "quantity": "1"
+              },
+              "sources": [
+                "https://www.parktool.com/en-us/product/i-beam-mini-fold-up-with-chain-tool-ib-3"
+              ]
+            },
+            {
+              "id": "hex-8",
+              "values": {
+                "bit_kind": "Hexagonal (Allen)",
+                "size": "8 mm",
+                "quantity": "1"
+              },
+              "sources": [
+                "https://www.parktool.com/en-us/product/i-beam-mini-fold-up-with-chain-tool-ib-3"
+              ]
+            },
+            {
+              "id": "r02",
+              "values": {
+                "bit_kind": "Torx",
+                "size": "T25",
+                "quantity": "1"
+              },
+              "sources": [
+                "https://www.parktool.com/en-us/product/i-beam-mini-fold-up-with-chain-tool-ib-3"
+              ]
+            },
+            {
+              "id": "r03",
+              "values": {
+                "bit_kind": "Destornillador plano",
+                "quantity": "1"
+              },
+              "sources": [
+                "https://www.parktool.com/en-us/product/i-beam-mini-fold-up-with-chain-tool-ib-3"
+              ]
+            },
+            {
+              "id": "r04",
+              "values": {
+                "bit_kind": "Llave estrella / cerrada",
+                "size": "8 mm",
+                "quantity": "1"
+              },
+              "sources": [
+                "https://www.parktool.com/en-us/product/i-beam-mini-fold-up-with-chain-tool-ib-3"
+              ]
+            },
+            {
+              "id": "spoke-3-23",
+              "values": {
+                "bit_kind": "Llave de rayos",
+                "size": "3.23 mm",
+                "quantity": "1"
+              },
+              "sources": [
+                "https://www.parktool.com/en-us/product/i-beam-mini-fold-up-with-chain-tool-ib-3"
+              ]
+            },
+            {
+              "id": "spoke-3-45",
+              "values": {
+                "bit_kind": "Llave de rayos",
+                "size": "3.45 mm",
+                "quantity": "1"
+              },
+              "sources": [
+                "https://www.parktool.com/en-us/product/i-beam-mini-fold-up-with-chain-tool-ib-3"
+              ]
+            },
+            {
+              "id": "r06",
+              "values": {
+                "bit_kind": "Desmontador",
+                "quantity": "1"
+              },
+              "sources": [
+                "https://www.parktool.com/en-us/product/i-beam-mini-fold-up-with-chain-tool-ib-3"
+              ]
+            },
+            {
+              "id": "r07",
+              "values": {
+                "bit_kind": "Corta cadena",
+                "quantity": "1"
+              },
+              "sources": [
+                "https://www.parktool.com/en-us/product/i-beam-mini-fold-up-with-chain-tool-ib-3"
+              ]
+            }
+          ]
+        },
+        "tool_capabilities": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r01",
+              "values": {
+                "member": "Corta cadena",
+                "operation": "Cortar / extraer remache",
+                "target_standard": "Cadenas 5–12v incl. SRAM 12v Flattop y T-Type",
+                "supported": true,
+                "speeds_min": "5",
+                "speeds_max": "12"
+              },
+              "sources": [
+                "https://www.parktool.com/en-us/product/i-beam-mini-fold-up-with-chain-tool-ib-3"
+              ]
+            },
+            {
+              "id": "r02",
+              "values": {
+                "member": "Corta cadena",
+                "operation": "Peenar remache",
+                "target_standard": "Remaches Campagnolo 11/12/13v",
+                "supported": false
+              },
+              "sources": [
+                "https://www.parktool.com/en-us/product/i-beam-mini-fold-up-with-chain-tool-ib-3"
+              ]
+            }
+          ]
+        }
+      },
+      "kind": "oem_revision_scoped",
+      "source_ids": [
+        "E-PT-IB3"
+      ],
+      "source_urls": [
+        "https://www.parktool.com/en-us/product/i-beam-mini-fold-up-with-chain-tool-ib-3"
+      ],
+      "expected_blocking": [],
+      "inventory_product": null,
+      "note": "Multiherramienta que sí registra velocidades de cadena (antes prohibido por allowed_when) y separa contenido de capacidad.",
+      "review_note": "Una fila por tamaño, llave estrella8mm; las capacidades no se derivan de contenido aplanado.",
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false,
+      "root_reconciliation": []
+    },
+    {
+      "id": "light_cateye_ampp800_viz300_kit",
+      "template": "light",
+      "values": {
+        "light_position": "Juego delantera + trasera",
+        "light_member_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r01",
+              "values": {
+                "member_id": "AMPP800 (HL-EL088RC)",
+                "position": "Delantera",
+                "battery_kind": "Li-ion integrada",
+                "battery_capacity_mah": "2500",
+                "battery_voltage_v": "3.7",
+                "charge_connector": "Micro-USB",
+                "mount_kind": "Abrazadera de manubrio",
+                "mount_diameter_min_mm": "22.0",
+                "mount_diameter_max_mm": "35.0",
+                "ip_rating": "IPX4",
+                "member_revision": "Web OEM consultada2026-09-07; lote de inventario no identificado"
+              },
+              "sources": [
+                "https://www.cateye.com/intl/products/headlights/HL-EL088RC_TL-LD810/"
+              ]
+            },
+            {
+              "id": "r02",
+              "values": {
+                "member_id": "ViZ300 (TL-LD810)",
+                "position": "Trasera",
+                "battery_kind": "Li-ion integrada",
+                "charge_connector": "Micro-USB",
+                "mount_kind": "Abrazadera de tija",
+                "mount_diameter_min_mm": "21.5",
+                "mount_diameter_max_mm": "32.0",
+                "mount_circumference_max_mm": "130",
+                "ip_rating": "IPX4",
+                "member_revision": "Web OEM consultada2026-09-07; lote de inventario no identificado"
+              },
+              "sources": [
+                "https://www.cateye.com/intl/products/headlights/HL-EL088RC_TL-LD810/",
+                "https://www.cateye.com/intl/support/manual/data/doc/TL-LD810_820_HP_ENG_v1.pdf"
+              ]
+            }
+          ]
+        },
+        "light_mode_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r01",
+              "values": {
+                "member_id": "r01",
+                "mode": "High",
+                "pattern": "Constante",
+                "lumens": "800",
+                "runtime_h": "1.5",
+                "member_revision": "Web OEM consultada2026-09-07; lote de inventario no identificado"
+              },
+              "sources": [
+                "https://www.cateye.com/intl/products/headlights/HL-EL088RC_TL-LD810/"
+              ]
+            },
+            {
+              "id": "r02",
+              "values": {
+                "member_id": "r01",
+                "mode": "Middle",
+                "pattern": "Constante",
+                "lumens": "400",
+                "runtime_h": "2",
+                "member_revision": "Web OEM consultada2026-09-07; lote de inventario no identificado"
+              },
+              "sources": [
+                "https://www.cateye.com/intl/products/headlights/HL-EL088RC_TL-LD810/"
+              ]
+            },
+            {
+              "id": "r03",
+              "values": {
+                "member_id": "r01",
+                "mode": "Low",
+                "pattern": "Constante",
+                "lumens": "200",
+                "runtime_h": "4",
+                "member_revision": "Web OEM consultada2026-09-07; lote de inventario no identificado"
+              },
+              "sources": [
+                "https://www.cateye.com/intl/products/headlights/HL-EL088RC_TL-LD810/"
+              ]
+            },
+            {
+              "id": "r04",
+              "values": {
+                "member_id": "r01",
+                "mode": "Daytime HyperConstant",
+                "pattern": "Constante + intermitente",
+                "lumens": "800",
+                "lumens_secondary": "200",
+                "runtime_h": "5",
+                "member_revision": "Web OEM consultada2026-09-07; lote de inventario no identificado"
+              },
+              "sources": [
+                "https://www.cateye.com/intl/products/headlights/HL-EL088RC_TL-LD810/"
+              ]
+            },
+            {
+              "id": "r05",
+              "values": {
+                "member_id": "r01",
+                "mode": "Flashing",
+                "pattern": "Intermitente",
+                "lumens": "200",
+                "runtime_h": "30",
+                "member_revision": "Web OEM consultada2026-09-07; lote de inventario no identificado"
+              },
+              "sources": [
+                "https://www.cateye.com/intl/products/headlights/HL-EL088RC_TL-LD810/"
+              ]
+            },
+            {
+              "id": "r06",
+              "values": {
+                "member_id": "r02",
+                "mode": "Constant",
+                "pattern": "Constante",
+                "lumens": "30",
+                "runtime_h": "5",
+                "member_revision": "Web OEM consultada2026-09-07; lote de inventario no identificado"
+              },
+              "sources": [
+                "https://www.cateye.com/intl/products/headlights/HL-EL088RC_TL-LD810/"
+              ]
+            },
+            {
+              "id": "r07",
+              "values": {
+                "member_id": "r02",
+                "mode": "Flashing",
+                "pattern": "Intermitente",
+                "lumens": "30",
+                "runtime_h": "45",
+                "member_revision": "Web OEM consultada2026-09-07; lote de inventario no identificado"
+              },
+              "sources": [
+                "https://www.cateye.com/intl/products/headlights/HL-EL088RC_TL-LD810/"
+              ]
+            },
+            {
+              "id": "r08",
+              "values": {
+                "member_id": "r02",
+                "mode": "Group Ride",
+                "pattern": "Otro",
+                "lumens": "15",
+                "runtime_h": "10",
+                "member_revision": "Web OEM consultada2026-09-07; lote de inventario no identificado"
+              },
+              "sources": [
+                "https://www.cateye.com/intl/products/headlights/HL-EL088RC_TL-LD810/"
+              ]
+            },
+            {
+              "id": "r09",
+              "values": {
+                "member_id": "r02",
+                "mode": "Daytime Hyperflash",
+                "pattern": "Diurno",
+                "lumens": "300",
+                "runtime_h": "10",
+                "member_revision": "Web OEM consultada2026-09-07; lote de inventario no identificado"
+              },
+              "sources": [
+                "https://www.cateye.com/intl/products/headlights/HL-EL088RC_TL-LD810/"
+              ]
+            }
+          ]
+        }
+      },
+      "kind": "oem_revision_scoped",
+      "source_ids": [
+        "E-CATEYE"
+      ],
+      "source_urls": [
+        "https://www.cateye.com/intl/products/headlights/HL-EL088RC_TL-LD810/"
+      ],
+      "expected_blocking": [],
+      "inventory_product": null,
+      "note": "Escenario ND12: 800 lm y 30 h nunca comparten fila; el trasero conserva su propio montaje y perímetro. Los escalares de luz única no aplican (allowed_when).",
+      "review_note": "Caso de web actual consultada, no asignación al inventario. GroupRide15lm/10h y MicroUSB; revisión anterior separada.",
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false,
+      "root_reconciliation": [
+        {
+          "source_field": "light_mode_configurations",
+          "source_row": "r01",
+          "target_field": "light_member_configurations",
+          "target_row": "r01",
+          "original_target_label": "AMPP800 (HL-EL088RC)"
+        },
+        {
+          "source_field": "light_mode_configurations",
+          "source_row": "r02",
+          "target_field": "light_member_configurations",
+          "target_row": "r01",
+          "original_target_label": "AMPP800 (HL-EL088RC)"
+        },
+        {
+          "source_field": "light_mode_configurations",
+          "source_row": "r03",
+          "target_field": "light_member_configurations",
+          "target_row": "r01",
+          "original_target_label": "AMPP800 (HL-EL088RC)"
+        },
+        {
+          "source_field": "light_mode_configurations",
+          "source_row": "r04",
+          "target_field": "light_member_configurations",
+          "target_row": "r01",
+          "original_target_label": "AMPP800 (HL-EL088RC)"
+        },
+        {
+          "source_field": "light_mode_configurations",
+          "source_row": "r05",
+          "target_field": "light_member_configurations",
+          "target_row": "r01",
+          "original_target_label": "AMPP800 (HL-EL088RC)"
+        },
+        {
+          "source_field": "light_mode_configurations",
+          "source_row": "r06",
+          "target_field": "light_member_configurations",
+          "target_row": "r02",
+          "original_target_label": "ViZ300 (TL-LD810)"
+        },
+        {
+          "source_field": "light_mode_configurations",
+          "source_row": "r07",
+          "target_field": "light_member_configurations",
+          "target_row": "r02",
+          "original_target_label": "ViZ300 (TL-LD810)"
+        },
+        {
+          "source_field": "light_mode_configurations",
+          "source_row": "r08",
+          "target_field": "light_member_configurations",
+          "target_row": "r02",
+          "original_target_label": "ViZ300 (TL-LD810)"
+        },
+        {
+          "source_field": "light_mode_configurations",
+          "source_row": "r09",
+          "target_field": "light_member_configurations",
+          "target_row": "r02",
+          "original_target_label": "ViZ300 (TL-LD810)"
+        }
+      ]
+    },
+    {
+      "id": "light_inventory_ae_kit_pending",
+      "template": "light",
+      "values": {
+        "light_position": "Juego delantera + trasera"
+      },
+      "kind": "inventory_candidate_unverified",
+      "source_ids": [
+        "E-INVENTARIO"
+      ],
+      "source_urls": [],
+      "expected_blocking": [],
+      "inventory_product": "Juego de luces delantera + trasera AE",
+      "note": "Producto real sin OEM: las filas requeridas faltan → pendiente (aviso), no contradicción; nada se inventa desde el título.",
+      "review_note": "Ausencias de miembros/modos son avisos no bloqueantes; pendiente investigación exacta.",
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false,
+      "root_reconciliation": [
+        "An unidentified kit has no confirmed common power source; per-light research remains pending."
+      ],
+      "unassigned_proposal_observations": {
+        "power_source": "Recargable USB"
+      }
+    },
+    {
+      "id": "accessory_mount_quad_lock_out_front",
+      "template": "accessory_mount",
+      "values": {
+        "accessory_mount_kind": "Soporte de teléfono",
+        "bike_attachment_kind": "Abrazadera de manubrio",
+        "bar_fit_representation": "Medidas discretas (filas)",
+        "device_attachment_kind": "Interfaz propietaria (carcasa / adaptador)",
+        "device_system": "Quad Lock",
+        "rotation_360": true,
+        "bar_clamp_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r01",
+              "values": {
+                "nominal_diameter_mm": "35",
+                "fit_method": "Directo",
+                "included": true,
+                "mount_revision": "Standard de la oferta actual consultada2026-09-07"
+              },
+              "sources": [
+                "https://www.quadlockcase.com/products/out-front-mount"
+              ]
+            },
+            {
+              "id": "r02",
+              "values": {
+                "nominal_diameter_mm": "31.8",
+                "fit_method": "Con espaciador incluido",
+                "included": true,
+                "mount_revision": "Standard de la oferta actual consultada2026-09-07"
+              },
+              "sources": [
+                "https://www.quadlockcase.com/products/out-front-mount"
+              ]
+            },
+            {
+              "id": "r03",
+              "values": {
+                "nominal_diameter_mm": "25.4",
+                "fit_method": "Con espaciador incluido",
+                "included": true,
+                "mount_revision": "Standard de la oferta actual consultada2026-09-07"
+              },
+              "sources": [
+                "https://www.quadlockcase.com/products/out-front-mount"
+              ]
+            },
+            {
+              "id": "r04",
+              "values": {
+                "nominal_diameter_mm": "22",
+                "fit_method": "Con espaciador incluido",
+                "spacer_or_variant": "OEM escribe «22 mm»; si es 22,2 se resuelve por variante/manual",
+                "included": true,
+                "mount_revision": "Standard de la oferta actual consultada2026-09-07"
+              },
+              "sources": [
+                "https://www.quadlockcase.com/products/out-front-mount"
+              ]
+            }
+          ]
+        }
+      },
+      "kind": "oem_revision_scoped",
+      "source_ids": [
+        "E-QUADLOCK"
+      ],
+      "source_urls": [
+        "https://www.quadlockcase.com/products/out-front-mount"
+      ],
+      "expected_blocking": [],
+      "inventory_product": null,
+      "note": "Escenario ND13: 30 mm no tiene fila → desconocido, no aprobado. El ancho del teléfono no aplica (carcasa propietaria). Cuál medida es «directa» y cuál con espaciador no lo confirma la lectura: la columna fit_method de la fila 35 es hipótesis a confirmar.",
+      "review_note": "Oferta actual Standard; preservar22literal y revisión. No aplicar a stock anterior sin identificar versión.",
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false,
+      "root_reconciliation": []
+    },
+    {
+      "id": "accessory_mount_gub_clamp_range_from_title",
+      "template": "accessory_mount",
+      "values": {
+        "accessory_mount_kind": "Soporte de teléfono",
+        "device_attachment_kind": "Pinza / brazos ajustables",
+        "device_width_min_mm": "55",
+        "device_width_max_mm": "100",
+        "bike_attachment_kind": "Abrazadera de manubrio",
+        "bar_fit_representation": "Desconocido / sin confirmar"
+      },
+      "kind": "inventory_candidate_unverified",
+      "source_ids": [
+        "E-INVENTARIO"
+      ],
+      "source_urls": [],
+      "expected_blocking": [],
+      "inventory_product": "Soporte Teléfono GUB Aluminio Bicicleta 55-100mm Negro",
+      "note": "Producto real: el título declara 55–100 mm de dispositivo (pinza); el lado bicicleta queda desconocido hasta leer el envase/OEM.",
+      "review_note": "Rango del título conserva carácter provisional; zona/diámetros de bicicleta pendientes OEM.",
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false,
+      "root_reconciliation": []
+    },
+    {
+      "id": "cycle_computer_garmin_edge_540",
+      "template": "cycle_computer",
+      "values": {},
+      "kind": "oem_partial_representation",
+      "source_ids": [
+        "E-GARMIN-540"
+      ],
+      "source_urls": [
+        "https://www8.garmin.com/manuals/webhelp/GUID-17DE938E-466A-4746-BDBF-7A6FC1B3A32C/EN-US/GUID-09801A97-361B-4675-AD3A-6ACE25854DB3.html"
+      ],
+      "expected_blocking": [],
+      "inventory_product": null,
+      "note": "Escenario ND21: GNSS y sensores son ejes distintos. El manual dice «ANT+ or Bluetooth» por tipo sin detallar cuál transporte admite cada tipo: las filas por transporte de Radar/Luces/Cambio/eBike/Remoto se dejan sólo en ANT+ como lectura conservadora y se marcan pendientes de confirmar por tipo.",
+      "review_note": "Manual general confirma transportes, no matriz por sensor. Retirar parejas y falsos sin fuente exacta.",
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false,
+      "root_reconciliation": [
+        "Sensor/transport rows own the scoped claims; rejected duplicate booleans are retained here as proposal history."
+      ],
+      "unassigned_proposal_observations": {
+        "sensor_link_ant_plus": true,
+        "sensor_link_bluetooth": true
+      }
+    },
+    {
+      "id": "cycle_computer_wired_11_functions_inventory",
+      "template": "cycle_computer",
+      "values": {
+        "positioning_source": "Sin posicionamiento",
+        "speed_source": "Sensor de rueda (imán / cable)",
+        "functions_count": "11",
+        "wheel_setting": "Desconocido / sin confirmar"
+      },
+      "kind": "inventory_candidate_unverified",
+      "source_ids": [
+        "E-INVENTARIO"
+      ],
+      "source_urls": [],
+      "expected_blocking": [],
+      "inventory_product": "CICLOCOMPUTADOR BICICLETA VELOCIMETRO CON CABLE 11 FUNCIONES",
+      "note": "Producto real: velocímetro con cable; el ajuste de rueda aplica (sensor de rueda) pero su método es desconocido hasta leer el manual.",
+      "review_note": "Cableado y11funciones del título no prueban ausencia de ANT+/Bluetooth/teléfono.",
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false,
+      "root_reconciliation": [
+        "Sensor/transport rows own the scoped claims; rejected duplicate booleans are retained here as proposal history."
+      ],
+      "unassigned_proposal_observations": {
+        "sensor_link_wired": true
+      }
+    },
+    {
+      "id": "consumer_electronics_anker_a2667_ports_and_budget",
+      "template": "consumer_electronics",
+      "values": {
+        "device_kind": "Cargador",
+        "rated_power_w": "65",
+        "ports_count": "3",
+        "charging_protocol_claim": "PPS, PowerIQ3.0, PowerIQ2.0",
+        "power_port_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r01",
+              "values": {
+                "port_id": "USB-C 1",
+                "connector": "USB-C",
+                "direction": "Salida",
+                "max_power_w": "65"
+              },
+              "sources": [
+                "https://service.anker.com/product-description/a085g000004x2BVAAY?recordId=a085g000004x2BVAAY"
+              ]
+            },
+            {
+              "id": "r02",
+              "values": {
+                "port_id": "USB-C 2",
+                "connector": "USB-C",
+                "direction": "Salida",
+                "max_power_w": "65"
+              },
+              "sources": [
+                "https://service.anker.com/product-description/a085g000004x2BVAAY?recordId=a085g000004x2BVAAY"
+              ]
+            },
+            {
+              "id": "r03",
+              "values": {
+                "port_id": "USB-A",
+                "connector": "USB-A",
+                "direction": "Salida",
+                "max_power_w": "22.5"
+              },
+              "sources": [
+                "https://service.anker.com/product-description/a085g000004x2BVAAY?recordId=a085g000004x2BVAAY"
+              ]
+            }
+          ]
+        },
+        "power_budget_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r01",
+              "values": {
+                "configuration": "C1 + C2",
+                "port_id": "r01",
+                "power_w": "45"
+              },
+              "sources": [
+                "https://service.anker.com/product-description/a085g000004x2BVAAY?recordId=a085g000004x2BVAAY"
+              ]
+            },
+            {
+              "id": "r02",
+              "values": {
+                "configuration": "C1 + C2",
+                "port_id": "r02",
+                "power_w": "20"
+              },
+              "sources": [
+                "https://service.anker.com/product-description/a085g000004x2BVAAY?recordId=a085g000004x2BVAAY"
+              ]
+            },
+            {
+              "id": "r03",
+              "values": {
+                "configuration": "C1 + A",
+                "port_id": "r01",
+                "power_w": "40"
+              },
+              "sources": [
+                "https://service.anker.com/product-description/a085g000004x2BVAAY?recordId=a085g000004x2BVAAY"
+              ]
+            },
+            {
+              "id": "r04",
+              "values": {
+                "configuration": "C1 + A",
+                "port_id": "r03",
+                "power_w": "22.5"
+              },
+              "sources": [
+                "https://service.anker.com/product-description/a085g000004x2BVAAY?recordId=a085g000004x2BVAAY"
+              ]
+            },
+            {
+              "id": "r05",
+              "values": {
+                "configuration": "C2 + A",
+                "port_id": "r02",
+                "power_w": "12"
+              },
+              "sources": [
+                "https://service.anker.com/product-description/a085g000004x2BVAAY?recordId=a085g000004x2BVAAY"
+              ]
+            },
+            {
+              "id": "r06",
+              "values": {
+                "configuration": "C2 + A",
+                "port_id": "r03",
+                "power_w": "12"
+              },
+              "sources": [
+                "https://service.anker.com/product-description/a085g000004x2BVAAY?recordId=a085g000004x2BVAAY"
+              ]
+            },
+            {
+              "id": "r07",
+              "values": {
+                "configuration": "C1 + C2 + A",
+                "port_id": "r01",
+                "power_w": "40"
+              },
+              "sources": [
+                "https://service.anker.com/product-description/a085g000004x2BVAAY?recordId=a085g000004x2BVAAY"
+              ]
+            },
+            {
+              "id": "r08",
+              "values": {
+                "configuration": "C1 + C2 + A",
+                "port_id": "r02",
+                "power_w": "12"
+              },
+              "sources": [
+                "https://service.anker.com/product-description/a085g000004x2BVAAY?recordId=a085g000004x2BVAAY"
+              ]
+            },
+            {
+              "id": "r09",
+              "values": {
+                "configuration": "C1 + C2 + A",
+                "port_id": "r03",
+                "power_w": "12"
+              },
+              "sources": [
+                "https://service.anker.com/product-description/a085g000004x2BVAAY?recordId=a085g000004x2BVAAY"
+              ]
+            }
+          ]
+        },
+        "spec_evidence_source": "https://service.anker.com/product-description/a085g000004x2BVAAY?recordId=a085g000004x2BVAAY"
+      },
+      "kind": "oem_revision_scoped",
+      "source_ids": [
+        "E-ANKER-A2667"
+      ],
+      "source_urls": [
+        "https://service.anker.com/product-description/a085g000004x2BVAAY?recordId=a085g000004x2BVAAY"
+      ],
+      "expected_blocking": [],
+      "inventory_product": null,
+      "note": "Escenario ND22: 65 W nunca aparece en dos puertos a la vez; cada combinación son varias filas con el mismo `configuration`. A2668 no hereda nada.",
+      "review_note": "Tabla exacta A2667 confirmada. GaN es tecnología, no protocolo; límites necesitan semántica explícita.",
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false,
+      "root_reconciliation": [
+        {
+          "source_field": "power_budget_configurations",
+          "source_row": "r01",
+          "target_field": "power_port_configurations",
+          "target_row": "r01",
+          "original_target_label": "USB-C 1"
+        },
+        {
+          "source_field": "power_budget_configurations",
+          "source_row": "r02",
+          "target_field": "power_port_configurations",
+          "target_row": "r02",
+          "original_target_label": "USB-C 2"
+        },
+        {
+          "source_field": "power_budget_configurations",
+          "source_row": "r03",
+          "target_field": "power_port_configurations",
+          "target_row": "r01",
+          "original_target_label": "USB-C 1"
+        },
+        {
+          "source_field": "power_budget_configurations",
+          "source_row": "r04",
+          "target_field": "power_port_configurations",
+          "target_row": "r03",
+          "original_target_label": "USB-A"
+        },
+        {
+          "source_field": "power_budget_configurations",
+          "source_row": "r05",
+          "target_field": "power_port_configurations",
+          "target_row": "r02",
+          "original_target_label": "USB-C 2"
+        },
+        {
+          "source_field": "power_budget_configurations",
+          "source_row": "r06",
+          "target_field": "power_port_configurations",
+          "target_row": "r03",
+          "original_target_label": "USB-A"
+        },
+        {
+          "source_field": "power_budget_configurations",
+          "source_row": "r07",
+          "target_field": "power_port_configurations",
+          "target_row": "r01",
+          "original_target_label": "USB-C 1"
+        },
+        {
+          "source_field": "power_budget_configurations",
+          "source_row": "r08",
+          "target_field": "power_port_configurations",
+          "target_row": "r02",
+          "original_target_label": "USB-C 2"
+        },
+        {
+          "source_field": "power_budget_configurations",
+          "source_row": "r09",
+          "target_field": "power_port_configurations",
+          "target_row": "r03",
+          "original_target_label": "USB-A"
+        }
+      ]
+    },
+    {
+      "id": "consumer_electronics_baseus_65w_model_unknown",
+      "template": "consumer_electronics",
+      "values": {
+        "device_kind": "Cargador",
+        "rated_power_w": "65"
+      },
+      "kind": "inventory_candidate_unverified",
+      "source_ids": [
+        "E-INVENTARIO"
+      ],
+      "source_urls": [],
+      "expected_blocking": [],
+      "inventory_product": "Cargador 65W Baseus",
+      "note": "Producto real «Cargador 65W Baseus» sin modelo identificado: los puertos requeridos faltan → pendiente; no se copian los de Anker.",
+      "review_note": "65W del título no identifica reparto ni modelo; faltan puertos como aviso.",
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false,
+      "root_reconciliation": []
+    },
+    {
+      "id": "consumer_electronics_baseus_cable_100w_label_claim",
+      "template": "consumer_electronics",
+      "values": {
+        "device_kind": "Cable de datos/carga",
+        "connector_a": "USB-C",
+        "connector_b": "USB-C",
+        "cable_power_capacity_w": "100",
+        "cable_data_capability": "Desconocido / sin confirmar"
+      },
+      "kind": "inventory_candidate_unverified",
+      "source_ids": [
+        "E-INVENTARIO"
+      ],
+      "source_urls": [],
+      "expected_blocking": [],
+      "inventory_product": "Baseus Cable Usb-c a Usb-c Carga Rapida 100w",
+      "note": "Producto real: 100 W es la declaración del título/etiqueta (requiere spec_evidence_source); la capacidad de datos no se deduce.",
+      "review_note": "100W es claim del título de cable; no derivar datos, vídeo ni certificación.",
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false,
+      "root_reconciliation": []
+    },
+    {
+      "id": "food_maurten_gel_100_caf_100_packaged",
+      "template": "food_beverage",
+      "values": {
+        "preparation_kind": "Envasado",
+        "food_item_kind": "Gel / barra energética",
+        "units_per_pack": "12",
+        "unit_mass_g": "40",
+        "net_mass_g": "480",
+        "nutrition_facts": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r01",
+              "values": {
+                "nutrient": "Energía (kcal)",
+                "amount": "100",
+                "basis": "Por unidad / sobre",
+                "qualifier": "Aproximadamente, según texto OEM; imagen de etiqueta no transcrita"
+              },
+              "sources": [
+                "https://www.maurten.com/products/us/gel-100-caf-100-box-us"
+              ]
+            },
+            {
+              "id": "r02",
+              "values": {
+                "nutrient": "Carbohidratos (g)",
+                "amount": "25",
+                "basis": "Por unidad / sobre"
+              },
+              "sources": [
+                "https://www.maurten.com/products/us/gel-100-caf-100-box-us"
+              ]
+            }
+          ]
+        },
+        "caffeine_mg": "100",
+        "caffeine_basis": "Por unidad / sobre",
+        "ingredients_text": "Water, glucose, fructose, sodium alginate, gluconic acid, calcium carbonate, caffeine",
+        "allergen_statement_source": "Documento / página oficial del fabricante",
+        "spec_evidence_source": "https://www.maurten.com/products/us/gel-100-caf-100-box-us"
+      },
+      "kind": "oem_revision_scoped",
+      "source_ids": [
+        "E-MAURTEN"
+      ],
+      "source_urls": [
+        "https://www.maurten.com/products/us/gel-100-caf-100-box-us"
+      ],
+      "expected_blocking": [],
+      "inventory_product": null,
+      "note": "Escenario ND23: caja (480 g) ≠ sobre (40 g) ≠ carbohidratos (25 g); allergens_declared_none NO se marca porque nadie lo declara. Los valores por 100 g no se transcribieron (la lectura los daba aproximados). No es un producto del inventario.",
+      "review_note": "Texto OEM US consultado, no envase visto; eliminar nota de investigación de alérgenos y cafeína duplicada.",
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false,
+      "root_reconciliation": []
+    },
+    {
+      "id": "food_latte_chico_prepared_inventory",
+      "template": "food_beverage",
+      "values": {
+        "preparation_kind": "Preparado en barra",
+        "food_item_kind": "Latte",
+        "serving_size": "Chico",
+        "allergen_statement_source": "Sin fuente"
+      },
+      "kind": "inventory_candidate_unverified",
+      "source_ids": [
+        "E-INVENTARIO"
+      ],
+      "source_urls": [],
+      "expected_blocking": [],
+      "inventory_product": "Latte Chico",
+      "note": "Producto real del café: la receta no está registrada, así que ingredientes/alérgenos quedan sin declarar (allergen_statement_source = Sin fuente); «Leche de vaca» y la sustitución son supuestos de venta a confirmar con el negocio, no hechos.",
+      "review_note": "LatteChico no prueba leche de vaca, sustitución ofrecida ni temperatura; receta pendiente.",
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false,
+      "root_reconciliation": []
+    },
+    {
+      "id": "pedal_french_m14_vs_9_16_not_equivalent",
+      "template": "pedal",
+      "values": {
+        "pedal_type": "Plataforma",
+        "pedal_thread_standard": "M14 x 1.25",
+        "sold_as": "Par"
+      },
+      "kind": "synthetic_geometry_from_primary_source",
+      "source_ids": [
+        "S-PEDALS",
+        "S-PEDAL-TOOL"
+      ],
+      "source_urls": [
+        "https://www.sheldonbrown.com/pedals.html",
+        "https://www.parktool.com/en-us/blog/repair-help/pedal-installation-and-removal"
+      ],
+      "expected_blocking": [],
+      "inventory_product": null,
+      "note": "Fixture mecánica sintética: geometría francesa no equivalente a9/16x20. No afirma accionamiento de herramienta ni identifica un SKU.",
+      "eligible_for_product_fill": false,
+      "review_findings": [
+        "FB01"
+      ],
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false,
+      "root_reconciliation": []
+    },
+    {
+      "id": "pedal_inventory_best_kp198_alias_unconfirmed",
+      "template": "pedal",
+      "values": {
+        "pedal_type": "Plataforma",
+        "pedal_thread_standard": "Desconocido / sin confirmar",
+        "sold_as": "Par"
+      },
+      "kind": "inventory_title_only_candidate",
+      "source_ids": [
+        "E-INVENTARIO"
+      ],
+      "source_urls": [],
+      "expected_blocking": [],
+      "inventory_product": "PEDAL BEST (PAR) KP-198 NEGRO EJE 9/16\" CAJA",
+      "note": "El9/16 del título se conserva en inventory_product como candidato nominal; no se escribe un hecho nuevo en clave legacy ni se infiere paso.",
+      "eligible_for_product_fill": false,
+      "review_findings": [
+        "FB01"
+      ],
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false,
+      "root_reconciliation": []
+    },
+    {
+      "id": "grip_ergon_gp1_rohloff_nexus_asymmetric_pair",
+      "template": "grip",
+      "values": {
+        "grip_attachment": "Lock-on (una abrazadera)",
+        "sold_as": "Par",
+        "grip_bar_nominal_diameter_mm": "22.2",
+        "grip_length_left_mm": "128",
+        "grip_length_right_mm": "93",
+        "grip_clamp_torque_nm": "5",
+        "spec_evidence_source": "Ergon manual_gp1.pdf"
+      },
+      "kind": "source_scoped_representation",
+      "source_ids": [
+        "S-GP1"
+      ],
+      "source_urls": [
+        "https://www.ergonbike.com/infocenter/downloads/manual_gp1.pdf"
+      ],
+      "expected_blocking": [],
+      "inventory_product": null,
+      "note": "GP1 Rohloff/Nexus del manual06/2014: par asimétrico. No poner el máximo128 en una condición global de ambos lados; requisitos de zona recta por lado quedan pendientes de representación.",
+      "eligible_for_product_fill": false,
+      "review_findings": [
+        "FB02"
+      ],
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false,
+      "root_reconciliation": []
+    },
+    {
+      "id": "grip_inventory_ozono_132_22_ambiguous",
+      "template": "grip",
+      "values": {
+        "grip_attachment": "Desconocido / sin confirmar",
+        "sold_as": "Par"
+      },
+      "kind": "inventory_title_only_candidate",
+      "source_ids": [
+        "E-INVENTARIO"
+      ],
+      "source_urls": [],
+      "expected_blocking": [],
+      "inventory_product": "PUÑOS OZONO NEGROS 132mm 22mm",
+      "note": "132 y22 permanecen en el título de investigación: no hay lado/diámetro de interfaz confirmado. No escribir132 a un campo retirado ni duplicarlo en ambos lados.",
+      "eligible_for_product_fill": false,
+      "review_findings": [],
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false,
+      "root_reconciliation": []
+    },
+    {
+      "id": "stem_ahead_28_6_vs_tapered_fork_top",
+      "template": "stem",
+      "values": {
+        "stem_kind": "Tee sin rosca (ahead)",
+        "bar_clamp_diameter_mm": "31.8",
+        "stem_length_mm": "45"
+      },
+      "kind": "inventory_title_only_candidate",
+      "source_ids": [
+        "E-INVENTARIO"
+      ],
+      "source_urls": [
+        "https://www.parktool.com/en-us/blog/repair-help/stem-removal-installation-threadless"
+      ],
+      "expected_blocking": [],
+      "inventory_product": "Tee Alum Eclipse 31.8MM x 45MM Black AS-263",
+      "note": "31.8x45 son candidatos del título Eclipse. Park explica el extremo superior de ahead, pero no demuestra28.6 en ese SKU; se omite. La comparación de una horquilla cónica requiere ambas identidades y datos.",
+      "eligible_for_product_fill": false,
+      "review_findings": [],
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false,
+      "root_reconciliation": []
+    },
+    {
+      "id": "seatpost_ritchey_wcs_1bolt_clampset_7x10",
+      "template": "seatpost",
+      "values": {
+        "seatpost_kind": "Rígida",
+        "seatpost_saddle_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r01",
+              "values": {
+                "rail_geometry": "Redondo 7 mm",
+                "configuration_state": "Con kit opcional",
+                "model": "WCS Carbon 1-Bolt",
+                "clamp_part": "Clampset 7x7"
+              },
+              "sources": [
+                "https://ritcheylogic.com/bike/seatposts/wcs-carbon-1-bolt-seatpost-complete-clampset"
+              ]
+            },
+            {
+              "id": "r02",
+              "values": {
+                "rail_geometry": "Oval 7x9 mm",
+                "configuration_state": "Con kit opcional",
+                "model": "WCS Carbon 1-Bolt",
+                "clamp_part": "Clampset 7x10",
+                "conditions": "el clampset 7x10 acepta 7x9, 7x9.6 y 7x10"
+              },
+              "sources": [
+                "https://ritcheylogic.com/bike/seatposts/wcs-carbon-1-bolt-seatpost-complete-clampset"
+              ]
+            },
+            {
+              "id": "r03",
+              "values": {
+                "rail_geometry": "Oval 7x9.6 mm",
+                "configuration_state": "Con kit opcional",
+                "model": "WCS Carbon 1-Bolt",
+                "clamp_part": "Clampset 7x10"
+              },
+              "sources": [
+                "https://ritcheylogic.com/bike/seatposts/wcs-carbon-1-bolt-seatpost-complete-clampset"
+              ]
+            },
+            {
+              "id": "r04",
+              "values": {
+                "rail_geometry": "Oval 7x10 mm",
+                "configuration_state": "Con kit opcional",
+                "model": "WCS Carbon 1-Bolt",
+                "clamp_part": "Clampset 7x10"
+              },
+              "sources": [
+                "https://ritcheylogic.com/bike/seatposts/wcs-carbon-1-bolt-seatpost-complete-clampset"
+              ]
+            },
+            {
+              "id": "r05",
+              "values": {
+                "rail_geometry": "Oval 8x8.5 mm",
+                "configuration_state": "Con kit opcional",
+                "model": "WCS Carbon 1-Bolt",
+                "clamp_part": "Clampset 8x8.5"
+              },
+              "sources": [
+                "https://ritcheylogic.com/bike/seatposts/wcs-carbon-1-bolt-seatpost-complete-clampset"
+              ]
+            }
+          ]
+        }
+      },
+      "kind": "source_scoped_configuration_example_not_seatpost_sku",
+      "source_ids": [
+        "S-RITCHEY"
+      ],
+      "source_urls": [
+        "https://ritcheylogic.com/bike/seatposts/wcs-carbon-1-bolt-seatpost-complete-clampset"
+      ],
+      "expected_blocking": [],
+      "inventory_product": null,
+      "note": "La fuente es el clampset: filas muestran alternativas con ese kit/modelo, sin afirmar contenido de una tija ni diámetro. Con kit opcional significa configuración posible con kit, no prueba de ausencia en la caja. El kit vendido tampoco se clasifica como cuerpo de tija para llenar inventario.",
+      "eligible_for_product_fill": false,
+      "review_findings": [
+        "FB03"
+      ],
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false,
+      "root_reconciliation": []
+    },
+    {
+      "id": "seatpost_reverb_axs_150_rev_a_dimensions",
+      "template": "seatpost",
+      "values": {
+        "seatpost_kind": "Telescópica (dropper)",
+        "dropper_travel_mm": "150",
+        "seatpost_length_mm": "440",
+        "seatpost_min_exposed_mm": "215",
+        "seatpost_min_insertion_mm": "80",
+        "seatpost_bottom_clearance_mm": "23",
+        "seatpost_dimension_document": "GEN.0000000006250 Rev A (2020)",
+        "dropper_control_kind": "Electrónico inalámbrico"
+      },
+      "kind": "source_scoped_representation",
+      "source_ids": [
+        "S-REVERB"
+      ],
+      "source_urls": [
+        "https://www.sram.com/globalassets/document-hierarchy/frame-fit-specifications/rockshox/gen0000000006250-rev-a-reverb-axs-seatpost-specifications.pdf"
+      ],
+      "expected_blocking": [],
+      "inventory_product": null,
+      "note": "RevA2020, carrera150: C440,D215,inserción mínima80,E23 como proyección de válvula adicional a C. Diámetro SKU, A/B del cuadro y demás configuración desconocidos; no emitir ajuste. Routing ausente por inalámbrico.",
+      "eligible_for_product_fill": false,
+      "review_findings": [
+        "FB05"
+      ],
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false,
+      "root_reconciliation": []
+    },
+    {
+      "id": "seatpost_inventory_zoom_27_2_rigid",
+      "template": "seatpost",
+      "values": {
+        "seatpost_kind": "Rígida",
+        "seatpost_diameter_mm": "27.2",
+        "seatpost_length_mm": "400"
+      },
+      "kind": "inventory_title_only_candidate",
+      "source_ids": [
+        "E-INVENTARIO"
+      ],
+      "source_urls": [],
+      "expected_blocking": [],
+      "inventory_product": "TUBO SILLIN ZOOM SP-C255(ISO-M) 27.2X400 BED/BED/LABK",
+      "note": "27.2x400 son candidatos del título. Abrazadera desconocida produce pendiente no bloqueante, no compatibilidad presunta.",
+      "eligible_for_product_fill": false,
+      "review_findings": [
+        "FB05"
+      ],
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false,
+      "root_reconciliation": []
+    },
+    {
+      "id": "handlebar_inventory_ruta_440_25_4",
+      "template": "handlebar",
+      "values": {
+        "bar_construction": "Manubrio separado",
+        "bar_style": "Ruta (drop)",
+        "bar_clamp_diameter_mm": "25.4",
+        "bar_width_reference": "Desconocido / sin confirmar",
+        "bar_width_mm": "440"
+      },
+      "kind": "inventory_title_only_candidate",
+      "source_ids": [
+        "E-INVENTARIO"
+      ],
+      "source_urls": [],
+      "expected_blocking": [],
+      "inventory_product": "MANUBRIO RUTA AL. 440mm. 25.4 DR-AL-48B/E NEGRO",
+      "note": "440 del título es una medición candidata sin datum; el prerrequisito sigue pendiente no bloqueante. No compararlo a un ancho centre-to-centre confirmado.",
+      "eligible_for_product_fill": false,
+      "review_findings": [
+        "FB06"
+      ],
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false,
+      "root_reconciliation": []
+    },
+    {
+      "id": "lock_kryptonite_002079_kit_ratings_by_component",
+      "template": "lock",
+      "values": {
+        "lock_kind": "Kit U + cable",
+        "inner_width_mm": "82.55",
+        "inner_height_mm": "177.8",
+        "shackle_diameter_mm": "13",
+        "cable_length_mm": "1219.2",
+        "keys_included": "3",
+        "mount_bracket_included": true,
+        "security_rating_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r02",
+              "values": {
+                "component": "U / arco",
+                "issuer": "Sold Secure",
+                "level": "Gold",
+                "component_model": "Evolution Mini7 DoubleDeadbolt",
+                "edition": "2024",
+                "scope_note": "La aprobación citada excluye el cable; verificar identidad/generación de la presentación002079 antes de llenar."
+              },
+              "sources": [
+                "https://www.soldsecure.com/files/downloads/Sold%20Secure%202024%20Approved%20Product%20Catalogue%20Web.pdf"
+              ]
+            }
+          ]
+        },
+        "spec_evidence_source": "Kryptonite002079 y Sold Secure catálogo2024"
+      },
+      "kind": "source_scoped_representation",
+      "source_ids": [
+        "S-KRYPTONITE",
+        "S-KRYPTONITE-SIZE",
+        "S-SOLD-SECURE"
+      ],
+      "source_urls": [
+        "https://www.kryptonitelock.com/en/products/product-information/current-key/002079.html?type=bicycle",
+        "https://support.kryptonitelock.com/hc/en-us/article_attachments/360079333594",
+        "https://www.soldsecure.com/files/downloads/Sold%20Secure%202024%20Approved%20Product%20Catalogue%20Web.pdf"
+      ],
+      "expected_blocking": [],
+      "inventory_product": null,
+      "note": "Se omiten ART4 y nivel7 de gráfico no leído. Medidas U son internas según tabla OEM. 4ft=1219.2mm es conversión aritmética nominal, no medición con décimas ni tolerancia. Gold conserva fuente/edición y exclusión del cable.",
+      "eligible_for_product_fill": false,
+      "review_findings": [
+        "FB19"
+      ],
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false,
+      "root_reconciliation": []
+    },
+    {
+      "id": "lock_inventory_onguard_coil_180x12",
+      "template": "lock",
+      "values": {
+        "lock_kind": "Cable / espiral",
+        "cable_length_mm": "1800",
+        "cable_diameter_mm": "12",
+        "locking_mechanism": "Llave"
+      },
+      "kind": "inventory_title_only_candidate",
+      "source_ids": [
+        "E-INVENTARIO"
+      ],
+      "source_urls": [],
+      "expected_blocking": [],
+      "inventory_product": "Candado OnGuard Llave Espiral NS Coil 180cmX12mm Naranjo",
+      "note": "Candidato del título congelado; no verificado como hecho OEM. Producto real: 180 cm x 12 mm son largo y diámetro del cable; sin clasificación de seguridad declarada.",
+      "eligible_for_product_fill": false,
+      "review_findings": [],
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false,
+      "root_reconciliation": []
+    },
+    {
+      "id": "rack_topeak_tetrarack_m2_no_eyelets",
+      "template": "rack_basket",
+      "values": {
+        "carrier_kind": "Parrilla trasera",
+        "carrier_mount_kind": "Correas a tirantes (sin ojales)",
+        "rack_eyelets_required": false,
+        "rack_top_interface": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "qt",
+              "values": {
+                "interface": "QuickTrack",
+                "counterpart_model": "Topeak MTX / RX TrunkBags",
+                "conditions": "La página no especifica una generación QuickTrack."
+              },
+              "sources": [
+                "https://www.topeak.com/global/en/product/1286-TETRARACK-M2"
+              ]
+            },
+            {
+              "id": "kf",
+              "values": {
+                "interface": "KLICKfix",
+                "conditions": "Alcance tal como lo declara la página; no universalizar modelos."
+              },
+              "sources": [
+                "https://www.topeak.com/global/en/product/1286-TETRARACK-M2"
+              ]
+            },
+            {
+              "id": "snap1",
+              "values": {
+                "interface": "RackTime Snapit",
+                "generation": "1.0"
+              },
+              "sources": [
+                "https://www.topeak.com/global/en/product/1286-TETRARACK-M2"
+              ]
+            },
+            {
+              "id": "snapvario",
+              "values": {
+                "interface": "RackTime Snapit",
+                "generation": "Vario"
+              },
+              "sources": [
+                "https://www.topeak.com/global/en/product/1286-TETRARACK-M2"
+              ]
+            }
+          ]
+        },
+        "max_load_kg": "12",
+        "load_reference": "Parrilla completa",
+        "rack_mount_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r01",
+              "values": {
+                "mount_point": "Correas a tirantes (sin ojales)",
+                "requirement": "tirantes con diámetro > 15 mm; largo de montaje 200 mm",
+                "tube_diameter_min_mm": "15",
+                "span_min_mm": "95",
+                "span_max_mm": "125",
+                "exclusions": "V-brake: no compatible según OEM",
+                "tube_diameter_min_inclusive": false,
+                "mount_length_mm": "200",
+                "advisories": "Carbono: no recomendado según OEM"
+              },
+              "sources": [
+                "https://www.topeak.com/global/en/product/1286-TETRARACK-M2"
+              ]
+            }
+          ]
+        },
+        "spec_evidence_source": "Topeak TA2408M2 página vigente"
+      },
+      "kind": "source_scoped_representation",
+      "source_ids": [
+        "S-TETRARACK"
+      ],
+      "source_urls": [
+        "https://www.topeak.com/global/en/product/1286-TETRARACK-M2"
+      ],
+      "expected_blocking": [],
+      "inventory_product": null,
+      "note": "Varias interfaces declaradas por fila sin asignar generación QuickTrack. >15 conserva extremo abierto. Ausencia de ojales no es incompatibilidad; verificar geometría completa y restricciones de la configuración.",
+      "eligible_for_product_fill": false,
+      "review_findings": [
+        "FB07",
+        "FB08"
+      ],
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false,
+      "root_reconciliation": []
+    },
+    {
+      "id": "bike_bag_topeak_trunkbag_dxp_side_frames_and_conflict",
+      "template": "bike_bag",
+      "values": {
+        "bag_position": "Otro",
+        "attachment": "Sistema de riel (QuickTrack / KLICKfix / RackTime)",
+        "bag_rack_interface": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "qt2",
+              "values": {
+                "interface": "MTX QuickTrack",
+                "generation": "2.0",
+                "counterpart_model": "Topeak MTX QuickTrack2.0 compatible racks"
+              },
+              "sources": [
+                "https://www.topeak.com/global/en/product/1685-MTX-TRUNKBAG-DXP-%28MTX-2.0%29"
+              ]
+            }
+          ]
+        },
+        "auxiliary_part_requirements": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r01",
+              "values": {
+                "configuration": "alforjas laterales desplegadas sobre MTX BeamRack",
+                "part": "MTX Dual Side Frames",
+                "applies_to": "MTX BeamRacks"
+              },
+              "sources": [
+                "https://www.topeak.com/global/en/product/1685-MTX-TRUNKBAG-DXP-%28MTX-2.0%29"
+              ]
+            }
+          ]
+        },
+        "bag_member_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r01",
+              "values": {
+                "member": "cuerpo superior",
+                "position": "Superior"
+              },
+              "sources": [
+                "https://www.topeak.com/global/en/product/1685-MTX-TRUNKBAG-DXP-%28MTX-2.0%29"
+              ]
+            },
+            {
+              "id": "r02",
+              "values": {
+                "member": "alforjas desplegables",
+                "position": "Ambos laterales"
+              },
+              "sources": [
+                "https://www.topeak.com/global/en/product/1685-MTX-TRUNKBAG-DXP-%28MTX-2.0%29"
+              ]
+            }
+          ]
+        },
+        "conflicting_claims": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r01",
+              "values": {
+                "field_key": "volume_l",
+                "value": "19.4",
+                "unit": "L",
+                "source_kind": "Página vigente del fabricante",
+                "source_date": "2026-09-07",
+                "locator": "ficha TT9635B2"
+              },
+              "sources": [
+                "https://www.topeak.com/global/en/product/1685-MTX-TRUNKBAG-DXP-%28MTX-2.0%29"
+              ]
+            },
+            {
+              "id": "r02",
+              "values": {
+                "field_key": "volume_l",
+                "value": "22.6",
+                "unit": "L",
+                "source_kind": "Catálogo oficial",
+                "source_date": "2024",
+                "locator": "entrada TT9635B2 del preview 2024"
+              },
+              "sources": [
+                "https://www.topeak.com/storage/app/media/subsite/de/Download/2024_topeak_new_products_preview.pdf"
+              ]
+            }
+          ]
+        },
+        "spec_evidence_source": "Topeak TT9635B2: página2026-09-07 y catálogo2024"
+      },
+      "kind": "source_scoped_representation",
+      "source_ids": [
+        "S-TRUNKBAG",
+        "S-TOPEAK-2024"
+      ],
+      "source_urls": [
+        "https://www.topeak.com/global/en/product/1685-MTX-TRUNKBAG-DXP-%28MTX-2.0%29",
+        "https://www.topeak.com/storage/app/media/subsite/de/Download/2024_topeak_new_products_preview.pdf"
+      ],
+      "expected_blocking": [],
+      "inventory_product": null,
+      "note": "Dos capacidades discordantes del mismo código siguen como observaciones, volumen escalar vacío. Sideframes requeridos en el uso declarado no prueban que falten en la caja. No asignar dimensiones generales a cuerpo superior/ejes sin referencia. Falta enforcement del conflicto y representación de altura por configuración.",
+      "eligible_for_product_fill": false,
+      "review_findings": [
+        "FB07",
+        "FB09",
+        "FB17",
+        "FB18"
+      ],
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false,
+      "root_reconciliation": []
+    },
+    {
+      "id": "kickstand_hebie_0669e_ksa18_vs_40mm_frame",
+      "template": "kickstand",
+      "values": {
+        "kickstand_mount_kind": "Soporte trasero (kickstand plate)",
+        "kickstand_mount_standard": "KSA 18 (separación 18 mm, 2 pernos)",
+        "mount_hole_spacing_mm": "18",
+        "mount_bolt_count": "2",
+        "nominal_wheel_size_min": "27.5\"",
+        "nominal_wheel_size_max": "29\"",
+        "installed_height_min_mm": "340",
+        "installed_height_max_mm": "390",
+        "frame_requirement_text": "Nur für Rahmen mit entsprechender Aufnahme am Hinterbau",
+        "spec_evidence_source": "hebie.de 0669 E",
+        "kickstand_length_reference": "Altura instalada A según plano Hebie0669E Rev1.0,01.25"
+      },
+      "kind": "source_scoped_representation",
+      "source_ids": [
+        "S-HEBIE18",
+        "S-HEBIE40",
+        "S-HEBIE-MANUAL"
+      ],
+      "source_urls": [
+        "https://www.hebie.de/ABSTELLHELD-18/0669-E",
+        "https://www.hebie.de/ABSTELLHELD-40/0667-E",
+        "https://www.hebie.de/pdf/hebie/9445-ma_abstellheld-18_0669-e_840x297_1.0_web.pdf"
+      ],
+      "expected_blocking": [],
+      "inventory_product": null,
+      "note": "0669E normal: KSA18 y dos pernos corroborados en manual. KSA40 no es montaje directo equivalente; un adaptador requiere evidencia propia. 25kg no se transforma en masa de bicicleta sin alcance explícito.",
+      "eligible_for_product_fill": false,
+      "review_findings": [
+        "FB10",
+        "FB11"
+      ],
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false,
+      "root_reconciliation": []
+    },
+    {
+      "id": "kickstand_inventory_clamp_26_36cm_reference_unknown",
+      "template": "kickstand",
+      "values": {
+        "kickstand_mount_kind": "Abrazadera a vaina",
+        "kickstand_mount_standard": "Abrazadera a vaina",
+        "adjustable_length": true,
+        "kickstand_length_reference": "Desconocido / sin confirmar",
+        "length_min_mm": "260",
+        "length_max_mm": "360"
+      },
+      "kind": "inventory_title_only_candidate",
+      "source_ids": [
+        "E-INVENTARIO"
+      ],
+      "source_urls": [],
+      "expected_blocking": [],
+      "inventory_product": "PATA DE APOYO DE ABRAZADERA AJUSTABLE 26cm-36cm",
+      "note": "Candidato del título congelado; no verificado como hecho OEM. Producto real: 26–36 cm sin saber si es altura instalada o largo de pieza; se declara la referencia como desconocida.",
+      "eligible_for_product_fill": false,
+      "review_findings": [
+        "FB10",
+        "FB11"
+      ],
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false,
+      "root_reconciliation": []
+    },
+    {
+      "id": "bottle_fidlock_twist_590_with_uni_base",
+      "template": "bottle",
+      "values": {
+        "volume_ml": "590",
+        "bottle_retention_system": "FIDLOCK TWIST",
+        "base_included": true,
+        "included_base_model": "TWIST uni base",
+        "material": "PE / plástico",
+        "bpa_free_claim": true,
+        "spec_evidence_source": "fidlock.com 09641-001032(TBL)"
+      },
+      "kind": "source_scoped_representation",
+      "source_ids": [
+        "S-FIDLOCK-BOTTLE",
+        "S-FIDLOCK-BASE"
+      ],
+      "source_urls": [
+        "https://www.fidlock.com/consumer/en/twist-bottle-590-uni-base/09641-001032-tbl",
+        "https://www.fidlock.com/consumer/en/twist-uni-base/09620-p00002-blk"
+      ],
+      "expected_blocking": [],
+      "inventory_product": null,
+      "note": "Caso basado en índice primario del producto590+uni base, pendiente de lectura directa para llenado. No se registra diámetro: el68 publicado es ancho, no diámetro. Retención propietaria no prohíbe dimensiones físicas.",
+      "eligible_for_product_fill": false,
+      "review_findings": [
+        "FB12"
+      ],
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false,
+      "root_reconciliation": []
+    },
+    {
+      "id": "bottle_cage_fidlock_uni_base_tube_width",
+      "template": "bottle_cage",
+      "values": {
+        "cage_mount": "Bridas (cable ties) al tubo",
+        "cage_retention_system": "FIDLOCK TWIST",
+        "frame_tube_width_min_mm": "28",
+        "frame_tube_width_max_mm": "62",
+        "spec_evidence_source": "fidlock.com 09620-P00002(BLK)"
+      },
+      "kind": "source_scoped_representation",
+      "source_ids": [
+        "S-FIDLOCK-BASE"
+      ],
+      "source_urls": [
+        "https://www.fidlock.com/consumer/en/twist-uni-base/09620-p00002-blk"
+      ],
+      "expected_blocking": [],
+      "inventory_product": null,
+      "note": "28–62 mm es ancho de tubo, no diámetro; «fits all TWIST modules» no incluye botellas convencionales.",
+      "eligible_for_product_fill": false,
+      "review_findings": [
+        "FB11"
+      ],
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false,
+      "root_reconciliation": []
+    },
+    {
+      "id": "bottle_inventory_ztto_750_retention_unknown",
+      "template": "bottle",
+      "values": {
+        "volume_ml": "750",
+        "bottle_retention_system": "Desconocido / sin confirmar"
+      },
+      "kind": "inventory_title_only_candidate",
+      "source_ids": [
+        "E-INVENTARIO"
+      ],
+      "source_urls": [],
+      "expected_blocking": [],
+      "inventory_product": "Botella 750ml ZTTO Blanca/Transparente",
+      "note": "Candidato del título congelado; no verificado como hecho OEM. Producto real: el título no identifica el sistema de retención; no se presume aro convencional.",
+      "eligible_for_product_fill": false,
+      "review_findings": [
+        "FB12"
+      ],
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false,
+      "root_reconciliation": []
+    },
+    {
+      "id": "pump_lezyne_16g_co2_5pack",
+      "template": "pump",
+      "values": {
+        "pump_kind": "Cartucho CO2 (recarga)",
+        "pack_quantity": "5",
+        "co2_cartridge_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r01",
+              "values": {
+                "gas_mass_g": "16",
+                "threaded": true,
+                "included_quantity": "5",
+                "configuration_kind": "Cartucho de esta presentación"
+              },
+              "sources": [
+                "https://ride.lezyne.com/products/16g-co2-cartridge"
+              ]
+            }
+          ]
+        },
+        "inflation_target_note": "road and low-volume gravel",
+        "spec_evidence_source": "ride.lezyne.com 1-C2-CRTDG-V116P5"
+      },
+      "kind": "source_scoped_representation",
+      "source_ids": [
+        "S-LEZYNE"
+      ],
+      "source_urls": [
+        "https://ride.lezyne.com/products/16g-co2-cartridge"
+      ],
+      "expected_blocking": [],
+      "inventory_product": null,
+      "note": "SKU1-C2-CRTDG-V116P5: gas16g y cinco cartuchos roscados. No llenar peso físico con60g sin alcance. Threaded no prueba rosca exacta ni ajuste de todo inflador; cantidad total/fila aún requieren coherencia ejecutable.",
+      "eligible_for_product_fill": false,
+      "review_findings": [
+        "FB13"
+      ],
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false,
+      "root_reconciliation": []
+    },
+    {
+      "id": "helmet_smith_mainline_certifications_by_row",
+      "template": "helmet",
+      "values": {
+        "oem_size_label": "M",
+        "head_circumference_min_cm": "55",
+        "head_circumference_max_cm": "59",
+        "helmet_kind": "Integral",
+        "intended_audience": "Adulto",
+        "rotational_protection_claimed": true,
+        "rotational_protection_system": "Mips",
+        "label_evidence_state": "Etiqueta no observada",
+        "weight_g": "770",
+        "spec_evidence_source": "smithoptics.com mainline-mips-r",
+        "certification_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r01",
+              "values": {
+                "standard": "CPSC 16 CFR 1203",
+                "scope_model": "Mainline Mips",
+                "evidence_kind": "Página OEM",
+                "evidence_date": "2026-09-07",
+                "standard_text": "CPSC (personas de5 años o más)"
+              },
+              "sources": [
+                "https://www.smithoptics.com/en-us/products/mainline-mips-r"
+              ]
+            },
+            {
+              "id": "r02",
+              "values": {
+                "standard": "EN 1078",
+                "scope_model": "Mainline Mips",
+                "evidence_kind": "Página OEM",
+                "evidence_date": "2026-09-07",
+                "standard_text": "CE EN1078"
+              },
+              "sources": [
+                "https://www.smithoptics.com/en-us/products/mainline-mips-r"
+              ]
+            },
+            {
+              "id": "r03",
+              "values": {
+                "standard": "NTA 8776",
+                "scope_model": "Mainline Mips",
+                "evidence_kind": "Página OEM",
+                "evidence_date": "2026-09-07",
+                "standard_text": "NTA8776"
+              },
+              "sources": [
+                "https://www.smithoptics.com/en-us/products/mainline-mips-r"
+              ]
+            },
+            {
+              "id": "r04",
+              "values": {
+                "standard": "ASTM F1952",
+                "scope_model": "Mainline Mips",
+                "evidence_kind": "Página OEM",
+                "evidence_date": "2026-09-07",
+                "standard_text": "ASTM F1952"
+              },
+              "sources": [
+                "https://www.smithoptics.com/en-us/products/mainline-mips-r"
+              ]
+            }
+          ]
+        }
+      },
+      "kind": "source_scoped_representation",
+      "source_ids": [
+        "S-SMITH"
+      ],
+      "source_urls": [
+        "https://www.smithoptics.com/en-us/products/mainline-mips-r"
+      ],
+      "expected_blocking": [],
+      "inventory_product": null,
+      "note": "Declaraciones de la página Mainline Mips; tabla adulta M55–59 y770g M. No se observó etiqueta de unidad ni edición EN. Se omiten construcción no publicada y mercados inferidos desde norma/aplicación. No afirmar certificación de cualquier lote/presentación.",
+      "eligible_for_product_fill": false,
+      "review_findings": [
+        "FB11",
+        "FB14",
+        "FB15",
+        "FB19"
+      ],
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false,
+      "root_reconciliation": []
+    },
+    {
+      "id": "helmet_inventory_best_enduro_certificado_sin_norma",
+      "template": "helmet",
+      "values": {
+        "oem_size_label": "L",
+        "helmet_kind": "Enduro (cobertura extendida)",
+        "label_evidence_state": "Etiqueta no observada"
+      },
+      "kind": "inventory_title_only_candidate",
+      "source_ids": [
+        "E-INVENTARIO"
+      ],
+      "source_urls": [],
+      "expected_blocking": [],
+      "inventory_product": "CASCO BEST ENDURO NEGRO MATTE TALLA L CERTIFICADO EN CAJA",
+      "note": "Título BEST EnduroL: ni Adulto ni una norma concreta se deducen de L o certificado en caja. Sin filas de certificación hasta evidencia.",
+      "eligible_for_product_fill": false,
+      "review_findings": [
+        "FB14",
+        "FB15"
+      ],
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false,
+      "root_reconciliation": []
+    },
+    {
+      "id": "eyewear_julbo_reactiv_2_4_polarized",
+      "template": "eyewear",
+      "values": {
+        "eyewear_lens_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r01",
+              "values": {
+                "model": "REACTIV 2-4 Polarized",
+                "photochromic": true,
+                "polarized": true,
+                "category_min": "2",
+                "category_max": "4",
+                "uv_claim": "100% UV protection"
+              },
+              "sources": [
+                "https://www.julbo.com/en_gb/sunglasses/photochromic-2-4-polarized-sunglasses"
+              ]
+            }
+          ]
+        },
+        "spec_evidence_source": "julbo.com photochromic-2-4-polarized"
+      },
+      "kind": "lens_family_reference_not_eyewear_sku",
+      "source_ids": [
+        "S-JULBO"
+      ],
+      "source_urls": [
+        "https://www.julbo.com/en_gb/sunglasses/photochromic-2-4-polarized-sunglasses"
+      ],
+      "expected_blocking": [],
+      "inventory_product": null,
+      "note": "Familia REACTIV2-4 Polarized: ambas funciones en la misma lente y UV por lente. Presentación incluida desconocida; VLT no completado. No copiar a cualquier gafas Julbo.",
+      "eligible_for_product_fill": false,
+      "review_findings": [
+        "FB20"
+      ],
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false,
+      "root_reconciliation": []
+    },
+    {
+      "id": "eyewear_inventory_scvcn_photochromic_unknown_category",
+      "template": "eyewear",
+      "values": {
+        "eyewear_lens_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r01",
+              "values": {
+                "model": "DZ-S62-PH-08",
+                "photochromic": true
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "kind": "inventory_title_only_candidate",
+      "source_ids": [
+        "E-INVENTARIO"
+      ],
+      "source_urls": [],
+      "expected_blocking": [],
+      "inventory_product": "Lentes SCVCN Fotocromáticos DZ-S62-PH-08",
+      "note": "Candidato exclusivamente del título SCVCN. Retirada URL Sheldon ajena; no sustituir por otra URL formal. Categoría/polarización/UV/contenido siguen sin confirmar y no es hecho listo para guardar.",
+      "eligible_for_product_fill": false,
+      "review_findings": [
+        "FB20"
+      ],
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false,
+      "root_reconciliation": []
+    },
+    {
+      "id": "apparel_castelli_perfetto_ros_ls_jacket",
+      "template": "rider_apparel",
+      "values": {
+        "garment_kind": "Chaqueta",
+        "sleeve": "Larga",
+        "oem_size_label": "S",
+        "oem_size_system": "Castelli hombre S–3XL",
+        "gender_fit": "Hombre",
+        "intended_audience": "Adulto",
+        "fit_cut": "Tailored",
+        "spec_evidence_source": "castelli-cycling.com 4519500-383"
+      },
+      "kind": "source_scoped_representation",
+      "source_ids": [
+        "S-CASTELLI"
+      ],
+      "source_urls": [
+        "https://www.castelli-cycling.com/CY/en/Men/Cycling/Top/Jackets/Cold/PERFETTO-RoS-LONG-SLEEVE/p/4519500_383_52_S"
+      ],
+      "expected_blocking": [],
+      "inventory_product": null,
+      "note": "Mismo SKU4519500-383, tamañoS en página oficial CY indexada. Se conserva Tailored literal, sin Race. Composición no leída: vacío. No transferir valores de otro color/revisión.",
+      "eligible_for_product_fill": false,
+      "review_findings": [
+        "FB15",
+        "FB16"
+      ],
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false,
+      "root_reconciliation": []
+    },
+    {
+      "id": "apparel_inventory_polera_wtb_xl",
+      "template": "rider_apparel",
+      "values": {
+        "garment_kind": "Polera",
+        "oem_size_label": "XL",
+        "intended_audience": "Desconocido / sin confirmar"
+      },
+      "kind": "inventory_title_only_candidate",
+      "source_ids": [
+        "E-INVENTARIO"
+      ],
+      "source_urls": [],
+      "expected_blocking": [],
+      "inventory_product": "Polera Wtb Wilderness Negra Xl",
+      "note": "Candidato del título congelado; no verificado como hecho OEM. Producto real: talla OEM exacta «XL» sin sistema ni guía; público desconocido.",
+      "eligible_for_product_fill": false,
+      "review_findings": [
+        "FB15"
+      ],
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false,
+      "root_reconciliation": []
+    }
+  ]
+}

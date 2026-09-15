@@ -1,0 +1,2216 @@
+{
+  "cases": [
+    {
+      "id": "ck_a_triple_lists_two_bolt_circles",
+      "template": "crankset",
+      "values": {
+        "crankset_construction": "Tres piezas (eje independiente)",
+        "spindle_interface": "Cuadrado JIS",
+        "spindle_taper_standard": "JIS",
+        "spindle_included": false,
+        "bottom_bracket_included": false,
+        "included_chainring_count": "3",
+        "chainring_mounting": "Platos desmontables por pernos",
+        "chainring_teeth_rows": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "ring_identity": "Exterior 42T",
+                "position": "Exterior",
+                "teeth": "42",
+                "source_document": "Vista despiezada identificada",
+                "bcd_mm": "104"
+              },
+              "sources": []
+            },
+            {
+              "id": "r2",
+              "values": {
+                "ring_identity": "Medio 34T",
+                "position": "Medio",
+                "teeth": "34",
+                "source_document": "Vista despiezada identificada",
+                "bcd_mm": "104"
+              },
+              "sources": []
+            },
+            {
+              "id": "r3",
+              "values": {
+                "ring_identity": "Interior 24T",
+                "position": "Interior",
+                "teeth": "24",
+                "source_document": "Vista despiezada identificada",
+                "bcd_mm": "64"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "spec_evidence_source": "https://example.invalid/synthetic"
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [
+        "https://dassets.shimano.com/content/dam/global/cg1SHICCycling/final/ev/ev/EV-FC-M8000-3849B.pdf"
+      ]
+    },
+    {
+      "id": "ck_the_same_ring_position_twice_blocks",
+      "template": "crankset",
+      "values": {
+        "crankset_construction": "Tres piezas (eje independiente)",
+        "spindle_interface": "Cuadrado JIS",
+        "spindle_taper_standard": "JIS",
+        "spindle_included": false,
+        "bottom_bracket_included": false,
+        "included_chainring_count": "3",
+        "chainring_mounting": "Platos desmontables por pernos",
+        "chainring_teeth_rows": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "ring_identity": "Exterior 42T",
+                "position": "Exterior",
+                "teeth": "42",
+                "source_document": "Vista despiezada identificada",
+                "bcd_mm": "104"
+              },
+              "sources": []
+            },
+            {
+              "id": "r2",
+              "values": {
+                "ring_identity": "Medio 34T",
+                "position": "Exterior",
+                "teeth": "34",
+                "source_document": "Vista despiezada identificada",
+                "bcd_mm": "104"
+              },
+              "sources": []
+            },
+            {
+              "id": "r3",
+              "values": {
+                "ring_identity": "Interior 24T",
+                "position": "Interior",
+                "teeth": "24",
+                "source_document": "Vista despiezada identificada",
+                "bcd_mm": "64"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "spec_evidence_source": "https://example.invalid/synthetic"
+      },
+      "expected_blocking": [
+        {
+          "code": "row_shape",
+          "field": "chainring_teeth_rows"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "ck_a_ring_without_its_position_is_incomplete",
+      "template": "crankset",
+      "values": {
+        "crankset_construction": "Tres piezas (eje independiente)",
+        "spindle_interface": "Cuadrado JIS",
+        "spindle_taper_standard": "JIS",
+        "spindle_included": false,
+        "bottom_bracket_included": false,
+        "included_chainring_count": "3",
+        "chainring_mounting": "Platos desmontables por pernos",
+        "chainring_teeth_rows": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "ring_identity": "Exterior 42T",
+                "teeth": "42",
+                "source_document": "Vista despiezada identificada",
+                "bcd_mm": "104"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "spec_evidence_source": "https://example.invalid/synthetic"
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "expected_issue_subset": [
+        {
+          "code": "row_incomplete",
+          "field": "chainring_teeth_rows",
+          "blocking": false
+        }
+      ],
+      "expected_sql_issue_subset": [
+        {
+          "code": "row_incomplete",
+          "field": "chainring_teeth_rows",
+          "blocking": false
+        }
+      ]
+    },
+    {
+      "id": "ck_a_bare_crankset_cannot_list_rings",
+      "template": "crankset",
+      "values": {
+        "crankset_construction": "Tres piezas (eje independiente)",
+        "spindle_interface": "Cuadrado JIS",
+        "spindle_taper_standard": "JIS",
+        "spindle_included": false,
+        "bottom_bracket_included": false,
+        "included_chainring_count": "0",
+        "spec_evidence_source": "https://example.invalid/synthetic",
+        "chainring_teeth_rows": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "ring_identity": "Exterior 42T",
+                "position": "Exterior",
+                "teeth": "42",
+                "source_document": "Vista despiezada identificada",
+                "bcd_mm": "104"
+              },
+              "sources": []
+            },
+            {
+              "id": "r2",
+              "values": {
+                "ring_identity": "Medio 34T",
+                "position": "Medio",
+                "teeth": "34",
+                "source_document": "Vista despiezada identificada",
+                "bcd_mm": "104"
+              },
+              "sources": []
+            },
+            {
+              "id": "r3",
+              "values": {
+                "ring_identity": "Interior 24T",
+                "position": "Interior",
+                "teeth": "24",
+                "source_document": "Vista despiezada identificada",
+                "bcd_mm": "64"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [
+        {
+          "code": "field_applicability",
+          "field": "chainring_teeth_rows"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "ck_the_ring_count_must_match_the_rows",
+      "template": "crankset",
+      "values": {
+        "crankset_construction": "Tres piezas (eje independiente)",
+        "spindle_interface": "Cuadrado JIS",
+        "spindle_taper_standard": "JIS",
+        "spindle_included": false,
+        "bottom_bracket_included": false,
+        "included_chainring_count": "2",
+        "chainring_mounting": "Platos desmontables por pernos",
+        "chainring_teeth_rows": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "ring_identity": "Exterior 42T",
+                "position": "Exterior",
+                "teeth": "42",
+                "source_document": "Vista despiezada identificada",
+                "bcd_mm": "104"
+              },
+              "sources": []
+            },
+            {
+              "id": "r2",
+              "values": {
+                "ring_identity": "Medio 34T",
+                "position": "Medio",
+                "teeth": "34",
+                "source_document": "Vista despiezada identificada",
+                "bcd_mm": "104"
+              },
+              "sources": []
+            },
+            {
+              "id": "r3",
+              "values": {
+                "ring_identity": "Interior 24T",
+                "position": "Interior",
+                "teeth": "24",
+                "source_document": "Vista despiezada identificada",
+                "bcd_mm": "64"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "spec_evidence_source": "https://example.invalid/synthetic"
+      },
+      "expected_blocking": [
+        {
+          "code": "row_cardinality_conflict",
+          "field": "chainring_teeth_rows"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "ck_a_crankset_without_its_own_spindle_has_no_chain_line",
+      "template": "crankset",
+      "values": {
+        "crankset_construction": "Tres piezas (eje independiente)",
+        "spindle_interface": "Cuadrado JIS",
+        "spindle_taper_standard": "JIS",
+        "spindle_included": false,
+        "bottom_bracket_included": false,
+        "included_chainring_count": "3",
+        "chainring_mounting": "Platos desmontables por pernos",
+        "chainring_teeth_rows": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "ring_identity": "Exterior 42T",
+                "position": "Exterior",
+                "teeth": "42",
+                "source_document": "Vista despiezada identificada",
+                "bcd_mm": "104"
+              },
+              "sources": []
+            },
+            {
+              "id": "r2",
+              "values": {
+                "ring_identity": "Medio 34T",
+                "position": "Medio",
+                "teeth": "34",
+                "source_document": "Vista despiezada identificada",
+                "bcd_mm": "104"
+              },
+              "sources": []
+            },
+            {
+              "id": "r3",
+              "values": {
+                "ring_identity": "Interior 24T",
+                "position": "Interior",
+                "teeth": "24",
+                "source_document": "Vista despiezada identificada",
+                "bcd_mm": "64"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "spec_evidence_source": "https://example.invalid/synthetic",
+        "chainline_mm": "122.5"
+      },
+      "expected_blocking": [
+        {
+          "code": "field_applicability",
+          "field": "chainline_mm"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [
+        "https://www.sheldonbrown.com/bbtaper.html"
+      ]
+    },
+    {
+      "id": "ck_a_crankset_with_its_own_spindle_publishes_its_chain_line",
+      "template": "crankset",
+      "values": {
+        "crankset_construction": "Tres piezas (eje independiente)",
+        "spindle_interface": "Hollowtech / 24mm",
+        "spindle_included": true,
+        "bottom_bracket_included": false,
+        "included_chainring_count": "3",
+        "chainring_mounting": "Platos desmontables por pernos",
+        "chainring_teeth_rows": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "ring_identity": "Exterior 42T",
+                "position": "Exterior",
+                "teeth": "42",
+                "source_document": "Vista despiezada identificada",
+                "bcd_mm": "104"
+              },
+              "sources": []
+            },
+            {
+              "id": "r2",
+              "values": {
+                "ring_identity": "Medio 34T",
+                "position": "Medio",
+                "teeth": "34",
+                "source_document": "Vista despiezada identificada",
+                "bcd_mm": "104"
+              },
+              "sources": []
+            },
+            {
+              "id": "r3",
+              "values": {
+                "ring_identity": "Interior 24T",
+                "position": "Interior",
+                "teeth": "24",
+                "source_document": "Vista despiezada identificada",
+                "bcd_mm": "64"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "spec_evidence_source": "https://example.invalid/synthetic",
+        "chainline_mm": "50"
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [
+        "https://www.sheldonbrown.com/bbtaper.html"
+      ]
+    },
+    {
+      "id": "ck_each_bottom_bracket_combination_keeps_its_own_line",
+      "template": "crankset",
+      "values": {
+        "crankset_construction": "Tres piezas (eje independiente)",
+        "spindle_interface": "Cuadrado JIS",
+        "spindle_taper_standard": "JIS",
+        "spindle_included": false,
+        "bottom_bracket_included": false,
+        "included_chainring_count": "3",
+        "chainring_mounting": "Platos desmontables por pernos",
+        "chainring_teeth_rows": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "ring_identity": "Exterior 42T",
+                "position": "Exterior",
+                "teeth": "42",
+                "source_document": "Vista despiezada identificada",
+                "bcd_mm": "104"
+              },
+              "sources": []
+            },
+            {
+              "id": "r2",
+              "values": {
+                "ring_identity": "Medio 34T",
+                "position": "Medio",
+                "teeth": "34",
+                "source_document": "Vista despiezada identificada",
+                "bcd_mm": "104"
+              },
+              "sources": []
+            },
+            {
+              "id": "r3",
+              "values": {
+                "ring_identity": "Interior 24T",
+                "position": "Interior",
+                "teeth": "24",
+                "source_document": "Vista despiezada identificada",
+                "bcd_mm": "64"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "spec_evidence_source": "https://example.invalid/synthetic",
+        "bottom_bracket_required": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "requirement_identity": "D-NL",
+                "bb_shell_interface": "BSA roscado",
+                "bb_shell_width_mm": "68",
+                "bb_model_code": "Pedalier documentado",
+                "spindle_length_mm": "122.5",
+                "resulting_chainline_mm": "47.5",
+                "configuration_code": "D-NL",
+                "source_document": "Tabla de compatibilidad identificada",
+                "source_url": "https://productinfo.shimano.com/en/compatibility/C-449"
+              },
+              "sources": []
+            },
+            {
+              "id": "r2",
+              "values": {
+                "requirement_identity": "D-EL",
+                "bb_shell_interface": "BSA roscado",
+                "bb_shell_width_mm": "68",
+                "bb_model_code": "Otro pedalier documentado",
+                "spindle_length_mm": "127.5",
+                "resulting_chainline_mm": "50",
+                "configuration_code": "D-EL",
+                "source_document": "Tabla de compatibilidad identificada",
+                "source_url": "https://productinfo.shimano.com/en/compatibility/C-449"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [
+        "https://productinfo.shimano.com/en/compatibility/C-449"
+      ]
+    },
+    {
+      "id": "ck_the_same_combination_twice_blocks",
+      "template": "crankset",
+      "values": {
+        "crankset_construction": "Tres piezas (eje independiente)",
+        "spindle_interface": "Cuadrado JIS",
+        "spindle_taper_standard": "JIS",
+        "spindle_included": false,
+        "bottom_bracket_included": false,
+        "included_chainring_count": "3",
+        "chainring_mounting": "Platos desmontables por pernos",
+        "chainring_teeth_rows": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "ring_identity": "Exterior 42T",
+                "position": "Exterior",
+                "teeth": "42",
+                "source_document": "Vista despiezada identificada",
+                "bcd_mm": "104"
+              },
+              "sources": []
+            },
+            {
+              "id": "r2",
+              "values": {
+                "ring_identity": "Medio 34T",
+                "position": "Medio",
+                "teeth": "34",
+                "source_document": "Vista despiezada identificada",
+                "bcd_mm": "104"
+              },
+              "sources": []
+            },
+            {
+              "id": "r3",
+              "values": {
+                "ring_identity": "Interior 24T",
+                "position": "Interior",
+                "teeth": "24",
+                "source_document": "Vista despiezada identificada",
+                "bcd_mm": "64"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "spec_evidence_source": "https://example.invalid/synthetic",
+        "bottom_bracket_required": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "requirement_identity": "D-NL",
+                "bb_shell_interface": "BSA roscado",
+                "bb_shell_width_mm": "68",
+                "bb_model_code": "Pedalier documentado",
+                "spindle_length_mm": "122.5",
+                "resulting_chainline_mm": "47.5",
+                "configuration_code": "D-NL",
+                "source_document": "Tabla de compatibilidad identificada",
+                "source_url": "https://productinfo.shimano.com/en/compatibility/C-449"
+              },
+              "sources": []
+            },
+            {
+              "id": "r2",
+              "values": {
+                "requirement_identity": "D-NL",
+                "bb_shell_interface": "BSA roscado",
+                "bb_shell_width_mm": "68",
+                "bb_model_code": "Pedalier documentado",
+                "spindle_length_mm": "122.5",
+                "resulting_chainline_mm": "47.5",
+                "configuration_code": "D-NL",
+                "source_document": "Tabla de compatibilidad identificada",
+                "source_url": "https://productinfo.shimano.com/en/compatibility/C-449"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [
+        {
+          "code": "row_shape",
+          "field": "bottom_bracket_required"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "ck_a_combination_without_its_shell_is_incomplete",
+      "template": "crankset",
+      "values": {
+        "crankset_construction": "Tres piezas (eje independiente)",
+        "spindle_interface": "Cuadrado JIS",
+        "spindle_taper_standard": "JIS",
+        "spindle_included": false,
+        "bottom_bracket_included": false,
+        "included_chainring_count": "3",
+        "chainring_mounting": "Platos desmontables por pernos",
+        "chainring_teeth_rows": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "ring_identity": "Exterior 42T",
+                "position": "Exterior",
+                "teeth": "42",
+                "source_document": "Vista despiezada identificada",
+                "bcd_mm": "104"
+              },
+              "sources": []
+            },
+            {
+              "id": "r2",
+              "values": {
+                "ring_identity": "Medio 34T",
+                "position": "Medio",
+                "teeth": "34",
+                "source_document": "Vista despiezada identificada",
+                "bcd_mm": "104"
+              },
+              "sources": []
+            },
+            {
+              "id": "r3",
+              "values": {
+                "ring_identity": "Interior 24T",
+                "position": "Interior",
+                "teeth": "24",
+                "source_document": "Vista despiezada identificada",
+                "bcd_mm": "64"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "spec_evidence_source": "https://example.invalid/synthetic",
+        "bottom_bracket_required": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "requirement_identity": "D-NL",
+                "bb_shell_width_mm": "68",
+                "bb_model_code": "Pedalier documentado",
+                "spindle_length_mm": "122.5",
+                "resulting_chainline_mm": "47.5",
+                "configuration_code": "D-NL",
+                "source_document": "Tabla de compatibilidad identificada",
+                "source_url": "https://productinfo.shimano.com/en/compatibility/C-449"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "expected_issue_subset": [
+        {
+          "code": "row_incomplete",
+          "field": "bottom_bracket_required",
+          "blocking": false
+        }
+      ],
+      "expected_sql_issue_subset": [
+        {
+          "code": "row_incomplete",
+          "field": "bottom_bracket_required",
+          "blocking": false
+        }
+      ]
+    },
+    {
+      "id": "ck_a_supplied_bottom_bracket_needs_its_contents",
+      "template": "crankset",
+      "values": {
+        "crankset_construction": "Tres piezas (eje independiente)",
+        "spindle_interface": "Cuadrado JIS",
+        "spindle_taper_standard": "JIS",
+        "spindle_included": false,
+        "bottom_bracket_included": true,
+        "included_chainring_count": "3",
+        "chainring_mounting": "Platos desmontables por pernos",
+        "chainring_teeth_rows": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "ring_identity": "Exterior 42T",
+                "position": "Exterior",
+                "teeth": "42",
+                "source_document": "Vista despiezada identificada",
+                "bcd_mm": "104"
+              },
+              "sources": []
+            },
+            {
+              "id": "r2",
+              "values": {
+                "ring_identity": "Medio 34T",
+                "position": "Medio",
+                "teeth": "34",
+                "source_document": "Vista despiezada identificada",
+                "bcd_mm": "104"
+              },
+              "sources": []
+            },
+            {
+              "id": "r3",
+              "values": {
+                "ring_identity": "Interior 24T",
+                "position": "Interior",
+                "teeth": "24",
+                "source_document": "Vista despiezada identificada",
+                "bcd_mm": "64"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "spec_evidence_source": "https://example.invalid/synthetic"
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "expected_issue_subset": [
+        {
+          "code": "required_missing",
+          "field": "crankset_bottom_bracket_supplied",
+          "blocking": false
+        }
+      ],
+      "expected_sql_issue_subset": [
+        {
+          "code": "required_missing",
+          "field": "crankset_bottom_bracket_supplied",
+          "blocking": false
+        }
+      ]
+    },
+    {
+      "id": "ck_without_a_supplied_bottom_bracket_there_is_no_content",
+      "template": "crankset",
+      "values": {
+        "crankset_construction": "Tres piezas (eje independiente)",
+        "spindle_interface": "Cuadrado JIS",
+        "spindle_taper_standard": "JIS",
+        "spindle_included": false,
+        "bottom_bracket_included": false,
+        "included_chainring_count": "3",
+        "chainring_mounting": "Platos desmontables por pernos",
+        "chainring_teeth_rows": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "ring_identity": "Exterior 42T",
+                "position": "Exterior",
+                "teeth": "42",
+                "source_document": "Vista despiezada identificada",
+                "bcd_mm": "104"
+              },
+              "sources": []
+            },
+            {
+              "id": "r2",
+              "values": {
+                "ring_identity": "Medio 34T",
+                "position": "Medio",
+                "teeth": "34",
+                "source_document": "Vista despiezada identificada",
+                "bcd_mm": "104"
+              },
+              "sources": []
+            },
+            {
+              "id": "r3",
+              "values": {
+                "ring_identity": "Interior 24T",
+                "position": "Interior",
+                "teeth": "24",
+                "source_document": "Vista despiezada identificada",
+                "bcd_mm": "64"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "spec_evidence_source": "https://example.invalid/synthetic",
+        "crankset_bottom_bracket_supplied": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "supplied_identity": "Pedalier del envase",
+                "bb_model_code": "Pedalier documentado",
+                "shell_interface": "BSA roscado",
+                "shell_width_mm": "68",
+                "source_document": "Envase identificado"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [
+        {
+          "code": "field_applicability",
+          "field": "crankset_bottom_bracket_supplied"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "ck_the_retired_single_bolt_circle_no_longer_answers",
+      "template": "crankset",
+      "values": {
+        "crankset_construction": "Tres piezas (eje independiente)",
+        "spindle_interface": "Cuadrado JIS",
+        "spindle_taper_standard": "JIS",
+        "spindle_included": false,
+        "bottom_bracket_included": false,
+        "included_chainring_count": "3",
+        "chainring_mounting": "Platos desmontables por pernos",
+        "chainring_teeth_rows": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "ring_identity": "Exterior 42T",
+                "position": "Exterior",
+                "teeth": "42",
+                "source_document": "Vista despiezada identificada",
+                "bcd_mm": "104"
+              },
+              "sources": []
+            },
+            {
+              "id": "r2",
+              "values": {
+                "ring_identity": "Medio 34T",
+                "position": "Medio",
+                "teeth": "34",
+                "source_document": "Vista despiezada identificada",
+                "bcd_mm": "104"
+              },
+              "sources": []
+            },
+            {
+              "id": "r3",
+              "values": {
+                "ring_identity": "Interior 24T",
+                "position": "Interior",
+                "teeth": "24",
+                "source_document": "Vista despiezada identificada",
+                "bcd_mm": "64"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "spec_evidence_source": "https://example.invalid/synthetic",
+        "chainring_bcd_mm": "104"
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "forbidden_issue_fields": [
+        "chainring_bcd_mm"
+      ]
+    },
+    {
+      "id": "ck_a_one_piece_crank_is_not_a_ring_count",
+      "template": "crankset",
+      "values": {
+        "crankset_construction": "Una pieza (americana / Ashtabula)",
+        "spindle_interface": "One-piece / americano",
+        "spindle_included": true,
+        "bottom_bracket_included": false,
+        "included_chainring_count": "1",
+        "chainring_mounting": "Platos desmontables por pernos",
+        "chainring_teeth_rows": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "ring_identity": "Único 44T",
+                "position": "Único",
+                "teeth": "44",
+                "source_document": "Vista despiezada identificada"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "spec_evidence_source": "https://example.invalid/synthetic"
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [
+        "https://www.parktool.com/en-us/blog/repair-help/how-to-remove-and-install-a-crank"
+      ],
+      "forbidden_issue_fields": [
+        "crankset_construction"
+      ]
+    },
+    {
+      "id": "ck_a_documented_grade_travels_with_its_claim",
+      "template": "crankset",
+      "values": {
+        "crankset_construction": "Tres piezas (eje independiente)",
+        "spindle_interface": "Cuadrado JIS",
+        "spindle_taper_standard": "JIS",
+        "spindle_included": false,
+        "bottom_bracket_included": false,
+        "included_chainring_count": "3",
+        "chainring_mounting": "Platos desmontables por pernos",
+        "chainring_teeth_rows": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "ring_identity": "Exterior 42T",
+                "position": "Exterior",
+                "teeth": "42",
+                "source_document": "Vista despiezada identificada",
+                "bcd_mm": "104"
+              },
+              "sources": []
+            },
+            {
+              "id": "r2",
+              "values": {
+                "ring_identity": "Medio 34T",
+                "position": "Medio",
+                "teeth": "34",
+                "source_document": "Vista despiezada identificada",
+                "bcd_mm": "104"
+              },
+              "sources": []
+            },
+            {
+              "id": "r3",
+              "values": {
+                "ring_identity": "Interior 24T",
+                "position": "Interior",
+                "teeth": "24",
+                "source_document": "Vista despiezada identificada",
+                "bcd_mm": "64"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "spec_evidence_source": "https://example.invalid/synthetic",
+        "crankset_compatibility_claims": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "claim_identity": "Modelo declarado",
+                "scope_kind": "Modelo documentado",
+                "source_document": "Documento identificado",
+                "brand": "Marca declarada",
+                "model": "Modelo declarado",
+                "declared_grade": "Usable con diferencias declaradas"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [
+        "https://dassets.shimano.com/content/dam/global/cg1SHICCycling/final/ev/ev/EV-FC-M8000-3849B.pdf"
+      ]
+    },
+    {
+      "id": "ck_an_interface_claim_cannot_name_a_model",
+      "template": "crankset",
+      "values": {
+        "crankset_construction": "Tres piezas (eje independiente)",
+        "spindle_interface": "Cuadrado JIS",
+        "spindle_taper_standard": "JIS",
+        "spindle_included": false,
+        "bottom_bracket_included": false,
+        "included_chainring_count": "3",
+        "chainring_mounting": "Platos desmontables por pernos",
+        "chainring_teeth_rows": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "ring_identity": "Exterior 42T",
+                "position": "Exterior",
+                "teeth": "42",
+                "source_document": "Vista despiezada identificada",
+                "bcd_mm": "104"
+              },
+              "sources": []
+            },
+            {
+              "id": "r2",
+              "values": {
+                "ring_identity": "Medio 34T",
+                "position": "Medio",
+                "teeth": "34",
+                "source_document": "Vista despiezada identificada",
+                "bcd_mm": "104"
+              },
+              "sources": []
+            },
+            {
+              "id": "r3",
+              "values": {
+                "ring_identity": "Interior 24T",
+                "position": "Interior",
+                "teeth": "24",
+                "source_document": "Vista despiezada identificada",
+                "bcd_mm": "64"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "spec_evidence_source": "https://example.invalid/synthetic",
+        "crankset_compatibility_claims": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "claim_identity": "Interfaz con modelo",
+                "scope_kind": "Interfaz o estándar documentado",
+                "source_document": "Documento identificado",
+                "declared_interface": "Interfaz declarada",
+                "model": "Modelo"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [
+        {
+          "code": "row_field_applicability",
+          "field": "crankset_compatibility_claims"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "ca_a_left_arm_names_its_length_and_thread",
+      "template": "crank_arm",
+      "values": {
+        "crank_side": "Izquierda",
+        "spindle_interface": "Cuadrado JIS",
+        "crank_arm_length_mm": "170",
+        "pedal_thread": "9/16",
+        "spec_evidence_source": "https://example.invalid/synthetic"
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "ca_a_pair_cannot_carry_one_scalar_length",
+      "template": "crank_arm",
+      "values": {
+        "crank_side": "Par",
+        "spindle_interface": "Cuadrado JIS",
+        "spec_evidence_source": "https://example.invalid/synthetic",
+        "crank_arm_unit_count": "2",
+        "crank_arm_units": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "unit_identity": "Brazo Izquierda",
+                "unit_side": "Izquierda",
+                "length_mm": "170",
+                "source_document": "Envase identificado",
+                "pedal_thread": "9/16 rosca izquierda",
+                "carries_chainring_mount": false
+              },
+              "sources": []
+            },
+            {
+              "id": "r2",
+              "values": {
+                "unit_identity": "Brazo Derecha",
+                "unit_side": "Derecha",
+                "length_mm": "170",
+                "source_document": "Envase identificado",
+                "pedal_thread": "9/16",
+                "carries_chainring_mount": true
+              },
+              "sources": []
+            }
+          ]
+        },
+        "crank_arm_length_mm": "170"
+      },
+      "expected_blocking": [
+        {
+          "code": "field_applicability",
+          "field": "crank_arm_length_mm"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "ca_a_pair_lists_its_two_arms",
+      "template": "crank_arm",
+      "values": {
+        "crank_side": "Par",
+        "spindle_interface": "Cuadrado JIS",
+        "spec_evidence_source": "https://example.invalid/synthetic",
+        "crank_arm_unit_count": "2",
+        "crank_arm_units": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "unit_identity": "Brazo Izquierda",
+                "unit_side": "Izquierda",
+                "length_mm": "170",
+                "source_document": "Envase identificado",
+                "pedal_thread": "9/16 rosca izquierda",
+                "carries_chainring_mount": false
+              },
+              "sources": []
+            },
+            {
+              "id": "r2",
+              "values": {
+                "unit_identity": "Brazo Derecha",
+                "unit_side": "Derecha",
+                "length_mm": "170",
+                "source_document": "Envase identificado",
+                "pedal_thread": "9/16",
+                "carries_chainring_mount": true
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [
+        "https://www.parktool.com/en-us/blog/repair-help/how-to-remove-and-install-a-crank"
+      ]
+    },
+    {
+      "id": "ca_the_same_arm_side_twice_blocks",
+      "template": "crank_arm",
+      "values": {
+        "crank_side": "Par",
+        "spindle_interface": "Cuadrado JIS",
+        "spec_evidence_source": "https://example.invalid/synthetic",
+        "crank_arm_unit_count": "2",
+        "crank_arm_units": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "unit_identity": "Brazo Izquierda",
+                "unit_side": "Izquierda",
+                "length_mm": "170",
+                "source_document": "Envase identificado"
+              },
+              "sources": []
+            },
+            {
+              "id": "r2",
+              "values": {
+                "unit_identity": "Brazo Izquierda",
+                "unit_side": "Izquierda",
+                "length_mm": "170",
+                "source_document": "Envase identificado"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [
+        {
+          "code": "row_shape",
+          "field": "crank_arm_units"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "ca_a_pair_without_its_count_is_pending",
+      "template": "crank_arm",
+      "values": {
+        "crank_side": "Par",
+        "spindle_interface": "Cuadrado JIS",
+        "spec_evidence_source": "https://example.invalid/synthetic",
+        "crank_arm_units": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "unit_identity": "Brazo Izquierda",
+                "unit_side": "Izquierda",
+                "length_mm": "170",
+                "source_document": "Envase identificado",
+                "pedal_thread": "9/16 rosca izquierda",
+                "carries_chainring_mount": false
+              },
+              "sources": []
+            },
+            {
+              "id": "r2",
+              "values": {
+                "unit_identity": "Brazo Derecha",
+                "unit_side": "Derecha",
+                "length_mm": "170",
+                "source_document": "Envase identificado",
+                "pedal_thread": "9/16",
+                "carries_chainring_mount": true
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "expected_issue_subset": [
+        {
+          "code": "row_cardinality_pending",
+          "field": "crank_arm_units",
+          "blocking": false
+        }
+      ],
+      "expected_sql_issue_subset": [
+        {
+          "code": "row_cardinality_pending",
+          "field": "crank_arm_units",
+          "blocking": false
+        }
+      ]
+    },
+    {
+      "id": "ca_an_individual_arm_cannot_list_package_arms",
+      "template": "crank_arm",
+      "values": {
+        "crank_side": "Izquierda",
+        "spindle_interface": "Cuadrado JIS",
+        "crank_arm_length_mm": "170",
+        "pedal_thread": "9/16",
+        "spec_evidence_source": "https://example.invalid/synthetic",
+        "crank_arm_units": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "unit_identity": "Brazo Izquierda",
+                "unit_side": "Izquierda",
+                "length_mm": "170",
+                "source_document": "Envase identificado"
+              },
+              "sources": []
+            },
+            {
+              "id": "r2",
+              "values": {
+                "unit_identity": "Brazo Derecha",
+                "unit_side": "Derecha",
+                "length_mm": "170",
+                "source_document": "Envase identificado"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [
+        {
+          "code": "field_applicability",
+          "field": "crank_arm_units"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "ca_an_individual_arm_without_its_length_is_pending",
+      "template": "crank_arm",
+      "values": {
+        "crank_side": "Izquierda",
+        "spindle_interface": "Cuadrado JIS",
+        "pedal_thread": "9/16",
+        "spec_evidence_source": "https://example.invalid/synthetic"
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "expected_issue_subset": [
+        {
+          "code": "required_missing",
+          "field": "crank_arm_length_mm",
+          "blocking": false
+        }
+      ],
+      "expected_sql_issue_subset": [
+        {
+          "code": "required_missing",
+          "field": "crank_arm_length_mm",
+          "blocking": false
+        }
+      ]
+    },
+    {
+      "id": "ca_the_documented_designation_does_not_replace_the_interface",
+      "template": "crank_arm",
+      "values": {
+        "crank_side": "Izquierda",
+        "spindle_interface": "Cuadrado JIS",
+        "crank_arm_length_mm": "170",
+        "pedal_thread": "9/16",
+        "spec_evidence_source": "https://example.invalid/synthetic",
+        "crank_arm_spindle_designation": "Eje documentado del fabricante"
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "forbidden_issue_fields": [
+        "spindle_interface"
+      ]
+    },
+    {
+      "id": "ca_a_square_arm_declares_which_standard",
+      "template": "crank_arm",
+      "values": {
+        "crank_side": "Izquierda",
+        "spindle_interface": "Cuadrado JIS",
+        "crank_arm_length_mm": "170",
+        "pedal_thread": "9/16",
+        "spec_evidence_source": "https://example.invalid/synthetic",
+        "spindle_taper_standard": "JIS"
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [
+        "https://www.sheldonbrown.com/bbtaper.html"
+      ]
+    },
+    {
+      "id": "ca_a_non_square_arm_has_no_taper_standard",
+      "template": "crank_arm",
+      "values": {
+        "crank_side": "Izquierda",
+        "spindle_interface": "Hollowtech / 24mm",
+        "crank_arm_length_mm": "170",
+        "pedal_thread": "9/16",
+        "spec_evidence_source": "https://example.invalid/synthetic",
+        "spindle_taper_standard": "JIS"
+      },
+      "expected_blocking": [
+        {
+          "code": "field_applicability",
+          "field": "spindle_taper_standard"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [
+        "https://www.sheldonbrown.com/bbtaper.html"
+      ]
+    },
+    {
+      "id": "cr_a_single_ring_names_its_teeth_and_circle",
+      "template": "chainring",
+      "values": {
+        "chainring_package_kind": "Plato individual",
+        "chainring_mount_type": "BCD 4 pernos",
+        "chainring_bcd_mm": "104",
+        "teeth_count": "36",
+        "spec_evidence_source": "https://example.invalid/synthetic",
+        "chainring_bolt_pattern_symmetric": true
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "cr_a_set_cannot_carry_one_scalar_teeth_count",
+      "template": "chainring",
+      "values": {
+        "chainring_package_kind": "Juego de platos en el mismo envase",
+        "chainring_mount_type": "BCD 4 pernos",
+        "spec_evidence_source": "https://example.invalid/synthetic",
+        "chainring_set_member_count": "3",
+        "chainring_set_members": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "member_identity": "Exterior 44T",
+                "position": "Exterior",
+                "teeth": "44",
+                "source_document": "Envase identificado",
+                "bcd_mm": "104"
+              },
+              "sources": []
+            },
+            {
+              "id": "r2",
+              "values": {
+                "member_identity": "Medio 32T",
+                "position": "Medio",
+                "teeth": "32",
+                "source_document": "Envase identificado",
+                "bcd_mm": "104"
+              },
+              "sources": []
+            },
+            {
+              "id": "r3",
+              "values": {
+                "member_identity": "Interior 22T",
+                "position": "Interior",
+                "teeth": "22",
+                "source_document": "Envase identificado",
+                "bcd_mm": "64"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "teeth_count": "36"
+      },
+      "expected_blocking": [
+        {
+          "code": "field_applicability",
+          "field": "teeth_count"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "cr_a_set_cannot_carry_one_scalar_bolt_circle",
+      "template": "chainring",
+      "values": {
+        "chainring_package_kind": "Juego de platos en el mismo envase",
+        "chainring_mount_type": "BCD 4 pernos",
+        "spec_evidence_source": "https://example.invalid/synthetic",
+        "chainring_set_member_count": "3",
+        "chainring_set_members": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "member_identity": "Exterior 44T",
+                "position": "Exterior",
+                "teeth": "44",
+                "source_document": "Envase identificado",
+                "bcd_mm": "104"
+              },
+              "sources": []
+            },
+            {
+              "id": "r2",
+              "values": {
+                "member_identity": "Medio 32T",
+                "position": "Medio",
+                "teeth": "32",
+                "source_document": "Envase identificado",
+                "bcd_mm": "104"
+              },
+              "sources": []
+            },
+            {
+              "id": "r3",
+              "values": {
+                "member_identity": "Interior 22T",
+                "position": "Interior",
+                "teeth": "22",
+                "source_document": "Envase identificado",
+                "bcd_mm": "64"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "chainring_bcd_mm": "104"
+      },
+      "expected_blocking": [
+        {
+          "code": "field_applicability",
+          "field": "chainring_bcd_mm"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "cr_a_triple_set_lists_two_bolt_circles",
+      "template": "chainring",
+      "values": {
+        "chainring_package_kind": "Juego de platos en el mismo envase",
+        "chainring_mount_type": "BCD 4 pernos",
+        "spec_evidence_source": "https://example.invalid/synthetic",
+        "chainring_set_member_count": "3",
+        "chainring_set_members": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "member_identity": "Exterior 44T",
+                "position": "Exterior",
+                "teeth": "44",
+                "source_document": "Envase identificado",
+                "bcd_mm": "104"
+              },
+              "sources": []
+            },
+            {
+              "id": "r2",
+              "values": {
+                "member_identity": "Medio 32T",
+                "position": "Medio",
+                "teeth": "32",
+                "source_document": "Envase identificado",
+                "bcd_mm": "104"
+              },
+              "sources": []
+            },
+            {
+              "id": "r3",
+              "values": {
+                "member_identity": "Interior 22T",
+                "position": "Interior",
+                "teeth": "22",
+                "source_document": "Envase identificado",
+                "bcd_mm": "64"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [
+        "https://dassets.shimano.com/content/dam/global/cg1SHICCycling/final/ev/ev/EV-FC-M8000-3849B.pdf"
+      ]
+    },
+    {
+      "id": "cr_the_same_member_position_twice_blocks",
+      "template": "chainring",
+      "values": {
+        "chainring_package_kind": "Juego de platos en el mismo envase",
+        "chainring_mount_type": "BCD 4 pernos",
+        "spec_evidence_source": "https://example.invalid/synthetic",
+        "chainring_set_member_count": "3",
+        "chainring_set_members": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "member_identity": "Exterior 44T",
+                "position": "Exterior",
+                "teeth": "44",
+                "source_document": "Envase identificado",
+                "bcd_mm": "104"
+              },
+              "sources": []
+            },
+            {
+              "id": "r2",
+              "values": {
+                "member_identity": "Medio 32T",
+                "position": "Exterior",
+                "teeth": "32",
+                "source_document": "Envase identificado",
+                "bcd_mm": "104"
+              },
+              "sources": []
+            },
+            {
+              "id": "r3",
+              "values": {
+                "member_identity": "Interior 22T",
+                "position": "Interior",
+                "teeth": "22",
+                "source_document": "Envase identificado",
+                "bcd_mm": "64"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [
+        {
+          "code": "row_shape",
+          "field": "chainring_set_members"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "cr_a_member_without_its_teeth_is_incomplete",
+      "template": "chainring",
+      "values": {
+        "chainring_package_kind": "Juego de platos en el mismo envase",
+        "chainring_mount_type": "BCD 4 pernos",
+        "spec_evidence_source": "https://example.invalid/synthetic",
+        "chainring_set_member_count": "2",
+        "chainring_set_members": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "member_identity": "Exterior 44T",
+                "position": "Exterior",
+                "teeth": "44",
+                "source_document": "Envase identificado",
+                "bcd_mm": "104"
+              },
+              "sources": []
+            },
+            {
+              "id": "r2",
+              "values": {
+                "member_identity": "Medio 32T",
+                "position": "Medio",
+                "source_document": "Envase identificado",
+                "bcd_mm": "104"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "expected_issue_subset": [
+        {
+          "code": "row_incomplete",
+          "field": "chainring_set_members",
+          "blocking": false
+        }
+      ],
+      "expected_sql_issue_subset": [
+        {
+          "code": "row_incomplete",
+          "field": "chainring_set_members",
+          "blocking": false
+        }
+      ]
+    },
+    {
+      "id": "cr_the_set_count_must_match_its_members",
+      "template": "chainring",
+      "values": {
+        "chainring_package_kind": "Juego de platos en el mismo envase",
+        "chainring_mount_type": "BCD 4 pernos",
+        "spec_evidence_source": "https://example.invalid/synthetic",
+        "chainring_set_member_count": "2",
+        "chainring_set_members": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "member_identity": "Exterior 44T",
+                "position": "Exterior",
+                "teeth": "44",
+                "source_document": "Envase identificado",
+                "bcd_mm": "104"
+              },
+              "sources": []
+            },
+            {
+              "id": "r2",
+              "values": {
+                "member_identity": "Medio 32T",
+                "position": "Medio",
+                "teeth": "32",
+                "source_document": "Envase identificado",
+                "bcd_mm": "104"
+              },
+              "sources": []
+            },
+            {
+              "id": "r3",
+              "values": {
+                "member_identity": "Interior 22T",
+                "position": "Interior",
+                "teeth": "22",
+                "source_document": "Envase identificado",
+                "bcd_mm": "64"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [
+        {
+          "code": "row_cardinality_conflict",
+          "field": "chainring_set_members"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "cr_an_individual_ring_cannot_list_set_members",
+      "template": "chainring",
+      "values": {
+        "chainring_package_kind": "Plato individual",
+        "chainring_mount_type": "BCD 4 pernos",
+        "chainring_bcd_mm": "104",
+        "teeth_count": "36",
+        "spec_evidence_source": "https://example.invalid/synthetic",
+        "chainring_set_members": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "member_identity": "Exterior 44T",
+                "position": "Exterior",
+                "teeth": "44",
+                "source_document": "Envase identificado",
+                "bcd_mm": "104"
+              },
+              "sources": []
+            },
+            {
+              "id": "r2",
+              "values": {
+                "member_identity": "Medio 32T",
+                "position": "Medio",
+                "teeth": "32",
+                "source_document": "Envase identificado",
+                "bcd_mm": "104"
+              },
+              "sources": []
+            },
+            {
+              "id": "r3",
+              "values": {
+                "member_identity": "Interior 22T",
+                "position": "Interior",
+                "teeth": "22",
+                "source_document": "Envase identificado",
+                "bcd_mm": "64"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [
+        {
+          "code": "field_applicability",
+          "field": "chainring_set_members"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "cr_a_direct_mount_ring_names_its_generation",
+      "template": "chainring",
+      "values": {
+        "chainring_package_kind": "Plato individual",
+        "spec_evidence_source": "https://example.invalid/synthetic",
+        "chainring_mount_type": "Direct mount Shimano",
+        "teeth_count": "32",
+        "chainring_direct_mount_generation": "Asiento documentado y su generación"
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [
+        "https://dassets.shimano.com/content/dam/global/cg1SHICCycling/final/ev/ev/EV-FC-M8000-3849B.pdf"
+      ]
+    },
+    {
+      "id": "cr_a_direct_mount_ring_without_its_generation_is_pending",
+      "template": "chainring",
+      "values": {
+        "chainring_package_kind": "Plato individual",
+        "spec_evidence_source": "https://example.invalid/synthetic",
+        "chainring_mount_type": "Direct mount Shimano",
+        "teeth_count": "32"
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "expected_issue_subset": [
+        {
+          "code": "required_missing",
+          "field": "chainring_direct_mount_generation",
+          "blocking": false
+        }
+      ],
+      "expected_sql_issue_subset": [
+        {
+          "code": "required_missing",
+          "field": "chainring_direct_mount_generation",
+          "blocking": false
+        }
+      ]
+    },
+    {
+      "id": "cr_a_bolt_circle_ring_has_no_direct_mount_generation",
+      "template": "chainring",
+      "values": {
+        "chainring_package_kind": "Plato individual",
+        "chainring_mount_type": "BCD 4 pernos",
+        "chainring_bcd_mm": "104",
+        "teeth_count": "36",
+        "spec_evidence_source": "https://example.invalid/synthetic",
+        "chainring_direct_mount_generation": "Asiento documentado"
+      },
+      "expected_blocking": [
+        {
+          "code": "field_applicability",
+          "field": "chainring_direct_mount_generation"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "cr_the_same_circle_can_be_drilled_two_ways",
+      "template": "chainring",
+      "values": {
+        "chainring_package_kind": "Plato individual",
+        "chainring_mount_type": "BCD 4 pernos",
+        "chainring_bcd_mm": "96",
+        "teeth_count": "36",
+        "spec_evidence_source": "https://example.invalid/synthetic",
+        "chainring_bolt_pattern_symmetric": false
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "forbidden_issue_fields": [
+        "chainring_bolt_pattern_symmetric",
+        "chainring_bcd_mm"
+      ]
+    },
+    {
+      "id": "cr_an_offset_without_its_datum_is_incomplete",
+      "template": "chainring",
+      "values": {
+        "chainring_package_kind": "Plato individual",
+        "chainring_mount_type": "BCD 4 pernos",
+        "chainring_bcd_mm": "104",
+        "teeth_count": "36",
+        "spec_evidence_source": "https://example.invalid/synthetic",
+        "chainring_offset_declarations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "measurement_identity": "Cota declarada",
+                "offset_mm": "5",
+                "source_document": "Documento identificado"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "expected_issue_subset": [
+        {
+          "code": "row_incomplete",
+          "field": "chainring_offset_declarations",
+          "blocking": false
+        }
+      ],
+      "expected_sql_issue_subset": [
+        {
+          "code": "row_incomplete",
+          "field": "chainring_offset_declarations",
+          "blocking": false
+        }
+      ]
+    },
+    {
+      "id": "cr_an_offset_with_its_datum_is_a_measurement",
+      "template": "chainring",
+      "values": {
+        "chainring_package_kind": "Plato individual",
+        "chainring_mount_type": "BCD 4 pernos",
+        "chainring_bcd_mm": "104",
+        "teeth_count": "36",
+        "spec_evidence_source": "https://example.invalid/synthetic",
+        "chainring_offset_declarations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "measurement_identity": "Cota declarada",
+                "offset_mm": "5",
+                "datum": "Desde la cara de montaje del plato",
+                "source_document": "Documento identificado"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "cr_the_retired_offset_scalar_no_longer_answers",
+      "template": "chainring",
+      "values": {
+        "chainring_package_kind": "Plato individual",
+        "chainring_mount_type": "BCD 4 pernos",
+        "chainring_bcd_mm": "104",
+        "teeth_count": "36",
+        "spec_evidence_source": "https://example.invalid/synthetic",
+        "chainring_offset_mm": "5"
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "forbidden_issue_fields": [
+        "chainring_offset_mm"
+      ]
+    },
+    {
+      "id": "cr_a_pairing_keeps_the_combination_it_belongs_to",
+      "template": "chainring",
+      "values": {
+        "chainring_package_kind": "Plato individual",
+        "chainring_mount_type": "BCD 4 pernos",
+        "chainring_bcd_mm": "104",
+        "teeth_count": "36",
+        "spec_evidence_source": "https://example.invalid/synthetic",
+        "chainring_oem_pairing_declarations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "pairing_identity": "Combinación documentada",
+                "declared_combination": "40-30-22T",
+                "member_designation": "22T-BA",
+                "fixing_bolt_designation": "Perno documentado de esta combinación",
+                "source_document": "Vista despiezada identificada",
+                "source_url": "https://dassets.shimano.com/content/dam/global/cg1SHICCycling/final/ev/ev/EV-FC-M8000-3849B.pdf"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [
+        "https://dassets.shimano.com/content/dam/global/cg1SHICCycling/final/ev/ev/EV-FC-M8000-3849B.pdf"
+      ]
+    },
+    {
+      "id": "cr_a_pairing_without_its_combination_is_incomplete",
+      "template": "chainring",
+      "values": {
+        "chainring_package_kind": "Plato individual",
+        "chainring_mount_type": "BCD 4 pernos",
+        "chainring_bcd_mm": "104",
+        "teeth_count": "36",
+        "spec_evidence_source": "https://example.invalid/synthetic",
+        "chainring_oem_pairing_declarations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "pairing_identity": "Combinación documentada",
+                "member_designation": "22T-BA",
+                "fixing_bolt_designation": "Perno documentado de esta combinación",
+                "source_document": "Vista despiezada identificada",
+                "source_url": "https://dassets.shimano.com/content/dam/global/cg1SHICCycling/final/ev/ev/EV-FC-M8000-3849B.pdf"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "expected_issue_subset": [
+        {
+          "code": "row_incomplete",
+          "field": "chainring_oem_pairing_declarations",
+          "blocking": false
+        }
+      ],
+      "expected_sql_issue_subset": [
+        {
+          "code": "row_incomplete",
+          "field": "chainring_oem_pairing_declarations",
+          "blocking": false
+        }
+      ]
+    },
+    {
+      "id": "cr_an_interface_claim_cannot_name_a_model",
+      "template": "chainring",
+      "values": {
+        "chainring_package_kind": "Plato individual",
+        "chainring_mount_type": "BCD 4 pernos",
+        "chainring_bcd_mm": "104",
+        "teeth_count": "36",
+        "spec_evidence_source": "https://example.invalid/synthetic",
+        "chainring_compatibility_claims": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "claim_identity": "Interfaz con modelo",
+                "scope_kind": "Interfaz o estándar documentado",
+                "source_document": "Documento identificado",
+                "declared_interface": "Interfaz declarada",
+                "model": "Modelo"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [
+        {
+          "code": "row_field_applicability",
+          "field": "chainring_compatibility_claims"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    }
+  ],
+  "pending_cases": [
+    {
+      "id": "an_integrated_motor_spindle_has_no_published_token",
+      "required_result": "published_domain_extension_pending",
+      "reason": "One arm in scope is sold for an integrated motor spindle. The published spindle domain has fourteen real interfaces and neither an «other» nor an «unknown» token, so the required field cannot be answered truthfully. The designation is written down; extending the domain belongs to the publisher, not to this packet."
+    },
+    {
+      "id": "jis_or_iso_is_not_inferred_from_the_brand",
+      "required_result": "unknown_without_model_scoped_evidence",
+      "reason": "The source lists which brands tend to use each standard and states the two mix in practice when the spindle length gives the wanted chain line. A tendency is not this product, and no physical incompatibility is declared."
+    },
+    {
+      "id": "crank_and_ring_codes_belong_to_the_product",
+      "required_result": "identity_pending",
+      "reason": "Titles carry manufacturer codes while model and manufacturer_sku are empty in all 50 records of the scope. Identity is resolved in the product, never here."
+    },
+    {
+      "id": "an_inch_length_in_a_title_is_not_a_measured_arm",
+      "required_result": "unknown_without_model_scoped_evidence",
+      "reason": "One-piece cranks are titled in inches. The arm length in millimetres is taken from the package or the manual, not converted from a trade name."
+    },
+    {
+      "id": "a_shell_width_in_a_title_is_not_the_supplied_contents",
+      "required_result": "unknown_without_model_scoped_evidence",
+      "reason": "Several titles name a shell width next to the word for a bottom bracket. Whether the bottom bracket ships in the box is a fact of the package."
+    },
+    {
+      "id": "the_interchangeability_columns_were_not_mapped",
+      "required_result": "unknown_without_model_scoped_evidence",
+      "reason": "The exploded view marks interchangeability with letters in per-model columns. This round read the legend, not the column alignment, so no part is declared interchangeable with a named crankset."
+    },
+    {
+      "id": "oem_relation_and_editor_validation_pending",
+      "required_result": "unknown_without_model_scoped_evidence",
+      "reason": "Directed OEM relations and the real editor round are not exercised by this packet."
+    }
+  ],
+  "catalogue_sha256": "2caf9b537c54c41b5c1ff40a8efeaa414f06320bedf31862fe1726fab912c756"
+}

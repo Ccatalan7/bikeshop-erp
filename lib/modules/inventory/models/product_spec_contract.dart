@@ -60,7 +60,11 @@ String productSpecClaimSummary(Map<String, dynamic> claim) {
 
 class ProductSpecIssue {
   const ProductSpecIssue(this.code, this.fieldKey, this.message,
-      {this.blocking = true, this.rowId, this.columnKey});
+      {this.blocking = true,
+      this.rowId,
+      this.columnKey,
+      this.collectionFieldKey,
+      this.memberProfileId});
 
   final String code;
   final String fieldKey;
@@ -68,6 +72,8 @@ class ProductSpecIssue {
   final bool blocking;
   final String? rowId;
   final String? columnKey;
+  final String? collectionFieldKey;
+  final String? memberProfileId;
 }
 
 List<ProductSpecIssue> productSpecServerIssues(Object? details) {
@@ -90,12 +96,39 @@ List<ProductSpecIssue> productSpecServerIssues(Object? details) {
             blocking: issue['blocking'] != false,
             rowId: issue['row_id'] is String ? issue['row_id'] as String : null,
             columnKey:
-                issue['column'] is String ? issue['column'] as String : null),
+                issue['column'] is String ? issue['column'] as String : null,
+            collectionFieldKey: issue['collection_field'] is String
+                ? issue['collection_field'] as String
+                : null,
+            memberProfileId: issue['profile_id'] is String
+                ? issue['profile_id'] as String
+                : null),
   ];
 }
 
-String productSpecIssueMessage(ProductSpecIssue issue, SpecTemplate? template,
-    Map<String, dynamic> values) {
+class ProductSpecIssueContext {
+  const ProductSpecIssueContext({
+    required this.label,
+    required this.template,
+    required this.values,
+  });
+
+  final String label;
+  final SpecTemplate template;
+  final Map<String, dynamic> values;
+}
+
+String productSpecIssueMessage(
+    ProductSpecIssue issue, SpecTemplate? template, Map<String, dynamic> values,
+    {ProductSpecIssueContext? Function(String)? memberContext}) {
+  var prefix = '';
+  if (issue.memberProfileId != null) {
+    final member = memberContext?.call(issue.memberProfileId!);
+    if (member == null) return 'Pieza incluida: ${issue.message}';
+    template = member.template;
+    values = member.values;
+    prefix = '${member.label} · ';
+  }
   final label = template?.labelFor(issue.fieldKey) ?? issue.fieldKey;
   var location = '';
   final rows = values[issue.fieldKey];
@@ -104,7 +137,14 @@ String productSpecIssueMessage(ProductSpecIssue issue, SpecTemplate? template,
         .indexWhere((row) => row is Map && row['id'] == issue.rowId);
     if (index >= 0) location = ' · configuración ${index + 1}';
   }
-  return label.isEmpty ? issue.message : '$label$location: ${issue.message}';
+  final collection = issue.collectionFieldKey;
+  if (collection != null && collection != issue.fieldKey) {
+    location += ' · ${template?.labelFor(collection) ?? collection}';
+  }
+  final message = label.isNotEmpty && issue.message.startsWith('$label: ')
+      ? issue.message.substring(label.length + 2)
+      : issue.message;
+  return prefix + (label.isEmpty ? message : '$label$location: $message');
 }
 
 /// An immutable manufacturer reference, explicitly chosen for this product.
@@ -171,11 +211,18 @@ List<ProductSpecIssue> validateProductSpecDraft({
   String manufacturerSku = '',
 }) {
   final issues = <ProductSpecIssue>[];
+  final definitions = {
+    for (final field in template.fields)
+      if (field.definition != null) field.definition!.key: field.definition!,
+  };
   final activeKeys = template.fields
       .map((field) => field.definition?.key)
       .whereType<String>()
       .where((key) => template.roleFor(key) != 'legacy')
       .toSet();
+  // A retired field keeps its conserved value outside the editable draft; the
+  // reference check below still needs it.
+  final conserved = values;
   values = Map.fromEntries(
       values.entries.where((entry) => activeKeys.contains(entry.key)));
   Set<String> optionValues(Object? value) =>
@@ -193,13 +240,28 @@ List<ProductSpecIssue> validateProductSpecDraft({
           'La referencia no corresponde a esta marca, modelo, código de fabricante o familia. Revisa la identidad o retira la referencia.'));
     }
     for (final entry in reference.facts.entries) {
+      final definition = definitions[entry.key];
+      // The server writes every documented fact into the saved scope, whatever
+      // the client omits. A definition outside the template is refused there,
+      // and a retired field survives only with the value it conserves; both
+      // are refused here first, for the root product and for a component.
+      if (definition == null) {
+        issues.add(ProductSpecIssue('reference_scope', entry.key,
+            '${template.labelFor(entry.key)}: la referencia ${reference.label} documenta un dato que esta ficha no tiene. Elige otra referencia o retírala.'));
+        continue;
+      }
+      if (template.roleFor(entry.key) == 'legacy') {
+        if (!_sameConservedValue(
+            definition, conserved[entry.key], entry.value)) {
+          issues.add(ProductSpecIssue('reference_scope', entry.key,
+              '${template.labelFor(entry.key)}: campo retirado; la referencia ${reference.label} no coincide con el dato conservado. Elige otra referencia o retírala.'));
+        }
+        continue;
+      }
       // An operator's evidence note supplements the reference's own sources.
       if (entry.key == 'spec_evidence_source') continue;
       if (!hasKnownSpecValue(values[entry.key])) continue;
-      final definition = template.fields
-          .firstWhereOrNull((field) => field.definition?.key == entry.key)
-          ?.definition;
-      final schema = definition?.rowSchema;
+      final schema = definition.rowSchema;
       bool matches;
       if (schema != null) {
         try {
@@ -209,7 +271,7 @@ List<ProductSpecIssue> validateProductSpecDraft({
         } on FormatException {
           matches = false;
         }
-      } else if (definition?.dataType == 'number') {
+      } else if (definition.dataType == 'number') {
         final actual = productSpecNumber(values[entry.key]);
         final expected = productSpecNumber(entry.value);
         matches = actual != null &&
@@ -354,7 +416,8 @@ List<ProductSpecIssue> validateProductSpecDraft({
     for (final issue in template.coherence.validate(values)) {
       if (issue.code == 'row_cardinality_pending' &&
           template.fields.any((field) =>
-              field.definition?.key == issue.field &&
+              {issue.field, issue.collectionField}
+                  .contains(field.definition?.key) &&
               template.applicabilityFor(field, values) == SpecTruth.no)) {
         // A collection that does not apply cannot require more investigation.
         // Existing observations still retain their applicability/shape errors.
@@ -362,7 +425,8 @@ List<ProductSpecIssue> validateProductSpecDraft({
       }
       if (issue.code == 'row_cardinality_conflict' &&
           issues.any((existing) =>
-              existing.fieldKey == issue.field &&
+              {issue.field, issue.collectionField}
+                  .contains(existing.fieldKey) &&
               existing.code == 'field_applicability' &&
               existing.blocking)) {
         continue;
@@ -378,23 +442,50 @@ List<ProductSpecIssue> validateProductSpecDraft({
       if (issue.rowId == null &&
           issues.any((existing) =>
               existing.code == issue.code &&
-              existing.fieldKey == issue.field)) {
+              existing.fieldKey == issue.field &&
+              existing.collectionFieldKey == issue.collectionField)) {
         continue;
       }
       final entry = ProductSpecIssue(issue.code, issue.field, issue.message,
           blocking: issue.blocking,
           rowId: issue.rowId,
-          columnKey: issue.column);
+          columnKey: issue.column,
+          collectionFieldKey: issue.collectionField);
       issues.add(ProductSpecIssue(entry.code, entry.fieldKey,
           productSpecIssueMessage(entry, template, values),
           blocking: entry.blocking,
           rowId: entry.rowId,
-          columnKey: entry.columnKey));
+          columnKey: entry.columnKey,
+          collectionFieldKey: entry.collectionFieldKey));
     }
   } on FormatException catch (error) {
     issues.add(ProductSpecIssue('configuration', '', error.message));
   }
   return issues;
+}
+
+/// A retired field is compared exactly: decimals by value through the shared
+/// decimal type, never through a double; rows through their schema; anything
+/// else structurally, without turning text into numbers or numbers into text.
+bool _sameConservedValue(
+    SpecDefinition definition, Object? conserved, Object? documented) {
+  if (definition.dataType == 'number') {
+    final current = productSpecNumber(conserved);
+    final expected = productSpecNumber(documented);
+    return current != null &&
+        expected != null &&
+        current.compareTo(expected) == 0;
+  }
+  final schema = definition.rowSchema;
+  if (schema != null) {
+    try {
+      return const DeepCollectionEquality().equals(
+          schema.parse(conserved).toJson(), schema.parse(documented).toJson());
+    } on FormatException {
+      return false;
+    }
+  }
+  return const DeepCollectionEquality().equals(conserved, documented);
 }
 
 /// A stock receipt may refresh its server timestamp only when the editable

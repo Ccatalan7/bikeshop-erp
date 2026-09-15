@@ -1,0 +1,852 @@
+{
+  "review_id": "package-contents-boundary-review-2026-09-07",
+  "reviewer": "Codex independent subagent spec_boundary_review",
+  "captured_at": "2026-09-07T15:01:27.033757+00:00",
+  "decision": "accept_scalar_split_and_label_change; correct_contents_row_identity_before_fill; AG01_open",
+  "scope": {
+    "read_only": true,
+    "implementation_edited": false,
+    "database_accessed": false,
+    "runtime_accessed": false,
+    "catalogue_applied": false,
+    "products_written": false,
+    "mechanical_coverage_complete": false,
+    "automatic_fill_authorized": false,
+    "new_versioned_files": [
+      "package-contents-boundary-review-2026-09-07.json",
+      "package-contents-boundary-review-2026-09-07.md"
+    ]
+  },
+  "reviewed_preimages": [
+    {
+      "path": "docs/development/product-specs-research-2026-09-05/all-family-contents-integrated-2026-09-07.json",
+      "sha256": "20a9c1eabdf84dd5e3e9cb5a4a922a695c6e91deff53bebdb2e0c584b5e8edee",
+      "bytes": 1389767
+    },
+    {
+      "path": "docs/development/product-specs-research-2026-09-05/all-family-contents-cases-integrated-2026-09-07.json",
+      "sha256": "f87a94087f0a325d637f58833d61c5568e95cc52bb5e27fd126a1306aa5eb1ae",
+      "bytes": 323533
+    },
+    {
+      "path": "scripts/inventory/compile_product_spec_package_contents_addendum.py",
+      "sha256": "8190c850f37b0224240e391cd52ceb6fd141321a84d65869b38dc41ef7226f42",
+      "bytes": 9081
+    },
+    {
+      "path": "docs/development/product-specs-research-2026-09-05/package-contents-integration-2026-09-07.md",
+      "sha256": "967d090f1a6e733495248edd81074550ee533928afb942a66a74538ea6e85fb5",
+      "bytes": 3755
+    }
+  ],
+  "accepted_boundaries": [
+    "New included_chainring_count is an exact nonnegative integer and admits unknown as a nonblocking completeness issue.",
+    "Legacy chainring_count remains legacy only in crankset/drivetrain_kit; its definition and bicycle template remain identical.",
+    "No automatic transfer of legacy answers, identities, models, commercial values or variant contents occurs in this compiler.",
+    "No condition requires a crankset/biela member before a drivetrain kit may declare included_chainring_count.",
+    "Zero makes a nonempty included-teeth table inapplicable; absent count remains pending and is not inferred from rows.",
+    "Mechanical brake template rename preserves identity and does not imply supplied levers.",
+    "Physical fit, installed count, optional compatibility and commercial content remain separate."
+  ],
+  "findings": [
+    {
+      "id": "PCB01",
+      "severity": "P2_before_fill",
+      "category": "representation_false_block",
+      "status": "reproduced_in_current_Dart",
+      "target": "definitions.chainring_teeth_rows.validation_rules.rows_schema",
+      "cause": "The table now owns supplied contents but retains unique_by(position) and required mounting position. Mounting position is not the identity of an included crown occurrence.",
+      "reproduction": {
+        "included_chainring_count": "2",
+        "chainring_teeth_rows": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "crown_1",
+              "values": {
+                "position": "1",
+                "teeth": "30"
+              },
+              "sources": []
+            },
+            {
+              "id": "crown_2",
+              "values": {
+                "position": "1",
+                "teeth": "32"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "observed": {
+        "blocking": [
+          "row_shape:chainring_teeth_rows"
+        ]
+      },
+      "proposed_result": "No conflict from repeated mounting position for distinct documented supplied occurrences; count check still required.",
+      "evidence_scope": "Executable synthetic package counterexample. No exact OEM package with both these spare crowns was found or attributed to stock.",
+      "minimum_correction": [
+        "PCB-P01",
+        "PCB-P04"
+      ],
+      "blast_radius": "Unpublished crankset content table; no product writes or live schema changes in this review."
+    },
+    {
+      "id": "PCB-G01",
+      "severity": "required_before_AG01_closure",
+      "category": "known_engine_gap",
+      "status": "reproduced_in_current_Dart",
+      "target": "crankset included_chainring_count versus chainring_teeth_rows",
+      "observed": [
+        "N=2/R=3 produces no count conflict.",
+        "N=2/R=1 produces no count completeness pending."
+      ],
+      "cause": "allowed_when/required_when only compare N>0. row_coherence supports links and scalar pairs, not cardinality.",
+      "minimum_correction": "Implement the semantic contract below in both Dart and SQL before activating new metadata; do not paste it as currently executable DSL."
+    },
+    {
+      "id": "PCB-N01",
+      "severity": "unit_definition_before_cardinality",
+      "category": "source_grounded_design_constraint",
+      "status": "not_a_current_false_rejection",
+      "target": "included_chainring_count and future kit_members reconciliation",
+      "source_ids": [
+        "SRAM_RED_MONOBLOCK"
+      ],
+      "fact": "A one-piece commercial assembly can contain two chainring crowns.",
+      "minimum_correction": "Count supplied chainring crowns, including integrated crowns, not separable units. Do not compare generic member quantity to this total without a confirmed conversion and scope.",
+      "proposed_patches": [
+        "PCB-P02",
+        "PCB-P03"
+      ]
+    }
+  ],
+  "owner_decision": {
+    "recommendation": "Keep chainring_teeth_rows as the sole content owner in this unpublished stage and remove mounting-position uniqueness authority. No parallel contents table is needed for the present input.",
+    "why": "It has origin=new, used_by=[crankset], and the current frozen contract already labels it contents. Its built-in row id can identify a supplied crown occurrence independently of mounting position.",
+    "condition": "This recommendation concerns only the unpublished artifact. It does not authorize reinterpretation of any published configuration or saved fact.",
+    "if_prior_configuration_data_exist": "Create a new contents owner and preserve the old field as legacy/configurations with an explicit migration review. Do not reclassify saved configuration options as included objects.",
+    "optional_and_mounted_configurations": "Remain separate scoped declarations; there is no automatic placement or compatibility proof from a contents row."
+  },
+  "metadata_patch_proposal": {
+    "schema_version": 1,
+    "base_artifact": "all-family-contents-integrated-2026-09-07.json",
+    "base_sha256": "20a9c1eabdf84dd5e3e9cb5a4a922a695c6e91deff53bebdb2e0c584b5e8edee",
+    "new_definitions": {},
+    "patches": [
+      {
+        "id": "PCB-P01",
+        "op": "replace_unpublished_rows_schema",
+        "template": null,
+        "key": "chainring_teeth_rows",
+        "before": {
+          "version": 1,
+          "columns": [
+            {
+              "key": "position",
+              "label": "Posición",
+              "type": "integer",
+              "required": true,
+              "validation": {
+                "positive": true
+              }
+            },
+            {
+              "key": "teeth",
+              "label": "Dientes",
+              "type": "integer",
+              "required": true,
+              "validation": {
+                "positive": true
+              }
+            }
+          ],
+          "unique_by": [
+            [
+              "position"
+            ]
+          ]
+        },
+        "after": {
+          "version": 1,
+          "columns": [
+            {
+              "key": "position",
+              "label": "Posición OEM numerada, si está declarada",
+              "type": "integer",
+              "required": false,
+              "validation": {
+                "positive": true
+              }
+            },
+            {
+              "key": "teeth",
+              "label": "Dientes",
+              "type": "integer",
+              "required": true,
+              "validation": {
+                "positive": true
+              }
+            }
+          ],
+          "unique_by": []
+        }
+      },
+      {
+        "id": "PCB-P02",
+        "op": "replace_field_contract",
+        "template": "crankset",
+        "key": "included_chainring_count",
+        "before": {
+          "helpers": "Número de platos físicamente suministrados con esta variante. Cero exige evidencia de que no se incluyen; sin confirmación queda Sin dato. No indica cuántos platos admite un montaje."
+        },
+        "after": {
+          "helpers": "Número de platos o coronas dentadas suministrados con esta variante. Dos coronas integradas en una pieza cuentan como dos platos; no es cantidad de unidades comerciales ni de posiciones simultáneas. Cero requiere exclusión documentada. Sin confirmación queda Sin dato; no se deriva de opciones, fotografías incompletas ni condiciones de pesaje."
+        }
+      },
+      {
+        "id": "PCB-P03",
+        "op": "replace_field_contract",
+        "template": "drivetrain_kit",
+        "key": "included_chainring_count",
+        "before": {
+          "helpers": "Número de platos físicamente suministrados con esta variante. Cero exige evidencia de que no se incluyen; sin confirmación queda Sin dato. No indica cuántos platos admite un montaje."
+        },
+        "after": {
+          "helpers": "Número de platos o coronas dentadas suministrados con esta variante. Dos coronas integradas en una pieza cuentan como dos platos; no es cantidad de unidades comerciales ni de posiciones simultáneas. Cero requiere exclusión documentada. Sin confirmación queda Sin dato; no se deriva de opciones, fotografías incompletas ni condiciones de pesaje."
+        }
+      },
+      {
+        "id": "PCB-P04",
+        "op": "replace_field_contract",
+        "template": "crankset",
+        "key": "chainring_teeth_rows",
+        "before": {
+          "labels": "Dientes y posición de los platos incluidos",
+          "helpers": "Describe sólo los platos suministrados. Las configuraciones compatibles u opcionales necesitan sus propias declaraciones; no se copian aquí."
+        },
+        "after": {
+          "labels": "Dientes de los platos incluidos",
+          "helpers": "Una fila por plato o corona dentada realmente suministrada, incluso si varias coronas forman una sola pieza. La posición de montaje es descriptiva y puede repetirse entre repuestos o alternativas incluidas. No conviertas opciones no suministradas ni dos lecturas de la misma corona en dos filas; las configuraciones compatibles se documentan aparte."
+        }
+      }
+    ],
+    "mechanical_coverage_complete": false,
+    "automatic_fill_authorized": false,
+    "status": "review_proposal_not_applied"
+  },
+  "minimum_cardinality_contract": {
+    "status": "semantic_design_only_engine_gap; not an executable form_contract bucket",
+    "initial_scope": {
+      "template": "crankset",
+      "total_field": "included_chainring_count",
+      "rows_field": "chainring_teeth_rows"
+    },
+    "unit": "One documented supplied chainring crown occurrence per row. An inseparable 2x assembly can contain two crowns; two copies of a crown remain two occurrences.",
+    "preconditions": [
+      "Both fields resolve by active definition ID in the same template/tenant and contract revision. Neither endpoint is legacy.",
+      "The total passes the existing exact number/integer/minimum validator. Invalid metadata fails closed.",
+      "Each valid row id denotes an included crown occurrence, not an OEM option, a mounting position or an additional reading of the same occurrence.",
+      "Existing row-shape validation owns malformed rows and duplicate ids; do not count malformed documents.",
+      "The row table has one-per-occurrence content semantics; no quantity-column summation is part of this minimum."
+    ],
+    "algorithm": [
+      "Validate total and table types first. Preserve existing scalar/row_shape conflicts; do not substitute guessed values.",
+      "Let N be the exact declared integer total when present. Let R be the number of valid distinct supplied-crown rows currently documented; do not count positions, teeth values, sources, option choices or members.",
+      "If N is absent, report total/completeness pending without deriving N from R.",
+      "If N=0 and rows are absent, the cardinality relation is consistent. An explicit nonempty table contradicts zero; reuse the current field_applicability owner rather than duplicate that diagnosis.",
+      "If N>0 and R>N, emit blocking cardinality conflict on the rows field, naming declared and documented quantities.",
+      "If N>0 and R<N (including an absent table), emit nonblocking completeness pending. Do not synthesize rows or delete observations.",
+      "If R=N, the count is balanced only. Keep missing cell/source/variant evidence issues and all mechanical-fit checks independent.",
+      "Compare exact decimal integers; do not cast a large total through floating point. Renaming/reordering a row or adding another source does not change R."
+    ],
+    "proposed_diagnostic_semantics": {
+      "over_total": "blocking count conflict",
+      "below_total": "nonblocking content completeness pending",
+      "missing_total": "nonblocking declared total pending",
+      "equal": "no count issue; not complete fiche or mechanical approval",
+      "invalid_row_or_total": "existing shape/type/range/integer conflict; no misleading secondary count result"
+    },
+    "kit_members_boundary": [
+      "Do not sum kit_members.quantity in the minimum rule. That table can contain nested sets, monoblocks, variants and independently incomplete observations.",
+      "A family token alone does not identify measurement unit or prove that members are disjoint supplied crowns. A member label such as plato does not supply that proof either.",
+      "A future reconciliation needs confirmed type, included status, exact variant, quantity unit and parent/child/disjoint scope plus stable occurrence links. Parent crankset and its included crowns must not be counted twice.",
+      "If those scopes are absent, remain pending; do not infer zero from no matching member rows and do not deduce crown count from a crankset/bicycle member.",
+      "drivetrain_kit has no chainring_teeth_rows endpoint in this stage. Do not attach the crankset relation to a nonexistent field or implicitly require bielas."
+    ],
+    "activation_gates": [
+      "New metadata must fail closed on old clients; an ignored unknown bucket is not sufficient. Preserve already published metadata versions.",
+      "Implement equivalent Dart, SQL draft/write/reference projection and schema-publication checks on the final merged snapshot.",
+      "Total and rows must be validated from the same revision; endpoint metadata changes require guarded publication and concurrency tests, not separate reads.",
+      "Preserve omitted rows/cells/sources during fill merge, then evaluate cardinality on the merged result.",
+      "No auto-fill, source verification, mechanical approval or identity reassignment follows from a balanced count."
+    ]
+  },
+  "fixtures": [
+    {
+      "id": "PCB-C01",
+      "template": "crankset",
+      "kind": "synthetic_contract_design",
+      "values": {
+        "included_chainring_count": "0"
+      },
+      "proposed_cardinality_outcome": "consistent_zero",
+      "engine_implemented": false,
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false
+    },
+    {
+      "id": "PCB-C02",
+      "template": "crankset",
+      "kind": "synthetic_contract_design",
+      "values": {
+        "included_chainring_count": "0",
+        "chainring_teeth_rows": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "crown_1",
+              "values": {
+                "teeth": "30"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "proposed_cardinality_outcome": "conflict",
+      "engine_implemented": false,
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "current_existing_guard": "field_applicability; do not duplicate the same conflict"
+    },
+    {
+      "id": "PCB-C03",
+      "template": "crankset",
+      "kind": "synthetic_contract_design",
+      "values": {
+        "included_chainring_count": "2",
+        "chainring_teeth_rows": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "crown_1",
+              "values": {
+                "teeth": "30"
+              },
+              "sources": []
+            },
+            {
+              "id": "crown_2",
+              "values": {
+                "teeth": "32"
+              },
+              "sources": []
+            },
+            {
+              "id": "crown_3",
+              "values": {
+                "teeth": "34"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "proposed_cardinality_outcome": "conflict",
+      "engine_implemented": false,
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "reason": "Three confirmed crown occurrences exceed the declared two; no tooth or position summation."
+    },
+    {
+      "id": "PCB-C04",
+      "template": "crankset",
+      "kind": "synthetic_contract_design",
+      "values": {
+        "included_chainring_count": "2",
+        "chainring_teeth_rows": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "crown_1",
+              "values": {
+                "teeth": "30"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "proposed_cardinality_outcome": "pending",
+      "engine_implemented": false,
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "reason": "One documented crown below two is incomplete evidence, not an incompatible product."
+    },
+    {
+      "id": "PCB-C05",
+      "template": "crankset",
+      "kind": "synthetic_contract_design",
+      "values": {
+        "included_chainring_count": "2",
+        "chainring_teeth_rows": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "crown_1",
+              "values": {
+                "teeth": "30"
+              },
+              "sources": []
+            },
+            {
+              "id": "crown_2",
+              "values": {
+                "teeth": "32"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "proposed_cardinality_outcome": "balanced_not_mechanical_approval",
+      "engine_implemented": false,
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false
+    },
+    {
+      "id": "PCB-C06",
+      "template": "crankset",
+      "kind": "synthetic_contract_design",
+      "values": {
+        "chainring_teeth_rows": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "crown_1",
+              "values": {
+                "teeth": "30"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "proposed_cardinality_outcome": "pending",
+      "engine_implemented": false,
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "reason": "Absent total is not derived from the current rows."
+    },
+    {
+      "id": "PCB-C07",
+      "template": "crankset",
+      "kind": "synthetic_contract_design",
+      "values": {
+        "included_chainring_count": "2"
+      },
+      "proposed_cardinality_outcome": "pending",
+      "engine_implemented": false,
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "reason": "Absent row table is not filled with fictional rows."
+    },
+    {
+      "id": "PCB-C08",
+      "template": "crankset",
+      "kind": "synthetic_contract_design",
+      "values": {
+        "included_chainring_count": "2",
+        "chainring_teeth_rows": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "crown_1",
+              "values": {
+                "position": "1",
+                "teeth": "30"
+              },
+              "sources": []
+            },
+            {
+              "id": "crown_2",
+              "values": {
+                "position": "1",
+                "teeth": "32"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "proposed_cardinality_outcome": "balanced_not_mechanical_approval",
+      "engine_implemented": false,
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "requires_metadata_patch": "PCB-P01",
+      "reason": "Distinct included crown occurrences may have the same mounting position; this is a synthetic package, not an OEM stock claim."
+    },
+    {
+      "id": "PCB-C09",
+      "template": "crankset",
+      "kind": "synthetic_contract_design",
+      "values": {
+        "included_chainring_count": "2",
+        "chainring_teeth_rows": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "crown_1",
+              "values": {
+                "teeth": "30"
+              },
+              "sources": []
+            },
+            {
+              "id": "crown_2",
+              "values": {
+                "teeth": "30"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "proposed_cardinality_outcome": "balanced_not_mechanical_approval",
+      "engine_implemented": false,
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "reason": "Two copies with the same tooth count remain two supplied crowns."
+    },
+    {
+      "id": "PCB-C10",
+      "template": "crankset",
+      "kind": "synthetic_contract_design",
+      "values": {
+        "included_chainring_count": "2",
+        "chainring_teeth_rows": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "crown_1",
+              "values": {
+                "position": "1"
+              },
+              "sources": []
+            },
+            {
+              "id": "crown_2",
+              "values": {
+                "position": "2",
+                "teeth": "32"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "proposed_cardinality_outcome": "balanced_but_cells_pending",
+      "engine_implemented": false,
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "reason": "Unknown teeth do not erase a documented crown occurrence; row_incomplete remains pending."
+    },
+    {
+      "id": "PCB-C11",
+      "template": "crankset",
+      "kind": "synthetic_contract_design",
+      "values": {
+        "included_chainring_count": "9007199254740993",
+        "chainring_teeth_rows": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "crown_1",
+              "values": {
+                "teeth": "30"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "proposed_cardinality_outcome": "pending",
+      "engine_implemented": false,
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "reason": "Exact integer comparison; no conversion of the total to double/int with lost precision. Numeric boundary is synthetic, not a plausible package."
+    },
+    {
+      "id": "PCB-C12",
+      "template": "crankset",
+      "kind": "synthetic_contract_design",
+      "values": {
+        "included_chainring_count": "1.5"
+      },
+      "proposed_cardinality_outcome": "existing_scalar_type_conflict",
+      "engine_implemented": false,
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "reason": "Existing integer check owns invalid total; cardinality does not invent a rounded total."
+    },
+    {
+      "id": "PCB-C13",
+      "template": "crankset",
+      "kind": "synthetic_contract_design",
+      "values": {
+        "included_chainring_count": "-1"
+      },
+      "proposed_cardinality_outcome": "existing_scalar_range_conflict",
+      "engine_implemented": false,
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false
+    },
+    {
+      "id": "PCB-C14",
+      "template": "crankset",
+      "kind": "synthetic_contract_design",
+      "values": {
+        "chainring_count": "3"
+      },
+      "proposed_cardinality_outcome": "pending",
+      "engine_implemented": false,
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "reason": "Legacy count cannot satisfy or populate the new content total."
+    },
+    {
+      "id": "PCB-C15",
+      "template": "crankset",
+      "kind": "OEM_construction_boundary_not_inventory_identity",
+      "values": {
+        "included_chainring_count": "2",
+        "chainring_teeth_rows": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "crown_1",
+              "values": {
+                "position": "1",
+                "teeth": "33"
+              },
+              "sources": []
+            },
+            {
+              "id": "crown_2",
+              "values": {
+                "position": "2",
+                "teeth": "46"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "proposed_cardinality_outcome": "balanced_not_mechanical_approval",
+      "engine_implemented": false,
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "source_ids": [
+        "SRAM_RED_MONOBLOCK"
+      ],
+      "other_view": {
+        "kit_members_quantity": "1",
+        "unit": "one monoblock assembly",
+        "comparison": "do not compare unit quantity directly to two crowns"
+      }
+    },
+    {
+      "id": "PCB-C16",
+      "template": "crankset",
+      "kind": "synthetic_contract_design",
+      "values": {
+        "included_chainring_count": "4",
+        "chainring_teeth_rows": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "crown_1",
+              "values": {
+                "teeth": "30"
+              },
+              "sources": []
+            },
+            {
+              "id": "crown_2",
+              "values": {
+                "teeth": "30"
+              },
+              "sources": []
+            },
+            {
+              "id": "crown_3",
+              "values": {
+                "teeth": "32"
+              },
+              "sources": []
+            },
+            {
+              "id": "crown_4",
+              "values": {
+                "teeth": "34"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "proposed_cardinality_outcome": "balanced_not_mechanical_approval",
+      "engine_implemented": false,
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "reason": "Content total is not capped by 1x/2x/3x mounting positions. This package is synthetic."
+    },
+    {
+      "id": "PCB-C17",
+      "template": "drivetrain_kit",
+      "kind": "OEM_content_boundary_not_inventory_identity",
+      "values": {
+        "included_chainring_count": "0"
+      },
+      "source_ids": [
+        "SRAM_UPGRADE"
+      ],
+      "proposed_cardinality_outcome": "not_configured_for_absent_teeth_table",
+      "reason": "A drivetrain kit may omit cranks and chainrings. No crankset dependency or implicit row table is introduced.",
+      "engine_implemented": false,
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false
+    },
+    {
+      "id": "PCB-C18",
+      "template": "crankset",
+      "kind": "OEM_variant_boundary_not_inventory_identity",
+      "source_ids": [
+        "EXTRALITE_VARIANTS"
+      ],
+      "variant_options": [
+        "Base Kit",
+        "Full Kit 52T",
+        "Full Kit 54T"
+      ],
+      "proposed_cardinality_outcome": "pending_until_variant_content_confirmed",
+      "reason": "52T OR 54T lists alternatives, not two supplied crowns. Never merge distinct SKU/variant contents.",
+      "engine_implemented": false,
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false
+    },
+    {
+      "id": "PCB-C19",
+      "template": "crankset",
+      "kind": "OEM_measurement_boundary_not_inventory_identity",
+      "source_ids": [
+        "RACEFACE_WEIGHT"
+      ],
+      "values": {
+        "included_chainring_count": "0"
+      },
+      "proposed_cardinality_outcome": "consistent_zero",
+      "reason": "The documented weight test includes a 32T ring, while the product contents explicitly sell rings separately. Do not fill a teeth row from weight conditions.",
+      "engine_implemented": false,
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false
+    }
+  ],
+  "primary_sources_read": [
+    {
+      "id": "PROFILE_NO_BOSS",
+      "url": "https://www.profileracing.com/product/no-boss-3-piece-chromoly-race-crankset/",
+      "sections": [
+        "Description"
+      ],
+      "supports": "Declared crank arms, axle and accessories; spline-drive sprocket/spider required separately. Does not identify J253 or prove contents by an image."
+    },
+    {
+      "id": "SRAM_UPGRADE",
+      "url": "https://www.sram.com/en/sram/models/gs-gx-1e-a1",
+      "sections": [
+        "Description",
+        "Specifications"
+      ],
+      "supports": "GX Eagle AXS Upgrade Kit GS-GX-1E-A1 is a partial drivetrain kit; crank and chainring are n/a. No generic biela prerequisite is justified."
+    },
+    {
+      "id": "SRAM_RED_MONOBLOCK",
+      "url": "https://www.sram.com/en/sram/models/cr-red-kit-e1",
+      "sections": [
+        "Description",
+        "Features",
+        "Specifications"
+      ],
+      "supports": "CR-RED-KIT-E1 declares one-piece construction and 2x chainring combinations. One commercial monoblock is not one crown."
+    },
+    {
+      "id": "EXTRALITE_VARIANTS",
+      "url": "https://www.extralite.com/products/927/qrc3s-b",
+      "sections": [
+        "Configure",
+        "Tech info"
+      ],
+      "supports": "QRC3S-B distinguishes Base Kit from Full Kit, with 52T OR 54T single-ring options. Alternative variants must not become a two-ring contents claim."
+    },
+    {
+      "id": "RACEFACE_WEIGHT",
+      "url": "https://www.raceface.com/products/turbine-crankset",
+      "sections": [
+        "Specs: Includes",
+        "Specs: Weight Conditions"
+      ],
+      "supports": "Turbine sells chainrings separately, although its documented weight condition includes a 32T ring. Measurement context does not prove package contents."
+    }
+  ],
+  "verification": {
+    "compiler": {
+      "executed_by_reviewer": true,
+      "mode": "import compile_package_contents() in memory with PYTHONDONTWRITEBYTECODE=1; not __main__; no artifact writes",
+      "checks": [
+        "All four generated artifacts match their frozen SHA-256 files.",
+        "bicycle template and chainring_count definition identical to base.",
+        "crankset/drivetrain_kit IDs and technical families preserved.",
+        "13 contents fixtures; 272 total; every publication gate remains false."
+      ],
+      "result": "pass"
+    },
+    "dart": {
+      "executed_by_reviewer": true,
+      "command": "fvm flutter test .tmp/product-spec-catalog/package-contents-boundary-probe.dart --no-pub --reporter expanded",
+      "passed": 22,
+      "failed": 0,
+      "exit_code": 0,
+      "last_line": "00:00 +22: All tests passed!",
+      "composition": "13 frozen contents fixtures plus 9 independent boundaries; tests include assertions that reproduce open gaps, not assertions of completed cardinality.",
+      "temporary_probe": ".tmp/product-spec-catalog/package-contents-boundary-probe.dart",
+      "temporary_probe_sha256": "bb5f2a38fcfb718e939caee259f02e9c7105a8d999231b2de4867263500b74d4"
+    },
+    "root_reported_not_reexecuted": [
+      "381 integrated Dart tests",
+      "272 SQL cases under rollback",
+      "180 Python tests"
+    ],
+    "not_performed": [
+      "database access",
+      "runtime or UI verification",
+      "product writes",
+      "catalogue publication",
+      "OEM validation of a stock SKU"
+    ],
+    "failed_tool_attempt": "Dart /dev/stdin exited253 before main; it produced no domain evidence. The authorised file-based Flutter probe above is the evidence.",
+    "metadata_patch_grammar": {
+      "executed_by_reviewer": true,
+      "method": "apply_reviewed_field_addendum + validate_contract in memory only",
+      "patches": 4,
+      "result": "pass",
+      "artifact_written": false,
+      "global_gates_open": false
+    }
+  },
+  "AG01_closed": false,
+  "automatic_fill_authorized": false
+}

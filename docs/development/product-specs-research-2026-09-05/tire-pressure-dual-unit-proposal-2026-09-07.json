@@ -1,0 +1,1094 @@
+{
+  "schema_version": 1,
+  "title": "Máximos generales de neumático en dos unidades: propuesta de tabla",
+  "author": "Claude (revisor independiente de representación)",
+  "prepared_on": "2026-09-07",
+  "status": "propuesta local; sin adjudicación, sin asignación, sin llenado, sin publicación",
+  "target": {
+    "base": "all-family-contents-integrated-2026-09-07.json",
+    "base_sha256": "20a9c1eabdf84dd5e3e9cb5a4a922a695c6e91deff53bebdb2e0c584b5e8edee",
+    "cases": "all-family-contents-cases-integrated-2026-09-07.json",
+    "cases_sha256": "f87a94087f0a325d637f58833d61c5568e95cc52bb5e27fd126a1306aa5eb1ae",
+    "cases_count": 272
+  },
+  "supersedes": {
+    "artifact": "wss-residual-field-packet-2026-09-07.json",
+    "artifact_sha256": "239ab6607e25f4211f88d5c4998cec25af52d07278d75d983c98f0cfa8b05087",
+    "patches": [
+      "WRFP-R3-max-pressure-unit",
+      "WRFP-R3-max-pressure-value"
+    ],
+    "note": "El original no se reescribe. Las correcciones van por id y preimagen en corrections."
+  },
+  "representation_vs_approval": "Aprobar una representación no aprueba un montaje ni certifica una familia. No se llena ningún producto. No se toca compilador, catálogo, código, pruebas de root, base de datos ni runtime.",
+  "sources": [
+    {
+      "id": "S-SCHWALBE-DE",
+      "title": "Schwalbe, Marathon Plus 11100769 (schwalbe.com)",
+      "url": "https://www.schwalbe.com/en/Marathon-Plus-11100769",
+      "read": "2026-09-07",
+      "proves": "ETRTO 37-622, 700x35C: «min. Bar: 4 Bar min. Psi: 55 PSI max. Bar: 6 Bar max. Psi: 85 PSI». Peso 900 g. El máximo se imprime en las dos unidades y no se condiciona a ningún perfil de llanta."
+    },
+    {
+      "id": "S-SCHWALBE-US",
+      "title": "Schwalbe, Marathon Plus 11100769 (schwalbetires.com)",
+      "url": "https://www.schwalbetires.com/Marathon-Plus-11100769",
+      "read": "2026-09-07",
+      "proves": "El mismo artículo y la misma edición 2014: ETRTO «37-622», «Min Bar: 4 Bar, Min Psi: 55 PSI, Max Bar: 6 Bar, Max Psi: 85 PSI». El peso sale en otra unidad, «1.98416 lb». Son dos documentos distintos de la misma variante."
+    },
+    {
+      "id": "S-CONTI-HOOKLESS",
+      "title": "Continental, Hookless vs. Hooked Rims",
+      "url": "https://www.continental-tires.com/us/en/tire-knowledge/hookless-vs-hooked-rims/",
+      "read": "2026-09-07",
+      "proves": "Cifras por variante y sólo para montaje sin gancho. GP 5000 S TR 700×28c: 5.0 bar, 72 psi, 23 mm de ancho interior máximo. No hay un máximo universal."
+    },
+    {
+      "id": "S-CONTI-GP",
+      "title": "Continental, Grand Prix 5000 S TR",
+      "url": "https://www.continental-tires.com/products/bicycle/tires/grand-prix-5000-s-tr/",
+      "read": "2026-09-07",
+      "proves": "«The maximum inflation pressure for hookless and hooked applications as well as the maximum inner rim width can be found on the tire packaging and may differ between hooked and hookless applications». Para esta variante el máximo general no se publica en la web."
+    }
+  ],
+  "findings": [
+    {
+      "id": "G1",
+      "question": "¿Existe de verdad un máximo general sin condiciones?",
+      "answer": "A veces sí y a veces no, y la tabla tiene que aguantar las dos.",
+      "text": "Schwalbe imprime para el Marathon Plus 37-622 un mínimo y un máximo sin condicionarlos a ningún perfil de llanta: ahí el máximo general existe como hecho publicado. Continental, para el GP 5000 S TR, publica en la web sólo cifras condicionadas a montaje sin gancho y dice explícitamente que el máximo general está en el envase y que hooked y hookless pueden diferir: ahí el máximo general existe pero no es legible desde esa fuente. La conclusión operativa es que la tabla vacía es un estado legítimo y no un defecto de la ficha."
+    },
+    {
+      "id": "G2",
+      "question": "¿Cómo se impide promocionar un máximo hooked o hookless?",
+      "answer": "Por vocabulario, no por bloqueo.",
+      "text": "La columna de alcance sólo ofrece «sin condición de llanta en el documento», «el documento lo declara para todo montaje» y desconocido. Un máximo que la fuente condiciona a un perfil no tiene token con qué declararse aquí, y su lugar sigue siendo tire_rim_configurations. Digo lo que esto no logra: un operador puede elegir «sin condición» para una cifra que sí la tenía, y el motor no puede verlo desde la ficha. Es un límite de revisión de fuente, igual que el ángulo copiado del BKC-0752."
+    },
+    {
+      "id": "G3",
+      "question": "¿Se puede exigir la unidad de forma que un número suelto no valga?",
+      "answer": "No con las condiciones. Queda pendiente, nunca bloqueado.",
+      "text": "Lo intenté y falló, y lo digo antes de que lo pruebes: diseñé la columna de unidad con un token explícito «Desconocido / sin confirmar» apostando a que elegirlo volvería la condición definitivamente falsa y haría bloquear al número. La sonda devolvió pendiente. La causa es que hasKnownSpecValue trata ese texto como ausencia en todo el motor, así que el token explícito y la celda vacía son el mismo estado. No hay vocabulario que arregle esto: con las condiciones, «sin unidad no se vuelve un número autorizado» se expresa como fila incompleta más valor con requisitos por confirmar, y nada más. Si quieres que ese caso bloquee hace falta otro mecanismo, y no propongo ninguno que no haya podido medir. El token se conserva igual porque es la convención de todas las columnas token del catálogo y porque la columna es requerida, así que la fila sigue marcada incompleta."
+    },
+    {
+      "id": "G7",
+      "question": "¿Se conserva algo del escalar retirado?",
+      "answer": "El hecho guardado sí; el gobierno del formulario no.",
+      "text": "tire_max_pressure_psi pasa a legado y validateProductSpecDraft descarta sus valores antes de validar, así que deja de emitir y deja de exigir. Ninguna condición del catálogo lo referencia como dependencia, de modo que retirarlo no rompe otra regla. Si prefieres integrar la tabla primero y retirarlo en otra ronda, el parche está aislado."
+    },
+    {
+      "id": "G4",
+      "question": "¿Por qué sin unique_by?",
+      "answer": "Porque no sé demostrar una clave que sólo funda duplicados ilegítimos.",
+      "text": "Los cuatro renglones de Schwalbe —dos unidades por dos documentos— son el contraejemplo: una clave sobre valor y unidad borra el segundo documento; una sobre documento y unidad borra una edición posterior que repite la cifra; una sobre las cuatro columnas no funde nada y sólo cuesta. 40 de los 57 esquemas de filas de la base tampoco llevan unique_by."
+    },
+    {
+      "id": "G5",
+      "question": "¿Se impone alguna equivalencia bar/psi?",
+      "answer": "Ninguna, y hay una razón medible.",
+      "text": "6 bar son 87,02 psi y Schwalbe imprime 85 PSI. Continental imprime 4.5 bar y 65 psi, y la conversión da 65,27. Si el motor derivara una unidad de la otra imprimiría números que el fabricante nunca publicó. Las dos cifras son dos hechos y viajan como dos filas."
+    },
+    {
+      "id": "G6",
+      "question": "¿Qué gramática se usó?",
+      "answer": "La que root ya tiene en pump_pressure_specifications.",
+      "text": "Esa tabla ya resuelve «una presión declarada con su unidad y su alcance»: magnitud, valor, unidad y a qué corresponde, las cuatro requeridas, más contexto y fuente opcionales, sin unique_by ni ordered_pairs. La tabla de neumáticos copia esa forma en vez de inventar otra al lado."
+    }
+  ],
+  "new_definitions": {
+    "tire_general_max_pressures": {
+      "key": "tire_general_max_pressures",
+      "origin": "new",
+      "id": null,
+      "label": "Máximos generales declarados para esta variante",
+      "data_type": "json",
+      "unit": null,
+      "allowed_values": [],
+      "validation_rules": {
+        "row_label": "Máximo declarado",
+        "rows_schema": {
+          "version": 1,
+          "columns": [
+            {
+              "key": "pressure_unit",
+              "label": "Unidad impresa",
+              "type": "token",
+              "required": true,
+              "allowed_values": [
+                "bar",
+                "psi",
+                "Desconocido / sin confirmar"
+              ]
+            },
+            {
+              "key": "max_pressure_value",
+              "label": "Presión máxima declarada",
+              "type": "decimal",
+              "validation": {
+                "positive": true
+              }
+            },
+            {
+              "key": "declared_scope",
+              "label": "Alcance declarado por el documento",
+              "type": "token",
+              "required": true,
+              "allowed_values": [
+                "Sin condición de llanta en el documento",
+                "El documento lo declara para todo montaje",
+                "Desconocido / sin confirmar"
+              ]
+            },
+            {
+              "key": "source_document",
+              "label": "Documento y edición",
+              "type": "text",
+              "required": true
+            },
+            {
+              "key": "source_url",
+              "label": "Fuente",
+              "type": "url"
+            }
+          ]
+        }
+      },
+      "used_by": []
+    }
+  },
+  "patches": [
+    {
+      "id": "TPDU-01-general-max-pressures-table",
+      "op": "add_field",
+      "template": "tire",
+      "key": "tire_general_max_pressures",
+      "before": null,
+      "after": {
+        "field_entry": {
+          "key": "tire_general_max_pressures",
+          "section_key": "measurement",
+          "sort_order": 220,
+          "is_required": false,
+          "visibility_rules": [],
+          "option_rules": [],
+          "constraint_rules": []
+        },
+        "definition_used_by_append": "tire",
+        "roles": "measurement",
+        "semantic_roles": "measurement",
+        "allowed_when": {
+          "kind": "always"
+        },
+        "required_when": {
+          "kind": "never"
+        },
+        "prerequisites": [
+          "spec_evidence_source"
+        ],
+        "evidence_requirements": "package_or_label",
+        "helpers": "Máximos que el documento declara para esta variante sin condicionarlos a un perfil de llanta. Un máximo que la fuente sólo declara para montaje con gancho o sin gancho no es un máximo general: esa cifra vive en «Límites generales de montaje de esta variante de neumático». La unidad se copia tal como está impresa y no se convierte: Schwalbe imprime «max. Bar: 6 Bar» y «max. Psi: 85 PSI» para la misma cubierta, y 6 bar convertidos dan 87 psi. Dos documentos o dos ediciones que declaran cifras distintas son dos filas; ninguna se marca errónea."
+      },
+      "before_extensions_required": {},
+      "replaces": [
+        "WRFP-R3-max-pressure-unit",
+        "WRFP-R3-max-pressure-value"
+      ],
+      "scope": "Una tabla en vez de dos escalares. Cada fila es un máximo declarado con su valor decimal exacto, su unidad impresa, el alcance que le da el documento y la identidad del documento. Copia la gramática que root ya usa en pump_pressure_specifications: magnitud, valor, unidad y a qué corresponde, todo requerido, más contexto y fuente opcionales.",
+      "not_claimed": "ninguna equivalencia entre bar y psi. Dos filas del mismo documento con 6 bar y 85 psi son dos hechos impresos, no uno convertido. El orden de las columnas pone la unidad antes que el valor porque la unidad lo habilita.",
+      "no_unique_by": "Deliberado. 40 de los 57 esquemas de filas de la base tampoco lo llevan. Cualquier clave que junte valor y unidad borraría el segundo documento, y una que junte documento y unidad borraría una edición posterior que repite la cifra. No sé demostrar una clave que sólo funda duplicados ilegítimos, así que no la propongo."
+    },
+    {
+      "id": "TPDU-02-row-conditions-unit-gates-value",
+      "op": "replace_template_coherence",
+      "template": "tire",
+      "key": "row_conditions",
+      "before": {
+        "present": true,
+        "value": {
+          "version": 1,
+          "fields": {
+            "tire_rim_configurations": {
+              "allowed_when": {
+                "max_pressure": {
+                  "kind": "when",
+                  "rows": [
+                    [
+                      {
+                        "field": "pressure_unit",
+                        "operator": "in",
+                        "value_type": "token",
+                        "value": [
+                          "bar",
+                          "psi"
+                        ]
+                      }
+                    ]
+                  ]
+                }
+              },
+              "required_when": {
+                "max_pressure": {
+                  "kind": "when",
+                  "rows": [
+                    [
+                      {
+                        "field": "pressure_unit",
+                        "operator": "in",
+                        "value_type": "token",
+                        "value": [
+                          "bar",
+                          "psi"
+                        ]
+                      }
+                    ]
+                  ]
+                }
+              },
+              "allowed_options": {}
+            }
+          }
+        }
+      },
+      "after": {
+        "version": 1,
+        "fields": {
+          "tire_rim_configurations": {
+            "allowed_when": {
+              "max_pressure": {
+                "kind": "when",
+                "rows": [
+                  [
+                    {
+                      "field": "pressure_unit",
+                      "operator": "in",
+                      "value_type": "token",
+                      "value": [
+                        "bar",
+                        "psi"
+                      ]
+                    }
+                  ]
+                ]
+              }
+            },
+            "required_when": {
+              "max_pressure": {
+                "kind": "when",
+                "rows": [
+                  [
+                    {
+                      "field": "pressure_unit",
+                      "operator": "in",
+                      "value_type": "token",
+                      "value": [
+                        "bar",
+                        "psi"
+                      ]
+                    }
+                  ]
+                ]
+              }
+            },
+            "allowed_options": {}
+          },
+          "tire_general_max_pressures": {
+            "allowed_when": {
+              "max_pressure_value": {
+                "kind": "when",
+                "rows": [
+                  [
+                    {
+                      "field": "pressure_unit",
+                      "operator": "in",
+                      "value_type": "token",
+                      "value": [
+                        "bar",
+                        "psi"
+                      ]
+                    }
+                  ]
+                ]
+              }
+            },
+            "required_when": {
+              "max_pressure_value": {
+                "kind": "when",
+                "rows": [
+                  [
+                    {
+                      "field": "pressure_unit",
+                      "operator": "in",
+                      "value_type": "token",
+                      "value": [
+                        "bar",
+                        "psi"
+                      ]
+                    }
+                  ]
+                ]
+              }
+            },
+            "allowed_options": {}
+          }
+        }
+      },
+      "before_extensions_required": {},
+      "replaces": [],
+      "scope": "La unidad gobierna el valor dentro de su propia fila: con la unidad en bar o psi el valor es exigible y su falta queda pendiente, y sin unidad el número queda con requisitos por confirmar y la fila incompleta. Digo lo que no hace: no bloquea. Ver G3.",
+      "not_claimed": "que el bloque toque las configuraciones por aro: su entrada anterior se conserva palabra por palabra.",
+      "no_unique_by": null
+    },
+    {
+      "id": "TPDU-03-retire-max-pressure-psi",
+      "op": "replace_field_contract",
+      "template": "tire",
+      "key": "tire_max_pressure_psi",
+      "before": {
+        "roles": "declaration",
+        "semantic_roles": "declaration"
+      },
+      "after": {
+        "roles": "legacy",
+        "semantic_roles": "legacy"
+      },
+      "before_extensions_required": {},
+      "replaces": [
+        "WRFP-R3-retire-max-pressure-psi"
+      ],
+      "scope": "El escalar en psi fija la unidad por adelantado y sería un segundo dueño del mismo hecho que ahora vive en la tabla. Pasa a legado; validateProductSpecDraft descarta los valores de campos legacy antes de validar. Es la misma retirada del paquete anterior, con la preimagen de esta base.",
+      "not_claimed": "que se borre un dato. Ninguna condición del catálogo lo referencia como dependencia. Si prefieres integrar la tabla primero y retirarlo después, este parche se puede adjudicar por separado.",
+      "no_unique_by": null
+    }
+  ],
+  "fixtures": [
+    {
+      "id": "tpdu_six_bar_and_85_psi_same_variant",
+      "template": "tire",
+      "kind": "válido",
+      "values": {
+        "tire_etrto": "37-622",
+        "tire_width_mm": "37",
+        "bead_seat_diameter_mm": "622",
+        "spec_evidence_source": "Schwalbe, Marathon Plus 37-622 (11100769)",
+        "tire_general_max_pressures": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "de_bar",
+              "values": {
+                "pressure_unit": "bar",
+                "declared_scope": "Sin condición de llanta en el documento",
+                "source_document": "Schwalbe, ficha de producto 11100769 (Marathon Plus 37-622), edición 2014, schwalbe.com, leída 2026-09-07",
+                "max_pressure_value": "6",
+                "source_url": "https://www.schwalbe.com/en/Marathon-Plus-11100769"
+              },
+              "sources": [
+                "https://www.schwalbe.com/en/Marathon-Plus-11100769"
+              ]
+            },
+            {
+              "id": "de_psi",
+              "values": {
+                "pressure_unit": "psi",
+                "declared_scope": "Sin condición de llanta en el documento",
+                "source_document": "Schwalbe, ficha de producto 11100769 (Marathon Plus 37-622), edición 2014, schwalbe.com, leída 2026-09-07",
+                "max_pressure_value": "85",
+                "source_url": "https://www.schwalbe.com/en/Marathon-Plus-11100769"
+              },
+              "sources": [
+                "https://www.schwalbe.com/en/Marathon-Plus-11100769"
+              ]
+            }
+          ]
+        }
+      },
+      "source_urls": [
+        "https://www.schwalbe.com/en/Marathon-Plus-11100769"
+      ],
+      "expected_blocking": [],
+      "note": "Las dos cifras impresas del mismo documento, cada una con su unidad. Ninguna se deriva de la otra: 6 bar convertidos dan 87 psi y el fabricante imprime 85.",
+      "observed_in_local_trial": [
+        {
+          "code": "required_missing",
+          "field": "tire_bead_type",
+          "row": null,
+          "column": null,
+          "blocking": false
+        }
+      ]
+    },
+    {
+      "id": "tpdu_two_documents_same_figures_do_not_merge",
+      "template": "tire",
+      "kind": "válido",
+      "values": {
+        "tire_etrto": "37-622",
+        "tire_width_mm": "37",
+        "bead_seat_diameter_mm": "622",
+        "spec_evidence_source": "Schwalbe, Marathon Plus 37-622 (11100769)",
+        "tire_general_max_pressures": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "de_bar",
+              "values": {
+                "pressure_unit": "bar",
+                "declared_scope": "Sin condición de llanta en el documento",
+                "source_document": "Schwalbe, ficha de producto 11100769 (Marathon Plus 37-622), edición 2014, schwalbe.com, leída 2026-09-07",
+                "max_pressure_value": "6",
+                "source_url": "https://www.schwalbe.com/en/Marathon-Plus-11100769"
+              },
+              "sources": [
+                "https://www.schwalbe.com/en/Marathon-Plus-11100769"
+              ]
+            },
+            {
+              "id": "de_psi",
+              "values": {
+                "pressure_unit": "psi",
+                "declared_scope": "Sin condición de llanta en el documento",
+                "source_document": "Schwalbe, ficha de producto 11100769 (Marathon Plus 37-622), edición 2014, schwalbe.com, leída 2026-09-07",
+                "max_pressure_value": "85",
+                "source_url": "https://www.schwalbe.com/en/Marathon-Plus-11100769"
+              },
+              "sources": [
+                "https://www.schwalbe.com/en/Marathon-Plus-11100769"
+              ]
+            },
+            {
+              "id": "us_bar",
+              "values": {
+                "pressure_unit": "bar",
+                "declared_scope": "Sin condición de llanta en el documento",
+                "source_document": "Schwalbe, ficha de producto 11100769 (Marathon Plus 37-622), edición 2014, schwalbetires.com, leída 2026-09-07",
+                "max_pressure_value": "6",
+                "source_url": "https://www.schwalbetires.com/Marathon-Plus-11100769"
+              },
+              "sources": [
+                "https://www.schwalbetires.com/Marathon-Plus-11100769"
+              ]
+            },
+            {
+              "id": "us_psi",
+              "values": {
+                "pressure_unit": "psi",
+                "declared_scope": "Sin condición de llanta en el documento",
+                "source_document": "Schwalbe, ficha de producto 11100769 (Marathon Plus 37-622), edición 2014, schwalbetires.com, leída 2026-09-07",
+                "max_pressure_value": "85",
+                "source_url": "https://www.schwalbetires.com/Marathon-Plus-11100769"
+              },
+              "sources": [
+                "https://www.schwalbetires.com/Marathon-Plus-11100769"
+              ]
+            }
+          ]
+        }
+      },
+      "source_urls": [
+        "https://www.schwalbe.com/en/Marathon-Plus-11100769",
+        "https://www.schwalbetires.com/Marathon-Plus-11100769"
+      ],
+      "expected_blocking": [],
+      "expected_row_count": 4,
+      "note": "Dos documentos reales de la misma variante con las mismas cifras. Leí los dos hoy. Con un unique_by sobre valor y unidad estas cuatro filas colapsarían a dos y la procedencia del segundo documento desaparecería. Por eso el esquema no lleva unique_by.",
+      "observed_in_local_trial": [
+        {
+          "code": "required_missing",
+          "field": "tire_bead_type",
+          "row": null,
+          "column": null,
+          "blocking": false
+        }
+      ]
+    },
+    {
+      "id": "tpdu_two_editions_disagree_neither_is_wrong",
+      "template": "tire",
+      "kind": "synthetic_documentary_conflict",
+      "values": {
+        "bead_seat_diameter_mm": "622",
+        "tire_general_max_pressures": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "ed_a",
+              "values": {
+                "pressure_unit": "bar",
+                "declared_scope": "Sin condición de llanta en el documento",
+                "source_document": "Documento sintético A, edición anterior",
+                "max_pressure_value": "6"
+              },
+              "sources": []
+            },
+            {
+              "id": "ed_b",
+              "values": {
+                "pressure_unit": "bar",
+                "declared_scope": "Sin condición de llanta en el documento",
+                "source_document": "Documento sintético B, edición posterior",
+                "max_pressure_value": "6.5"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "source_urls": [],
+      "expected_blocking": [],
+      "note": "Cifras sintéticas y sin atribuir a ningún fabricante: no encontré dos ediciones reales de una misma variante que se contradigan, y no voy a inventar la atribución. Lo que la fixtura fija es la forma: dos ediciones que declaran distinto conviven como dos filas y ninguna queda marcada errónea.",
+      "observed_in_local_trial": [
+        {
+          "code": "required_missing",
+          "field": "tire_width_mm",
+          "row": null,
+          "column": null,
+          "blocking": false
+        },
+        {
+          "code": "required_missing",
+          "field": "tire_bead_type",
+          "row": null,
+          "column": null,
+          "blocking": false
+        },
+        {
+          "code": "prerequisite",
+          "field": "tire_general_max_pressures",
+          "row": null,
+          "column": null,
+          "blocking": false
+        }
+      ]
+    },
+    {
+      "id": "tpdu_value_without_unit_is_not_authorized",
+      "template": "tire",
+      "kind": "desconocido",
+      "values": {
+        "bead_seat_diameter_mm": "622",
+        "tire_general_max_pressures": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "max_pressure_value": "6"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "source_urls": [],
+      "expected_blocking": [],
+      "note": "Sin unidad el número queda con requisitos por confirmar y la fila incompleta. Medido, no supuesto: una dependencia ausente evalúa a SpecTruth.unknown, no a «no», así que no bloquea. Para que sí bloquee hay que declarar la unidad desconocida.",
+      "observed_in_local_trial": [
+        {
+          "code": "required_missing",
+          "field": "tire_width_mm",
+          "row": null,
+          "column": null,
+          "blocking": false
+        },
+        {
+          "code": "required_missing",
+          "field": "tire_bead_type",
+          "row": null,
+          "column": null,
+          "blocking": false
+        },
+        {
+          "code": "prerequisite",
+          "field": "tire_general_max_pressures",
+          "row": null,
+          "column": null,
+          "blocking": false
+        },
+        {
+          "code": "row_incomplete",
+          "field": "tire_general_max_pressures",
+          "row": null,
+          "column": null,
+          "blocking": false
+        },
+        {
+          "code": "row_prerequisite",
+          "field": "tire_general_max_pressures",
+          "row": "r1",
+          "column": "max_pressure_value",
+          "blocking": false
+        }
+      ]
+    },
+    {
+      "id": "tpdu_unit_declared_unknown_is_still_only_pending",
+      "template": "tire",
+      "kind": "known_gap_regression",
+      "values": {
+        "bead_seat_diameter_mm": "622",
+        "tire_general_max_pressures": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "pressure_unit": "Desconocido / sin confirmar",
+                "declared_scope": "Sin condición de llanta en el documento",
+                "source_document": "Envase sin unidad legible",
+                "max_pressure_value": "6"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "source_urls": [],
+      "expected_blocking": [],
+      "expected_row_condition_issues": [
+        {
+          "code": "row_prerequisite",
+          "field": "tire_general_max_pressures",
+          "row_id": "r1",
+          "column": "max_pressure_value",
+          "blocking": false
+        }
+      ],
+      "note": "Yo esperaba un bloqueo aquí y me equivoqué. hasKnownSpecValue trata «Desconocido / sin confirmar» como ausencia en todo el motor, así que elegir ese token es idéntico a dejar la celda vacía y la condición nunca llega a ser falsa. La fila queda incompleta y el valor pendiente. Esta fixtura fija el hueco para que no se vuelva a proponer esa salida.",
+      "observed_in_local_trial": [
+        {
+          "code": "required_missing",
+          "field": "tire_width_mm",
+          "row": null,
+          "column": null,
+          "blocking": false
+        },
+        {
+          "code": "required_missing",
+          "field": "tire_bead_type",
+          "row": null,
+          "column": null,
+          "blocking": false
+        },
+        {
+          "code": "prerequisite",
+          "field": "tire_general_max_pressures",
+          "row": null,
+          "column": null,
+          "blocking": false
+        },
+        {
+          "code": "row_incomplete",
+          "field": "tire_general_max_pressures",
+          "row": null,
+          "column": null,
+          "blocking": false
+        },
+        {
+          "code": "row_prerequisite",
+          "field": "tire_general_max_pressures",
+          "row": "r1",
+          "column": "max_pressure_value",
+          "blocking": false
+        }
+      ]
+    },
+    {
+      "id": "tpdu_unit_without_value_is_pending",
+      "template": "tire",
+      "kind": "desconocido",
+      "values": {
+        "bead_seat_diameter_mm": "622",
+        "tire_general_max_pressures": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "pressure_unit": "bar",
+                "declared_scope": "Sin condición de llanta en el documento",
+                "source_document": "Schwalbe, ficha de producto 11100769 (Marathon Plus 37-622), edición 2014, schwalbe.com, leída 2026-09-07",
+                "source_url": "https://www.schwalbe.com/en/Marathon-Plus-11100769"
+              },
+              "sources": [
+                "https://www.schwalbe.com/en/Marathon-Plus-11100769"
+              ]
+            }
+          ]
+        }
+      },
+      "source_urls": [
+        "https://www.schwalbe.com/en/Marathon-Plus-11100769"
+      ],
+      "expected_blocking": [],
+      "expected_row_condition_issues": [
+        {
+          "code": "row_required_missing",
+          "field": "tire_general_max_pressures",
+          "row_id": "r1",
+          "column": "max_pressure_value",
+          "blocking": false
+        }
+      ],
+      "note": "Elegida la unidad, el valor es exigible y su falta queda pendiente.",
+      "observed_in_local_trial": [
+        {
+          "code": "required_missing",
+          "field": "tire_width_mm",
+          "row": null,
+          "column": null,
+          "blocking": false
+        },
+        {
+          "code": "required_missing",
+          "field": "tire_bead_type",
+          "row": null,
+          "column": null,
+          "blocking": false
+        },
+        {
+          "code": "prerequisite",
+          "field": "tire_general_max_pressures",
+          "row": null,
+          "column": null,
+          "blocking": false
+        },
+        {
+          "code": "row_required_missing",
+          "field": "tire_general_max_pressures",
+          "row": "r1",
+          "column": "max_pressure_value",
+          "blocking": false
+        }
+      ]
+    },
+    {
+      "id": "tpdu_row_without_scope_or_document_is_pending",
+      "template": "tire",
+      "kind": "desconocido",
+      "values": {
+        "bead_seat_diameter_mm": "622",
+        "tire_general_max_pressures": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "pressure_unit": "bar",
+                "max_pressure_value": "6"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "source_urls": [],
+      "expected_blocking": [],
+      "note": "Alcance y documento son columnas requeridas del esquema: su falta sale como row_incomplete no bloqueante, nombrando la fila y la columna que falta.",
+      "observed_in_local_trial": [
+        {
+          "code": "required_missing",
+          "field": "tire_width_mm",
+          "row": null,
+          "column": null,
+          "blocking": false
+        },
+        {
+          "code": "required_missing",
+          "field": "tire_bead_type",
+          "row": null,
+          "column": null,
+          "blocking": false
+        },
+        {
+          "code": "prerequisite",
+          "field": "tire_general_max_pressures",
+          "row": null,
+          "column": null,
+          "blocking": false
+        },
+        {
+          "code": "row_incomplete",
+          "field": "tire_general_max_pressures",
+          "row": null,
+          "column": null,
+          "blocking": false
+        }
+      ]
+    },
+    {
+      "id": "tpdu_hookless_only_source_is_not_promoted",
+      "template": "tire",
+      "kind": "válido",
+      "values": {
+        "tire_etrto": "28-622",
+        "tire_width_mm": "28",
+        "bead_seat_diameter_mm": "622",
+        "spec_evidence_source": "Continental, Hookless vs. Hooked Rims",
+        "tire_rim_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "hk",
+              "values": {
+                "rim_bead_profile": "Sin gancho (hookless)",
+                "mounting_method": "Tubeless",
+                "rim_internal_width_max_mm": "23",
+                "max_pressure": "5.0",
+                "pressure_unit": "bar"
+              },
+              "sources": [
+                "https://www.continental-tires.com/us/en/tire-knowledge/hookless-vs-hooked-rims/"
+              ]
+            }
+          ]
+        }
+      },
+      "source_urls": [
+        "https://www.continental-tires.com/us/en/tire-knowledge/hookless-vs-hooked-rims/",
+        "https://www.continental-tires.com/products/bicycle/tires/grand-prix-5000-s-tr/"
+      ],
+      "expected_blocking": [],
+      "note": "Continental publica para el 700×28c 5.0 bar y 23 mm sólo para montaje sin gancho, y dice que el máximo general está en el envase y puede diferir. La tabla de máximos generales queda vacía: la cifra condicionada no se promociona, y su ausencia no es un defecto.",
+      "observed_in_local_trial": [
+        {
+          "code": "required_missing",
+          "field": "tire_bead_type",
+          "row": null,
+          "column": null,
+          "blocking": false
+        }
+      ]
+    },
+    {
+      "id": "tpdu_legacy_psi_no_longer_governs",
+      "template": "tire",
+      "kind": "legacy_boundary_regression",
+      "values": {
+        "bead_seat_diameter_mm": "622",
+        "tire_max_pressure_psi": "999"
+      },
+      "source_urls": [],
+      "expected_blocking": [],
+      "forbidden_issue_fields": [
+        "tire_max_pressure_psi"
+      ],
+      "note": "999 es sintético y no se atribuye a nadie. Tras la retirada el validador descarta el valor antes de validar.",
+      "observed_in_local_trial": [
+        {
+          "code": "required_missing",
+          "field": "tire_width_mm",
+          "row": null,
+          "column": null,
+          "blocking": false
+        },
+        {
+          "code": "required_missing",
+          "field": "tire_bead_type",
+          "row": null,
+          "column": null,
+          "blocking": false
+        }
+      ]
+    }
+  ],
+  "corrections": [
+    {
+      "id": "C1",
+      "target": "patch",
+      "target_id": "WRFP-R3-max-pressure-unit",
+      "action": "retirar",
+      "path": null,
+      "before": {
+        "op": "add_field",
+        "template": "tire",
+        "key": "tire_max_pressure_unit"
+      },
+      "after": null,
+      "replaced_by": "TPDU-01-general-max-pressures-table",
+      "why": "Un escalar por unidad no puede conservar las dos cifras impresas de una misma variante."
+    },
+    {
+      "id": "C2",
+      "target": "patch",
+      "target_id": "WRFP-R3-max-pressure-value",
+      "action": "retirar",
+      "path": null,
+      "before": {
+        "op": "add_field",
+        "template": "tire",
+        "key": "tire_max_pressure_value"
+      },
+      "after": null,
+      "replaced_by": "TPDU-01-general-max-pressures-table",
+      "why": "Mismo motivo; además no tenía dónde poner el documento ni el alcance."
+    },
+    {
+      "id": "C3",
+      "target": "patch",
+      "target_id": "WRFP-R1-race-contact-angle",
+      "action": "corregir",
+      "path": "after.helpers",
+      "before": "Magnitud del ángulo interno α medido respecto del plano perpendicular al eje, entre 0 y 90 grados (NSK). Se registra sólo si el fabricante declara un único valor nominal común. No se deduce del sufijo MAX, ni de que la aplicación sea Dirección, ni del par de biseles de asiento. Un conjunto de pedalier que declara 15° no es un rodamiento suelto: ese ángulo pertenece al conjunto, no a un SKU de rodamiento.",
+      "after": "Magnitud del ángulo interno α medido respecto del plano perpendicular al eje, entre 0 y 90 grados (NSK). Se registra sólo si el fabricante declara un único valor nominal común. No se deduce del sufijo MAX, ni de que la aplicación sea Dirección, ni del par de biseles de asiento. Un conjunto de pedalier que declara 15° está declarando el ángulo de sus rodamientos internos; lo que ese documento no hace es identificar qué rodamiento suelto son. Copiar la cifra a un SKU suelto exige demostrar antes que se trata del mismo rodamiento.",
+      "replaced_by": null,
+      "why": "Mi texto decía que el ángulo «pertenece al conjunto, no a un SKU de rodamiento». Es falso: el ángulo es de los rodamientos internos. Lo que el documento no hace es identificarlos como un SKU suelto, y lo que sigue siendo falso es copiar la cifra sin demostrar esa identidad."
+    },
+    {
+      "id": "C4",
+      "target": "fixture",
+      "target_id": "wrfp_bb_assembly_angle_copied_is_undetectable",
+      "action": "corregir",
+      "path": "note",
+      "before": "Los 15° del BKC-0752 pertenecen a un pedalier completo con cazoletas, precarga y separadores. Copiados a un rodamiento suelto el motor no puede detectarlo: sólo la revisión de la fuente lo separa. Se registra como límite, no como regla.",
+      "after": "Los 15° del BKC-0752 son el ángulo de los rodamientos internos de ese pedalier. El documento no identifica qué rodamiento suelto son, así que copiar la cifra a un SKU suelto sin demostrar esa identidad es falso, y el motor no puede detectarlo desde la ficha: sólo la revisión de la fuente lo separa. Se registra como límite, no como regla.",
+      "replaced_by": null,
+      "why": "La misma afirmación equivocada que C3, en la nota de la fixtura. Los valores no cambian."
+    },
+    {
+      "id": "C5",
+      "target": "fixture",
+      "target_id": "wrfp_schwalbe_general_maximum_in_bar",
+      "action": "retirar",
+      "path": null,
+      "before": {
+        "tire_etrto": "37-622",
+        "tire_width_mm": "37",
+        "bead_seat_diameter_mm": "622",
+        "tire_max_pressure_unit": "bar",
+        "tire_max_pressure_value": "6",
+        "spec_evidence_source": "Schwalbe, Marathon Plus 37-622 (11100769)"
+      },
+      "after": null,
+      "replaced_by": "tpdu_six_bar_and_85_psi_same_variant",
+      "why": "Guardaba 6 bar y perdía los 85 psi del mismo documento."
+    },
+    {
+      "id": "C6",
+      "target": "fixture",
+      "target_id": "wrfp_unit_without_value_is_pending",
+      "action": "retirar",
+      "path": null,
+      "before": {
+        "bead_seat_diameter_mm": "622",
+        "tire_max_pressure_unit": "psi",
+        "spec_evidence_source": "Envase del fabricante"
+      },
+      "after": null,
+      "replaced_by": "tpdu_unit_without_value_is_pending",
+      "why": "El mismo límite, ahora dentro de la fila."
+    },
+    {
+      "id": "C7",
+      "target": "fixture",
+      "target_id": "wrfp_value_without_unit_stays_pending",
+      "action": "retirar",
+      "path": null,
+      "before": {
+        "bead_seat_diameter_mm": "622",
+        "tire_max_pressure_value": "6",
+        "spec_evidence_source": "Envase del fabricante"
+      },
+      "after": null,
+      "replaced_by": "tpdu_value_without_unit_is_not_authorized",
+      "why": "El mismo límite, ahora dentro de la fila. La salida bloqueante que creí haber encontrado no existe: ver G3."
+    },
+    {
+      "id": "C8",
+      "target": "fixture",
+      "target_id": "wrfp_hookless_row_maximum_is_not_the_headline",
+      "action": "retirar",
+      "path": null,
+      "before": {
+        "tire_etrto": "28-622",
+        "tire_width_mm": "28",
+        "bead_seat_diameter_mm": "622",
+        "tire_max_pressure_unit": "bar",
+        "tire_max_pressure_value": "5",
+        "spec_evidence_source": "Continental, Hookless vs. Hooked Rims",
+        "tire_rim_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "hk",
+              "values": {
+                "rim_bead_profile": "Sin gancho (hookless)",
+                "mounting_method": "Tubeless",
+                "rim_internal_width_max_mm": "23",
+                "max_pressure": "5.0",
+                "pressure_unit": "bar"
+              },
+              "sources": [
+                "https://www.continental-tires.com/us/en/tire-knowledge/hookless-vs-hooked-rims/"
+              ]
+            }
+          ]
+        }
+      },
+      "after": null,
+      "replaced_by": "tpdu_hookless_only_source_is_not_promoted",
+      "why": "La fixtura ponía la cifra hookless en el titular para mostrar que era indetectable. Con la tabla, el caso correcto es que la cifra condicionada no se promociona y la tabla general queda vacía."
+    },
+    {
+      "id": "C9",
+      "target": "finding",
+      "target_id": "F6",
+      "action": "superado",
+      "path": null,
+      "before": "Schwalbe imprime las dos unidades para la misma cubierta: «max. Bar: 6 Bar» y «max. Psi: 85 PSI». No son conversiones exactas entre sí —6 bar son 87 psi—, así que ninguna se deriva de la otra. R3 guarda una sola, y la otra cifra impresa no queda representada. Es una pérdida consciente, no un error: representar las dos exigiría un par valor/unidad repetible, que es una fila, no un escalar.",
+      "after": null,
+      "replaced_by": "TPDU-01-general-max-pressures-table",
+      "why": "F6 identificó bien la pérdida y la llamó consciente. Tu decisión la elimina en vez de aceptarla, así que la conclusión de F6 queda superada; la observación que la motivó sigue siendo correcta."
+    },
+    {
+      "id": "C10",
+      "target": "finding",
+      "target_id": "F11",
+      "action": "sigue vigente, cambia de sujeto",
+      "path": null,
+      "before": "«El valor exige la unidad» no llega a ser un bloqueo. Una dependencia ausente evalúa a SpecTruth.unknown, no a «no», así que un número escrito sin elegir la unidad queda como pendiente no bloqueante. Lo comprobé corriendo la fixtura contra validateProductSpecDraft, no leyendo el código. Es el mismo comportamiento que cualquier otro prerequisito del catálogo, así que es consistente; pero si root quiere que ese caso bloquee, no alcanza con allowed_when y hace falta otro mecanismo.",
+      "after": null,
+      "replaced_by": null,
+      "why": "La semántica medida es la misma en celdas de fila: una dependencia ausente da unknown. Y se refuerza: el token explícito de desconocido tampoco evalúa a «no», porque el motor lo trata como ausencia. F11 no tenía salida y sigue sin tenerla."
+    }
+  ],
+  "engine_facts_verified": [
+    {
+      "fact": "row_incomplete, que nace de las columnas requeridas del esquema, es no bloqueante y nombra fila y columna.",
+      "where": "lib/modules/inventory/models/product_spec_contract.dart:299-303"
+    },
+    {
+      "fact": "Una columna requerida estáticamente no admite allowed_when condicional; por eso el valor no es requerido y se gobierna por row_conditions.",
+      "where": "scripts/inventory/product_spec_row_condition_metadata.py:173-174"
+    },
+    {
+      "fact": "Una celda con valor y aplicabilidad definitivamente falsa bloquea; con aplicabilidad desconocida sólo queda pendiente.",
+      "where": "lib/modules/inventory/models/product_spec_row_conditions.dart:105-120"
+    },
+    {
+      "fact": "40 de los 57 esquemas de filas de la base no declaran unique_by.",
+      "where": "lectura del artefacto base congelado"
+    },
+    {
+      "fact": "hasKnownSpecValue trata «desconocido / sin confirmar» y «unknown» como ausencia, así que el token explícito no puede volver falsa una condición.",
+      "where": "lib/modules/inventory/utils/spec_rule_evaluator.dart:5-15"
+    }
+  ],
+  "gates": {
+    "publication": false,
+    "fill": false,
+    "assignment": false,
+    "mechanical_approval": false,
+    "families_certified": false
+  },
+  "stats": {
+    "patches": 3,
+    "new_definitions": 1,
+    "fixtures": 9,
+    "corrections": 10,
+    "sources": 4
+  },
+  "local_trial": {
+    "compiler": "apply_reviewed_field_addendum con una adjudicación de ensayo escrita por Claude: los tres parches aplican, validate_contract pasa y publication_gates no cambia.",
+    "dart": "Las nueve fixturas corrieron contra validateProductSpecDraft con el catálogo ya parchado. observed_in_local_trial es la salida literal del motor."
+  }
+}

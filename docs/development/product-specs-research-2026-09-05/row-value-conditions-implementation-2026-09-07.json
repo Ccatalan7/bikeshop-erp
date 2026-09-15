@@ -1,0 +1,254 @@
+{
+  "schema_version": 1,
+  "date": "2026-09-07",
+  "status": "implemented_local_frozen_for_root_review",
+  "scope": "Conditional expected literals within one configuration row; no new mechanical or stock claims",
+  "finding": "CPC-G01",
+  "closure": "Engine representation implemented and locally verified; catalogue rule publication and real UI integration remain root gates",
+  "contract": {
+    "form_rules_version": 2,
+    "row_conditions_version": 1,
+    "bucket": "value_when",
+    "target_types": {
+      "boolean": "JSON boolean",
+      "token": "literal string within schema and template domains",
+      "decimal": "exact PostgreSQL-compatible decimal string; decimal or integer target column"
+    },
+    "rule_keys": [
+      "when",
+      "expected"
+    ],
+    "expected_keys": [
+      "value_type",
+      "value"
+    ],
+    "rules_per_column": "nonempty array; all confirmed rules apply without precedence",
+    "example": {
+      "rules_version": 2,
+      "row_conditions": {
+        "version": 1,
+        "fields": {
+          "configurations": {
+            "value_when": {
+              "clamp_included": [
+                {
+                  "when": {
+                    "kind": "when",
+                    "rows": [
+                      [
+                        {
+                          "field": "configuration_state",
+                          "operator": "eq",
+                          "value_type": "token",
+                          "value": "Con kit incluido"
+                        }
+                      ]
+                    ]
+                  },
+                  "expected": {
+                    "value_type": "boolean",
+                    "value": true
+                  }
+                }
+              ]
+            }
+          }
+        }
+      }
+    },
+    "knownness": "Missing or unknown is not false; false and numeric zero are known.",
+    "same_row_only": true,
+    "foreign_target_or_prerequisite_rejected": true,
+    "mixed_bucket_cycles_rejected": true,
+    "metadata_domain_validation": true,
+    "autofill": false,
+    "old_client_behavior": "Prior parser rejects unknown bucket; no old binary launched. Never publish the bucket before the corresponding client rollout gate.",
+    "hot_reload": "Nullable backing _valueWhen with public empty-map fallback for pre-extension live instances; actual reload belongs to root."
+  },
+  "semantics": [
+    {
+      "antecedent": "false",
+      "actual": "any valid observation or missing",
+      "result": "no value obligation"
+    },
+    {
+      "antecedent": "unknown",
+      "actual": "any valid observation or missing",
+      "result": "row_value_pending",
+      "blocking": false
+    },
+    {
+      "antecedent": "true",
+      "actual": "missing or unknown",
+      "result": "row_value_pending",
+      "blocking": false
+    },
+    {
+      "antecedent": "true",
+      "actual": "known equal typed literal",
+      "result": "no value issue"
+    },
+    {
+      "antecedent": "true",
+      "actual": "known different typed literal",
+      "result": "row_value_conflict",
+      "blocking": true
+    },
+    {
+      "antecedent": "multiple true rules with incompatible expected values",
+      "actual": "including missing",
+      "result": "row_value_conflict",
+      "blocking": true
+    },
+    {
+      "applicability": "false or unknown",
+      "result": "existing applicability/prerequisite owner; no confirmed value requirement"
+    }
+  ],
+  "stable_dart_api": {
+    "ProductSpecRowValueRule": [
+      "when: Map<String,dynamic>",
+      "valueType: String",
+      "expected: Object"
+    ],
+    "ProductSpecRowFieldConditions": [
+      "valueWhen: Map<String,List<ProductSpecRowValueRule>> getter",
+      "validateRow(field,rowId,values)",
+      "dependenciesFor(column)",
+      "applicabilityFor(column,values)",
+      "requiredFor(column,values)"
+    ]
+  },
+  "sql": {
+    "migration": "supabase/migrations/20260907024000_product_spec_row_value_conditions.sql",
+    "replacements": {
+      "spec_row_conditions_metadata_internal_v1(jsonb,jsonb)": {
+        "before_md5": "bdc9903e785f45355d16840963128554",
+        "after_md5": "f3a61c7ddb5ae221d977207eb692588b"
+      },
+      "spec_row_conditions_issues_internal_v1(jsonb,jsonb,jsonb)": {
+        "before_md5": "ff9dfdc494187854222afcf70cb036dc",
+        "after_md5": "74312e56c452d640b3ced5633f729b7c"
+      }
+    },
+    "unchanged_dependency_count": 5,
+    "private_helpers": true,
+    "definer": false,
+    "volatility": "immutable",
+    "owner": "postgres",
+    "search_path": "pg_catalog, public, pg_temp",
+    "execute_roles": [
+      "postgres",
+      "service_role"
+    ],
+    "preimage_and_postimage_guards": true,
+    "local_applied": true,
+    "production_applied_by_this_agent": false,
+    "concurrency": "The five pinned unchanged 2200 callers retain template version/share locks and endpoint definition update/share locks. No new two-session experiment was run for 2400.",
+    "persistent_catalogue_writes": 0,
+    "persistent_product_writes": 0,
+    "synthetic_test_mutations_rolled_back": true
+  },
+  "validation": {
+    "shared_behavior_cases": 46,
+    "shared_valid_metadata_cases": 4,
+    "shared_invalid_metadata_cases": 51,
+    "new_sql_assertions": 216,
+    "existing_sql_assertions": 101,
+    "sql_total": 317,
+    "sql_files": 3,
+    "new_dart_tests": 106,
+    "python_tests": 119,
+    "local_verifier_assertions": 2,
+    "logs": [
+      ".tmp/row-value-pgtap-final.log",
+      ".tmp/row-value-pgtap-regression.log",
+      ".tmp/row-value-dart-values-final.log",
+      ".tmp/row-value-python-final.log",
+      ".tmp/row-value-verify-final.log",
+      ".tmp/row-value-migration-final.log",
+      ".tmp/row-value-dart-final.log"
+    ],
+    "function_capture": ".tmp/row-value-function-state.json",
+    "coverage": [
+      "intrinsic bool/token/decimal typing",
+      "exact decimals beyond 2^53",
+      "literal 01 vs 1",
+      "simultaneously active incompatible rules even without observation",
+      "same-row isolation",
+      "unknown and missing preservation",
+      "domain and mixed-bucket cycle rejection",
+      "central draft consumer",
+      "authenticated aggregate save",
+      "direct fact constraint",
+      "rejected writer leaves entire product and facts unchanged",
+      "source URLs and row IDs preserved",
+      "reference agreement cannot waive template contradiction",
+      "populated metadata cannot change/remove expectation",
+      "schema type/domain/field deletion guard"
+    ],
+    "dart_total": 155,
+    "dart_files": 3
+  },
+  "corrections_during_verification": [
+    {
+      "id": "RV1",
+      "cause": "New bucket initially let when=null reach generic 22023 from existing DSL instead of the new metadata check",
+      "resolution": "Strict object check and 23514 normalization only for new value_when condition validation",
+      "evidence": "Both direct metadata and publication regression now pass; no invalid value was accepted."
+    },
+    {
+      "id": "RV2",
+      "cause": "Existing Python decimal literal helper allowed raw zero exponent through int64, beyond PostgreSQL and current Dart bounds",
+      "resolution": "1073741823 maximum raw exponent; exact string bounds preserved before scale arithmetic",
+      "evidence": ".tmp/row-value-exponent-bound.json; 0e1073741823 accepted, 0e1073741824 and int64 maximum rejected by local SQL; shared tests agree."
+    }
+  ],
+  "gates": {
+    "root_independent_review": false,
+    "production_2400_verification": false,
+    "catalogue_value_when_publication": false,
+    "root_inline_ui_and_live_reload": false,
+    "mechanical_family_complete": false,
+    "automatic_product_fill": false
+  },
+  "residuals": [
+    "No same-row field-to-field comparison or arithmetic was added; expected is a constant literal.",
+    "No text/url target, cross-row implication or item identity inference was added.",
+    "Con kit opcional deliberately implies neither true nor false.",
+    "Synthetic adapter_present requires an explicit presence column; blank adapter_model cannot be treated as explicit absence.",
+    "Global form issues already consume the result; inline row controls are root-owned and must render these same pending/conflict findings without inferring observations.",
+    "Independent reference observations can still be recorded; selecting a matching reference does not override template value conditions.",
+    "Missing an entire structured field is governed by existing field-level completeness rules; value_when does not invent rows."
+  ],
+  "artifacts": {
+    "lib/modules/inventory/models/product_spec_row_conditions.dart": {
+      "sha256": "262a6117c56aaaa50eeb388e3405db5db25879cb0acabd0bbedba743e6350ce6"
+    },
+    "scripts/inventory/product_spec_row_condition_metadata.py": {
+      "sha256": "15839ceccd3eb129a00ac60223da653e089857ed8215f187daefca53906992a2"
+    },
+    "supabase/migrations/20260907024000_product_spec_row_value_conditions.sql": {
+      "sha256": "86c54bfe71e343a7e146747f6a320bbba44decf7c058d927093e6d4a10cee7aa"
+    },
+    "supabase/tests/product_spec_row_value_conditions.sql": {
+      "sha256": "5a2c0b64c6f8c0cd76db9f3776475dd20f97aa8b1a8e203ad9003bd5a85a7958"
+    },
+    "test/unit/product_spec_row_value_conditions_test.dart": {
+      "sha256": "55d29ef385a356a335a4a49c5219c419c7bd48a05b3f36ca0c21442bc988ab29"
+    },
+    "test/fixtures/product_spec_row_value_conditions.json": {
+      "sha256": "901b666a2f6e7c23c5bf4fc5c3d7076d62dadd935f01f624ed07d0a180adc577"
+    },
+    "supabase/tests/fixtures/product_spec_row_value_conditions.sql": {
+      "sha256": "d99c36278f6be83e4b7e739b92320a00dd4e4bf6e0996548b2b16e66a51654dd"
+    },
+    "test/scripts/test_product_spec_row_value_conditions.py": {
+      "sha256": "f28401c1dcd86635b3f3469301865e0f7b8e59f4f16ec53d59c9465ded5dcb59"
+    },
+    "docs/development/product-specs-research-2026-09-05/product-spec-row-value-conditions-verify.sql": {
+      "sha256": "7b306bb0a225e3690b0a9b8174f7370b1ae98d22cbf9a62d82db7018739987a6"
+    }
+  },
+  "source_scope": "Synthetic software contract fixtures, not manufacturer compatibility assertions. CPC adjudication supplies separately scoped domain requirements; this implementation does not publish them."
+}

@@ -6,6 +6,7 @@ import '../../../shared/services/tenant_service.dart';
 import '../../../shared/models/product.dart' show PurchaseTreatment;
 import '../../ai_assistant/services/ai_service.dart';
 import '../models/inventory_models.dart';
+import '../models/product_spec_member_profile.dart';
 import '../models/stock_adjustment.dart';
 
 enum InventoryExternalStockFilter {
@@ -671,6 +672,23 @@ class InventoryService extends ChangeNotifier {
     required List<Map<String, dynamic>> components,
     required String operationKey,
     Map<String, dynamic>? specCommand,
+  }) async =>
+      (await saveProductSetAggregateWithContext(
+              parent: parent,
+              components: components,
+              operationKey: operationKey,
+              specCommand: specCommand))
+          .aggregate;
+
+  Future<
+      ({
+        ProductSetAggregateSaveResult aggregate,
+        Map<String, dynamic>? editorContext
+      })> saveProductSetAggregateWithContext({
+    required Map<String, dynamic> parent,
+    required List<Map<String, dynamic>> components,
+    required String operationKey,
+    Map<String, dynamic>? specCommand,
   }) async {
     final cleanOperationKey = operationKey.trim();
     if (cleanOperationKey.isEmpty) {
@@ -691,7 +709,7 @@ class InventoryService extends ChangeNotifier {
     final response = await _db.rpc(
       specCommand == null
           ? 'save_product_set_aggregate'
-          : 'save_product_with_specs_v1',
+          : _productSpecSaveRpc(specCommand),
       params: specCommand == null
           ? {
               'p_parent': parent,
@@ -705,17 +723,32 @@ class InventoryService extends ChangeNotifier {
               'p_operation_key': cleanOperationKey,
             },
     );
+    final receipt = _rpcJsonMap(response);
+    final editorContext = decodeProductSpecSavedEditorContext(receipt,
+        withMembers: specCommand?.containsKey('p_member_profiles') == true);
     final result = ProductSetAggregateSaveResult.fromJson(
       specCommand == null
-          ? _rpcJsonMap(response)
-          : Map<String, dynamic>.from(_rpcJsonMap(response)['set'] as Map),
+          ? receipt
+          : Map<String, dynamic>.from(receipt['set'] as Map),
     );
     invalidateProductsCache();
     notifyListeners();
-    return result;
+    return (aggregate: result, editorContext: editorContext);
   }
 
   Future<Product> saveProductWithSpecs({
+    required Product product,
+    required Map<String, dynamic> specCommand,
+    required String operationKey,
+  }) async =>
+      (await saveProductWithSpecsAndContext(
+              product: product,
+              specCommand: specCommand,
+              operationKey: operationKey))
+          .product;
+
+  Future<({Product product, Map<String, dynamic>? editorContext})>
+      saveProductWithSpecsAndContext({
     required Product product,
     required Map<String, dynamic> specCommand,
     required String operationKey,
@@ -736,16 +769,28 @@ class InventoryService extends ChangeNotifier {
       debugPrint('[InventoryService] Product embedding unavailable: $error');
     }
     final result =
-        _rpcJsonMap(await _db.rpc('save_product_with_specs_v1', params: {
+        _rpcJsonMap(await _db.rpc(_productSpecSaveRpc(specCommand), params: {
       ...specCommand,
       'p_product': payload,
       'p_operation_key': operationKey,
     }));
+    final editorContext = decodeProductSpecSavedEditorContext(result,
+        withMembers: specCommand.containsKey('p_member_profiles'));
     invalidateProductsCache();
     notifyListeners();
-    return Product.fromJson(
-        Map<String, dynamic>.from(result['product'] as Map));
+    return (
+      product:
+          Product.fromJson(Map<String, dynamic>.from(result['product'] as Map)),
+      editorContext: editorContext,
+    );
   }
+
+  // Both standalone products and stock sets use the same aggregate protocol.
+  // Absence is an old client preserving profiles; an explicit command is v2.
+  static String _productSpecSaveRpc(Map<String, dynamic> command) =>
+      command.containsKey('p_member_profiles')
+          ? 'save_product_with_specs_v2'
+          : 'save_product_with_specs_v1';
 
   Future<ProductSetCompositionSnapshot> getProductSetComposition(
     String setProductId,

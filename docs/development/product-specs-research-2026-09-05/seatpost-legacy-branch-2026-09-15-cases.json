@@ -1,0 +1,202 @@
+{
+  "schema_version": 1,
+  "catalogue_sha256": "ec8466326fee27966af8fbff94fb4c353f8c95e5f00a2460cca13551b1d8acd0",
+  "cases": [
+    {
+      "id": "seatpost_empty",
+      "template": "seatpost",
+      "values": {},
+      "expected_blocking": [],
+      "expected_issue_subset": [
+        {
+          "code": "required_missing",
+          "field": "seatpost_kind",
+          "blocking": false
+        }
+      ],
+      "expected_sql_blocking": [],
+      "expected_sql_issue_subset": [
+        {
+          "code": "required_missing",
+          "field": "seatpost_kind",
+          "blocking": false
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false
+    },
+    {
+      "id": "seatpost_shim_kind_is_no_longer_a_seatpost",
+      "template": "seatpost",
+      "values": {
+        "spec_evidence_source": "Synthetic fixture; no inventory claim.",
+        "seatpost_kind": "Suplemento (shim)"
+      },
+      "expected_blocking": [
+        {
+          "code": "constraint",
+          "field": "seatpost_kind"
+        }
+      ],
+      "expected_issue_subset": [],
+      "expected_sql_blocking": [
+        {
+          "code": "field_constraint",
+          "field": "seatpost_kind"
+        }
+      ],
+      "expected_sql_issue_subset": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false
+    },
+    {
+      "id": "seatpost_shim_kind_with_inherited_values_blocks_only_the_kind",
+      "template": "seatpost",
+      "values": {
+        "spec_evidence_source": "Synthetic fixture; no inventory claim.",
+        "seatpost_kind": "Suplemento (shim)",
+        "shim_inner_diameter_mm": "27.2",
+        "shim_outer_diameter_mm": "30.9",
+        "seatpost_shim_length_mm": "80"
+      },
+      "expected_blocking": [
+        {
+          "code": "constraint",
+          "field": "seatpost_kind"
+        }
+      ],
+      "expected_issue_subset": [],
+      "expected_sql_blocking": [
+        {
+          "code": "field_constraint",
+          "field": "seatpost_kind"
+        }
+      ],
+      "expected_sql_issue_subset": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "forbidden_issue_fields": [
+        "shim_inner_diameter_mm",
+        "shim_outer_diameter_mm",
+        "seatpost_shim_length_mm"
+      ]
+    },
+    {
+      "id": "seatpost_rigid_post_keeps_inherited_values_silent",
+      "template": "seatpost",
+      "values": {
+        "spec_evidence_source": "Synthetic fixture; no inventory claim.",
+        "seatpost_kind": "Rígida",
+        "seatpost_diameter_mm": "27.2",
+        "shim_inner_diameter_mm": "27.2",
+        "shim_outer_diameter_mm": "30.9",
+        "seatpost_shim_length_mm": "80"
+      },
+      "expected_blocking": [],
+      "expected_issue_subset": [
+        {
+          "code": "required_missing",
+          "field": "seatpost_saddle_configurations",
+          "blocking": false
+        }
+      ],
+      "expected_sql_blocking": [],
+      "expected_sql_issue_subset": [
+        {
+          "code": "required_missing",
+          "field": "seatpost_saddle_configurations",
+          "blocking": false
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "forbidden_issue_fields": [
+        "shim_inner_diameter_mm",
+        "shim_outer_diameter_mm",
+        "seatpost_shim_length_mm"
+      ]
+    },
+    {
+      "id": "seatpost_rigid_post_pending_saddle_configurations",
+      "template": "seatpost",
+      "values": {
+        "spec_evidence_source": "Synthetic fixture; no inventory claim.",
+        "seatpost_kind": "Rígida",
+        "seatpost_diameter_mm": "27.2"
+      },
+      "expected_blocking": [],
+      "expected_issue_subset": [
+        {
+          "code": "required_missing",
+          "field": "seatpost_saddle_configurations",
+          "blocking": false
+        }
+      ],
+      "expected_sql_blocking": [],
+      "expected_sql_issue_subset": [
+        {
+          "code": "required_missing",
+          "field": "seatpost_saddle_configurations",
+          "blocking": false
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false
+    },
+    {
+      "id": "seatpost_dropper_kind_still_valid",
+      "template": "seatpost",
+      "values": {
+        "spec_evidence_source": "Synthetic fixture; no inventory claim.",
+        "seatpost_kind": "Telescópica (dropper)",
+        "seatpost_diameter_mm": "30.9",
+        "dropper_control_kind": "Mecánico por cable"
+      },
+      "expected_blocking": [],
+      "expected_issue_subset": [
+        {
+          "code": "required_missing",
+          "field": "seatpost_saddle_configurations",
+          "blocking": false
+        }
+      ],
+      "expected_sql_blocking": [],
+      "expected_sql_issue_subset": [
+        {
+          "code": "required_missing",
+          "field": "seatpost_saddle_configurations",
+          "blocking": false
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false
+    },
+    {
+      "id": "seatpost_other_kind_still_valid",
+      "template": "seatpost",
+      "values": {
+        "spec_evidence_source": "Synthetic fixture; no inventory claim.",
+        "seatpost_kind": "Otro",
+        "seatpost_diameter_mm": "31.6"
+      },
+      "expected_blocking": [],
+      "expected_issue_subset": [
+        {
+          "code": "required_missing",
+          "field": "seatpost_saddle_configurations",
+          "blocking": false
+        }
+      ],
+      "expected_sql_blocking": [],
+      "expected_sql_issue_subset": [
+        {
+          "code": "required_missing",
+          "field": "seatpost_saddle_configurations",
+          "blocking": false
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false
+    }
+  ]
+}

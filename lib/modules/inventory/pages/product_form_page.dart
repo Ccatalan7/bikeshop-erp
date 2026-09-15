@@ -44,7 +44,10 @@ import '../services/spec_engine_service.dart';
 import '../models/product_spec_contract.dart';
 import '../models/product_spec_rows.dart';
 import '../models/product_spec_number.dart';
+import '../models/product_spec_member_draft.dart';
+import '../models/product_spec_member_profile.dart';
 import '../widgets/product_spec_rows_field.dart';
+import '../widgets/product_spec_member_editor.dart';
 import '../utils/spec_rule_evaluator.dart';
 import '../../../shared/widgets/vb_notice.dart';
 import '../../../shared/widgets/vb_form_section.dart';
@@ -387,13 +390,22 @@ class _ProductFormPageState extends State<ProductFormPage>
 
   // ── Ficha Técnica (Spec Engine) ──────────────────────────────────────────
   SpecTemplate? _specTemplate;
+  Map<String, String>? _specFamilyLabelsState;
+  Map<String, String> get _specFamilyLabels =>
+      _specFamilyLabelsState ?? const {};
   Map<String, dynamic> _specValues = {};
   bool _isLoadingSpecs = false;
   String? _specLoadError;
   int _specLoadEpoch = 0;
   int _specDisplayGeneration = 0;
-  String? _specAuthorityUser;
+  ErpAuthorityScopeKey? _specAuthority;
   int _specRevision = 0;
+  ProductSpecMemberDrafts? _specMemberDrafts;
+  List<ProductSpecMemberCollection>? _specMemberCollectionsState;
+  List<ProductSpecMemberCollection> get _specMemberCollections =>
+      _specMemberCollectionsState ?? const [];
+  set _specMemberCollections(List<ProductSpecMemberCollection> value) =>
+      _specMemberCollectionsState = value;
   String? _loadedSpecDraftKey;
   // Older open editors survive hot reload without running field initializers.
   List<Map<String, dynamic>>? _unassignedSpecFactsState;
@@ -1265,15 +1277,14 @@ class _ProductFormPageState extends State<ProductFormPage>
     if (mounted && _specTemplate != null) setState(() {});
   }
 
-  Future<void> _loadSpecTemplate(String? categoryId,
-      {String? productId}) async {
-    final epoch = ++_specLoadEpoch;
-    final user = Supabase.instance.client.auth.currentUser?.id;
+  void _cacheCurrentSpecDraft() {
     final previousDraftKey = _loadedSpecDraftKey ??
         (_specTemplate == null
             ? null
             : '${_existingProduct?.id ?? 'new'}:${_specTemplate!.id}');
-    if (previousDraftKey != null && _specLoadError == null) {
+    if (previousDraftKey != null &&
+        _specLoadError == null &&
+        !_isLoadingSpecs) {
       _specDrafts[previousDraftKey] = _SpecInferenceResolution(
           values: Map.of(_specValues),
           manualKeys: Set.of(_manualSpecOverrideKeys),
@@ -1281,6 +1292,13 @@ class _ProductFormPageState extends State<ProductFormPage>
           guidanceByField: Map.of(_specFieldGuidance));
       _specDraftReferences[previousDraftKey] = _specReference;
     }
+  }
+
+  Future<void> _loadSpecTemplate(String? categoryId,
+      {String? productId}) async {
+    _cacheCurrentSpecDraft();
+    final epoch = ++_specLoadEpoch;
+    final user = Supabase.instance.client.auth.currentUser?.id;
     if (mounted)
       setState(() {
         _isLoadingSpecs = true;
@@ -1288,12 +1306,26 @@ class _ProductFormPageState extends State<ProductFormPage>
       });
     try {
       final tenant = await TenantService().getTenantId();
-      if (user == null || tenant == null)
+      final authority =
+          ErpAuthorityScopeKey.from(userId: user, tenantId: tenant);
+      if (authority == null ||
+          (_specAuthority != null && _specAuthority != authority)) {
         throw const AuthorityScopeChangedException();
-      final context = await SpecEngineService.instance.getProductEditorContext(
-          productId: productId, categoryId: categoryId);
+      }
+      final context = await SpecEngineService.instance
+          .getProductMemberEditorContext(
+              productId: productId, categoryId: categoryId);
       final template = context.template;
       final snapshot = context.snapshot;
+      var familyLabels = const <String, String>{};
+      try {
+        familyLabels = await SpecEngineService.instance
+            .getFamilyLabels(authority.tenantId);
+      } catch (_) {
+        // Names are presentation metadata. Do not block the technical editor
+        // or narrow its permitted families when this optional read fails.
+        debugPrint('[Product specs] Family names unavailable for this load.');
+      }
       final draftKey =
           '${productId ?? 'new'}:${template?.id ?? 'unmapped:$categoryId'}';
       final references = template == null
@@ -1309,6 +1341,13 @@ class _ProductFormPageState extends State<ProductFormPage>
       if (!mounted ||
           epoch != _specLoadEpoch ||
           _selectedCategoryId != categoryId) return;
+      final previousMembers = _specMemberDrafts;
+      if (previousMembers != null &&
+          (previousMembers.source.productId != productId ||
+              previousMembers.source.revision != context.members.revision)) {
+        throw const FormatException(
+            'El producto cambió en otra edición. Tus cambios se conservan; vuelve a abrirlo para cargar la versión guardada.');
+      }
       final draft = _specDrafts[draftKey];
       final referenceId = snapshot['reference_id'] as String?;
       final reference = _specDraftReferences.containsKey(draftKey)
@@ -1343,7 +1382,8 @@ class _ProductFormPageState extends State<ProductFormPage>
           previousAutoValues: draft?.autoDerivedValues ?? storedAuto);
       setState(() {
         _specTemplate = template;
-        _specAuthorityUser = user;
+        _specFamilyLabelsState = familyLabels;
+        _specAuthority = authority;
         _specDisplayGeneration++;
         _loadedSpecDraftKey = draftKey;
         _specBindingSource = snapshot['binding_source'] as String? ?? 'none';
@@ -1352,8 +1392,10 @@ class _ProductFormPageState extends State<ProductFormPage>
             .toList(growable: false);
         _specReferences = references;
         // A reload of an existing draft must not bless a stale revision.
-        if (draft == null)
+        if (previousMembers == null && draft == null)
           _specRevision = (snapshot['revision'] as num?)?.toInt() ?? 0;
+        _specMemberDrafts ??= ProductSpecMemberDrafts(context.members);
+        _specMemberCollections = context.members.collections;
         _specValues = resolution.values;
         _manualSpecOverrideKeys
           ..clear()
@@ -1365,20 +1407,13 @@ class _ProductFormPageState extends State<ProductFormPage>
       });
     } on AuthorityScopeChangedException {
       if (mounted && epoch == _specLoadEpoch) {
-        setState(() {
-          _specTemplate = null;
-          _specValues = {};
-          _specDrafts.clear();
-          _loadedSpecDraftKey = null;
-          _unassignedSpecFacts = [];
-          _specReference = null;
-          _specDraftReferences.clear();
-        });
+        _invalidateSpecAuthority();
       }
     } catch (error) {
       if (mounted && epoch == _specLoadEpoch) {
-        setState(() => _specLoadError =
-            'No se pudo cargar la ficha. Tus respuestas se conservan.');
+        setState(() => _specLoadError = error is FormatException
+            ? error.message
+            : 'No se pudo cargar la ficha. Tus respuestas se conservan.');
         debugPrint('[ProductForm] Specification load failed: $error');
       }
     } finally {
@@ -1417,6 +1452,9 @@ class _ProductFormPageState extends State<ProductFormPage>
     // No speed/width/profile loop and no deletion of contradictory manual facts.
     if (_specReference?.family == template.technicalFamily) {
       for (final entry in _specReference!.facts.entries) {
+        if (!template.fields
+                .any((field) => field.definition?.key == entry.key) ||
+            template.roleFor(entry.key) == 'legacy') continue;
         if (!hasKnownSpecValue(resolvedValues[entry.key])) {
           resolvedValues[entry.key] = entry.value;
           nextAutoDerivedValues[entry.key] = entry.value;
@@ -1506,32 +1544,18 @@ class _ProductFormPageState extends State<ProductFormPage>
     SpecTemplateField field, {
     DrivetrainProductSpecFieldBehavior? behavior,
     bool isAutoLocked = false,
+    required SpecTemplate template,
+    required ProductSpecReference? reference,
   }) {
     final key = field.definition?.key ?? '';
-    if (key == 'spec_evidence_source' && _specReference != null) {
+    if (key == 'spec_evidence_source' && reference != null) {
       return 'Puedes registrar aquí el envase o manual que revisaste. Las fuentes del fabricante se conservan en Datos de la referencia.';
     }
     if (isAutoLocked) return 'Dato de la referencia seleccionada.';
     return behavior?.helperText ??
-        _specTemplate?.helperFor(key) ??
+        template.helperFor(key) ??
         field.helperText ??
         field.definition?.helpText;
-  }
-
-  DrivetrainProductSpecFieldBehavior _specFieldBehavior(
-    SpecTemplateField field,
-  ) {
-    final template = _specTemplate;
-    final def = field.definition;
-    if (template == null || def == null) {
-      return const DrivetrainProductSpecFieldBehavior();
-    }
-
-    return _specFieldBehaviorForValues(
-      template: template,
-      field: field,
-      values: _specValues,
-    );
   }
 
   DrivetrainProductSpecFieldBehavior _specFieldBehaviorForValues({
@@ -1561,15 +1585,6 @@ class _ProductFormPageState extends State<ProductFormPage>
               ...template.applicabilityDependencies(field)
             }.map(template.labelFor).join(', ')}.',
     );
-  }
-
-  bool _isSpecFieldAutoLocked(SpecTemplateField field) {
-    final def = field.definition;
-    if (def == null || def.key == 'spec_evidence_source') {
-      return false;
-    }
-
-    return _autoDerivedSpecValues.containsKey(def.key);
   }
 
   String _normalizedSpecOptionValue(dynamic value) {
@@ -1643,6 +1658,7 @@ class _ProductFormPageState extends State<ProductFormPage>
   List<String> _specFieldOptions(
     SpecTemplateField field,
     DrivetrainProductSpecFieldBehavior behavior,
+    Map<String, dynamic> values,
   ) {
     final def = field.definition;
     if (def == null) {
@@ -1655,11 +1671,11 @@ class _ProductFormPageState extends State<ProductFormPage>
     final options = <String>{
       ...?(constrainedOptions ??
           ((def.dataType == 'number')
-              ? _numberOptionValuesForField(field: field, values: _specValues)
+              ? _numberOptionValuesForField(field: field, values: values)
               : def.options)),
     };
 
-    final currentValue = _specValues[def.key];
+    final currentValue = values[def.key];
     if (currentValue is List) {
       options.addAll(currentValue.map((value) => _specOptionLabel(def, value)));
     } else if (_isMeaningfulSpecValue(currentValue)) {
@@ -1671,7 +1687,8 @@ class _ProductFormPageState extends State<ProductFormPage>
     return sorted;
   }
 
-  String? _validateSpecField(SpecTemplateField field, String? rawValue) {
+  String? _validateSpecField(
+      SpecTemplateField field, String? rawValue, Map<String, dynamic> values) {
     final def = field.definition;
     final trimmed = rawValue?.trim() ?? '';
     if (def == null || trimmed.isEmpty) {
@@ -1696,14 +1713,14 @@ class _ProductFormPageState extends State<ProductFormPage>
     final parsed = _specNumericValue(trimmed)!;
 
     if (def.key == 'smallest_cog_teeth') {
-      final largestCog = _specNumericValue(_specValues['largest_cog_teeth']);
+      final largestCog = _specNumericValue(values['largest_cog_teeth']);
       if (largestCog != null && parsed.compareTo(largestCog) >= 0) {
         return 'Debe ser menor que el pinon mayor';
       }
     }
 
     if (def.key == 'largest_cog_teeth') {
-      final smallestCog = _specNumericValue(_specValues['smallest_cog_teeth']);
+      final smallestCog = _specNumericValue(values['smallest_cog_teeth']);
       if (smallestCog != null && parsed.compareTo(smallestCog) <= 0) {
         return 'Debe ser mayor que el pinon menor';
       }
@@ -3908,11 +3925,16 @@ class _ProductFormPageState extends State<ProductFormPage>
   }
 
   void _handleProductTypeChanged(ProductType value) {
+    final wasService = _isServiceForm;
+    if (!wasService && value == ProductType.service) _cacheCurrentSpecDraft();
     setState(() {
       _selectedProductType = value;
       if (value == ProductType.service) {
+        _specLoadEpoch++;
+        _isLoadingSpecs = false;
         _selectedPurchaseTreatment = PurchaseTreatment.inventory;
         _specTemplate = null;
+        _loadedSpecDraftKey = null;
         _specValues = {};
         _manualSpecOverrideKeys.clear();
         _autoDerivedSpecValues.clear();
@@ -3952,6 +3974,11 @@ class _ProductFormPageState extends State<ProductFormPage>
     });
 
     _syncTabControllerForCurrentMode();
+
+    if (wasService && value != ProductType.service) {
+      unawaited(_loadSpecTemplate(_selectedCategoryId,
+          productId: _existingProduct?.id));
+    }
 
     if (value == ProductType.service) {
       if (_serviceProfiles.isEmpty && !_isLoadingServiceProfiles) {
@@ -4770,6 +4797,53 @@ class _ProductFormPageState extends State<ProductFormPage>
           model: _modelController.text,
           manufacturerSku: _specManufacturerSkuController.text);
 
+  String? get _specMemberSaveError {
+    try {
+      _specMemberDrafts?.buildCommand(
+          parentTemplate: _specTemplate, parentValues: _specValues);
+      return null;
+    } on FormatException catch (error) {
+      return error.message;
+    }
+  }
+
+  void _adoptSavedSpecContext(Map<String, dynamic>? context, Product product) {
+    if (context == null) return;
+    final root = SpecEngineService.decodeProductSpecEditorContext(context);
+    final members = decodeProductSpecMemberProfiles(context,
+        expectedProductId: product.id, expectedRevision: product.specRevision);
+    final referenceId = context['reference_id'] as String?;
+    final reference = _specReference?.id == referenceId
+        ? _specReference
+        : _specReferences.where((r) => r.id == referenceId).firstOrNull;
+    final values = Map<String, dynamic>.from(context['values'] as Map);
+    _specTemplate = root.template;
+    _specValues = values;
+    _specReference = reference;
+    _specMemberDrafts = ProductSpecMemberDrafts(members);
+    _specMemberCollections = members.collections;
+    _specRevision = members.revision;
+    _specLoadError = null;
+    _specDisplayGeneration++;
+    _loadedSpecDraftKey =
+        '${product.id}:${root.template?.id ?? 'unmapped:${product.categoryId}'}';
+    _specBindingSource = context['binding_source'] as String?;
+    _unassignedSpecFacts = (context['unassigned_facts'] as List? ?? [])
+        .map((row) => Map<String, dynamic>.from(row as Map))
+        .toList();
+    _specDrafts.clear();
+    _specDraftReferences.clear();
+    _manualSpecOverrideKeys.clear();
+    _autoDerivedSpecValues
+      ..clear()
+      ..addAll({
+        for (final key in context['catalog_keys'] as List? ?? [])
+          if (reference?.facts.containsKey(key) == true)
+            key as String: values[key]
+      });
+    _specFieldGuidance = const {};
+  }
+
   Map<String, dynamic> _specSaveCommand() => {
         'p_is_new': _existingProduct == null,
         'p_template_id': _specTemplate?.id,
@@ -4782,21 +4856,32 @@ class _ProductFormPageState extends State<ProductFormPage>
         'p_expected_updated_at':
             _existingProduct?.updatedAt.toUtc().toIso8601String(),
         'p_reference_id': _specReference?.id,
+        if (_specMemberDrafts != null)
+          'p_member_profiles': _specMemberDrafts!.buildCommand(
+              parentTemplate: _specTemplate, parentValues: _specValues),
       };
 
   Future<void> _saveProduct() async {
-    if (!_isServiceForm &&
-        _specAuthorityUser != null &&
-        _specAuthorityUser != Supabase.instance.client.auth.currentUser?.id)
-      return;
+    if (!_isServiceForm && _specAuthority != null) {
+      final tenant = await TenantService().getTenantId();
+      if (!mounted) return;
+      if (_specAuthority !=
+          ErpAuthorityScopeKey.from(
+              userId: Supabase.instance.client.auth.currentUser?.id,
+              tenantId: tenant)) {
+        _invalidateSpecAuthority();
+      }
+    }
     if (!_isServiceForm &&
         (_isLoadingSpecs ||
             _specLoadError != null ||
+            _specMemberSaveError != null ||
             _specIssues.any((issue) => issue.blocking))) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
           content: Text(_isLoadingSpecs
               ? 'Espera a que termine de cargar la ficha.'
               : _specLoadError ??
+                  _specMemberSaveError ??
                   _specIssues.firstWhere((issue) => issue.blocking).message)));
       return;
     }
@@ -5207,13 +5292,16 @@ class _ProductFormPageState extends State<ProductFormPage>
           };
         }).toList(growable: false);
 
-        final aggregate = await _inventoryService.saveProductSetAggregate(
+        final receipt =
+            await _inventoryService.saveProductSetAggregateWithContext(
           parent: parentPayload,
           components: componentPayloads,
           operationKey: _productSetSaveOperationKey,
           specCommand: _specSaveCommand(),
         );
+        final aggregate = receipt.aggregate;
         savedProduct = aggregate.parent;
+        _adoptSavedSpecContext(receipt.editorContext, savedProduct);
         _existingProduct = savedProduct;
         // The same key is retained on rejection or an unknown acknowledgement,
         // but a confirmed receipt starts a fresh edit operation.
@@ -5239,10 +5327,12 @@ class _ProductFormPageState extends State<ProductFormPage>
           );
         }).toList(growable: false);
       } else if (!_isServiceForm) {
-        savedProduct = await _inventoryService.saveProductWithSpecs(
+        final receipt = await _inventoryService.saveProductWithSpecsAndContext(
             product: product,
             specCommand: _specSaveCommand(),
             operationKey: _productSpecOperationKey);
+        savedProduct = receipt.product;
+        _adoptSavedSpecContext(receipt.editorContext, savedProduct);
         _productSpecOperationKey =
             'product-spec-${DateTime.now().microsecondsSinceEpoch}';
       } else if (_existingProduct != null) {
@@ -5348,7 +5438,8 @@ class _ProductFormPageState extends State<ProductFormPage>
                   ? e.message
                   : productSpecServerIssues(e.details)
                       .map((issue) => productSpecIssueMessage(
-                          issue, _specTemplate, _specValues))
+                          issue, _specTemplate, _specValues,
+                          memberContext: _specIssueMemberContext))
                       .join('\n'))
               : 'No se pudo guardar el producto. Tus respuestas se conservan.'),
           backgroundColor: Colors.red,
@@ -5366,6 +5457,22 @@ class _ProductFormPageState extends State<ProductFormPage>
     } catch (_) {
       // Ignored: shared inventory not available in certain contexts.
     }
+  }
+
+  ProductSpecIssueContext? _specIssueMemberContext(String id) {
+    final members =
+        _specMemberDrafts?.active ?? const <ProductSpecMemberDraft>[];
+    final index = members.indexWhere((member) => member.id == id);
+    if (index < 0) return null;
+    final member = members[index];
+    final identity = [
+      member.identity['identity_brand'],
+      member.identity['identity_model']
+    ].whereType<String>().join(' ');
+    return ProductSpecIssueContext(
+        label: 'Pieza ${index + 1}${identity.isEmpty ? '' : ' · $identity'}',
+        template: member.template,
+        values: member.values);
   }
 
   /// Show confirmation dialog and delete product
@@ -7530,14 +7637,25 @@ class _ProductFormPageState extends State<ProductFormPage>
     ]);
   }
 
+  Map<String, Map<String, String>> _specRowTokenLabels(
+          String fieldKey, ProductSpecRowSchema schema) =>
+      {
+        for (final column in schema.columns)
+          if (fieldKey == 'kit_members' &&
+              column.key == 'family' &&
+              column.type == 'token')
+            column.key: _specFamilyLabels,
+      };
+
   Widget _buildSpecReadOnlyValue(String id, String label, Object? value,
-      {ProductSpecRowSchema? schema, String? unit}) {
+      {ProductSpecRowSchema? schema, String? unit, String? definitionKey}) {
     if (schema != null) {
       return ProductSpecRowsField(
           key: ValueKey('spec-readonly-$id-$_specDisplayGeneration'),
           fieldKey: id,
           label: label,
           schema: schema,
+          tokenLabels: _specRowTokenLabels(definitionKey ?? '', schema),
           value: value,
           onChanged: null);
     }
@@ -7559,6 +7677,7 @@ class _ProductFormPageState extends State<ProductFormPage>
           for (final fact in _unassignedSpecFacts)
             _buildSpecReadOnlyValue(fact['definition_id'] as String,
                 fact['label'] as String, fact['value'],
+                definitionKey: fact['key'] as String?,
                 schema: fact['rows_schema'] is Map
                     ? ProductSpecRowSchema.fromJson(
                         Map<String, dynamic>.from(fact['rows_schema'] as Map))
@@ -7574,6 +7693,7 @@ class _ProductFormPageState extends State<ProductFormPage>
           .where((entry) => entry.key != 'spec_evidence_source'))
         _buildSpecReadOnlyValue('reference-${reference.id}-${entry.key}',
             _specTemplate!.labelFor(entry.key), entry.value,
+            definitionKey: entry.key,
             schema: _specTemplate!.fields
                 .where((field) => field.definition?.key == entry.key)
                 .firstOrNull
@@ -7636,58 +7756,47 @@ class _ProductFormPageState extends State<ProductFormPage>
     }
 
     if (_specTemplate == null) {
-      return Center(
+      return SingleChildScrollView(
         key: key,
-        child: Padding(
-          padding: const EdgeInsets.all(32),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(Icons.tune_outlined,
-                  size: 48, color: theme.colorScheme.onSurfaceVariant),
-              const SizedBox(height: 16),
-              Text(
-                'Sin ficha técnica',
-                style: theme.textTheme.titleMedium?.copyWith(
-                  color: theme.colorScheme.onSurfaceVariant,
-                ),
+        child: Column(children: [
+          Center(
+            child: Padding(
+              padding: const EdgeInsets.all(32),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.tune_outlined,
+                      size: 48, color: theme.colorScheme.onSurfaceVariant),
+                  const SizedBox(height: 16),
+                  Text(
+                    'Sin ficha técnica',
+                    style: theme.textTheme.titleMedium?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    _specBindingSource == 'explicit_unavailable'
+                        ? 'La ficha asignada no está disponible. Sus datos se conservan; revisa la asignación antes de guardar.'
+                        : 'Este producto todavía no tiene una ficha técnica asignada.',
+                    textAlign: TextAlign.center,
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                  if (_unassignedSpecFacts.isNotEmpty)
+                    _buildUnassignedSpecFacts(),
+                ],
               ),
-              const SizedBox(height: 8),
-              Text(
-                _specBindingSource == 'explicit_unavailable'
-                    ? 'La ficha asignada no está disponible. Sus datos se conservan; revisa la asignación antes de guardar.'
-                    : 'Este producto todavía no tiene una ficha técnica asignada.',
-                textAlign: TextAlign.center,
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: theme.colorScheme.onSurfaceVariant,
-                ),
-              ),
-              if (_unassignedSpecFacts.isNotEmpty) _buildUnassignedSpecFacts(),
-            ],
+            ),
           ),
-        ),
+          if (_specMemberDrafts != null) _buildSpecMemberEditor(theme),
+        ]),
       );
     }
 
     final template = _specTemplate!;
     final sections = template.sections;
-    final sectionLabels = <String, String>{
-      'primary': 'Datos básicos del producto',
-      'measurement': 'Medidas y características',
-      'declaration': 'Declaraciones del fabricante',
-      'legacy': 'Datos anteriores por revisar',
-      'identification': 'Identificación',
-      'compatibility': 'Compatibilidad',
-      'specs': 'Especificaciones',
-      'hydraulic': 'Sistema Hidráulico',
-      'mounting': 'Montaje',
-      'range': 'Rango',
-      'dimensions': 'Dimensiones',
-      'contents': 'Contenido',
-      'features': 'Características',
-      'installation': 'Instalación',
-      'general': 'General',
-    };
 
     return SingleChildScrollView(
       key: key,
@@ -7717,32 +7826,136 @@ class _ProductFormPageState extends State<ProductFormPage>
             ..._buildSpecSection(
               theme: theme,
               section: section,
-              label: sectionLabels[section] ?? section,
+              label: _specSectionLabels[section] ?? section,
               template: template,
             ),
+          if (_specMemberDrafts != null) _buildSpecMemberEditor(theme),
         ],
       ),
     );
   }
+
+  static const _specSectionLabels = <String, String>{
+    'primary': 'Datos básicos del producto',
+    'measurement': 'Medidas y características',
+    'declaration': 'Declaraciones del fabricante',
+    'legacy': 'Datos anteriores por revisar',
+    'identification': 'Identificación',
+    'compatibility': 'Compatibilidad',
+    'specs': 'Especificaciones',
+    'hydraulic': 'Sistema Hidráulico',
+    'mounting': 'Montaje',
+    'range': 'Rango',
+    'dimensions': 'Dimensiones',
+    'contents': 'Contenido',
+    'features': 'Características',
+    'installation': 'Instalación',
+    'general': 'General',
+  };
+
+  Future<T> _readMemberSpecs<T>(Future<T> Function() read) async {
+    final authority = _specAuthority;
+    final tenant = await TenantService().getTenantId();
+    if (authority == null ||
+        authority !=
+            ErpAuthorityScopeKey.from(
+                userId: Supabase.instance.client.auth.currentUser?.id,
+                tenantId: tenant)) {
+      throw const AuthorityScopeChangedException();
+    }
+    final result = await read();
+    if (!mounted ||
+        authority != _specAuthority ||
+        authority !=
+            ErpAuthorityScopeKey.from(
+                userId: Supabase.instance.client.auth.currentUser?.id,
+                tenantId: await TenantService().getTenantId())) {
+      throw const AuthorityScopeChangedException();
+    }
+    return result;
+  }
+
+  void _invalidateSpecAuthority() {
+    if (!mounted) return;
+    setState(() {
+      _specLoadEpoch++;
+      _isLoadingSpecs = false;
+      _specAuthority = null;
+      _specTemplate = null;
+      _specFamilyLabelsState = null;
+      _specValues = {};
+      _specDrafts.clear();
+      _loadedSpecDraftKey = null;
+      _unassignedSpecFacts = [];
+      _specReference = null;
+      _specReferences = [];
+      _specDraftReferences.clear();
+      _manualSpecOverrideKeys.clear();
+      _autoDerivedSpecValues.clear();
+      _specFieldGuidance = const {};
+      _specMemberDrafts = null;
+      _specMemberCollections = [];
+      _specLoadError = 'La sesión cambió. Vuelve a abrir el producto.';
+    });
+  }
+
+  Widget _buildSpecMemberEditor(ThemeData theme) => ProductSpecMemberEditor(
+      drafts: _specMemberDrafts!,
+      parentTemplate: _specTemplate,
+      parentValues: _specValues,
+      collections: _specMemberCollections,
+      enabled: !_isSaving && !_isLoadingSpecs && _specLoadError == null,
+      loadTemplate: (
+              {required parentTemplateId,
+              required collectionDefinitionId,
+              required familyKey}) =>
+          _readMemberSpecs(() => SpecEngineService.instance
+              .getProductMemberTemplate(
+                  parentTemplateId: parentTemplateId,
+                  collectionDefinitionId: collectionDefinitionId,
+                  familyKey: familyKey)),
+      loadReferences: (family) => _readMemberSpecs(() async =>
+          (await SpecEngineService.instance.getReferences(family))
+              .map(ProductSpecReference.fromJson)
+              .toList()),
+      onChanged: () => setState(() {}),
+      onAuthorityChanged: _invalidateSpecAuthority,
+      buildFields: (member, generation) => [
+            for (final section in member.template.sections)
+              ..._buildSpecSection(
+                  theme: theme,
+                  section: section,
+                  label: _specSectionLabels[section] ?? section,
+                  template: member.template,
+                  member: member,
+                  memberGeneration: generation),
+          ]);
 
   List<Widget> _buildSpecSection({
     required ThemeData theme,
     required String section,
     required String label,
     required SpecTemplate template,
+    ProductSpecMemberDraft? member,
+    int memberGeneration = 0,
   }) {
+    final values = member?.values ?? _specValues;
+    final reference = member == null ? _specReference : member.reference;
+    final issues = member?.validate() ?? _specIssues;
     final fields = template.fieldsForSection(section).where((f) {
       final specKey = f.definition?.key;
-      final hasValue = hasKnownSpecValue(_specValues[specKey]);
+      final hasValue = hasKnownSpecValue(values[specKey]);
       final supplied = specKey != 'spec_evidence_source' &&
-          _specReference != null &&
-          (_specReference!.facts.containsKey(specKey) ||
+          reference != null &&
+          (reference.facts.containsKey(specKey) ||
               template.roleFor(specKey ?? '') == 'declaration');
-      final conflict = _specIssues.any((i) => i.fieldKey == specKey);
+      final conflict = issues.any((i) => i.fieldKey == specKey);
       return (!supplied || conflict) &&
           (hasValue ||
-              (template.applicabilityFor(f, _specValues) == SpecTruth.yes &&
-                  !_specFieldBehavior(f).hidden));
+              (template.applicabilityFor(f, values) == SpecTruth.yes &&
+                  !_specFieldBehaviorForValues(
+                          template: template, field: f, values: values)
+                      .hidden));
     }).toList();
     if (fields.isEmpty) return [];
 
@@ -7775,7 +7988,12 @@ class _ProductFormPageState extends State<ProductFormPage>
 
     final fieldWidgets = <Widget>[];
     for (int i = 0; i < fields.length; i++) {
-      fieldWidgets.add(_buildSpecField(theme: theme, field: fields[i]));
+      fieldWidgets.add(_buildSpecField(
+          theme: theme,
+          field: fields[i],
+          template: template,
+          member: member,
+          memberGeneration: memberGeneration));
       if (i < fields.length - 1) fieldWidgets.add(const SizedBox(height: 16));
     }
 
@@ -7788,22 +8006,44 @@ class _ProductFormPageState extends State<ProductFormPage>
   Widget _buildSpecField({
     required ThemeData theme,
     required SpecTemplateField field,
+    required SpecTemplate template,
+    ProductSpecMemberDraft? member,
+    int memberGeneration = 0,
   }) {
+    final values = member?.values ?? _specValues;
+    final issues = member?.validate() ?? _specIssues;
+    final reference = member == null ? _specReference : member.reference;
+    final scope = member == null ? '' : 'member-${member.id}-';
+    final displayKey = member == null
+        ? '$_loadedSpecDraftKey-$_specDisplayGeneration'
+        : '${member.id}-$memberGeneration';
+    void change(String key, dynamic value) {
+      if (member == null) {
+        _updateSpecValue(key, value);
+      } else {
+        setState(() =>
+            member.setValue(key, _isMeaningfulSpecValue(value) ? value : null));
+      }
+    }
+
     final def = field.definition;
     if (def == null) return const SizedBox.shrink();
 
-    final behavior = _specFieldBehavior(field);
-    final currentValue = _specValues[def.key];
+    final behavior = _specFieldBehaviorForValues(
+        template: template, field: field, values: values);
+    final currentValue = values[def.key];
     final currentValueText =
         def.dataType == 'json' ? '' : _specOptionLabel(def, currentValue);
-    final label = _specDisplayLabel(def, field);
-    final isAutoLocked = _isSpecFieldAutoLocked(field);
-    final isEnabled = behavior.enabled && !isAutoLocked;
-    final issue = _specIssues.where((i) => i.fieldKey == def.key).firstOrNull;
-    if (_specTemplate?.roleFor(def.key) == 'legacy') {
+    final label = _specDisplayLabel(def, template);
+    final isAutoLocked = def.key != 'spec_evidence_source' &&
+        (member?.isCatalogValue(def.key) ??
+            _autoDerivedSpecValues.containsKey(def.key));
+    final isEnabled = behavior.enabled && !isAutoLocked && !_isSaving;
+    final issue = issues.where((i) => i.fieldKey == def.key).firstOrNull;
+    if (template.roleFor(def.key) == 'legacy') {
       return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        _buildSpecReadOnlyValue('legacy-${def.id}', label, currentValue,
-            schema: def.rowSchema, unit: def.unit),
+        _buildSpecReadOnlyValue('${scope}legacy-${def.id}', label, currentValue,
+            schema: def.rowSchema, unit: def.unit, definitionKey: def.key),
         Text(
             'Se conserva para revisión y no se usa para afirmar compatibilidad.',
             style: theme.textTheme.bodySmall),
@@ -7820,7 +8060,8 @@ class _ProductFormPageState extends State<ProductFormPage>
                     ? theme.colorScheme.error
                     : theme.colorScheme.onSurfaceVariant)),
         TextButton(
-            onPressed: () => _updateSpecValue(def.key, null),
+            onPressed:
+                _isSaving || isAutoLocked ? null : () => change(def.key, null),
             child: const Text('Retirar este valor')),
       ]);
     }
@@ -7830,13 +8071,15 @@ class _ProductFormPageState extends State<ProductFormPage>
             field,
             behavior: behavior,
             isAutoLocked: isAutoLocked,
+            template: template,
+            reference: reference,
           );
-    final options = _specFieldOptions(field, behavior);
+    final options = _specFieldOptions(field, behavior, values);
 
     switch (def.dataType) {
       case 'boolean':
         return ProductSpecBooleanField(
-            key: ValueKey('spec-${def.key}'),
+            key: ValueKey('spec-$scope${def.key}'),
             label: label,
             value: currentValue is bool ? currentValue : null,
             helperText: helperText,
@@ -7847,8 +8090,7 @@ class _ProductFormPageState extends State<ProductFormPage>
                     if (behavior.allowedOptions!.contains('true')) true,
                     if (behavior.allowedOptions!.contains('false')) false,
                   },
-            onChanged:
-                isEnabled ? (value) => _updateSpecValue(def.key, value) : null);
+            onChanged: isEnabled ? (value) => change(def.key, value) : null);
 
       case 'json':
         final schema = def.rowSchema;
@@ -7860,31 +8102,30 @@ class _ProductFormPageState extends State<ProductFormPage>
                   'Falta el esquema de estas configuraciones. Sus datos se conservan.');
         }
         return ProductSpecRowsField(
-            key: ValueKey(
-                'spec-${def.key}-${_loadedSpecDraftKey}-$_specDisplayGeneration'),
+            key: ValueKey('spec-$scope${def.key}-$displayKey'),
             fieldKey: def.key,
             label: label,
             schema: schema,
+            tokenLabels: _specRowTokenLabels(def.key, schema),
             value: currentValue,
             itemLabel:
                 def.validationRules['row_label'] as String? ?? 'Configuración',
             helperText: helperText,
-            conditions: _specTemplate!.rowConditions.fields[def.key],
-            referenceOptions: _specTemplate!.coherence
-                .optionsFor(def.key, _specValues, _specTemplate!.labelFor),
-            onChanged:
-                isEnabled ? (value) => _updateSpecValue(def.key, value) : null);
+            conditions: template.rowConditions.fields[def.key],
+            referenceOptions: template.coherence
+                .optionsFor(def.key, values, template.labelFor),
+            onChanged: isEnabled ? (value) => change(def.key, value) : null);
 
       case 'single_select':
         return _buildSpecScalarSelect(
+            scope: scope,
             field: field,
             value: currentValueText,
             options: options,
             label: label,
             helper: helperText,
             error: issue?.blocking == true ? issue?.message : null,
-            onChanged:
-                isEnabled ? (value) => _updateSpecValue(def.key, value) : null);
+            onChanged: isEnabled ? (value) => change(def.key, value) : null);
 
       case 'multi_select':
         final selected = (currentValue is List)
@@ -7895,6 +8136,7 @@ class _ProductFormPageState extends State<ProductFormPage>
                 : <String>{});
         if (def.key == 'drivetrain_declared_compatible_ecosystems') {
           return _buildDropdownMultiSelectSpecField(
+            onChanged: (value) => change(def.key, value),
             theme: theme,
             specKey: def.key,
             label: label,
@@ -7922,10 +8164,10 @@ class _ProductFormPageState extends State<ProductFormPage>
               children: options.map((o) {
                 final isSelected = selected.contains(o);
                 return FilterChip(
-                  key: ValueKey('product-spec-${def.key}-option-$o'),
+                  key: ValueKey('product-spec-$scope${def.key}-option-$o'),
                   label: Text(o),
                   selected: isSelected,
-                  onSelected: (isEnabled || isSelected)
+                  onSelected: (!isAutoLocked && (isEnabled || isSelected))
                       ? (v) {
                           final next = Set<String>.from(selected);
                           if (v) {
@@ -7933,7 +8175,7 @@ class _ProductFormPageState extends State<ProductFormPage>
                           } else {
                             next.remove(o);
                           }
-                          _updateSpecValue(def.key, next.toList());
+                          change(def.key, next.toList());
                         }
                       : null,
                 );
@@ -7954,6 +8196,7 @@ class _ProductFormPageState extends State<ProductFormPage>
       case 'number':
         if (options.isNotEmpty) {
           return _buildSpecScalarSelect(
+              scope: scope,
               field: field,
               value: currentValueText,
               options: options,
@@ -7961,7 +8204,7 @@ class _ProductFormPageState extends State<ProductFormPage>
               helper: helperText,
               error: issue?.blocking == true ? issue?.message : null,
               onChanged: isEnabled
-                  ? (value) => _updateSpecValue(def.key,
+                  ? (value) => change(def.key,
                       value == null ? null : _parsedSpecNumberValue(value))
                   : null);
         }
@@ -7970,11 +8213,10 @@ class _ProductFormPageState extends State<ProductFormPage>
             context,
             label,
             Semantics(
-                key: ValueKey('product-spec-field-${def.key}'),
+                key: ValueKey('product-spec-field-$scope${def.key}'),
                 label: label,
                 child: TextFormField(
-                  key: ValueKey(
-                      'spec-${def.key}-${_loadedSpecDraftKey}-$_specDisplayGeneration'),
+                  key: ValueKey('spec-$scope${def.key}-$displayKey'),
                   enabled: isEnabled,
                   initialValue: currentValue?.toString() ?? '',
                   keyboardType: const TextInputType.numberWithOptions(
@@ -7987,10 +8229,11 @@ class _ProductFormPageState extends State<ProductFormPage>
                     errorMaxLines: 5,
                     errorText: issue?.blocking == true ? issue?.message : null,
                   ),
-                  validator: (value) => _validateSpecField(field, value),
+                  validator: (value) =>
+                      _validateSpecField(field, value, values),
                   onChanged: isEnabled
                       ? (v) {
-                          _updateSpecValue(
+                          change(
                             def.key,
                             v.trim().isEmpty ? null : _parsedSpecNumberValue(v),
                           );
@@ -8003,11 +8246,10 @@ class _ProductFormPageState extends State<ProductFormPage>
             context,
             label,
             Semantics(
-                key: ValueKey('product-spec-field-${def.key}'),
+                key: ValueKey('product-spec-field-$scope${def.key}'),
                 label: label,
                 child: TextFormField(
-                  key: ValueKey(
-                      'spec-${def.key}-${_loadedSpecDraftKey}-$_specDisplayGeneration'),
+                  key: ValueKey('spec-$scope${def.key}-$displayKey'),
                   enabled: isEnabled,
                   initialValue: currentValue?.toString() ?? '',
                   decoration: InputDecoration(
@@ -8017,16 +8259,17 @@ class _ProductFormPageState extends State<ProductFormPage>
                     errorMaxLines: 5,
                     errorText: issue?.blocking == true ? issue?.message : null,
                   ),
-                  validator: (value) => _validateSpecField(field, value),
-                  onChanged: isEnabled
-                      ? (v) => _updateSpecValue(def.key, v.trim())
-                      : null,
+                  validator: (value) =>
+                      _validateSpecField(field, value, values),
+                  onChanged:
+                      isEnabled ? (v) => change(def.key, v.trim()) : null,
                 )));
     }
   }
 
   Widget _buildSpecScalarSelect(
-      {required SpecTemplateField field,
+      {String scope = '',
+      required SpecTemplateField field,
       required String value,
       required List<String> options,
       required String label,
@@ -8036,7 +8279,7 @@ class _ProductFormPageState extends State<ProductFormPage>
     if (options.length > VbShortSelect.maxOptions ||
         options.any((option) => option.length > 30)) {
       return VbSearchableSelect<String>(
-          key: ValueKey('product-spec-${field.definition?.key}'),
+          key: ValueKey('product-spec-$scope${field.definition?.key}'),
           value: value.isEmpty ? null : value,
           label: label,
           sheetTitle: label,
@@ -8052,7 +8295,7 @@ class _ProductFormPageState extends State<ProductFormPage>
     }
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
       VbShortSelect<String?>(
-          key: ValueKey('product-spec-${field.definition?.key}'),
+          key: ValueKey('product-spec-$scope${field.definition?.key}'),
           semanticLabel: label,
           value: value.isEmpty ? null : value,
           label: label,
@@ -8078,8 +8321,8 @@ class _ProductFormPageState extends State<ProductFormPage>
     ]);
   }
 
-  String _specDisplayLabel(SpecDefinition def, SpecTemplateField field) {
-    final baseLabel = _specTemplate?.displayLabelFor(def.key) ??
+  String _specDisplayLabel(SpecDefinition def, SpecTemplate template) {
+    final baseLabel = template.displayLabelFor(def.key) ??
         switch (def.key) {
           'drivetrain_mode' => 'Modo transmisión',
           'drivetrain_primary_ecosystem' =>
@@ -8101,6 +8344,7 @@ class _ProductFormPageState extends State<ProductFormPage>
     required String? helperText,
     required bool isEnabled,
     required String placeholderText,
+    required ValueChanged<List<String>> onChanged,
   }) {
     final summaryText = selected.join(' / ');
 
@@ -8160,10 +8404,7 @@ class _ProductFormPageState extends State<ProductFormPage>
                                           } else {
                                             next.remove(option);
                                           }
-                                          _updateSpecValue(
-                                            specKey,
-                                            next.toList()..sort(),
-                                          );
+                                          onChanged(next.toList()..sort());
                                         },
                                 ),
                               )
@@ -8178,8 +8419,7 @@ class _ProductFormPageState extends State<ProductFormPage>
                         TextButton(
                           onPressed: !isEnabled
                               ? null
-                              : () =>
-                                  _updateSpecValue(specKey, const <String>[]),
+                              : () => onChanged(const <String>[]),
                           child: const Text('Limpiar'),
                         ),
                       ],
@@ -8239,8 +8479,7 @@ class _ProductFormPageState extends State<ProductFormPage>
                                 ? () {
                                     final next = Set<String>.from(selected)
                                       ..remove(option);
-                                    _updateSpecValue(
-                                        specKey, next.toList()..sort());
+                                    onChanged(next.toList()..sort());
                                   }
                                 : null,
                           ),

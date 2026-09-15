@@ -432,3 +432,286 @@ son ejes distintos. Los dos ángulos de apoyo de un cartucho de dirección
 descritos por [Park Tool](https://www.parktool.com/en-us/blog/repair-help/headset-standards)
 no son el ángulo interno entre bolas y pistas. No se solicitan biseles de
 cartucho a una bolsa de bolas sueltas.
+
+### K39 — Una función integrada no crea un kit (2026-09-07)
+
+[ABUS PURL-Y ACE](https://www.abus.com/int/Consumer/Bike-helmets/Urban/PURL-Y-ACE)
+incluye una luz trasera recargable con fijación magnética;
+[Noxgear Tracer2](https://www.noxgear.com/tracer2) es un chaleco con iluminación
+LED. Una identidad comercial puede combinar funciones. La categoría no basta
+para prohibirlas, ni permite tratar toda función integrada como otra pieza
+entregada en la caja. El contenido debe estar documentado para esa edición.
+
+`kit_members` declara piezas, cantidades, posición y texto de marca/modelo;
+ese texto no enlaza productos del catálogo ni les atribuye sus medidas o
+certificaciones. La ausencia de familia conserva una fila pendiente, sin
+inventar una clasificación. El estrechamiento de `light` resuelve sus dos
+tablas de miembros y no se extiende a otras plantillas. La revisión PUB-D01
+que proponía extenderlo fue retirada tras comprobar qué datos posee cada
+tabla. Buscar sólo nombres literales en código no demuestra que no existan
+lectores genéricos: también se revisa la proyección y el papel semántico.
+
+### K40 — Formato, función, contenido y alcance son ejes distintos (2026-09-07)
+
+[Topeak HYBRIDROCKET HP](https://www.topeak.com/global/en/product/407-HYBRIDROCKET-HP)
+combina minibomba e inflador CO₂. El formato manual no excluye esa capacidad;
+el cartucho incluido y los cartuchos admitidos son declaraciones distintas.
+El booleano de capacidad adicional sólo aplica cuando el formato no la declara
+ya. Su ausencia no significa «no». No se excluyen otros formatos por analogía.
+
+La [CamelBak M.U.L.E. 5 Waist Pack](https://www.camelbak.com/product/m.u.l.e.%C2%AE-5-waist-pack-with-crux%C2%AE-1.5l-lumbar-reservoir/CB-2815.html)
+se vende como riñonera con depósito Crux de 1,5 L. El depósito incluido no es
+capacidad de alojamiento para uno opcional. El alcance de carga/hidratación
+y el alcance por unidad/conjunto deben poder expresarse simultáneamente.
+La lectura disponible no confirma qué incluye el volumen nominal del bolso:
+no restar 1,5 L de un nombre comercial ni inventar una capacidad de carga.
+
+[Sheldon Brown](https://www.sheldonbrown.com/tire-sizing.html) distingue las
+designaciones nominales del diámetro de asiento. Un rango nominal en pulgadas
+puede comprobar su orden sin convertir sus extremos a BSD. Una lista OEM no
+se convierte en un intervalo continuo, y ninguna de esas declaraciones prueba
+por sí sola holgura, fijación o carga de un accesorio.
+
+[Park Tool INF-2](https://www.parktool.com/en-us/product/shop-inflator-inf-2)
+publica la escala del manómetro en psi y bar. Se conservan ambas unidades con
+su magnitud; no se convierten en dos capacidades de trabajo ni se reemplaza
+una cifra publicada por una conversión calculada. El cero u otro origen de
+escala se conserva en la declaración si importa; no se asume universalmente.
+
+Corrección de revisión DL-5: `legacy` ya retira el campo de validación,
+coherencia y escritura de hechos; la UI conserva la observación para revisión.
+`allowed_when: never` con rol activo representa una incompatibilidad de campo,
+no una retirada. Tampoco se ofrece un campo legacy o una tabla por miembro
+como predicado escalar de compras; un criterio guardado que el editor no
+pueda expresar se conserva al guardar cambios en otros campos.
+
+### K41 — El apriete conserva rango, unidad y configuración (2026-09-07)
+
+[ODI v2.1](https://www.odigrips.com/pages/install) publica un rango de apriete
+en in-lb y Nm, junto con condiciones de material, diámetro y fijación. Un
+escalar no representa ese rango: convertirlo silenciosamente en su máximo
+cambia la declaración. La ficha separa valor nominal, intervalo y máximo,
+conserva las unidades publicadas y comprueba el orden sólo dentro del intervalo
+de una misma fila. No compara las cifras OEM redondeadas entre unidades.
+
+El [manual Ergon GP1 de 06/2014](https://www.ergonbike.com/infocenter/downloads/manual_gp1.pdf),
+página 2, publica el apriete en Nm y ft-lb. Ambas lecturas conservan su modelo
+y edición, igual que las longitudes por lado de la versión Rohloff/Nexus.
+Ninguna de esas cifras se copia a otros puños como un ajuste universal.
+
+[Park Tool](https://www.parktool.com/en-us/blog/repair-help/handlebar-grip-installation-flat-bars)
+distingue el ajuste por fricción/interferencia de los puños deslizantes y
+la fijación mediante collarín de los lock-on. El interior físico medido y
+el diámetro nominal previsto ya tenían nombres y papeles distintos en la
+ficha; CP-1 no demostraba que dos números diferentes fueran incompatibles.
+La medición necesita zona y condición —pieza libre o montada—, sin inventar
+una igualdad ni una tolerancia universal que el fabricante no haya declarado.
+
+### K42 — Diámetro, paso y uso de una pieza de rueda son ejes separados (2026-09-07)
+
+[Park Tool, Basic Thread Concepts](https://www.parktool.com/en-us/blog/repair-help/basic-thread-concepts)
+documenta el eje de 10 mm × 26 TPI. La unidad del diámetro no determina la
+del paso; un selector único «métrica/pulgadas» excluía esa pieza real. Las
+dos unidades se declaran por separado, sin conversión ni paso supuesto.
+La [guía de llaves de radios](https://www.parktool.com/en-us/blog/repair-help/spoke-wrench-tool-selection)
+distingue geometría y posición de herramienta; calibre del radio y tamaño de
+llave no son intercambiables. El [TRA225](https://robertaxleproject.com/product/12mm-thru-axle-for-trainer-180-mm-with-1-25-mm-thread/)
+justifica conservar paso 1,25 mm, longitud y configuración exacta; no prueba
+que otra longitud, asiento u OLD sea equivalente.
+
+El [VP-1C de Park](https://www.parktool.com/en-us/product/vulcanizing-patch-kit-vp-1)
+declara materiales de cámara admitidos y excluye TPU y cuerpo de neumático
+tubeless. Una excepción del [artículo UST](https://www.parktool.com/en-int/blog/repair-help/tubeless-tire-mounting-and-repair)
+pertenece a su superficie y condiciones; no autoriza toda la familia de parches.
+El [Topeak TFV-05](https://www.topeak.com/us/en/product/1440-VALVE-EXTENDER-28MM)
+necesita obús desmontable; la condición corresponde al extensor que reubica
+el obús, sin proyectarla a todos los extensores.
+
+### K43 — Material de la espiga y superficie de anclaje son distintos (2026-09-07)
+
+El [manual Cervélo de horquilla v3](https://cervelo.cdn.prismic.io/cervelo/ffe12d7a-81fc-499c-981e-65904298ad93_fork_owners_manualv3.pdf),
+página impresa 3, prescribe un inserto de aleación suministrado con araña
+preinstalada. Refuta el bloqueo basado sólo en «araña + espiga de carbono».
+El contacto directo con carbono y el anclaje en un inserto OEM necesitan
+declaraciones distintas; el inserto conserva identidad, objetivo, fuente y
+condiciones. No autoriza un manguito cualquiera ni hereda un procedimiento
+de montaje a otra horquilla. Se corrigió el candidato antes de publicarlo.
+
+La [ficha Wolf Tooth del expansor](https://www.wolftoothcomponents.com/products/compression-plug)
+no convierte el rango de espiga metálica en medida universal de toda espiga.
+El par de tapa y el de expansión conservan sus elementos, unidades y condiciones.
+La [ficha FOX FLOAT DPS PERFORMANCE](https://ridefox.com/products/fox-float-dps-performance)
+publica tamaños por referencia: longitud y recorrido se conservan juntos,
+con unidades y extremos vinculados a esa configuración. No sustituir una
+referencia por una etiqueta visible al enlazar filas.
+
+### K44 — Alcance OEM y configuración individualizan un veredicto (2026-09-07)
+
+[Wolf Tooth RoadLink](https://www.wolftoothcomponents.com/pages/roadlink-tech-page)
+separa DM y Standard, cambio, velocidades, jaula/capacidad y montaje. Su lista
+DM clasifica 11–42 como aceptable y 10–42 sin soporte, aunque un comentario
+adicional declara mejora parcial para este último. El apartado de fuente y
+su salvedad se conservan; una mejora parcial no se transforma en soporte OEM.
+Un límite de piñón máximo no debe inventar el menor de un cassette. Dos
+veredictos opuestos para una configuración completa requieren adjudicación.
+
+[Sheldon, Lockring](https://www.sheldonbrown.com/gloss_l.html) distingue rosca
+del anillo, objetivo, generación y piñón exterior; el anillo de piñón fijo no
+posee también la rosca derecha del piñón. [OneUp V2, junio 2023](https://int.oneupcomponents.com/blogs/bashguides-chainguides/bashguard-chainguide-install-instructions)
+publica placas de cobertura distinta: placa disponible no implica placa incluida.
+La presentación debe individualizar el estado instalado.
+
+### K45 — Cable, extremo, funda y forro conservan sus ámbitos (2026-09-07)
+
+[Sheldon](https://www.sheldonbrown.com/cables.html) excluye para frenos la funda
+longitudinal de cambio sostenida por plástico. [Jagwire KEB](https://www.jagwire.com/en/article/154-585/brake-housing-5mm-keb-slick-lube)
+usa refuerzo Kevlar: sin compresión no identifica una sola construcción. El
+veredicto de uso y construcción pertenecen a la misma fila; no basta el nombre
+de la marca. El diámetro interno sigue desconocido si la fuente no lo publica.
+
+Las tablas OEM indexadas de [Universal Sport XL](https://jagwire.com/products/diy-cable-kits/universal-sport-xl-brake-kit)
+y [Elite Link 2017](https://jagwire.com/products/diy-cable-kits/2017mountain-elite-link-brake-kit)
+muestran largos distintos por miembro y un forro más largo que los segmentos
+metálicos que cubre. Las rutas directas no fueron legibles: esas tablas no se
+presentan como un catálogo vivo de 2026. [Odyssey M2](https://shop.odysseybmx.com/collections/odyssey-gyros/products/odyssey-m2-dual-upper-cable-black)
+sí publica 440 mm en su página; el modelo M2 no es el perfil de una cabeza.
+Universal se conserva como designación, no como número o aprobación universal.
+
+
+## K46 — Hidráulica: identidad física antes de aplicaciones (2026-09-07)
+
+El largo que trae una manguera y la necesidad de cortarla son independientes.
+Los extremos A/B tampoco equivalen automáticamente a maneta/cáliper: el
+[catálogo Jagwire 2021](https://jagwire.com/files/general/2021_Jagwire_AM_Catalog_LowRes.pdf)
+publica dos acoples de cáliper preinstalados en un tramo a cortar (texto OEM
+indexado; sin imagen de PDF en esta ronda). Conservar etapa, miembro y adaptador
+exactos; no presentar esa edición como SKU actual.
+
+Un envase tiene una formulación. [SRAM](https://support.sram.com/hc/en-us/articles/5927424375451-Can-I-use-DOT-5-in-my-SRAM-DOT-brakes)
+excluye DOT 5 en el contexto de sus frenos DOT. [FMVSS116](https://www.ecfr.gov/current/title-49/subtitle-B/chapter-V/part-571/subpart-B/section-571.116)
+distingue DOT 5 con base silicona y DOT 5.1 sin ella; el número cercano no
+implica sustitución. No se infiere el tipo de fluido desde la marca del freno.
+Las listas de [Park BKM-1.2](https://www.parktool.com/en-us/product/hydraulic-brake-bleed-kit-mineral-bkm-1-2)
+y [BKD-1.2](https://www.parktool.com/en-us/product/hydraulic-brake-bleed-kit-dot-bkd-1-2)
+son de herramientas y adaptadores de purga; ambos se venden sin líquido.
+No autorizan una botella para todos esos modelos.
+
+Se corrige una afirmación demasiado amplia de la propuesta: no es cierto que
+ningún aceite mineral tenga normas. El resumen oficial histórico de
+[ISO9128:1987](https://www.iso.org/standard/16724.html), edición retirada, cita
+ISO7308 para base petróleo. Es un contraejemplo al veto universal, no prueba de
+conformidad ni aprobación de un líquido para bicicletas. Una norma de ensayo,
+una especificación de formulación y una aplicación OEM tienen ámbitos distintos.
+
+Regresión mínima: largo conocido con corte válido; A/B ambos para cáliper
+válidos; un envase con dos bases contradice su identidad; mineral con grado
+DOT y DOT5.1 con base silicona bloquean; modelos/aplicaciones requieren enlace
+al miembro real. La adjudicación de la identidad y la aprobación OEM para cada
+producto siguen siendo necesarias antes del llenado.
+
+
+**Precisión de K46, HY-A (2026-09-07):** la designación comercial no es una
+lista exclusiva de normas cumplidas. [Motul DOT5.1, TDS01/22](https://azupim01.motul.com/media/motulData/DO/base/DOT_5.1_en_FR_motul_27400_20220113.pdf)
+publica cumplimiento DOT3/4/5.1 para la misma formulación. Prohibir DOT4 por
+llamarse DOT5.1 sería una regla falsa. Se separan designación y cumplimiento
+tipado, comprobando la base química; no se extrapola la aprobación a un freno
+concreto ni se completan cumplimientos que el OEM no declare.
+
+## K47 — Adaptadores: un puerto no es el anillo ni la posición del rotor (2026-09-07)
+
+[Wolf Tooth Boostinator](https://www.wolftoothcomponents.com/products/boostinator) documenta kits traseros de seis pernos que incluyen endcap, separador y tornillos y requieren aparaguado; declara límite de rotor de 183 mm. Por eso conservar seis pernos en entrada y salida no significa ausencia de función. El contexto HR es Hope Pro2 EVO/Pro4 trasero; no extenderlo al Pro2 sin EVO ni a un separador suelto. No se tomó un offset numérico por analogía.
+
+[Shimano DM-MDBR001-05](https://si.shimano.com/en/pdfs/dm/MDBR001/DM-MDBR001-05-ENG.pdf), prosa p.8, excluye SM-RT86/SM-RT76 con adaptador de aluminio al usar SM-RTAD05. El nombre del montaje por sí solo no sustituye las exclusiones OEM. Rosca a maza y rosca del anillo de cierre son interfaces distintas y pueden coexistir; cada una tiene su celda.
+
+Park fundamenta nombres IS/Post/Flat; no fue fuente de dimensiones sintéticas. Evidencia y limitaciones en `brake-adapter-parts-root-decisions-2026-09-07.md` y checkpoint de integración. Las plantillas aplicadas no certifican montaje real ni habilitan llenado.
+
+## K48 — Talla, configuración y geometría no son el mismo ámbito (2026-09-07)
+
+[Sheldon Brown](https://sheldonbrown.com/frame-sizing.html) explica convenciones de medida de cuadro distintas: el datum forma parte del dato. [Surly Preamble](https://surlybikes.com/blogs/blog/a-preamble-to-the-surly-preamble) documenta650b en XS/SM y700c en otras tallas; no se copia todo el catálogo de variantes a un SKU. Una variante documental puede conservar alternativas OEM de montaje, cada una con su configuración.
+
+[Cross-Check](https://surlybikes.com/products/cross_check_2000) declara42mm de cubierta y aproximadamente40con guardabarros, dependientes del montaje; su OLD físico132,5mm acepta mazas130/135según el OEM. Son declaraciones discretas condicionadas, no intervalos universales ni medidas intercambiables. Se leyó prosa y etiquetas de tabla; no se extrajo geometría de un diagrama no inspeccionado.
+
+[Park Tool](https://www.parktool.com/en-us/blog/repair-help/bottom-bracket-identification) distingue caja lisa y copas que se enroscan entre sí. La rosca de la copa no convierte la caja en roscada. El modelo conserva interfaces intrínsecas y aceptaciones OEM por separado.
+
+Regresión: una ficha no mezcla dos variantes; cada geometría tiene configuración/datum, cada rueda tiene sus puertos y cada componente su tipo y propiedades en la misma fila. El enlace row_id sólo demuestra existencia del padre, no igualdad arbitraria de columnas. Una fila de batería no puede adquirir recorrido de horquilla. Datos ausentes quedan pendientes; fuentes sintéticas de pruebas no autorizan llenado.
+
+## K49 — Mando combinado: pieza, salida y asignación (2026-09-07)
+
+La salida de una maneta por cable puede accionar un cáliper con conversión hidráulica. Eso no convierte a la maneta en propietaria del fluido ni de las conexiones hidráulicas: [TRP HY/RD](https://eu.trpcycling.com/en-at/products/hy-rd) describe precisamente la hidráulica en el cáliper de un sistema accionado por cable. Los campos de fluido y manguera se condicionan a la pieza y configuración que contienen ese circuito; no a una etiqueta genérica de sistema híbrido.
+
+El lado físico tampoco determina el cambio accionado: [SRAM AXS](https://support.sram.com/hc/en-us/articles/16420328834459-Can-I-change-assign-shifter-functions-in-the-AXS-app-e-g-move-the-derailleur-outboard-with-a-left-shifter-click) permite reasignar funciones. La asignación de botones y el destinatario de un claim son distintos del número de posiciones de un mando mecánico; las posiciones de trim no equivalen a platos adicionales ([Sheldon Brown](https://sheldonbrown.com/front-derailers.html)). Los datos de freno/cambio se conservan en la misma fila que su modo y sus condiciones, evitando que una referencia a otra fila pruebe sólo existencia sin probar su tipo.
+
+Un paquete puede contener dos mandos idénticos: modelo, lado y edición no identifican una ocurrencia física. Cada miembro tiene su identificador; se impide duplicar esa ocurrencia, no vender dos piezas iguales. La cantidad se deriva de los miembros representados y no de una cantidad supuesta. [Adjudicación e integración](../development/product-specs-research-2026-09-05/combined-control-integration-2026-09-07.md). Estas reglas de representación no autorizan cruces mecánicos por marca ni reemplazan la fuente de la variante concreta.
+
+## K50 — No borrar el bisel del rodamiento al distinguirlo de la rodadura (2026-09-07)
+
+[Enduro S7806](https://cycling.endurobearings.com/collections/headset-bearings/products/bb-s7806-2rs-36deg) declara un bisel interior del propio rodamiento; [Cane Creek](https://www.canecreek.com/products/headset-bearings) distingue variantes por pares de ángulos. Esos dos apoyos permanecen separados del contacto entre elementos rodantes y pistas. La propuesta que los trasladaba exclusivamente a una cubeta se rechazó; la base congelada ya tenía bien esta distinción y se restauraron sus regresiones. Una cubeta también conserva su asiento físico aunque se venda con rodamiento incluido.
+
+[NSK](https://www.nsk.com/tools-resources/abc-bearings/differentiating-rolling-bearings/) define el ángulo de rodadura y admite cero en el dominio radial. Una descripción de contacto angular sin cifra OEM publicada no autoriza inferirla de un par de biseles. La clasificación de carga y la descripción de construcción no deben convertirse en sinónimos por heurística.
+
+[Wheels BB86-OUT-BB](https://wheelsmfg.com/collections/bb86-92/products/bb86-92-outboard-abec-3-bb-for-24mm-shimano-cranks?variant=53184938377384) separa ancho de caja admitido, anchura sobre rodamientos y espaciadores suministrados. El ancho admisible pertenece a una configuración; un intervalo requiere publicación explícita. Sumar las piezas incluidas no demuestra el stack instalado. [Park Tool](https://www.parktool.com/en-us/blog/repair-help/bottom-bracket-identification) documenta copas que se roscan entre sí dentro de una caja lisa: hay que nombrar la contraparte de cada puerto. [Adjudicación y límites del candidato](../development/product-specs-research-2026-09-05/existing-bearing-bb-root-decisions-2026-09-07.md).
+
+## K51 — El dato dimensional necesita pieza, variante y significado (2026-09-08)
+
+Las revisiones de rayos, dirección y neumáticos detectaron el mismo fallo:
+convertir una cifra o etiqueta compartida en una dependencia mecánica que la
+fuente no declara. [Park, SHIS](https://www.parktool.com/en-us/blog/repair-help/standardized-headset-identification-system)
+separa extremo superior/inferior y usa códigos nominales; no son medidas
+literales de todos los asientos. [Park, llaves de rayos](https://www.parktool.com/en-us/blog/repair-help/spoke-wrench-tool-selection)
+no hace depender la llave del calibre del alambre. [Sheldon, Wheelbuilding](https://www.sheldonbrown.com/wheelbuild.html)
+distingue sección elíptica de plana, y rosca laminada de alambre: no basta un
+solo selector de diámetro para las tres propiedades.
+
+En neumáticos, el límite de operación declarado por el fabricante de la rueda
+no se convierte en el máximo estampado del neumático ni en la presión de un
+ensayo de retención. [Zipp](https://www.sram.com/en/zipp/campaigns/hookless-tire-compatibility)
+y [ENVE](https://enve.com/blogs/journal/hookless-rim-technology-101) documentan
+alcances distintos. [Stan's](https://stans.com/pages/sealant-refresh-reminder)
+asigna dosis distintas a dos medidas MTB: una fila identificada sólo por
+«MTB» impediría guardar ambos usos documentados. El volumen de un envase no
+limita una aplicación que puede consumir más de un envase.
+
+La regresión mínima mantiene los datos del mismo extremo/configuración juntos,
+permite varias aplicaciones identificadas del mismo producto y deja desconocida
+una contraparte fuera del alcance OEM. La evidencia puede ser documento o
+envase identificado, con URL opcional tipada; exigir siempre una URL perdería
+información verificable. Estos cambios de representación no sustituyen la
+investigación de cada SKU ni certifican montajes por coincidencia dimensional.
+
+## K52 — Peso del conjunto, identidad de la pieza y coherencia del esquema (2026-09-08)
+
+[OneUp Bash Guide V2](https://www.oneupcomponents.com/products/bashguide-v2-iscg05)
+presenta el peso del conjunto según la placa montada. Sus
+[instrucciones](https://eu.oneupcomponents.com/blogs/bashguides-chainguides/bashguard-chainguide-install-instructions)
+separan las tres placas suministradas y cuál viene instalada. El candidato de
+Claude ponía los pesos del conjunto en las filas de placas sueltas: Root lo
+corrigió con configuraciones montadas que referencian la pieza incluida. Una
+masa con unidad correcta sigue siendo errónea si se asigna a otro objeto.
+
+Dos roldanas con el mismo número de dientes no quedan identificadas por eso,
+ni se les puede deducir la posición. [Park](https://www.parktool.com/en-us/blog/repair-help/how-a-rear-derailleur-works)
+explica las funciones de guía y tensión; cada ocurrencia del envase conserva
+sus propios datos y declaraciones. Un título con un solo número de dientes
+no demuestra que las dos piezas sean idénticas.
+
+Al trasladar cotas de un escalar a una fila hay que trasladar explícitamente
+su coherencia al dueño de filas. ID < OD corresponde al mismo cuerpo anular;
+un rango inclusivo conserva mínimo <= máximo. Las unidades deben coincidir y
+la combinación de comparaciones no puede formar un ciclo con alguna relación
+estricta: ninguna observación completa satisfaría ese esquema. Un fallo de
+metadatos se rechaza al definir la regla, no como dato culpable del producto.
+El candidato v2 lo verifica sin reescribir esquemas ni sobres ya persistidos.
+
+### 2026-09-15 — casquillos de tija y zapatas de llanta
+
+Un casquillo de tija tiene interfaces hacia la tija y hacia el alojamiento
+interior del cuadro; no equivale a un separador axial. Pares discretos de diámetro
+publicados por variante no forman un rango continuo. Inserción y restricciones
+requieren la fuente del cuadro y de la tija. Fuentes y límites en
+`seatpost-shim-architecture-evidence-2026-09-15.md` del directorio de investigación.
+
+Park Tool distingue zapatas de carretera, espárrago roscado y espárrago liso,
+y presentaciones enteras o de cartucho; la clave genérica «pastilla» no describe
+esas interfaces. [Guía de reemplazo](https://www.parktool.com/en-us/blog/repair-help/brake-pad-replacement-rim-brakes).
+El contenido de una caja no prueba que una zapata ajuste a cualquier freno de
+llanta, ni que su espárrago sea equivalente al de una pastilla de disco.

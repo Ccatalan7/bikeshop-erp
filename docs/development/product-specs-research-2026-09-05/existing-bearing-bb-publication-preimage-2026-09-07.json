@@ -1,0 +1,4172 @@
+{
+  "fields": [
+    {
+      "id": "0010aa54-6583-4436-95a0-6c1bbdd7b6ee",
+      "tenant_id": null,
+      "created_at": "2026-08-21T06:48:26.227216+00:00",
+      "sort_order": 130,
+      "updated_at": "2026-08-21T16:29:12.200166+00:00",
+      "helper_text": null,
+      "is_required": false,
+      "section_key": "identification",
+      "template_id": "a4f78fa2-219f-44c6-82c4-d7d63e79cb1d",
+      "option_rules": [
+        {
+          "allow": [
+            "1/4"
+          ],
+          "field": "bb_shell_standard",
+          "value": [
+            "BSA / Caja inglesa 34,8 mm (1.37\") x 24",
+            "Italiano 36 mm x 24",
+            "T47 47 mm",
+            "Francés 35 mm x 1",
+            "Suizo 35 mm x 1",
+            "Euro BMX roscado 68 mm"
+          ],
+          "operator": "in"
+        },
+        {
+          "allow": [
+            "1/4"
+          ],
+          "field": "bb_shell_standard",
+          "value": "Americano 51,5 mm",
+          "operator": "eq"
+        }
+      ],
+      "constraint_rules": [],
+      "visibility_rules": [
+        {
+          "field": "bb_construction",
+          "value": "Cubetas y canastillo",
+          "operator": "eq"
+        }
+      ],
+      "default_value_json": null,
+      "spec_definition_id": "a7147f59-7898-4104-9d6b-7a6ae582c2fc"
+    },
+    {
+      "id": "01d4e5a1-b2d8-45b5-ac82-96d2cc88eef3",
+      "tenant_id": null,
+      "created_at": "2026-09-06T06:58:57.745728+00:00",
+      "sort_order": 5,
+      "updated_at": "2026-09-06T06:58:57.745728+00:00",
+      "helper_text": null,
+      "is_required": false,
+      "section_key": "declaration",
+      "template_id": "98f78948-c186-4340-ae78-ce315b3c3aef",
+      "option_rules": [],
+      "constraint_rules": [],
+      "visibility_rules": [],
+      "default_value_json": null,
+      "spec_definition_id": "4f055961-6c16-430b-a4e2-e6b09dc1cccc"
+    },
+    {
+      "id": "0f955fce-500d-4689-a650-7d88be8da6b3",
+      "tenant_id": null,
+      "created_at": "2026-08-21T06:48:26.227216+00:00",
+      "sort_order": 140,
+      "updated_at": "2026-08-21T16:29:12.200166+00:00",
+      "helper_text": null,
+      "is_required": false,
+      "section_key": "identification",
+      "template_id": "a4f78fa2-219f-44c6-82c4-d7d63e79cb1d",
+      "option_rules": [
+        {
+          "allow": [
+            9,
+            11
+          ],
+          "field": "bb_shell_standard",
+          "value": [
+            "BSA / Caja inglesa 34,8 mm (1.37\") x 24",
+            "Italiano 36 mm x 24",
+            "T47 47 mm",
+            "Francés 35 mm x 1",
+            "Suizo 35 mm x 1",
+            "Euro BMX roscado 68 mm"
+          ],
+          "operator": "in"
+        },
+        {
+          "allow": [
+            9,
+            11
+          ],
+          "field": "bb_shell_standard",
+          "value": "Americano 51,5 mm",
+          "operator": "eq"
+        }
+      ],
+      "constraint_rules": [],
+      "visibility_rules": [
+        {
+          "field": "bb_construction",
+          "value": "Cubetas y canastillo",
+          "operator": "eq"
+        }
+      ],
+      "default_value_json": null,
+      "spec_definition_id": "56fd912a-1a4d-41ad-bf08-b0d1499b9395"
+    },
+    {
+      "id": "11d115dd-3308-439b-80a4-10722da184eb",
+      "tenant_id": null,
+      "created_at": "2026-08-21T05:19:49.858391+00:00",
+      "sort_order": 10,
+      "updated_at": "2026-08-21T16:29:12.200166+00:00",
+      "helper_text": "La caja del cuadro donde entran estas cubetas.",
+      "is_required": true,
+      "section_key": "compatibility",
+      "template_id": "50c9c0f2-5aec-4ffb-a54e-fad0c62124f4",
+      "option_rules": [],
+      "constraint_rules": [],
+      "visibility_rules": [],
+      "default_value_json": null,
+      "spec_definition_id": "b6d541fc-7f81-405b-b20d-f19ecfccb35e"
+    },
+    {
+      "id": "1a4f79d2-1c0c-4881-9c0d-633f3063413e",
+      "tenant_id": null,
+      "created_at": "2026-04-26T17:27:53.621862+00:00",
+      "sort_order": 50,
+      "updated_at": "2026-08-21T16:29:12.200166+00:00",
+      "helper_text": null,
+      "is_required": false,
+      "section_key": "dimensions",
+      "template_id": "98f78948-c186-4340-ae78-ce315b3c3aef",
+      "option_rules": [],
+      "constraint_rules": [],
+      "visibility_rules": [
+        {
+          "field": "bb_construction",
+          "value": [
+            "Rodamiento sellado",
+            "A presión"
+          ],
+          "operator": "in"
+        }
+      ],
+      "default_value_json": null,
+      "spec_definition_id": "0b1a2520-bd82-4304-95ce-5935234b5587"
+    },
+    {
+      "id": "2073b778-1287-4ae7-bc82-795354072a2b",
+      "tenant_id": null,
+      "created_at": "2026-04-26T17:27:53.621862+00:00",
+      "sort_order": 110,
+      "updated_at": "2026-08-21T16:29:12.200166+00:00",
+      "helper_text": null,
+      "is_required": false,
+      "section_key": "dimensions",
+      "template_id": "a4f78fa2-219f-44c6-82c4-d7d63e79cb1d",
+      "option_rules": [
+        {
+          "allow": [
+            19
+          ],
+          "field": "spindle_interface",
+          "value": "BMX 19mm",
+          "operator": "eq"
+        },
+        {
+          "allow": [
+            22
+          ],
+          "field": "spindle_interface",
+          "value": "BMX 22mm",
+          "operator": "eq"
+        },
+        {
+          "allow": [
+            24
+          ],
+          "field": "spindle_interface",
+          "value": "BMX 24mm",
+          "operator": "eq"
+        },
+        {
+          "allow": [
+            24
+          ],
+          "field": "spindle_interface",
+          "value": "Hollowtech / 24mm",
+          "operator": "eq"
+        },
+        {
+          "allow": [
+            28.99
+          ],
+          "field": "spindle_interface",
+          "value": "SRAM DUB 28.99mm",
+          "operator": "eq"
+        },
+        {
+          "allow": [
+            30
+          ],
+          "field": "spindle_interface",
+          "value": "BB30 30mm",
+          "operator": "eq"
+        },
+        {
+          "allow": [
+            24
+          ],
+          "field": "spindle_interface",
+          "value": "SRAM GXP 24/22",
+          "operator": "eq"
+        }
+      ],
+      "constraint_rules": [],
+      "visibility_rules": [
+        {
+          "field": "includes_spindle",
+          "value": true,
+          "operator": "eq"
+        },
+        {
+          "field": "spindle_interface",
+          "value": [
+            "BMX 19mm",
+            "BMX 22mm",
+            "BMX 24mm",
+            "Hollowtech / 24mm",
+            "SRAM DUB 28.99mm",
+            "BB30 30mm",
+            "SRAM GXP 24/22"
+          ],
+          "operator": "in"
+        }
+      ],
+      "default_value_json": null,
+      "spec_definition_id": "205c58cb-63ca-4e3e-9c7b-d411dce390dd"
+    },
+    {
+      "id": "222819c5-ccbc-4cca-964b-dfe70fc5d2ca",
+      "tenant_id": null,
+      "created_at": "2026-04-26T17:27:53.621862+00:00",
+      "sort_order": 40,
+      "updated_at": "2026-08-21T16:29:12.200166+00:00",
+      "helper_text": "El eje que este motor trae.",
+      "is_required": false,
+      "section_key": "compatibility",
+      "template_id": "a4f78fa2-219f-44c6-82c4-d7d63e79cb1d",
+      "option_rules": [
+        {
+          "allow": [
+            "Cuadrado JIS",
+            "Cuadrado ISO",
+            "ISIS",
+            "Octalink",
+            "Powerspline",
+            "BMX 19mm",
+            "BMX 22mm",
+            "BMX 24mm"
+          ],
+          "field": "bb_construction",
+          "value": "Rodamiento sellado",
+          "operator": "eq"
+        },
+        {
+          "allow": [
+            "Hollowtech / 24mm",
+            "SRAM GXP 24/22",
+            "SRAM DUB 28.99mm"
+          ],
+          "field": "bb_construction",
+          "value": "Integrado",
+          "operator": "eq"
+        },
+        {
+          "allow": [
+            "Cuadrado JIS",
+            "Cuadrado ISO",
+            "Con chaveta",
+            "One-piece / americano"
+          ],
+          "field": "bb_construction",
+          "value": "Cubetas y canastillo",
+          "operator": "eq"
+        },
+        {
+          "allow": [
+            "Hollowtech / 24mm",
+            "SRAM DUB 28.99mm",
+            "BB30 30mm",
+            "SRAM GXP 24/22",
+            "BMX 19mm",
+            "BMX 22mm",
+            "BMX 24mm"
+          ],
+          "field": "bb_construction",
+          "value": [
+            "A presión",
+            "Roscado entre sí"
+          ],
+          "operator": "in"
+        },
+        {
+          "allow": [
+            "Cuadrado JIS",
+            "Cuadrado ISO",
+            "ISIS",
+            "Octalink",
+            "Powerspline",
+            "Con chaveta",
+            "Hollowtech / 24mm",
+            "SRAM GXP 24/22",
+            "SRAM DUB 28.99mm"
+          ],
+          "field": "bb_shell_standard",
+          "value": [
+            "BSA / Caja inglesa 34,8 mm (1.37\") x 24",
+            "Italiano 36 mm x 24",
+            "T47 47 mm",
+            "Francés 35 mm x 1",
+            "Suizo 35 mm x 1",
+            "Euro BMX roscado 68 mm"
+          ],
+          "operator": "in"
+        },
+        {
+          "allow": [
+            "Hollowtech / 24mm",
+            "SRAM DUB 28.99mm",
+            "BB30 30mm",
+            "SRAM GXP 24/22"
+          ],
+          "field": "bb_shell_standard",
+          "value": [
+            "BB86 / BB92 41 mm",
+            "PF30 46 mm",
+            "BB30 42 mm",
+            "BB386EVO 46 mm",
+            "BB90 / BB95",
+            "BBRight / OSBB"
+          ],
+          "operator": "in"
+        },
+        {
+          "allow": [
+            "BMX 19mm",
+            "BMX 22mm",
+            "BMX 24mm"
+          ],
+          "field": "bb_shell_standard",
+          "value": [
+            "Mid BMX 41,2 mm",
+            "Spanish BMX 37 mm"
+          ],
+          "operator": "in"
+        },
+        {
+          "allow": [
+            "One-piece / americano"
+          ],
+          "field": "bb_shell_standard",
+          "value": [
+            "Americano 51,5 mm"
+          ],
+          "operator": "in"
+        }
+      ],
+      "constraint_rules": [],
+      "visibility_rules": [
+        {
+          "field": "includes_spindle",
+          "value": true,
+          "operator": "eq"
+        }
+      ],
+      "default_value_json": null,
+      "spec_definition_id": "660b0e90-180d-44a1-938c-f304a9358094"
+    },
+    {
+      "id": "5256b015-ae0a-4fea-8942-af1332416a7a",
+      "tenant_id": null,
+      "created_at": "2026-09-06T06:58:57.745728+00:00",
+      "sort_order": 5,
+      "updated_at": "2026-09-06T06:58:57.745728+00:00",
+      "helper_text": null,
+      "is_required": false,
+      "section_key": "declaration",
+      "template_id": "a4f78fa2-219f-44c6-82c4-d7d63e79cb1d",
+      "option_rules": [],
+      "constraint_rules": [],
+      "visibility_rules": [],
+      "default_value_json": null,
+      "spec_definition_id": "4f055961-6c16-430b-a4e2-e6b09dc1cccc"
+    },
+    {
+      "id": "5316b1bb-27af-4ed8-bd66-c675281b1cea",
+      "tenant_id": null,
+      "created_at": "2026-08-21T05:19:49.858391+00:00",
+      "sort_order": 30,
+      "updated_at": "2026-08-21T16:29:12.200166+00:00",
+      "helper_text": "Un rodamiento sellado trae el eje; unas motores integrados no.",
+      "is_required": true,
+      "section_key": "compatibility",
+      "template_id": "a4f78fa2-219f-44c6-82c4-d7d63e79cb1d",
+      "option_rules": [],
+      "constraint_rules": [],
+      "visibility_rules": [
+        {
+          "field": "bb_construction",
+          "operator": "is_set"
+        }
+      ],
+      "default_value_json": null,
+      "spec_definition_id": "bab324fa-2459-4a14-b7f9-51de3fdf06e3"
+    },
+    {
+      "id": "55cccd4a-49bf-478c-956a-8b2f264e77af",
+      "tenant_id": null,
+      "created_at": "2026-08-21T06:48:26.227216+00:00",
+      "sort_order": 120,
+      "updated_at": "2026-08-21T16:29:12.200166+00:00",
+      "helper_text": null,
+      "is_required": false,
+      "section_key": "dimensions",
+      "template_id": "a4f78fa2-219f-44c6-82c4-d7d63e79cb1d",
+      "option_rules": [
+        {
+          "allow": [
+            2.5,
+            5
+          ],
+          "field": "bb_shell_width_mm",
+          "value": 68,
+          "operator": "eq"
+        },
+        {
+          "allow": [
+            0,
+            2.5
+          ],
+          "field": "bb_shell_width_mm",
+          "value": 73,
+          "operator": "eq"
+        },
+        {
+          "allow": [
+            0
+          ],
+          "field": "bb_shell_width_mm",
+          "value": 83,
+          "operator": "eq"
+        }
+      ],
+      "constraint_rules": [],
+      "visibility_rules": [
+        {
+          "field": "bb_construction",
+          "value": "Integrado",
+          "operator": "eq"
+        }
+      ],
+      "default_value_json": null,
+      "spec_definition_id": "83e6351f-e477-4ea1-b58c-2e0f7beb8af3"
+    },
+    {
+      "id": "56f44769-56e8-4866-a860-d283483f0234",
+      "tenant_id": null,
+      "created_at": "2026-08-21T05:19:49.858391+00:00",
+      "sort_order": 30,
+      "updated_at": "2026-08-21T16:29:12.200166+00:00",
+      "helper_text": "Un canastillo 1/4 x 9 lleva nueve por lado.",
+      "is_required": true,
+      "section_key": "identification",
+      "template_id": "98f78948-c186-4340-ae78-ce315b3c3aef",
+      "option_rules": [],
+      "constraint_rules": [],
+      "visibility_rules": [
+        {
+          "field": "bb_construction",
+          "value": "Cubetas y canastillo",
+          "operator": "eq"
+        }
+      ],
+      "default_value_json": null,
+      "spec_definition_id": "56fd912a-1a4d-41ad-bf08-b0d1499b9395"
+    },
+    {
+      "id": "5fb46dec-562a-4d3b-ad7b-1febe922f5b9",
+      "tenant_id": null,
+      "created_at": "2026-08-21T06:48:26.227216+00:00",
+      "sort_order": 60,
+      "updated_at": "2026-08-21T16:29:12.200166+00:00",
+      "helper_text": null,
+      "is_required": false,
+      "section_key": "compatibility",
+      "template_id": "a4f78fa2-219f-44c6-82c4-d7d63e79cb1d",
+      "option_rules": [
+        {
+          "allow": [
+            "Derecha / Izquierda (BSA inglés)"
+          ],
+          "field": "bb_shell_standard",
+          "value": "BSA / Caja inglesa 34,8 mm (1.37\") x 24",
+          "operator": "eq"
+        },
+        {
+          "allow": [
+            "Derecha / Derecha (italiano o genérico)"
+          ],
+          "field": "bb_shell_standard",
+          "value": [
+            "Italiano 36 mm x 24",
+            "T47 47 mm",
+            "Francés 35 mm x 1",
+            "Euro BMX roscado 68 mm"
+          ],
+          "operator": "in"
+        },
+        {
+          "allow": [
+            "Derecha / Izquierda (BSA inglés)"
+          ],
+          "field": "bb_shell_standard",
+          "value": "Suizo 35 mm x 1",
+          "operator": "eq"
+        }
+      ],
+      "constraint_rules": [],
+      "visibility_rules": [
+        {
+          "field": "bb_construction",
+          "value": [
+            "Cubetas y canastillo",
+            "Integrado"
+          ],
+          "operator": "in"
+        },
+        {
+          "field": "bb_shell_standard",
+          "value": [
+            "BSA / Caja inglesa 34,8 mm (1.37\") x 24",
+            "Italiano 36 mm x 24",
+            "T47 47 mm",
+            "Francés 35 mm x 1",
+            "Suizo 35 mm x 1",
+            "Euro BMX roscado 68 mm"
+          ],
+          "operator": "in"
+        }
+      ],
+      "default_value_json": null,
+      "spec_definition_id": "b4863ef0-d4d6-4e08-a6bd-b3fcf7ddcb55"
+    },
+    {
+      "id": "65b92c93-c85f-4daa-9773-8d6840b21831",
+      "tenant_id": null,
+      "created_at": "2026-04-20T20:47:55.39882+00:00",
+      "sort_order": 10,
+      "updated_at": "2026-04-20T20:47:55.39882+00:00",
+      "helper_text": null,
+      "is_required": true,
+      "section_key": "identification",
+      "template_id": "d293dc44-f47a-4dd8-801f-3de0c5749da3",
+      "option_rules": [],
+      "constraint_rules": [],
+      "visibility_rules": [],
+      "default_value_json": null,
+      "spec_definition_id": "f423ecda-cc55-4ec7-a9a3-28caf6310c66"
+    },
+    {
+      "id": "67fec045-ddc2-4af7-90c1-ad7df29441d8",
+      "tenant_id": null,
+      "created_at": "2026-09-06T06:58:57.745728+00:00",
+      "sort_order": 5,
+      "updated_at": "2026-09-06T06:58:57.745728+00:00",
+      "helper_text": null,
+      "is_required": false,
+      "section_key": "declaration",
+      "template_id": "d293dc44-f47a-4dd8-801f-3de0c5749da3",
+      "option_rules": [],
+      "constraint_rules": [],
+      "visibility_rules": [],
+      "default_value_json": null,
+      "spec_definition_id": "4f055961-6c16-430b-a4e2-e6b09dc1cccc"
+    },
+    {
+      "id": "7899549d-eb9b-40f9-8828-b10a7dee85cc",
+      "tenant_id": null,
+      "created_at": "2026-04-26T23:52:25.17615+00:00",
+      "sort_order": 70,
+      "updated_at": "2026-08-21T16:29:12.200166+00:00",
+      "helper_text": null,
+      "is_required": false,
+      "section_key": "dimensions",
+      "template_id": "98f78948-c186-4340-ae78-ce315b3c3aef",
+      "option_rules": [],
+      "constraint_rules": [],
+      "visibility_rules": [
+        {
+          "field": "bb_construction",
+          "value": [
+            "Rodamiento sellado",
+            "A presión"
+          ],
+          "operator": "in"
+        }
+      ],
+      "default_value_json": null,
+      "spec_definition_id": "04694a95-9e92-4674-a0c2-4252ba185aaf"
+    },
+    {
+      "id": "834b4dc6-8ddf-442b-bbcf-7289dc428881",
+      "tenant_id": null,
+      "created_at": "2026-04-20T20:47:55.39882+00:00",
+      "sort_order": 10,
+      "updated_at": "2026-04-20T20:47:55.39882+00:00",
+      "helper_text": null,
+      "is_required": true,
+      "section_key": "compatibility",
+      "template_id": "d293dc44-f47a-4dd8-801f-3de0c5749da3",
+      "option_rules": [],
+      "constraint_rules": [],
+      "visibility_rules": [],
+      "default_value_json": null,
+      "spec_definition_id": "f831fd26-2a2c-4504-b787-56593fed70df"
+    },
+    {
+      "id": "8acbfc02-1793-4b83-afd5-362666b11443",
+      "tenant_id": null,
+      "created_at": "2026-04-26T17:27:53.621862+00:00",
+      "sort_order": 60,
+      "updated_at": "2026-08-21T16:29:12.200166+00:00",
+      "helper_text": null,
+      "is_required": false,
+      "section_key": "dimensions",
+      "template_id": "98f78948-c186-4340-ae78-ce315b3c3aef",
+      "option_rules": [],
+      "constraint_rules": [],
+      "visibility_rules": [
+        {
+          "field": "bb_construction",
+          "value": [
+            "Rodamiento sellado",
+            "A presión"
+          ],
+          "operator": "in"
+        }
+      ],
+      "default_value_json": null,
+      "spec_definition_id": "dd77c79b-4ae5-487a-9b56-9c9a0c01361e"
+    },
+    {
+      "id": "9091d52e-a555-4edb-b907-7d1ca92eaff4",
+      "tenant_id": null,
+      "created_at": "2026-08-21T05:19:49.858391+00:00",
+      "sort_order": 10,
+      "updated_at": "2026-08-21T16:29:12.200166+00:00",
+      "helper_text": "Empieza por acá: define la rosca, el diámetro y qué anchos existen.",
+      "is_required": true,
+      "section_key": "compatibility",
+      "template_id": "a4f78fa2-219f-44c6-82c4-d7d63e79cb1d",
+      "option_rules": [],
+      "constraint_rules": [],
+      "visibility_rules": [],
+      "default_value_json": null,
+      "spec_definition_id": "b6d541fc-7f81-405b-b20d-f19ecfccb35e"
+    },
+    {
+      "id": "948af52a-d9e9-4def-a802-e0e7bbb07d86",
+      "tenant_id": null,
+      "created_at": "2026-08-21T05:19:49.858391+00:00",
+      "sort_order": 10,
+      "updated_at": "2026-08-21T16:29:12.200166+00:00",
+      "helper_text": "Un eje suelto se vende para un sistema de bolas o para reponer un cartucho.",
+      "is_required": true,
+      "section_key": "compatibility",
+      "template_id": "047523e5-829c-4509-ae83-ea5b8cdd4b31",
+      "option_rules": [
+        {
+          "allow": [
+            "Cubetas y canastillo",
+            "Rodamiento sellado"
+          ]
+        }
+      ],
+      "constraint_rules": [],
+      "visibility_rules": [],
+      "default_value_json": null,
+      "spec_definition_id": "9d7291ce-bf0d-4a54-be0b-c050f3fb2e2d"
+    },
+    {
+      "id": "981a9b09-2167-4d95-aaa8-279521da6c11",
+      "tenant_id": null,
+      "created_at": "2026-04-26T17:27:53.621862+00:00",
+      "sort_order": 40,
+      "updated_at": "2026-08-21T16:29:12.200166+00:00",
+      "helper_text": "El código comercial, por ejemplo 6805 o 163110.",
+      "is_required": true,
+      "section_key": "identification",
+      "template_id": "98f78948-c186-4340-ae78-ce315b3c3aef",
+      "option_rules": [],
+      "constraint_rules": [],
+      "visibility_rules": [
+        {
+          "field": "bb_construction",
+          "value": [
+            "Rodamiento sellado",
+            "A presión"
+          ],
+          "operator": "in"
+        }
+      ],
+      "default_value_json": null,
+      "spec_definition_id": "f831fd26-2a2c-4504-b787-56593fed70df"
+    },
+    {
+      "id": "9c083425-6e74-4055-a63c-8e25ed7d6cda",
+      "tenant_id": null,
+      "created_at": "2026-08-21T05:19:49.858391+00:00",
+      "sort_order": 20,
+      "updated_at": "2026-08-21T16:29:12.200166+00:00",
+      "helper_text": "Un juego de cubetas no es un cartucho: o son de bolas, o son copas.",
+      "is_required": true,
+      "section_key": "compatibility",
+      "template_id": "50c9c0f2-5aec-4ffb-a54e-fad0c62124f4",
+      "option_rules": [
+        {
+          "allow": [
+            "Cubetas y canastillo",
+            "Integrado"
+          ],
+          "field": "bb_shell_standard",
+          "value": [
+            "BSA / Caja inglesa 34,8 mm (1.37\") x 24",
+            "Italiano 36 mm x 24",
+            "T47 47 mm",
+            "Francés 35 mm x 1",
+            "Suizo 35 mm x 1",
+            "Euro BMX roscado 68 mm"
+          ],
+          "operator": "in"
+        },
+        {
+          "allow": [
+            "A presión",
+            "Roscado entre sí"
+          ],
+          "field": "bb_shell_standard",
+          "value": [
+            "BB86 / BB92 41 mm",
+            "PF30 46 mm",
+            "BB30 42 mm",
+            "BB386EVO 46 mm",
+            "BB90 / BB95",
+            "BBRight / OSBB",
+            "Mid BMX 41,2 mm",
+            "Spanish BMX 37 mm"
+          ],
+          "operator": "in"
+        },
+        {
+          "allow": [
+            "Cubetas y canastillo",
+            "A presión"
+          ],
+          "field": "bb_shell_standard",
+          "value": "Americano 51,5 mm",
+          "operator": "eq"
+        }
+      ],
+      "constraint_rules": [],
+      "visibility_rules": [
+        {
+          "field": "bb_shell_standard",
+          "operator": "is_set"
+        }
+      ],
+      "default_value_json": null,
+      "spec_definition_id": "9d7291ce-bf0d-4a54-be0b-c050f3fb2e2d"
+    },
+    {
+      "id": "9f3d5384-d9b0-4d75-9fd6-8d69e25c07b8",
+      "tenant_id": null,
+      "created_at": "2026-08-21T06:59:19.614109+00:00",
+      "sort_order": 10,
+      "updated_at": "2026-08-21T16:29:12.200166+00:00",
+      "helper_text": "Un canastillo de bolas y un rodamiento sellado no se describen igual.",
+      "is_required": true,
+      "section_key": "compatibility",
+      "template_id": "98f78948-c186-4340-ae78-ce315b3c3aef",
+      "option_rules": [
+        {
+          "allow": [
+            "Cubetas y canastillo",
+            "Rodamiento sellado",
+            "A presión"
+          ]
+        }
+      ],
+      "constraint_rules": [],
+      "visibility_rules": [],
+      "default_value_json": null,
+      "spec_definition_id": "9d7291ce-bf0d-4a54-be0b-c050f3fb2e2d"
+    },
+    {
+      "id": "a22ba0ad-8361-4eb7-8794-bb36e8ebd13b",
+      "tenant_id": null,
+      "created_at": "2026-08-21T06:48:26.227216+00:00",
+      "sort_order": 150,
+      "updated_at": "2026-08-21T16:29:12.200166+00:00",
+      "helper_text": null,
+      "is_required": false,
+      "section_key": "identification",
+      "template_id": "a4f78fa2-219f-44c6-82c4-d7d63e79cb1d",
+      "option_rules": [],
+      "constraint_rules": [],
+      "visibility_rules": [
+        {
+          "field": "bb_construction",
+          "value": [
+            "Integrado",
+            "A presión",
+            "Thread-together",
+            "Rodamiento sellado"
+          ],
+          "operator": "in"
+        }
+      ],
+      "default_value_json": null,
+      "spec_definition_id": "f831fd26-2a2c-4504-b787-56593fed70df"
+    },
+    {
+      "id": "a433dc6b-754f-499c-99ca-247bbe87f7b5",
+      "tenant_id": null,
+      "created_at": "2026-09-06T06:58:57.745728+00:00",
+      "sort_order": 5,
+      "updated_at": "2026-09-06T06:58:57.745728+00:00",
+      "helper_text": null,
+      "is_required": false,
+      "section_key": "declaration",
+      "template_id": "047523e5-829c-4509-ae83-ea5b8cdd4b31",
+      "option_rules": [],
+      "constraint_rules": [],
+      "visibility_rules": [],
+      "default_value_json": null,
+      "spec_definition_id": "4f055961-6c16-430b-a4e2-e6b09dc1cccc"
+    },
+    {
+      "id": "a4d1c000-cdf6-4121-a019-4ad9b17e094b",
+      "tenant_id": null,
+      "created_at": "2026-08-21T05:19:49.858391+00:00",
+      "sort_order": 20,
+      "updated_at": "2026-08-21T16:29:12.200166+00:00",
+      "helper_text": "Sólo los canastillos de bolas sueltas.",
+      "is_required": true,
+      "section_key": "identification",
+      "template_id": "98f78948-c186-4340-ae78-ce315b3c3aef",
+      "option_rules": [],
+      "constraint_rules": [],
+      "visibility_rules": [
+        {
+          "field": "bb_construction",
+          "value": "Cubetas y canastillo",
+          "operator": "eq"
+        }
+      ],
+      "default_value_json": null,
+      "spec_definition_id": "a7147f59-7898-4104-9d6b-7a6ae582c2fc"
+    },
+    {
+      "id": "ac78b3ed-80dc-4d87-bd90-a439dfedad57",
+      "tenant_id": null,
+      "created_at": "2026-04-26T17:27:53.621862+00:00",
+      "sort_order": 30,
+      "updated_at": "2026-08-21T16:29:12.200166+00:00",
+      "helper_text": null,
+      "is_required": false,
+      "section_key": "dimensions",
+      "template_id": "047523e5-829c-4509-ae83-ea5b8cdd4b31",
+      "option_rules": [
+        {
+          "allow": [
+            103,
+            107,
+            110,
+            110.5,
+            113,
+            113.5,
+            116,
+            118,
+            118.5,
+            119,
+            121,
+            122.5,
+            124,
+            124.5,
+            125,
+            125.5,
+            126,
+            127,
+            127.5,
+            128
+          ],
+          "field": "spindle_interface",
+          "value": [
+            "Cuadrado JIS",
+            "Cuadrado ISO"
+          ],
+          "operator": "in"
+        },
+        {
+          "allow": [
+            127.5,
+            131,
+            135,
+            140,
+            145,
+            147
+          ],
+          "field": "spindle_interface",
+          "value": "Con chaveta",
+          "operator": "eq"
+        },
+        {
+          "allow": [
+            128,
+            131,
+            135
+          ],
+          "field": "spindle_interface",
+          "value": [
+            "BMX 19mm",
+            "BMX 22mm",
+            "BMX 24mm"
+          ],
+          "operator": "in"
+        },
+        {
+          "allow": [
+            108,
+            113,
+            118
+          ],
+          "field": "spindle_interface",
+          "value": "ISIS",
+          "operator": "eq"
+        },
+        {
+          "allow": [
+            109,
+            113,
+            118
+          ],
+          "field": "spindle_interface",
+          "value": "Octalink",
+          "operator": "eq"
+        },
+        {
+          "allow": [
+            108,
+            113,
+            118
+          ],
+          "field": "spindle_interface",
+          "value": "Powerspline",
+          "operator": "eq"
+        }
+      ],
+      "constraint_rules": [],
+      "visibility_rules": [
+        {
+          "field": "spindle_interface",
+          "operator": "is_set"
+        }
+      ],
+      "default_value_json": null,
+      "spec_definition_id": "9b8f6fa4-de08-4f4e-988d-b57345b3e9d6"
+    },
+    {
+      "id": "afce3039-79cf-4173-83c2-cc663fe2f693",
+      "tenant_id": null,
+      "created_at": "2026-04-26T17:27:53.621862+00:00",
+      "sort_order": 50,
+      "updated_at": "2026-08-21T16:29:12.200166+00:00",
+      "helper_text": null,
+      "is_required": false,
+      "section_key": "dimensions",
+      "template_id": "50c9c0f2-5aec-4ffb-a54e-fad0c62124f4",
+      "option_rules": [
+        {
+          "allow": [
+            68,
+            73,
+            83,
+            100
+          ],
+          "field": "bb_shell_standard",
+          "value": [
+            "BSA / Caja inglesa 34,8 mm (1.37\") x 24",
+            "T47 47 mm",
+            "Euro BMX roscado 68 mm",
+            "Francés 35 mm x 1",
+            "Suizo 35 mm x 1",
+            "BB30 42 mm"
+          ],
+          "operator": "in"
+        },
+        {
+          "allow": [
+            70
+          ],
+          "field": "bb_shell_standard",
+          "value": "Italiano 36 mm x 24",
+          "operator": "eq"
+        },
+        {
+          "allow": [
+            86.5,
+            89.5,
+            92,
+            107,
+            121
+          ],
+          "field": "bb_shell_standard",
+          "value": [
+            "BB86 / BB92 41 mm",
+            "PF30 46 mm",
+            "BB386EVO 46 mm"
+          ],
+          "operator": "in"
+        },
+        {
+          "allow": [
+            68,
+            73
+          ],
+          "field": "bb_shell_standard",
+          "value": [
+            "Mid BMX 41,2 mm",
+            "Spanish BMX 37 mm",
+            "Americano 51,5 mm"
+          ],
+          "operator": "in"
+        }
+      ],
+      "constraint_rules": [],
+      "visibility_rules": [
+        {
+          "field": "bb_shell_standard",
+          "operator": "is_set"
+        }
+      ],
+      "default_value_json": null,
+      "spec_definition_id": "ca1bc471-dfdf-4e24-a17e-b3950030a817"
+    },
+    {
+      "id": "be289e20-bf2d-46ed-98e5-935e988bce82",
+      "tenant_id": null,
+      "created_at": "2026-04-26T17:27:53.621862+00:00",
+      "sort_order": 70,
+      "updated_at": "2026-08-21T16:29:12.200166+00:00",
+      "helper_text": null,
+      "is_required": false,
+      "section_key": "dimensions",
+      "template_id": "a4f78fa2-219f-44c6-82c4-d7d63e79cb1d",
+      "option_rules": [
+        {
+          "allow": [
+            68,
+            73,
+            83,
+            100
+          ],
+          "field": "bb_shell_standard",
+          "value": [
+            "BSA / Caja inglesa 34,8 mm (1.37\") x 24",
+            "T47 47 mm",
+            "Euro BMX roscado 68 mm",
+            "Francés 35 mm x 1",
+            "Suizo 35 mm x 1",
+            "BB30 42 mm"
+          ],
+          "operator": "in"
+        },
+        {
+          "allow": [
+            70
+          ],
+          "field": "bb_shell_standard",
+          "value": "Italiano 36 mm x 24",
+          "operator": "eq"
+        },
+        {
+          "allow": [
+            86.5,
+            89.5,
+            92,
+            107,
+            121
+          ],
+          "field": "bb_shell_standard",
+          "value": [
+            "BB86 / BB92 41 mm",
+            "PF30 46 mm",
+            "BB386EVO 46 mm"
+          ],
+          "operator": "in"
+        },
+        {
+          "allow": [
+            86.5,
+            89.5,
+            92
+          ],
+          "field": "bb_shell_standard",
+          "value": [
+            "BB90 / BB95",
+            "BBRight / OSBB"
+          ],
+          "operator": "in"
+        },
+        {
+          "allow": [
+            68,
+            73
+          ],
+          "field": "bb_shell_standard",
+          "value": [
+            "Mid BMX 41,2 mm",
+            "Spanish BMX 37 mm",
+            "Americano 51,5 mm"
+          ],
+          "operator": "in"
+        }
+      ],
+      "constraint_rules": [],
+      "visibility_rules": [
+        {
+          "field": "bb_shell_standard",
+          "operator": "is_set"
+        }
+      ],
+      "default_value_json": null,
+      "spec_definition_id": "ca1bc471-dfdf-4e24-a17e-b3950030a817"
+    },
+    {
+      "id": "bf144b7c-11b3-45b6-a753-08f2f038250b",
+      "tenant_id": null,
+      "created_at": "2026-04-26T17:27:53.621862+00:00",
+      "sort_order": 20,
+      "updated_at": "2026-08-21T16:29:12.200166+00:00",
+      "helper_text": null,
+      "is_required": true,
+      "section_key": "compatibility",
+      "template_id": "047523e5-829c-4509-ae83-ea5b8cdd4b31",
+      "option_rules": [
+        {
+          "allow": [
+            "Cuadrado JIS",
+            "Cuadrado ISO",
+            "Con chaveta",
+            "BMX 19mm",
+            "BMX 22mm",
+            "BMX 24mm"
+          ],
+          "field": "bb_construction",
+          "value": "Cubetas y canastillo",
+          "operator": "eq"
+        },
+        {
+          "allow": [
+            "Cuadrado JIS",
+            "Cuadrado ISO",
+            "ISIS",
+            "Octalink",
+            "Powerspline"
+          ],
+          "field": "bb_construction",
+          "value": "Rodamiento sellado",
+          "operator": "eq"
+        }
+      ],
+      "constraint_rules": [],
+      "visibility_rules": [
+        {
+          "field": "bb_construction",
+          "operator": "is_set"
+        }
+      ],
+      "default_value_json": null,
+      "spec_definition_id": "660b0e90-180d-44a1-938c-f304a9358094"
+    },
+    {
+      "id": "c84f0db2-7c5b-47ae-87f0-6a25ceea5457",
+      "tenant_id": null,
+      "created_at": "2026-04-26T17:27:53.621862+00:00",
+      "sort_order": 100,
+      "updated_at": "2026-08-21T16:29:12.200166+00:00",
+      "helper_text": null,
+      "is_required": false,
+      "section_key": "dimensions",
+      "template_id": "a4f78fa2-219f-44c6-82c4-d7d63e79cb1d",
+      "option_rules": [
+        {
+          "allow": [
+            103,
+            107,
+            110,
+            110.5,
+            113,
+            113.5,
+            116,
+            118,
+            118.5,
+            119,
+            121,
+            122.5,
+            124,
+            124.5,
+            125,
+            125.5,
+            126,
+            127,
+            127.5,
+            128
+          ],
+          "field": "spindle_interface",
+          "value": [
+            "Cuadrado JIS",
+            "Cuadrado ISO"
+          ],
+          "operator": "in"
+        },
+        {
+          "allow": [
+            108,
+            113,
+            118
+          ],
+          "field": "spindle_interface",
+          "value": "ISIS",
+          "operator": "eq"
+        },
+        {
+          "allow": [
+            109,
+            113,
+            118
+          ],
+          "field": "spindle_interface",
+          "value": "Octalink",
+          "operator": "eq"
+        },
+        {
+          "allow": [
+            108,
+            113,
+            118
+          ],
+          "field": "spindle_interface",
+          "value": "Powerspline",
+          "operator": "eq"
+        },
+        {
+          "allow": [
+            128,
+            131,
+            135
+          ],
+          "field": "spindle_interface",
+          "value": [
+            "BMX 19mm",
+            "BMX 22mm",
+            "BMX 24mm"
+          ],
+          "operator": "in"
+        },
+        {
+          "allow": [
+            127.5,
+            131,
+            135,
+            140,
+            145,
+            147
+          ],
+          "field": "spindle_interface",
+          "value": "Con chaveta",
+          "operator": "eq"
+        }
+      ],
+      "constraint_rules": [],
+      "visibility_rules": [
+        {
+          "field": "includes_spindle",
+          "value": true,
+          "operator": "eq"
+        },
+        {
+          "field": "spindle_interface",
+          "value": [
+            "Hollowtech / 24mm",
+            "SRAM GXP 24/22",
+            "SRAM DUB 28.99mm",
+            "BB30 30mm",
+            "One-piece / americano"
+          ],
+          "operator": "not_in"
+        }
+      ],
+      "default_value_json": null,
+      "spec_definition_id": "9b8f6fa4-de08-4f4e-988d-b57345b3e9d6"
+    },
+    {
+      "id": "cc5ce95b-22a9-4394-ab0f-67c63a996243",
+      "tenant_id": null,
+      "created_at": "2026-08-21T06:48:26.227216+00:00",
+      "sort_order": 90,
+      "updated_at": "2026-08-21T16:29:12.200166+00:00",
+      "helper_text": null,
+      "is_required": false,
+      "section_key": "dimensions",
+      "template_id": "a4f78fa2-219f-44c6-82c4-d7d63e79cb1d",
+      "option_rules": [
+        {
+          "allow": [
+            34.8,
+            35,
+            36,
+            37
+          ],
+          "field": "bb_shell_standard",
+          "value": [
+            "BSA / Caja inglesa 34,8 mm (1.37\") x 24",
+            "Italiano 36 mm x 24",
+            "T47 47 mm",
+            "Francés 35 mm x 1",
+            "Suizo 35 mm x 1",
+            "Euro BMX roscado 68 mm"
+          ],
+          "operator": "in"
+        },
+        {
+          "allow": [
+            51.5
+          ],
+          "field": "bb_shell_standard",
+          "value": "Americano 51,5 mm",
+          "operator": "eq"
+        }
+      ],
+      "constraint_rules": [],
+      "visibility_rules": [
+        {
+          "field": "bb_construction",
+          "value": "Cubetas y canastillo",
+          "operator": "eq"
+        }
+      ],
+      "default_value_json": null,
+      "spec_definition_id": "4c0a652b-fd7c-4f99-b7e6-efbcde3f45d3"
+    },
+    {
+      "id": "cf0f23d0-415b-4b53-a8d7-19119ec8ef62",
+      "tenant_id": null,
+      "created_at": "2026-04-26T17:27:53.621862+00:00",
+      "sort_order": 80,
+      "updated_at": "2026-08-21T16:29:12.200166+00:00",
+      "helper_text": "Diámetro del eje que este rodamiento acepta.",
+      "is_required": false,
+      "section_key": "dimensions",
+      "template_id": "98f78948-c186-4340-ae78-ce315b3c3aef",
+      "option_rules": [],
+      "constraint_rules": [],
+      "visibility_rules": [
+        {
+          "field": "bb_construction",
+          "operator": "is_set"
+        }
+      ],
+      "default_value_json": null,
+      "spec_definition_id": "205c58cb-63ca-4e3e-9c7b-d411dce390dd"
+    },
+    {
+      "id": "d0787e2e-884a-487f-adfb-25f9570b7ff0",
+      "tenant_id": null,
+      "created_at": "2026-09-06T06:58:57.745728+00:00",
+      "sort_order": 5,
+      "updated_at": "2026-09-06T06:58:57.745728+00:00",
+      "helper_text": null,
+      "is_required": false,
+      "section_key": "declaration",
+      "template_id": "50c9c0f2-5aec-4ffb-a54e-fad0c62124f4",
+      "option_rules": [],
+      "constraint_rules": [],
+      "visibility_rules": [],
+      "default_value_json": null,
+      "spec_definition_id": "4f055961-6c16-430b-a4e2-e6b09dc1cccc"
+    },
+    {
+      "id": "de40cb47-449a-4d87-bcbf-cae438ecd724",
+      "tenant_id": null,
+      "created_at": "2026-04-26T23:52:25.17615+00:00",
+      "sort_order": 80,
+      "updated_at": "2026-08-21T16:29:12.200166+00:00",
+      "helper_text": "En las cajas roscadas manda la rosca, no el diámetro del bore.",
+      "is_required": false,
+      "section_key": "dimensions",
+      "template_id": "a4f78fa2-219f-44c6-82c4-d7d63e79cb1d",
+      "option_rules": [
+        {
+          "allow": [
+            41
+          ],
+          "field": "bb_shell_standard",
+          "value": [
+            "BB86 / BB92 41 mm",
+            "BB90 / BB95"
+          ],
+          "operator": "in"
+        },
+        {
+          "allow": [
+            42,
+            46
+          ],
+          "field": "bb_shell_standard",
+          "value": [
+            "PF30 46 mm",
+            "BB386EVO 46 mm",
+            "BBRight / OSBB"
+          ],
+          "operator": "in"
+        },
+        {
+          "allow": [
+            42
+          ],
+          "field": "bb_shell_standard",
+          "value": "BB30 42 mm",
+          "operator": "eq"
+        },
+        {
+          "allow": [
+            41.2
+          ],
+          "field": "bb_shell_standard",
+          "value": "Mid BMX 41,2 mm",
+          "operator": "eq"
+        },
+        {
+          "allow": [
+            37
+          ],
+          "field": "bb_shell_standard",
+          "value": "Spanish BMX 37 mm",
+          "operator": "eq"
+        },
+        {
+          "allow": [
+            51.5
+          ],
+          "field": "bb_shell_standard",
+          "value": "Americano 51,5 mm",
+          "operator": "eq"
+        }
+      ],
+      "constraint_rules": [],
+      "visibility_rules": [
+        {
+          "field": "bb_shell_standard",
+          "value": [
+            "BB86 / BB92 41 mm",
+            "PF30 46 mm",
+            "BB30 42 mm",
+            "BB386EVO 46 mm",
+            "BB90 / BB95",
+            "BBRight / OSBB",
+            "Mid BMX 41,2 mm",
+            "Spanish BMX 37 mm",
+            "Americano 51,5 mm"
+          ],
+          "operator": "in"
+        }
+      ],
+      "default_value_json": null,
+      "spec_definition_id": "d57f3678-3366-44a3-8351-dc3908278ae8"
+    },
+    {
+      "id": "e25cfdbd-1ef5-4a82-9029-cf927e88349d",
+      "tenant_id": null,
+      "created_at": "2026-08-21T05:19:49.858391+00:00",
+      "sort_order": 40,
+      "updated_at": "2026-08-21T16:29:12.200166+00:00",
+      "helper_text": null,
+      "is_required": false,
+      "section_key": "dimensions",
+      "template_id": "047523e5-829c-4509-ae83-ea5b8cdd4b31",
+      "option_rules": [
+        {
+          "allow": [
+            19
+          ],
+          "field": "spindle_interface",
+          "value": "BMX 19mm",
+          "operator": "eq"
+        },
+        {
+          "allow": [
+            22
+          ],
+          "field": "spindle_interface",
+          "value": "BMX 22mm",
+          "operator": "eq"
+        },
+        {
+          "allow": [
+            24
+          ],
+          "field": "spindle_interface",
+          "value": "BMX 24mm",
+          "operator": "eq"
+        }
+      ],
+      "constraint_rules": [],
+      "visibility_rules": [
+        {
+          "field": "spindle_interface",
+          "value": [
+            "BMX 19mm",
+            "BMX 22mm",
+            "BMX 24mm"
+          ],
+          "operator": "in"
+        }
+      ],
+      "default_value_json": null,
+      "spec_definition_id": "205c58cb-63ca-4e3e-9c7b-d411dce390dd"
+    },
+    {
+      "id": "e4f700d9-3217-4eda-a292-3af2097066bd",
+      "tenant_id": null,
+      "created_at": "2026-08-21T05:19:49.858391+00:00",
+      "sort_order": 50,
+      "updated_at": "2026-08-21T16:29:12.200166+00:00",
+      "helper_text": "Marca todas las que sirven. Hay copas que aceptan 24/24 y 22/24 a la vez.",
+      "is_required": false,
+      "section_key": "compatibility",
+      "template_id": "a4f78fa2-219f-44c6-82c4-d7d63e79cb1d",
+      "option_rules": [
+        {
+          "allow": [
+            "Hollowtech / 24mm",
+            "SRAM GXP 24/22",
+            "SRAM DUB 28.99mm"
+          ],
+          "field": "bb_construction",
+          "value": "Integrado",
+          "operator": "eq"
+        },
+        {
+          "allow": [
+            "Hollowtech / 24mm",
+            "SRAM DUB 28.99mm",
+            "BB30 30mm",
+            "SRAM GXP 24/22",
+            "BMX 19mm",
+            "BMX 22mm",
+            "BMX 24mm"
+          ],
+          "field": "bb_construction",
+          "value": [
+            "A presión",
+            "Roscado entre sí"
+          ],
+          "operator": "in"
+        },
+        {
+          "allow": [
+            "Cuadrado JIS",
+            "Cuadrado ISO",
+            "ISIS",
+            "Octalink",
+            "Powerspline",
+            "BMX 19mm",
+            "BMX 22mm",
+            "BMX 24mm"
+          ],
+          "field": "bb_construction",
+          "value": "Rodamiento sellado",
+          "operator": "eq"
+        },
+        {
+          "allow": [
+            "Cuadrado JIS",
+            "Cuadrado ISO",
+            "Con chaveta",
+            "One-piece / americano"
+          ],
+          "field": "bb_construction",
+          "value": "Cubetas y canastillo",
+          "operator": "eq"
+        },
+        {
+          "allow": [
+            "Cuadrado JIS",
+            "Cuadrado ISO",
+            "ISIS",
+            "Octalink",
+            "Powerspline",
+            "Con chaveta",
+            "Hollowtech / 24mm",
+            "SRAM GXP 24/22",
+            "SRAM DUB 28.99mm"
+          ],
+          "field": "bb_shell_standard",
+          "value": [
+            "BSA / Caja inglesa 34,8 mm (1.37\") x 24",
+            "Italiano 36 mm x 24",
+            "T47 47 mm",
+            "Francés 35 mm x 1",
+            "Suizo 35 mm x 1",
+            "Euro BMX roscado 68 mm"
+          ],
+          "operator": "in"
+        },
+        {
+          "allow": [
+            "Hollowtech / 24mm",
+            "SRAM DUB 28.99mm",
+            "BB30 30mm",
+            "SRAM GXP 24/22"
+          ],
+          "field": "bb_shell_standard",
+          "value": [
+            "BB86 / BB92 41 mm",
+            "PF30 46 mm",
+            "BB30 42 mm",
+            "BB386EVO 46 mm",
+            "BB90 / BB95",
+            "BBRight / OSBB"
+          ],
+          "operator": "in"
+        },
+        {
+          "allow": [
+            "BMX 19mm",
+            "BMX 22mm",
+            "BMX 24mm"
+          ],
+          "field": "bb_shell_standard",
+          "value": [
+            "Mid BMX 41,2 mm",
+            "Spanish BMX 37 mm"
+          ],
+          "operator": "in"
+        },
+        {
+          "allow": [
+            "One-piece / americano"
+          ],
+          "field": "bb_shell_standard",
+          "value": [
+            "Americano 51,5 mm"
+          ],
+          "operator": "in"
+        }
+      ],
+      "constraint_rules": [],
+      "visibility_rules": [
+        {
+          "field": "includes_spindle",
+          "value": false,
+          "operator": "eq"
+        }
+      ],
+      "default_value_json": null,
+      "spec_definition_id": "9aaa1273-6fd9-468b-b295-f1f699d1259e"
+    },
+    {
+      "id": "e97c5514-e1f9-43a2-96e4-8f770aaadea0",
+      "tenant_id": null,
+      "created_at": "2026-08-21T05:19:49.858391+00:00",
+      "sort_order": 60,
+      "updated_at": "2026-08-21T16:29:12.200166+00:00",
+      "helper_text": "Se mide sobre la rosca. 34,8 mm es el inglés corriente.",
+      "is_required": false,
+      "section_key": "dimensions",
+      "template_id": "50c9c0f2-5aec-4ffb-a54e-fad0c62124f4",
+      "option_rules": [
+        {
+          "allow": [
+            34.8,
+            35,
+            36,
+            37
+          ],
+          "field": "bb_shell_standard",
+          "value": [
+            "BSA / Caja inglesa 34,8 mm (1.37\") x 24",
+            "Italiano 36 mm x 24",
+            "T47 47 mm",
+            "Francés 35 mm x 1",
+            "Suizo 35 mm x 1",
+            "Euro BMX roscado 68 mm"
+          ],
+          "operator": "in"
+        },
+        {
+          "allow": [
+            51.5
+          ],
+          "field": "bb_shell_standard",
+          "value": "Americano 51,5 mm",
+          "operator": "eq"
+        }
+      ],
+      "constraint_rules": [],
+      "visibility_rules": [
+        {
+          "field": "bb_construction",
+          "value": "Cubetas y canastillo",
+          "operator": "eq"
+        }
+      ],
+      "default_value_json": null,
+      "spec_definition_id": "4c0a652b-fd7c-4f99-b7e6-efbcde3f45d3"
+    },
+    {
+      "id": "f2af5fd1-1971-4e56-a7de-5fb930610740",
+      "tenant_id": null,
+      "created_at": "2026-08-21T05:19:49.858391+00:00",
+      "sort_order": 30,
+      "updated_at": "2026-08-21T16:29:12.200166+00:00",
+      "helper_text": "DER/IZQ es el inglés; DER/DER aparece en italiano y en lo genérico.",
+      "is_required": true,
+      "section_key": "compatibility",
+      "template_id": "50c9c0f2-5aec-4ffb-a54e-fad0c62124f4",
+      "option_rules": [
+        {
+          "allow": [
+            "Derecha / Izquierda (BSA inglés)"
+          ],
+          "field": "bb_shell_standard",
+          "value": [
+            "BSA / Caja inglesa 34,8 mm (1.37\") x 24",
+            "Suizo 35 mm x 1"
+          ],
+          "operator": "in"
+        },
+        {
+          "allow": [
+            "Derecha / Derecha (italiano o genérico)"
+          ],
+          "field": "bb_shell_standard",
+          "value": [
+            "Italiano 36 mm x 24",
+            "T47 47 mm",
+            "Francés 35 mm x 1",
+            "Euro BMX roscado 68 mm",
+            "Americano 51,5 mm"
+          ],
+          "operator": "in"
+        }
+      ],
+      "constraint_rules": [],
+      "visibility_rules": [
+        {
+          "field": "bb_construction",
+          "operator": "is_set"
+        },
+        {
+          "field": "bb_shell_standard",
+          "value": [
+            "BSA / Caja inglesa 34,8 mm (1.37\") x 24",
+            "Italiano 36 mm x 24",
+            "T47 47 mm",
+            "Francés 35 mm x 1",
+            "Suizo 35 mm x 1",
+            "Euro BMX roscado 68 mm",
+            "Americano 51,5 mm"
+          ],
+          "operator": "in"
+        }
+      ],
+      "default_value_json": null,
+      "spec_definition_id": "b4863ef0-d4d6-4e08-a6bd-b3fcf7ddcb55"
+    },
+    {
+      "id": "f4380b2a-57ec-4709-9b3a-46bcec5b2a68",
+      "tenant_id": null,
+      "created_at": "2026-08-21T05:19:49.858391+00:00",
+      "sort_order": 20,
+      "updated_at": "2026-08-21T16:29:12.200166+00:00",
+      "helper_text": "Una misma caja inglesa acepta motor sellado, cubetas y canastillo, o integrado.",
+      "is_required": true,
+      "section_key": "compatibility",
+      "template_id": "a4f78fa2-219f-44c6-82c4-d7d63e79cb1d",
+      "option_rules": [
+        {
+          "allow": [
+            "Rodamiento sellado",
+            "Integrado",
+            "Cubetas y canastillo"
+          ],
+          "field": "bb_shell_standard",
+          "value": [
+            "BSA / Caja inglesa 34,8 mm (1.37\") x 24",
+            "Italiano 36 mm x 24",
+            "T47 47 mm",
+            "Francés 35 mm x 1",
+            "Suizo 35 mm x 1",
+            "Euro BMX roscado 68 mm"
+          ],
+          "operator": "in"
+        },
+        {
+          "allow": [
+            "A presión",
+            "Roscado entre sí"
+          ],
+          "field": "bb_shell_standard",
+          "value": [
+            "BB86 / BB92 41 mm",
+            "PF30 46 mm",
+            "BB30 42 mm",
+            "BB386EVO 46 mm",
+            "BB90 / BB95",
+            "BBRight / OSBB"
+          ],
+          "operator": "in"
+        },
+        {
+          "allow": [
+            "Rodamiento sellado",
+            "A presión"
+          ],
+          "field": "bb_shell_standard",
+          "value": [
+            "Mid BMX 41,2 mm",
+            "Spanish BMX 37 mm"
+          ],
+          "operator": "in"
+        },
+        {
+          "allow": [
+            "Cubetas y canastillo"
+          ],
+          "field": "bb_shell_standard",
+          "value": [
+            "Americano 51,5 mm"
+          ],
+          "operator": "in"
+        }
+      ],
+      "constraint_rules": [],
+      "visibility_rules": [
+        {
+          "field": "bb_shell_standard",
+          "operator": "is_set"
+        }
+      ],
+      "default_value_json": null,
+      "spec_definition_id": "9d7291ce-bf0d-4a54-be0b-c050f3fb2e2d"
+    },
+    {
+      "id": "f44dbe08-9d71-448b-83c2-344254520249",
+      "tenant_id": null,
+      "created_at": "2026-08-21T05:19:49.858391+00:00",
+      "sort_order": 40,
+      "updated_at": "2026-08-21T16:29:12.200166+00:00",
+      "helper_text": "Marca todas las que sirven.",
+      "is_required": true,
+      "section_key": "compatibility",
+      "template_id": "50c9c0f2-5aec-4ffb-a54e-fad0c62124f4",
+      "option_rules": [
+        {
+          "allow": [
+            "Cuadrado JIS",
+            "Cuadrado ISO",
+            "Con chaveta",
+            "One-piece / americano",
+            "BMX 19mm",
+            "BMX 22mm",
+            "BMX 24mm"
+          ],
+          "field": "bb_construction",
+          "value": "Cubetas y canastillo",
+          "operator": "eq"
+        },
+        {
+          "allow": [
+            "Hollowtech / 24mm",
+            "SRAM GXP 24/22",
+            "SRAM DUB 28.99mm"
+          ],
+          "field": "bb_construction",
+          "value": "Integrado",
+          "operator": "eq"
+        },
+        {
+          "allow": [
+            "Hollowtech / 24mm",
+            "SRAM DUB 28.99mm",
+            "BB30 30mm",
+            "SRAM GXP 24/22",
+            "BMX 19mm",
+            "BMX 22mm",
+            "BMX 24mm"
+          ],
+          "field": "bb_construction",
+          "value": [
+            "A presión",
+            "Roscado entre sí"
+          ],
+          "operator": "in"
+        }
+      ],
+      "constraint_rules": [],
+      "visibility_rules": [
+        {
+          "field": "bb_construction",
+          "operator": "is_set"
+        }
+      ],
+      "default_value_json": null,
+      "spec_definition_id": "9aaa1273-6fd9-468b-b295-f1f699d1259e"
+    }
+  ],
+  "templates": [
+    {
+      "id": "d293dc44-f47a-4dd8-801f-3de0c5749da3",
+      "key": "bearing",
+      "name": "Rodamiento",
+      "is_active": true,
+      "tenant_id": null,
+      "created_at": "2026-04-20T20:47:55.193543+00:00",
+      "updated_at": "2026-04-20T20:47:55.193543+00:00",
+      "description": "Rodamientos por aplicación y medida",
+      "default_tags": [],
+      "form_contract": {
+        "roles": {
+          "bearing_size_code": "primary",
+          "bearing_application": "primary",
+          "spec_evidence_source": "declaration"
+        },
+        "labels": {},
+        "helpers": {},
+        "version": 1,
+        "coverage": "template",
+        "prerequisites": {}
+      },
+      "contract_version": 2,
+      "technical_family": "bearing"
+    },
+    {
+      "id": "a4f78fa2-219f-44c6-82c4-d7d63e79cb1d",
+      "key": "bottom_bracket",
+      "name": "Motor / Bottom Bracket",
+      "is_active": true,
+      "tenant_id": null,
+      "created_at": "2026-04-26T17:27:33.100573+00:00",
+      "updated_at": "2026-04-26T17:27:33.100573+00:00",
+      "description": "Motor/pedalier completo; compatibilidad por familia, caja, rosca, eje e interfaz.",
+      "default_tags": [
+        "drivetrain",
+        "bottom_bracket"
+      ],
+      "form_contract": {
+        "roles": {
+          "bb_ball_size_in": "primary",
+          "bb_construction": "primary",
+          "includes_spindle": "measurement",
+          "bb_shell_standard": "primary",
+          "bb_shell_width_mm": "measurement",
+          "bearing_size_code": "primary",
+          "spindle_interface": "primary",
+          "spindle_length_mm": "measurement",
+          "bb_cup_thread_pair": "primary",
+          "bb_spacer_stack_mm": "measurement",
+          "spindle_diameter_mm": "measurement",
+          "bb_shell_diameter_mm": "measurement",
+          "spec_evidence_source": "declaration",
+          "bb_ball_count_per_side": "measurement",
+          "bb_cup_outer_diameter_mm": "measurement",
+          "spindle_interface_accepted": "primary"
+        },
+        "labels": {},
+        "helpers": {},
+        "version": 1,
+        "coverage": "template",
+        "prerequisites": {}
+      },
+      "contract_version": 9,
+      "technical_family": "bottom_bracket"
+    },
+    {
+      "id": "047523e5-829c-4509-ae83-ea5b8cdd4b31",
+      "key": "bottom_bracket_axle",
+      "name": "Eje de Motor",
+      "is_active": true,
+      "tenant_id": null,
+      "created_at": "2026-04-26T17:27:33.100573+00:00",
+      "updated_at": "2026-04-26T17:27:33.100573+00:00",
+      "description": "Eje/spindle de motor; compatibilidad por interfaz, largo y familia.",
+      "default_tags": [
+        "drivetrain",
+        "bottom_bracket"
+      ],
+      "form_contract": {
+        "roles": {
+          "bb_construction": "primary",
+          "spindle_interface": "primary",
+          "spindle_length_mm": "measurement",
+          "spindle_diameter_mm": "measurement",
+          "spec_evidence_source": "declaration"
+        },
+        "labels": {},
+        "helpers": {},
+        "version": 1,
+        "coverage": "template",
+        "prerequisites": {}
+      },
+      "contract_version": 4,
+      "technical_family": "bottom_bracket_axle"
+    },
+    {
+      "id": "98f78948-c186-4340-ae78-ce315b3c3aef",
+      "key": "bottom_bracket_bearing",
+      "name": "Rodamiento Motor",
+      "is_active": true,
+      "tenant_id": null,
+      "created_at": "2026-04-26T17:27:33.100573+00:00",
+      "updated_at": "2026-04-26T17:27:33.100573+00:00",
+      "description": "Rodamiento de motor/pedalier; compatibilidad por codigo y medidas.",
+      "default_tags": [
+        "drivetrain",
+        "bottom_bracket",
+        "bearing"
+      ],
+      "form_contract": {
+        "roles": {
+          "bb_ball_size_in": "primary",
+          "bb_construction": "primary",
+          "bearing_size_code": "primary",
+          "bb_bearing_width_mm": "measurement",
+          "spindle_diameter_mm": "measurement",
+          "spec_evidence_source": "declaration",
+          "bb_ball_count_per_side": "measurement",
+          "bearing_inner_diameter_mm": "measurement",
+          "bearing_outer_diameter_mm": "measurement"
+        },
+        "labels": {},
+        "helpers": {},
+        "version": 1,
+        "coverage": "template",
+        "prerequisites": {}
+      },
+      "contract_version": 7,
+      "technical_family": "bottom_bracket_bearing"
+    },
+    {
+      "id": "50c9c0f2-5aec-4ffb-a54e-fad0c62124f4",
+      "key": "bottom_bracket_cup",
+      "name": "Cubeta de Motor",
+      "is_active": true,
+      "tenant_id": null,
+      "created_at": "2026-04-26T17:27:33.100573+00:00",
+      "updated_at": "2026-04-26T17:27:33.100573+00:00",
+      "description": "Cubeta/cazoleta de motor; compatibilidad por rosca, caja y familia.",
+      "default_tags": [
+        "drivetrain",
+        "bottom_bracket"
+      ],
+      "form_contract": {
+        "roles": {
+          "bb_construction": "primary",
+          "bb_shell_standard": "primary",
+          "bb_shell_width_mm": "measurement",
+          "bb_cup_thread_pair": "primary",
+          "spec_evidence_source": "declaration",
+          "bb_cup_outer_diameter_mm": "measurement",
+          "spindle_interface_accepted": "primary"
+        },
+        "labels": {},
+        "helpers": {},
+        "version": 1,
+        "coverage": "template",
+        "prerequisites": {}
+      },
+      "contract_version": 4,
+      "technical_family": "bottom_bracket_cup"
+    }
+  ],
+  "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+  "captured_at": "2026-09-08T04:44:49.670532+00:00",
+  "explicit_bindings": {
+    "bearing": 0,
+    "bottom_bracket": 0,
+    "bottom_bracket_cup": 0,
+    "bottom_bracket_axle": 0,
+    "bottom_bracket_bearing": 0
+  },
+  "effective_bindings": {
+    "bearing": 9,
+    "bottom_bracket": 34,
+    "bottom_bracket_cup": 8,
+    "bottom_bracket_axle": 3,
+    "bottom_bracket_bearing": 3
+  },
+  "existing_definitions": [
+    {
+      "id": "61de9305-1284-53aa-b4bf-b3441b87dac6",
+      "key": "ball_diameter_in",
+      "unit": "in",
+      "label": "Diámetro de las bolas",
+      "options": [
+        {
+          "id": "13da017d-cc23-53e2-ace1-135d76a9bdb7",
+          "code": "catalog_22edd6ef855e82b08869484e2a3bf8af",
+          "label": "5/32",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-09-08T00:43:15.995439+00:00",
+          "sort_order": 1,
+          "updated_at": "2026-09-08T00:43:15.995439+00:00",
+          "spec_definition_id": "61de9305-1284-53aa-b4bf-b3441b87dac6"
+        },
+        {
+          "id": "4eb9f488-e1f5-5ad1-be69-3146f5f99274",
+          "code": "catalog_94ccd40fa0e15e100997ba5fa19e0864",
+          "label": "7/32",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-09-08T00:43:15.995439+00:00",
+          "sort_order": 3,
+          "updated_at": "2026-09-08T00:43:15.995439+00:00",
+          "spec_definition_id": "61de9305-1284-53aa-b4bf-b3441b87dac6"
+        },
+        {
+          "id": "69103004-4e6b-5702-b58c-c2a98e8b1b3d",
+          "code": "catalog_d1ddeea9fa9e23f6c07078cbee37fd1f",
+          "label": "1/8",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-09-08T00:43:15.995439+00:00",
+          "sort_order": 0,
+          "updated_at": "2026-09-08T00:43:15.995439+00:00",
+          "spec_definition_id": "61de9305-1284-53aa-b4bf-b3441b87dac6"
+        },
+        {
+          "id": "a856af36-6227-54e1-bac3-4b661bc1b695",
+          "code": "catalog_a3f96da9b8241db91307359741ae4cf8",
+          "label": "3/16",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-09-08T00:43:15.995439+00:00",
+          "sort_order": 2,
+          "updated_at": "2026-09-08T00:43:15.995439+00:00",
+          "spec_definition_id": "61de9305-1284-53aa-b4bf-b3441b87dac6"
+        },
+        {
+          "id": "acadb321-6024-53b6-bb87-fc5e5d5823b1",
+          "code": "catalog_ff8bed43ac09b1148fc7648f5845f698",
+          "label": "1/4",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-09-08T00:43:15.995439+00:00",
+          "sort_order": 4,
+          "updated_at": "2026-09-08T00:43:15.995439+00:00",
+          "spec_definition_id": "61de9305-1284-53aa-b4bf-b3441b87dac6"
+        },
+        {
+          "id": "b99e3bc8-feca-5125-a7ba-84cf670b3862",
+          "code": "catalog_c2295235a535ea3e85b7a0e5ab85afb0",
+          "label": "Otro",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-09-08T00:43:15.995439+00:00",
+          "sort_order": 5,
+          "updated_at": "2026-09-08T00:43:15.995439+00:00",
+          "spec_definition_id": "61de9305-1284-53aa-b4bf-b3441b87dac6"
+        }
+      ],
+      "data_type": "single_select",
+      "tenant_id": null,
+      "created_at": "2026-09-08T00:43:15.995439+00:00",
+      "group_name": null,
+      "sort_order": 0,
+      "updated_at": "2026-09-08T00:43:15.995439+00:00",
+      "description": null,
+      "is_filterable": false,
+      "allowed_values": [
+        "1/8",
+        "5/32",
+        "3/16",
+        "7/32",
+        "1/4",
+        "Otro"
+      ],
+      "validation_rules": {},
+      "is_customer_visible": false,
+      "is_mechanic_visible": true,
+      "is_required_by_default": false,
+      "is_compatibility_relevant": false
+    },
+    {
+      "id": "56fd912a-1a4d-41ad-bf08-b0d1499b9395",
+      "key": "bb_ball_count_per_side",
+      "unit": null,
+      "label": "Bolitas por lado",
+      "options": [
+        {
+          "id": "22d63919-e140-4f8e-beaf-22d3f0ec1016",
+          "code": "v_12",
+          "label": "12",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-08-21T17:58:02.773721+00:00",
+          "sort_order": 4,
+          "updated_at": "2026-08-21T17:58:02.773721+00:00",
+          "spec_definition_id": "56fd912a-1a4d-41ad-bf08-b0d1499b9395"
+        },
+        {
+          "id": "5d8c57dc-00a5-463d-9b69-9080c6ab4d80",
+          "code": "v_11",
+          "label": "11",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-08-21T17:58:02.773721+00:00",
+          "sort_order": 3,
+          "updated_at": "2026-08-21T17:58:02.773721+00:00",
+          "spec_definition_id": "56fd912a-1a4d-41ad-bf08-b0d1499b9395"
+        },
+        {
+          "id": "69c26356-86d0-4cf2-879f-6477f0fa718b",
+          "code": "v_7",
+          "label": "7",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-08-21T17:58:02.773721+00:00",
+          "sort_order": 1,
+          "updated_at": "2026-08-21T17:58:02.773721+00:00",
+          "spec_definition_id": "56fd912a-1a4d-41ad-bf08-b0d1499b9395"
+        },
+        {
+          "id": "9156785b-9aee-461a-8108-595c4daf16be",
+          "code": "v_13",
+          "label": "13",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-08-21T17:58:02.773721+00:00",
+          "sort_order": 5,
+          "updated_at": "2026-08-21T17:58:02.773721+00:00",
+          "spec_definition_id": "56fd912a-1a4d-41ad-bf08-b0d1499b9395"
+        },
+        {
+          "id": "c1580327-1657-43ff-b1c3-a5757fa98031",
+          "code": "v_9",
+          "label": "9",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-08-21T17:58:02.773721+00:00",
+          "sort_order": 2,
+          "updated_at": "2026-08-21T17:58:02.773721+00:00",
+          "spec_definition_id": "56fd912a-1a4d-41ad-bf08-b0d1499b9395"
+        }
+      ],
+      "data_type": "number",
+      "tenant_id": null,
+      "created_at": "2026-08-21T05:19:49.858391+00:00",
+      "group_name": "Rodamientos",
+      "sort_order": 71,
+      "updated_at": "2026-08-21T16:18:21.516496+00:00",
+      "description": "Cantidad de bolitas por canastillo. Un canastillo 1/4 x 9 lleva nueve.",
+      "is_filterable": true,
+      "allowed_values": [
+        7,
+        9,
+        11,
+        12,
+        13
+      ],
+      "validation_rules": {
+        "integer": true,
+        "positive": true
+      },
+      "is_customer_visible": true,
+      "is_mechanic_visible": true,
+      "is_required_by_default": false,
+      "is_compatibility_relevant": true
+    },
+    {
+      "id": "a7147f59-7898-4104-9d6b-7a6ae582c2fc",
+      "key": "bb_ball_size_in",
+      "unit": null,
+      "label": "Tamaño de bolita",
+      "options": [
+        {
+          "id": "49c297fb-33a9-4ba0-8705-a75df72a1e8d",
+          "code": "ball_1_8",
+          "label": "1/8",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-08-21T17:58:02.773721+00:00",
+          "sort_order": 1,
+          "updated_at": "2026-08-21T17:58:02.773721+00:00",
+          "spec_definition_id": "a7147f59-7898-4104-9d6b-7a6ae582c2fc"
+        },
+        {
+          "id": "5027f1bb-097e-430d-80ae-e415eed6a59a",
+          "code": "ball_1_4",
+          "label": "1/4",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-08-21T17:58:02.773721+00:00",
+          "sort_order": 4,
+          "updated_at": "2026-08-21T17:58:02.773721+00:00",
+          "spec_definition_id": "a7147f59-7898-4104-9d6b-7a6ae582c2fc"
+        },
+        {
+          "id": "914fea3a-89ae-457e-a67e-1486d2dcf23c",
+          "code": "ball_3_16",
+          "label": "3/16",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-08-21T17:58:02.773721+00:00",
+          "sort_order": 3,
+          "updated_at": "2026-08-21T17:58:02.773721+00:00",
+          "spec_definition_id": "a7147f59-7898-4104-9d6b-7a6ae582c2fc"
+        },
+        {
+          "id": "b109cdc8-cb86-479e-96ce-b3f86b3f3fb4",
+          "code": "ball_5_32",
+          "label": "5/32",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-08-21T17:58:02.773721+00:00",
+          "sort_order": 2,
+          "updated_at": "2026-08-21T17:58:02.773721+00:00",
+          "spec_definition_id": "a7147f59-7898-4104-9d6b-7a6ae582c2fc"
+        }
+      ],
+      "data_type": "single_select",
+      "tenant_id": null,
+      "created_at": "2026-08-21T05:19:49.858391+00:00",
+      "group_name": "Rodamientos",
+      "sort_order": 70,
+      "updated_at": "2026-08-21T05:38:01.508138+00:00",
+      "description": "Diámetro de las bolitas del canastillo, en pulgadas.",
+      "is_filterable": true,
+      "allowed_values": [
+        "1/8",
+        "5/32",
+        "3/16",
+        "1/4"
+      ],
+      "validation_rules": {},
+      "is_customer_visible": true,
+      "is_mechanic_visible": true,
+      "is_required_by_default": false,
+      "is_compatibility_relevant": true
+    },
+    {
+      "id": "04694a95-9e92-4674-a0c2-4252ba185aaf",
+      "key": "bb_bearing_width_mm",
+      "unit": "mm",
+      "label": "Ancho rodamiento motor",
+      "options": [],
+      "data_type": "number",
+      "tenant_id": null,
+      "created_at": "2026-04-26T23:52:14.049527+00:00",
+      "group_name": "Rodamientos",
+      "sort_order": 70,
+      "updated_at": "2026-04-26T23:52:14.049527+00:00",
+      "description": "Ancho del rodamiento de motor/pedalier.",
+      "is_filterable": true,
+      "allowed_values": [],
+      "validation_rules": {
+        "positive": true
+      },
+      "is_customer_visible": true,
+      "is_mechanic_visible": true,
+      "is_required_by_default": false,
+      "is_compatibility_relevant": true
+    },
+    {
+      "id": "9d7291ce-bf0d-4a54-be0b-c050f3fb2e2d",
+      "key": "bb_construction",
+      "unit": null,
+      "label": "Construcción",
+      "options": [
+        {
+          "id": "2fe226b0-3dec-4d43-b988-34f179bde5ae",
+          "code": "cup_and_cone",
+          "label": "Cubetas y canastillo",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-08-21T17:58:02.773721+00:00",
+          "sort_order": 3,
+          "updated_at": "2026-08-21T17:58:02.773721+00:00",
+          "spec_definition_id": "9d7291ce-bf0d-4a54-be0b-c050f3fb2e2d"
+        },
+        {
+          "id": "52db4cb5-3825-4c0a-89f7-2c40df34e749",
+          "code": "external_cups",
+          "label": "Integrado",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-08-21T17:58:02.773721+00:00",
+          "sort_order": 2,
+          "updated_at": "2026-08-21T17:58:02.773721+00:00",
+          "spec_definition_id": "9d7291ce-bf0d-4a54-be0b-c050f3fb2e2d"
+        },
+        {
+          "id": "5acccc35-95fe-474a-a64c-9bc502f647af",
+          "code": "press_fit",
+          "label": "A presión",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-08-21T17:58:02.773721+00:00",
+          "sort_order": 4,
+          "updated_at": "2026-08-21T17:58:02.773721+00:00",
+          "spec_definition_id": "9d7291ce-bf0d-4a54-be0b-c050f3fb2e2d"
+        },
+        {
+          "id": "df50d9f2-4cb2-4bdd-b06c-c9a13d230930",
+          "code": "thread_together",
+          "label": "Roscado entre sí",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-08-21T17:58:02.773721+00:00",
+          "sort_order": 5,
+          "updated_at": "2026-08-21T17:58:02.773721+00:00",
+          "spec_definition_id": "9d7291ce-bf0d-4a54-be0b-c050f3fb2e2d"
+        },
+        {
+          "id": "f62a8992-9f2a-4128-a61b-6e34b5ecb60d",
+          "code": "sealed_cartridge",
+          "label": "Rodamiento sellado",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-08-21T17:58:02.773721+00:00",
+          "sort_order": 1,
+          "updated_at": "2026-08-21T18:46:56.180677+00:00",
+          "spec_definition_id": "9d7291ce-bf0d-4a54-be0b-c050f3fb2e2d"
+        }
+      ],
+      "data_type": "single_select",
+      "tenant_id": null,
+      "created_at": "2026-08-21T05:19:49.858391+00:00",
+      "group_name": "Pedalier",
+      "sort_order": 59,
+      "updated_at": "2026-08-21T16:23:07.121342+00:00",
+      "description": "Cómo está armado por dentro. Un motor sellado no se ajusta ni se sirve; uno de cubetas y canastillo sí; en el integrado los rodamientos quedan fuera de la caja.",
+      "is_filterable": true,
+      "allowed_values": [
+        "Rodamiento sellado",
+        "Integrado",
+        "Cubetas y canastillo",
+        "A presión",
+        "Roscado entre sí"
+      ],
+      "validation_rules": {},
+      "is_customer_visible": true,
+      "is_mechanic_visible": true,
+      "is_required_by_default": true,
+      "is_compatibility_relevant": true
+    },
+    {
+      "id": "4c0a652b-fd7c-4f99-b7e6-efbcde3f45d3",
+      "key": "bb_cup_outer_diameter_mm",
+      "unit": "mm",
+      "label": "Diámetro de rosca de cubeta",
+      "options": [
+        {
+          "id": "1432c10f-85f2-4a5a-9ec6-3c7a5321825c",
+          "code": "v_51_5",
+          "label": "51.5",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-08-21T17:58:02.773721+00:00",
+          "sort_order": 6,
+          "updated_at": "2026-08-21T17:58:02.773721+00:00",
+          "spec_definition_id": "4c0a652b-fd7c-4f99-b7e6-efbcde3f45d3"
+        },
+        {
+          "id": "619611e0-5961-4f10-91ea-4e3e99ba240e",
+          "code": "v_34_8",
+          "label": "34.8",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-08-21T17:58:02.773721+00:00",
+          "sort_order": 1,
+          "updated_at": "2026-08-21T17:58:02.773721+00:00",
+          "spec_definition_id": "4c0a652b-fd7c-4f99-b7e6-efbcde3f45d3"
+        },
+        {
+          "id": "6cc0be5d-b523-46f9-beb6-66f7c5f50425",
+          "code": "v_41_2",
+          "label": "41.2",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-08-21T17:58:02.773721+00:00",
+          "sort_order": 5,
+          "updated_at": "2026-08-21T17:58:02.773721+00:00",
+          "spec_definition_id": "4c0a652b-fd7c-4f99-b7e6-efbcde3f45d3"
+        },
+        {
+          "id": "7f6abd92-053a-47b5-8563-7483bb1b978c",
+          "code": "v_35",
+          "label": "35",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-08-21T17:58:02.773721+00:00",
+          "sort_order": 2,
+          "updated_at": "2026-08-21T17:58:02.773721+00:00",
+          "spec_definition_id": "4c0a652b-fd7c-4f99-b7e6-efbcde3f45d3"
+        },
+        {
+          "id": "a30e9bf7-9b4d-4960-a5c3-4a5ec20a5e18",
+          "code": "v_36",
+          "label": "36",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-08-21T17:58:02.773721+00:00",
+          "sort_order": 3,
+          "updated_at": "2026-08-21T17:58:02.773721+00:00",
+          "spec_definition_id": "4c0a652b-fd7c-4f99-b7e6-efbcde3f45d3"
+        },
+        {
+          "id": "b96f4090-2df0-4821-8581-acd2beffda04",
+          "code": "v_37",
+          "label": "37",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-08-21T17:58:02.773721+00:00",
+          "sort_order": 4,
+          "updated_at": "2026-08-21T17:58:02.773721+00:00",
+          "spec_definition_id": "4c0a652b-fd7c-4f99-b7e6-efbcde3f45d3"
+        }
+      ],
+      "data_type": "number",
+      "tenant_id": null,
+      "created_at": "2026-08-21T05:19:49.858391+00:00",
+      "group_name": "Pedalier",
+      "sort_order": 69,
+      "updated_at": "2026-08-21T16:23:07.121342+00:00",
+      "description": "Diámetro sobre la rosca de la cubeta. En caja inglesa son 34,8 mm, que es la misma rosca de 1.37\".",
+      "is_filterable": true,
+      "allowed_values": [
+        34.8,
+        35,
+        36,
+        37,
+        41.2,
+        51.5
+      ],
+      "validation_rules": {
+        "positive": true
+      },
+      "is_customer_visible": true,
+      "is_mechanic_visible": true,
+      "is_required_by_default": false,
+      "is_compatibility_relevant": true
+    },
+    {
+      "id": "b4863ef0-d4d6-4e08-a6bd-b3fcf7ddcb55",
+      "key": "bb_cup_thread_pair",
+      "unit": null,
+      "label": "Mano de la rosca",
+      "options": [
+        {
+          "id": "30233863-b59b-440f-95fc-42e6c815c75f",
+          "code": "pressed",
+          "label": "Sin rosca (a presión)",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-08-21T17:58:02.773721+00:00",
+          "sort_order": 3,
+          "updated_at": "2026-08-21T17:58:02.773721+00:00",
+          "spec_definition_id": "b4863ef0-d4d6-4e08-a6bd-b3fcf7ddcb55"
+        },
+        {
+          "id": "4b463d4d-0e16-44d1-8d62-689e581ea2f9",
+          "code": "right_right",
+          "label": "Derecha / Derecha (italiano o genérico)",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-08-21T17:58:02.773721+00:00",
+          "sort_order": 2,
+          "updated_at": "2026-08-21T17:58:02.773721+00:00",
+          "spec_definition_id": "b4863ef0-d4d6-4e08-a6bd-b3fcf7ddcb55"
+        },
+        {
+          "id": "6093af40-af9b-4330-811f-74e0800d6779",
+          "code": "right_left",
+          "label": "Derecha / Izquierda (BSA inglés)",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-08-21T17:58:02.773721+00:00",
+          "sort_order": 1,
+          "updated_at": "2026-08-21T17:58:02.773721+00:00",
+          "spec_definition_id": "b4863ef0-d4d6-4e08-a6bd-b3fcf7ddcb55"
+        }
+      ],
+      "data_type": "single_select",
+      "tenant_id": null,
+      "created_at": "2026-08-21T05:19:49.858391+00:00",
+      "group_name": "Pedalier",
+      "sort_order": 68,
+      "updated_at": "2026-08-21T05:38:01.508138+00:00",
+      "description": "Combinación de rosca de las cubetas. El inglés BSA lleva la copa fija a la izquierda; el italiano y buena parte de lo genérico van ambas a la derecha.",
+      "is_filterable": true,
+      "allowed_values": [
+        "Derecha / Izquierda (BSA inglés)",
+        "Derecha / Derecha (italiano o genérico)",
+        "Sin rosca (a presión)"
+      ],
+      "validation_rules": {},
+      "is_customer_visible": true,
+      "is_mechanic_visible": true,
+      "is_required_by_default": false,
+      "is_compatibility_relevant": true
+    },
+    {
+      "id": "d57f3678-3366-44a3-8351-dc3908278ae8",
+      "key": "bb_shell_diameter_mm",
+      "unit": "mm",
+      "label": "Diametro caja motor",
+      "options": [
+        {
+          "id": "23ac4a31-84f3-46b9-b88f-962fc4be2e89",
+          "code": "v_46",
+          "label": "46",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-08-21T17:58:02.773721+00:00",
+          "sort_order": 5,
+          "updated_at": "2026-08-21T17:58:02.773721+00:00",
+          "spec_definition_id": "d57f3678-3366-44a3-8351-dc3908278ae8"
+        },
+        {
+          "id": "2afa1942-aff9-4df7-ba12-05c94992423e",
+          "code": "v_51_5",
+          "label": "51.5",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-08-21T17:58:02.773721+00:00",
+          "sort_order": 6,
+          "updated_at": "2026-08-21T17:58:02.773721+00:00",
+          "spec_definition_id": "d57f3678-3366-44a3-8351-dc3908278ae8"
+        },
+        {
+          "id": "6140a040-f35a-4441-81f0-5a54891cde54",
+          "code": "v_42",
+          "label": "42",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-08-21T17:58:02.773721+00:00",
+          "sort_order": 4,
+          "updated_at": "2026-08-21T17:58:02.773721+00:00",
+          "spec_definition_id": "d57f3678-3366-44a3-8351-dc3908278ae8"
+        },
+        {
+          "id": "a66dad89-ec43-4fc1-a3ba-3b261193fb4d",
+          "code": "v_41",
+          "label": "41",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-08-21T17:58:02.773721+00:00",
+          "sort_order": 2,
+          "updated_at": "2026-08-21T17:58:02.773721+00:00",
+          "spec_definition_id": "d57f3678-3366-44a3-8351-dc3908278ae8"
+        },
+        {
+          "id": "d5c47f53-4abf-4c1e-8853-516c3a397b26",
+          "code": "v_37",
+          "label": "37",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-08-21T17:58:02.773721+00:00",
+          "sort_order": 1,
+          "updated_at": "2026-08-21T17:58:02.773721+00:00",
+          "spec_definition_id": "d57f3678-3366-44a3-8351-dc3908278ae8"
+        },
+        {
+          "id": "e5d2ab57-4845-489f-9847-72090b994051",
+          "code": "v_41_2",
+          "label": "41.2",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-08-21T17:58:02.773721+00:00",
+          "sort_order": 3,
+          "updated_at": "2026-08-21T17:58:02.773721+00:00",
+          "spec_definition_id": "d57f3678-3366-44a3-8351-dc3908278ae8"
+        }
+      ],
+      "data_type": "number",
+      "tenant_id": null,
+      "created_at": "2026-04-26T23:52:14.049527+00:00",
+      "group_name": "Pedalier",
+      "sort_order": 69,
+      "updated_at": "2026-08-21T05:19:49.858391+00:00",
+      "description": "Diametro interno o nominal de la caja de motor cuando el estandar lo requiere.",
+      "is_filterable": true,
+      "allowed_values": [
+        37,
+        41,
+        41.2,
+        42,
+        46,
+        51.5
+      ],
+      "validation_rules": {
+        "positive": true
+      },
+      "is_customer_visible": true,
+      "is_mechanic_visible": true,
+      "is_required_by_default": false,
+      "is_compatibility_relevant": true
+    },
+    {
+      "id": "b6d541fc-7f81-405b-b20d-f19ecfccb35e",
+      "key": "bb_shell_standard",
+      "unit": null,
+      "label": "Caja de motor",
+      "options": [
+        {
+          "id": "08ab05fc-b7e1-4135-825c-3954e46171a7",
+          "code": "t47_threaded",
+          "label": "T47 47 mm",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-08-21T17:58:02.773721+00:00",
+          "sort_order": 3,
+          "updated_at": "2026-08-21T17:58:02.773721+00:00",
+          "spec_definition_id": "b6d541fc-7f81-405b-b20d-f19ecfccb35e"
+        },
+        {
+          "id": "113a7e1b-6c93-4cd1-9796-329859ab392d",
+          "code": "bb386evo",
+          "label": "BB386EVO 46 mm",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-08-21T17:58:02.773721+00:00",
+          "sort_order": 10,
+          "updated_at": "2026-08-21T17:58:02.773721+00:00",
+          "spec_definition_id": "b6d541fc-7f81-405b-b20d-f19ecfccb35e"
+        },
+        {
+          "id": "1b6894b9-6702-4794-8cbc-1327c72f0511",
+          "code": "swiss_threaded",
+          "label": "Suizo 35 mm x 1",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-08-21T17:58:02.773721+00:00",
+          "sort_order": 5,
+          "updated_at": "2026-08-21T17:58:02.773721+00:00",
+          "spec_definition_id": "b6d541fc-7f81-405b-b20d-f19ecfccb35e"
+        },
+        {
+          "id": "1fa7be7a-8887-4501-8566-963b82188bcf",
+          "code": "french_threaded",
+          "label": "Francés 35 mm x 1",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-08-21T17:58:02.773721+00:00",
+          "sort_order": 4,
+          "updated_at": "2026-08-21T17:58:02.773721+00:00",
+          "spec_definition_id": "b6d541fc-7f81-405b-b20d-f19ecfccb35e"
+        },
+        {
+          "id": "34a1b886-b643-40b6-b9c3-fdf419678892",
+          "code": "american_one_piece",
+          "label": "Americano 51,5 mm",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-08-21T17:58:02.773721+00:00",
+          "sort_order": 15,
+          "updated_at": "2026-08-21T17:58:02.773721+00:00",
+          "spec_definition_id": "b6d541fc-7f81-405b-b20d-f19ecfccb35e"
+        },
+        {
+          "id": "40ebca79-affe-4b98-8992-0de93c7bb00a",
+          "code": "bb90_bb95",
+          "label": "BB90 / BB95",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-08-21T17:58:02.773721+00:00",
+          "sort_order": 11,
+          "updated_at": "2026-08-21T17:58:02.773721+00:00",
+          "spec_definition_id": "b6d541fc-7f81-405b-b20d-f19ecfccb35e"
+        },
+        {
+          "id": "54a7fa2d-b631-4a59-a7a8-0060768221db",
+          "code": "bb86_bb92",
+          "label": "BB86 / BB92 41 mm",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-08-21T17:58:02.773721+00:00",
+          "sort_order": 7,
+          "updated_at": "2026-08-21T17:58:02.773721+00:00",
+          "spec_definition_id": "b6d541fc-7f81-405b-b20d-f19ecfccb35e"
+        },
+        {
+          "id": "64b00d60-3a24-4ae3-a73e-0e3155b97dd2",
+          "code": "bsa_threaded",
+          "label": "BSA / Caja inglesa 34,8 mm (1.37\") x 24",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-08-21T17:58:02.773721+00:00",
+          "sort_order": 1,
+          "updated_at": "2026-08-21T17:58:02.773721+00:00",
+          "spec_definition_id": "b6d541fc-7f81-405b-b20d-f19ecfccb35e"
+        },
+        {
+          "id": "97d7d8d5-3cf8-46db-b2d9-f52f3b3f0ba4",
+          "code": "bbright_osbb",
+          "label": "BBRight / OSBB",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-08-21T17:58:02.773721+00:00",
+          "sort_order": 12,
+          "updated_at": "2026-08-21T17:58:02.773721+00:00",
+          "spec_definition_id": "b6d541fc-7f81-405b-b20d-f19ecfccb35e"
+        },
+        {
+          "id": "9b122e78-66a5-408c-82b9-e4a609777413",
+          "code": "pf30",
+          "label": "PF30 46 mm",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-08-21T17:58:02.773721+00:00",
+          "sort_order": 8,
+          "updated_at": "2026-08-21T17:58:02.773721+00:00",
+          "spec_definition_id": "b6d541fc-7f81-405b-b20d-f19ecfccb35e"
+        },
+        {
+          "id": "d75078a0-ab29-447f-9bf5-3b981ad7eb6e",
+          "code": "spanish_bmx",
+          "label": "Spanish BMX 37 mm",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-08-21T17:58:02.773721+00:00",
+          "sort_order": 14,
+          "updated_at": "2026-08-21T17:58:02.773721+00:00",
+          "spec_definition_id": "b6d541fc-7f81-405b-b20d-f19ecfccb35e"
+        },
+        {
+          "id": "d75e42e0-4137-49ad-9dee-a064b998e271",
+          "code": "euro_bmx_threaded",
+          "label": "Euro BMX roscado 68 mm",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-08-21T17:58:02.773721+00:00",
+          "sort_order": 6,
+          "updated_at": "2026-08-21T17:58:02.773721+00:00",
+          "spec_definition_id": "b6d541fc-7f81-405b-b20d-f19ecfccb35e"
+        },
+        {
+          "id": "e1283571-696d-46e6-a6bd-c7f27ff5c8b8",
+          "code": "mid_bmx",
+          "label": "Mid BMX 41,2 mm",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-08-21T17:58:02.773721+00:00",
+          "sort_order": 13,
+          "updated_at": "2026-08-21T17:58:02.773721+00:00",
+          "spec_definition_id": "b6d541fc-7f81-405b-b20d-f19ecfccb35e"
+        },
+        {
+          "id": "e2b61872-39b3-4f61-af88-b14a6e35f324",
+          "code": "bb30",
+          "label": "BB30 42 mm",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-08-21T17:58:02.773721+00:00",
+          "sort_order": 9,
+          "updated_at": "2026-08-21T17:58:02.773721+00:00",
+          "spec_definition_id": "b6d541fc-7f81-405b-b20d-f19ecfccb35e"
+        },
+        {
+          "id": "f9ece64b-c5bf-428a-a172-a67a1715c7d8",
+          "code": "italian_threaded",
+          "label": "Italiano 36 mm x 24",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-08-21T17:58:02.773721+00:00",
+          "sort_order": 2,
+          "updated_at": "2026-08-21T17:58:02.773721+00:00",
+          "spec_definition_id": "b6d541fc-7f81-405b-b20d-f19ecfccb35e"
+        }
+      ],
+      "data_type": "single_select",
+      "tenant_id": null,
+      "created_at": "2026-08-21T05:19:49.858391+00:00",
+      "group_name": "Pedalier",
+      "sort_order": 58,
+      "updated_at": "2026-08-21T16:29:12.200166+00:00",
+      "description": "La caja del cuadro donde entra el motor. La inglesa es la corriente en Chile: rosca derecha-izquierda de 1.37\" x 24.",
+      "is_filterable": true,
+      "allowed_values": [
+        "BSA / Caja inglesa 34,8 mm (1.37\") x 24",
+        "Italiano 36 mm x 24",
+        "T47 47 mm",
+        "Francés 35 mm x 1",
+        "Suizo 35 mm x 1",
+        "Euro BMX roscado 68 mm",
+        "BB86 / BB92 41 mm",
+        "PF30 46 mm",
+        "BB30 42 mm",
+        "BB386EVO 46 mm",
+        "BB90 / BB95",
+        "BBRight / OSBB",
+        "Mid BMX 41,2 mm",
+        "Spanish BMX 37 mm",
+        "Americano 51,5 mm"
+      ],
+      "validation_rules": {},
+      "is_customer_visible": true,
+      "is_mechanic_visible": true,
+      "is_required_by_default": true,
+      "is_compatibility_relevant": true
+    },
+    {
+      "id": "ca1bc471-dfdf-4e24-a17e-b3950030a817",
+      "key": "bb_shell_width_mm",
+      "unit": "mm",
+      "label": "Ancho caja motor",
+      "options": [
+        {
+          "id": "1dcf6f73-91fa-4cbb-8550-762a6415de8c",
+          "code": "v_68",
+          "label": "68",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-08-21T17:58:02.773721+00:00",
+          "sort_order": 1,
+          "updated_at": "2026-08-21T17:58:02.773721+00:00",
+          "spec_definition_id": "ca1bc471-dfdf-4e24-a17e-b3950030a817"
+        },
+        {
+          "id": "2619f030-a32d-4bb5-8fa2-72e8c7927a92",
+          "code": "v_70",
+          "label": "70",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-08-21T17:58:02.773721+00:00",
+          "sort_order": 2,
+          "updated_at": "2026-08-21T17:58:02.773721+00:00",
+          "spec_definition_id": "ca1bc471-dfdf-4e24-a17e-b3950030a817"
+        },
+        {
+          "id": "522dc027-55c5-4f73-8500-06dd535ea8c4",
+          "code": "v_100",
+          "label": "100",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-08-21T17:58:02.773721+00:00",
+          "sort_order": 8,
+          "updated_at": "2026-08-21T17:58:02.773721+00:00",
+          "spec_definition_id": "ca1bc471-dfdf-4e24-a17e-b3950030a817"
+        },
+        {
+          "id": "736ffd74-3398-482d-ac74-f23bce2ac855",
+          "code": "v_86_5",
+          "label": "86.5",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-08-21T17:58:02.773721+00:00",
+          "sort_order": 5,
+          "updated_at": "2026-08-21T17:58:02.773721+00:00",
+          "spec_definition_id": "ca1bc471-dfdf-4e24-a17e-b3950030a817"
+        },
+        {
+          "id": "bbcc4331-f411-4282-a5c3-60746743d31c",
+          "code": "v_89_5",
+          "label": "89.5",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-08-21T17:58:02.773721+00:00",
+          "sort_order": 6,
+          "updated_at": "2026-08-21T17:58:02.773721+00:00",
+          "spec_definition_id": "ca1bc471-dfdf-4e24-a17e-b3950030a817"
+        },
+        {
+          "id": "cc95f91c-f88a-4e03-94f7-7ba7c0db0c7b",
+          "code": "v_107",
+          "label": "107",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-08-21T17:58:02.773721+00:00",
+          "sort_order": 9,
+          "updated_at": "2026-08-21T17:58:02.773721+00:00",
+          "spec_definition_id": "ca1bc471-dfdf-4e24-a17e-b3950030a817"
+        },
+        {
+          "id": "d0ebc00d-c335-4e6c-bd71-23ee1975242f",
+          "code": "v_121",
+          "label": "121",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-08-21T17:58:02.773721+00:00",
+          "sort_order": 10,
+          "updated_at": "2026-08-21T17:58:02.773721+00:00",
+          "spec_definition_id": "ca1bc471-dfdf-4e24-a17e-b3950030a817"
+        },
+        {
+          "id": "dbcd362c-16f7-4d8b-96b9-c85e3e966c85",
+          "code": "v_73",
+          "label": "73",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-08-21T17:58:02.773721+00:00",
+          "sort_order": 3,
+          "updated_at": "2026-08-21T17:58:02.773721+00:00",
+          "spec_definition_id": "ca1bc471-dfdf-4e24-a17e-b3950030a817"
+        },
+        {
+          "id": "dc211e62-bc7e-49cc-907c-52acaf190f01",
+          "code": "v_83",
+          "label": "83",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-08-21T17:58:02.773721+00:00",
+          "sort_order": 4,
+          "updated_at": "2026-08-21T17:58:02.773721+00:00",
+          "spec_definition_id": "ca1bc471-dfdf-4e24-a17e-b3950030a817"
+        },
+        {
+          "id": "fd839b87-83a4-4b85-9b6f-27740349aa0d",
+          "code": "v_92",
+          "label": "92",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-08-21T17:58:02.773721+00:00",
+          "sort_order": 7,
+          "updated_at": "2026-08-21T17:58:02.773721+00:00",
+          "spec_definition_id": "ca1bc471-dfdf-4e24-a17e-b3950030a817"
+        }
+      ],
+      "data_type": "number",
+      "tenant_id": null,
+      "created_at": "2026-04-26T17:27:29.520986+00:00",
+      "group_name": "Pedalier",
+      "sort_order": 62,
+      "updated_at": "2026-08-21T05:19:49.858391+00:00",
+      "description": "Ancho de caja del cuadro para motor / bottom bracket.",
+      "is_filterable": true,
+      "allowed_values": [
+        68,
+        70,
+        73,
+        83,
+        86.5,
+        89.5,
+        92,
+        100,
+        107,
+        121
+      ],
+      "validation_rules": {
+        "positive": true
+      },
+      "is_customer_visible": true,
+      "is_mechanic_visible": true,
+      "is_required_by_default": false,
+      "is_compatibility_relevant": true
+    },
+    {
+      "id": "83e6351f-e477-4ea1-b58c-2e0f7beb8af3",
+      "key": "bb_spacer_stack_mm",
+      "unit": "mm",
+      "label": "Espaciadores incluidos",
+      "options": [
+        {
+          "id": "6143f861-2a7a-4a46-97c2-740d12626295",
+          "code": "v_0",
+          "label": "0",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-08-21T17:58:02.773721+00:00",
+          "sort_order": 1,
+          "updated_at": "2026-08-21T17:58:02.773721+00:00",
+          "spec_definition_id": "83e6351f-e477-4ea1-b58c-2e0f7beb8af3"
+        },
+        {
+          "id": "6b16b5a4-c200-4082-9d09-66b584b5879b",
+          "code": "v_5",
+          "label": "5",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-08-21T17:58:02.773721+00:00",
+          "sort_order": 3,
+          "updated_at": "2026-08-21T17:58:02.773721+00:00",
+          "spec_definition_id": "83e6351f-e477-4ea1-b58c-2e0f7beb8af3"
+        },
+        {
+          "id": "db079452-23f1-45c4-b031-3d3d49ff83c0",
+          "code": "v_2_5",
+          "label": "2.5",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-08-21T17:58:02.773721+00:00",
+          "sort_order": 2,
+          "updated_at": "2026-08-21T17:58:02.773721+00:00",
+          "spec_definition_id": "83e6351f-e477-4ea1-b58c-2e0f7beb8af3"
+        }
+      ],
+      "data_type": "number",
+      "tenant_id": null,
+      "created_at": "2026-08-21T06:48:26.227216+00:00",
+      "group_name": "Pedalier",
+      "sort_order": 72,
+      "updated_at": "2026-08-21T16:18:21.516496+00:00",
+      "description": "Milímetros de espaciador que trae el juego. Un motor integrado de 68 mm necesita 2,5 mm por lado; en una caja de 73 mm van sin ellos.",
+      "is_filterable": true,
+      "allowed_values": [
+        0,
+        2.5,
+        5
+      ],
+      "validation_rules": {
+        "min": 0
+      },
+      "is_customer_visible": true,
+      "is_mechanic_visible": true,
+      "is_required_by_default": false,
+      "is_compatibility_relevant": true
+    },
+    {
+      "id": "f423ecda-cc55-4ec7-a9a3-28caf6310c66",
+      "key": "bearing_application",
+      "unit": null,
+      "label": "Aplicación del Rodamiento",
+      "options": [
+        {
+          "id": "803f42a2-cb78-4eb1-b2b3-8d5b9dbcbb55",
+          "code": "maza",
+          "label": "Maza",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-08-21T17:58:02.773721+00:00",
+          "sort_order": 1,
+          "updated_at": "2026-08-21T17:58:02.773721+00:00",
+          "spec_definition_id": "f423ecda-cc55-4ec7-a9a3-28caf6310c66"
+        },
+        {
+          "id": "e3951dea-0ef4-4abf-ac88-1f71440abc3b",
+          "code": "otro",
+          "label": "Otro",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-08-21T17:58:02.773721+00:00",
+          "sort_order": 4,
+          "updated_at": "2026-08-21T17:58:02.773721+00:00",
+          "spec_definition_id": "f423ecda-cc55-4ec7-a9a3-28caf6310c66"
+        },
+        {
+          "id": "ef5d5ad2-0640-447c-9457-7b61085cef54",
+          "code": "pedalier",
+          "label": "Pedalier",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-08-21T17:58:02.773721+00:00",
+          "sort_order": 3,
+          "updated_at": "2026-08-21T17:58:02.773721+00:00",
+          "spec_definition_id": "f423ecda-cc55-4ec7-a9a3-28caf6310c66"
+        },
+        {
+          "id": "ff17113c-d7e6-460c-b626-956b63351978",
+          "code": "direccion",
+          "label": "Dirección",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-08-21T17:58:02.773721+00:00",
+          "sort_order": 2,
+          "updated_at": "2026-08-21T17:58:02.773721+00:00",
+          "spec_definition_id": "f423ecda-cc55-4ec7-a9a3-28caf6310c66"
+        }
+      ],
+      "data_type": "single_select",
+      "tenant_id": null,
+      "created_at": "2026-04-20T20:47:54.99401+00:00",
+      "group_name": "Identificación",
+      "sort_order": 140,
+      "updated_at": "2026-04-20T20:47:54.99401+00:00",
+      "description": null,
+      "is_filterable": true,
+      "allowed_values": [
+        "Maza",
+        "Dirección",
+        "Pedalier",
+        "Otro"
+      ],
+      "validation_rules": {},
+      "is_customer_visible": true,
+      "is_mechanic_visible": true,
+      "is_required_by_default": false,
+      "is_compatibility_relevant": false
+    },
+    {
+      "id": "0b1a2520-bd82-4304-95ce-5935234b5587",
+      "key": "bearing_inner_diameter_mm",
+      "unit": "mm",
+      "label": "Diámetro interno rodamiento",
+      "options": [],
+      "data_type": "number",
+      "tenant_id": null,
+      "created_at": "2026-04-26T17:27:29.520986+00:00",
+      "group_name": "Rodamientos",
+      "sort_order": 67,
+      "updated_at": "2026-04-26T17:30:29.032543+00:00",
+      "description": "Diámetro interno del rodamiento.",
+      "is_filterable": true,
+      "allowed_values": [],
+      "validation_rules": {
+        "positive": true
+      },
+      "is_customer_visible": true,
+      "is_mechanic_visible": true,
+      "is_required_by_default": false,
+      "is_compatibility_relevant": true
+    },
+    {
+      "id": "dd77c79b-4ae5-487a-9b56-9c9a0c01361e",
+      "key": "bearing_outer_diameter_mm",
+      "unit": "mm",
+      "label": "Diámetro externo rodamiento",
+      "options": [],
+      "data_type": "number",
+      "tenant_id": null,
+      "created_at": "2026-04-26T17:27:29.520986+00:00",
+      "group_name": "Rodamientos",
+      "sort_order": 68,
+      "updated_at": "2026-04-26T17:30:29.032543+00:00",
+      "description": "Diámetro externo del rodamiento.",
+      "is_filterable": true,
+      "allowed_values": [],
+      "validation_rules": {
+        "positive": true
+      },
+      "is_customer_visible": true,
+      "is_mechanic_visible": true,
+      "is_required_by_default": false,
+      "is_compatibility_relevant": true
+    },
+    {
+      "id": "f831fd26-2a2c-4504-b787-56593fed70df",
+      "key": "bearing_size_code",
+      "unit": null,
+      "label": "Código rodamiento",
+      "options": [],
+      "data_type": "text",
+      "tenant_id": null,
+      "created_at": "2026-04-20T20:47:54.99401+00:00",
+      "group_name": "Rodamientos",
+      "sort_order": 66,
+      "updated_at": "2026-04-26T17:30:29.032543+00:00",
+      "description": "Código comercial del rodamiento, por ejemplo 6805, 6902 o 163110.",
+      "is_filterable": true,
+      "allowed_values": [],
+      "validation_rules": {},
+      "is_customer_visible": true,
+      "is_mechanic_visible": true,
+      "is_required_by_default": false,
+      "is_compatibility_relevant": true
+    },
+    {
+      "id": "bab324fa-2459-4a14-b7f9-51de3fdf06e3",
+      "key": "includes_spindle",
+      "unit": null,
+      "label": "Incluye eje",
+      "options": [],
+      "data_type": "boolean",
+      "tenant_id": null,
+      "created_at": "2026-08-21T05:19:49.858391+00:00",
+      "group_name": "Pedalier",
+      "sort_order": 66,
+      "updated_at": "2026-08-21T16:18:21.516496+00:00",
+      "description": "Si el producto trae el eje. Un motor sellado sí; un integrado no, el eje viene con la biela.",
+      "is_filterable": true,
+      "allowed_values": [],
+      "validation_rules": {},
+      "is_customer_visible": true,
+      "is_mechanic_visible": true,
+      "is_required_by_default": false,
+      "is_compatibility_relevant": true
+    },
+    {
+      "id": "4f055961-6c16-430b-a4e2-e6b09dc1cccc",
+      "key": "spec_evidence_source",
+      "unit": null,
+      "label": "Fuente de la declaración",
+      "options": [],
+      "data_type": "text",
+      "tenant_id": null,
+      "created_at": "2026-09-06T06:58:57.745728+00:00",
+      "group_name": null,
+      "sort_order": 900,
+      "updated_at": "2026-09-06T06:58:57.745728+00:00",
+      "description": "URL del fabricante, manual o identificación del envase que respalda la declaración.",
+      "is_filterable": false,
+      "allowed_values": [],
+      "validation_rules": {},
+      "is_customer_visible": false,
+      "is_mechanic_visible": true,
+      "is_required_by_default": false,
+      "is_compatibility_relevant": false
+    },
+    {
+      "id": "205c58cb-63ca-4e3e-9c7b-d411dce390dd",
+      "key": "spindle_diameter_mm",
+      "unit": "mm",
+      "label": "Diámetro eje",
+      "options": [
+        {
+          "id": "1295a6c7-6088-4d95-94d7-4081c8f0d034",
+          "code": "v_22",
+          "label": "22",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-08-21T17:58:02.773721+00:00",
+          "sort_order": 4,
+          "updated_at": "2026-08-21T17:58:02.773721+00:00",
+          "spec_definition_id": "205c58cb-63ca-4e3e-9c7b-d411dce390dd"
+        },
+        {
+          "id": "30974799-ec0d-4211-9d48-7773da85e1b2",
+          "code": "v_19",
+          "label": "19",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-08-21T17:58:02.773721+00:00",
+          "sort_order": 2,
+          "updated_at": "2026-08-21T17:58:02.773721+00:00",
+          "spec_definition_id": "205c58cb-63ca-4e3e-9c7b-d411dce390dd"
+        },
+        {
+          "id": "481bb627-1668-459f-ba57-ac5374764611",
+          "code": "v_28_99",
+          "label": "28.99",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-08-21T17:58:02.773721+00:00",
+          "sort_order": 7,
+          "updated_at": "2026-08-21T17:58:02.773721+00:00",
+          "spec_definition_id": "205c58cb-63ca-4e3e-9c7b-d411dce390dd"
+        },
+        {
+          "id": "5b82c2d3-065c-4f04-92e8-6b24e2cfc8c1",
+          "code": "v_30",
+          "label": "30",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-08-21T17:58:02.773721+00:00",
+          "sort_order": 8,
+          "updated_at": "2026-08-21T17:58:02.773721+00:00",
+          "spec_definition_id": "205c58cb-63ca-4e3e-9c7b-d411dce390dd"
+        },
+        {
+          "id": "810d39d6-fc91-4522-aca0-14e4d7589c45",
+          "code": "v_20",
+          "label": "20",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-08-21T17:58:02.773721+00:00",
+          "sort_order": 3,
+          "updated_at": "2026-08-21T17:58:02.773721+00:00",
+          "spec_definition_id": "205c58cb-63ca-4e3e-9c7b-d411dce390dd"
+        },
+        {
+          "id": "e9681d09-6b86-46e3-ac1d-a43bb9563625",
+          "code": "v_17",
+          "label": "17",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-08-21T17:58:02.773721+00:00",
+          "sort_order": 1,
+          "updated_at": "2026-08-21T17:58:02.773721+00:00",
+          "spec_definition_id": "205c58cb-63ca-4e3e-9c7b-d411dce390dd"
+        },
+        {
+          "id": "f61e5bc4-5568-4313-8760-8a9811e8eee1",
+          "code": "v_25_4",
+          "label": "25.4",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-08-21T17:58:02.773721+00:00",
+          "sort_order": 6,
+          "updated_at": "2026-08-21T17:58:02.773721+00:00",
+          "spec_definition_id": "205c58cb-63ca-4e3e-9c7b-d411dce390dd"
+        },
+        {
+          "id": "fb695d1e-71a8-4e2b-8533-68bf822d833b",
+          "code": "v_24",
+          "label": "24",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-08-21T17:58:02.773721+00:00",
+          "sort_order": 5,
+          "updated_at": "2026-08-21T17:58:02.773721+00:00",
+          "spec_definition_id": "205c58cb-63ca-4e3e-9c7b-d411dce390dd"
+        }
+      ],
+      "data_type": "number",
+      "tenant_id": null,
+      "created_at": "2026-04-26T17:27:29.520986+00:00",
+      "group_name": "Pedalier",
+      "sort_order": 65,
+      "updated_at": "2026-08-21T05:19:49.858391+00:00",
+      "description": "Diámetro de eje/spindle, común en BMX y motores externos.",
+      "is_filterable": true,
+      "allowed_values": [
+        17,
+        19,
+        20,
+        22,
+        24,
+        25.4,
+        28.99,
+        30
+      ],
+      "validation_rules": {
+        "positive": true
+      },
+      "is_customer_visible": true,
+      "is_mechanic_visible": true,
+      "is_required_by_default": false,
+      "is_compatibility_relevant": true
+    },
+    {
+      "id": "660b0e90-180d-44a1-938c-f304a9358094",
+      "key": "spindle_interface",
+      "unit": null,
+      "label": "Punta del eje",
+      "options": [
+        {
+          "id": "00e64080-7dfe-4f5e-9582-00525d29a3b5",
+          "code": "bb30_30",
+          "label": "BB30 30mm",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-08-21T17:58:02.773721+00:00",
+          "sort_order": 6,
+          "updated_at": "2026-08-21T17:58:02.773721+00:00",
+          "spec_definition_id": "660b0e90-180d-44a1-938c-f304a9358094"
+        },
+        {
+          "id": "08e0888d-07f2-45ee-8afa-bcca1c9e3446",
+          "code": "isis",
+          "label": "ISIS",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-08-21T17:58:02.773721+00:00",
+          "sort_order": 7,
+          "updated_at": "2026-08-21T17:58:02.773721+00:00",
+          "spec_definition_id": "660b0e90-180d-44a1-938c-f304a9358094"
+        },
+        {
+          "id": "1bc7f139-de81-493c-a9ba-e184602df16a",
+          "code": "hollowtech_24",
+          "label": "Hollowtech / 24mm",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-08-21T17:58:02.773721+00:00",
+          "sort_order": 3,
+          "updated_at": "2026-08-21T17:58:02.773721+00:00",
+          "spec_definition_id": "660b0e90-180d-44a1-938c-f304a9358094"
+        },
+        {
+          "id": "329473af-4e20-4f43-b870-9eceec0d4ec1",
+          "code": "sram_dub",
+          "label": "SRAM DUB 28.99mm",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-08-21T17:58:02.773721+00:00",
+          "sort_order": 5,
+          "updated_at": "2026-08-21T17:58:02.773721+00:00",
+          "spec_definition_id": "660b0e90-180d-44a1-938c-f304a9358094"
+        },
+        {
+          "id": "40d75b1b-265f-4b53-9874-2bc8aad98f2b",
+          "code": "bmx_22",
+          "label": "BMX 22mm",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-08-21T17:58:02.773721+00:00",
+          "sort_order": 11,
+          "updated_at": "2026-08-21T17:58:02.773721+00:00",
+          "spec_definition_id": "660b0e90-180d-44a1-938c-f304a9358094"
+        },
+        {
+          "id": "50159a68-76ac-4443-9abf-3dfa3a3ddfd8",
+          "code": "one_piece",
+          "label": "One-piece / americano",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-08-21T17:58:02.773721+00:00",
+          "sort_order": 13,
+          "updated_at": "2026-08-21T17:58:02.773721+00:00",
+          "spec_definition_id": "660b0e90-180d-44a1-938c-f304a9358094"
+        },
+        {
+          "id": "69815048-1f62-4941-9585-2e43aab5e311",
+          "code": "powerspline",
+          "label": "Powerspline",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-08-21T17:58:02.773721+00:00",
+          "sort_order": 14,
+          "updated_at": "2026-08-21T17:58:02.773721+00:00",
+          "spec_definition_id": "660b0e90-180d-44a1-938c-f304a9358094"
+        },
+        {
+          "id": "6d2911e3-d1bb-4b63-af9b-236aa71fb057",
+          "code": "cottered",
+          "label": "Con chaveta",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-08-21T17:58:02.773721+00:00",
+          "sort_order": 9,
+          "updated_at": "2026-08-21T17:58:02.773721+00:00",
+          "spec_definition_id": "660b0e90-180d-44a1-938c-f304a9358094"
+        },
+        {
+          "id": "780054cb-0f4d-4966-a00b-af66e0c59fd4",
+          "code": "sram_gxp",
+          "label": "SRAM GXP 24/22",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-08-21T17:58:02.773721+00:00",
+          "sort_order": 4,
+          "updated_at": "2026-08-21T17:58:02.773721+00:00",
+          "spec_definition_id": "660b0e90-180d-44a1-938c-f304a9358094"
+        },
+        {
+          "id": "a7b79629-f772-4e61-aab0-e0e18a35a415",
+          "code": "bmx_24",
+          "label": "BMX 24mm",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-08-21T17:58:02.773721+00:00",
+          "sort_order": 12,
+          "updated_at": "2026-08-21T17:58:02.773721+00:00",
+          "spec_definition_id": "660b0e90-180d-44a1-938c-f304a9358094"
+        },
+        {
+          "id": "a973480a-f2bf-4b9b-8908-835e1c9d17a2",
+          "code": "bmx_19",
+          "label": "BMX 19mm",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-08-21T17:58:02.773721+00:00",
+          "sort_order": 10,
+          "updated_at": "2026-08-21T17:58:02.773721+00:00",
+          "spec_definition_id": "660b0e90-180d-44a1-938c-f304a9358094"
+        },
+        {
+          "id": "b4ccccf2-fd0e-4270-881e-c8a4bcc80e8d",
+          "code": "square_iso",
+          "label": "Cuadrado ISO",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-08-21T17:58:02.773721+00:00",
+          "sort_order": 2,
+          "updated_at": "2026-08-21T17:58:02.773721+00:00",
+          "spec_definition_id": "660b0e90-180d-44a1-938c-f304a9358094"
+        },
+        {
+          "id": "d6082dc2-ab24-46f2-a2c5-d22ef39a17f9",
+          "code": "square_jis",
+          "label": "Cuadrado JIS",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-08-21T17:58:02.773721+00:00",
+          "sort_order": 1,
+          "updated_at": "2026-08-21T17:58:02.773721+00:00",
+          "spec_definition_id": "660b0e90-180d-44a1-938c-f304a9358094"
+        },
+        {
+          "id": "df7493ea-6504-43c1-ad36-eeed932c7d1e",
+          "code": "octalink",
+          "label": "Octalink",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-08-21T17:58:02.773721+00:00",
+          "sort_order": 8,
+          "updated_at": "2026-08-21T17:58:02.773721+00:00",
+          "spec_definition_id": "660b0e90-180d-44a1-938c-f304a9358094"
+        }
+      ],
+      "data_type": "single_select",
+      "tenant_id": null,
+      "created_at": "2026-04-26T17:27:29.520986+00:00",
+      "group_name": "Pedalier",
+      "sort_order": 63,
+      "updated_at": "2026-08-21T16:23:07.121342+00:00",
+      "description": "Cómo entra el volante en el eje. El cuadrado viene en JIS (12,63 mm, Shimano) e ISO (12,5 mm, europeo); Octalink e ISIS son estriados.",
+      "is_filterable": true,
+      "allowed_values": [
+        "Cuadrado JIS",
+        "Cuadrado ISO",
+        "Hollowtech / 24mm",
+        "SRAM GXP 24/22",
+        "SRAM DUB 28.99mm",
+        "BB30 30mm",
+        "ISIS",
+        "Octalink",
+        "Con chaveta",
+        "BMX 19mm",
+        "BMX 22mm",
+        "BMX 24mm",
+        "One-piece / americano",
+        "Powerspline"
+      ],
+      "validation_rules": {},
+      "is_customer_visible": true,
+      "is_mechanic_visible": true,
+      "is_required_by_default": false,
+      "is_compatibility_relevant": true
+    },
+    {
+      "id": "9aaa1273-6fd9-468b-b295-f1f699d1259e",
+      "key": "spindle_interface_accepted",
+      "unit": null,
+      "label": "Puntas de eje que acepta",
+      "options": [
+        {
+          "id": "404932ec-18bf-4fb0-8c04-479eba4f3b0a",
+          "code": "square_iso",
+          "label": "Cuadrado ISO",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-08-21T17:58:02.773721+00:00",
+          "sort_order": 2,
+          "updated_at": "2026-08-21T17:58:02.773721+00:00",
+          "spec_definition_id": "9aaa1273-6fd9-468b-b295-f1f699d1259e"
+        },
+        {
+          "id": "80cd78d6-1654-4f36-adbb-f74cc2ff8c38",
+          "code": "bmx_22",
+          "label": "BMX 22mm",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-08-21T17:58:02.773721+00:00",
+          "sort_order": 11,
+          "updated_at": "2026-08-21T17:58:02.773721+00:00",
+          "spec_definition_id": "9aaa1273-6fd9-468b-b295-f1f699d1259e"
+        },
+        {
+          "id": "8a1eed0e-937f-4c90-9475-d0a86279ffb0",
+          "code": "bb30_30",
+          "label": "BB30 30mm",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-08-21T17:58:02.773721+00:00",
+          "sort_order": 6,
+          "updated_at": "2026-08-21T17:58:02.773721+00:00",
+          "spec_definition_id": "9aaa1273-6fd9-468b-b295-f1f699d1259e"
+        },
+        {
+          "id": "9180abf8-31c3-4b5f-a745-65a5a10a3b54",
+          "code": "bmx_24",
+          "label": "BMX 24mm",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-08-21T17:58:02.773721+00:00",
+          "sort_order": 12,
+          "updated_at": "2026-08-21T17:58:02.773721+00:00",
+          "spec_definition_id": "9aaa1273-6fd9-468b-b295-f1f699d1259e"
+        },
+        {
+          "id": "9c2b96d2-aeb7-411d-893c-328a2a6b5c8e",
+          "code": "hollowtech_24",
+          "label": "Hollowtech / 24mm",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-08-21T17:58:02.773721+00:00",
+          "sort_order": 3,
+          "updated_at": "2026-08-21T17:58:02.773721+00:00",
+          "spec_definition_id": "9aaa1273-6fd9-468b-b295-f1f699d1259e"
+        },
+        {
+          "id": "b0f3778b-c39f-446d-bf35-63c7906697fd",
+          "code": "cottered",
+          "label": "Con chaveta",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-08-21T17:58:02.773721+00:00",
+          "sort_order": 9,
+          "updated_at": "2026-08-21T17:58:02.773721+00:00",
+          "spec_definition_id": "9aaa1273-6fd9-468b-b295-f1f699d1259e"
+        },
+        {
+          "id": "cfb3679b-6fcd-4cc0-8b36-8b1d5bd1a94f",
+          "code": "sram_gxp",
+          "label": "SRAM GXP 24/22",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-08-21T17:58:02.773721+00:00",
+          "sort_order": 4,
+          "updated_at": "2026-08-21T17:58:02.773721+00:00",
+          "spec_definition_id": "9aaa1273-6fd9-468b-b295-f1f699d1259e"
+        },
+        {
+          "id": "df309cc7-c887-4c02-8d15-330ea80f3954",
+          "code": "bmx_19",
+          "label": "BMX 19mm",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-08-21T17:58:02.773721+00:00",
+          "sort_order": 10,
+          "updated_at": "2026-08-21T17:58:02.773721+00:00",
+          "spec_definition_id": "9aaa1273-6fd9-468b-b295-f1f699d1259e"
+        },
+        {
+          "id": "df431607-3bef-4ac9-a48d-b70663c6bd95",
+          "code": "one_piece",
+          "label": "One-piece / americano",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-08-21T17:58:02.773721+00:00",
+          "sort_order": 13,
+          "updated_at": "2026-08-21T17:58:02.773721+00:00",
+          "spec_definition_id": "9aaa1273-6fd9-468b-b295-f1f699d1259e"
+        },
+        {
+          "id": "e01decb2-b954-484b-b482-51e8e2b44e22",
+          "code": "sram_dub",
+          "label": "SRAM DUB 28.99mm",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-08-21T17:58:02.773721+00:00",
+          "sort_order": 5,
+          "updated_at": "2026-08-21T17:58:02.773721+00:00",
+          "spec_definition_id": "9aaa1273-6fd9-468b-b295-f1f699d1259e"
+        },
+        {
+          "id": "e0a128da-b5b0-41c4-8be4-13eb2b0b22f1",
+          "code": "square_jis",
+          "label": "Cuadrado JIS",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-08-21T17:58:02.773721+00:00",
+          "sort_order": 1,
+          "updated_at": "2026-08-21T17:58:02.773721+00:00",
+          "spec_definition_id": "9aaa1273-6fd9-468b-b295-f1f699d1259e"
+        },
+        {
+          "id": "e3ce9251-2862-4e2a-b1ce-7823e0faa106",
+          "code": "octalink",
+          "label": "Octalink",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-08-21T17:58:02.773721+00:00",
+          "sort_order": 8,
+          "updated_at": "2026-08-21T17:58:02.773721+00:00",
+          "spec_definition_id": "9aaa1273-6fd9-468b-b295-f1f699d1259e"
+        },
+        {
+          "id": "f446124c-a60c-4b48-a38f-6faf5fc956c9",
+          "code": "isis",
+          "label": "ISIS",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-08-21T17:58:02.773721+00:00",
+          "sort_order": 7,
+          "updated_at": "2026-08-21T17:58:02.773721+00:00",
+          "spec_definition_id": "9aaa1273-6fd9-468b-b295-f1f699d1259e"
+        },
+        {
+          "id": "f9a0cc7a-cef2-4e1e-b2d7-7fef4fa30346",
+          "code": "powerspline",
+          "label": "Powerspline",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-08-21T17:58:02.773721+00:00",
+          "sort_order": 14,
+          "updated_at": "2026-08-21T17:58:02.773721+00:00",
+          "spec_definition_id": "9aaa1273-6fd9-468b-b295-f1f699d1259e"
+        }
+      ],
+      "data_type": "multi_select",
+      "tenant_id": null,
+      "created_at": "2026-08-21T05:19:49.858391+00:00",
+      "group_name": "Pedalier",
+      "sort_order": 67,
+      "updated_at": "2026-08-21T16:18:21.516496+00:00",
+      "description": "Qué ejes admite un motor que no trae el suyo. Acepta más de uno: hay cubetas que sirven para Hollowtech 24/24 y para GXP 22/24.",
+      "is_filterable": true,
+      "allowed_values": [
+        "Cuadrado JIS",
+        "Cuadrado ISO",
+        "Hollowtech / 24mm",
+        "SRAM GXP 24/22",
+        "SRAM DUB 28.99mm",
+        "BB30 30mm",
+        "ISIS",
+        "Octalink",
+        "Con chaveta",
+        "BMX 19mm",
+        "BMX 22mm",
+        "BMX 24mm",
+        "One-piece / americano",
+        "Powerspline"
+      ],
+      "validation_rules": {},
+      "is_customer_visible": true,
+      "is_mechanic_visible": true,
+      "is_required_by_default": false,
+      "is_compatibility_relevant": true
+    },
+    {
+      "id": "9b8f6fa4-de08-4f4e-988d-b57345b3e9d6",
+      "key": "spindle_length_mm",
+      "unit": "mm",
+      "label": "Largo eje",
+      "options": [
+        {
+          "id": "0306285e-f728-4692-80d3-4caef8b6735d",
+          "code": "v_113",
+          "label": "113",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-08-21T17:58:02.773721+00:00",
+          "sort_order": 7,
+          "updated_at": "2026-08-21T17:58:02.773721+00:00",
+          "spec_definition_id": "9b8f6fa4-de08-4f4e-988d-b57345b3e9d6"
+        },
+        {
+          "id": "0c493dd8-d8e8-4d86-9045-09ece3c6f385",
+          "code": "v_140",
+          "label": "140",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-08-21T17:58:02.773721+00:00",
+          "sort_order": 25,
+          "updated_at": "2026-08-21T17:58:02.773721+00:00",
+          "spec_definition_id": "9b8f6fa4-de08-4f4e-988d-b57345b3e9d6"
+        },
+        {
+          "id": "30df7e3d-efdb-4bdf-8693-72e2d21ca361",
+          "code": "v_124",
+          "label": "124",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-08-21T17:58:02.773721+00:00",
+          "sort_order": 15,
+          "updated_at": "2026-08-21T17:58:02.773721+00:00",
+          "spec_definition_id": "9b8f6fa4-de08-4f4e-988d-b57345b3e9d6"
+        },
+        {
+          "id": "3203b5cd-58d8-4941-9a69-1e55f28579ec",
+          "code": "v_127",
+          "label": "127",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-08-21T17:58:02.773721+00:00",
+          "sort_order": 20,
+          "updated_at": "2026-08-21T17:58:02.773721+00:00",
+          "spec_definition_id": "9b8f6fa4-de08-4f4e-988d-b57345b3e9d6"
+        },
+        {
+          "id": "34135458-f86b-403e-b88f-4542f73306d1",
+          "code": "v_135",
+          "label": "135",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-08-21T17:58:02.773721+00:00",
+          "sort_order": 24,
+          "updated_at": "2026-08-21T17:58:02.773721+00:00",
+          "spec_definition_id": "9b8f6fa4-de08-4f4e-988d-b57345b3e9d6"
+        },
+        {
+          "id": "37a9d98f-cf0f-4956-989d-986c5cfde34f",
+          "code": "v_124_5",
+          "label": "124.5",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-08-21T17:58:02.773721+00:00",
+          "sort_order": 16,
+          "updated_at": "2026-08-21T17:58:02.773721+00:00",
+          "spec_definition_id": "9b8f6fa4-de08-4f4e-988d-b57345b3e9d6"
+        },
+        {
+          "id": "4bfd3ef6-b914-4ac3-8180-07ed5bf42538",
+          "code": "v_103",
+          "label": "103",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-08-21T17:58:02.773721+00:00",
+          "sort_order": 1,
+          "updated_at": "2026-08-21T17:58:02.773721+00:00",
+          "spec_definition_id": "9b8f6fa4-de08-4f4e-988d-b57345b3e9d6"
+        },
+        {
+          "id": "55e64e1b-b8b8-4e9b-957f-b655b1af75d7",
+          "code": "v_131",
+          "label": "131",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-08-21T17:58:02.773721+00:00",
+          "sort_order": 23,
+          "updated_at": "2026-08-21T17:58:02.773721+00:00",
+          "spec_definition_id": "9b8f6fa4-de08-4f4e-988d-b57345b3e9d6"
+        },
+        {
+          "id": "55fc4e90-6a41-4d32-832b-aac7f90bf976",
+          "code": "v_122_5",
+          "label": "122.5",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-08-21T17:58:02.773721+00:00",
+          "sort_order": 14,
+          "updated_at": "2026-08-21T17:58:02.773721+00:00",
+          "spec_definition_id": "9b8f6fa4-de08-4f4e-988d-b57345b3e9d6"
+        },
+        {
+          "id": "56f25f11-cf75-4b54-83a8-dc6d6c1947ae",
+          "code": "v_128",
+          "label": "128",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-08-21T17:58:02.773721+00:00",
+          "sort_order": 22,
+          "updated_at": "2026-08-21T17:58:02.773721+00:00",
+          "spec_definition_id": "9b8f6fa4-de08-4f4e-988d-b57345b3e9d6"
+        },
+        {
+          "id": "59aa32df-98ea-4732-940e-b38a5ac01400",
+          "code": "v_118_5",
+          "label": "118.5",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-08-21T17:58:02.773721+00:00",
+          "sort_order": 11,
+          "updated_at": "2026-08-21T17:58:02.773721+00:00",
+          "spec_definition_id": "9b8f6fa4-de08-4f4e-988d-b57345b3e9d6"
+        },
+        {
+          "id": "5a9d786f-5853-40af-9a10-4cf408a7a8d6",
+          "code": "v_107",
+          "label": "107",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-08-21T17:58:02.773721+00:00",
+          "sort_order": 2,
+          "updated_at": "2026-08-21T17:58:02.773721+00:00",
+          "spec_definition_id": "9b8f6fa4-de08-4f4e-988d-b57345b3e9d6"
+        },
+        {
+          "id": "5f4cb435-d97b-4f68-9abd-27bdd6d02bfb",
+          "code": "v_147",
+          "label": "147",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-08-21T17:58:02.773721+00:00",
+          "sort_order": 27,
+          "updated_at": "2026-08-21T17:58:02.773721+00:00",
+          "spec_definition_id": "9b8f6fa4-de08-4f4e-988d-b57345b3e9d6"
+        },
+        {
+          "id": "69de7b78-658e-464b-ae21-b3e6a8022a4d",
+          "code": "v_125_5",
+          "label": "125.5",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-08-21T17:58:02.773721+00:00",
+          "sort_order": 18,
+          "updated_at": "2026-08-21T17:58:02.773721+00:00",
+          "spec_definition_id": "9b8f6fa4-de08-4f4e-988d-b57345b3e9d6"
+        },
+        {
+          "id": "6c76004c-2edd-46b7-a780-bb72b0068648",
+          "code": "v_118",
+          "label": "118",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-08-21T17:58:02.773721+00:00",
+          "sort_order": 10,
+          "updated_at": "2026-08-21T17:58:02.773721+00:00",
+          "spec_definition_id": "9b8f6fa4-de08-4f4e-988d-b57345b3e9d6"
+        },
+        {
+          "id": "7ba7b72c-d44a-464a-82c7-15d061c8a1d7",
+          "code": "v_127_5",
+          "label": "127.5",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-08-21T17:58:02.773721+00:00",
+          "sort_order": 21,
+          "updated_at": "2026-08-21T17:58:02.773721+00:00",
+          "spec_definition_id": "9b8f6fa4-de08-4f4e-988d-b57345b3e9d6"
+        },
+        {
+          "id": "7bb8c9a9-69a8-478c-b9c3-e4366519f06d",
+          "code": "v_113_5",
+          "label": "113.5",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-08-21T17:58:02.773721+00:00",
+          "sort_order": 8,
+          "updated_at": "2026-08-21T17:58:02.773721+00:00",
+          "spec_definition_id": "9b8f6fa4-de08-4f4e-988d-b57345b3e9d6"
+        },
+        {
+          "id": "7e60406b-afcb-4314-888d-e97c230e9138",
+          "code": "v_116",
+          "label": "116",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-08-21T17:58:02.773721+00:00",
+          "sort_order": 9,
+          "updated_at": "2026-08-21T17:58:02.773721+00:00",
+          "spec_definition_id": "9b8f6fa4-de08-4f4e-988d-b57345b3e9d6"
+        },
+        {
+          "id": "9bafee21-a1eb-412b-8d0a-a4f071f8fcb2",
+          "code": "v_110_5",
+          "label": "110.5",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-08-21T17:58:02.773721+00:00",
+          "sort_order": 6,
+          "updated_at": "2026-08-21T17:58:02.773721+00:00",
+          "spec_definition_id": "9b8f6fa4-de08-4f4e-988d-b57345b3e9d6"
+        },
+        {
+          "id": "bdd8c0cb-5e20-45d9-8806-e4020f466424",
+          "code": "v_119",
+          "label": "119",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-08-21T17:58:02.773721+00:00",
+          "sort_order": 12,
+          "updated_at": "2026-08-21T17:58:02.773721+00:00",
+          "spec_definition_id": "9b8f6fa4-de08-4f4e-988d-b57345b3e9d6"
+        },
+        {
+          "id": "bfc4edf2-5562-4c77-9e45-77623d4f672c",
+          "code": "v_126",
+          "label": "126",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-08-21T17:58:02.773721+00:00",
+          "sort_order": 19,
+          "updated_at": "2026-08-21T17:58:02.773721+00:00",
+          "spec_definition_id": "9b8f6fa4-de08-4f4e-988d-b57345b3e9d6"
+        },
+        {
+          "id": "ccc3a268-7265-48ec-9ccb-1376ef61dc86",
+          "code": "v_110",
+          "label": "110",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-08-21T17:58:02.773721+00:00",
+          "sort_order": 5,
+          "updated_at": "2026-08-21T17:58:02.773721+00:00",
+          "spec_definition_id": "9b8f6fa4-de08-4f4e-988d-b57345b3e9d6"
+        },
+        {
+          "id": "d075f2da-2d93-432e-9464-39c5c27c8f42",
+          "code": "v_121",
+          "label": "121",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-08-21T17:58:02.773721+00:00",
+          "sort_order": 13,
+          "updated_at": "2026-08-21T17:58:02.773721+00:00",
+          "spec_definition_id": "9b8f6fa4-de08-4f4e-988d-b57345b3e9d6"
+        },
+        {
+          "id": "db7bb56b-5f9f-4b41-b16d-e23cbb119821",
+          "code": "v_108",
+          "label": "108",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-08-21T17:58:02.773721+00:00",
+          "sort_order": 3,
+          "updated_at": "2026-08-21T17:58:02.773721+00:00",
+          "spec_definition_id": "9b8f6fa4-de08-4f4e-988d-b57345b3e9d6"
+        },
+        {
+          "id": "e136ef23-4187-460d-9952-29152c99d2d2",
+          "code": "v_125",
+          "label": "125",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-08-21T17:58:02.773721+00:00",
+          "sort_order": 17,
+          "updated_at": "2026-08-21T17:58:02.773721+00:00",
+          "spec_definition_id": "9b8f6fa4-de08-4f4e-988d-b57345b3e9d6"
+        },
+        {
+          "id": "f4c90bb6-7a4a-40cd-8889-987b3bb64d78",
+          "code": "v_145",
+          "label": "145",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-08-21T17:58:02.773721+00:00",
+          "sort_order": 26,
+          "updated_at": "2026-08-21T17:58:02.773721+00:00",
+          "spec_definition_id": "9b8f6fa4-de08-4f4e-988d-b57345b3e9d6"
+        },
+        {
+          "id": "f75a43f6-3437-4eaf-9ad2-d646c04cd803",
+          "code": "v_109",
+          "label": "109",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-08-21T17:58:02.773721+00:00",
+          "sort_order": 4,
+          "updated_at": "2026-08-21T17:58:02.773721+00:00",
+          "spec_definition_id": "9b8f6fa4-de08-4f4e-988d-b57345b3e9d6"
+        }
+      ],
+      "data_type": "number",
+      "tenant_id": null,
+      "created_at": "2026-04-26T17:27:29.520986+00:00",
+      "group_name": "Pedalier",
+      "sort_order": 64,
+      "updated_at": "2026-08-21T06:00:18.566668+00:00",
+      "description": "Largo del eje de motor / spindle.",
+      "is_filterable": true,
+      "allowed_values": [
+        103,
+        107,
+        108,
+        109,
+        110,
+        110.5,
+        113,
+        113.5,
+        116,
+        118,
+        118.5,
+        119,
+        121,
+        122.5,
+        124,
+        124.5,
+        125,
+        125.5,
+        126,
+        127,
+        127.5,
+        128,
+        131,
+        135,
+        140,
+        145,
+        147
+      ],
+      "validation_rules": {
+        "positive": true
+      },
+      "is_customer_visible": true,
+      "is_mechanic_visible": true,
+      "is_required_by_default": false,
+      "is_compatibility_relevant": true
+    }
+  ]
+}

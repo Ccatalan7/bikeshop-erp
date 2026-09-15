@@ -1,0 +1,78 @@
+[botón] · 48x48
+Editar producto · 294x32
+[botón] · 48x48
+Mantén los datos comerciales y de inventario al día para el POS y la contabilidad. · 398x40
+Margen 78.6% · 94x16
+Guardar · [botón] · 129x40
+Detalles Generales
+Pestaña 1 de 3 · 145x74
+Tienda Online
+Pestaña 2 de 3 · 126x74
+Ficha Técnica
+Pestaña 3 de 3 · [seleccionado] · 126x74
+Missing Link / Conector Cadena · 203x19
+Conexión De Cadena Kmc Cl573r 6/7/8 Plata 2p · 328x48
+Actualizar ficha · [botón] · 160x40
+KMC · CL573R · 99x20
+Modelo del fabricante · 328x16
+= CL573R · [campo] · 328x100
+  Confirma el modelo antes de elegir su variante. La marca por sí sola no determina compatibilidad. · 292x48
+Código del fabricante (MPN) · 328x16
+[campo] · 328x84
+  Identifica la variante exacta. Es distinto del SKU de la tienda. · 292x32
+Referencia del fabricante · 145x16
+Referencia del fabricante · = Completar manualmente · [botón cerrado] · 328x48
+Las referencias corresponden a la marca y modelo confirmados. Revisa si documentan una presentación o sólo el modelo. Se completa el MPN únicamente cuando está documentado. Al retirar la referencia se quitan sus datos automáticos; tus respuestas manuales se conservan. · 328x18
+Ficha manual: elige una variante documentada o completa los datos que conoces. · 328x32
+Revisa la ficha antes de guardar. Conectores completos por envase: ingresa una cantidad entera. · 306x53
+Datos básicos del producto · 176x19
+Tipo de conector · 328x16
+Tipo de conector · = Pin · [botón cerrado] · 328x48
+Missing link: cierre rápido de dos placas. Pin: pasador de unión. Half link: medio eslabón. El clip es otro tipo de cierre. · 328x48
+Dejar sin confirmar · [botón] · 158x40
+Clase de cadena declarada · 163x16
+1 · [botón] · 40x30
+5 · [botón] · 43x30
+6 · [botón] · 43x30
+7 · [botón] · 42x30
+8 · [botón] · 43x30
+9 · [botón] · 43x30
+10 · [botón] · 49x30
+11 · [botón] · 47x30
+12 · [botón] · 49x30
+13 · [botón] · 49x30
+Clase indicada para las cadenas que admite este conector. No es el número de piñones de la bicicleta y no confirma por sí sola compatibilidad. · 328x48
+Fuente de la declaración · 328x16
+Fuente de la declaración · = Envase CL573R revisado · nota de prueba sin guardar · [campo] · 328x100
+  URL o identificación del envase/manual de este modelo. Se necesita antes de declarar sus cadenas admitidas, reutilización o sentido. · 292x48
+Medidas y características · 165x19
+Denominación de ancho · 328x16
+Denominación de ancho · = Sin confirmar · [botón cerrado] · 328x48
+Denominación nominal del fabricante. No es una medición del ancho exterior. · 328x32
+Contenido · 66x19
+Conectores completos por envase · 328x16
+Conectores completos por envase · = 1.5 · [campo] · 328x84
+  Conectores completos por envase: ingresa una cantidad entera. · 292x32
+unidades · 73x24
+Declaraciones del fabricante · 186x19
+Reutilizable según el fabricante · 238x16
+Reutilizable según el fabricante · 238x71
+  Sin dato · [botón seleccionado] · 77x48
+  Sí. No disponible. Los requisitos elegidos no admiten Sí. · [botón DESHABILITADO] · 77x48
+  No · [botón] · 77x48
+Registra lo indicado para este modelo. Sin dato no autoriza reutilizarlo; un pasador de unión nuevo se utiliza una sola vez. · 328x48
+Cadenas admitidas por el fabricante · 328x16
+Cadenas admitidas por el fabricante · [campo] · 328x116
+  Copia los modelos o series admitidos y sus excepciones. Dos cadenas de la misma marca o velocidad pueden necesitar conectores distintos. · 292x64
+Conector con sentido de montaje · 213x16
+Conector con sentido de montaje · 213x52
+  Sin dato · [botón seleccionado] · 68x48
+  Sí · [botón] · 68x48
+  No · [botón] · 68x48
+Confirma las flechas o instrucciones del conector, independientemente del sentido de la cadena. · 328x32
+[botón] · 56x56
+Viñabike ERP · [encabezado] · 107x24
+Notificaciones · [botón] · 48x48
+Mensajes · [botón] · 48x48
+Tareas y herramientas, 6 sin leer · [botón] · 48x48
+6 · 7x14

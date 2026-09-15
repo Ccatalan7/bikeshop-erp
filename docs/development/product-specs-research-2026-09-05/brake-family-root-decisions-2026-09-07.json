@@ -1,0 +1,718 @@
+{
+  "schema_version": 1,
+  "title": "Root adjudication of the independent brake representation packet",
+  "approval_scope": "field_representation",
+  "base_sha256": "cf8ebeb1e4e7dd32853b8618657a3f25e3f5428158702ef2e0adeb5b89978577",
+  "proposal_sha256": "3599369a1b1841ff407981b22dbbd5ce533e833d5d490ec0e8961134fefaddee",
+  "proposal_file": "brake-family-implementation-packet-2026-09-07.json",
+  "review_file": "brake-family-implementation-packet-2026-09-07.md",
+  "review_sha256": "2108157e83329724e0316998ee34c7474aa3657aa5693aab6677633f971c826c",
+  "patch_adjudications": [
+    {
+      "patch_id": "BP-options-fluid_type",
+      "decision": "aceptar",
+      "reason": "Amplía vocabulario descriptivo sin convertir una opción o marca en una aprobación de montaje."
+    },
+    {
+      "patch_id": "BP-options-compound_type",
+      "decision": "aceptar",
+      "reason": "Amplía vocabulario descriptivo sin convertir una opción o marca en una aprobación de montaje."
+    },
+    {
+      "patch_id": "BP-options-rim_brake_style",
+      "decision": "aceptar",
+      "reason": "Amplía vocabulario descriptivo sin convertir una opción o marca en una aprobación de montaje."
+    },
+    {
+      "patch_id": "BP-options-rim_brake_frame_mount",
+      "decision": "aceptar",
+      "reason": "Amplía vocabulario descriptivo sin convertir una opción o marca en una aprobación de montaje."
+    },
+    {
+      "patch_id": "BP-add-brake_caliper-brake_external_hose_connection",
+      "decision": "aceptar",
+      "reason": "Este componente tiene conexión de manguera externa: propiedad o interfaz de brake_caliper, con guardas declaradas y datos faltantes pendientes; no autoridad para llenar ni confirmar un montaje."
+    },
+    {
+      "patch_id": "BP-add-brake_caliper-brake_fluid_approvals",
+      "decision": "aceptar",
+      "reason": "Fluidos admitidos para el modelo: propiedad o interfaz de brake_caliper, con guardas declaradas y datos faltantes pendientes; no autoridad para llenar ni confirmar un montaje."
+    },
+    {
+      "patch_id": "BP-add-brake_caliper-brake_hydraulic_connections",
+      "decision": "aceptar",
+      "reason": "Mangueras y conexiones por extremo: propiedad o interfaz de brake_caliper, con guardas declaradas y datos faltantes pendientes; no autoridad para llenar ni confirmar un montaje."
+    },
+    {
+      "patch_id": "BP-change-brake_caliper-fluid_type",
+      "decision": "aceptar",
+      "reason": "Separa el significado del campo y sus requisitos sin modificar hechos existentes."
+    },
+    {
+      "patch_id": "BP-change-brake_caliper-hose_system_code",
+      "decision": "aceptar",
+      "reason": "Separa el significado del campo y sus requisitos sin modificar hechos existentes."
+    },
+    {
+      "patch_id": "BP-change-brake_caliper-hose_fitting_type",
+      "decision": "corregir",
+      "reason": "Retiro explícito del resumen ambiguo: rol y semántica legacy, sin edición ni obligatoriedad; los hechos históricos permanecen. Sus alternativas ahora tienen filas con extremo/posición.",
+      "after_override": {
+        "roles": "legacy",
+        "semantic_roles": "legacy",
+        "required_when": {
+          "kind": "never"
+        },
+        "helpers": "Resumen retirado: no distingue los extremos ni identifica un racor completo.",
+        "allowed_when": {
+          "kind": "never"
+        }
+      },
+      "before_extensions": {
+        "allowed_when": {
+          "present": true,
+          "value": {
+            "kind": "when",
+            "rows": [
+              [
+                {
+                  "field": "brake_actuation",
+                  "operator": "in",
+                  "value_type": "token",
+                  "value": [
+                    "Hidráulico",
+                    "Híbrido (cable a hidráulico)"
+                  ]
+                }
+              ]
+            ]
+          }
+        }
+      }
+    },
+    {
+      "patch_id": "BP-change-brake_caliper-bleed_port",
+      "decision": "corregir",
+      "reason": "Retiro explícito del resumen ambiguo: rol y semántica legacy, sin edición ni obligatoriedad; los hechos históricos permanecen. Sus alternativas ahora tienen filas con extremo/posición.",
+      "after_override": {
+        "roles": "legacy",
+        "semantic_roles": "legacy",
+        "required_when": {
+          "kind": "never"
+        },
+        "helpers": "Mezclaba puerto, herramienta y procedimiento; conservar lectura en historia.",
+        "allowed_when": {
+          "kind": "never"
+        }
+      },
+      "before_extensions": {
+        "allowed_when": {
+          "present": true,
+          "value": {
+            "kind": "when",
+            "rows": [
+              [
+                {
+                  "field": "brake_actuation",
+                  "operator": "in",
+                  "value_type": "token",
+                  "value": [
+                    "Hidráulico",
+                    "Híbrido (cable a hidráulico)"
+                  ]
+                }
+              ]
+            ]
+          }
+        }
+      }
+    },
+    {
+      "patch_id": "BP-add-brake_caliper-brake_bleed_ports",
+      "decision": "aceptar",
+      "reason": "Puertos de purga del modelo: propiedad o interfaz de brake_caliper, con guardas declaradas y datos faltantes pendientes; no autoridad para llenar ni confirmar un montaje."
+    },
+    {
+      "patch_id": "BP-change-brake_caliper-piston_count_value",
+      "decision": "aceptar",
+      "reason": "Separa el significado del campo y sus requisitos sin modificar hechos existentes."
+    },
+    {
+      "patch_id": "BP-add-brake_caliper-rim_brake_mount_fitments",
+      "decision": "aceptar",
+      "reason": "Montajes de freno de llanta documentados: propiedad o interfaz de brake_caliper, con guardas declaradas y datos faltantes pendientes; no autoridad para llenar ni confirmar un montaje."
+    },
+    {
+      "patch_id": "BP-add-brake_caliper-caliper_rotor_nominal_thickness_mm",
+      "decision": "aceptar",
+      "reason": "Espesor nominal de rotor previsto por el cáliper: propiedad o interfaz de brake_caliper, con guardas declaradas y datos faltantes pendientes; no autoridad para llenar ni confirmar un montaje."
+    },
+    {
+      "patch_id": "BP-add-brake_lever-brake_external_hose_connection",
+      "decision": "aceptar",
+      "reason": "Este componente tiene conexión de manguera externa: propiedad o interfaz de brake_lever, con guardas declaradas y datos faltantes pendientes; no autoridad para llenar ni confirmar un montaje."
+    },
+    {
+      "patch_id": "BP-add-brake_lever-brake_fluid_approvals",
+      "decision": "aceptar",
+      "reason": "Fluidos admitidos para el modelo: propiedad o interfaz de brake_lever, con guardas declaradas y datos faltantes pendientes; no autoridad para llenar ni confirmar un montaje."
+    },
+    {
+      "patch_id": "BP-add-brake_lever-brake_hydraulic_connections",
+      "decision": "aceptar",
+      "reason": "Mangueras y conexiones por extremo: propiedad o interfaz de brake_lever, con guardas declaradas y datos faltantes pendientes; no autoridad para llenar ni confirmar un montaje."
+    },
+    {
+      "patch_id": "BP-change-brake_lever-fluid_type",
+      "decision": "aceptar",
+      "reason": "Separa el significado del campo y sus requisitos sin modificar hechos existentes."
+    },
+    {
+      "patch_id": "BP-change-brake_lever-hose_system_code",
+      "decision": "aceptar",
+      "reason": "Separa el significado del campo y sus requisitos sin modificar hechos existentes."
+    },
+    {
+      "patch_id": "BP-add-hydraulic_disc_brake-brake_assembly_configurations",
+      "decision": "aceptar",
+      "reason": "Circuitos incluidos, separados por posición: propiedad o interfaz de hydraulic_disc_brake, con guardas declaradas y datos faltantes pendientes; no autoridad para llenar ni confirmar un montaje."
+    },
+    {
+      "patch_id": "BP-add-hydraulic_disc_brake-brake_fluid_approvals",
+      "decision": "aceptar",
+      "reason": "Fluidos admitidos para el modelo: propiedad o interfaz de hydraulic_disc_brake, con guardas declaradas y datos faltantes pendientes; no autoridad para llenar ni confirmar un montaje."
+    },
+    {
+      "patch_id": "BP-add-hydraulic_disc_brake-brake_hydraulic_connections",
+      "decision": "aceptar",
+      "reason": "Mangueras y conexiones por extremo: propiedad o interfaz de hydraulic_disc_brake, con guardas declaradas y datos faltantes pendientes; no autoridad para llenar ni confirmar un montaje."
+    },
+    {
+      "patch_id": "BP-add-hydraulic_disc_brake-brake_bleed_ports",
+      "decision": "aceptar",
+      "reason": "Puertos de purga del modelo: propiedad o interfaz de hydraulic_disc_brake, con guardas declaradas y datos faltantes pendientes; no autoridad para llenar ni confirmar un montaje."
+    },
+    {
+      "patch_id": "BP-change-hydraulic_disc_brake-fluid_type",
+      "decision": "aceptar",
+      "reason": "Separa el significado del campo y sus requisitos sin modificar hechos existentes."
+    },
+    {
+      "patch_id": "BP-change-hydraulic_disc_brake-hose_fitting_type",
+      "decision": "corregir",
+      "reason": "Retiro explícito del resumen ambiguo: rol y semántica legacy, sin edición ni obligatoriedad; los hechos históricos permanecen. Sus alternativas ahora tienen filas con extremo/posición.",
+      "after_override": {
+        "roles": "legacy",
+        "semantic_roles": "legacy",
+        "required_when": {
+          "kind": "never"
+        },
+        "helpers": "Resumen retirado: las conexiones se registran por extremo.",
+        "allowed_when": {
+          "kind": "never"
+        }
+      },
+      "before_extensions": {
+        "allowed_when": {
+          "present": true,
+          "value": {
+            "kind": "always"
+          }
+        }
+      }
+    },
+    {
+      "patch_id": "BP-change-hydraulic_disc_brake-bleed_port",
+      "decision": "corregir",
+      "reason": "Retiro explícito del resumen ambiguo: rol y semántica legacy, sin edición ni obligatoriedad; los hechos históricos permanecen. Sus alternativas ahora tienen filas con extremo/posición.",
+      "after_override": {
+        "roles": "legacy",
+        "semantic_roles": "legacy",
+        "required_when": {
+          "kind": "never"
+        },
+        "helpers": "Resumen retirado: separar puerto, herramienta y procedimiento.",
+        "allowed_when": {
+          "kind": "never"
+        }
+      },
+      "before_extensions": {
+        "allowed_when": {
+          "present": true,
+          "value": {
+            "kind": "always"
+          }
+        }
+      }
+    },
+    {
+      "patch_id": "BP-add-mechanical_disc_brake-brake_assembly_configurations",
+      "decision": "aceptar",
+      "reason": "Circuitos incluidos, separados por posición: propiedad o interfaz de mechanical_disc_brake, con guardas declaradas y datos faltantes pendientes; no autoridad para llenar ni confirmar un montaje."
+    },
+    {
+      "patch_id": "BP-add-rim_brake-brake_assembly_configurations",
+      "decision": "aceptar",
+      "reason": "Circuitos incluidos, separados por posición: propiedad o interfaz de rim_brake, con guardas declaradas y datos faltantes pendientes; no autoridad para llenar ni confirmar un montaje."
+    },
+    {
+      "patch_id": "BP-add-rim_brake-brake_actuation",
+      "decision": "aceptar",
+      "reason": "Accionamiento del freno: propiedad o interfaz de rim_brake, con guardas declaradas y datos faltantes pendientes; no autoridad para llenar ni confirmar un montaje."
+    },
+    {
+      "patch_id": "BP-add-rim_brake-brake_external_hose_connection",
+      "decision": "aceptar",
+      "reason": "Este componente tiene conexión de manguera externa: propiedad o interfaz de rim_brake, con guardas declaradas y datos faltantes pendientes; no autoridad para llenar ni confirmar un montaje."
+    },
+    {
+      "patch_id": "BP-add-rim_brake-brake_fluid_approvals",
+      "decision": "aceptar",
+      "reason": "Fluidos admitidos para el modelo: propiedad o interfaz de rim_brake, con guardas declaradas y datos faltantes pendientes; no autoridad para llenar ni confirmar un montaje."
+    },
+    {
+      "patch_id": "BP-add-rim_brake-brake_hydraulic_connections",
+      "decision": "aceptar",
+      "reason": "Mangueras y conexiones por extremo: propiedad o interfaz de rim_brake, con guardas declaradas y datos faltantes pendientes; no autoridad para llenar ni confirmar un montaje."
+    },
+    {
+      "patch_id": "BP-add-rim_brake-rim_brake_mount_fitments",
+      "decision": "aceptar",
+      "reason": "Montajes de freno de llanta documentados: propiedad o interfaz de rim_brake, con guardas declaradas y datos faltantes pendientes; no autoridad para llenar ni confirmar un montaje."
+    },
+    {
+      "patch_id": "BP-change-rim_brake-lever_pull_required",
+      "decision": "aceptar",
+      "reason": "Separa el significado del campo y sus requisitos sin modificar hechos existentes."
+    },
+    {
+      "patch_id": "BP-change-rim_brake-rim_pad_stud_type",
+      "decision": "corregir",
+      "reason": "HS usa una interfaz específica, pero esa observación no demuestra una prohibición universal de postes en todo freno hidráulico/híbrido. El montaje de la zapata se documenta por modelo, separado del accionamiento.",
+      "after_override": {
+        "allowed_when": {
+          "kind": "always"
+        },
+        "helpers": "Interfaz de la zapata declarada para el modelo; no deducir un poste roscado, liso o específico del accionamiento hidráulico o por cable."
+      }
+    },
+    {
+      "patch_id": "BP-add-rim_brake-rim_pad_interface_model",
+      "decision": "aceptar",
+      "reason": "Interfaz / soporte OEM de la zapata: propiedad o interfaz de rim_brake, con guardas declaradas y datos faltantes pendientes; no autoridad para llenar ni confirmar un montaje."
+    },
+    {
+      "patch_id": "BP-add-brake_shift_combined_control-brake_actuation",
+      "decision": "aceptar",
+      "reason": "Accionamiento del freno: propiedad o interfaz de brake_shift_combined_control, con guardas declaradas y datos faltantes pendientes; no autoridad para llenar ni confirmar un montaje."
+    },
+    {
+      "patch_id": "BP-change-brake_shift_combined_control-lever_cable_pull",
+      "decision": "aceptar",
+      "reason": "Separa el significado del campo y sus requisitos sin modificar hechos existentes."
+    },
+    {
+      "patch_id": "BP-add-brake_shift_combined_control-brake_external_hose_connection",
+      "decision": "aceptar",
+      "reason": "Este componente tiene conexión de manguera externa: propiedad o interfaz de brake_shift_combined_control, con guardas declaradas y datos faltantes pendientes; no autoridad para llenar ni confirmar un montaje."
+    },
+    {
+      "patch_id": "BP-add-brake_shift_combined_control-brake_fluid_approvals",
+      "decision": "aceptar",
+      "reason": "Fluidos admitidos para el modelo: propiedad o interfaz de brake_shift_combined_control, con guardas declaradas y datos faltantes pendientes; no autoridad para llenar ni confirmar un montaje."
+    },
+    {
+      "patch_id": "BP-add-brake_shift_combined_control-brake_hydraulic_connections",
+      "decision": "aceptar",
+      "reason": "Mangueras y conexiones por extremo: propiedad o interfaz de brake_shift_combined_control, con guardas declaradas y datos faltantes pendientes; no autoridad para llenar ni confirmar un montaje."
+    },
+    {
+      "patch_id": "BP-add-brake_pad-brake_pad_retainer_model",
+      "decision": "aceptar",
+      "reason": "Modelo de pasador / retención de pastilla: propiedad o interfaz de brake_pad, con guardas declaradas y datos faltantes pendientes; no autoridad para llenar ni confirmar un montaje."
+    },
+    {
+      "patch_id": "BP-add-brake_caliper-brake_pad_retainer_model",
+      "decision": "aceptar",
+      "reason": "Modelo de pasador / retención de pastilla: propiedad o interfaz de brake_caliper, con guardas declaradas y datos faltantes pendientes; no autoridad para llenar ni confirmar un montaje."
+    },
+    {
+      "patch_id": "BP-add-hydraulic_disc_brake-brake_pad_retainer_model",
+      "decision": "aceptar",
+      "reason": "Modelo de pasador / retención de pastilla: propiedad o interfaz de hydraulic_disc_brake, con guardas declaradas y datos faltantes pendientes; no autoridad para llenar ni confirmar un montaje."
+    },
+    {
+      "patch_id": "BP-add-mechanical_disc_brake-brake_pad_retainer_model",
+      "decision": "aceptar",
+      "reason": "Modelo de pasador / retención de pastilla: propiedad o interfaz de mechanical_disc_brake, con guardas declaradas y datos faltantes pendientes; no autoridad para llenar ni confirmar un montaje."
+    },
+    {
+      "patch_id": "BP-add-brake_pad-brake_pad_oem_compound",
+      "decision": "aceptar",
+      "reason": "Denominación de compuesto del fabricante: propiedad o interfaz de brake_pad, con guardas declaradas y datos faltantes pendientes; no autoridad para llenar ni confirmar un montaje."
+    },
+    {
+      "patch_id": "BP-add-brake_pad-rim_pad_interface_model",
+      "decision": "aceptar",
+      "reason": "Interfaz / soporte OEM de la zapata: propiedad o interfaz de brake_pad, con guardas declaradas y datos faltantes pendientes; no autoridad para llenar ni confirmar un montaje."
+    },
+    {
+      "patch_id": "BP-change-brake_pad-pad_shape_code",
+      "decision": "aceptar",
+      "reason": "Separa el significado del campo y sus requisitos sin modificar hechos existentes."
+    },
+    {
+      "patch_id": "BP-change-brake_pad-pad_retention",
+      "decision": "aceptar",
+      "reason": "Separa el significado del campo y sus requisitos sin modificar hechos existentes."
+    },
+    {
+      "patch_id": "BP-columns-compatible_caliper_models",
+      "decision": "aceptar",
+      "reason": "Conserva posición y variante dentro de la misma fila de aplicación; no combina listas entre posiciones."
+    },
+    {
+      "patch_id": "BP-columns-compatible_brake_models",
+      "decision": "aceptar",
+      "reason": "Conserva posición y variante dentro de la misma fila de aplicación; no combina listas entre posiciones."
+    },
+    {
+      "patch_id": "BP-columns-rotor_size_recipe",
+      "decision": "aceptar",
+      "reason": "Conserva posición y variante dentro de la misma fila de aplicación; no combina listas entre posiciones."
+    },
+    {
+      "patch_id": "BP-change-brake_mount_adapter-caliper_mount",
+      "decision": "corregir",
+      "reason": "Retiro explícito del resumen ambiguo: rol y semántica legacy, sin edición ni obligatoriedad; los hechos históricos permanecen. Sus alternativas ahora tienen filas con extremo/posición.",
+      "after_override": {
+        "roles": "legacy",
+        "semantic_roles": "legacy",
+        "required_when": {
+          "kind": "never"
+        },
+        "helpers": "Resumen retirado: las aplicaciones alternativas pertenecen a filas completas por posición y montaje base.",
+        "allowed_when": {
+          "kind": "never"
+        }
+      },
+      "before_extensions": {
+        "allowed_when": {
+          "present": true,
+          "value": {
+            "kind": "always"
+          }
+        }
+      }
+    },
+    {
+      "patch_id": "BP-change-brake_mount_adapter-frame_mount",
+      "decision": "corregir",
+      "reason": "Retiro explícito del resumen ambiguo: rol y semántica legacy, sin edición ni obligatoriedad; los hechos históricos permanecen. Sus alternativas ahora tienen filas con extremo/posición.",
+      "after_override": {
+        "roles": "legacy",
+        "semantic_roles": "legacy",
+        "required_when": {
+          "kind": "never"
+        },
+        "helpers": "Resumen retirado: las aplicaciones alternativas pertenecen a filas completas por posición y montaje base.",
+        "allowed_when": {
+          "kind": "never"
+        }
+      },
+      "before_extensions": {
+        "allowed_when": {
+          "present": true,
+          "value": {
+            "kind": "always"
+          }
+        }
+      }
+    },
+    {
+      "patch_id": "BP-change-brake_mount_adapter-position",
+      "decision": "corregir",
+      "reason": "Retiro explícito del resumen ambiguo: rol y semántica legacy, sin edición ni obligatoriedad; los hechos históricos permanecen. Sus alternativas ahora tienen filas con extremo/posición.",
+      "after_override": {
+        "roles": "legacy",
+        "semantic_roles": "legacy",
+        "required_when": {
+          "kind": "never"
+        },
+        "helpers": "Resumen retirado: las aplicaciones alternativas pertenecen a filas completas por posición y montaje base.",
+        "allowed_when": {
+          "kind": "never"
+        }
+      },
+      "before_extensions": {
+        "allowed_when": {
+          "present": true,
+          "value": {
+            "kind": "always"
+          }
+        }
+      }
+    },
+    {
+      "patch_id": "BP-change-brake_mount_adapter-rotor_from_mm",
+      "decision": "corregir",
+      "reason": "Retiro explícito del resumen ambiguo: rol y semántica legacy, sin edición ni obligatoriedad; los hechos históricos permanecen. Sus alternativas ahora tienen filas con extremo/posición.",
+      "after_override": {
+        "roles": "legacy",
+        "semantic_roles": "legacy",
+        "required_when": {
+          "kind": "never"
+        },
+        "helpers": "Resumen retirado: las aplicaciones alternativas pertenecen a filas completas por posición y montaje base.",
+        "allowed_when": {
+          "kind": "never"
+        }
+      },
+      "before_extensions": {
+        "allowed_when": {
+          "present": true,
+          "value": {
+            "kind": "always"
+          }
+        }
+      }
+    },
+    {
+      "patch_id": "BP-change-brake_mount_adapter-rotor_to_mm",
+      "decision": "corregir",
+      "reason": "Retiro explícito del resumen ambiguo: rol y semántica legacy, sin edición ni obligatoriedad; los hechos históricos permanecen. Sus alternativas ahora tienen filas con extremo/posición.",
+      "after_override": {
+        "roles": "legacy",
+        "semantic_roles": "legacy",
+        "required_when": {
+          "kind": "never"
+        },
+        "helpers": "Resumen retirado: las aplicaciones alternativas pertenecen a filas completas por posición y montaje base.",
+        "allowed_when": {
+          "kind": "never"
+        }
+      },
+      "before_extensions": {
+        "allowed_when": {
+          "present": true,
+          "value": {
+            "kind": "always"
+          }
+        }
+      }
+    },
+    {
+      "patch_id": "BP-add-brake_mount_adapter-brake_adapter_fitments",
+      "decision": "aceptar",
+      "reason": "Aplicaciones documentadas del adaptador de cáliper: propiedad o interfaz de brake_mount_adapter, con guardas declaradas y datos faltantes pendientes; no autoridad para llenar ni confirmar un montaje."
+    },
+    {
+      "patch_id": "BP-change-rotor_mount_adapter-hub_interface",
+      "decision": "corregir",
+      "reason": "Retiro explícito del resumen ambiguo: rol y semántica legacy, sin edición ni obligatoriedad; los hechos históricos permanecen. Sus alternativas ahora tienen filas con extremo/posición.",
+      "after_override": {
+        "roles": "legacy",
+        "semantic_roles": "legacy",
+        "required_when": {
+          "kind": "never"
+        },
+        "helpers": "Resumen retirado: identificar por separado la interfaz de maza y la de rotor en cada ruta documentada.",
+        "allowed_when": {
+          "kind": "never"
+        }
+      },
+      "before_extensions": {
+        "allowed_when": {
+          "present": true,
+          "value": {
+            "kind": "always"
+          }
+        }
+      }
+    },
+    {
+      "patch_id": "BP-change-rotor_mount_adapter-rotor_mount_out",
+      "decision": "corregir",
+      "reason": "Retiro explícito del resumen ambiguo: rol y semántica legacy, sin edición ni obligatoriedad; los hechos históricos permanecen. Sus alternativas ahora tienen filas con extremo/posición.",
+      "after_override": {
+        "roles": "legacy",
+        "semantic_roles": "legacy",
+        "required_when": {
+          "kind": "never"
+        },
+        "helpers": "Resumen retirado: identificar por separado la interfaz de maza y la de rotor en cada ruta documentada.",
+        "allowed_when": {
+          "kind": "never"
+        }
+      },
+      "before_extensions": {
+        "allowed_when": {
+          "present": true,
+          "value": {
+            "kind": "always"
+          }
+        }
+      }
+    },
+    {
+      "patch_id": "BP-add-rotor_mount_adapter-rotor_adapter_fitments",
+      "decision": "aceptar",
+      "reason": "Extremos documentados del adaptador de rotor: propiedad o interfaz de rotor_mount_adapter, con guardas declaradas y datos faltantes pendientes; no autoridad para llenar ni confirmar un montaje."
+    },
+    {
+      "patch_id": "BP-change-rotor-rotor_thickness_mm",
+      "decision": "aceptar",
+      "reason": "Separa el significado del campo y sus requisitos sin modificar hechos existentes."
+    },
+    {
+      "patch_id": "BP-change-rotor-rotor_min_thickness_mm",
+      "decision": "aceptar",
+      "reason": "Separa el significado del campo y sus requisitos sin modificar hechos existentes."
+    },
+    {
+      "patch_id": "BP-change-rotor-rotor_floating",
+      "decision": "aceptar",
+      "reason": "Separa el significado del campo y sus requisitos sin modificar hechos existentes."
+    },
+    {
+      "patch_id": "BP-add-hydraulic_hose-brake_hydraulic_connections",
+      "decision": "aceptar",
+      "reason": "Mangueras y conexiones por extremo: propiedad o interfaz de hydraulic_hose, con guardas declaradas y datos faltantes pendientes; no autoridad para llenar ni confirmar un montaje."
+    },
+    {
+      "patch_id": "BP-change-hydraulic_hose-hose_system_code",
+      "decision": "aceptar",
+      "reason": "Separa el significado del campo y sus requisitos sin modificar hechos existentes."
+    },
+    {
+      "patch_id": "BP-add-hydraulic_fitting-brake_hydraulic_connections",
+      "decision": "aceptar",
+      "reason": "Mangueras y conexiones por extremo: propiedad o interfaz de hydraulic_fitting, con guardas declaradas y datos faltantes pendientes; no autoridad para llenar ni confirmar un montaje."
+    },
+    {
+      "patch_id": "BP-change-hydraulic_fitting-hose_system_code",
+      "decision": "aceptar",
+      "reason": "Separa el significado del campo y sus requisitos sin modificar hechos existentes."
+    },
+    {
+      "patch_id": "BP-add-hydraulic_fitting-brake_fitting_oem_code",
+      "decision": "aceptar",
+      "reason": "Código OEM completo del racor / inserto: propiedad o interfaz de hydraulic_fitting, con guardas declaradas y datos faltantes pendientes; no autoridad para llenar ni confirmar un montaje."
+    },
+    {
+      "patch_id": "BP-add-hydraulic_fitting-brake_fitting_insert_length_mm",
+      "decision": "aceptar",
+      "reason": "Longitud del inserto: propiedad o interfaz de hydraulic_fitting, con guardas declaradas y datos faltantes pendientes; no autoridad para llenar ni confirmar un montaje."
+    },
+    {
+      "patch_id": "BP-add-hydraulic_fitting-compatible_brake_models",
+      "decision": "aceptar",
+      "reason": "Modelos de freno documentados: propiedad o interfaz de hydraulic_fitting, con guardas declaradas y datos faltantes pendientes; no autoridad para llenar ni confirmar un montaje."
+    },
+    {
+      "patch_id": "BP-change-brake_fluid-fluid_type",
+      "decision": "aceptar",
+      "reason": "Separa el significado del campo y sus requisitos sin modificar hechos existentes."
+    },
+    {
+      "patch_id": "BP-add-brake_fluid-compatible_brake_models",
+      "decision": "aceptar",
+      "reason": "Modelos de freno documentados: propiedad o interfaz de brake_fluid, con guardas declaradas y datos faltantes pendientes; no autoridad para llenar ni confirmar un montaje."
+    },
+    {
+      "patch_id": "BP-change-brake_fluid-oem_brand_specific",
+      "decision": "aceptar",
+      "reason": "Separa el significado del campo y sus requisitos sin modificar hechos existentes."
+    },
+    {
+      "patch_id": "BP-change-control_housing-housing_kind",
+      "decision": "corregir",
+      "reason": "Retiro explícito del resumen ambiguo: rol y semántica legacy, sin edición ni obligatoriedad; los hechos históricos permanecen. Sus alternativas ahora tienen filas con extremo/posición.",
+      "after_override": {
+        "roles": "legacy",
+        "semantic_roles": "legacy",
+        "required_when": {
+          "kind": "never"
+        },
+        "helpers": "Mezclaba diámetro, construcción y uso; conservar historia y registrar las tres propiedades por separado.",
+        "allowed_when": {
+          "kind": "never"
+        }
+      },
+      "before_extensions": {
+        "allowed_when": {
+          "present": true,
+          "value": {
+            "kind": "always"
+          }
+        }
+      }
+    },
+    {
+      "patch_id": "BP-add-control_housing-housing_application",
+      "decision": "aceptar",
+      "reason": "Uso declarado de la funda: propiedad o interfaz de control_housing, con guardas declaradas y datos faltantes pendientes; no autoridad para llenar ni confirmar un montaje."
+    },
+    {
+      "patch_id": "BP-add-control_housing-housing_construction",
+      "decision": "aceptar",
+      "reason": "Construcción de la funda: propiedad o interfaz de control_housing, con guardas declaradas y datos faltantes pendientes; no autoridad para llenar ni confirmar un montaje."
+    },
+    {
+      "patch_id": "BP-add-control_cable-control_cable_end_options",
+      "decision": "aceptar",
+      "reason": "Cabezas y extremos del cable: propiedad o interfaz de control_cable, con guardas declaradas y datos faltantes pendientes; no autoridad para llenar ni confirmar un montaje."
+    },
+    {
+      "patch_id": "BP-change-control_cable-cable_head",
+      "decision": "aceptar",
+      "reason": "Separa el significado del campo y sus requisitos sin modificar hechos existentes."
+    },
+    {
+      "patch_id": "BP-add-control_small_part-compatible_brake_models",
+      "decision": "aceptar",
+      "reason": "Modelos de freno documentados: propiedad o interfaz de control_small_part, con guardas declaradas y datos faltantes pendientes; no autoridad para llenar ni confirmar un montaje."
+    },
+    {
+      "patch_id": "BP-add-bmx_cable_detangler-compatible_brake_models",
+      "decision": "aceptar",
+      "reason": "Modelos de freno documentados: propiedad o interfaz de bmx_cable_detangler, con guardas declaradas y datos faltantes pendientes; no autoridad para llenar ni confirmar un montaje."
+    },
+    {
+      "patch_id": "BP-change-brake_small_part-compatible_brake_models",
+      "decision": "aceptar",
+      "reason": "Separa el significado del campo y sus requisitos sin modificar hechos existentes."
+    },
+    {
+      "patch_id": "BP-change-hub_brake-brake_actuation",
+      "decision": "aceptar",
+      "reason": "Separa el significado del campo y sus requisitos sin modificar hechos existentes."
+    },
+    {
+      "patch_id": "BP-coherence-hydraulic_disc_brake",
+      "decision": "aceptar",
+      "reason": "Vínculo ejecutable por ID estable entre una conexión y su circuito; el vínculo no certifica el circuito completo."
+    },
+    {
+      "patch_id": "BP-coherence-rim_brake",
+      "decision": "aceptar",
+      "reason": "Vínculo ejecutable por ID estable entre una conexión y su circuito; el vínculo no certifica el circuito completo."
+    },
+    {
+      "patch_id": "BP-order-rim-brake-reach",
+      "decision": "rechazar",
+      "reason": "Ya está integrado exactamente en A/B/rootC. Se conserva ese bloque; el before ausente pertenece a la base del 6 y no se fuerza sobre el catálogo actual."
+    }
+  ],
+  "definition_overrides": {},
+  "mechanical_reference_publication_authorized": false,
+  "product_fill_authorized": false,
+  "relation_semantics_status": "Source-scoped candidates retained separately; not published or connected to a counterpart consumer by this field integration.",
+  "retirement_data_gate": "Audit existing observations/references before metadata publication. No existing value is rewritten or assigned.",
+  "residual_gates": [
+    "EG01-EG10 remain subject to their explicit scope; consumer fluid/family false inference fixed separately.",
+    "Row conditions, circuit membership/quantity, source/model scope and per-product research remain open.",
+    "Two null legacy units are deferred, without numerical conversion.",
+    "No automatic assignment and no fill."
+  ]
+}

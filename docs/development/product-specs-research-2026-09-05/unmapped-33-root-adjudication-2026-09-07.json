@@ -1,0 +1,2391 @@
+{
+  "schema_version": 1,
+  "reviewed_at": "2026-09-07T18:25:47.348541+00:00",
+  "scope": "Adjudicación de familia de los 33 registros inicialmente ambiguos/de negocio; cero cambios de producto.",
+  "input_sha256": {
+    "unmapped-26-root-evidence-2026-09-07.json": "12a927d454fce0eb7a721e6dd63b730ff032735effe34023f971015a8de271b5",
+    "unmapped-ambiguous-and-business-review-2026-09-07.json": "d966352e06415821860eafc0138e9fc7a9797ab4e9b43d6622989277c5f1ae2c",
+    "unmapped-33-evidence-followup-2026-09-07.json": "68b2446fca850183d792411a312ef9fdd24a156920b4f944209f7033d65618b1",
+    "unmapped-33-source-routing-correction-2026-09-07.json": "a799c9ba54a1592318af3c15878f8849c64b6463e8f59e4b878705188c39a2d2",
+    "all-family-cardinality-integrated-2026-09-07.json": "934ce172a6f3eaf8fa8dc616a912d161c965840b97b647fbee23870ccc154562"
+  },
+  "live_read_receipt": {
+    "path": ".tmp/db/unmapped-seven-root-verification.json",
+    "sha256": "1e8423c0ace39cb920e7a514596713db635f03bcc69e99c4b84b930b81bfa8f9",
+    "verified_records": 7
+  },
+  "records": [
+    {
+      "id": "cc9f7f88-0401-4eb2-bbd6-74b1b1b07336",
+      "sku": "NNV7",
+      "claude_record_sha256": "8835151ad27fe0a432d717d0db602e3bfbb011c66ea000a5b4764831af25a259",
+      "original_source_preimage": {
+        "id": "cc9f7f88-0401-4eb2-bbd6-74b1b1b07336",
+        "name": "ALIEXPRESS",
+        "category_id": null,
+        "category_path": null,
+        "candidate_family": null,
+        "candidate_alternatives": [],
+        "status": "ambiguous",
+        "reason": "Nombre insuficiente: parece proveedor, marca o rótulo genérico; investigar documentos antes de decidir si representa un producto.",
+        "evidence": {
+          "kind": "existing_catalog_identity",
+          "name": "ALIEXPRESS",
+          "category_path": null
+        },
+        "independent_review": "pending",
+        "apply_allowed": false
+      },
+      "live_preimage": {
+        "id": "cc9f7f88-0401-4eb2-bbd6-74b1b1b07336",
+        "sku": "NNV7",
+        "name": "ALIEXPRESS",
+        "brand_id": null,
+        "documents": [],
+        "image_url": null,
+        "is_active": true,
+        "image_urls": [],
+        "updated_at": "2026-07-21T20:40:10.460155+00:00",
+        "category_id": null,
+        "description": "",
+        "product_type": "product",
+        "spec_template_id": null,
+        "matched_line_count": 0,
+        "purchase_treatment": "inventory",
+        "stock_movement_count": 0
+      },
+      "live_preimage_sha256": "b1c81b824aeccefabe85189f7b69666e5bf9921dc10faea844314d3f17c26f1b",
+      "root_decision": "identity_or_business_research_pending",
+      "requires_technical_template": null,
+      "proposed_template": null,
+      "evidence_opened": [],
+      "reason": "El nombre coincide con plataforma en otros registros; eso no prueba que este ID sea contraparte administrativa. La consulta no encontró líneas normalizadas ni stock asociados.",
+      "next_investigation": {
+        "owner": "Codex/Claude",
+        "action": "Rastrear documento o inventario original; distinguir contraparte, intervención, componente y paquete. Conservar las referencias históricas y el material físico.",
+        "requires_routine_owner_entry": false
+      },
+      "included_when_inactive": true,
+      "apply_allowed": false,
+      "mechanical_approval": false,
+      "fill_allowed": false
+    },
+    {
+      "id": "a4373f06-b5b1-48e6-b501-64091f999fd3",
+      "sku": "NNV8",
+      "claude_record_sha256": "3bde1506288165397488bfd6e42af03534ad2d2ef44d025e5543a083f1907762",
+      "original_source_preimage": {
+        "id": "a4373f06-b5b1-48e6-b501-64091f999fd3",
+        "name": "Andes",
+        "category_id": null,
+        "category_path": null,
+        "candidate_family": null,
+        "candidate_alternatives": [],
+        "status": "ambiguous",
+        "reason": "Nombre insuficiente: parece proveedor, marca o rótulo genérico; investigar documentos antes de decidir si representa un producto.",
+        "evidence": {
+          "kind": "existing_catalog_identity",
+          "name": "Andes",
+          "category_path": null
+        },
+        "independent_review": "pending",
+        "apply_allowed": false
+      },
+      "live_preimage": {
+        "id": "a4373f06-b5b1-48e6-b501-64091f999fd3",
+        "sku": "NNV8",
+        "name": "Andes",
+        "brand_id": null,
+        "documents": [],
+        "image_url": null,
+        "is_active": true,
+        "image_urls": [],
+        "updated_at": "2026-07-21T20:40:10.445057+00:00",
+        "category_id": null,
+        "description": "",
+        "product_type": "product",
+        "spec_template_id": null,
+        "matched_line_count": 0,
+        "purchase_treatment": "inventory",
+        "stock_movement_count": 0
+      },
+      "live_preimage_sha256": "38cc0dd7eba006c3afd46bebb51777c5c337e96fe9f797049012984b281c9bcd",
+      "root_decision": "identity_or_business_research_pending",
+      "requires_technical_template": null,
+      "proposed_template": null,
+      "evidence_opened": [],
+      "reason": "Nombre y estado actual insuficientes para adjudicar objeto o tratamiento comercial. Mantener candidato nominal y rastrear origen sin convertir hipótesis en ficha.",
+      "next_investigation": {
+        "owner": "Codex/Claude",
+        "action": "Rastrear documento o inventario original; distinguir contraparte, intervención, componente y paquete. Conservar las referencias históricas y el material físico.",
+        "requires_routine_owner_entry": false
+      },
+      "included_when_inactive": true,
+      "apply_allowed": false,
+      "mechanical_approval": false,
+      "fill_allowed": false
+    },
+    {
+      "id": "54aa6f11-e04d-446c-aa33-7e6580dbe7e1",
+      "sku": "NNV15",
+      "claude_record_sha256": "ab4e45ebdfbaaa860ed78ba108d6698982cb1d1b6dc613c0f7d230de3720f99e",
+      "original_source_preimage": {
+        "id": "54aa6f11-e04d-446c-aa33-7e6580dbe7e1",
+        "name": "BETTABIKES",
+        "category_id": null,
+        "category_path": null,
+        "candidate_family": null,
+        "candidate_alternatives": [],
+        "status": "ambiguous",
+        "reason": "Nombre insuficiente: parece proveedor, marca o rótulo genérico; investigar documentos antes de decidir si representa un producto.",
+        "evidence": {
+          "kind": "existing_catalog_identity",
+          "name": "BETTABIKES",
+          "category_path": null
+        },
+        "independent_review": "pending",
+        "apply_allowed": false
+      },
+      "live_preimage": {
+        "id": "54aa6f11-e04d-446c-aa33-7e6580dbe7e1",
+        "sku": "NNV15",
+        "name": "BETTABIKES",
+        "brand_id": null,
+        "documents": [],
+        "image_url": null,
+        "is_active": true,
+        "image_urls": [],
+        "updated_at": "2026-07-21T20:40:10.421282+00:00",
+        "category_id": null,
+        "description": "",
+        "product_type": "product",
+        "spec_template_id": null,
+        "matched_line_count": 0,
+        "purchase_treatment": "inventory",
+        "stock_movement_count": 0
+      },
+      "live_preimage_sha256": "50ad070668b584940f9e40e8357c77ab29f5619701f80f69205a2e243301c86a",
+      "root_decision": "identity_or_business_research_pending",
+      "requires_technical_template": null,
+      "proposed_template": null,
+      "evidence_opened": [],
+      "reason": "El nombre coincide con proveedor en otros registros; eso no prueba que este ID sea contraparte administrativa. La consulta no encontró líneas normalizadas ni stock asociados.",
+      "next_investigation": {
+        "owner": "Codex/Claude",
+        "action": "Rastrear documento o inventario original; distinguir contraparte, intervención, componente y paquete. Conservar las referencias históricas y el material físico.",
+        "requires_routine_owner_entry": false
+      },
+      "included_when_inactive": true,
+      "apply_allowed": false,
+      "mechanical_approval": false,
+      "fill_allowed": false
+    },
+    {
+      "id": "88154c74-0a20-43d9-9fd6-7361299aedac",
+      "sku": "NNV36",
+      "claude_record_sha256": "a3bd5921147579288afcb2462ab439ddbee3ceb6b947d326b1e9fac8cf7888d4",
+      "original_source_preimage": {
+        "id": "88154c74-0a20-43d9-9fd6-7361299aedac",
+        "name": "Centrado de Rueda BettaBikes",
+        "category_id": null,
+        "category_path": null,
+        "candidate_family": null,
+        "status": "business_record_review",
+        "reason": "El nombre describe centrado de rueda, una intervención; revisar clasificación de servicio sin modificar documentos históricos.",
+        "evidence": {
+          "kind": "existing_catalog_identity",
+          "name": "Centrado de Rueda BettaBikes",
+          "category_path": null
+        },
+        "independent_review": "pending",
+        "apply_allowed": false
+      },
+      "live_preimage": {
+        "id": "88154c74-0a20-43d9-9fd6-7361299aedac",
+        "sku": "NNV36",
+        "name": "Centrado de Rueda BettaBikes",
+        "brand_id": null,
+        "documents": [],
+        "image_url": null,
+        "is_active": false,
+        "image_urls": [],
+        "updated_at": "2026-05-22T22:32:52.422539+00:00",
+        "category_id": null,
+        "description": "",
+        "product_type": "product",
+        "spec_template_id": null,
+        "matched_line_count": 0,
+        "purchase_treatment": "inventory",
+        "stock_movement_count": 0
+      },
+      "live_preimage_sha256": "da563401b45ee2312d56669289ec1d61e90c546e95dd7d9fa772044f885dbe26",
+      "root_decision": "identity_or_business_research_pending",
+      "requires_technical_template": null,
+      "proposed_template": null,
+      "evidence_opened": [],
+      "reason": "Nombre y estado actual insuficientes para adjudicar objeto o tratamiento comercial. Mantener candidato nominal y rastrear origen sin convertir hipótesis en ficha.",
+      "next_investigation": {
+        "owner": "Codex/Claude",
+        "action": "Rastrear documento o inventario original; distinguir contraparte, intervención, componente y paquete. Conservar las referencias históricas y el material físico.",
+        "requires_routine_owner_entry": false
+      },
+      "included_when_inactive": true,
+      "apply_allowed": false,
+      "mechanical_approval": false,
+      "fill_allowed": false
+    },
+    {
+      "id": "b679e9c0-b7ab-4028-b1b4-a1a0351c2103",
+      "sku": "NNV41",
+      "claude_record_sha256": "32b58c83513c0401f35bc5073a5e221047580420a3a4ab2b70d4ecc999afc150",
+      "original_source_preimage": {
+        "id": "b679e9c0-b7ab-4028-b1b4-a1a0351c2103",
+        "name": "Costo de bicicleta",
+        "category_id": null,
+        "category_path": null,
+        "candidate_family": null,
+        "status": "business_record_review",
+        "reason": "Costo de bicicleta parece un concepto contable/comercial, no identidad de pieza.",
+        "evidence": {
+          "kind": "existing_catalog_identity",
+          "name": "Costo de bicicleta",
+          "category_path": null
+        },
+        "independent_review": "pending",
+        "apply_allowed": false
+      },
+      "live_preimage": {
+        "id": "b679e9c0-b7ab-4028-b1b4-a1a0351c2103",
+        "sku": "NNV41",
+        "name": "Costo de bicicleta",
+        "brand_id": null,
+        "documents": [],
+        "image_url": null,
+        "is_active": true,
+        "image_urls": [],
+        "updated_at": "2026-05-22T22:33:41.227011+00:00",
+        "category_id": null,
+        "description": "",
+        "product_type": "product",
+        "spec_template_id": null,
+        "matched_line_count": 0,
+        "purchase_treatment": "inventory",
+        "stock_movement_count": 0
+      },
+      "live_preimage_sha256": "133de5fde0c15a33ba2a111b1e9f4dd2ffcb820454de276fc5ebe6dd95dd45f0",
+      "root_decision": "identity_or_business_research_pending",
+      "requires_technical_template": null,
+      "proposed_template": null,
+      "evidence_opened": [],
+      "reason": "Nombre y estado actual insuficientes para adjudicar objeto o tratamiento comercial. Mantener candidato nominal y rastrear origen sin convertir hipótesis en ficha.",
+      "next_investigation": {
+        "owner": "Codex/Claude",
+        "action": "Rastrear documento o inventario original; distinguir contraparte, intervención, componente y paquete. Conservar las referencias históricas y el material físico.",
+        "requires_routine_owner_entry": false
+      },
+      "included_when_inactive": true,
+      "apply_allowed": false,
+      "mechanical_approval": false,
+      "fill_allowed": false
+    },
+    {
+      "id": "02472142-39a6-4037-9d87-d044786eea7e",
+      "sku": "NNV42",
+      "claude_record_sha256": "d4896ad65de4a62105318607c001a0159bf6d52a91e521f555f69d290dc059ea",
+      "original_source_preimage": {
+        "id": "02472142-39a6-4037-9d87-d044786eea7e",
+        "name": "Cubetas Motor Americano BMX Bettabikes",
+        "category_id": null,
+        "category_path": null,
+        "candidate_family": null,
+        "candidate_alternatives": [
+          "bottom_bracket",
+          "bottom_bracket_cup"
+        ],
+        "status": "ambiguous",
+        "reason": "Cubetas americanas puede ser juego completo o copas; inspeccionar contenido.",
+        "evidence": {
+          "kind": "existing_catalog_identity",
+          "name": "Cubetas Motor Americano BMX Bettabikes",
+          "category_path": null
+        },
+        "independent_review": "pending",
+        "apply_allowed": false
+      },
+      "live_preimage": {
+        "id": "02472142-39a6-4037-9d87-d044786eea7e",
+        "sku": "NNV42",
+        "name": "Cubetas Motor Americano BMX Bettabikes",
+        "brand_id": null,
+        "documents": [],
+        "image_url": null,
+        "is_active": false,
+        "image_urls": [],
+        "updated_at": "2026-05-22T22:32:52.422539+00:00",
+        "category_id": null,
+        "description": "",
+        "product_type": "product",
+        "spec_template_id": null,
+        "matched_line_count": 0,
+        "purchase_treatment": "inventory",
+        "stock_movement_count": 0
+      },
+      "live_preimage_sha256": "30311b3938d123c2693f00731f6408304e475decf62215ab385ac1e685999fa8",
+      "root_decision": "identity_or_business_research_pending",
+      "requires_technical_template": null,
+      "proposed_template": null,
+      "evidence_opened": [],
+      "reason": "Contenido sin documento identificado: la presencia de eje no define un pedalier completo y su ausencia no obliga a separar copas/rodamientos. Conservar la unidad comercial y verificar miembros/variante.",
+      "next_investigation": {
+        "owner": "Codex/Claude",
+        "action": "Rastrear documento o inventario original; distinguir contraparte, intervención, componente y paquete. Conservar las referencias históricas y el material físico.",
+        "requires_routine_owner_entry": false
+      },
+      "included_when_inactive": true,
+      "apply_allowed": false,
+      "mechanical_approval": false,
+      "fill_allowed": false
+    },
+    {
+      "id": "443886d9-3c28-483c-b19f-bc45d2be4740",
+      "sku": "00000000",
+      "claude_record_sha256": "4f0fa861283392bb0ad5e117c4252fade3edf932561ada7091004f77cce0aa74",
+      "original_source_preimage": {
+        "id": "443886d9-3c28-483c-b19f-bc45d2be4740",
+        "name": "Diagnóstico",
+        "category_id": null,
+        "category_path": null,
+        "candidate_family": null,
+        "status": "business_record_review",
+        "reason": "Diagnóstico describe un servicio, no una pieza.",
+        "evidence": {
+          "kind": "existing_catalog_identity",
+          "name": "Diagnóstico",
+          "category_path": null
+        },
+        "independent_review": "pending",
+        "apply_allowed": false
+      },
+      "live_preimage": {
+        "id": "443886d9-3c28-483c-b19f-bc45d2be4740",
+        "sku": "00000000",
+        "name": "Diagnóstico",
+        "brand_id": null,
+        "documents": [],
+        "image_url": null,
+        "is_active": true,
+        "image_urls": [],
+        "updated_at": "2026-07-21T20:40:10.414353+00:00",
+        "category_id": null,
+        "description": "",
+        "product_type": "product",
+        "spec_template_id": null,
+        "matched_line_count": 0,
+        "purchase_treatment": "inventory",
+        "stock_movement_count": 0
+      },
+      "live_preimage_sha256": "d1a1ff6b413aeec4f6b63c30b488b3b46eaad1dcb3e9fd7d2420bd9e2b7ba3a1",
+      "root_decision": "identity_or_business_research_pending",
+      "requires_technical_template": null,
+      "proposed_template": null,
+      "evidence_opened": [],
+      "reason": "Nombre y estado actual insuficientes para adjudicar objeto o tratamiento comercial. Mantener candidato nominal y rastrear origen sin convertir hipótesis en ficha.",
+      "next_investigation": {
+        "owner": "Codex/Claude",
+        "action": "Rastrear documento o inventario original; distinguir contraparte, intervención, componente y paquete. Conservar las referencias históricas y el material físico.",
+        "requires_routine_owner_entry": false
+      },
+      "included_when_inactive": true,
+      "apply_allowed": false,
+      "mechanical_approval": false,
+      "fill_allowed": false
+    },
+    {
+      "id": "8e0be162-e824-4bc4-be0f-9be8f19ec7db",
+      "sku": "NNV47",
+      "claude_record_sha256": "2824cbfa9b32c54bd396923bdd6dc7f09bb1f517e4f04e89bf85ddab3200a69f",
+      "original_source_preimage": {
+        "id": "8e0be162-e824-4bc4-be0f-9be8f19ec7db",
+        "name": "Dr. Bike",
+        "category_id": null,
+        "category_path": null,
+        "candidate_family": null,
+        "candidate_alternatives": [],
+        "status": "ambiguous",
+        "reason": "Nombre insuficiente: parece proveedor, marca o rótulo genérico; investigar documentos antes de decidir si representa un producto.",
+        "evidence": {
+          "kind": "existing_catalog_identity",
+          "name": "Dr. Bike",
+          "category_path": null
+        },
+        "independent_review": "pending",
+        "apply_allowed": false
+      },
+      "live_preimage": {
+        "id": "8e0be162-e824-4bc4-be0f-9be8f19ec7db",
+        "sku": "NNV47",
+        "name": "Dr. Bike",
+        "brand_id": null,
+        "documents": [],
+        "image_url": null,
+        "is_active": true,
+        "image_urls": [],
+        "updated_at": "2026-07-21T20:40:10.436897+00:00",
+        "category_id": null,
+        "description": "",
+        "product_type": "product",
+        "spec_template_id": null,
+        "matched_line_count": 0,
+        "purchase_treatment": "inventory",
+        "stock_movement_count": 0
+      },
+      "live_preimage_sha256": "e13384a3d10bb50a0d490ddcd065f13644c813e50ce1f3d8cad3ba2614ad953e",
+      "root_decision": "identity_or_business_research_pending",
+      "requires_technical_template": null,
+      "proposed_template": null,
+      "evidence_opened": [],
+      "reason": "Nombre y estado actual insuficientes para adjudicar objeto o tratamiento comercial. Mantener candidato nominal y rastrear origen sin convertir hipótesis en ficha.",
+      "next_investigation": {
+        "owner": "Codex/Claude",
+        "action": "Rastrear documento o inventario original; distinguir contraparte, intervención, componente y paquete. Conservar las referencias históricas y el material físico.",
+        "requires_routine_owner_entry": false
+      },
+      "included_when_inactive": true,
+      "apply_allowed": false,
+      "mechanical_approval": false,
+      "fill_allowed": false
+    },
+    {
+      "id": "47cbf024-c586-4170-af0e-c0fea99e3146",
+      "sku": "NNV48",
+      "claude_record_sha256": "900eb85c819d69ad2cbd44a0c7acf875d0db2345668a185117cd96ce7f2146bd",
+      "original_source_preimage": {
+        "id": "47cbf024-c586-4170-af0e-c0fea99e3146",
+        "name": "Eje de Motor Set Up Bikes",
+        "category_id": null,
+        "category_path": null,
+        "candidate_family": null,
+        "candidate_alternatives": [
+          "bottom_bracket",
+          "bottom_bracket_axle"
+        ],
+        "status": "ambiguous",
+        "reason": "Eje de motor no distingue eje suelto de conjunto completo.",
+        "evidence": {
+          "kind": "existing_catalog_identity",
+          "name": "Eje de Motor Set Up Bikes",
+          "category_path": null
+        },
+        "independent_review": "pending",
+        "apply_allowed": false
+      },
+      "live_preimage": {
+        "id": "47cbf024-c586-4170-af0e-c0fea99e3146",
+        "sku": "NNV48",
+        "name": "Eje de Motor Set Up Bikes",
+        "brand_id": null,
+        "documents": [],
+        "image_url": null,
+        "is_active": true,
+        "image_urls": [],
+        "updated_at": "2026-05-22T22:33:41.227011+00:00",
+        "category_id": null,
+        "description": "",
+        "product_type": "product",
+        "spec_template_id": null,
+        "matched_line_count": 0,
+        "purchase_treatment": "inventory",
+        "stock_movement_count": 0
+      },
+      "live_preimage_sha256": "5e8dcc32020af75f210f109d466f861fc525d5eb4c28d3be3cc511be5a8609a8",
+      "root_decision": "identity_or_business_research_pending",
+      "requires_technical_template": null,
+      "proposed_template": null,
+      "evidence_opened": [],
+      "reason": "Contenido sin documento identificado: la presencia de eje no define un pedalier completo y su ausencia no obliga a separar copas/rodamientos. Conservar la unidad comercial y verificar miembros/variante.",
+      "next_investigation": {
+        "owner": "Codex/Claude",
+        "action": "Rastrear documento o inventario original; distinguir contraparte, intervención, componente y paquete. Conservar las referencias históricas y el material físico.",
+        "requires_routine_owner_entry": false
+      },
+      "included_when_inactive": true,
+      "apply_allowed": false,
+      "mechanical_approval": false,
+      "fill_allowed": false
+    },
+    {
+      "id": "122bc792-47f0-47a7-a007-05c8d53e6802",
+      "sku": "NNV60",
+      "claude_record_sha256": "df05ab724987b7185b3d638da93f199ef012c8a59c5d21b7372f17e87eb3d034",
+      "original_source_preimage": {
+        "id": "122bc792-47f0-47a7-a007-05c8d53e6802",
+        "name": "Gasto por transporte",
+        "category_id": null,
+        "category_path": null,
+        "candidate_family": null,
+        "status": "business_record_review",
+        "reason": "Gasto por transporte requiere revisión comercial/contable, no una ficha mecánica.",
+        "evidence": {
+          "kind": "existing_catalog_identity",
+          "name": "Gasto por transporte",
+          "category_path": null
+        },
+        "independent_review": "pending",
+        "apply_allowed": false
+      },
+      "live_preimage": {
+        "id": "122bc792-47f0-47a7-a007-05c8d53e6802",
+        "sku": "NNV60",
+        "name": "Gasto por transporte",
+        "brand_id": null,
+        "documents": [],
+        "image_url": null,
+        "is_active": true,
+        "image_urls": [],
+        "updated_at": "2026-07-21T20:40:10.24737+00:00",
+        "category_id": null,
+        "description": "",
+        "product_type": "product",
+        "spec_template_id": null,
+        "matched_line_count": 0,
+        "purchase_treatment": "inventory",
+        "stock_movement_count": 0
+      },
+      "live_preimage_sha256": "07c238933e861ecbe5070570461272b59055e2d6e83c28117bc6c0548c6c7ccf",
+      "root_decision": "identity_or_business_research_pending",
+      "requires_technical_template": null,
+      "proposed_template": null,
+      "evidence_opened": [],
+      "reason": "Nombre y estado actual insuficientes para adjudicar objeto o tratamiento comercial. Mantener candidato nominal y rastrear origen sin convertir hipótesis en ficha.",
+      "next_investigation": {
+        "owner": "Codex/Claude",
+        "action": "Rastrear documento o inventario original; distinguir contraparte, intervención, componente y paquete. Conservar las referencias históricas y el material físico.",
+        "requires_routine_owner_entry": false
+      },
+      "included_when_inactive": true,
+      "apply_allowed": false,
+      "mechanical_approval": false,
+      "fill_allowed": false
+    },
+    {
+      "id": "fe2c9570-bc9f-4ac1-9115-2a604a508b45",
+      "sku": "NNV68",
+      "claude_record_sha256": "84f75914888a30611c7155b922295c157b2d21ec96734abd3aa379a51ba527e0",
+      "original_source_preimage": {
+        "id": "fe2c9570-bc9f-4ac1-9115-2a604a508b45",
+        "name": "Instalación rayo trasero disco + centrado zona afectada",
+        "category_id": null,
+        "category_path": null,
+        "candidate_family": null,
+        "status": "business_record_review",
+        "reason": "La identidad es instalación y centrado; el rayo es material de la intervención.",
+        "evidence": {
+          "kind": "existing_catalog_identity",
+          "name": "Instalación rayo trasero disco + centrado zona afectada",
+          "category_path": null
+        },
+        "independent_review": "pending",
+        "apply_allowed": false
+      },
+      "live_preimage": {
+        "id": "fe2c9570-bc9f-4ac1-9115-2a604a508b45",
+        "sku": "NNV68",
+        "name": "Instalación rayo trasero disco + centrado zona afectada",
+        "brand_id": null,
+        "documents": [],
+        "image_url": null,
+        "is_active": true,
+        "image_urls": [],
+        "updated_at": "2026-05-22T22:33:41.227011+00:00",
+        "category_id": null,
+        "description": "",
+        "product_type": "product",
+        "spec_template_id": null,
+        "matched_line_count": 0,
+        "purchase_treatment": "inventory",
+        "stock_movement_count": 0
+      },
+      "live_preimage_sha256": "3c7de6d3dd3baa859809d78fb70fa9d0a877712286a5b56842244d32c12be294",
+      "root_decision": "identity_or_business_research_pending",
+      "requires_technical_template": null,
+      "proposed_template": null,
+      "evidence_opened": [],
+      "reason": "Nombre y estado actual insuficientes para adjudicar objeto o tratamiento comercial. Mantener candidato nominal y rastrear origen sin convertir hipótesis en ficha.",
+      "next_investigation": {
+        "owner": "Codex/Claude",
+        "action": "Rastrear documento o inventario original; distinguir contraparte, intervención, componente y paquete. Conservar las referencias históricas y el material físico.",
+        "requires_routine_owner_entry": false
+      },
+      "included_when_inactive": true,
+      "apply_allowed": false,
+      "mechanical_approval": false,
+      "fill_allowed": false
+    },
+    {
+      "id": "e174953e-ff08-48b9-ad39-3737a3ab5518",
+      "sku": "NNV71",
+      "claude_record_sha256": "96d390c31e0aa1b521758adecac9c9813c6d924d62d8bdcadd5232161307f2b1",
+      "original_source_preimage": {
+        "id": "e174953e-ff08-48b9-ad39-3737a3ab5518",
+        "name": "Juego de Tuercas Laterales Motor + Rodamientos",
+        "category_id": null,
+        "category_path": null,
+        "candidate_family": null,
+        "candidate_alternatives": [
+          "bottom_bracket",
+          "bottom_bracket_cup"
+        ],
+        "status": "ambiguous",
+        "reason": "Juego de tuercas y rodamientos: faltan contenido e interfaces para clasificar el kit.",
+        "evidence": {
+          "kind": "existing_catalog_identity",
+          "name": "Juego de Tuercas Laterales Motor + Rodamientos",
+          "category_path": null
+        },
+        "independent_review": "pending",
+        "apply_allowed": false
+      },
+      "live_preimage": {
+        "id": "e174953e-ff08-48b9-ad39-3737a3ab5518",
+        "sku": "NNV71",
+        "name": "Juego de Tuercas Laterales Motor + Rodamientos",
+        "brand_id": null,
+        "documents": [],
+        "image_url": null,
+        "is_active": true,
+        "image_urls": [],
+        "updated_at": "2026-05-22T22:33:41.227011+00:00",
+        "category_id": null,
+        "description": "",
+        "product_type": "product",
+        "spec_template_id": null,
+        "matched_line_count": 0,
+        "purchase_treatment": "inventory",
+        "stock_movement_count": 0
+      },
+      "live_preimage_sha256": "4fe19702783f3492925c7afd2731f66dac2da7932d10f3bcb4564f582f0ba8d6",
+      "root_decision": "identity_or_business_research_pending",
+      "requires_technical_template": null,
+      "proposed_template": null,
+      "evidence_opened": [],
+      "reason": "Contenido sin documento identificado: la presencia de eje no define un pedalier completo y su ausencia no obliga a separar copas/rodamientos. Conservar la unidad comercial y verificar miembros/variante.",
+      "next_investigation": {
+        "owner": "Codex/Claude",
+        "action": "Rastrear documento o inventario original; distinguir contraparte, intervención, componente y paquete. Conservar las referencias históricas y el material físico.",
+        "requires_routine_owner_entry": false
+      },
+      "included_when_inactive": true,
+      "apply_allowed": false,
+      "mechanical_approval": false,
+      "fill_allowed": false
+    },
+    {
+      "id": "20f982dc-02f0-4612-8754-fed9934eabe4",
+      "sku": "NNV102",
+      "claude_record_sha256": "ced16ad91cc289e0ffdf8b716e91a55ee04bf543260a6224ee26725a2073b82e",
+      "original_source_preimage": {
+        "id": "20f982dc-02f0-4612-8754-fed9934eabe4",
+        "name": "MKR",
+        "category_id": null,
+        "category_path": null,
+        "candidate_family": null,
+        "candidate_alternatives": [],
+        "status": "ambiguous",
+        "reason": "Nombre insuficiente: parece proveedor, marca o rótulo genérico; investigar documentos antes de decidir si representa un producto.",
+        "evidence": {
+          "kind": "existing_catalog_identity",
+          "name": "MKR",
+          "category_path": null
+        },
+        "independent_review": "pending",
+        "apply_allowed": false
+      },
+      "live_preimage": {
+        "id": "20f982dc-02f0-4612-8754-fed9934eabe4",
+        "sku": "NNV102",
+        "name": "MKR",
+        "brand_id": null,
+        "documents": [],
+        "image_url": null,
+        "is_active": true,
+        "image_urls": [],
+        "updated_at": "2026-07-21T20:40:10.367851+00:00",
+        "category_id": null,
+        "description": "",
+        "product_type": "product",
+        "spec_template_id": null,
+        "matched_line_count": 0,
+        "purchase_treatment": "inventory",
+        "stock_movement_count": 0
+      },
+      "live_preimage_sha256": "4cacb97574a785d2b8b1f134d4237d30cae325590aa7900b917b1231d0ec37a3",
+      "root_decision": "identity_or_business_research_pending",
+      "requires_technical_template": null,
+      "proposed_template": null,
+      "evidence_opened": [],
+      "reason": "Nombre y estado actual insuficientes para adjudicar objeto o tratamiento comercial. Mantener candidato nominal y rastrear origen sin convertir hipótesis en ficha.",
+      "next_investigation": {
+        "owner": "Codex/Claude",
+        "action": "Rastrear documento o inventario original; distinguir contraparte, intervención, componente y paquete. Conservar las referencias históricas y el material físico.",
+        "requires_routine_owner_entry": false
+      },
+      "included_when_inactive": true,
+      "apply_allowed": false,
+      "mechanical_approval": false,
+      "fill_allowed": false
+    },
+    {
+      "id": "be5b3f76-aaa7-4694-badb-89317bc4325f",
+      "sku": "NNV111",
+      "claude_record_sha256": "4cd9300436ae85e647d2347ae4f4364fd01b8a4ecf6d6a47e0fd21aa70b489fe",
+      "original_source_preimage": {
+        "id": "be5b3f76-aaa7-4694-badb-89317bc4325f",
+        "name": "Nota de Crédito Por Cámara Chaoyang 700x25/32C F/V 60MM",
+        "category_id": null,
+        "category_path": null,
+        "candidate_family": null,
+        "status": "business_record_review",
+        "reason": "Nota de crédito por una cámara es identidad de documento, no identidad de cámara. No reclasificar por la pieza citada.",
+        "evidence": {
+          "kind": "existing_catalog_identity",
+          "name": "Nota de Crédito Por Cámara Chaoyang 700x25/32C F/V 60MM",
+          "category_path": null
+        },
+        "independent_review": "pending",
+        "apply_allowed": false
+      },
+      "live_preimage": {
+        "id": "be5b3f76-aaa7-4694-badb-89317bc4325f",
+        "sku": "NNV111",
+        "name": "Nota de Crédito Por Cámara Chaoyang 700x25/32C F/V 60MM",
+        "brand_id": null,
+        "documents": [],
+        "image_url": null,
+        "is_active": true,
+        "image_urls": [],
+        "updated_at": "2026-06-17T17:27:40.223789+00:00",
+        "category_id": null,
+        "description": "",
+        "product_type": "product",
+        "spec_template_id": null,
+        "matched_line_count": 0,
+        "purchase_treatment": "inventory",
+        "stock_movement_count": 2
+      },
+      "live_preimage_sha256": "8f215f68840a59210a5d4f5488924d60e6b32ed1d16ea8f7915cc336dc722759",
+      "root_decision": "identity_or_business_research_pending",
+      "requires_technical_template": null,
+      "proposed_template": null,
+      "evidence_opened": [],
+      "reason": "El rótulo cita una nota de crédito; sus movimientos son apertura y regularización AJ-00225. No se encontró documento de crédito vinculado. No asignar tube por el nombre ni eliminar el registro.",
+      "next_investigation": {
+        "owner": "Codex/Claude",
+        "action": "Rastrear documento o inventario original; distinguir contraparte, intervención, componente y paquete. Conservar las referencias históricas y el material físico.",
+        "requires_routine_owner_entry": false
+      },
+      "included_when_inactive": true,
+      "apply_allowed": false,
+      "mechanical_approval": false,
+      "fill_allowed": false
+    },
+    {
+      "id": "d5803c84-0678-44c7-b204-dd2f9be5f7e4",
+      "sku": "NNV112",
+      "claude_record_sha256": "e724c36b703875891aaac1e9f0c5175ac3064f873c8f16406a18c32d3a358174",
+      "original_source_preimage": {
+        "id": "d5803c84-0678-44c7-b204-dd2f9be5f7e4",
+        "name": "Pack",
+        "category_id": null,
+        "category_path": null,
+        "candidate_family": null,
+        "candidate_alternatives": [],
+        "status": "ambiguous",
+        "reason": "Nombre insuficiente: parece proveedor, marca o rótulo genérico; investigar documentos antes de decidir si representa un producto.",
+        "evidence": {
+          "kind": "existing_catalog_identity",
+          "name": "Pack",
+          "category_path": null
+        },
+        "independent_review": "pending",
+        "apply_allowed": false
+      },
+      "live_preimage": {
+        "id": "d5803c84-0678-44c7-b204-dd2f9be5f7e4",
+        "sku": "NNV112",
+        "name": "Pack",
+        "brand_id": null,
+        "documents": [],
+        "image_url": null,
+        "is_active": true,
+        "image_urls": [],
+        "updated_at": "2026-07-21T20:40:10.464225+00:00",
+        "category_id": null,
+        "description": "",
+        "product_type": "product",
+        "spec_template_id": null,
+        "matched_line_count": 0,
+        "purchase_treatment": "inventory",
+        "stock_movement_count": 0
+      },
+      "live_preimage_sha256": "adb420bf402830d665f480e258f18c82b4064ae436e2b19c9c0754de60c14a03",
+      "root_decision": "identity_or_business_research_pending",
+      "requires_technical_template": null,
+      "proposed_template": null,
+      "evidence_opened": [],
+      "reason": "Nombre y estado actual insuficientes para adjudicar objeto o tratamiento comercial. Mantener candidato nominal y rastrear origen sin convertir hipótesis en ficha.",
+      "next_investigation": {
+        "owner": "Codex/Claude",
+        "action": "Rastrear documento o inventario original; distinguir contraparte, intervención, componente y paquete. Conservar las referencias históricas y el material físico.",
+        "requires_routine_owner_entry": false
+      },
+      "included_when_inactive": true,
+      "apply_allowed": false,
+      "mechanical_approval": false,
+      "fill_allowed": false
+    },
+    {
+      "id": "e21dd68b-a0b5-4b1e-8d3c-c4ceb235fc47",
+      "sku": "NNV125",
+      "claude_record_sha256": "09309a894d3c8ebc34bbaebcb66cbae1c9b0764c25815c4b563cc20865398731",
+      "original_source_preimage": {
+        "id": "e21dd68b-a0b5-4b1e-8d3c-c4ceb235fc47",
+        "name": "Piñon 1v Bettabikes",
+        "category_id": null,
+        "category_path": null,
+        "candidate_family": null,
+        "candidate_alternatives": [
+          "freewheel",
+          "fixed_cog"
+        ],
+        "status": "ambiguous",
+        "reason": "Piñón 1v no distingue rueda libre de piñón fijo.",
+        "evidence": {
+          "kind": "existing_catalog_identity",
+          "name": "Piñon 1v Bettabikes",
+          "category_path": null
+        },
+        "independent_review": "pending",
+        "apply_allowed": false
+      },
+      "live_preimage": {
+        "id": "e21dd68b-a0b5-4b1e-8d3c-c4ceb235fc47",
+        "sku": "NNV125",
+        "name": "Piñon 1v Bettabikes",
+        "brand_id": null,
+        "documents": [],
+        "image_url": null,
+        "is_active": false,
+        "image_urls": [],
+        "updated_at": "2026-05-22T22:32:52.422539+00:00",
+        "category_id": null,
+        "description": "",
+        "product_type": "product",
+        "spec_template_id": null,
+        "matched_line_count": 0,
+        "purchase_treatment": "inventory",
+        "stock_movement_count": 0
+      },
+      "live_preimage_sha256": "0cf645820e86f8372eab7870086bc532a7064176c570ff96eba0b7fd838ec993",
+      "root_decision": "identity_or_business_research_pending",
+      "requires_technical_template": null,
+      "proposed_template": null,
+      "evidence_opened": [],
+      "reason": "Nombre y estado actual insuficientes para adjudicar objeto o tratamiento comercial. Mantener candidato nominal y rastrear origen sin convertir hipótesis en ficha.",
+      "next_investigation": {
+        "owner": "Codex/Claude",
+        "action": "Rastrear documento o inventario original; distinguir contraparte, intervención, componente y paquete. Conservar las referencias históricas y el material físico.",
+        "requires_routine_owner_entry": false
+      },
+      "included_when_inactive": true,
+      "apply_allowed": false,
+      "mechanical_approval": false,
+      "fill_allowed": false
+    },
+    {
+      "id": "db0e972a-bbb9-4c0c-b9fa-f462f7224b25",
+      "sku": "NNV126",
+      "claude_record_sha256": "ac19b2c6c4bb40ef6ea45e7c58e6ae6eb5ec265ec3801b999ccd1e482b596724",
+      "original_source_preimage": {
+        "id": "db0e972a-bbb9-4c0c-b9fa-f462f7224b25",
+        "name": "Piñon 1v Monsoon Bettabikes",
+        "category_id": null,
+        "category_path": null,
+        "candidate_family": null,
+        "candidate_alternatives": [
+          "freewheel",
+          "fixed_cog"
+        ],
+        "status": "ambiguous",
+        "reason": "Piñón 1v no distingue rueda libre de piñón fijo.",
+        "evidence": {
+          "kind": "existing_catalog_identity",
+          "name": "Piñon 1v Monsoon Bettabikes",
+          "category_path": null
+        },
+        "independent_review": "pending",
+        "apply_allowed": false
+      },
+      "live_preimage": {
+        "id": "db0e972a-bbb9-4c0c-b9fa-f462f7224b25",
+        "sku": "NNV126",
+        "name": "Piñon 1v Monsoon Bettabikes",
+        "brand_id": null,
+        "documents": [],
+        "image_url": null,
+        "is_active": false,
+        "image_urls": [],
+        "updated_at": "2026-05-22T22:32:52.422539+00:00",
+        "category_id": null,
+        "description": "",
+        "product_type": "product",
+        "spec_template_id": null,
+        "matched_line_count": 0,
+        "purchase_treatment": "inventory",
+        "stock_movement_count": 0
+      },
+      "live_preimage_sha256": "edeacbde28fad5d60a3f7816087beae44184acf00ce64ca795ea1fb965b56ff5",
+      "root_decision": "identity_or_business_research_pending",
+      "requires_technical_template": null,
+      "proposed_template": null,
+      "evidence_opened": [],
+      "reason": "Nombre y estado actual insuficientes para adjudicar objeto o tratamiento comercial. Mantener candidato nominal y rastrear origen sin convertir hipótesis en ficha.",
+      "next_investigation": {
+        "owner": "Codex/Claude",
+        "action": "Rastrear documento o inventario original; distinguir contraparte, intervención, componente y paquete. Conservar las referencias históricas y el material físico.",
+        "requires_routine_owner_entry": false
+      },
+      "included_when_inactive": true,
+      "apply_allowed": false,
+      "mechanical_approval": false,
+      "fill_allowed": false
+    },
+    {
+      "id": "63001381-18eb-4812-9346-c452bca6165b",
+      "sku": "NNV154",
+      "claude_record_sha256": "60f30cff67a12133c13439534b9f99adeb298555e44cc9a03ebe28069af6633f",
+      "original_source_preimage": {
+        "id": "63001381-18eb-4812-9346-c452bca6165b",
+        "name": "Restauración de Freno Hidráulico",
+        "category_id": null,
+        "category_path": null,
+        "candidate_family": null,
+        "status": "business_record_review",
+        "reason": "Restauración de freno es intervención, no freno de venta.",
+        "evidence": {
+          "kind": "existing_catalog_identity",
+          "name": "Restauración de Freno Hidráulico",
+          "category_path": null
+        },
+        "independent_review": "pending",
+        "apply_allowed": false
+      },
+      "live_preimage": {
+        "id": "63001381-18eb-4812-9346-c452bca6165b",
+        "sku": "NNV154",
+        "name": "Restauración de Freno Hidráulico",
+        "brand_id": null,
+        "documents": [],
+        "image_url": null,
+        "is_active": false,
+        "image_urls": [],
+        "updated_at": "2026-05-22T22:32:52.422539+00:00",
+        "category_id": null,
+        "description": "",
+        "product_type": "product",
+        "spec_template_id": null,
+        "matched_line_count": 0,
+        "purchase_treatment": "inventory",
+        "stock_movement_count": 0
+      },
+      "live_preimage_sha256": "4aed42c49e27885730e3cb57e6e531eb04d31ff6cf02ecd132b0f07dd1271631",
+      "root_decision": "identity_or_business_research_pending",
+      "requires_technical_template": null,
+      "proposed_template": null,
+      "evidence_opened": [],
+      "reason": "Nombre y estado actual insuficientes para adjudicar objeto o tratamiento comercial. Mantener candidato nominal y rastrear origen sin convertir hipótesis en ficha.",
+      "next_investigation": {
+        "owner": "Codex/Claude",
+        "action": "Rastrear documento o inventario original; distinguir contraparte, intervención, componente y paquete. Conservar las referencias históricas y el material físico.",
+        "requires_routine_owner_entry": false
+      },
+      "included_when_inactive": true,
+      "apply_allowed": false,
+      "mechanical_approval": false,
+      "fill_allowed": false
+    },
+    {
+      "id": "689f23ee-650f-4f9a-9919-5f02674bb7b0",
+      "sku": "ACC-TES-59147",
+      "claude_record_sha256": "2f3bbc8dcfef7163a43982f14212edf91fa04bc7baf30bf236bff53c4b213c04",
+      "original_source_preimage": {
+        "id": "689f23ee-650f-4f9a-9919-5f02674bb7b0",
+        "name": "Test",
+        "category_id": "f4bbf969-a871-4e49-80ce-7d50420c95d2",
+        "category_path": "Accesorios / Adaptadores",
+        "candidate_family": null,
+        "status": "business_record_review",
+        "reason": "Registro llamado Test: determinar propósito antes de darle una ficha.",
+        "evidence": {
+          "kind": "existing_catalog_identity",
+          "name": "Test",
+          "category_path": "Accesorios / Adaptadores"
+        },
+        "independent_review": "pending",
+        "apply_allowed": false
+      },
+      "live_preimage": {
+        "id": "689f23ee-650f-4f9a-9919-5f02674bb7b0",
+        "sku": "ACC-TES-59147",
+        "name": "Test",
+        "brand_id": null,
+        "documents": [
+          {
+            "date": "2026-03-16T00:29:15.955208+00:00",
+            "kind": "sale",
+            "name": "Test",
+            "status": "paid",
+            "invoice_id": "956b0eec-df53-411a-9199-efffa854776e",
+            "description": null,
+            "supplier_name": null,
+            "invoice_number": "FV-00446",
+            "purchase_treatment": null
+          }
+        ],
+        "image_url": null,
+        "is_active": true,
+        "image_urls": [],
+        "updated_at": "2026-06-16T15:34:08.59612+00:00",
+        "category_id": "f4bbf969-a871-4e49-80ce-7d50420c95d2",
+        "description": null,
+        "product_type": "product",
+        "spec_template_id": null,
+        "matched_line_count": 1,
+        "purchase_treatment": "inventory",
+        "stock_movement_count": 2
+      },
+      "live_preimage_sha256": "f6e517eb8f2dfa1bd65483b7888773db7db5b3e82211c24203d096a47662b335",
+      "root_decision": "identity_or_business_research_pending",
+      "requires_technical_template": null,
+      "proposed_template": null,
+      "evidence_opened": [],
+      "reason": "Una venta pagada con nombre Test y movimientos de stock impiden tratarlo como desechable por su nombre. Un movimiento cita además FV-00491, fuera de las líneas actuales coincidentes: seguir ese linaje.",
+      "next_investigation": {
+        "owner": "Codex/Claude",
+        "action": "Rastrear documento o inventario original; distinguir contraparte, intervención, componente y paquete. Conservar las referencias históricas y el material físico.",
+        "requires_routine_owner_entry": false
+      },
+      "included_when_inactive": true,
+      "apply_allowed": false,
+      "mechanical_approval": false,
+      "fill_allowed": false
+    },
+    {
+      "id": "6be54ef6-92da-46fe-9c14-7c21592fba71",
+      "sku": "17367",
+      "claude_record_sha256": "c44f73732d17a0d3a37c517c44580e58328fd857d2982674fdda807e943c3081",
+      "original_source_preimage": {
+        "id": "6be54ef6-92da-46fe-9c14-7c21592fba71",
+        "name": "FUNDA PROTECTORA BEST COLOR GRIS",
+        "category_id": "d37ad820-19d5-45a7-a790-d054c255a51c",
+        "category_path": "Accesorios / Fundas",
+        "candidate_family": null,
+        "candidate_alternatives": [
+          "protective_cover"
+        ],
+        "status": "ambiguous",
+        "reason": "No se identifica el objeto que cubre ni dimensiones.",
+        "evidence": {
+          "kind": "existing_catalog_identity",
+          "name": "FUNDA PROTECTORA BEST COLOR GRIS",
+          "category_path": "Accesorios / Fundas"
+        },
+        "independent_review": "pending",
+        "apply_allowed": false
+      },
+      "live_preimage": {
+        "id": "6be54ef6-92da-46fe-9c14-7c21592fba71",
+        "sku": "17367",
+        "name": "FUNDA PROTECTORA BEST COLOR GRIS",
+        "brand_id": "26da6538-a898-45c8-9a53-d4d0ed746c90",
+        "documents": [],
+        "image_url": "https://xzdvtzdqjeyqxnkqprtf.supabase.co/storage/v1/object/public/vinabike-assets/5443b130-cc28-45af-a420-cd500b288890/17367/17367.jpg",
+        "is_active": true,
+        "image_urls": [],
+        "updated_at": "2026-05-22T22:33:41.227011+00:00",
+        "category_id": "d37ad820-19d5-45a7-a790-d054c255a51c",
+        "description": "",
+        "product_type": "product",
+        "spec_template_id": null,
+        "matched_line_count": 0,
+        "purchase_treatment": "inventory",
+        "stock_movement_count": 0
+      },
+      "live_preimage_sha256": "3cd7960822f6ad17bf9f124281ebfb93257786a6bcbd89f9cf4e762e1678d6bc",
+      "root_decision": "family_supported_identity_conflict",
+      "requires_technical_template": true,
+      "proposed_template": {
+        "template_key": "bike_protection",
+        "template_id": "479bdd38-e5e2-5123-9268-4bb60ef24467",
+        "technical_family": "bike_protection"
+      },
+      "evidence_opened": [
+        {
+          "kind": "image_opened_by_root",
+          "path": ".tmp/product-spec-catalog/identity-images/6be54ef6-92da-46fe-9c14-7c21592fba71.img",
+          "sha256": "176dc9348cf7234bc5e32f49b6a9192db06f03e1460ed707d1ee0a0d3a8dea90",
+          "source_url": "https://xzdvtzdqjeyqxnkqprtf.supabase.co/storage/v1/object/public/vinabike-assets/5443b130-cc28-45af-a420-cd500b288890/17367/17367.jpg",
+          "scope": "object type; no pixel-based dimensions or OEM fitment",
+          "observed_package_text": {
+            "brand": "VISION",
+            "code": "17367",
+            "dimensions_printed": "200 x 58 x 100 cm",
+            "dimensional_axes_explicit": false
+          }
+        }
+      ],
+      "reason": "Envase: funda para bicicletas, VISION y código 17367. Código coincidente, marca BEST del nombre en conflicto.",
+      "next_investigation": {
+        "owner": "Codex/Claude",
+        "action": "Localizar documento del proveedor para código 17367 y resolver BEST/VISION antes de adoptar marca o medidas; todos los tamaños es un reclamo comercial, no calce universal.",
+        "requires_routine_owner_entry": false
+      },
+      "included_when_inactive": true,
+      "apply_allowed": false,
+      "mechanical_approval": false,
+      "fill_allowed": false
+    },
+    {
+      "id": "49dd4bf9-fae0-48d0-aaa8-50b1f5ed1670",
+      "sku": "NNV56",
+      "claude_record_sha256": "472f45ad6667132ac75c7001154c2ecc6ae4b5adde790cfe5eef0fd701c7d11c",
+      "original_source_preimage": {
+        "id": "49dd4bf9-fae0-48d0-aaa8-50b1f5ed1670",
+        "name": "Freno Hidráulico Delantero Tanke 4 Pistones Morado Metálico",
+        "category_id": "2feb2f2e-5cd4-478b-8883-6c0dfa1cea02",
+        "category_path": "Componentes / Frenos / Frenos Hidráulicos",
+        "candidate_family": null,
+        "candidate_alternatives": [
+          "complete_brake",
+          "brake_caliper"
+        ],
+        "status": "ambiguous",
+        "reason": "Freno hidráulico delantero sin lista de componentes: confirmar si incluye manilla/manguera/cáliper.",
+        "evidence": {
+          "kind": "existing_catalog_identity",
+          "name": "Freno Hidráulico Delantero Tanke 4 Pistones Morado Metálico",
+          "category_path": "Componentes / Frenos / Frenos Hidráulicos"
+        },
+        "independent_review": "pending",
+        "apply_allowed": false
+      },
+      "live_preimage": {
+        "id": "49dd4bf9-fae0-48d0-aaa8-50b1f5ed1670",
+        "sku": "NNV56",
+        "name": "Freno Hidráulico Delantero Tanke 4 Pistones Morado Metálico",
+        "brand_id": null,
+        "documents": [],
+        "image_url": "https://xzdvtzdqjeyqxnkqprtf.supabase.co/storage/v1/object/public/vinabike-assets/5443b130-cc28-45af-a420-cd500b288890/NNV56/Freno Hidraulico Delantero Tanke 4 Pistones Morado Metalico .jpg",
+        "is_active": true,
+        "image_urls": [],
+        "updated_at": "2026-05-22T22:33:41.227011+00:00",
+        "category_id": "2feb2f2e-5cd4-478b-8883-6c0dfa1cea02",
+        "description": "",
+        "product_type": "product",
+        "spec_template_id": null,
+        "matched_line_count": 0,
+        "purchase_treatment": "inventory",
+        "stock_movement_count": 0
+      },
+      "live_preimage_sha256": "ee6d8d70d6f3428fcf3280f087fee5ea031e0be71c08c4d23a566c90dc0da421",
+      "root_decision": "identity_or_business_research_pending",
+      "requires_technical_template": null,
+      "proposed_template": null,
+      "evidence_opened": [],
+      "reason": "Nombre y estado actual insuficientes para adjudicar objeto o tratamiento comercial. Mantener candidato nominal y rastrear origen sin convertir hipótesis en ficha.",
+      "next_investigation": {
+        "owner": "Codex/Claude",
+        "action": "Rastrear documento o inventario original; distinguir contraparte, intervención, componente y paquete. Conservar las referencias históricas y el material físico.",
+        "requires_routine_owner_entry": false
+      },
+      "included_when_inactive": true,
+      "apply_allowed": false,
+      "mechanical_approval": false,
+      "fill_allowed": false
+    },
+    {
+      "id": "5908b918-2403-4128-a5c7-c1e5bb70cd0e",
+      "sku": "PO02770019255",
+      "claude_record_sha256": "c13022cb70cbc3bed979f1a3ff2f9605cf4c108adeab3bf56cfcf47e2626541a",
+      "original_source_preimage": {
+        "id": "5908b918-2403-4128-a5c7-c1e5bb70cd0e",
+        "name": "EJE BLOQUEO SOLO DELANTERO (min.10pcs) ALTERNATIVO 2022 ECONOM.",
+        "category_id": "3e618617-bbc1-4cf5-8220-4258f1e83981",
+        "category_path": "Componentes / Ruedas / Mazas / Ejes",
+        "candidate_family": null,
+        "candidate_alternatives": [
+          "hub_axle",
+          "wheel_retention"
+        ],
+        "status": "ambiguous",
+        "reason": "Eje bloqueo no distingue inequívocamente eje hueco de aguja de cierre; comprobar imagen.",
+        "evidence": {
+          "kind": "existing_catalog_identity",
+          "name": "EJE BLOQUEO SOLO DELANTERO (min.10pcs) ALTERNATIVO 2022 ECONOM.",
+          "category_path": "Componentes / Ruedas / Mazas / Ejes"
+        },
+        "independent_review": "pending",
+        "apply_allowed": false
+      },
+      "live_preimage": {
+        "id": "5908b918-2403-4128-a5c7-c1e5bb70cd0e",
+        "sku": "PO02770019255",
+        "name": "EJE BLOQUEO SOLO DELANTERO (min.10pcs) ALTERNATIVO 2022 ECONOM.",
+        "brand_id": "9192658c-2fb0-4d19-b81f-1f6c8350eb39",
+        "documents": [
+          {
+            "date": "2026-08-20T19:43:32.458555+00:00",
+            "kind": "sale",
+            "name": "EJE BLOQUEO SOLO DELANTERO (min.10pcs) ALTERNATIVO 2022 ECONOM.",
+            "status": "paid",
+            "invoice_id": "f99cfae3-d3cf-4c3a-acc4-8c5318752de6",
+            "description": "",
+            "supplier_name": null,
+            "invoice_number": "FV-00978",
+            "purchase_treatment": null
+          }
+        ],
+        "image_url": "https://xzdvtzdqjeyqxnkqprtf.supabase.co/storage/v1/object/public/vinabike-assets/5443b130-cc28-45af-a420-cd500b288890/PO02770019255/19255.jpg",
+        "is_active": true,
+        "image_urls": [],
+        "updated_at": "2026-07-08T16:02:07.939939+00:00",
+        "category_id": "3e618617-bbc1-4cf5-8220-4258f1e83981",
+        "description": "",
+        "product_type": "product",
+        "spec_template_id": null,
+        "matched_line_count": 1,
+        "purchase_treatment": "workshop_consumable",
+        "stock_movement_count": 2
+      },
+      "live_preimage_sha256": "86b09fa6816322d4ef0e1b54ead905d0c18c9dc684d5b723298064db72db419e",
+      "root_decision": "family_supported_pending_global_gates",
+      "requires_technical_template": true,
+      "proposed_template": {
+        "template_key": "hub_axle",
+        "template_id": "7883bd2d-8ff0-583c-a4f2-606e23a6ce21",
+        "technical_family": "hub_axle"
+      },
+      "evidence_opened": [
+        {
+          "kind": "image_opened_by_root",
+          "path": ".tmp/product-spec-catalog/identity-images/5908b918-2403-4128-a5c7-c1e5bb70cd0e.img",
+          "sha256": "5f05059ed7bf221702e277cadc294102cfcdad47ce27935955ccf38d770eef02",
+          "source_url": "https://xzdvtzdqjeyqxnkqprtf.supabase.co/storage/v1/object/public/vinabike-assets/5443b130-cc28-45af-a420-cd500b288890/PO02770019255/19255.jpg",
+          "scope": "object type; no pixel-based dimensions or OEM fitment"
+        }
+      ],
+      "reason": "Root abrió la imagen: eje de maza con conos y contratuercas. Respalda hub_axle, sin inferir dimensiones, paso ni modelo de maza.",
+      "next_investigation": {
+        "owner": "Codex/Claude",
+        "action": "Investigar código del proveedor y documentación de diámetro, paso y longitud. No convertir min.10pcs en contenido ni 7/8 9V en mazas aprobadas.",
+        "requires_routine_owner_entry": false
+      },
+      "included_when_inactive": true,
+      "apply_allowed": false,
+      "mechanical_approval": false,
+      "fill_allowed": false
+    },
+    {
+      "id": "ce2e2810-35ed-47fc-85ba-0ecf2ba3fd57",
+      "sku": "PO02633001073",
+      "claude_record_sha256": "5843876c0e1e827368bb1749d87dd3b2ec5d144f6f724ba14a5a8d74f6b6dde9",
+      "original_source_preimage": {
+        "id": "ce2e2810-35ed-47fc-85ba-0ecf2ba3fd57",
+        "name": "EJE BLOQUEO TRASERO 7/8 9V. COMPATIBLE / GENERICO",
+        "category_id": "3e618617-bbc1-4cf5-8220-4258f1e83981",
+        "category_path": "Componentes / Ruedas / Mazas / Ejes",
+        "candidate_family": null,
+        "candidate_alternatives": [
+          "hub_axle",
+          "wheel_retention"
+        ],
+        "status": "ambiguous",
+        "reason": "Eje bloqueo no distingue inequívocamente eje hueco de aguja de cierre; comprobar imagen.",
+        "evidence": {
+          "kind": "existing_catalog_identity",
+          "name": "EJE BLOQUEO TRASERO 7/8 9V. COMPATIBLE / GENERICO",
+          "category_path": "Componentes / Ruedas / Mazas / Ejes"
+        },
+        "independent_review": "pending",
+        "apply_allowed": false
+      },
+      "live_preimage": {
+        "id": "ce2e2810-35ed-47fc-85ba-0ecf2ba3fd57",
+        "sku": "PO02633001073",
+        "name": "EJE BLOQUEO TRASERO 7/8 9V. COMPATIBLE / GENERICO",
+        "brand_id": null,
+        "documents": [],
+        "image_url": "https://xzdvtzdqjeyqxnkqprtf.supabase.co/storage/v1/object/public/vinabike-assets/5443b130-cc28-45af-a420-cd500b288890/PO02633001073/1073.jpg",
+        "is_active": true,
+        "image_urls": [],
+        "updated_at": "2026-05-22T22:33:41.227011+00:00",
+        "category_id": "3e618617-bbc1-4cf5-8220-4258f1e83981",
+        "description": "",
+        "product_type": "product",
+        "spec_template_id": null,
+        "matched_line_count": 0,
+        "purchase_treatment": "inventory",
+        "stock_movement_count": 0
+      },
+      "live_preimage_sha256": "a8dfc10f6c5659db5394f9b593a1be964f943f682f195fccd8aac593ca0b849c",
+      "root_decision": "family_supported_pending_global_gates",
+      "requires_technical_template": true,
+      "proposed_template": {
+        "template_key": "hub_axle",
+        "template_id": "7883bd2d-8ff0-583c-a4f2-606e23a6ce21",
+        "technical_family": "hub_axle"
+      },
+      "evidence_opened": [
+        {
+          "kind": "image_opened_by_root",
+          "path": ".tmp/product-spec-catalog/identity-images/ce2e2810-35ed-47fc-85ba-0ecf2ba3fd57.img",
+          "sha256": "795047d8acee8087b78554c166856a184eea4c1d6876173b78f57a0729a7c5d4",
+          "source_url": "https://xzdvtzdqjeyqxnkqprtf.supabase.co/storage/v1/object/public/vinabike-assets/5443b130-cc28-45af-a420-cd500b288890/PO02633001073/1073.jpg",
+          "scope": "object type; no pixel-based dimensions or OEM fitment"
+        }
+      ],
+      "reason": "Root abrió la imagen: eje de maza con conos y contratuercas. Respalda hub_axle, sin inferir dimensiones, paso ni modelo de maza.",
+      "next_investigation": {
+        "owner": "Codex/Claude",
+        "action": "Investigar código del proveedor y documentación de diámetro, paso y longitud. No convertir min.10pcs en contenido ni 7/8 9V en mazas aprobadas.",
+        "requires_routine_owner_entry": false
+      },
+      "included_when_inactive": true,
+      "apply_allowed": false,
+      "mechanical_approval": false,
+      "fill_allowed": false
+    },
+    {
+      "id": "f8089a2e-da2a-430c-8949-137fdd1930a7",
+      "sku": "M010",
+      "claude_record_sha256": "f64fd140245297dd72cc897ba371e281fd41eb2fd3dfcfa2c8ac6bf4608bc250",
+      "original_source_preimage": {
+        "id": "f8089a2e-da2a-430c-8949-137fdd1930a7",
+        "name": "Cámara nueva + servicio de cambio",
+        "category_id": "266b99d3-f0b4-4deb-b156-c192ec024ee0",
+        "category_path": "Servicio",
+        "candidate_family": null,
+        "status": "business_record_review",
+        "reason": "Paquete cámara + servicio: resolver componentes y tratamiento comercial antes de asignar una ficha de cámara plana.",
+        "evidence": {
+          "kind": "existing_catalog_identity",
+          "name": "Cámara nueva + servicio de cambio",
+          "category_path": "Servicio"
+        },
+        "independent_review": "pending",
+        "apply_allowed": false
+      },
+      "live_preimage": {
+        "id": "f8089a2e-da2a-430c-8949-137fdd1930a7",
+        "sku": "M010",
+        "name": "Cámara nueva + servicio de cambio",
+        "brand_id": null,
+        "documents": [
+          {
+            "date": "2026-06-04T13:29:50.908075+00:00",
+            "kind": "sale",
+            "name": "Cámara nueva + servicio de cambio",
+            "status": "paid",
+            "invoice_id": "c750d368-1354-4ec7-8e30-86b382ec196e",
+            "description": "",
+            "supplier_name": null,
+            "invoice_number": "FV-00714",
+            "purchase_treatment": null
+          },
+          {
+            "date": "2026-08-29T19:47:53.509425+00:00",
+            "kind": "sale",
+            "name": "Cámara nueva + servicio de cambio",
+            "status": "paid",
+            "invoice_id": "ff00bb48-da01-4f8f-87f7-c5e1f6ad85a4",
+            "description": null,
+            "supplier_name": null,
+            "invoice_number": "FV-00986",
+            "purchase_treatment": null
+          }
+        ],
+        "image_url": null,
+        "is_active": true,
+        "image_urls": [],
+        "updated_at": "2026-08-11T19:44:13.421722+00:00",
+        "category_id": "266b99d3-f0b4-4deb-b156-c192ec024ee0",
+        "description": "",
+        "product_type": "product",
+        "spec_template_id": null,
+        "matched_line_count": 2,
+        "purchase_treatment": "workshop_consumable",
+        "stock_movement_count": 1
+      },
+      "live_preimage_sha256": "63b0838c1199dcdaad453f044bcee9b804ad529aea09d1a704703a4f29ca20bd",
+      "root_decision": "identity_or_business_research_pending",
+      "requires_technical_template": null,
+      "proposed_template": null,
+      "evidence_opened": [],
+      "reason": "Dos ventas pagadas y una salida de stock documentan Cámara nueva + servicio. No identifican la variante de cámara ni justifican excluir el material físico del saneamiento.",
+      "next_investigation": {
+        "owner": "Codex/Claude",
+        "action": "Rastrear documento o inventario original; distinguir contraparte, intervención, componente y paquete. Conservar las referencias históricas y el material físico.",
+        "requires_routine_owner_entry": false
+      },
+      "included_when_inactive": true,
+      "apply_allowed": false,
+      "mechanical_approval": false,
+      "fill_allowed": false
+    },
+    {
+      "id": "dec02e89-94f5-4fb4-bcec-b59231176120",
+      "sku": "NNV43",
+      "claude_record_sha256": "66dbb6d36925092bb4b35e92653b9b758e86b85f86231a0a9275ab08062bafe3",
+      "original_source_preimage": {
+        "id": "dec02e89-94f5-4fb4-bcec-b59231176120",
+        "name": "Descontaminación Disco de Freno",
+        "category_id": "266b99d3-f0b4-4deb-b156-c192ec024ee0",
+        "category_path": "Servicio",
+        "candidate_family": null,
+        "status": "business_record_review",
+        "reason": "El nombre describe intervención de taller, no pieza física.",
+        "evidence": {
+          "kind": "existing_catalog_identity",
+          "name": "Descontaminación Disco de Freno",
+          "category_path": "Servicio"
+        },
+        "independent_review": "pending",
+        "apply_allowed": false
+      },
+      "live_preimage": {
+        "id": "dec02e89-94f5-4fb4-bcec-b59231176120",
+        "sku": "NNV43",
+        "name": "Descontaminación Disco de Freno",
+        "brand_id": null,
+        "documents": [
+          {
+            "date": "2025-12-03T03:00:00+00:00",
+            "kind": "sale",
+            "name": "Descontaminación Disco de Freno",
+            "status": "paid",
+            "invoice_id": "568833ea-9a2a-40d3-8f95-22254affa451",
+            "description": "+ Pastillas de Freno\n+ Limpieza de Caliper",
+            "supplier_name": null,
+            "invoice_number": "FV-00082",
+            "purchase_treatment": null
+          },
+          {
+            "date": "2026-01-27T11:47:29.295175+00:00",
+            "kind": "sale",
+            "name": "Descontaminación Disco de Freno",
+            "status": "paid",
+            "invoice_id": "00e47777-5e35-4820-bbcc-6ed7b95dc010",
+            "description": "+ CAMBIO DE PIOLAS\n+ LUBRICACIÓN DE FUNDAS\n+ REGULACIÓN\n\nFRENO DELANTERO\nFRENO TRASERO",
+            "supplier_name": null,
+            "invoice_number": "FV-00299",
+            "purchase_treatment": null
+          },
+          {
+            "date": "2026-01-28T18:57:18.795+00:00",
+            "kind": "sale",
+            "name": "Descontaminación Disco de Freno",
+            "status": "paid",
+            "invoice_id": "546eae3c-5b36-43c9-bf76-868fec181c85",
+            "description": "Ambos discos",
+            "supplier_name": null,
+            "invoice_number": "FV-00307",
+            "purchase_treatment": null
+          },
+          {
+            "date": "2026-05-15T12:32:21.678182+00:00",
+            "kind": "sale",
+            "name": "Descontaminación Disco de Freno",
+            "status": "paid",
+            "invoice_id": "54f919fe-76e3-4b99-8ad7-62a9eeeef9c9",
+            "description": null,
+            "supplier_name": null,
+            "invoice_number": "FV-00654",
+            "purchase_treatment": null
+          },
+          {
+            "date": "2026-06-06T12:52:09.647551+00:00",
+            "kind": "sale",
+            "name": "Descontaminación Disco de Freno",
+            "status": "paid",
+            "invoice_id": "234b8199-e479-4643-a43d-f2329ac0e176",
+            "description": "+Descontaminación de Pastillas de freno",
+            "supplier_name": null,
+            "invoice_number": "FV-00721",
+            "purchase_treatment": null
+          }
+        ],
+        "image_url": null,
+        "is_active": true,
+        "image_urls": [],
+        "updated_at": "2026-06-19T18:45:17.999621+00:00",
+        "category_id": "266b99d3-f0b4-4deb-b156-c192ec024ee0",
+        "description": "",
+        "product_type": "product",
+        "spec_template_id": null,
+        "matched_line_count": 5,
+        "purchase_treatment": "workshop_consumable",
+        "stock_movement_count": 5
+      },
+      "live_preimage_sha256": "dc60c9b817cdffc37b0f12c6a67962fcaae79f63997b3641a0624dc8aa348d6e",
+      "root_decision": "service_workflow_supported",
+      "requires_technical_template": false,
+      "proposed_template": null,
+      "evidence_opened": [],
+      "reason": "Ventas pagadas describen intervenciones de limpieza/retiro de óxido. Requieren contrato de servicio y materiales, sin inventar ficha de componente.",
+      "next_investigation": {
+        "owner": "Codex/Claude",
+        "action": "Revisar mapeo de servicio y referencias antes de proponer corrección de product_type. Preservar materiales y consumos sin partir ni reescribir ventas.",
+        "requires_routine_owner_entry": false
+      },
+      "included_when_inactive": true,
+      "apply_allowed": false,
+      "mechanical_approval": false,
+      "fill_allowed": false
+    },
+    {
+      "id": "c1885a05-91bd-48ed-9afe-054f45c97360",
+      "sku": "NNV155",
+      "claude_record_sha256": "d1280f14785ce855bc244db3456962f1f2797918a3a48004d420eac054904ad5",
+      "original_source_preimage": {
+        "id": "c1885a05-91bd-48ed-9afe-054f45c97360",
+        "name": "Retiro de Óxido",
+        "category_id": "266b99d3-f0b4-4deb-b156-c192ec024ee0",
+        "category_path": "Servicio",
+        "candidate_family": null,
+        "status": "business_record_review",
+        "reason": "El nombre describe intervención de taller, no pieza física.",
+        "evidence": {
+          "kind": "existing_catalog_identity",
+          "name": "Retiro de Óxido",
+          "category_path": "Servicio"
+        },
+        "independent_review": "pending",
+        "apply_allowed": false
+      },
+      "live_preimage": {
+        "id": "c1885a05-91bd-48ed-9afe-054f45c97360",
+        "sku": "NNV155",
+        "name": "Retiro de Óxido",
+        "brand_id": null,
+        "documents": [
+          {
+            "date": "2026-03-18T18:52:00.434494+00:00",
+            "kind": "sale",
+            "name": "Retiro de Óxido",
+            "status": "paid",
+            "invoice_id": "e46c761a-903f-4335-8df3-5132a1cb3ab6",
+            "description": "Retiro de óxido de Cadena",
+            "supplier_name": null,
+            "invoice_number": "FV-00457",
+            "purchase_treatment": null
+          }
+        ],
+        "image_url": null,
+        "is_active": true,
+        "image_urls": [],
+        "updated_at": "2026-06-23T20:11:02.435693+00:00",
+        "category_id": "266b99d3-f0b4-4deb-b156-c192ec024ee0",
+        "description": "",
+        "product_type": "product",
+        "spec_template_id": null,
+        "matched_line_count": 1,
+        "purchase_treatment": "workshop_consumable",
+        "stock_movement_count": 1
+      },
+      "live_preimage_sha256": "3300c5a31a03486b787368278648075dc49e08075f0feb693f467b18765dbbb3",
+      "root_decision": "service_workflow_supported",
+      "requires_technical_template": false,
+      "proposed_template": null,
+      "evidence_opened": [],
+      "reason": "Ventas pagadas describen intervenciones de limpieza/retiro de óxido. Requieren contrato de servicio y materiales, sin inventar ficha de componente.",
+      "next_investigation": {
+        "owner": "Codex/Claude",
+        "action": "Revisar mapeo de servicio y referencias antes de proponer corrección de product_type. Preservar materiales y consumos sin partir ni reescribir ventas.",
+        "requires_routine_owner_entry": false
+      },
+      "included_when_inactive": true,
+      "apply_allowed": false,
+      "mechanical_approval": false,
+      "fill_allowed": false
+    },
+    {
+      "id": "9dace983-0f30-49c7-9a3f-7a1b8ea62133",
+      "sku": "2854",
+      "original_review_record": {
+        "id": "9dace983-0f30-49c7-9a3f-7a1b8ea62133",
+        "name": "Aceite Mineral Chepark",
+        "source_preimage": {
+          "artifact": "unmapped-product-ficha-codex-review-2026-09-06.json",
+          "artifact_sha256": "72661039d8b5ad9662a771734ba6dbe7e2958a1b3cba9979f1a7958449ee140d",
+          "status": "ambiguous",
+          "reason": "Aceite sin sistema/uso inequívoco; nunca certificar uso en frenos por ser mineral.",
+          "candidate_family": null,
+          "candidate_alternatives": [
+            "workshop_chemical",
+            "brake_fluid"
+          ],
+          "category_id": "e413b6fa-5a21-4757-aa7e-14e64e5a112b",
+          "category_path": "Viñabike / Grasa/Aceites/Soluciones/Limpiadores",
+          "apply_allowed": false,
+          "independent_review": "pending"
+        },
+        "register_facts": {
+          "sku": "2854",
+          "active": true,
+          "facts_count": 0,
+          "template_id": null,
+          "has_image_evidence": false,
+          "codex_candidate_object_class": null
+        },
+        "evidence_read": [
+          "Registro global all-product-review-register-2026-09-06.json: sku, active, facts_count, image_evidence.",
+          "Registro de plantillas de la base congelada: existencia de la clave, su id y su familia técnica.",
+          "Búsqueda pública: Chepark comercializa BIC-860, aceite mineral para freno hidráulico, en presentaciones que incluyen 1000 ml, distribuido en mercados hispanohablantes."
+        ],
+        "decision": "pendiente",
+        "not_a_technical_product": false,
+        "proposed_family": {
+          "template_key": "brake_fluid",
+          "template_id": "2a8d4d76-2120-51e6-a2f7-42be2563c7d7",
+          "technical_family": "brake_fluid"
+        },
+        "considered_alternatives": [
+          {
+            "template_key": "workshop_chemical",
+            "template_id": "61bc1c93-8b73-55d0-9584-6087a8190dfe",
+            "technical_family": "workshop_chemical"
+          }
+        ],
+        "confidence": "media",
+        "gap": "El registro no tiene imagen ni modelo ni volumen. Que Chepark venda un aceite mineral de freno no demuestra que este sku sea ése: la marca también vende otros lubricantes y limpiadores, y en este mismo catálogo hay cinco registros Chepark distintos.",
+        "next_investigation": {
+          "assignee": "Claude",
+          "action": "Leer el documento de compra para capturar el código y el volumen; si aparece BIC-860 o equivalente, la familia queda respaldada y si no, se queda en workshop_chemical."
+        },
+        "note": "La palabra «mineral» no certifica por sí sola el uso en frenos; lo que mueve la lectura es que la marca tenga una línea de aceite de freno, y aun así no basta.",
+        "apply_allowed": false,
+        "assignment_made": false
+      },
+      "live_projection": {
+        "id": "9dace983-0f30-49c7-9a3f-7a1b8ea62133",
+        "sku": "2854",
+        "name": "Aceite Mineral Chepark",
+        "brand_id": null,
+        "documents": [
+          {
+            "date": "2025-11-15T06:15:10.461+00:00",
+            "kind": "sale",
+            "name": "Aceite Mineral Chepark",
+            "status": "draft",
+            "invoice_id": "dbaa6e24-c6d0-49c4-be44-12971b9856d9",
+            "description": null,
+            "supplier_name": null,
+            "invoice_number": "FV-00016",
+            "purchase_treatment": null
+          }
+        ],
+        "image_url": null,
+        "is_active": true,
+        "image_urls": [],
+        "updated_at": "2026-07-21T20:40:10.442722+00:00",
+        "category_id": "e413b6fa-5a21-4757-aa7e-14e64e5a112b",
+        "description": "",
+        "product_type": "product",
+        "spec_template_id": null,
+        "matched_line_count": 1,
+        "purchase_treatment": "workshop_consumable",
+        "stock_movement_count": 3
+      },
+      "projection_scope": "Campos nombrados en unmapped-seven-root-verification.sql; no es la fila products completa.",
+      "root_decision": "identity_or_business_research_pending",
+      "requires_technical_template": null,
+      "proposed_template": null,
+      "reason": "Aceite mineral sin imagen ni código OEM. Venta en borrador y movimientos prueban registros de actividad, no uso físico ni identidad de BIC-860. Una cantidad de stock de 1000 no identifica 1000 ml.",
+      "evidence_opened": [],
+      "next_investigation": {
+        "owner": "Codex/Claude",
+        "action": "Localizar documento o imagen exacta de Chepark/Vittal 2854; comparar código y uso declarado.",
+        "requires_routine_owner_entry": false
+      },
+      "included_when_inactive": true,
+      "apply_allowed": false,
+      "mechanical_approval": false,
+      "fill_allowed": false
+    },
+    {
+      "id": "ccdb85f9-8456-4da3-930a-e3d359ca6f47",
+      "sku": "67",
+      "original_review_record": {
+        "id": "ccdb85f9-8456-4da3-930a-e3d359ca6f47",
+        "name": "ACEITE NACIONAL",
+        "source_preimage": {
+          "artifact": "unmapped-product-ficha-codex-review-2026-09-06.json",
+          "artifact_sha256": "72661039d8b5ad9662a771734ba6dbe7e2958a1b3cba9979f1a7958449ee140d",
+          "status": "ambiguous",
+          "reason": "Aceite sin sistema/uso inequívoco; nunca certificar uso en frenos por ser mineral.",
+          "candidate_family": null,
+          "candidate_alternatives": [
+            "workshop_chemical",
+            "brake_fluid"
+          ],
+          "category_id": "e413b6fa-5a21-4757-aa7e-14e64e5a112b",
+          "category_path": "Viñabike / Grasa/Aceites/Soluciones/Limpiadores",
+          "apply_allowed": false,
+          "independent_review": "pending"
+        },
+        "register_facts": {
+          "sku": "67",
+          "active": true,
+          "facts_count": 0,
+          "template_id": null,
+          "has_image_evidence": true,
+          "codex_candidate_object_class": "workshop_lubricant"
+        },
+        "evidence_read": [
+          "Registro global all-product-review-register-2026-09-06.json: sku, active, facts_count, image_evidence.",
+          "Registro de plantillas de la base congelada: existencia de la clave, su id y su familia técnica.",
+          "Registro de revisión de imagen de Codex (leí el registro, no abrí el archivo de imagen): sha256 de la imagen 42ef7eae7554e1f77f8616d7784e7775f046ff6cc422ac8353caf5d11aeea7a3 — «Etiqueta visible de lubricante multipropósito; no fluido de frenos, y no deducir composición mineral/DOT.»"
+        ],
+        "decision": "respaldada",
+        "not_a_technical_product": false,
+        "proposed_family": {
+          "template_key": "workshop_chemical",
+          "template_id": "61bc1c93-8b73-55d0-9584-6087a8190dfe",
+          "technical_family": "workshop_chemical"
+        },
+        "considered_alternatives": [
+          {
+            "template_key": "brake_fluid",
+            "template_id": "2a8d4d76-2120-51e6-a2f7-42be2563c7d7",
+            "technical_family": "brake_fluid"
+          }
+        ],
+        "confidence": "alta",
+        "gap": "Falta el volumen y el envase; la etiqueta de la imagen no da la composición.",
+        "next_investigation": {
+          "assignee": "Claude",
+          "action": "Leer el volumen y el envase del documento de compra, y dejar escrito en not_for que no está declarado como líquido de frenos."
+        },
+        "note": "La imagen dice lubricante multipropósito. No se certifica uso en frenos y no se deduce composición. workshop_chemical tiene el campo not_for, que es donde eso se dice sin afirmar nada de más.",
+        "apply_allowed": false,
+        "assignment_made": false
+      },
+      "live_projection": {
+        "id": "ccdb85f9-8456-4da3-930a-e3d359ca6f47",
+        "sku": "67",
+        "name": "ACEITE NACIONAL",
+        "brand_id": null,
+        "documents": [
+          {
+            "date": "2025-11-15T06:15:10.461+00:00",
+            "kind": "sale",
+            "name": "ACEITE NACIONAL",
+            "status": "draft",
+            "invoice_id": "dbaa6e24-c6d0-49c4-be44-12971b9856d9",
+            "description": null,
+            "supplier_name": null,
+            "invoice_number": "FV-00016",
+            "purchase_treatment": null
+          }
+        ],
+        "image_url": "https://xzdvtzdqjeyqxnkqprtf.supabase.co/storage/v1/object/public/vinabike-assets/5443b130-cc28-45af-a420-cd500b288890/67/Captura_de_pantalla_2025-03-05_130858.png",
+        "is_active": true,
+        "image_urls": [],
+        "updated_at": "2026-05-22T22:33:41.227011+00:00",
+        "category_id": "e413b6fa-5a21-4757-aa7e-14e64e5a112b",
+        "description": "test 2",
+        "product_type": "product",
+        "spec_template_id": null,
+        "matched_line_count": 1,
+        "purchase_treatment": "inventory",
+        "stock_movement_count": 0
+      },
+      "projection_scope": "Campos nombrados en unmapped-seven-root-verification.sql; no es la fila products completa.",
+      "root_decision": "family_backed_pending_gates",
+      "requires_technical_template": true,
+      "proposed_template": {
+        "key": "workshop_chemical",
+        "id": "61bc1c93-8b73-55d0-9584-6087a8190dfe",
+        "technical_family": "workshop_chemical"
+      },
+      "reason": "Etiqueta LUBETRAC, lubricante multipropósito. ACEITE NACIONAL es un nombre genérico, no una marca contradictoria por sí misma. El volumen no se lee con seguridad.",
+      "evidence_opened": [
+        {
+          "kind": "existing_catalog_image",
+          "url": "https://xzdvtzdqjeyqxnkqprtf.supabase.co/storage/v1/object/public/vinabike-assets/5443b130-cc28-45af-a420-cd500b288890/67/Captura_de_pantalla_2025-03-05_130858.png",
+          "path": ".tmp/product-spec-catalog/identity-images/ccdb85f9-8456-4da3-930a-e3d359ca6f47.img",
+          "sha256": "42ef7eae7554e1f77f8616d7784e7775f046ff6cc422ac8353caf5d11aeea7a3",
+          "opened_by": [
+            "Claude",
+            "Codex"
+          ],
+          "limits": "Imagen comercial: no prueba por sí sola la variante física en stock."
+        }
+      ],
+      "next_investigation": {
+        "owner": "Codex/Claude",
+        "action": "Buscar el envase exacto y su ficha. No completar formulación, volumen o aprobación de frenos sin evidencia.",
+        "requires_routine_owner_entry": false
+      },
+      "included_when_inactive": true,
+      "apply_allowed": false,
+      "mechanical_approval": false,
+      "fill_allowed": false
+    },
+    {
+      "id": "49b90689-b504-4216-81e3-b311e29bfb90",
+      "sku": "1541",
+      "original_review_record": {
+        "id": "49b90689-b504-4216-81e3-b311e29bfb90",
+        "name": "GOMITA PARA FRENO V-BRAKE COMPATIBLE / GENERICO",
+        "source_preimage": {
+          "artifact": "unmapped-product-ficha-codex-review-2026-09-06.json",
+          "artifact_sha256": "72661039d8b5ad9662a771734ba6dbe7e2958a1b3cba9979f1a7958449ee140d",
+          "status": "ambiguous",
+          "reason": "Gomita V-Brake puede ser guardapolvo del cable o goma de frenado: requiere imagen.",
+          "candidate_family": null,
+          "candidate_alternatives": [
+            "brake_pad",
+            "brake_cable_boot"
+          ],
+          "category_id": "406eb822-e49c-43d2-b4f1-df92cc50fbaf",
+          "category_path": "Componentes / Frenos / V-Brake / Gomas V-Brake",
+          "apply_allowed": false,
+          "independent_review": "pending"
+        },
+        "register_facts": {
+          "sku": "1541",
+          "active": true,
+          "facts_count": 0,
+          "template_id": null,
+          "has_image_evidence": true,
+          "codex_candidate_object_class": "brake_cable_boot"
+        },
+        "evidence_read": [
+          "Registro global all-product-review-register-2026-09-06.json: sku, active, facts_count, image_evidence.",
+          "Registro de plantillas de la base congelada: existencia de la clave, su id y su familia técnica.",
+          "Registro de revisión de imagen de Codex (leí el registro, no abrí el archivo de imagen): sha256 de la imagen adafb07fd22454ac5bdec428455d5f495bd1ebf3e921005251c28afd69583dc1 — «Fuelle de goma para cable V-Brake, no zapata ni pastilla.»"
+        ],
+        "decision": "respaldada",
+        "not_a_technical_product": false,
+        "proposed_family": {
+          "template_key": "control_small_part",
+          "template_id": "37a61da4-67f9-5ab8-9a10-7868b3035f3c",
+          "technical_family": "control_small_part"
+        },
+        "considered_alternatives": [
+          {
+            "template_key": "brake_small_part",
+            "template_id": "bdae0fde-f2e2-56c9-8c17-593926d0e292",
+            "technical_family": "brake_small_part"
+          }
+        ],
+        "confidence": "media-alta",
+        "gap": "La imagen fija el objeto pero no sus diámetros de cable y funda, que es lo que la plantilla pide.",
+        "next_investigation": {
+          "assignee": "Claude",
+          "action": "Medir o leer del envase el diámetro de cable y de funda; sin eso la ficha queda con sus campos distintivos vacíos."
+        },
+        "note": "Codex propuso «brake_cable_boot», que no es una clave. Entre las dos que existen elijo control_small_part y no brake_small_part porque es la que modela el recorrido del cable de un V-Brake: lleva fits_cable_diameter_mm, fits_housing_diameter_mm y noodle_angle_deg. La imagen dice fuelle de cable, no zapata.",
+        "apply_allowed": false,
+        "assignment_made": false
+      },
+      "live_projection": {
+        "id": "49b90689-b504-4216-81e3-b311e29bfb90",
+        "sku": "1541",
+        "name": "GOMITA PARA FRENO V-BRAKE COMPATIBLE / GENERICO",
+        "brand_id": "ea73c5fd-d0c2-4712-b6a3-e5d7d2364da8",
+        "documents": [],
+        "image_url": "https://xzdvtzdqjeyqxnkqprtf.supabase.co/storage/v1/object/public/vinabike-assets/5443b130-cc28-45af-a420-cd500b288890/1541/1541.jpg",
+        "is_active": true,
+        "image_urls": [],
+        "updated_at": "2026-07-07T21:05:25.408478+00:00",
+        "category_id": "406eb822-e49c-43d2-b4f1-df92cc50fbaf",
+        "description": "",
+        "product_type": "product",
+        "spec_template_id": null,
+        "matched_line_count": 0,
+        "purchase_treatment": "workshop_consumable",
+        "stock_movement_count": 2
+      },
+      "projection_scope": "Campos nombrados en unmapped-seven-root-verification.sql; no es la fila products completa.",
+      "root_decision": "family_backed_pending_gates",
+      "requires_technical_template": true,
+      "proposed_template": {
+        "key": "control_small_part",
+        "id": "37a61da4-67f9-5ab8-9a10-7868b3035f3c",
+        "technical_family": "control_small_part"
+      },
+      "reason": "La imagen muestra un fuelle corrugado. control_part_kind ofrece Fuelle / goma protectora; el ángulo sólo aplica a Noodle V-brake. La familia está resuelta sin medir diámetros.",
+      "evidence_opened": [
+        {
+          "kind": "existing_catalog_image",
+          "url": "https://xzdvtzdqjeyqxnkqprtf.supabase.co/storage/v1/object/public/vinabike-assets/5443b130-cc28-45af-a420-cd500b288890/1541/1541.jpg",
+          "path": ".tmp/product-spec-catalog/identity-images/49b90689-b504-4216-81e3-b311e29bfb90.img",
+          "sha256": "adafb07fd22454ac5bdec428455d5f495bd1ebf3e921005251c28afd69583dc1",
+          "opened_by": [
+            "Claude",
+            "Codex"
+          ],
+          "limits": "Imagen comercial: no prueba por sí sola la variante física en stock."
+        }
+      ],
+      "next_investigation": {
+        "owner": "Codex/Claude",
+        "action": "Investigar medidas sólo cuando exista evidencia; no son requisito para resolver la familia.",
+        "requires_routine_owner_entry": false
+      },
+      "included_when_inactive": true,
+      "apply_allowed": false,
+      "mechanical_approval": false,
+      "fill_allowed": false
+    },
+    {
+      "id": "19539d72-bff0-4875-b22e-a130297741d3",
+      "sku": "1197",
+      "original_review_record": {
+        "id": "19539d72-bff0-4875-b22e-a130297741d3",
+        "name": "Limpiador Cadena y Piñón Chepark",
+        "source_preimage": {
+          "artifact": "unmapped-product-ficha-codex-review-2026-09-06.json",
+          "artifact_sha256": "72661039d8b5ad9662a771734ba6dbe7e2958a1b3cba9979f1a7958449ee140d",
+          "status": "ambiguous",
+          "reason": "Limpiador sin contenido/unidad puede ser químico o herramienta; comprobar foto y ficha.",
+          "candidate_family": null,
+          "candidate_alternatives": [
+            "workshop_chemical",
+            "workshop_tool"
+          ],
+          "category_id": "e413b6fa-5a21-4757-aa7e-14e64e5a112b",
+          "category_path": "Viñabike / Grasa/Aceites/Soluciones/Limpiadores",
+          "apply_allowed": false,
+          "independent_review": "pending"
+        },
+        "register_facts": {
+          "sku": "1197",
+          "active": true,
+          "facts_count": 0,
+          "template_id": null,
+          "has_image_evidence": false,
+          "codex_candidate_object_class": null
+        },
+        "evidence_read": [
+          "Registro global all-product-review-register-2026-09-06.json: sku, active, facts_count, image_evidence.",
+          "Registro de plantillas de la base congelada: existencia de la clave, su id y su familia técnica."
+        ],
+        "decision": "pendiente",
+        "not_a_technical_product": false,
+        "proposed_family": {
+          "template_key": null,
+          "template_id": null,
+          "technical_family": null
+        },
+        "considered_alternatives": [
+          {
+            "template_key": "workshop_tool",
+            "template_id": "9fa846f3-8544-5fdf-9220-9f86e196ddb0",
+            "technical_family": "workshop_tool"
+          },
+          {
+            "template_key": "workshop_chemical",
+            "template_id": "61bc1c93-8b73-55d0-9584-6087a8190dfe",
+            "technical_family": "workshop_chemical"
+          }
+        ],
+        "confidence": "baja",
+        "gap": "Sin imagen y sin código. «Limpiador de cadena y piñón» nombra igual a una máquina de limpieza que a un líquido, y Chepark fabrica de los dos.",
+        "next_investigation": {
+          "assignee": "Claude",
+          "action": "Buscar imagen o documento de compra de este sku; el discriminante es si el envase es botella con volumen o un objeto con mecanismo."
+        },
+        "note": "No lo resuelvo por analogía con el PP-01: son dos registros distintos.",
+        "apply_allowed": false,
+        "assignment_made": false
+      },
+      "live_projection": {
+        "id": "19539d72-bff0-4875-b22e-a130297741d3",
+        "sku": "1197",
+        "name": "Limpiador Cadena y Piñón Chepark",
+        "brand_id": null,
+        "documents": [],
+        "image_url": null,
+        "is_active": true,
+        "image_urls": [],
+        "updated_at": "2026-07-21T20:40:10.354293+00:00",
+        "category_id": "e413b6fa-5a21-4757-aa7e-14e64e5a112b",
+        "description": "",
+        "product_type": "product",
+        "spec_template_id": null,
+        "matched_line_count": 0,
+        "purchase_treatment": "inventory",
+        "stock_movement_count": 2
+      },
+      "projection_scope": "Campos nombrados en unmapped-seven-root-verification.sql; no es la fila products completa.",
+      "root_decision": "identity_or_business_research_pending",
+      "requires_technical_template": null,
+      "proposed_template": null,
+      "reason": "Sin imagen ni documento de producto. El stock 425 no distingue un líquido de una herramienta; su unidad sigue siendo unit.",
+      "evidence_opened": [],
+      "next_investigation": {
+        "owner": "Codex/Claude",
+        "action": "Buscar artículo exacto Chepark/Vittal 1197 en fuentes existentes, con foto o descripción de presentación.",
+        "requires_routine_owner_entry": false
+      },
+      "included_when_inactive": true,
+      "apply_allowed": false,
+      "mechanical_approval": false,
+      "fill_allowed": false
+    },
+    {
+      "id": "b887f8e9-755a-42c6-8668-e4c451a537ae",
+      "sku": "1559",
+      "original_review_record": {
+        "id": "b887f8e9-755a-42c6-8668-e4c451a537ae",
+        "name": "LIMPIADOR TRIPLE PLATO PP-01",
+        "source_preimage": {
+          "artifact": "unmapped-product-ficha-codex-review-2026-09-06.json",
+          "artifact_sha256": "72661039d8b5ad9662a771734ba6dbe7e2958a1b3cba9979f1a7958449ee140d",
+          "status": "ambiguous",
+          "reason": "Limpiador sin contenido/unidad puede ser químico o herramienta; comprobar foto y ficha.",
+          "candidate_family": null,
+          "candidate_alternatives": [
+            "workshop_chemical",
+            "workshop_tool"
+          ],
+          "category_id": "e413b6fa-5a21-4757-aa7e-14e64e5a112b",
+          "category_path": "Viñabike / Grasa/Aceites/Soluciones/Limpiadores",
+          "apply_allowed": false,
+          "independent_review": "pending"
+        },
+        "register_facts": {
+          "sku": "1559",
+          "active": true,
+          "facts_count": 0,
+          "template_id": null,
+          "has_image_evidence": true,
+          "codex_candidate_object_class": "workshop_cleaning_tool"
+        },
+        "evidence_read": [
+          "Registro global all-product-review-register-2026-09-06.json: sku, active, facts_count, image_evidence.",
+          "Registro de plantillas de la base congelada: existencia de la clave, su id y su familia técnica.",
+          "Registro de revisión de imagen de Codex (leí el registro, no abrí el archivo de imagen): sha256 de la imagen ed46c419e70942e288666062d33fbb5148c3adcfacf98132cdff63e3e43c00d1 — «Objeto sólido articulado para limpieza, no botella de químico. La foto es pequeña; falta descripción de uso exacto.»",
+          "Búsqueda pública sin resultado: ninguna fuente identifica el código «PP-01». La búsqueda se reporta como fallida, no como ausencia de producto."
+        ],
+        "decision": "respaldada",
+        "not_a_technical_product": false,
+        "proposed_family": {
+          "template_key": "workshop_tool",
+          "template_id": "9fa846f3-8544-5fdf-9220-9f86e196ddb0",
+          "technical_family": "workshop_tool"
+        },
+        "considered_alternatives": [
+          {
+            "template_key": "workshop_chemical",
+            "template_id": "61bc1c93-8b73-55d0-9584-6087a8190dfe",
+            "technical_family": "workshop_chemical"
+          }
+        ],
+        "confidence": "media-alta",
+        "gap": "La foto es pequeña y no se lee el uso exacto; la búsqueda pública del código PP-01 no devolvió ninguna fuente.",
+        "next_investigation": {
+          "assignee": "Claude",
+          "action": "Abrir la imagen del ERP a tamaño completo y describir el mecanismo; si es un limpiador de cadena, tool_kind y tool_capabilities ya lo representan."
+        },
+        "note": "Objeto sólido articulado, no botella: eso descarta el químico aunque el nombre diga limpiador.",
+        "apply_allowed": false,
+        "assignment_made": false
+      },
+      "live_projection": {
+        "id": "b887f8e9-755a-42c6-8668-e4c451a537ae",
+        "sku": "1559",
+        "name": "LIMPIADOR TRIPLE PLATO PP-01",
+        "brand_id": "0e29db11-beb6-4179-be13-6e76a37398a3",
+        "documents": [],
+        "image_url": "https://xzdvtzdqjeyqxnkqprtf.supabase.co/storage/v1/object/public/vinabike-assets/5443b130-cc28-45af-a420-cd500b288890/1559/1559-2.jpg",
+        "is_active": true,
+        "image_urls": [],
+        "updated_at": "2026-05-22T22:33:41.227011+00:00",
+        "category_id": "e413b6fa-5a21-4757-aa7e-14e64e5a112b",
+        "description": "",
+        "product_type": "product",
+        "spec_template_id": null,
+        "matched_line_count": 0,
+        "purchase_treatment": "inventory",
+        "stock_movement_count": 1
+      },
+      "projection_scope": "Campos nombrados en unmapped-seven-root-verification.sql; no es la fila products completa.",
+      "root_decision": "family_backed_pending_gates",
+      "requires_technical_template": true,
+      "proposed_template": {
+        "key": "workshop_tool",
+        "id": "9fa846f3-8544-5fdf-9220-9f86e196ddb0",
+        "technical_family": "workshop_tool"
+      },
+      "reason": "Imagen de herramienta articulada Rito; la función exacta y dimensiones siguen desconocidas. La existencia inicial no identifica el mecanismo.",
+      "evidence_opened": [
+        {
+          "kind": "existing_catalog_image",
+          "url": "https://xzdvtzdqjeyqxnkqprtf.supabase.co/storage/v1/object/public/vinabike-assets/5443b130-cc28-45af-a420-cd500b288890/1559/1559-2.jpg",
+          "path": ".tmp/product-spec-catalog/identity-images/b887f8e9-755a-42c6-8668-e4c451a537ae.img",
+          "sha256": "ed46c419e70942e288666062d33fbb5148c3adcfacf98132cdff63e3e43c00d1",
+          "opened_by": [
+            "Claude",
+            "Codex"
+          ],
+          "limits": "Imagen comercial: no prueba por sí sola la variante física en stock."
+        }
+      ],
+      "next_investigation": {
+        "owner": "Codex/Claude",
+        "action": "Buscar el artículo PP-01/1559 en fuentes de Rito/RBX existentes. No deducir alcance mecánico del dentado visible.",
+        "requires_routine_owner_entry": false
+      },
+      "included_when_inactive": true,
+      "apply_allowed": false,
+      "mechanical_approval": false,
+      "fill_allowed": false
+    },
+    {
+      "id": "2ea1138a-82f3-4e4f-85d4-2ab6d3c979cc",
+      "sku": "24131",
+      "original_review_record": {
+        "id": "2ea1138a-82f3-4e4f-85d4-2ab6d3c979cc",
+        "name": "Set Cubre Manubrio 125mm/220mm Black",
+        "source_preimage": {
+          "artifact": "unmapped-product-ficha-codex-review-2026-09-06.json",
+          "artifact_sha256": "72661039d8b5ad9662a771734ba6dbe7e2958a1b3cba9979f1a7958449ee140d",
+          "status": "ambiguous",
+          "reason": "Cubre manubrio no distingue empuñadura de funda protectora sin imagen.",
+          "candidate_family": null,
+          "candidate_alternatives": [
+            "grip",
+            "handlebar_cover"
+          ],
+          "category_id": null,
+          "category_path": null,
+          "apply_allowed": false,
+          "independent_review": "pending"
+        },
+        "register_facts": {
+          "sku": "24131",
+          "active": true,
+          "facts_count": 0,
+          "template_id": null,
+          "has_image_evidence": true,
+          "codex_candidate_object_class": "handlebar_padding_set"
+        },
+        "evidence_read": [
+          "Registro global all-product-review-register-2026-09-06.json: sku, active, facts_count, image_evidence.",
+          "Registro de plantillas de la base congelada: existencia de la clave, su id y su familia técnica.",
+          "Registro de revisión de imagen de Codex (leí el registro, no abrí el archivo de imagen): sha256 de la imagen c2cdd2df878961535af7c36ec321d6110f813f0bba1320c908acab48d161169e — «Cuatro coberturas tubulares para manubrio de longitudes/formas distintas; describir composición, sin reducir el set a un par de puños.»"
+        ],
+        "decision": "respaldada",
+        "not_a_technical_product": false,
+        "proposed_family": {
+          "template_key": "handlebar_covering",
+          "template_id": "30a5664f-8dbb-5a1c-9fdd-61b59c33eca2",
+          "technical_family": "handlebar_covering"
+        },
+        "considered_alternatives": [
+          {
+            "template_key": "grip",
+            "template_id": "c327c7f7-bcff-51fa-b173-1678f770ac44",
+            "technical_family": "grip"
+          }
+        ],
+        "confidence": "media-alta",
+        "gap": "La imagen muestra cuatro piezas y el registro no declara la composición del set.",
+        "next_investigation": {
+          "assignee": "Claude",
+          "action": "Abrir la imagen del ERP y describir las cuatro piezas para llenar kit_members; sin eso la ficha existiría vacía en lo que la distingue de un par de puños."
+        },
+        "note": "Codex propuso «handlebar_cover», que no es una clave; la que existe es handlebar_covering, y su campo kit_members es justamente el que permite no reducir el set a un par de puños.",
+        "apply_allowed": false,
+        "assignment_made": false
+      },
+      "live_projection": {
+        "id": "2ea1138a-82f3-4e4f-85d4-2ab6d3c979cc",
+        "sku": "24131",
+        "name": "Set Cubre Manubrio 125mm/220mm Black",
+        "brand_id": null,
+        "documents": [],
+        "image_url": "https://xzdvtzdqjeyqxnkqprtf.supabase.co/storage/v1/object/public/vinabike-assets/5443b130-cc28-45af-a420-cd500b288890/24131/24131.jpg",
+        "is_active": true,
+        "image_urls": [],
+        "updated_at": "2026-05-22T22:33:41.227011+00:00",
+        "category_id": null,
+        "description": "",
+        "product_type": "product",
+        "spec_template_id": null,
+        "matched_line_count": 0,
+        "purchase_treatment": "inventory",
+        "stock_movement_count": 0
+      },
+      "projection_scope": "Campos nombrados en unmapped-seven-root-verification.sql; no es la fila products completa.",
+      "root_decision": "family_backed_pending_gates",
+      "requires_technical_template": true,
+      "proposed_template": {
+        "key": "handlebar_covering",
+        "id": "30a5664f-8dbb-5a1c-9fdd-61b59c33eca2",
+        "technical_family": "handlebar_covering"
+      },
+      "reason": "La imagen muestra cuatro secciones de recubrimiento de manubrio. Conservar la presentación comercial; no derivar dimensiones ni composición del tamaño relativo de la fotografía.",
+      "evidence_opened": [
+        {
+          "kind": "existing_catalog_image",
+          "url": "https://xzdvtzdqjeyqxnkqprtf.supabase.co/storage/v1/object/public/vinabike-assets/5443b130-cc28-45af-a420-cd500b288890/24131/24131.jpg",
+          "path": ".tmp/product-spec-catalog/identity-images/2ea1138a-82f3-4e4f-85d4-2ab6d3c979cc.img",
+          "sha256": "c2cdd2df878961535af7c36ec321d6110f813f0bba1320c908acab48d161169e",
+          "opened_by": [
+            "Claude",
+            "Codex"
+          ],
+          "limits": "Imagen comercial: no prueba por sí sola la variante física en stock."
+        }
+      ],
+      "next_investigation": {
+        "owner": "Codex/Claude",
+        "action": "Documentar presentación y medidas desde el artículo exacto; conservar 125mm/220mm como lectura nominal del título hasta revisar evidencia.",
+        "requires_routine_owner_entry": false
+      },
+      "included_when_inactive": true,
+      "apply_allowed": false,
+      "mechanical_approval": false,
+      "fill_allowed": false
+    },
+    {
+      "id": "b4f7fe80-76c4-4dea-ae7a-adde6efe2aa0",
+      "sku": "NNV162",
+      "original_review_record": {
+        "id": "b4f7fe80-76c4-4dea-ae7a-adde6efe2aa0",
+        "name": "Rotor Freno Trasero BMX PadroBikes",
+        "source_preimage": {
+          "artifact": "unmapped-product-ficha-codex-review-2026-09-06.json",
+          "artifact_sha256": "72661039d8b5ad9662a771734ba6dbe7e2958a1b3cba9979f1a7958449ee140d",
+          "status": "ambiguous",
+          "reason": "Rotor BMX trasero no identifica sin imagen si es desacoplador de cables o disco.",
+          "candidate_family": null,
+          "candidate_alternatives": [
+            "brake_detangler",
+            "rotor"
+          ],
+          "category_id": null,
+          "category_path": null,
+          "apply_allowed": false,
+          "independent_review": "pending"
+        },
+        "register_facts": {
+          "sku": "NNV162",
+          "active": true,
+          "facts_count": 0,
+          "template_id": null,
+          "has_image_evidence": false,
+          "codex_candidate_object_class": null
+        },
+        "evidence_read": [
+          "Registro global all-product-review-register-2026-09-06.json: sku, active, facts_count, image_evidence.",
+          "Registro de plantillas de la base congelada: existencia de la clave, su id y su familia técnica.",
+          "Sheldon Brown, glosario Ri-Z: el «rotor» de una bicicleta de estilo libre es «a mechanism used on freestyle bicycles to route the rear brake cable through a bearing assembly which surrounds the handlebar stem, allowing the handlebars and fork to revolve indefinitely without fouling the rear brake cable»."
+        ],
+        "decision": "respaldada",
+        "not_a_technical_product": false,
+        "proposed_family": {
+          "template_key": "bmx_cable_detangler",
+          "template_id": "9e85c3f5-d7fb-5fa7-b93b-dee112f414ab",
+          "technical_family": "bmx_cable_detangler"
+        },
+        "considered_alternatives": [
+          {
+            "template_key": "rotor",
+            "template_id": "a2ba0aad-9c5c-4563-a4f5-75cf2611a43a",
+            "technical_family": "rotor"
+          }
+        ],
+        "confidence": "media-alta",
+        "gap": "No hay imagen ni documento de este sku. La lectura descansa en que las tres palabras del nombre coinciden con la definición documentada, no en el nombre comercial por sí solo.",
+        "next_investigation": {
+          "assignee": "Claude",
+          "action": "Buscar una foto o el documento de compra de PadroBikes que muestre si el objeto rodea la potencia; si aparece un disco, la familia cambia a rotor."
+        },
+        "note": "Codex propuso «brake_detangler», que no es una clave de plantilla. La clave que existe es bmx_cable_detangler. Sheldon define el rotor de BMX como el mecanismo que enruta el cable del freno trasero alrededor de la potencia, y el nombre dice rotor, freno trasero y BMX.",
+        "apply_allowed": false,
+        "assignment_made": false
+      },
+      "live_projection": {
+        "id": "b4f7fe80-76c4-4dea-ae7a-adde6efe2aa0",
+        "sku": "NNV162",
+        "name": "Rotor Freno Trasero BMX PadroBikes",
+        "brand_id": null,
+        "documents": [],
+        "image_url": null,
+        "is_active": true,
+        "image_urls": [],
+        "updated_at": "2026-05-22T22:33:41.227011+00:00",
+        "category_id": null,
+        "description": "",
+        "product_type": "product",
+        "spec_template_id": null,
+        "matched_line_count": 0,
+        "purchase_treatment": "inventory",
+        "stock_movement_count": 0
+      },
+      "projection_scope": "Campos nombrados en unmapped-seven-root-verification.sql; no es la fila products completa.",
+      "root_decision": "identity_or_business_research_pending",
+      "requires_technical_template": null,
+      "proposed_template": null,
+      "reason": "El nombre sugiere detangler BMX pero no demuestra el objeto de este registro; sin imagen ni líneas actuales enlazadas.",
+      "evidence_opened": [],
+      "next_investigation": {
+        "owner": "Codex/Claude",
+        "action": "Rastrear fuente de alta y documento Padro Bikes, preservando la hipótesis detangler y la alternativa rotor de disco.",
+        "requires_routine_owner_entry": false
+      },
+      "included_when_inactive": true,
+      "apply_allowed": false,
+      "mechanical_approval": false,
+      "fill_allowed": false
+    }
+  ],
+  "counts": {
+    "identity_or_business_research_pending": 24,
+    "family_supported_identity_conflict": 1,
+    "family_supported_pending_global_gates": 2,
+    "service_workflow_supported": 2,
+    "family_backed_pending_gates": 4
+  },
+  "corrections_accepted": [
+    "R1: una ruta parcial no demuestra ausencia de uso",
+    "R2: retirar inferencias derivadas de ceros falsos",
+    "R3: fuelle es control_small_part por discriminante literal y condiciones verificadas",
+    "R4: clasificación comercial actual es dato auditado, no prueba del objeto",
+    "R5: distinguir original del artefacto de proyección de products",
+    "R6: evidencia ausente no es exclusión de compatibilidad"
+  ],
+  "corrections_to_new_inferences": [
+    "Cantidad de stock no se convierte en volumen ni en código de producto.",
+    "Una venta en borrador demuestra una línea registrada, no una venta completada ni un uso físico.",
+    "Coincidir en una factura no prueba que dos químicos se usen juntos.",
+    "Nombre genérico ACEITE NACIONAL y marca visible LUBETRAC no son por sí mismos identidades contradictorias."
+  ],
+  "boot_contract_probe": {
+    "path": ".tmp/product-spec-catalog/control-boot-existing-contract-probe.dart",
+    "result": "2 PASS: fuelle sin ángulo válido; ángulo de noodle en fuelle bloqueado por field_applicability.",
+    "new_metadata_required": false
+  },
+  "gates": {
+    "all_product_assignment_review_complete": false,
+    "assignment_application_allowed": false,
+    "fill_allowed": false
+  },
+  "assignments_applied": 0,
+  "facts_written": 0
+}

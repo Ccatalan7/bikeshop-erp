@@ -1,0 +1,93 @@
+{
+  "schema_version": 1,
+  "new_definitions": {},
+  "source_review_sha256": "aeef526190b16d7a9acd7b0c46de6aa81e82a4a9b2a9a733505cc63ada9e4862",
+  "required_server_migration": "20260907025000",
+  "mechanical_coverage_complete": false,
+  "automatic_fill_authorized": false,
+  "patches": [
+    {
+      "id": "PORT-01",
+      "op": "replace_unpublished_numeric_rules",
+      "template": null,
+      "key": "ports_count",
+      "before": {
+        "positive": true,
+        "integer": true
+      },
+      "after": {
+        "positive": true,
+        "integer": true,
+        "min": "1"
+      }
+    },
+    {
+      "id": "PORT-02",
+      "op": "replace_template_coherence",
+      "template": "consumer_electronics",
+      "key": "row_coherence",
+      "before": {
+        "present": true,
+        "value": {
+          "version": 1,
+          "links": [
+            {
+              "id": "consumer_electronics_member_link",
+              "field": "power_budget_configurations",
+              "column": "port_id",
+              "target_field": "power_port_configurations",
+              "label_columns": [
+                "port_id",
+                "connector",
+                "direction"
+              ]
+            },
+            {
+              "id": "consumer_electronics_profile_port_link",
+              "field": "power_port_profile_configurations",
+              "column": "port_id",
+              "target_field": "power_port_configurations",
+              "label_columns": [
+                "port_id",
+                "connector"
+              ]
+            }
+          ]
+        }
+      },
+      "after": {
+        "version": 2,
+        "links": [
+          {
+            "id": "consumer_electronics_member_link",
+            "field": "power_budget_configurations",
+            "column": "port_id",
+            "target_field": "power_port_configurations",
+            "label_columns": [
+              "port_id",
+              "connector",
+              "direction"
+            ]
+          },
+          {
+            "id": "consumer_electronics_profile_port_link",
+            "field": "power_port_profile_configurations",
+            "column": "port_id",
+            "target_field": "power_port_configurations",
+            "label_columns": [
+              "port_id",
+              "connector"
+            ]
+          }
+        ],
+        "cardinalities": [
+          {
+            "id": "physical_port_occurrences",
+            "field": "power_port_configurations",
+            "total_field": "ports_count"
+          }
+        ]
+      }
+    }
+  ]
+}

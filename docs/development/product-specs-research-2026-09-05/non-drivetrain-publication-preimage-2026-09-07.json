@@ -1,0 +1,38 @@
+[
+    {
+        "metadata": {
+            "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+            "captured_at": "2026-09-07T22:06:00.961684+00:00",
+            "global_templates": 37,
+            "tenant_templates": 0,
+            "template_collisions": [
+            ],
+            "existing_definitions": [
+                {
+                    "id": "4f055961-6c16-430b-a4e2-e6b09dc1cccc",
+                    "key": "spec_evidence_source",
+                    "unit": null,
+                    "label": "Fuente de la declaración",
+                    "options": [
+                    ],
+                    "data_type": "text",
+                    "tenant_id": null,
+                    "created_at": "2026-09-06T06:58:57.745728+00:00",
+                    "group_name": null,
+                    "sort_order": 900,
+                    "updated_at": "2026-09-06T06:58:57.745728+00:00",
+                    "description": "URL del fabricante, manual o identificación del envase que respalda la declaración.",
+                    "is_filterable": false,
+                    "allowed_values": [
+                    ],
+                    "validation_rules": {
+                    },
+                    "is_customer_visible": false,
+                    "is_mechanic_visible": true,
+                    "is_required_by_default": false,
+                    "is_compatibility_relevant": false
+                }
+            ]
+        }
+    }
+]

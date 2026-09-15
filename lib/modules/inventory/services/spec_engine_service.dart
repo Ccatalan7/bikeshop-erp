@@ -6,6 +6,7 @@ import '../models/product_spec_rows.dart';
 import '../models/product_spec_template_rules.dart';
 import '../models/product_spec_coherence.dart';
 import '../models/product_spec_row_conditions.dart';
+import '../models/product_spec_member_profile.dart';
 
 // ---------------------------------------------------------------------------
 // Models
@@ -334,6 +335,46 @@ class SpecEngineService {
 
   final _client = Supabase.instance.client;
 
+  /// Display names use the same tenant override as member-template lookup.
+  /// Keys remain the stored identity; these labels never decide compatibility.
+  Future<Map<String, String>> getFamilyLabels(String tenantId) async {
+    final rows = await _client
+        .from('spec_templates')
+        .select('id,tenant_id,key,name')
+        .eq('is_active', true)
+        .or('tenant_id.is.null,tenant_id.eq.$tenantId')
+        .order('id');
+    return decodeFamilyLabels(rows, tenantId: tenantId);
+  }
+
+  static Map<String, String> decodeFamilyLabels(List<dynamic> rows,
+      {required String tenantId}) {
+    final ordered = rows.map((row) {
+      if (row is! Map ||
+          row['id'] is! String ||
+          row['key'] is! String ||
+          row['name'] is! String ||
+          (row['name'] as String).trim().isEmpty ||
+          (row['tenant_id'] != null && row['tenant_id'] != tenantId)) {
+        throw const FormatException(
+            'No se pudieron leer los nombres de las fichas.');
+      }
+      return Map<String, dynamic>.from(row);
+    }).toList()
+      ..sort((a, b) {
+        final scope = (a['tenant_id'] == tenantId ? 0 : 1)
+            .compareTo(b['tenant_id'] == tenantId ? 0 : 1);
+        return scope != 0
+            ? scope
+            : (a['id'] as String).compareTo(b['id'] as String);
+      });
+    final labels = <String, String>{};
+    for (final row in ordered) {
+      labels.putIfAbsent(row['key'] as String, () => row['name'] as String);
+    }
+    return Map.unmodifiable(labels);
+  }
+
   // Always read the active contract when opening/retrying an editor. Server
   // versions reject stale saves; no process-wide cache may hide that reload.
   Future<SpecTemplate?> getTemplateForCategory(String categoryId) async =>
@@ -350,6 +391,76 @@ class SpecEngineService {
       throw const FormatException('La lectura pertenece a otra ficha.');
     }
     return decodeProductSpecEditorContext(snapshot);
+  }
+
+  /// Root facts and included components belong to the same product revision.
+  /// No fallback to v2 may silently discard the component editor's history.
+  Future<
+      ({
+        SpecTemplate? template,
+        Map<String, dynamic> snapshot,
+        ProductSpecMemberProfiles members
+      })> getProductMemberEditorContext({
+    String? productId,
+    String? categoryId,
+  }) async {
+    final response = await _client.rpc('get_product_spec_editor_context_v3',
+        params: {'p_product_id': productId, 'p_category_id': categoryId});
+    final snapshot = Map<String, dynamic>.from(response as Map);
+    if (snapshot['product_id'] != productId ||
+        snapshot['draft_category_id'] != categoryId) {
+      throw const FormatException('La lectura pertenece a otra ficha.');
+    }
+    final root = decodeProductSpecEditorContext(snapshot);
+    return (
+      template: root.template,
+      snapshot: root.snapshot,
+      members: decodeProductSpecMemberProfiles(snapshot,
+          expectedProductId: productId,
+          expectedRevision: snapshot['revision'] as int)
+    );
+  }
+
+  /// Draft components use the existing family's complete contract. The server
+  /// checks the declared parent collection before exposing the selected family.
+  Future<SpecTemplate> getProductMemberTemplate({
+    required String parentTemplateId,
+    required String collectionDefinitionId,
+    required String familyKey,
+  }) async {
+    final response =
+        await _client.rpc('get_product_spec_member_template_v1', params: {
+      'p_parent_template_id': parentTemplateId,
+      'p_collection_definition_id': collectionDefinitionId,
+      'p_family_key': familyKey
+    });
+    return decodeProductMemberTemplate(
+        Map<String, dynamic>.from(response as Map),
+        parentTemplateId: parentTemplateId,
+        collectionDefinitionId: collectionDefinitionId,
+        familyKey: familyKey);
+  }
+
+  static SpecTemplate decodeProductMemberTemplate(
+    Map<String, dynamic> snapshot, {
+    required String parentTemplateId,
+    required String collectionDefinitionId,
+    required String familyKey,
+  }) {
+    if (snapshot['parent_template_id'] != parentTemplateId ||
+        snapshot['collection_definition_id'] != collectionDefinitionId ||
+        snapshot['template_key'] != familyKey ||
+        snapshot['revision'] != 0 ||
+        snapshot['values'] is! Map ||
+        (snapshot['values'] as Map).isNotEmpty) {
+      throw const FormatException(
+          'La ficha no pertenece al componente elegido.');
+    }
+    final template = decodeProductSpecEditorContext(snapshot).template;
+    if (template == null) {
+      throw const FormatException('Falta la ficha del componente elegido.');
+    }
+    return template;
   }
 
   /// The v2 RPC supplies facts, definitions and the version in one PostgreSQL
@@ -369,8 +480,9 @@ class SpecEngineService {
     }
     final raw = snapshot['template'];
     if (snapshot['template_id'] == null) {
-      if (raw != null)
+      if (raw != null) {
         throw const FormatException('Identidad de ficha inválida.');
+      }
       return (template: null, snapshot: Map<String, dynamic>.from(snapshot));
     }
     if (raw is! Map ||
@@ -489,8 +601,9 @@ class SpecEngineService {
       if (!hasKnownSpecValue(value)) continue;
       switch (def.dataType) {
         case 'boolean':
-          if (value is! bool)
+          if (value is! bool) {
             throw FormatException('${def.label}: booleano inválido');
+          }
           payload[def.id] = {'boolean': value};
         case 'number':
           if (productSpecNumberErrorCode(value, def.validationRules) != null) {
@@ -510,8 +623,9 @@ class SpecEngineService {
           final labels = value is List ? value : [value];
           final ids = labels.map((label) {
             final id = def.optionIds[label.toString()];
-            if (id == null)
+            if (id == null) {
               throw FormatException('${def.label}: opción desconocida $label');
+            }
             return id;
           }).toList(growable: false);
           payload[def.id] = {'value_ids': ids};

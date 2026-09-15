@@ -1,0 +1,1656 @@
+{
+  "schema_version": 1,
+  "title": "Campos residuales de ruedas, dirección y suspensión: paquete implementable",
+  "author": "Claude (revisor independiente de representación)",
+  "prepared_on": "2026-09-07",
+  "status": "propuesta local; ninguna adjudicación, ningún llenado, ninguna publicación",
+  "target": {
+    "base": "all-family-row-values-integrated-2026-09-07.json",
+    "base_sha256": "58e68f0c4f0d7b8e824a84a3931cf9f7bd03767f8a65aaa55020bc6af7465f03",
+    "cases": "all-family-row-values-cases-integrated-2026-09-07.json",
+    "cases_sha256": "0eb5dfda6a7087cf115afd54e08a9908b00511acbae59d58217b783d371da810",
+    "cases_count": 259
+  },
+  "root_decisions_implemented": [
+    "R1",
+    "R2",
+    "R3",
+    "R6"
+  ],
+  "root_decisions_deliberately_not_implemented": {
+    "R4": "No se propone la desigualdad entre los dos máximos de FOX.",
+    "R5": "No se propone la relación entre carrera y entrecentros."
+  },
+  "representation_vs_approval": "Aprobar una representación no aprueba un montaje ni certifica una familia. Este paquete no certifica familias completas ni llenado, y no toca compilador, catálogo, código, pruebas de root, base de datos ni runtime.",
+  "sources": [
+    {
+      "id": "S-PARK-HEADSET",
+      "title": "Park Tool, Headset Standards and Sizing",
+      "url": "https://www.parktool.com/en-us/blog/repair-help/headset-standards-and-sizing",
+      "read": "ronda anterior de esta colaboración",
+      "proves": "Un rodamiento de cartucho de dirección se marca con dos ángulos (36×45): el primero es el bisel que apoya en la pista de dirección o cono centrador, el segundo el que apoya en el alojamiento del cuadro. Enumera bolas sueltas, canastillo y cartucho como tres cosas distintas.",
+      "used_for": [
+        "R1"
+      ]
+    },
+    {
+      "id": "S-NSK-ANGLE",
+      "title": "NSK, Differentiating rolling bearings",
+      "url": "https://www.nsk.com/company/technology/rolling/",
+      "read": "2026-09-07",
+      "proves": "El ángulo de contacto α es «el ángulo entre una línea perpendicular al eje del rodamiento y otra que pasa por los puntos donde un elemento rodante contacta las pistas del anillo interior y exterior bajo carga», y su dominio va de 0° a 90° (radial 0–45, axial 45–90). No dice si un rodamiento de doble hilera de contacto angular tiene uno o dos ángulos nominales.",
+      "used_for": [
+        "R1"
+      ]
+    },
+    {
+      "id": "S-ENDURO-BASICS",
+      "title": "Enduro Bearings, Bearing Basics 1",
+      "url": "https://cycling.endurobearings.com/pages/bearing-basics-1",
+      "read": "2026-09-07",
+      "proves": "LLB y LLU son designaciones de sellado: «These designations indicate a mating groove on the inner race where two sealing lips make light contact (LLB) or medium contact (LLU)». No publica ningún ángulo de contacto numérico y la palabra «cartridge» no aparece en la página.",
+      "used_for": [
+        "R1",
+        "R2"
+      ]
+    },
+    {
+      "id": "S-ENDURO-3802",
+      "title": "Enduro Bearings, 3802 LLU MAX",
+      "url": "https://cycling.endurobearings.com/products/3802-llu-max",
+      "read": "2026-09-07",
+      "proves": "15×24×7 mm, doble hilera, contacto angular, sellos LLU de doble labio. No publica ningún ángulo de contacto.",
+      "used_for": [
+        "R1"
+      ]
+    },
+    {
+      "id": "S-ENDURO-BKC0752",
+      "title": "Enduro Bearings, BKC-0752",
+      "url": "https://cycling.endurobearings.com/products/bkc-0752",
+      "read": "2026-09-07",
+      "proves": "«T47-Asymmetrical, Thread-In, XD15 Ceramic-Hybrid, Angular-Contact Bearing Bottom Bracket for BB386 type (30mm) spindles». Publica 15° de contacto angular, pero el SKU es un pedalier completo: cazoletas mecanizadas con rodamientos prensados, ajustador de precarga de aluminio y juego de separadores.",
+      "used_for": [
+        "R1"
+      ]
+    },
+    {
+      "id": "S-SKF-CAPPED",
+      "title": "SKF, deep groove ball bearings (texto indexado)",
+      "url": "https://www.skf.com/us/products/rolling-bearings/ball-bearings/deep-groove-ball-bearings/single-row-deep-groove-ball-bearings",
+      "read": "2026-09-07, sólo por índice",
+      "proves": "Los rodamientos «capped on both sides are lubricated for the life of the bearing and are virtually maintenance-free». El folleto S-Type 41 distingue por designación pantallas removibles (SLLC) de pantallas metálicas no removibles (SFFC).",
+      "limitation": "El cuerpo de la página se sirve por JavaScript y el PDF de catálogo que devuelve el buscador es imagen sin capa de texto: estas dos frases quedan como texto indexado, no como lectura literal de la página. No se usa ninguna cifra de esta fuente.",
+      "used_for": [
+        "R1"
+      ]
+    },
+    {
+      "id": "S-CONTI-HOOKLESS",
+      "title": "Continental, Hookless vs. Hooked Rims",
+      "url": "https://www.continental-tires.com/us/en/tire-knowledge/hookless-vs-hooked-rims/",
+      "read": "2026-09-07, tabla completa releída",
+      "proves": "Los límites son por variante y no hay un máximo universal. GP 5000 S TR: 650b×30c 4.5|65|25, 650b×32c 4.5|65|25, 700×25c 5.0|72|21, 700×28c 5.0|72|23, 700×30c 4.5|65|25, 700×32c 4.5|65|25. GP 5000 AS TR: 700×25c 5.0|72|21, 700×28c 5.0|72|23, 700×32c 4.5|65|25, 700×35c 4.0|58|25. GP 5000 TT TR: 700×25c 5.0|72|21, 700×28c 5.0|72|23. AERO 111: 700×26c 5.0|72|22, 700×29c 5.0|72|25. Grand Prix TR: 700×25c 5.0|72|21, 700×28c 5.0|72|23, 700×30c 4.5|65|25, 700×32c 4.5|65|25. Notas al pie: «Hookless rim = *TSS rim (tubeless straight side)» y «Hooked rim = **C/TC rim (crotchet/tubeless crotchet)».",
+      "used_for": [
+        "R3",
+        "R6"
+      ]
+    },
+    {
+      "id": "S-CONTI-GP5000STR",
+      "title": "Continental, Grand Prix 5000 S TR",
+      "url": "https://www.continental-tires.com/products/bicycle/tires/grand-prix-5000-s-tr/",
+      "read": "2026-09-07",
+      "proves": "«The maximum inflation pressure for hookless and hooked applications as well as the maximum inner rim width can be found on the tire packaging and may differ between hooked and hookless applications». El máximo general por medida no se publica en la página.",
+      "used_for": [
+        "R3"
+      ]
+    },
+    {
+      "id": "S-SCHWALBE-MPLUS",
+      "title": "Schwalbe, Marathon Plus 37-622 (11100769)",
+      "url": "https://www.schwalbe.com/en/Marathon-Plus-11100769",
+      "read": "2026-09-07",
+      "proves": "ETRTO 37-622, 700x35C: «min. Bar: 4 Bar min. Psi: 55 PSI max. Bar: 6 Bar max. Psi: 85 PSI». El máximo general se imprime en las dos unidades y no son conversiones exactas entre sí: 6 bar son 87 psi, y el fabricante imprime 85 PSI.",
+      "used_for": [
+        "R3"
+      ]
+    },
+    {
+      "id": "S-FOX-2013",
+      "title": "FOX 2013 (cotas de borde y pico)",
+      "url": null,
+      "read": "ronda anterior; adjudicado por root",
+      "proves": "Los dos máximos son cotas independientes. Un borde máximo de 700 y un pico máximo de 690 siguen admitiendo un borde real de 680 con un pico de 685; el orden entre ambos no es una imposibilidad física.",
+      "used_for": [
+        "R4"
+      ]
+    }
+  ],
+  "findings": [
+    {
+      "id": "F1",
+      "about": "R2",
+      "verdict": "la decisión resiste",
+      "text": "Busqué el contraejemplo que la tumbaría: un rodamiento tapado por un solo lado. Existe —SKF distingue 6208-Z de 6208-2Z— pero el catálogo lo registra como cartucho sellado o blindado, no como cartucho abierto, así que conserva bearing_seal_kind. La compuerta sólo cierra el caso en que no hay nada que designar."
+    },
+    {
+      "id": "F2",
+      "about": "R2",
+      "verdict": "la decisión resiste",
+      "text": "La página de Enduro que define LLB y LLU no usa la palabra «cartridge» ni una sola vez. La construcción y el sellado son dos hechos independientes y ninguno se lee del otro."
+    },
+    {
+      "id": "F3",
+      "about": "R1",
+      "verdict": "la decisión resiste, con un límite",
+      "text": "NSK define α respecto del plano perpendicular al eje y lo acota entre 0° y 90°, pero no dice si una doble hilera de contacto angular tiene uno o dos ángulos nominales. Ese silencio es justo lo que sostiene la guarda de root: el campo sólo se llena cuando el fabricante declara un único valor nominal común. El Enduro 3802 LLU MAX es el caso: doble hilera, contacto angular, y ningún ángulo publicado."
+    },
+    {
+      "id": "F4",
+      "about": "R1",
+      "verdict": "contraejemplo que confirma el alcance",
+      "text": "El BKC-0752 sí publica 15°, pero es un pedalier T47 completo con cazoletas mecanizadas, ajustador de precarga y separadores. Convertirlo en un SKU de rodamiento suelto sería inventar un producto. El motor no puede distinguirlo desde la ficha, así que queda como fixtura de tipo contradictory_undetectable y no como regla."
+    },
+    {
+      "id": "F5",
+      "about": "R1",
+      "verdict": "precisión sobre el dominio",
+      "text": "Los dos biseles usan positive:true, que excluye el cero. Para α el cero es legítimo: NSK lo asigna al contacto radial. Por eso el campo nuevo usa min «0» y max «90» en vez de positive."
+    },
+    {
+      "id": "F6",
+      "about": "R3",
+      "verdict": "la decisión resiste, y aparece un límite que conviene nombrar",
+      "text": "Schwalbe imprime las dos unidades para la misma cubierta: «max. Bar: 6 Bar» y «max. Psi: 85 PSI». No son conversiones exactas entre sí —6 bar son 87 psi—, así que ninguna se deriva de la otra. R3 guarda una sola, y la otra cifra impresa no queda representada. Es una pérdida consciente, no un error: representar las dos exigiría un par valor/unidad repetible, que es una fila, no un escalar."
+    },
+    {
+      "id": "F7",
+      "about": "R3",
+      "verdict": "la fuente confirma la separación",
+      "text": "Continental declara en la página del GP 5000 S TR que el máximo hookless y el hooked «may differ» y que ambos están en el envase. El titular y el máximo de una configuración son dos hechos distintos con dueños distintos, tal como pide root."
+    },
+    {
+      "id": "F8",
+      "about": "R6",
+      "verdict": "la decisión resiste",
+      "text": "La tabla hookless de Continental publica 5.0, 4.5, 4.0 y 3.8 bar y anchos de 21 a 25 mm según variante y modelo. No hay tope universal que inventar. La exigencia se implementa sobre pressure_unit y rim_internal_width_max_mm, nunca sobre el mínimo."
+    },
+    {
+      "id": "F9",
+      "about": "R6",
+      "verdict": "trampa del motor evitada",
+      "text": "Exigir max_pressure directamente por perfil hookless habría dejado una celda requerida y no aplicable a la vez cuando falta la unidad: allowed_when es falso sin unidad, y una celda con valor no aplicable emite un bloqueo. Exigir la unidad, que ya arrastra su valor, produce el mismo resultado sin esa contradicción."
+    },
+    {
+      "id": "F11",
+      "about": "R3",
+      "verdict": "límite del motor, medido",
+      "text": "«El valor exige la unidad» no llega a ser un bloqueo. Una dependencia ausente evalúa a SpecTruth.unknown, no a «no», así que un número escrito sin elegir la unidad queda como pendiente no bloqueante. Lo comprobé corriendo la fixtura contra validateProductSpecDraft, no leyendo el código. Es el mismo comportamiento que cualquier otro prerequisito del catálogo, así que es consistente; pero si root quiere que ese caso bloquee, no alcanza con allowed_when y hace falta otro mecanismo."
+    },
+    {
+      "id": "F12",
+      "about": "R3",
+      "verdict": "corrección a mi propio parche",
+      "text": "Mi primera versión ponía tire_max_pressure_unit en allowed_when y además en prerequisites. La sonda devolvió dos avisos «prerequisite» para el mismo campo, con dos mensajes distintos: dos dueños para el mismo pendiente. Dejé allowed_when como único dueño de esa dependencia y prerequisites sólo con la fuente."
+    },
+    {
+      "id": "F10",
+      "about": "R4 y R5",
+      "verdict": "sin parche, como pidió root",
+      "text": "No se propone la desigualdad entre máximos de FOX ni entre carrera y entrecentros. La razón de root es más fuerte que la mía: dos cotas independientes no ordenan los valores reales que admiten."
+    }
+  ],
+  "new_definitions": {
+    "bearing_race_contact_angle_deg": {
+      "key": "bearing_race_contact_angle_deg",
+      "origin": "new",
+      "id": null,
+      "label": "Ángulo de contacto interno declarado por el fabricante",
+      "data_type": "number",
+      "unit": "°",
+      "allowed_values": [],
+      "validation_rules": {
+        "min": "0",
+        "max": "90"
+      },
+      "used_by": []
+    },
+    "bearing_row_count": {
+      "key": "bearing_row_count",
+      "origin": "new",
+      "id": null,
+      "label": "Hileras de elementos rodantes declaradas",
+      "data_type": "number",
+      "unit": null,
+      "allowed_values": [],
+      "validation_rules": {
+        "positive": true,
+        "integer": true
+      },
+      "used_by": []
+    },
+    "bearing_regreasable": {
+      "key": "bearing_regreasable",
+      "origin": "new",
+      "id": null,
+      "label": "El fabricante declara que admite reengrase",
+      "data_type": "boolean",
+      "unit": null,
+      "allowed_values": [],
+      "validation_rules": {},
+      "used_by": []
+    },
+    "tire_max_pressure_unit": {
+      "key": "tire_max_pressure_unit",
+      "origin": "new",
+      "id": null,
+      "label": "Unidad del máximo general declarado",
+      "data_type": "single_select",
+      "unit": null,
+      "allowed_values": [
+        "bar",
+        "psi"
+      ],
+      "validation_rules": {},
+      "used_by": []
+    },
+    "tire_max_pressure_value": {
+      "key": "tire_max_pressure_value",
+      "origin": "new",
+      "id": null,
+      "label": "Presión máxima general declarada para esta variante",
+      "data_type": "number",
+      "unit": null,
+      "allowed_values": [],
+      "validation_rules": {
+        "positive": true
+      },
+      "used_by": []
+    }
+  },
+  "patches": [
+    {
+      "id": "WRFP-R2-bearing_seal_kind-open-cartridge",
+      "decision": "R2",
+      "op": "replace_field_contract",
+      "template": "bearing",
+      "key": "bearing_seal_kind",
+      "before": {
+        "allowed_when": {
+          "kind": "when",
+          "rows": [
+            [
+              {
+                "field": "bearing_construction",
+                "operator": "in",
+                "value_type": "token",
+                "value": [
+                  "Cartucho sellado",
+                  "Cartucho abierto",
+                  "Cartucho blindado",
+                  "Cartucho (sellado sin confirmar)"
+                ]
+              }
+            ]
+          ]
+        }
+      },
+      "after": {
+        "allowed_when": {
+          "kind": "when",
+          "rows": [
+            [
+              {
+                "field": "bearing_construction",
+                "operator": "in",
+                "value_type": "token",
+                "value": [
+                  "Cartucho sellado",
+                  "Cartucho blindado",
+                  "Cartucho (sellado sin confirmar)"
+                ]
+              }
+            ]
+          ]
+        }
+      },
+      "before_extensions_required": {},
+      "source_ids": [
+        "S-ENDURO-BASICS",
+        "S-SKF-CAPPED"
+      ],
+      "scope": "Un cartucho abierto no tiene sello ni pantalla, así que deja de admitir una designación de sellado. La designación OEM completa no se toca: sigue entera en bearing_size_code.",
+      "not_claimed": "que «cartucho» implique sellado, ni al revés. Un rodamiento tapado por un solo lado se sigue registrando como cartucho sellado o blindado y conserva este campo."
+    },
+    {
+      "id": "WRFP-R1-inner-bevel-helper",
+      "decision": "R1",
+      "op": "replace_field_contract",
+      "template": "bearing",
+      "key": "bearing_inner_contact_angle_deg",
+      "before": {},
+      "after": {
+        "helpers": "Ángulo del bisel del anillo interior, el que apoya en la pista de dirección o en el cono centrador. Es el primer número de una marca tipo 36×45 según la convención que documenta Park Tool. No es el ángulo con que las bolas contactan las pistas dentro del rodamiento: ése es «Ángulo de contacto interno declarado por el fabricante»."
+      },
+      "before_extensions_required": {
+        "helpers": {
+          "present": false,
+          "value": null
+        }
+      },
+      "source_ids": [
+        "S-PARK-HEADSET"
+      ],
+      "scope": "Se conservan id, clave y rótulo. Sólo se agrega el datum que desambigua el bisel.",
+      "not_claimed": "que la convención 36×45 sea universal: se atribuye a Park Tool."
+    },
+    {
+      "id": "WRFP-R1-outer-bevel-helper",
+      "decision": "R1",
+      "op": "replace_field_contract",
+      "template": "bearing",
+      "key": "bearing_outer_contact_angle_deg",
+      "before": {},
+      "after": {
+        "helpers": "Ángulo del bisel del anillo exterior, el que apoya en el alojamiento del cuadro o en la cazoleta. Es el segundo número de una marca tipo 36×45 según la convención que documenta Park Tool. No es el ángulo con que las bolas contactan las pistas dentro del rodamiento."
+      },
+      "before_extensions_required": {
+        "helpers": {
+          "present": false,
+          "value": null
+        }
+      },
+      "source_ids": [
+        "S-PARK-HEADSET"
+      ],
+      "scope": "Igual que el interior, en el otro anillo.",
+      "not_claimed": "No se propone renombrar las claves ni reasignar identidades."
+    },
+    {
+      "id": "WRFP-R1-race-contact-angle",
+      "decision": "R1",
+      "op": "add_field",
+      "template": "bearing",
+      "key": "bearing_race_contact_angle_deg",
+      "before": null,
+      "after": {
+        "field_entry": {
+          "key": "bearing_race_contact_angle_deg",
+          "section_key": "measurement",
+          "sort_order": 260,
+          "is_required": false,
+          "visibility_rules": [],
+          "option_rules": [],
+          "constraint_rules": []
+        },
+        "definition_used_by_append": "bearing",
+        "roles": "measurement",
+        "semantic_roles": "measurement",
+        "allowed_when": {
+          "kind": "when",
+          "rows": [
+            [
+              {
+                "field": "bearing_construction",
+                "operator": "in",
+                "value_type": "token",
+                "value": [
+                  "Cartucho sellado",
+                  "Cartucho abierto",
+                  "Cartucho blindado",
+                  "Cartucho (sellado sin confirmar)"
+                ]
+              }
+            ]
+          ]
+        },
+        "required_when": {
+          "kind": "never"
+        },
+        "prerequisites": [
+          "spec_evidence_source"
+        ],
+        "evidence_requirements": "oem_spec",
+        "helpers": "Magnitud del ángulo interno α medido respecto del plano perpendicular al eje, entre 0 y 90 grados (NSK). Se registra sólo si el fabricante declara un único valor nominal común. No se deduce del sufijo MAX, ni de que la aplicación sea Dirección, ni del par de biseles de asiento. Un conjunto de pedalier que declara 15° no es un rodamiento suelto: ese ángulo pertenece al conjunto, no a un SKU de rodamiento."
+      },
+      "before_extensions_required": {},
+      "source_ids": [
+        "S-NSK-ANGLE",
+        "S-ENDURO-3802",
+        "S-ENDURO-BKC0752"
+      ],
+      "scope": "Campo nuevo y distinto de los dos biseles. Aplica sólo a construcciones de cartucho, que son las que tienen pistas propias; nunca es obligatorio.",
+      "not_claimed": "No se deriva de MAX, ni de bearing_application = Dirección, ni del par de biseles. Tampoco se afirma que un rodamiento de doble hilera tenga un solo ángulo nominal."
+    },
+    {
+      "id": "WRFP-R1-row-count",
+      "decision": "R1",
+      "op": "add_field",
+      "template": "bearing",
+      "key": "bearing_row_count",
+      "before": null,
+      "after": {
+        "field_entry": {
+          "key": "bearing_row_count",
+          "section_key": "measurement",
+          "sort_order": 270,
+          "is_required": false,
+          "visibility_rules": [],
+          "option_rules": [],
+          "constraint_rules": []
+        },
+        "definition_used_by_append": "bearing",
+        "roles": "measurement",
+        "semantic_roles": "measurement",
+        "allowed_when": {
+          "kind": "when",
+          "rows": [
+            [
+              {
+                "field": "bearing_construction",
+                "operator": "in",
+                "value_type": "token",
+                "value": [
+                  "Cartucho sellado",
+                  "Cartucho abierto",
+                  "Cartucho blindado",
+                  "Cartucho (sellado sin confirmar)",
+                  "Canastillo con bolas"
+                ]
+              }
+            ]
+          ]
+        },
+        "required_when": {
+          "kind": "never"
+        },
+        "prerequisites": [
+          "spec_evidence_source"
+        ],
+        "evidence_requirements": "oem_spec",
+        "helpers": "Declaración del fabricante, por ejemplo «Double Row» en el Enduro 3802 LLU MAX. No se deduce del sello, del ancho ni del código de tamaño."
+      },
+      "before_extensions_required": {},
+      "source_ids": [
+        "S-ENDURO-3802"
+      ],
+      "scope": "Entero positivo. Se excluye sólo la bolsa de bolas sueltas, que no tiene hileras, y la construcción declarada como desconocida.",
+      "not_claimed": "No se infiere del sello, del ancho ni del código dimensional."
+    },
+    {
+      "id": "WRFP-R1-regreasable",
+      "decision": "R1",
+      "op": "add_field",
+      "template": "bearing",
+      "key": "bearing_regreasable",
+      "before": null,
+      "after": {
+        "field_entry": {
+          "key": "bearing_regreasable",
+          "section_key": "declaration",
+          "sort_order": 280,
+          "is_required": false,
+          "visibility_rules": [],
+          "option_rules": [],
+          "constraint_rules": []
+        },
+        "definition_used_by_append": "bearing",
+        "roles": "declaration",
+        "semantic_roles": "declaration",
+        "allowed_when": {
+          "kind": "when",
+          "rows": [
+            [
+              {
+                "field": "bearing_construction",
+                "operator": "in",
+                "value_type": "token",
+                "value": [
+                  "Cartucho sellado",
+                  "Cartucho abierto",
+                  "Cartucho blindado",
+                  "Cartucho (sellado sin confirmar)",
+                  "Canastillo con bolas"
+                ]
+              }
+            ]
+          ]
+        },
+        "required_when": {
+          "kind": "never"
+        },
+        "prerequisites": [
+          "spec_evidence_source"
+        ],
+        "evidence_requirements": "oem_spec",
+        "helpers": "Declaración del fabricante. No se deduce del sello ni de la palabra «cartucho»: SKF distingue por designación pantallas removibles de pantallas no removibles, y su frase sobre lubricación de por vida está acotada a los rodamientos tapados por ambos lados."
+      },
+      "before_extensions_required": {},
+      "source_ids": [
+        "S-SKF-CAPPED",
+        "S-ENDURO-BASICS"
+      ],
+      "scope": "Booleano sin valor por defecto: la ausencia ya es «desconocido» para el motor, que sólo mira hasKnownSpecValue. Nunca es obligatorio.",
+      "not_claimed": "No se deduce del sello. La frase de SKF sobre lubricación de por vida está acotada a los tapados por ambos lados y no gobierna un sello LLU que el taller abre."
+    },
+    {
+      "id": "WRFP-R3-retire-max-pressure-psi",
+      "decision": "R3",
+      "op": "replace_field_contract",
+      "template": "tire",
+      "key": "tire_max_pressure_psi",
+      "before": {
+        "roles": "declaration",
+        "semantic_roles": "declaration"
+      },
+      "after": {
+        "roles": "legacy",
+        "semantic_roles": "legacy"
+      },
+      "before_extensions_required": {},
+      "source_ids": [
+        "S-CONTI-GP5000STR",
+        "S-SCHWALBE-MPLUS"
+      ],
+      "scope": "El escalar en psi fija la unidad por adelantado y no distingue el máximo general del máximo de una configuración. Pasa a legado; validateProductSpecDraft descarta los valores de campos legacy antes de validar, así que deja de gobernar el editor sin perder el hecho guardado.",
+      "not_claimed": "No se borra ningún dato ni se convierte a otra unidad. Ninguna condición del catálogo lo referencia como dependencia, así que retirarlo no rompe otra regla."
+    },
+    {
+      "id": "WRFP-R3-max-pressure-unit",
+      "decision": "R3",
+      "op": "add_field",
+      "template": "tire",
+      "key": "tire_max_pressure_unit",
+      "before": null,
+      "after": {
+        "field_entry": {
+          "key": "tire_max_pressure_unit",
+          "section_key": "declaration",
+          "sort_order": 220,
+          "is_required": false,
+          "visibility_rules": [],
+          "option_rules": [],
+          "constraint_rules": []
+        },
+        "definition_used_by_append": "tire",
+        "roles": "declaration",
+        "semantic_roles": "declaration",
+        "allowed_when": {
+          "kind": "always"
+        },
+        "required_when": {
+          "kind": "never"
+        },
+        "prerequisites": [
+          "spec_evidence_source"
+        ],
+        "evidence_requirements": "package_or_label",
+        "helpers": "Unidad en que el fabricante imprime el máximo general de esta variante. No se convierte: Schwalbe imprime «max. Bar: 6 Bar» y «max. Psi: 85 PSI» para la misma cubierta, y 6 bar convertidos dan 87 psi."
+      },
+      "before_extensions_required": {},
+      "source_ids": [
+        "S-SCHWALBE-MPLUS"
+      ],
+      "scope": "La unidad precede al valor y lo habilita.",
+      "not_claimed": "No se convierte entre bar y psi en ningún sentido."
+    },
+    {
+      "id": "WRFP-R3-max-pressure-value",
+      "decision": "R3",
+      "op": "add_field",
+      "template": "tire",
+      "key": "tire_max_pressure_value",
+      "before": null,
+      "after": {
+        "field_entry": {
+          "key": "tire_max_pressure_value",
+          "section_key": "declaration",
+          "sort_order": 230,
+          "is_required": false,
+          "visibility_rules": [],
+          "option_rules": [],
+          "constraint_rules": []
+        },
+        "definition_used_by_append": "tire",
+        "roles": "declaration",
+        "semantic_roles": "declaration",
+        "allowed_when": {
+          "kind": "when",
+          "rows": [
+            [
+              {
+                "field": "tire_max_pressure_unit",
+                "operator": "in",
+                "value_type": "token",
+                "value": [
+                  "bar",
+                  "psi"
+                ]
+              }
+            ]
+          ]
+        },
+        "required_when": {
+          "kind": "when",
+          "rows": [
+            [
+              {
+                "field": "tire_max_pressure_unit",
+                "operator": "in",
+                "value_type": "token",
+                "value": [
+                  "bar",
+                  "psi"
+                ]
+              }
+            ]
+          ]
+        },
+        "prerequisites": [
+          "spec_evidence_source"
+        ],
+        "evidence_requirements": "package_or_label",
+        "helpers": "Máximo general de esta variante, en la unidad ya elegida. No se copia aquí el máximo condicionado de una configuración: Continental declara que el máximo hookless y el hooked pueden diferir y que ambos están en el envase."
+      },
+      "before_extensions_required": {},
+      "source_ids": [
+        "S-CONTI-GP5000STR",
+        "S-SCHWALBE-MPLUS"
+      ],
+      "scope": "allowed_when es el único dueño de la dependencia con la unidad; prerequisites sólo pide la fuente. Poner la unidad en las dos partes emitía dos avisos «prerequisite» para el mismo campo, medido en la sonda. Elegir la unidad y no traer el número deja la ficha pendiente: required_missing escalar es no bloqueante.",
+      "not_claimed": "No se ordena contra ningún máximo de fila ni contra el mínimo de otra configuración."
+    },
+    {
+      "id": "WRFP-R6-hookless-pending-completeness",
+      "decision": "R6",
+      "op": "replace_template_coherence",
+      "template": "tire",
+      "key": "row_conditions",
+      "before": {
+        "present": true,
+        "value": {
+          "version": 1,
+          "fields": {
+            "tire_rim_configurations": {
+              "allowed_when": {
+                "max_pressure": {
+                  "kind": "when",
+                  "rows": [
+                    [
+                      {
+                        "field": "pressure_unit",
+                        "operator": "in",
+                        "value_type": "token",
+                        "value": [
+                          "bar",
+                          "psi"
+                        ]
+                      }
+                    ]
+                  ]
+                }
+              },
+              "required_when": {
+                "max_pressure": {
+                  "kind": "when",
+                  "rows": [
+                    [
+                      {
+                        "field": "pressure_unit",
+                        "operator": "in",
+                        "value_type": "token",
+                        "value": [
+                          "bar",
+                          "psi"
+                        ]
+                      }
+                    ]
+                  ]
+                }
+              },
+              "allowed_options": {}
+            }
+          }
+        }
+      },
+      "after": {
+        "version": 1,
+        "fields": {
+          "tire_rim_configurations": {
+            "allowed_when": {
+              "max_pressure": {
+                "kind": "when",
+                "rows": [
+                  [
+                    {
+                      "field": "pressure_unit",
+                      "operator": "in",
+                      "value_type": "token",
+                      "value": [
+                        "bar",
+                        "psi"
+                      ]
+                    }
+                  ]
+                ]
+              }
+            },
+            "required_when": {
+              "max_pressure": {
+                "kind": "when",
+                "rows": [
+                  [
+                    {
+                      "field": "pressure_unit",
+                      "operator": "in",
+                      "value_type": "token",
+                      "value": [
+                        "bar",
+                        "psi"
+                      ]
+                    }
+                  ]
+                ]
+              },
+              "pressure_unit": {
+                "kind": "when",
+                "rows": [
+                  [
+                    {
+                      "field": "rim_bead_profile",
+                      "operator": "eq",
+                      "value_type": "token",
+                      "value": "Sin gancho (hookless)"
+                    }
+                  ]
+                ]
+              },
+              "rim_internal_width_max_mm": {
+                "kind": "when",
+                "rows": [
+                  [
+                    {
+                      "field": "rim_bead_profile",
+                      "operator": "eq",
+                      "value_type": "token",
+                      "value": "Sin gancho (hookless)"
+                    }
+                  ]
+                ]
+              }
+            },
+            "allowed_options": {}
+          }
+        }
+      },
+      "before_extensions_required": {},
+      "source_ids": [
+        "S-CONTI-HOOKLESS"
+      ],
+      "scope": "Una fila hookless sin ancho interno máximo o sin unidad de presión queda pendiente, no imposible. La unidad ya exigía su valor, así que la presión se completa por esa cadena y ningún otro miembro la aporta.",
+      "not_claimed": "No se inventa ningún tope universal: Continental publica 5.0, 4.5, 4.0 y 3.8 bar según la variante. El mínimo sigue siendo otro dato y nunca se iguala al máximo."
+    }
+  ],
+  "fixtures": [
+    {
+      "id": "wrfp_open_cartridge_rejects_seal_designation",
+      "template": "bearing",
+      "kind": "contradictorio",
+      "decision": "R2",
+      "values": {
+        "bearing_construction": "Cartucho abierto",
+        "bearing_seal_kind": "2RS (goma, doble)"
+      },
+      "source_urls": [
+        "https://cycling.endurobearings.com/pages/bearing-basics-1"
+      ],
+      "source_ids": [
+        "S-ENDURO-BASICS"
+      ],
+      "expected_blocking": [
+        {
+          "code": "field_applicability",
+          "field": "bearing_seal_kind"
+        }
+      ],
+      "note": "Un cartucho abierto no tiene sello que designar.",
+      "observed_in_local_trial": [
+        {
+          "code": "required_missing",
+          "field": "bearing_size_code",
+          "row": null,
+          "column": null,
+          "blocking": false
+        },
+        {
+          "code": "field_applicability",
+          "field": "bearing_seal_kind",
+          "row": null,
+          "column": null,
+          "blocking": true
+        }
+      ]
+    },
+    {
+      "id": "wrfp_open_cartridge_keeps_its_oem_code",
+      "template": "bearing",
+      "kind": "válido",
+      "decision": "R2",
+      "values": {
+        "bearing_construction": "Cartucho abierto",
+        "bearing_size_code": "6902",
+        "bearing_inner_diameter_mm": "15",
+        "bearing_outer_diameter_mm": "28",
+        "bearing_width_mm": "7"
+      },
+      "source_urls": [],
+      "source_ids": [],
+      "expected_blocking": [],
+      "forbidden_issue_fields": [
+        "bearing_size_code"
+      ],
+      "note": "Retirar el sello no toca la designación del fabricante.",
+      "observed_in_local_trial": []
+    },
+    {
+      "id": "wrfp_sealed_cartridge_still_takes_llu",
+      "template": "bearing",
+      "kind": "válido",
+      "decision": "R2",
+      "values": {
+        "bearing_construction": "Cartucho sellado",
+        "bearing_size_code": "3802 LLU MAX",
+        "bearing_seal_kind": "LLU (doble labio, contacto medio)",
+        "spec_evidence_source": "Enduro Bearings, 3802 LLU MAX"
+      },
+      "source_urls": [
+        "https://cycling.endurobearings.com/products/3802-llu-max",
+        "https://cycling.endurobearings.com/pages/bearing-basics-1"
+      ],
+      "source_ids": [
+        "S-ENDURO-3802",
+        "S-ENDURO-BASICS"
+      ],
+      "expected_blocking": [],
+      "note": "La compuerta no se pasa de restrictiva: el sellado sigue admitiendo su designación.",
+      "observed_in_local_trial": []
+    },
+    {
+      "id": "wrfp_3802_double_row_without_declared_angle",
+      "template": "bearing",
+      "kind": "desconocido",
+      "decision": "R1",
+      "values": {
+        "bearing_construction": "Cartucho sellado",
+        "bearing_size_code": "3802 LLU MAX",
+        "bearing_internal_construction": "Contacto angular, doble hilera, MAX",
+        "bearing_seal_kind": "LLU (doble labio, contacto medio)",
+        "bearing_row_count": "2",
+        "bearing_element_retention": "Complemento completo / sin jaula",
+        "bearing_inner_diameter_mm": "15",
+        "bearing_outer_diameter_mm": "24",
+        "bearing_width_mm": "7",
+        "spec_evidence_source": "Enduro Bearings, 3802 LLU MAX"
+      },
+      "source_urls": [
+        "https://cycling.endurobearings.com/products/3802-llu-max"
+      ],
+      "source_ids": [
+        "S-ENDURO-3802"
+      ],
+      "expected_blocking": [],
+      "forbidden_issue_fields": [
+        "bearing_race_contact_angle_deg"
+      ],
+      "note": "Doble hilera, contacto angular y MAX, sin ángulo publicado. El campo nuevo queda vacío y nunca se reclama.",
+      "observed_in_local_trial": []
+    },
+    {
+      "id": "wrfp_race_contact_angle_zero_is_in_domain",
+      "template": "bearing",
+      "kind": "válido",
+      "decision": "R1",
+      "values": {
+        "bearing_construction": "Cartucho sellado",
+        "bearing_race_contact_angle_deg": "0",
+        "spec_evidence_source": "Ficha del fabricante"
+      },
+      "source_urls": [],
+      "source_ids": [
+        "S-NSK-ANGLE"
+      ],
+      "expected_blocking": [],
+      "note": "NSK admite α = 0 para el contacto radial: el dominio parte en cero, no en «mayor que cero».",
+      "observed_in_local_trial": [
+        {
+          "code": "required_missing",
+          "field": "bearing_size_code",
+          "row": null,
+          "column": null,
+          "blocking": false
+        }
+      ]
+    },
+    {
+      "id": "wrfp_race_contact_angle_outside_domain",
+      "template": "bearing",
+      "kind": "contradictorio",
+      "decision": "R1",
+      "values": {
+        "bearing_construction": "Cartucho sellado",
+        "bearing_race_contact_angle_deg": "91",
+        "spec_evidence_source": "Ficha del fabricante"
+      },
+      "source_urls": [],
+      "source_ids": [
+        "S-NSK-ANGLE"
+      ],
+      "expected_blocking": [
+        {
+          "code": "range",
+          "field": "bearing_race_contact_angle_deg"
+        }
+      ],
+      "note": "El dominio de α termina en 90°.",
+      "observed_in_local_trial": [
+        {
+          "code": "required_missing",
+          "field": "bearing_size_code",
+          "row": null,
+          "column": null,
+          "blocking": false
+        },
+        {
+          "code": "range",
+          "field": "bearing_race_contact_angle_deg",
+          "row": null,
+          "column": null,
+          "blocking": true
+        }
+      ]
+    },
+    {
+      "id": "wrfp_loose_balls_cannot_declare_rows_or_angle",
+      "template": "bearing",
+      "kind": "contradictorio",
+      "decision": "R1",
+      "values": {
+        "bearing_construction": "Bolas sueltas (bolsa)",
+        "bearing_row_count": "1",
+        "bearing_race_contact_angle_deg": "15",
+        "spec_evidence_source": "Ficha del fabricante"
+      },
+      "source_urls": [],
+      "source_ids": [],
+      "expected_blocking": [
+        {
+          "code": "field_applicability",
+          "field": "bearing_race_contact_angle_deg"
+        },
+        {
+          "code": "field_applicability",
+          "field": "bearing_row_count"
+        }
+      ],
+      "note": "Una bolsa de bolas no tiene hileras ni pistas propias.",
+      "observed_in_local_trial": [
+        {
+          "code": "required_missing",
+          "field": "ball_diameter_in",
+          "row": null,
+          "column": null,
+          "blocking": false
+        },
+        {
+          "code": "field_applicability",
+          "field": "bearing_race_contact_angle_deg",
+          "row": null,
+          "column": null,
+          "blocking": true
+        },
+        {
+          "code": "field_applicability",
+          "field": "bearing_row_count",
+          "row": null,
+          "column": null,
+          "blocking": true
+        }
+      ]
+    },
+    {
+      "id": "wrfp_bb_assembly_angle_copied_is_undetectable",
+      "template": "bearing",
+      "kind": "contradictory_undetectable",
+      "decision": "R1",
+      "values": {
+        "bearing_construction": "Cartucho sellado",
+        "bearing_internal_construction": "Contacto angular",
+        "bearing_race_contact_angle_deg": "15",
+        "spec_evidence_source": "Enduro Bearings, BKC-0752"
+      },
+      "source_urls": [
+        "https://cycling.endurobearings.com/products/bkc-0752"
+      ],
+      "source_ids": [
+        "S-ENDURO-BKC0752"
+      ],
+      "expected_blocking": [],
+      "note": "Los 15° del BKC-0752 pertenecen a un pedalier completo con cazoletas, precarga y separadores. Copiados a un rodamiento suelto el motor no puede detectarlo: sólo la revisión de la fuente lo separa. Se registra como límite, no como regla.",
+      "observed_in_local_trial": [
+        {
+          "code": "required_missing",
+          "field": "bearing_size_code",
+          "row": null,
+          "column": null,
+          "blocking": false
+        }
+      ]
+    },
+    {
+      "id": "wrfp_regreasable_is_unknown_by_default",
+      "template": "bearing",
+      "kind": "desconocido",
+      "decision": "R1",
+      "values": {
+        "bearing_construction": "Cartucho sellado",
+        "bearing_seal_kind": "LLU (doble labio, contacto medio)",
+        "spec_evidence_source": "Enduro Bearings, Bearing Basics 1"
+      },
+      "source_urls": [
+        "https://cycling.endurobearings.com/pages/bearing-basics-1"
+      ],
+      "source_ids": [
+        "S-ENDURO-BASICS"
+      ],
+      "expected_blocking": [],
+      "forbidden_issue_fields": [
+        "bearing_regreasable"
+      ],
+      "note": "La ausencia ya es desconocido; el campo nunca se reclama.",
+      "observed_in_local_trial": [
+        {
+          "code": "required_missing",
+          "field": "bearing_size_code",
+          "row": null,
+          "column": null,
+          "blocking": false
+        }
+      ]
+    },
+    {
+      "id": "wrfp_sealed_does_not_decide_regreasing",
+      "template": "bearing",
+      "kind": "válido",
+      "decision": "R1",
+      "values": {
+        "bearing_construction": "Cartucho sellado",
+        "bearing_seal_kind": "LLU (doble labio, contacto medio)",
+        "bearing_regreasable": true,
+        "spec_evidence_source": "Enduro Bearings, Bearing Basics 1"
+      },
+      "source_urls": [
+        "https://cycling.endurobearings.com/pages/bearing-basics-1",
+        "https://cycling.endurobearings.com/products/3802-llu-max"
+      ],
+      "source_ids": [
+        "S-ENDURO-BASICS",
+        "S-SKF-CAPPED"
+      ],
+      "expected_blocking": [],
+      "note": "Sellado y reengrasable conviven; el sello no decide la declaración.",
+      "observed_in_local_trial": [
+        {
+          "code": "required_missing",
+          "field": "bearing_size_code",
+          "row": null,
+          "column": null,
+          "blocking": false
+        }
+      ]
+    },
+    {
+      "id": "wrfp_schwalbe_general_maximum_in_bar",
+      "template": "tire",
+      "kind": "válido",
+      "decision": "R3",
+      "values": {
+        "tire_etrto": "37-622",
+        "tire_width_mm": "37",
+        "bead_seat_diameter_mm": "622",
+        "tire_max_pressure_unit": "bar",
+        "tire_max_pressure_value": "6",
+        "spec_evidence_source": "Schwalbe, Marathon Plus 37-622 (11100769)"
+      },
+      "source_urls": [
+        "https://www.schwalbe.com/en/Marathon-Plus-11100769"
+      ],
+      "source_ids": [
+        "S-SCHWALBE-MPLUS"
+      ],
+      "expected_blocking": [],
+      "note": "Cifra impresa: «max. Bar: 6 Bar». La misma ficha imprime «max. Psi: 85 PSI»; no se convierte.",
+      "observed_in_local_trial": [
+        {
+          "code": "required_missing",
+          "field": "tire_bead_type",
+          "row": null,
+          "column": null,
+          "blocking": false
+        }
+      ]
+    },
+    {
+      "id": "wrfp_unit_without_value_is_pending",
+      "template": "tire",
+      "kind": "desconocido",
+      "decision": "R3",
+      "values": {
+        "bead_seat_diameter_mm": "622",
+        "tire_max_pressure_unit": "psi",
+        "spec_evidence_source": "Envase del fabricante"
+      },
+      "source_urls": [],
+      "source_ids": [],
+      "expected_blocking": [],
+      "expected_issues": [
+        {
+          "code": "required_missing",
+          "field": "tire_max_pressure_value",
+          "blocking": false
+        }
+      ],
+      "note": "Elegir la unidad y no traer el número deja la ficha pendiente, no rota.",
+      "observed_in_local_trial": [
+        {
+          "code": "required_missing",
+          "field": "tire_width_mm",
+          "row": null,
+          "column": null,
+          "blocking": false
+        },
+        {
+          "code": "required_missing",
+          "field": "tire_bead_type",
+          "row": null,
+          "column": null,
+          "blocking": false
+        },
+        {
+          "code": "required_missing",
+          "field": "tire_max_pressure_value",
+          "row": null,
+          "column": null,
+          "blocking": false
+        }
+      ]
+    },
+    {
+      "id": "wrfp_value_without_unit_stays_pending",
+      "template": "tire",
+      "kind": "desconocido",
+      "decision": "R3",
+      "values": {
+        "bead_seat_diameter_mm": "622",
+        "tire_max_pressure_value": "6",
+        "spec_evidence_source": "Envase del fabricante"
+      },
+      "source_urls": [],
+      "source_ids": [],
+      "expected_blocking": [],
+      "expected_pending_contains": [
+        {
+          "code": "prerequisite",
+          "field": "tire_max_pressure_value",
+          "blocking": false
+        }
+      ],
+      "note": "Medido, no supuesto: una dependencia ausente da SpecTruth.unknown, no «no». El número sin unidad queda con requisitos por confirmar y no bloquea. Es el límite del motor, no una decisión de diseño.",
+      "observed_in_local_trial": [
+        {
+          "code": "required_missing",
+          "field": "tire_width_mm",
+          "row": null,
+          "column": null,
+          "blocking": false
+        },
+        {
+          "code": "required_missing",
+          "field": "tire_bead_type",
+          "row": null,
+          "column": null,
+          "blocking": false
+        },
+        {
+          "code": "prerequisite",
+          "field": "tire_max_pressure_value",
+          "row": null,
+          "column": null,
+          "blocking": false
+        }
+      ]
+    },
+    {
+      "id": "wrfp_legacy_psi_no_longer_governs",
+      "template": "tire",
+      "kind": "legacy_boundary_regression",
+      "decision": "R3",
+      "values": {
+        "bead_seat_diameter_mm": "622",
+        "tire_max_pressure_psi": "999"
+      },
+      "source_urls": [],
+      "source_ids": [],
+      "expected_blocking": [],
+      "forbidden_issue_fields": [
+        "tire_max_pressure_psi"
+      ],
+      "note": "999 es un número sintético, no atribuido a ningún fabricante. Tras el retiro, validateProductSpecDraft descarta el valor antes de validar y no emite nada.",
+      "observed_in_local_trial": [
+        {
+          "code": "required_missing",
+          "field": "tire_width_mm",
+          "row": null,
+          "column": null,
+          "blocking": false
+        },
+        {
+          "code": "required_missing",
+          "field": "tire_bead_type",
+          "row": null,
+          "column": null,
+          "blocking": false
+        }
+      ]
+    },
+    {
+      "id": "wrfp_hookless_row_maximum_is_not_the_headline",
+      "template": "tire",
+      "kind": "contradictory_undetectable",
+      "decision": "R3",
+      "values": {
+        "tire_etrto": "28-622",
+        "tire_width_mm": "28",
+        "bead_seat_diameter_mm": "622",
+        "tire_max_pressure_unit": "bar",
+        "tire_max_pressure_value": "5",
+        "spec_evidence_source": "Continental, Hookless vs. Hooked Rims",
+        "tire_rim_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "hk",
+              "values": {
+                "rim_bead_profile": "Sin gancho (hookless)",
+                "mounting_method": "Tubeless",
+                "rim_internal_width_max_mm": "23",
+                "max_pressure": "5.0",
+                "pressure_unit": "bar"
+              },
+              "sources": [
+                "https://www.continental-tires.com/us/en/tire-knowledge/hookless-vs-hooked-rims/"
+              ]
+            }
+          ]
+        }
+      },
+      "source_urls": [
+        "https://www.continental-tires.com/us/en/tire-knowledge/hookless-vs-hooked-rims/",
+        "https://www.continental-tires.com/products/bicycle/tires/grand-prix-5000-s-tr/"
+      ],
+      "source_ids": [
+        "S-CONTI-HOOKLESS",
+        "S-CONTI-GP5000STR"
+      ],
+      "expected_blocking": [],
+      "note": "El 5.0 de la fila es el máximo hookless. Continental declara que el hookless y el hooked pueden diferir y que ambos están en el envase, así que copiarlo al titular es falso y el motor no puede verlo. Queda como límite documentado.",
+      "observed_in_local_trial": [
+        {
+          "code": "required_missing",
+          "field": "tire_bead_type",
+          "row": null,
+          "column": null,
+          "blocking": false
+        }
+      ]
+    },
+    {
+      "id": "wrfp_hookless_row_pending_max_width",
+      "template": "tire",
+      "kind": "desconocido",
+      "decision": "R6",
+      "values": {
+        "bead_seat_diameter_mm": "622",
+        "tire_rim_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "hk",
+              "values": {
+                "rim_bead_profile": "Sin gancho (hookless)",
+                "mounting_method": "Tubeless",
+                "max_pressure": "4.0",
+                "pressure_unit": "bar"
+              },
+              "sources": [
+                "https://www.continental-tires.com/us/en/tire-knowledge/hookless-vs-hooked-rims/"
+              ]
+            }
+          ]
+        }
+      },
+      "source_urls": [
+        "https://www.continental-tires.com/us/en/tire-knowledge/hookless-vs-hooked-rims/"
+      ],
+      "source_ids": [
+        "S-CONTI-HOOKLESS"
+      ],
+      "expected_blocking": [],
+      "expected_row_condition_issues": [
+        {
+          "code": "row_required_missing",
+          "field": "tire_rim_configurations",
+          "row_id": "hk",
+          "column": "rim_internal_width_max_mm",
+          "blocking": false
+        }
+      ],
+      "note": "Completitud pendiente, no imposibilidad.",
+      "observed_in_local_trial": [
+        {
+          "code": "required_missing",
+          "field": "tire_width_mm",
+          "row": null,
+          "column": null,
+          "blocking": false
+        },
+        {
+          "code": "required_missing",
+          "field": "tire_bead_type",
+          "row": null,
+          "column": null,
+          "blocking": false
+        },
+        {
+          "code": "prerequisite",
+          "field": "tire_rim_configurations",
+          "row": null,
+          "column": null,
+          "blocking": false
+        },
+        {
+          "code": "row_required_missing",
+          "field": "tire_rim_configurations",
+          "row": "hk",
+          "column": "rim_internal_width_max_mm",
+          "blocking": false
+        }
+      ]
+    },
+    {
+      "id": "wrfp_hookless_row_pending_unit_and_width",
+      "template": "tire",
+      "kind": "desconocido",
+      "decision": "R6",
+      "values": {
+        "bead_seat_diameter_mm": "622",
+        "tire_rim_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "hk",
+              "values": {
+                "rim_bead_profile": "Sin gancho (hookless)",
+                "mounting_method": "Tubeless"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "source_urls": [],
+      "source_ids": [],
+      "expected_blocking": [],
+      "note": "Sin unidad, la presión de la fila queda con requisitos por confirmar; la unidad y el ancho máximo quedan pendientes.",
+      "observed_in_local_trial": [
+        {
+          "code": "required_missing",
+          "field": "tire_width_mm",
+          "row": null,
+          "column": null,
+          "blocking": false
+        },
+        {
+          "code": "required_missing",
+          "field": "tire_bead_type",
+          "row": null,
+          "column": null,
+          "blocking": false
+        },
+        {
+          "code": "prerequisite",
+          "field": "tire_rim_configurations",
+          "row": null,
+          "column": null,
+          "blocking": false
+        },
+        {
+          "code": "row_required_missing",
+          "field": "tire_rim_configurations",
+          "row": "hk",
+          "column": "rim_internal_width_max_mm",
+          "blocking": false
+        },
+        {
+          "code": "row_prerequisite",
+          "field": "tire_rim_configurations",
+          "row": "hk",
+          "column": "max_pressure",
+          "blocking": false
+        },
+        {
+          "code": "row_required_missing",
+          "field": "tire_rim_configurations",
+          "row": "hk",
+          "column": "pressure_unit",
+          "blocking": false
+        }
+      ]
+    },
+    {
+      "id": "wrfp_hooked_row_needs_no_hookless_completeness",
+      "template": "tire",
+      "kind": "válido",
+      "decision": "R6",
+      "values": {
+        "bead_seat_diameter_mm": "622",
+        "tire_rim_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "hk",
+              "values": {
+                "rim_bead_profile": "Con gancho (hooked)",
+                "mounting_method": "Con cámara"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "source_urls": [],
+      "source_ids": [],
+      "expected_blocking": [],
+      "forbidden_issue_fields": [],
+      "note": "La compuerta es sólo para hookless; una fila con gancho no hereda la exigencia.",
+      "observed_in_local_trial": [
+        {
+          "code": "required_missing",
+          "field": "tire_width_mm",
+          "row": null,
+          "column": null,
+          "blocking": false
+        },
+        {
+          "code": "required_missing",
+          "field": "tire_bead_type",
+          "row": null,
+          "column": null,
+          "blocking": false
+        },
+        {
+          "code": "prerequisite",
+          "field": "tire_rim_configurations",
+          "row": null,
+          "column": null,
+          "blocking": false
+        },
+        {
+          "code": "row_prerequisite",
+          "field": "tire_rim_configurations",
+          "row": "hk",
+          "column": "max_pressure",
+          "blocking": false
+        }
+      ]
+    },
+    {
+      "id": "wrfp_hookless_minimum_is_not_invented",
+      "template": "tire",
+      "kind": "válido",
+      "decision": "R6",
+      "values": {
+        "tire_etrto": "25-622",
+        "bead_seat_diameter_mm": "622",
+        "tire_rim_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "hk",
+              "values": {
+                "rim_bead_profile": "Sin gancho (hookless)",
+                "mounting_method": "Tubeless",
+                "rim_internal_width_max_mm": "21",
+                "max_pressure": "5.0",
+                "pressure_unit": "bar"
+              },
+              "sources": [
+                "https://www.continental-tires.com/us/en/tire-knowledge/hookless-vs-hooked-rims/"
+              ]
+            }
+          ]
+        }
+      },
+      "source_urls": [
+        "https://www.continental-tires.com/us/en/tire-knowledge/hookless-vs-hooked-rims/"
+      ],
+      "source_ids": [
+        "S-CONTI-HOOKLESS"
+      ],
+      "expected_blocking": [],
+      "note": "Continental publica 21 mm como máximo del 700×25c y no publica mínimo. El mínimo queda vacío y nadie lo exige.",
+      "observed_in_local_trial": [
+        {
+          "code": "prerequisite",
+          "field": "tire_etrto",
+          "row": null,
+          "column": null,
+          "blocking": false
+        },
+        {
+          "code": "required_missing",
+          "field": "tire_width_mm",
+          "row": null,
+          "column": null,
+          "blocking": false
+        },
+        {
+          "code": "required_missing",
+          "field": "tire_bead_type",
+          "row": null,
+          "column": null,
+          "blocking": false
+        },
+        {
+          "code": "prerequisite",
+          "field": "tire_rim_configurations",
+          "row": null,
+          "column": null,
+          "blocking": false
+        }
+      ]
+    }
+  ],
+  "previous_fixture_changes": [
+    {
+      "case_id": "wss_root_pressure_unit_requires_its_value",
+      "artifact": "all-family-row-values-cases-integrated-2026-09-07.json",
+      "artifact_sha256": "0eb5dfda6a7087cf115afd54e08a9908b00511acbae59d58217b783d371da810",
+      "values_change": "ninguno",
+      "expectation_change": "gana un row_required_missing no bloqueante en rim_internal_width_max_mm de la fila «hookless», además del pendiente de presión que ya tenía."
+    },
+    {
+      "case_id": "wss_SF6",
+      "artifact": "all-family-row-values-cases-integrated-2026-09-07.json",
+      "artifact_sha256": "0eb5dfda6a7087cf115afd54e08a9908b00511acbae59d58217b783d371da810",
+      "values_change": "ninguno",
+      "expectation_change": "cada una de las dos filas hookless gana un row_required_missing no bloqueante en rim_internal_width_max_mm. El bloqueo por row_shape no cambia."
+    },
+    {
+      "case_id": "wss_tire_same_variant_profile_method_twice",
+      "artifact": "all-family-row-values-cases-integrated-2026-09-07.json",
+      "artifact_sha256": "0eb5dfda6a7087cf115afd54e08a9908b00511acbae59d58217b783d371da810",
+      "values_change": "ninguno",
+      "expectation_change": "las dos filas hookless ganan un row_required_missing no bloqueante en rim_internal_width_max_mm. El bloqueo por row_shape no cambia."
+    }
+  ],
+  "engine_facts_verified": [
+    {
+      "fact": "validateProductSpecDraft descarta los valores de campos con rol legacy antes de validar.",
+      "where": "lib/modules/inventory/models/product_spec_contract.dart:174-180"
+    },
+    {
+      "fact": "required_missing escalar es no bloqueante.",
+      "where": "lib/modules/inventory/models/product_spec_contract.dart:242-244"
+    },
+    {
+      "fact": "row_required_missing es no bloqueante y sólo se emite en columnas que no son required estáticas.",
+      "where": "lib/modules/inventory/models/product_spec_row_conditions.dart:121-127"
+    },
+    {
+      "fact": "Una celda con valor y no aplicable sí bloquea.",
+      "where": "lib/modules/inventory/models/product_spec_row_conditions.dart:105-110"
+    },
+    {
+      "fact": "Toda celda no booleana viaja como texto: un número JSON es rechazado por tipo, y una columna entera rechaza el exponente negativo de «2.0».",
+      "where": "lib/modules/inventory/models/product_spec_rows.dart:203-231"
+    },
+    {
+      "fact": "Una condición no puede depender de un campo legacy; el sujeto sí puede serlo.",
+      "where": "scripts/inventory/compile_product_spec_catalog.py:583, 595-596"
+    },
+    {
+      "fact": "Ninguna condición del catálogo referencia tire_max_pressure_psi: retirarlo no rompe otra regla.",
+      "where": "lectura del artefacto base congelado"
+    }
+  ],
+  "local_trial": {
+    "ran": "apply_reviewed_field_addendum con una adjudicación de ensayo escrita por Claude",
+    "result": "los diez parches aplican, validate_contract pasa y publication_gates no cambia",
+    "meaning": "demuestra que las preimágenes son exactas y que el contrato resultante es válido. No es una adjudicación: root escribe la suya.",
+    "dart_probe": "Las 19 fixturas corrieron contra validateProductSpecDraft con el catálogo ya parchado. El campo observed_in_local_trial de cada una es la salida literal del motor, no una expectativa escrita a mano. La sonda vivió en un archivo temporal que ya fue borrado; el árbol queda como estaba."
+  },
+  "gates": {
+    "publication": false,
+    "fill": false,
+    "assignment": false,
+    "families_certified": false
+  },
+  "stats": {
+    "patches": 10,
+    "new_definitions": 5,
+    "fixtures": 19,
+    "sources": 10,
+    "previous_fixture_changes": 3
+  }
+}

@@ -1,0 +1,568 @@
+{
+ "schema_version": 1,
+ "title": "Auditoría del consumidor: pedalier, bielas y platos, frenos y mandos/cambios",
+ "author": "Claude (Opus 5); revisor independiente",
+ "prepared_on": "2026-09-07",
+ "status": "auditoría; no se editó código, catálogos, archivos congelados, producción ni runtime",
+ "audited": {
+  "consumer": "lib/modules/bikeshop/services/bike_product_compatibility_service.dart",
+  "consumer_sha256": "4eecdda115aec395bd105beeadb2be2b20dd1d0af33915609cd4ca4532797f66",
+  "catalogue": "docs/development/product-specs-research-2026-09-05/all-family-remaining-nd-integrated-2026-09-07.json",
+  "catalogue_sha256": "f1826a9a782a200754b21ba6c5420af0f9c39b89482503cab77f96779fc739b1"
+ },
+ "headline": "Diez hallazgos. Dos son falsos incompatibles sobre la venta más común del taller: una biela de eje externo sobre una caja inglesa, y una zapata de freno de llanta sobre una bici de freno de llanta. La causa que se repite es que varios evaluadores de familia no reciben la ficha del producto y deciden sólo con el registro de la bici.",
+ "root_causes": [
+  "Los evaluadores de familia de freno y de desviador delantero reciben sólo el contexto de la bici y nunca la ficha del producto, de modo que infieren desde el nombre de la familia.",
+  "El contexto guarda un solo tipo de freno por bicicleta, cuando adelante y atrás pueden diferir.",
+  "El vocabulario de familia de pedalier de una biela mezcla estándar de caja con sistema de eje, y se compara contra un canonizador construido para estándares de caja.",
+  "Varias diferencias que describen una conversión o un ajuste con espaciadores se emiten como incompatibilidad en vez de como condición."
+ ],
+ "sources": {
+  "S-CATALOGO": {
+   "title": "Catálogo integrado del propio proyecto (docs/development/product-specs-research-2026-09-05/all-family-remaining-nd-integrated-2026-09-07.json)",
+   "url": null,
+   "grade": "structural (evidencia primaria verificada en esta ronda)",
+   "states": [
+    "`brake_pad.braking_surface` admite Disco, Llanta y Maza, y la plantilla tiene campos propios de zapata: espárrago, construcción, largo y material del aro previsto.",
+    "`bottom_bracket.bb_shell_interface` incluye literalmente «BSA / ISO 1.37\" x 24 tpi (68 / 73 mm)»: el propio catálogo declara que una caja BSA cubre 68 y 73 mm.",
+    "`crankset.bottom_bracket_family` mezcla estándar de caja (BSA roscado, Pressfit, BB30 / PF30, Mid / BMX, Americano) con sistema de eje (Hollowtech / 24mm externo, Cuadrado cartucho).",
+    "`bottom_bracket.spindle_interface_accepted` es una lista múltiple de ejes admitidos, distinta del `spindle_interface` único.",
+    "`front_derailleur.compatible_chainring_counts` y `brake_lever.brake_position` existen y el consumidor no los lee."
+   ]
+  },
+  "S-PARK-BB": {
+   "title": "Park Tool — Bottom Bracket Standards",
+   "url": "https://www.parktool.com/en-us/blog/repair-help/bottom-bracket-standards",
+   "grade": "reference_general (no releída en esta ronda)",
+   "states": [
+    "La caja roscada inglesa se fabrica en 68 mm y 73 mm con la misma rosca; los pedalier de cazoleta externa se montan en ambas usando espaciadores. El ancho de caja no cambia el estándar de rosca."
+   ]
+  },
+  "S-SHELDON-BB": {
+   "title": "Sheldon Brown — glosario de pedalier",
+   "url": "https://www.sheldonbrown.com/gloss_bo.html",
+   "grade": "reference_general (no releída en esta ronda)",
+   "states": [
+    "Distingue el alojamiento del cuadro (rosca y ancho) del eje y de la interfaz de biela: son ejes independientes y no se deducen uno del otro."
+   ]
+  },
+  "S-PARK-PAD": {
+   "title": "Park Tool — sustitución de zapatas de freno de llanta",
+   "url": "https://www.parktool.com/en-us/blog/repair-help/rim-brake-pad-replacement",
+   "grade": "reference_general (no releída en esta ronda)",
+   "states": [
+    "La zapata de freno de llanta es un consumible propio, con su espárrago y su porta-goma, distinto de la pastilla de disco."
+   ]
+  },
+  "S-CODE": {
+   "title": "Consumidor auditado (lib/modules/bikeshop/services/bike_product_compatibility_service.dart)",
+   "url": null,
+   "grade": "structural",
+   "states": [
+    "Estado real del código en las rutas citadas."
+   ]
+  }
+ },
+ "catalogue_evidence": {
+  "brake_pad.braking_surface": [
+   "Disco",
+   "Llanta",
+   "Maza (banda / tambor / rodillo)"
+  ],
+  "bottom_bracket.bb_shell_interface": [
+   "BSA / ISO 1.37\" x 24 tpi (68 / 73 mm)",
+   "Italiano 36 mm x 24 tpi (70 mm)",
+   "T47 47 mm x 1.0"
+  ],
+  "crankset.bottom_bracket_family": [
+   "BSA roscado",
+   "Pressfit",
+   "BB30 / PF30",
+   "Mid / BMX",
+   "Americano / one-piece",
+   "Cuadrado cartucho",
+   "Hollowtech / 24mm externo",
+   "Otro",
+   "Desconocido / sin confirmar"
+  ],
+  "bottom_bracket.spindle_interface_accepted": [
+   "Cuadrado JIS",
+   "Cuadrado ISO",
+   "Hollowtech / 24mm",
+   "SRAM GXP 24/22",
+   "SRAM DUB 28.99mm",
+   "BB30 30mm"
+  ],
+  "front_derailleur.compatible_chainring_counts": [
+   "1",
+   "2",
+   "3"
+  ],
+  "brake_lever.brake_position": [
+   "Delantero",
+   "Trasero",
+   "Universal"
+  ]
+ },
+ "findings": [
+  {
+   "id": "D1",
+   "severity": "P0",
+   "title": "La familia de pedalier de una biela no es un estándar de caja: falso incompatible en la combinación más común",
+   "path": {
+    "file": "lib/modules/bikeshop/services/bike_product_compatibility_service.dart",
+    "lines": "1305-1317",
+    "code": "  ProductCompatibilityAssessment? _assessDetailedCranksetCompatibility({\n    required _BikeCompatibilityContext compatibilityContext,\n    required Map<String, dynamic> specValues,\n    required String familyLabel,\n  }) {\n    final bbAssessment = _assessDetailedBottomBracketCompatibility(\n      compatibilityContext: compatibilityContext,\n      specValues: specValues,\n      familyLabel: familyLabel,\n    );\n    if (bbAssessment?.level == ProductCompatibilityLevel.incompatible) {\n      return bbAssessment;\n    }",
+    "also": [
+     "1249-1256",
+     "3396-3400"
+    ],
+    "keys": [
+     "crankset.bottom_bracket_family",
+     "bb_shell_standard"
+    ]
+   },
+   "problematic_condition": "La evaluación de biela reusa la de pedalier, que lee `specValues[\"bb_shell_standard\"] ?? specValues[\"bottom_bracket_family\"]` y lo compara con la familia de la bici; si difieren, devuelve incompatible. Una biela no tiene estándar de caja: sólo tiene `bottom_bracket_family`, cuyo vocabulario mezcla cajas con sistemas de eje.",
+   "counter_example": "Una biela declarada «Hollowtech / 24mm externo» sobre una bici con caja «BSA roscado» se canoniza a dos familias distintas (`hollowtech_external` y `bsa_threaded`) y sale incompatible. Una biela Hollowtech II está diseñada precisamente para una caja BSA con pedalier de cazoleta externa. Lo mismo ocurre con «Cuadrado cartucho» sobre BSA, que es un cartucho que se enrosca en esa misma caja.",
+   "correct_result": "Pendiente o condicional. Nunca incompatible por este dato: el estándar de caja pertenece al cuadro y al pedalier, no a la biela.",
+   "proposal": "No alimentar el campo de la biela al comparador de estándar de caja. Para una biela, comparar su `spindle_interface` contra el `spindle_interface` y el `spindle_interface_accepted` del pedalier instalado o disponible, y dejar el estándar de caja fuera de su veredicto.",
+   "source_ids": [
+    "S-CATALOGO",
+    "S-PARK-BB",
+    "S-SHELDON-BB"
+   ]
+  },
+  {
+   "id": "D2",
+   "severity": "P0",
+   "title": "Las pastillas se juzgan sin mirar la superficie de frenado del producto",
+   "path": {
+    "file": "lib/modules/bikeshop/services/bike_product_compatibility_service.dart",
+    "lines": "2267-2290",
+    "code": "  ProductCompatibilityAssessment? _assessBrakePadFamilyCompatibility(\n    _BikeCompatibilityContext compatibilityContext,\n  ) {\n    final brakeType = compatibilityContext.brakeType;\n    if (brakeType == null) {\n      return const ProductCompatibilityAssessment.caution(\n        detail:\n            'Pastillas de freno; falta confirmar si la bici usa freno de disco',\n        sortPriority: 32,\n      );\n    }\n\n    if (!_isDiscBrakeType(brakeType)) {\n      return ProductCompatibilityAssessment.incompatible(\n        detail:\n            'Pastillas de freno para disco, pero la bici usa ${_brakeTypePhrase(brakeType)}',\n      );\n    }\n\n    return const ProductCompatibilityAssessment.caution(\n      detail: 'Pastillas de freno; revisar forma y compatibilidad del caliper',\n      sortPriority: 24,\n    );\n  }",
+    "signature": "recibe sólo _BikeCompatibilityContext; no recibe specValues"
+   },
+   "problematic_condition": "El evaluador declara incompatible cualquier producto de la familia pastilla cuando la bici no es de disco, con el texto «Pastillas de freno para disco». Nunca lee `braking_surface` del producto.",
+   "counter_example": "El catálogo admite `braking_surface` = Llanta y tiene campos exclusivos de zapata. Una zapata de V-brake vendida para una bici de freno de llanta sale hoy incompatible. En el sentido contrario, una zapata de llanta sobre una bici de disco sale como precaución «revisar forma y compatibilidad del caliper», que es un falso no-incompatible.",
+   "correct_result": "Incompatible sólo con las dos superficies conocidas y distintas. Con la del producto ausente, pendiente.",
+   "proposal": "Pasar `specValues` al evaluador de la familia y decidir con `braking_surface`; si falta, no emitir veredicto duro en ninguna dirección.",
+   "source_ids": [
+    "S-CATALOGO",
+    "S-PARK-PAD"
+   ]
+  },
+  {
+   "id": "D3",
+   "severity": "P1",
+   "title": "El ancho de caja se compara por igualdad y contradice el propio vocabulario del catálogo",
+   "path": {
+    "file": "lib/modules/bikeshop/services/bike_product_compatibility_service.dart",
+    "lines": "1258-1265",
+    "code": "    if (expectedShellWidth != null &&\n        productShellWidth != null &&\n        !_sameNumericValue(expectedShellWidth, productShellWidth)) {\n      return ProductCompatibilityAssessment.incompatible(\n        detail:\n            '$familyLabel ancho ${_formatMeasurement(productShellWidth)} mm no coincide con la bici (${_formatMeasurement(expectedShellWidth)} mm)',\n      );\n    }",
+    "tolerance": "_sameNumericValue admite 0,6 mm"
+   },
+   "problematic_condition": "Un ancho de caja del producto distinto del de la bici en más de 0,6 mm devuelve incompatible, sin mirar si la caja es roscada o a presión.",
+   "counter_example": "El propio catálogo rotula la opción como «BSA / ISO 1.37\" x 24 tpi (68 / 73 mm)»: la misma caja cubre los dos anchos. Un pedalier de cazoleta externa para BSA se monta en 68 y en 73 con espaciadores, así que 73 contra 68 sale incompatible siendo la venta corriente. En una caja a presión el ancho sí distingue (BB86 frente a BB92) y ahí la comparación es correcta.",
+   "correct_result": "Condicional para caja roscada, nombrando los espaciadores. Incompatible sólo en caja a presión, donde el ancho define el modelo.",
+   "proposal": "Condicionar la comprobación de ancho a la familia: en roscadas, tratar la diferencia como ajuste de espaciadores; en a presión, conservar el veredicto duro.",
+   "source_ids": [
+    "S-CATALOGO",
+    "S-PARK-BB"
+   ]
+  },
+  {
+   "id": "D4",
+   "severity": "P1",
+   "title": "La manilla de freno se declara incompatible con una bici de contrapedal sin mirar su posición",
+   "path": {
+    "file": "lib/modules/bikeshop/services/bike_product_compatibility_service.dart",
+    "lines": "2292-2311",
+    "code": "  ProductCompatibilityAssessment? _assessBrakeLeverFamilyCompatibility(\n    _BikeCompatibilityContext compatibilityContext,\n  ) {\n    final brakeType = compatibilityContext.brakeType;\n    if (brakeType == null) {\n      return const ProductCompatibilityAssessment.caution(\n        detail:\n            'Manilla de freno; falta confirmar el sistema de freno de la bici',\n        sortPriority: 34,\n      );\n    }\n\n    if (brakeType == 'coaster_brake') {\n      return const ProductCompatibilityAssessment.incompatible(\n        detail:\n            'Manilla de freno no corresponde a una bici con freno contrapedal',\n      );\n    }\n\n    if (brakeType == 'hydraulic_disc') {",
+    "unused_field": "brake_lever.brake_position = ['Delantero', 'Trasero', 'Universal']"
+   },
+   "problematic_condition": "Con la bici marcada como contrapedal, cualquier manilla devuelve incompatible.",
+   "counter_example": "Una bicicleta de contrapedal lleva casi siempre freno delantero de llanta, y su manilla delantera es una venta normal. El catálogo tiene `brake_position` con Delantero, Trasero y Universal, que el evaluador no lee. La causa de fondo es que el contexto guarda un solo tipo de freno por bici y no puede representar contrapedal atrás con llanta adelante.",
+   "correct_result": "Condicional: pendiente de confirmar la posición y el freno delantero real. Incompatible sólo para una manilla declarada trasera en una bici sin freno trasero por cable.",
+   "proposal": "Leer `brake_position` del producto y, mientras el contexto no distinga adelante y atrás, no emitir veredicto duro por el tipo único de freno.",
+   "source_ids": [
+    "S-CATALOGO"
+   ]
+  },
+  {
+   "id": "D5",
+   "severity": "P1",
+   "title": "El tipo de freno de la bici es un solo valor y produce incompatibles duros en ambos sentidos",
+   "path": {
+    "paths": [
+     "2153-2159",
+     "2198-2203"
+    ],
+    "file": "lib/modules/bikeshop/services/bike_product_compatibility_service.dart",
+    "code_rim": "\n    if (brakeType != 'rim') {\n      return ProductCompatibilityAssessment.incompatible(\n        detail:\n            'Producto para freno de llanta, pero la bici usa ${_brakeTypePhrase(brakeType)}',\n      );\n    }",
+    "code_hyd": "        detail:\n            'Producto hidraulico, pero la bici usa ${_brakeTypePhrase(brakeType)}',\n      );\n    }\n\n    return const ProductCompatibilityAssessment.caution("
+   },
+   "problematic_condition": "Un producto de freno de llanta sobre una bici que no es de llanta, y un producto hidráulico sobre una bici de disco mecánico, devuelven incompatible.",
+   "counter_example": "Un juego hidráulico completo instalado en una bici de disco mecánico es una mejora corriente, no una incompatibilidad: lo que no interopera es una pieza suelta del sistema instalado, como una manguera, un kit de purga o unas pastillas de ese caliper. Y una bici con disco adelante y llanta atrás, o al revés, no cabe en un solo valor de contexto.",
+   "correct_result": "Incompatible sólo para una pieza que deba interoperar con el sistema instalado y con las dos partes conocidas. Para un sistema completo, condicional.",
+   "proposal": "Distinguir pieza de recambio del sistema instalado frente a sistema completo, y separar el tipo de freno delantero del trasero en el contexto antes de sostener cualquier veredicto duro.",
+   "source_ids": [
+    "S-CODE",
+    "S-CATALOGO"
+   ]
+  },
+  {
+   "id": "D6",
+   "severity": "P1",
+   "title": "Con el lado del mando sin declarar se aplican las dos comprobaciones y cualquiera puede refutar el producto",
+   "path": {
+    "file": "lib/modules/bikeshop/services/bike_product_compatibility_service.dart",
+    "lines": "1115-1123",
+    "code": "    final position = _canonicalShifterPosition(specValues['shifter_position']);\n    final checksRearSide = position == null ||\n        position == 'right' ||\n        position == 'pair' ||\n        position == 'universal';\n    final checksFrontSide = position == null ||\n        position == 'left' ||\n        position == 'pair' ||\n        position == 'universal';",
+    "also": [
+     "1148-1158",
+     "1162-1172"
+    ]
+   },
+   "problematic_condition": "Cuando `shifter_position` no se reconoce, `checksRearSide` y `checksFrontSide` quedan verdaderos y el producto se compara a la vez contra las velocidades traseras y contra el número de platos; cualquiera de las dos devuelve incompatible.",
+   "counter_example": "Un mando izquierdo cuyo lado no está capturado y que declara `drivetrain_speeds` con su número de posiciones delanteras se compara contra el conteo de piñones de la bici y sale incompatible. Un mando de un solo lado no puede ser refutado por la cifra del otro lado.",
+   "correct_result": "Pendiente. Sin el lado declarado, ninguna de las dos comprobaciones sostiene un veredicto duro.",
+   "proposal": "Con el lado desconocido, degradar las dos comprobaciones a precaución y pedir el lado, en vez de aplicar ambas como si el producto fuera un par.",
+   "source_ids": [
+    "S-CODE",
+    "S-CATALOGO"
+   ]
+  },
+  {
+   "id": "D7",
+   "severity": "P2",
+   "title": "Un mando triple sobre una transmisión doble se declara incompatible",
+   "path": {
+    "file": "lib/modules/bikeshop/services/bike_product_compatibility_service.dart",
+    "lines": "1162-1172",
+    "code": "\n    if (checksFrontSide &&\n        expectedFrontCount != null &&\n        productFrontCounts.isNotEmpty) {\n      if (!productFrontCounts.contains(expectedFrontCount)) {\n        return ProductCompatibilityAssessment.incompatible(\n          detail:\n              'Shifter ${_formatFrontCountSet(productFrontCounts)} no coincide con la bici (${expectedFrontCount}x)',\n        );\n      }\n      checks.add(ProductCompatibilityAssessment.compatible("
+   },
+   "problematic_condition": "Si el conteo de platos del producto no contiene el de la bici, devuelve incompatible.",
+   "counter_example": "Un mando de tres posiciones con biela doble es una combinación de taller corriente: se deja sin usar la tercera posición. Al revés, un mando doble en una triple pierde un plato pero funciona. Ninguna de las dos es imposible.",
+   "correct_result": "Condicional, nombrando la posición sobrante o el plato que se pierde.",
+   "proposal": "Degradar a precaución con el detalle del desajuste; conservar el veredicto duro sólo si aparece una fuente que documente una imposibilidad de indexado concreta.",
+   "source_ids": [
+    "S-CODE"
+   ]
+  },
+  {
+   "id": "D8",
+   "severity": "P2",
+   "title": "El desviador delantero sobre una bici 1x se declara incompatible y no se lee el propio producto",
+   "path": {
+    "file": "lib/modules/bikeshop/services/bike_product_compatibility_service.dart",
+    "lines": "790-800",
+    "code": "  ProductCompatibilityAssessment? _assessFrontDerailleurFamilyCompatibility(\n    _BikeCompatibilityContext compatibilityContext,\n  ) {\n    final frontCount = _frontChainringCountFromContext(compatibilityContext);\n    if (frontCount == 1) {\n      return const ProductCompatibilityAssessment.incompatible(\n        detail: 'Desviador delantero no corresponde a transmisión 1x',\n      );\n    }\n\n    if (frontCount == null) {",
+    "signature": "recibe sólo _BikeCompatibilityContext",
+    "unused_field": "front_derailleur.compatible_chainring_counts = ['1', '2', '3']"
+   },
+   "problematic_condition": "Con la bici en 1x, cualquier desviador delantero devuelve incompatible.",
+   "counter_example": "Comprar un desviador para pasar de 1x a 2x es el primer paso de esa conversión, que además necesita mando, biela doble y montaje en el cuadro. El catálogo tiene `compatible_chainring_counts` en el producto y el evaluador no recibe la ficha.",
+   "correct_result": "Condicional: nombrar lo que falta para la conversión, no negar la venta.",
+   "proposal": "Pasar la ficha al evaluador y devolver precaución con los requisitos de la conversión.",
+   "source_ids": [
+    "S-CATALOGO"
+   ]
+  },
+  {
+   "id": "D9",
+   "severity": "P2",
+   "title": "La biela con otro número de platos se declara incompatible",
+   "path": {
+    "file": "lib/modules/bikeshop/services/bike_product_compatibility_service.dart",
+    "lines": "1319-1328",
+    "code": "    final expectedFrontCount =\n        _frontChainringCountFromContext(compatibilityContext);\n    final productFrontCounts = _frontChainringCountsFromSpecs(specValues);\n    if (expectedFrontCount != null &&\n        productFrontCounts.isNotEmpty &&\n        !productFrontCounts.contains(expectedFrontCount)) {\n      return ProductCompatibilityAssessment.incompatible(\n        detail:\n            '$familyLabel ${_formatFrontCountSet(productFrontCounts)} no coincide con la bici (${expectedFrontCount}x)',\n      );"
+   },
+   "problematic_condition": "Si el conteo de platos de la biela no contiene el de la bici, devuelve incompatible.",
+   "counter_example": "Misma clase que el desviador: una biela doble sobre una bici 1x es una conversión, no una imposibilidad.",
+   "correct_result": "Condicional con los requisitos de la conversión.",
+   "proposal": "Degradar a precaución y enumerar lo que hace falta.",
+   "source_ids": [
+    "S-CODE"
+   ]
+  },
+  {
+   "id": "D10",
+   "severity": "P2",
+   "title": "El pedalier se juzga por su eje único y se ignora la lista de ejes admitidos",
+   "path": {
+    "file": "lib/modules/bikeshop/services/bike_product_compatibility_service.dart",
+    "lines": "1245-1248 y 1275-1282",
+    "unused_field": "bottom_bracket.spindle_interface_accepted = ['Cuadrado JIS', 'Cuadrado ISO', 'Hollowtech / 24mm', 'SRAM GXP 24/22', 'SRAM DUB 28.99mm', 'BB30 30mm'] …"
+   },
+   "problematic_condition": "La comparación de interfaz de eje usa sólo `spindle_interface`, un valor único, y devuelve incompatible ante cualquier diferencia.",
+   "counter_example": "El catálogo tiene una lista múltiple de ejes admitidos, que existe justamente para los pedalier que aceptan varios; un pedalier que admite 24 mm y GXP se juzga por uno solo y puede salir incompatible con el otro.",
+   "correct_result": "Pendiente cuando la lista de admitidos existe y contiene el eje buscado.",
+   "proposal": "Leer también `spindle_interface_accepted` antes de emitir el veredicto.",
+   "source_ids": [
+    "S-CATALOGO"
+   ]
+  }
+ ],
+ "fixtures": [
+  {
+   "id": "CF1",
+   "kind": "positivo",
+   "about": "D1",
+   "family": "crankset",
+   "bike": {
+    "bottomBracketFamily": "BSA roscado"
+   },
+   "product": {
+    "bottom_bracket_family": "Hollowtech / 24mm externo",
+    "spindle_interface": "Hollowtech / 24mm"
+   },
+   "today": "incompatible",
+   "expected": "caution",
+   "must_say": [
+    "eje",
+    "pedalier"
+   ],
+   "note": "La combinación más común del taller no puede salir incompatible."
+  },
+  {
+   "id": "CF2",
+   "kind": "positivo",
+   "about": "D3",
+   "family": "bottom_bracket",
+   "bike": {
+    "bottomBracketFamily": "BSA roscado",
+    "bbShellWidthMm": 68
+   },
+   "product": {
+    "bb_shell_standard": "BSA / Caja inglesa 34,8 mm (1.37\") x 24",
+    "bb_shell_width_mm": 73
+   },
+   "today": "incompatible",
+   "expected": "caution",
+   "must_say": [
+    "espaciador"
+   ],
+   "note": "El propio catálogo declara 68 y 73 dentro de la misma caja."
+  },
+  {
+   "id": "CF3",
+   "kind": "negativo",
+   "about": "D3",
+   "family": "bottom_bracket",
+   "bike": {
+    "bottomBracketFamily": "BB86 / BB92 41 mm",
+    "bbShellWidthMm": 86.5
+   },
+   "product": {
+    "bb_shell_standard": "BB86 / BB92 41 mm",
+    "bb_shell_width_mm": 91.5
+   },
+   "today": "incompatible",
+   "expected": "incompatible",
+   "must_say": [
+    "86",
+    "91"
+   ],
+   "note": "En caja a presión el ancho sí define el modelo: este veredicto duro se conserva."
+  },
+  {
+   "id": "CF4",
+   "kind": "positivo",
+   "about": "D2",
+   "family": "brake_pad",
+   "bike": {
+    "brakeType": "rim"
+   },
+   "product": {
+    "braking_surface": "Llanta",
+    "rim_pad_stud_type": "Espárrago roscado"
+   },
+   "today": "incompatible",
+   "expected": "caution",
+   "must_say": [
+    "llanta"
+   ],
+   "note": "Una zapata para una bici de freno de llanta."
+  },
+  {
+   "id": "CF5",
+   "kind": "negativo",
+   "about": "D2",
+   "family": "brake_pad",
+   "bike": {
+    "brakeType": "hydraulic_disc"
+   },
+   "product": {
+    "braking_surface": "Llanta"
+   },
+   "today": "caution",
+   "expected": "incompatible",
+   "must_say": [
+    "llanta",
+    "disco"
+   ],
+   "note": "Hoy pasa como precaución: es el falso no-incompatible del sentido contrario."
+  },
+  {
+   "id": "CF6",
+   "kind": "desconocido",
+   "about": "D2",
+   "family": "brake_pad",
+   "bike": {
+    "brakeType": "hydraulic_disc"
+   },
+   "product": {},
+   "today": "caution",
+   "expected": "caution",
+   "must_say": [
+    "superficie"
+   ],
+   "note": "Sin superficie declarada no se decide en ninguna dirección."
+  },
+  {
+   "id": "CF7",
+   "kind": "positivo",
+   "about": "D4",
+   "family": "brake_lever",
+   "bike": {
+    "brakeType": "coaster_brake"
+   },
+   "product": {
+    "brake_position": "Delantero",
+    "brake_actuation": "Mecánico (cable)"
+   },
+   "today": "incompatible",
+   "expected": "caution",
+   "must_say": [
+    "delantero"
+   ],
+   "note": "La manilla delantera de una bici de contrapedal."
+  },
+  {
+   "id": "CF8",
+   "kind": "desconocido",
+   "about": "D6",
+   "family": "shifter",
+   "bike": {
+    "rearCogCount": 8
+   },
+   "product": {
+    "drivetrain_speeds": [
+     "3"
+    ],
+    "front_chainring_count": [
+     "3"
+    ]
+   },
+   "today": "incompatible",
+   "expected": "caution",
+   "must_say": [
+    "lado"
+   ],
+   "note": "Sin lado declarado, la cifra delantera se compara contra la trasera."
+  },
+  {
+   "id": "CF9",
+   "kind": "positivo",
+   "about": "D7",
+   "family": "shifter",
+   "bike": {
+    "frontChainringCount": 2
+   },
+   "product": {
+    "shifter_position": "Izquierdo / delantero",
+    "front_chainring_count": [
+     "3"
+    ]
+   },
+   "today": "incompatible",
+   "expected": "caution",
+   "must_say": [
+    "posición"
+   ],
+   "note": "Mando triple con biela doble."
+  },
+  {
+   "id": "CF10",
+   "kind": "positivo",
+   "about": "D8",
+   "family": "front_derailleur",
+   "bike": {
+    "frontChainringCount": 1
+   },
+   "product": {
+    "compatible_chainring_counts": [
+     "2",
+     "3"
+    ],
+    "front_derailleur_mount_type": "Abrazadera"
+   },
+   "today": "incompatible",
+   "expected": "caution",
+   "must_say": [
+    "conversión"
+   ],
+   "note": "Primer paso de una conversión a 2x."
+  },
+  {
+   "id": "CF11",
+   "kind": "negativo",
+   "about": "verificación",
+   "family": "shifter",
+   "bike": {
+    "rearCogCount": 9,
+    "shiftActuationFamily": "Shimano SIS 6-9v"
+   },
+   "product": {
+    "shifter_position": "Derecho / trasero",
+    "drivetrain_speeds": [
+     "11"
+    ],
+    "shift_actuation_family": "Shimano Dynasys 11/12v"
+   },
+   "today": "incompatible",
+   "expected": "incompatible",
+   "must_say": [
+    "indexado"
+   ],
+   "note": "Familia de indexado distinta con lado declarado: el veredicto duro es correcto y se conserva."
+  },
+  {
+   "id": "CF12",
+   "kind": "desconocido",
+   "about": "D10",
+   "family": "bottom_bracket",
+   "bike": {
+    "spindleInterface": "SRAM GXP 24/22"
+   },
+   "product": {
+    "spindle_interface": "Hollowtech / 24mm",
+    "spindle_interface_accepted": [
+     "Hollowtech / 24mm",
+     "SRAM GXP 24/22"
+    ]
+   },
+   "today": "incompatible",
+   "expected": "caution",
+   "must_say": [
+    "admitidos"
+   ],
+   "note": "El pedalier declara aceptar los dos ejes y el consumidor lee sólo uno."
+  }
+ ],
+ "limits": [
+  "Auditoría de lectura del código y del catálogo. No ejecuté la aplicación ni las pruebas, y no derivo compatibilidad de que las pruebas estén verdes: ninguna de las ramas duras que señalo tiene prueba que las fije.",
+  "La evidencia primaria que sí verifiqué en esta ronda es el vocabulario del propio catálogo del proyecto. Park Tool y Sheldon Brown se citan como base general y no los releí hoy; ninguno de los hallazgos depende sólo de ellos.",
+  "No toqué el bloque de radios y ruedas, que ya recibió su corrección conservadora.",
+  "Ningún hallazgo propone subir el nivel de un veredicto salvo CF5, donde hoy una zapata de llanta sobre una bici de disco pasa como precaución.",
+  "No certifico ninguna familia como completa ni autorizo llenado, asignación ni siembra."
+ ],
+ "stats": {
+  "findings": 10,
+  "p0": 2,
+  "false_incompatible": 8,
+  "false_permissive": 1,
+  "hard_verdicts_kept": 2,
+  "fixtures": 12
+ }
+}

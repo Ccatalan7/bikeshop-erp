@@ -18,20 +18,30 @@ class ProductSpecRowLink {
 /// declared collection. This never counts cells, mounting positions or rows in
 /// another collection, and never derives a total from partial observations.
 class ProductSpecRowCardinality {
-  const ProductSpecRowCardinality(this.id, this.field, this.totalField);
+  const ProductSpecRowCardinality(this.id, this.field, this.totalField)
+      : groupLink = null,
+        totalColumn = null;
+  const ProductSpecRowCardinality.grouped(
+      this.id, this.field, this.groupLink, this.totalColumn)
+      : totalField = null;
   final String id;
   final String field;
-  final String totalField;
+  final String? totalField;
+  final ProductSpecRowLink? groupLink;
+  final String? totalColumn;
 }
 
 class ProductSpecCoherenceIssue {
   const ProductSpecCoherenceIssue(this.code, this.field, this.message,
-      {this.rowId, this.column, this.blocking = true});
+      {this.rowId, this.column, this.collectionField, this.blocking = true});
   final String code;
   final String field;
   final String message;
   final String? rowId;
   final String? column;
+  // A grouped issue is displayed on its parent total cell, but applicability
+  // belongs to the child collection whose occurrences are being counted.
+  final String? collectionField;
   final bool blocking;
 }
 
@@ -83,7 +93,7 @@ class ProductSpecCoherence {
     if (contract.containsKey('row_coherence')) {
       if (raw is! Map ||
           (raw['version'] != 1 &&
-              !(raw['version'] is int && raw['version'] == 2)) ||
+              !(raw['version'] is int && {2, 3}.contains(raw['version']))) ||
           raw['links'] is! List ||
           (raw['version'] == 1
               ? raw.keys.any((k) => !{'version', 'links'}.contains(k))
@@ -142,17 +152,46 @@ class ProductSpecCoherence {
       }
       final collections = <String>{};
       for (final item in raw['cardinalities'] as List? ?? const []) {
+        final grouped = item is Map && item.containsKey('group_by');
+        final expectedKeys = grouped
+            ? {'id', 'field', 'group_by', 'total_column'}
+            : {'id', 'field', 'total_field'};
         if (item is! Map ||
-            item.length != 3 ||
-            item.keys.any((k) => !{'id', 'field', 'total_field'}.contains(k)) ||
-            !['id', 'field', 'total_field'].every((k) => key(item[k])) ||
+            grouped && raw['version'] != 3 ||
+            item.length != expectedKeys.length ||
+            item.keys.any((k) => !expectedKeys.contains(k)) ||
+            !expectedKeys.every((k) => key(item[k])) ||
             !ids.add(item['id'] as String) ||
             !collections.add(item['field'] as String) ||
             activeTypes[item['field']] != 'json' ||
-            schemas[item['field']] == null ||
-            activeTypes[item['total_field']] != 'number') {
+            schemas[item['field']] == null) {
           throw const FormatException(
               'La cardinalidad necesita una tabla y un total de esta ficha, sin duplicados.');
+        }
+        if (grouped) {
+          final link = links.where((l) => l.id == item['group_by']).firstOrNull;
+          final column = schemas[link?.targetField]
+              ?.columns
+              .where((c) => c.key == item['total_column'])
+              .firstOrNull;
+          final minimum = productSpecNumber(column?.validation['min']);
+          if (link == null ||
+              link.field != item['field'] ||
+              column?.type != 'integer' ||
+              minimum == null ||
+              minimum.negative) {
+            throw const FormatException(
+                'El total agrupado necesita un vínculo de esta tabla y una columna entera no negativa en su destino.');
+          }
+          cardinalities.add(ProductSpecRowCardinality.grouped(
+              item['id'] as String,
+              item['field'] as String,
+              link,
+              item['total_column'] as String));
+          continue;
+        }
+        if (activeTypes[item['total_field']] != 'number') {
+          throw const FormatException('El total de filas debe ser numérico.');
         }
         final rules = numberRules[item['total_field']];
         final minimum = productSpecNumber(rules?['min']);
@@ -211,11 +250,13 @@ class ProductSpecCoherence {
       final seen = <String>{};
       for (final pair in ordered) {
         if (pair is! List ||
-            pair.length != 2 ||
+            !(pair.length == 2 || pair.length == 3 && pair[2] == 'lt') ||
             pair[0] == pair[1] ||
-            pair.any((k) => k is! String || activeTypes[k] != 'number') ||
+            pair
+                .take(2)
+                .any((k) => k is! String || activeTypes[k] != 'number') ||
             units[pair[0]] != units[pair[1]] ||
-            !seen.add(pair.join('.'))) {
+            !seen.add(pair.take(2).join('.'))) {
           throw const FormatException(
               'Los límites requieren dos campos numéricos distintos con la misma unidad.');
         }
@@ -279,9 +320,12 @@ class ProductSpecCoherence {
       for (final cardinality in cardinalities) cardinality.field,
     }) {
       if (!hasKnownSpecValue(values[key]) &&
-          !(cardinalities.any((c) => c.field == key) &&
+          !(cardinalities.any(
+                  (c) => c.field == key || c.groupLink?.targetField == key) &&
               values[key] != null &&
-              values[key] is! String)) continue;
+              values[key] is! String)) {
+        continue;
+      }
       try {
         parsed[key] = schemas[key]!.parse(values[key]);
       } on FormatException {
@@ -291,11 +335,21 @@ class ProductSpecCoherence {
       }
     }
     for (final link in links) {
-      if (invalid.contains(link.field) || invalid.contains(link.targetField))
+      if (invalid.contains(link.field) || invalid.contains(link.targetField)) {
         continue;
+      }
       final target = parsed[link.targetField];
+      final grouped = cardinalities.any((c) => c.groupLink?.id == link.id);
       for (final row in parsed[link.field]?.rows ?? <ProductSpecRow>[]) {
         final value = row.values[link.column];
+        if (grouped &&
+            !hasKnownSpecValue(value) &&
+            !(target?.rows.any((r) => r.id == value) ?? false)) {
+          issues.add(ProductSpecCoherenceIssue('row_reference_pending',
+              link.field, 'Falta identificar la configuración de esta fila.',
+              rowId: row.id, column: link.column, blocking: false));
+          continue;
+        }
         if (value == null) continue;
         if (target == null) {
           issues.add(ProductSpecCoherenceIssue('row_reference_pending',
@@ -315,6 +369,43 @@ class ProductSpecCoherence {
       // A malformed collection cannot become a smaller, apparently valid one
       // by discarding malformed rows or duplicate IDs.
       if (invalid.contains(cardinality.field)) continue;
+      final group = cardinality.groupLink;
+      if (group != null) {
+        if (invalid.contains(group.targetField)) continue;
+        final parents = parsed[group.targetField]?.rows;
+        if (parents == null) {
+          issues.add(ProductSpecCoherenceIssue(
+              'row_cardinality_pending',
+              group.targetField,
+              'Falta documentar la configuración y su total.',
+              collectionField: cardinality.field,
+              blocking: false));
+          continue;
+        }
+        for (final parent in parents) {
+          final total =
+              productSpecNumber(parent.values[cardinality.totalColumn]);
+          final count = SpecRuleDecimal.tryParse(
+              '${parsed[cardinality.field]?.rows.where((r) => r.values[group.column] == parent.id).length ?? 0}')!;
+          final comparison = total == null ? null : count.compareTo(total);
+          if (comparison == 0) continue;
+          issues.add(ProductSpecCoherenceIssue(
+              comparison != null && comparison > 0
+                  ? 'row_cardinality_conflict'
+                  : 'row_cardinality_pending',
+              group.targetField,
+              total == null
+                  ? 'Falta confirmar el total de esta configuración.'
+                  : comparison! > 0
+                      ? 'Esta configuración tiene más filas que su total declarado.'
+                      : 'Faltan filas por documentar en esta configuración.',
+              rowId: parent.id,
+              column: cardinality.totalColumn,
+              collectionField: cardinality.field,
+              blocking: comparison != null && comparison > 0));
+        }
+        continue;
+      }
       final rawTotal = values[cardinality.totalField];
       if (rawTotal == null ||
           rawTotal is String && !hasKnownSpecValue(rawTotal)) {
@@ -334,7 +425,7 @@ class ProductSpecCoherence {
               null) {
         issues.add(ProductSpecCoherenceIssue(
             'row_cardinality_total',
-            cardinality.totalField,
+            cardinality.totalField!,
             'El total debe ser una cantidad entera no negativa dentro del dominio del campo.'));
         continue;
       }
@@ -357,10 +448,17 @@ class ProductSpecCoherence {
     for (final pair in scalarOrderedPairs) {
       final lower = productSpecNumber(values[pair[0]]);
       final upper = productSpecNumber(values[pair[1]]);
-      if (lower != null && upper != null && lower.compareTo(upper) > 0) {
-        for (final field in pair) {
-          issues.add(ProductSpecCoherenceIssue('range_order', field,
-              'El límite inferior no puede superar el superior.'));
+      final strict = pair.length == 3 && pair[2] == 'lt';
+      if (lower != null &&
+          upper != null &&
+          (strict ? lower.compareTo(upper) >= 0 : lower.compareTo(upper) > 0)) {
+        for (final field in pair.take(2)) {
+          issues.add(ProductSpecCoherenceIssue(
+              'range_order',
+              field,
+              strict
+                  ? 'La primera medida debe ser menor que la segunda.'
+                  : 'El límite inferior no puede superar el superior.'));
         }
       }
     }

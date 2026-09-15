@@ -56,6 +56,17 @@ class SupplierNeedSearchNotPersisted implements Exception {
   final SupplierNeedSearchRequest request;
   final Object cause;
 
+  /// El servidor **negó** el recibo, no se cayó el transporte.
+  ///
+  /// Con un rechazo no hay cadena de reintento que valga: cada intento repite
+  /// la misma negativa. Quien atienda esta excepción tiene que mirar esto
+  /// antes de encolar nada; el 2026-09-15 no mirarlo costó 16 días de base
+  /// saturada.
+  SupplierNeedSearchRejected? get rejection {
+    final cause = this.cause;
+    return cause is SupplierNeedSearchRejected ? cause : null;
+  }
+
   @override
   String toString() => 'SupplierNeedSearchNotPersisted($cause)';
 }

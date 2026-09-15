@@ -1,0 +1,11 @@
+# Mando combinado: integración verificada
+
+Migración `20260908032000_combined_control_spec_templates.sql` APPLIED y verificada a las `2026-09-08T04:14:54Z`. Completa las **68 plantillas nuevas activadas**. Las 37 originales, el saneamiento transversal y el llenado siguen abiertos; asignaciones y llenado nuevos: cero.
+
+Pasaron 56 pruebas Dart, 55 casos SQL y cinco regresiones del publicador. Claude entregó el sucesor con revisión y 17 mutantes; las cuatro adjudicaciones finales son de Codex, detalladas con sus fuentes en [decisiones y hashes](combined-control-root-decisions-2026-09-07.md). No se atribuye a Claude una revisión de ese último diff.
+
+Paquete SHA-256 `60915e28d05212914d5ea264ce1bfe328e93032d04fe9daf1bb11eafa35b538a`; migración `3987f30346e1d987416c85e636db838e80214aaabb0943ac14cae634b11b5d4c`; verificador `b408695b4f19d2e00524f630f2a247bfac73de6b80435f6a3e7841975fba62a7`. Backup `20260908T041415Z-combined-control-metadata`, con bytes, hash y permisos verificados. El verificador previo rechazó por ausencia y el posterior pasó.
+
+Lectura API autenticada a las `2026-09-08T04:15:28.738403Z`: una plantilla, 15 usos, 15 definiciones y 28 opciones; referencias vacías; writes 0. Diez definiciones y cuatro opciones son nuevas; cinco definiciones compartidas se preservaron. Recibo `.tmp/db/migration-receipts/20260908032000.receipt`; evidencia API `.tmp/product-spec-catalog/combined-control-authenticated-readback.json`. Comparación de `combined-control-immediate-before.json` con `combined-control-live-after.json`: sólo cambian checked_at y latest_migration. Productos, hechos, defaults y motor preservados.
+
+Cada ocurrencia física posee su configuración de freno y cambio; lado físico, asignación electrónica y destinatario son datos distintos. La salida por cable hacia un conversor hidráulico externo no adquiere las propiedades del circuito hidráulico del conversor. El contenido se cuenta por ocurrencias, permitiendo dos piezas idénticas sin duplicar una misma pieza. Los datos legacy permanecen conservados y fuera de edición activa. La validación del esquema no certifica un montaje ni resuelve por sí sola la identidad documental del producto. Editor real, consumidores y aplicador de llenado siguen como gates globales.

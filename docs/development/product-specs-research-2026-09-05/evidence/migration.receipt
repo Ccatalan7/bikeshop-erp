@@ -1,0 +1,6 @@
+version=20260906070000
+migration=supabase/migrations/20260906070000_product_spec_contract.sql
+migration_sha256=007450b4bcd89b36b1afc6cc55b000c99a6c42c1828537abd8500929e1ae5d4d
+production_status=APPLIED
+verified_at_utc=2026-09-06T06:59:30Z
+verification=docs/development/product-specs-research-2026-09-05/readback.sql sha256=2e0983a7a3b790347952e7b581ac06f2469b3e1bb4f03d26f52994484f81616b

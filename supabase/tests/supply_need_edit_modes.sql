@@ -366,6 +366,12 @@ set local role authenticated;
 
 -- La revisión vigente es 3. Un recorrido que empezó en la 2 y termina ahora
 -- está entregando filas leídas contra otra ficha.
+--
+-- **`23514`, no `40001`.** Con `serialization_failure` cualquier cliente
+-- reintenta la misma transacción; un recibo estampado con una revisión que ya
+-- no existe no puede aceptarse nunca. 2026-09-15: un cliente reintentó ese
+-- rechazo ~900 veces por segundo durante 16 días. La clase 23 es lo que el
+-- ERP clasifica como rechazo definitivo (migración 20260915190000).
 select throws_ok(
   $$select public.record_supplier_need_portal_search_v1(
       'ed17e000-0000-4000-8000-000000000021',
@@ -373,9 +379,9 @@ select throws_ok(
       'camara', 'no_matches', null, '[]'::jsonb, '{}'::jsonb, '{}'::jsonb,
       5, 2, 'ed17e000-0000-4000-8000-000000000041', 'tube'
     )$$,
-  '40001',
-  null,
-  'un recorrido que empezó en la revisión anterior se rechaza al guardar'
+  '23514',
+  'La necesidad cambió mientras se consultaba al proveedor; esa lectura ya no responde lo que se está preguntando.',
+  'un recorrido que empezó en la revisión anterior se rechaza definitivamente al guardar'
 );
 
 select throws_ok(

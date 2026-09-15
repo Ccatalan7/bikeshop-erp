@@ -228,7 +228,7 @@ family-specific prerequisites. There is no universal ecosystem-first stack.
 - `front_derailleur` ficha behavior must suppress 1x-only ecosystem and platform claims such as `Single speed / BMX`, `SRAM Eagle`, and `SRAM T-Type Transmission`.
 - `front_derailleur_clamp_mm` is only meaningful for clamp-mount front derailleurs.
 - rear derailleur compatibility is not speed-only; actuation family, max-cog support, total capacity, cage expectations, and mounting still matter.
-- drivetrain kits must stay in caution territory when only the front-side crankset or pedalier facts are explicit and the rear-side content of the kit is still unresolved.
+- drivetrain kits have no assumed front/rear composition. Evaluate the actual included members and their assembly relationships; a kit containing a chain does not inherit the bicycle's crankset or require a rear derailleur. Until that member-level evaluation is available, both family and detailed scoring return a kit-specific caution, without crank dimensions or configuration claims (2026-09-14).
 
 #### Current scoring doctrine for drivetrain controls
 

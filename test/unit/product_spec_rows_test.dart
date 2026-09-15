@@ -208,7 +208,7 @@ void main() {
           }
         ]
       },
-    {...Map<String, dynamic>.from(base['schema']), 'version': 2},
+    {...Map<String, dynamic>.from(base['schema']), 'version': 3},
     {'version': 1, 'columns': []},
     {
       'version': 1,

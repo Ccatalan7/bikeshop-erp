@@ -1,0 +1,357 @@
+{
+  "review_id": "consumer-scope-boundary-review-2026-09-07",
+  "reviewer": "Codex independent subagent spec_boundary_review",
+  "captured_at": "2026-09-07T14:40:15.875217+00:00",
+  "decision": "accept_bounded_change_with_explicit_residuals",
+  "new_reproduced_findings": [],
+  "blocking_findings_in_reviewed_change": 0,
+  "scope": {
+    "purpose": "Revisión independiente del dispatch por identidad, alcance de frenos, shell/eje, interfaces alternativas y controles delanteros/traseros del consumidor del taller.",
+    "implementation_edited": false,
+    "tests_edited": false,
+    "database_accessed": false,
+    "runtime_accessed": false,
+    "catalog_applied": false,
+    "products_written": false,
+    "global_mechanical_coverage_closed": false,
+    "fill_enabled": false
+  },
+  "reviewed_preimages": [
+    {
+      "path": "lib/modules/bikeshop/services/bike_product_compatibility_service.dart",
+      "sha256": "1b92589665640c7b02dac9f915be956d328a432b08596d16aeca0bf6a507145d",
+      "bytes": 124037
+    },
+    {
+      "path": "test/unit/bike_product_compatibility_service_test.dart",
+      "sha256": "f04717e2e278ad17a391617b0b50a1144a023af40625f83676f6318e912ffc4e",
+      "bytes": 44815
+    }
+  ],
+  "downstream_file_inspected": {
+    "path": "lib/shared/widgets/product_autocomplete_field.dart",
+    "sha256": "a9dd8aa9be9afb5f279ff04f9a04979704715175015c7916b68225200fcd571a",
+    "bytes": 73363,
+    "scope": "Lectura de filtrado/ordenación y selección, necesaria para no atribuir al scorer un bloqueo de persistencia inexistente."
+  },
+  "checks": [
+    {
+      "id": "CSB01",
+      "boundary": "Identidad antes de campos de interfaz compartidos",
+      "status": "pass",
+      "service_lines": [
+        452,
+        474,
+        492,
+        1542
+      ],
+      "fixture": {
+        "family": "front_hub",
+        "bike_front_hub_spacing_mm": 100,
+        "product_values": {
+          "wheel_position": "front",
+          "hub_spacing_mm": 110,
+          "rotor_mount_type": "6 pernos"
+        },
+        "bike_values": {
+          "brakeType": "disc"
+        }
+      },
+      "expected": "incompatible por ancho de maza; rotor_mount_type no despacha esta identidad a frenos",
+      "evidence": "Prueba existente de maza con campo de rotor y lectura del filtro semanticKeys.any(_brakeFamilies.contains)."
+    },
+    {
+      "id": "CSB02",
+      "boundary": "El tipo de freno agregado no identifica ambos extremos",
+      "status": "pass",
+      "service_lines": [
+        2153,
+        2193,
+        2213,
+        2225
+      ],
+      "fixtures": [
+        "brake_pad con superficie Llanta ante brakeType=hydraulic_disc",
+        "brake_lever delantero ante brakeType=coaster_brake",
+        "rotor 180 mm ante brakeType=rim y frontRotorSizeMm=180"
+      ],
+      "expected": "caution con alcance o interfaces faltantes; ningún aprobado completo ni rechazo de ambos extremos por brakeType agregado",
+      "source_ids": [
+        "SB_COASTER"
+      ],
+      "evidence": "Pruebas parametrizadas de superficie y ocho familias de freno; prueba de rotor conserva comparación parcial de diámetro."
+    },
+    {
+      "id": "CSB03",
+      "boundary": "La interfaz del crankset no se compara como caja del cuadro",
+      "status": "pass",
+      "service_lines": [
+        568,
+        1326,
+        1349
+      ],
+      "fixtures": [
+        "crankset bottom_bracket_family=Hollowtech / 24mm externo ante cuadro BSA",
+        "crankset bottom_bracket_family=Cuadrado cartucho ante cuadro BSA",
+        "crankset con spindle_interface=BMX 19 mm y 1x coincidentes"
+      ],
+      "expected": "caution; no llamar al comparador de caja como si la biela fuese un pedalier; conservar línea de cadena, montaje y modelo pendientes",
+      "source_ids": [
+        "PT_BB_STANDARDS",
+        "PT_BB_PRESSFIT"
+      ]
+    },
+    {
+      "id": "CSB04",
+      "boundary": "Un escalar de ancho no declara una lista exhaustiva de configuraciones",
+      "status": "pass",
+      "service_lines": [
+        1255,
+        1275,
+        1284,
+        1306,
+        3089,
+        3108
+      ],
+      "fixtures": [
+        "BSA: ancho del producto 73, cuadro 68",
+        "Pressfit: ancho del producto 92, cuadro 89.5",
+        "Caja Mid del producto frente a BSA del cuadro"
+      ],
+      "expected": "Los dos primeros exigen configuraciones admitidas y no autorizan adaptador; Mid/BSA conserva incompatible para montaje directo",
+      "source_ids": [
+        "SH_MAFC002",
+        "PT_BB_STANDARDS"
+      ],
+      "adjudication": "D3 no es aceptable como prohibición universal de diferencias pressfit. El ejemplo Shimano demuestra que existen configuraciones OEM distintas; no declara equivalentes todas las anchuras ni los modelos."
+    },
+    {
+      "id": "CSB05",
+      "boundary": "La cobertura múltiple de ejes conserva cada alternativa",
+      "status": "pass",
+      "service_lines": [
+        1273,
+        1294,
+        1400,
+        3043,
+        3078
+      ],
+      "fixture": {
+        "bike_values": {
+          "spindleInterface": "Hollowtech / 24mm"
+        },
+        "product_values": {
+          "spindle_interface_accepted": [
+            "SRAM GXP 24/22",
+            "Hollowtech / 24mm"
+          ]
+        }
+      },
+      "expected": "caution con coincidencia parcial de 24 mm; con GXP solamente, caution fuera de cobertura registrada, sin aprobación de adaptador",
+      "source_ids": [
+        "PT_BB_PRESSFIT"
+      ],
+      "evidence": "Prueba existente con dos alternativas y su control negativo GXP; GXP se canonicaliza antes del token genérico de 24 mm."
+    },
+    {
+      "id": "CSB06",
+      "boundary": "Lado desconocido o Universal del shifter",
+      "status": "pass",
+      "service_lines": [
+        1139,
+        1144,
+        1151,
+        3206
+      ],
+      "fixtures": [
+        "sin shifter_position, velocidades 8 frente a bici 2x12 e indexado diferente",
+        "shifter_position=Universal con datos delanteros y traseros"
+      ],
+      "expected": "caution antes de comparar un extremo no identificado; Universal no implica Par",
+      "catalog_tokens_checked": [
+        "Izquierdo / delantero",
+        "Derecho / trasero",
+        "Par",
+        "Universal"
+      ],
+      "evidence": "Rótulos reales de shifter_position en catálogo congelado y dos pruebas existentes; no se usó un rótulo de par inventado que contenga ambos lados."
+    },
+    {
+      "id": "CSB07",
+      "boundary": "El mando izquierdo no hereda la familia de indexado trasero",
+      "status": "pass",
+      "service_lines": [
+        1168,
+        1208,
+        1234
+      ],
+      "fixture": {
+        "family": "shifter",
+        "product_side": "Izquierdo / delantero",
+        "front_count": 2,
+        "bike_rear_actuation": "Shimano Dynasys 11/12",
+        "product_actuation": "SRAM X-Actuation"
+      },
+      "expected": "caution por tiro/indexado delantero; no rechazo ni coincidencia basados en la familia trasera"
+    },
+    {
+      "id": "CSB08",
+      "boundary": "Conflicto trasero explícito antes del pendiente delantero del par",
+      "status": "pass",
+      "service_lines": [
+        1168,
+        1179,
+        1195
+      ],
+      "fixture": {
+        "family": "shifter",
+        "product_values": {
+          "shifter_position": "Par",
+          "drivetrain_speeds": [
+            "10"
+          ],
+          "front_chainring_count": [
+            "3"
+          ]
+        },
+        "bike_values": {
+          "drivetrainConfig": "2x12",
+          "drivetrainSpeeds": 12
+        }
+      },
+      "expected": "incompatible por 10v frente a 12v; la diferencia 3x/2x no lo sustituye por caution",
+      "evidence": "Prueba existente known rear conflict in a pair is not suppressed by front count change."
+    },
+    {
+      "id": "CSB09",
+      "boundary": "Cantidad de platos, contenido y conversión",
+      "status": "pass_with_known_residual_AG01",
+      "service_lines": [
+        813,
+        1098,
+        1195,
+        1339,
+        2518
+      ],
+      "fixtures": [
+        "mando Par de 3x para bici 2x10 con trasera coincidente",
+        "desviador delantero o crankset 2x ante bici 1x12",
+        "desviador compatible_chainring_counts=[2]",
+        "texto modelo 2026 en cantidad de platos"
+      ],
+      "expected": "caution de conversión/cobertura; no aconsejar omitir una posición; el texto de modelo no fabrica una cantidad",
+      "source_ids": [
+        "SH_SL0001",
+        "SH_5N20A"
+      ],
+      "residual": "El nuevo chainring_count no se equipara al legacy front_chainring_count. AG01 (contenido físico frente a capacidad/configuración del crankset) sigue abierto."
+    }
+  ],
+  "primary_sources_read": [
+    {
+      "id": "PT_BB_STANDARDS",
+      "url": "https://www.parktool.com/en-us/blog/repair-help/bottom-bracket-standards-and-terminology",
+      "sections": [
+        "Introduction",
+        "English Threaded Shells",
+        "Press Fit Shells",
+        "Mid Press Fit"
+      ],
+      "supports": "Distingue caja, montaje y diámetro de eje; BSA/Euro comparten rosca; las familias a presión reúnen diferentes medidas e interfaces.",
+      "does_not_support": "Intercambiabilidad universal de piezas con el mismo nombre de familia."
+    },
+    {
+      "id": "PT_BB_PRESSFIT",
+      "url": "https://www.parktool.com/en-us/blog/repair-help/bottom-bracket-tool-selection-press-fit",
+      "sections": [
+        "Preliminary Info",
+        "24 mm & 22/24 mm Stepped Spindles"
+      ],
+      "supports": "La interfaz a la caja y el eje admitido son variables distintas; GXP tiene eje escalonado y pueden existir adaptadores con condiciones propias.",
+      "does_not_support": "Aprobar un adaptador no documentado porque el producto menciona 24 mm."
+    },
+    {
+      "id": "SH_MAFC002",
+      "url": "https://si.shimano.com/en/pdfs/dm/MAFC002/DM-MAFC002-11-ENG.pdf",
+      "printed_pages": [
+        12,
+        14
+      ],
+      "supports": "El manual diferencia 68/73 roscado y 89.5/92 a presión, con configuraciones de espaciadores específicas.",
+      "does_not_support": "Que un mismo producto sea simultáneamente roscado y pressfit, ni que cualquier ancho pueda compensarse con un espaciador."
+    },
+    {
+      "id": "SB_COASTER",
+      "url": "https://www.sheldonbrown.com/coaster-brakes.html",
+      "sections": [
+        "Coaster Brakes",
+        "Pros and Cons"
+      ],
+      "supports": "El contrapedal actúa en la maza trasera; ese dato no excluye un freno de mano delantero.",
+      "does_not_support": "Determinar el modelo o montaje delantero de una bicicleta del inventario."
+    },
+    {
+      "id": "SH_SL0001",
+      "url": "https://si.shimano.com/en/pdfs/dm/SL0001/DM-SL0001-11-ENG.pdf",
+      "printed_pages": [
+        12,
+        13,
+        14,
+        16
+      ],
+      "supports": "Distingue mecanismos con y sin conversor; en p.14 SL-T780/SL-T670 carecen de él; la posición puede depender del desviador concreto.",
+      "does_not_support": "Usar cualquier mando triple como doble omitiendo una posición."
+    },
+    {
+      "id": "SH_5N20A",
+      "url": "https://si.shimano.com/en/pdfs/si/5N20A/SI-5N20A-002-ENG.pdf",
+      "printed_pages": [
+        1
+      ],
+      "sections": [
+        "Connecting and securing the inner cable",
+        "Installation of the shifting lever"
+      ],
+      "supports": "Describe un selector de modo y una secuencia de configuración para los componentes indicados.",
+      "does_not_support": "Una regla general para todos los mandos Shimano o triples."
+    }
+  ],
+  "verification": {
+    "executed_by_this_reviewer": true,
+    "command": "fvm flutter test test/unit/bike_product_compatibility_service_test.dart --reporter expanded",
+    "exit_code": 0,
+    "asserted_tests_passed": 82,
+    "asserted_tests_failed": 0,
+    "final_output": "00:00 +82: All tests passed!",
+    "new_test_files_created": false,
+    "runtime_proven": false,
+    "test_limit": "Pruebas de comportamiento con caché estructurada sintética; no verifican la lectura RPC productiva ni una combinación OEM real."
+  },
+  "residuals": [
+    {
+      "id": "CSB-R01",
+      "status": "known_scope_gap_not_new_regression",
+      "detail": "BikeProfile no entrega sistema exacto por rueda ni objetivo de reemplazo/conversión. Un resultado caution no confirma ninguna de esas condiciones."
+    },
+    {
+      "id": "CSB-R02",
+      "status": "known_representation_gap_AG01",
+      "detail": "Cantidad física de platos incluidos, capacidad del crankset y cantidad instalada deben seguir separadas; falta la adjudicación del nuevo campo y su productor."
+    },
+    {
+      "id": "CSB-R03",
+      "status": "known_unimplemented_coverage",
+      "detail": "Controles combinados, configuraciones por fila y relaciones OEM completas siguen pendientes. Este cambio no evalúa un montaje completo desde esos contratos."
+    },
+    {
+      "id": "CSB-R04",
+      "status": "consumer_boundary_not_new_regression",
+      "detail": "El resultado ordena y puede excluir incompatible del modo compatibleOnly del autocomplete (líneas147–156). caution permanece visible. _selectProduct (1514) comunica la selección y el submit por SKU/barcode (1540) también la invoca. No es una validación de guardado ni una barrera mecánica de persistencia."
+    },
+    {
+      "id": "CSB-R05",
+      "status": "not_tested_in_this_review",
+      "detail": "No se ejecutó DB, recarga, navegador ni app. La revisión no acredita una ejecución real del taller ni habilita catálogo o fill."
+    }
+  ]
+}

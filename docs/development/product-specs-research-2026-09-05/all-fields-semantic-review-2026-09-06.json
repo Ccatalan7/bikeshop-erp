@@ -1,0 +1,1949 @@
+{
+  "schema_version": 1,
+  "reviewer": "Codex",
+  "reviewed_on": "2026-09-06",
+  "snapshot_sha256": "52d083195dd3d5d7ac25d6f3e1f361941e088d9678bc3dac629d8251681e0dd7",
+  "scope": "Los 136 campos actuales, con consumidores por plantilla. Diagnóstico semántico completo del vocabulario actual; no certificación de cada familia ni catálogo OEM. Pendientes se conservan hasta implementación y revisión independiente.",
+  "definitions": [
+    {
+      "definition_id": "56fd912a-1a4d-41ad-bf08-b0d1499b9395",
+      "key": "bb_ball_count_per_side",
+      "current_data_type": "number",
+      "templates": [
+        "bottom_bracket",
+        "bottom_bracket_bearing"
+      ],
+      "review_group": "positive_integer_count",
+      "finding_and_disposition": "Conservar cantidad entera positiva sin topes de catálogo universales; distinguir piezas suministradas, dientes físicos y capacidad declarada.",
+      "evidence_basis": "quantity_semantics",
+      "sanitation_status": "numeric_domain_deployed_20260906150000",
+      "mechanical_family_approved": false,
+      "remaining_gate": "family_semantics_and_interfaces_review"
+    },
+    {
+      "definition_id": "a7147f59-7898-4104-9d6b-7a6ae582c2fc",
+      "key": "bb_ball_size_in",
+      "current_data_type": "single_select",
+      "templates": [
+        "bottom_bracket",
+        "bottom_bracket_bearing"
+      ],
+      "review_group": "bb_ball_diameter",
+      "finding_and_disposition": "Conservar diámetro nominal fraccionario observado de la bola; catálogo gobernado extensible, no inferir cantidad ni ajuste por diámetro solamente.",
+      "evidence_basis": "K18",
+      "sanitation_status": "pending",
+      "mechanical_family_approved": false
+    },
+    {
+      "definition_id": "04694a95-9e92-4674-a0c2-4252ba185aaf",
+      "key": "bb_bearing_width_mm",
+      "current_data_type": "number",
+      "templates": [
+        "bottom_bracket_bearing"
+      ],
+      "review_group": "positive_measurement",
+      "finding_and_disposition": "Conservar medida numérica; exigir valor positivo finito sin topes universales derivados del stock. Los límites de montaje pertenecen a referencia/receta, no a este escalar.",
+      "evidence_basis": "quantity_semantics",
+      "sanitation_status": "numeric_domain_deployed_20260906150000",
+      "mechanical_family_approved": false,
+      "remaining_gate": "family_semantics_and_interfaces_review"
+    },
+    {
+      "definition_id": "9d7291ce-bf0d-4a54-be0b-c050f3fb2e2d",
+      "key": "bb_construction",
+      "current_data_type": "single_select",
+      "templates": [
+        "bottom_bracket",
+        "bottom_bracket_axle",
+        "bottom_bracket_bearing",
+        "bottom_bracket_cup"
+      ],
+      "review_group": "bb_axes_mixed",
+      "finding_and_disposition": "Separar construcción, interfaz al cuadro, interfaz a biela y ejes incluidos; los vocabularios mezclan rosca/alojamiento/familia/eje o agrupan estándares diferentes. Revisar contra Park y despiece exacto.",
+      "evidence_basis": "K18",
+      "sanitation_status": "pending",
+      "mechanical_family_approved": false
+    },
+    {
+      "definition_id": "4c0a652b-fd7c-4f99-b7e6-efbcde3f45d3",
+      "key": "bb_cup_outer_diameter_mm",
+      "current_data_type": "number",
+      "templates": [
+        "bottom_bracket",
+        "bottom_bracket_cup"
+      ],
+      "review_group": "positive_measurement",
+      "finding_and_disposition": "Conservar medida numérica; exigir valor positivo finito sin topes universales derivados del stock. Los límites de montaje pertenecen a referencia/receta, no a este escalar.",
+      "evidence_basis": "quantity_semantics",
+      "sanitation_status": "numeric_domain_deployed_20260906150000",
+      "mechanical_family_approved": false,
+      "remaining_gate": "family_semantics_and_interfaces_review"
+    },
+    {
+      "definition_id": "b4863ef0-d4d6-4e08-a6bd-b3fcf7ddcb55",
+      "key": "bb_cup_thread_pair",
+      "current_data_type": "single_select",
+      "templates": [
+        "bottom_bracket",
+        "bottom_bracket_cup"
+      ],
+      "review_group": "bb_thread_pair",
+      "finding_and_disposition": "El par de sentidos depende del estándar y de la posición; Derecha/Derecha no identifica universalmente italiano. Etiquetar lado de observación; pressfit usa otra interfaz.",
+      "evidence_basis": "K18",
+      "sanitation_status": "pending",
+      "mechanical_family_approved": false
+    },
+    {
+      "definition_id": "d57f3678-3366-44a3-8351-dc3908278ae8",
+      "key": "bb_shell_diameter_mm",
+      "current_data_type": "number",
+      "templates": [
+        "bottom_bracket"
+      ],
+      "review_group": "positive_measurement",
+      "finding_and_disposition": "Conservar medida numérica; exigir valor positivo finito sin topes universales derivados del stock. Los límites de montaje pertenecen a referencia/receta, no a este escalar.",
+      "evidence_basis": "quantity_semantics",
+      "sanitation_status": "numeric_domain_deployed_20260906150000",
+      "mechanical_family_approved": false,
+      "remaining_gate": "family_semantics_and_interfaces_review"
+    },
+    {
+      "definition_id": "b6d541fc-7f81-405b-b20d-f19ecfccb35e",
+      "key": "bb_shell_standard",
+      "current_data_type": "single_select",
+      "templates": [
+        "bottom_bracket",
+        "bottom_bracket_cup"
+      ],
+      "review_group": "bb_axes_mixed",
+      "finding_and_disposition": "Separar construcción, interfaz al cuadro, interfaz a biela y ejes incluidos; los vocabularios mezclan rosca/alojamiento/familia/eje o agrupan estándares diferentes. Revisar contra Park y despiece exacto.",
+      "evidence_basis": "K18",
+      "sanitation_status": "pending",
+      "mechanical_family_approved": false
+    },
+    {
+      "definition_id": "ca1bc471-dfdf-4e24-a17e-b3950030a817",
+      "key": "bb_shell_width_mm",
+      "current_data_type": "number",
+      "templates": [
+        "bottom_bracket",
+        "bottom_bracket_cup"
+      ],
+      "review_group": "positive_measurement",
+      "finding_and_disposition": "Conservar medida numérica; exigir valor positivo finito sin topes universales derivados del stock. Los límites de montaje pertenecen a referencia/receta, no a este escalar.",
+      "evidence_basis": "quantity_semantics",
+      "sanitation_status": "numeric_domain_deployed_20260906150000",
+      "mechanical_family_approved": false,
+      "remaining_gate": "family_semantics_and_interfaces_review"
+    },
+    {
+      "definition_id": "83e6351f-e477-4ea1-b58c-2e0f7beb8af3",
+      "key": "bb_spacer_stack_mm",
+      "current_data_type": "number",
+      "templates": [
+        "bottom_bracket"
+      ],
+      "review_group": "nonnegative_stack",
+      "finding_and_disposition": "Cero significa ninguna arandela y es válido; medida no negativa, receta por lado y modelo, sin un máximo universal de 10 mm.",
+      "evidence_basis": "K18",
+      "sanitation_status": "numeric_domain_deployed_20260906150000",
+      "mechanical_family_approved": false,
+      "remaining_gate": "family_semantics_and_interfaces_review"
+    },
+    {
+      "definition_id": "850f97da-d462-48dc-abd8-55c1ccf0dd3c",
+      "key": "bb_thread_standard",
+      "current_data_type": "single_select",
+      "templates": [],
+      "review_group": "bb_axes_mixed",
+      "finding_and_disposition": "Separar construcción, interfaz al cuadro, interfaz a biela y ejes incluidos; los vocabularios mezclan rosca/alojamiento/familia/eje o agrupan estándares diferentes. Revisar contra Park y despiece exacto.",
+      "evidence_basis": "K18",
+      "sanitation_status": "pending",
+      "mechanical_family_approved": false
+    },
+    {
+      "definition_id": "f423ecda-cc55-4ec7-a9a3-28caf6310c66",
+      "key": "bearing_application",
+      "current_data_type": "single_select",
+      "templates": [
+        "bearing"
+      ],
+      "review_group": "bearing_structure",
+      "finding_and_disposition": "Sellado describe protección, no necesariamente tipo constructivo; distinguir cartucho, sueltas, canastillo, sellos/contacto/dimensiones. Aplicación no demuestra equivalencia.",
+      "evidence_basis": "K18_K19",
+      "sanitation_status": "pending",
+      "mechanical_family_approved": false
+    },
+    {
+      "definition_id": "0b1a2520-bd82-4304-95ce-5935234b5587",
+      "key": "bearing_inner_diameter_mm",
+      "current_data_type": "number",
+      "templates": [
+        "bottom_bracket_bearing"
+      ],
+      "review_group": "positive_measurement",
+      "finding_and_disposition": "Conservar medida numérica; exigir valor positivo finito sin topes universales derivados del stock. Los límites de montaje pertenecen a referencia/receta, no a este escalar.",
+      "evidence_basis": "quantity_semantics",
+      "sanitation_status": "numeric_domain_deployed_20260906150000",
+      "mechanical_family_approved": false,
+      "remaining_gate": "family_semantics_and_interfaces_review"
+    },
+    {
+      "definition_id": "dd77c79b-4ae5-487a-9b56-9c9a0c01361e",
+      "key": "bearing_outer_diameter_mm",
+      "current_data_type": "number",
+      "templates": [
+        "bottom_bracket_bearing"
+      ],
+      "review_group": "positive_measurement",
+      "finding_and_disposition": "Conservar medida numérica; exigir valor positivo finito sin topes universales derivados del stock. Los límites de montaje pertenecen a referencia/receta, no a este escalar.",
+      "evidence_basis": "quantity_semantics",
+      "sanitation_status": "numeric_domain_deployed_20260906150000",
+      "mechanical_family_approved": false,
+      "remaining_gate": "family_semantics_and_interfaces_review"
+    },
+    {
+      "definition_id": "f831fd26-2a2c-4504-b787-56593fed70df",
+      "key": "bearing_size_code",
+      "current_data_type": "text",
+      "templates": [
+        "bearing",
+        "bottom_bracket",
+        "bottom_bracket_bearing"
+      ],
+      "review_group": "exact_reference_text",
+      "finding_and_disposition": "Conservar identificador o texto observado; no evaluar compatibilidad por coincidencia aproximada ni convertir uso/objetivo en identidad del objeto. Añadir relación exacta con fuente.",
+      "evidence_basis": "identity_matching_contract",
+      "sanitation_status": "pending",
+      "mechanical_family_approved": false
+    },
+    {
+      "definition_id": "75de7b40-1094-439a-950c-da205c76af48",
+      "key": "bearing_system",
+      "current_data_type": "single_select",
+      "templates": [
+        "headset",
+        "hub"
+      ],
+      "review_group": "bearing_structure",
+      "finding_and_disposition": "Sellado describe protección, no necesariamente tipo constructivo; distinguir cartucho, sueltas, canastillo, sellos/contacto/dimensiones. Aplicación no demuestra equivalencia.",
+      "evidence_basis": "K18_K19",
+      "sanitation_status": "pending",
+      "mechanical_family_approved": false
+    },
+    {
+      "definition_id": "91f8707f-311a-4232-8a79-073fd41b5535",
+      "key": "bleed_port",
+      "current_data_type": "single_select",
+      "templates": [
+        "brake_caliper",
+        "hydraulic_disc_brake"
+      ],
+      "review_group": "brake_interface_not_tool",
+      "finding_and_disposition": "Puerto de purga no es tamaño de llave ni jeringa; montaje Adaptador requerido no es interfaz física. Definir interfaz real y receta del adaptador por ambos extremos.",
+      "evidence_basis": "K24_K26",
+      "sanitation_status": "pending",
+      "mechanical_family_approved": false
+    },
+    {
+      "definition_id": "16b4f701-478d-41c4-9fe0-5f9c215c3345",
+      "key": "bottom_bracket_family",
+      "current_data_type": "single_select",
+      "templates": [
+        "crankset",
+        "drivetrain_kit"
+      ],
+      "review_group": "bb_axes_mixed",
+      "finding_and_disposition": "Separar construcción, interfaz al cuadro, interfaz a biela y ejes incluidos; los vocabularios mezclan rosca/alojamiento/familia/eje o agrupan estándares diferentes. Revisar contra Park y despiece exacto.",
+      "evidence_basis": "K18",
+      "sanitation_status": "pending",
+      "mechanical_family_approved": false
+    },
+    {
+      "definition_id": "ef5f6e33-beec-4eb9-9add-26257133cf49",
+      "key": "brake_position",
+      "current_data_type": "single_select",
+      "templates": [
+        "brake_caliper",
+        "brake_lever",
+        "brake_pad",
+        "hydraulic_disc_brake",
+        "mechanical_disc_brake",
+        "rim_brake",
+        "rotor"
+      ],
+      "review_group": "position_per_member",
+      "finding_and_disposition": "Un par necesita un miembro por lado/función con sus interfaces. Universal sólo si la declaración lo respalda; no usarlo como desconocido.",
+      "evidence_basis": "kit_identity",
+      "sanitation_status": "pending",
+      "mechanical_family_approved": false
+    },
+    {
+      "definition_id": "de380dfb-d1ad-4702-a978-069692dabd49",
+      "key": "brake_system",
+      "current_data_type": "single_select",
+      "templates": [
+        "brake_caliper",
+        "brake_lever",
+        "brake_pad",
+        "hydraulic_disc_brake",
+        "mechanical_disc_brake",
+        "rim_brake",
+        "rotor"
+      ],
+      "review_group": "brake_system_is_brand",
+      "finding_and_disposition": "El campo llamado sistema contiene marcas; no prueba compatibilidad. Separar fabricante comercial de modelo de circuito/maneta/cáliper y conexiones.",
+      "evidence_basis": "K23_K26",
+      "sanitation_status": "pending",
+      "mechanical_family_approved": false
+    },
+    {
+      "definition_id": "af057d76-e4ea-40d5-a293-941ad6aa0dc2",
+      "key": "brake_type",
+      "current_data_type": "single_select",
+      "templates": [
+        "brake_caliper",
+        "brake_lever",
+        "brake_pad"
+      ],
+      "review_group": "brake_types_incomplete",
+      "finding_and_disposition": "Separar superficie frenada y accionamiento; faltan cáliper de llanta, U-brake y sistemas de maza. Tipo de pastilla debe decidirse antes de campos de compuesto/retención.",
+      "evidence_basis": "K23_K25",
+      "sanitation_status": "pending",
+      "mechanical_family_approved": false
+    },
+    {
+      "definition_id": "d72e7f7c-6330-42bd-9e63-5075740e1a96",
+      "key": "caliper_hydraulic",
+      "current_data_type": "boolean",
+      "templates": [
+        "brake_caliper",
+        "brake_lever"
+      ],
+      "review_group": "split_brake_actuation",
+      "finding_and_disposition": "Un booleano hidráulico no distingue mecánico, hidráulico, híbrido ni freno cerrado de maza; reemplazar progresivamente por construcción y accionamiento tipados por subsistema.",
+      "evidence_basis": "K23_K26",
+      "sanitation_status": "pending",
+      "mechanical_family_approved": false
+    },
+    {
+      "definition_id": "f2fab4fe-fb90-4a9d-88c0-300e52202b56",
+      "key": "cassette_cog_sequence",
+      "current_data_type": "text",
+      "templates": [
+        "cassette",
+        "freewheel"
+      ],
+      "review_group": "structured_sequence",
+      "finding_and_disposition": "Separar secuencia física ordenada de dentado, conteo intrínseco y rango compatible; texto libre no basta para validar igualdad, extremos y número de coronas.",
+      "evidence_basis": "K08_K12",
+      "sanitation_status": "pending",
+      "mechanical_family_approved": false
+    },
+    {
+      "definition_id": "0ce76410-2ca6-4357-beac-9663ff2328d3",
+      "key": "chain_connector_directional",
+      "current_data_type": "boolean",
+      "templates": [
+        "chain_link"
+      ],
+      "review_group": "preserve_boolean_with_prerequisites",
+      "finding_and_disposition": "Conservar Sí/No/desconocido; aplicar sólo después de identificar objeto/construcción y fuente. False no equivale a ausencia. Revisar requisitos por plantilla y por miembro de kit.",
+      "evidence_basis": "three_valued_contract",
+      "sanitation_status": "pending",
+      "mechanical_family_approved": false
+    },
+    {
+      "definition_id": "b767efea-c5e1-41d0-8d7e-5a6127fec1e4",
+      "key": "chain_connector_target",
+      "current_data_type": "text",
+      "templates": [
+        "chain_link"
+      ],
+      "review_group": "exact_reference_text",
+      "finding_and_disposition": "Conservar identificador o texto observado; no evaluar compatibilidad por coincidencia aproximada ni convertir uso/objetivo en identidad del objeto. Añadir relación exacta con fuente.",
+      "evidence_basis": "identity_matching_contract",
+      "sanitation_status": "pending",
+      "mechanical_family_approved": false
+    },
+    {
+      "definition_id": "adb0b9ea-2f0b-49de-8b43-fb3bad96a7d0",
+      "key": "chain_connector_type",
+      "current_data_type": "single_select",
+      "templates": [
+        "chain_link"
+      ],
+      "review_group": "chain_scoped_fields",
+      "finding_and_disposition": "Base de cadena/conector ya revisada en el piloto; conservar. Velocidades/ancho/aplicación necesitan alcance de modelo/cadena objetivo y no certifican variantes no investigadas.",
+      "evidence_basis": "K01_K07",
+      "sanitation_status": "pending",
+      "mechanical_family_approved": false
+    },
+    {
+      "definition_id": "621a2ce0-7b30-4780-821f-b3c5ba3684bb",
+      "key": "chain_directional",
+      "current_data_type": "boolean",
+      "templates": [
+        "chain"
+      ],
+      "review_group": "preserve_boolean_with_prerequisites",
+      "finding_and_disposition": "Conservar Sí/No/desconocido; aplicar sólo después de identificar objeto/construcción y fuente. False no equivale a ausencia. Revisar requisitos por plantilla y por miembro de kit.",
+      "evidence_basis": "three_valued_contract",
+      "sanitation_status": "pending",
+      "mechanical_family_approved": false
+    },
+    {
+      "definition_id": "9d2ee4a7-faa1-41d6-b353-9484d1455089",
+      "key": "chain_ebike_rated",
+      "current_data_type": "boolean",
+      "templates": [
+        "chain",
+        "drivetrain_kit"
+      ],
+      "review_group": "preserve_boolean_with_prerequisites",
+      "finding_and_disposition": "Conservar Sí/No/desconocido; aplicar sólo después de identificar objeto/construcción y fuente. False no equivale a ausencia. Revisar requisitos por plantilla y por miembro de kit.",
+      "evidence_basis": "three_valued_contract",
+      "sanitation_status": "pending",
+      "mechanical_family_approved": false
+    },
+    {
+      "definition_id": "c5e7c370-7a77-474f-87d2-a30c861994c4",
+      "key": "chain_guide_mount_type",
+      "current_data_type": "single_select",
+      "templates": [
+        "chain_guide"
+      ],
+      "review_group": "guide_mount_scope",
+      "finding_and_disposition": "Conservar montaje declarado pero completar patrón/distancias, dientes/rango y receta por modelo; Direct mount sin interfaz exacta no aprueba fitment.",
+      "evidence_basis": "K12_K13",
+      "sanitation_status": "pending",
+      "mechanical_family_approved": false
+    },
+    {
+      "definition_id": "e4a41092-27d9-41a9-a4ff-1d417c4e5265",
+      "key": "chain_link_pack_qty",
+      "current_data_type": "number",
+      "templates": [
+        "chain_link"
+      ],
+      "review_group": "positive_integer_count",
+      "finding_and_disposition": "Conservar cantidad entera positiva sin topes de catálogo universales; distinguir piezas suministradas, dientes físicos y capacidad declarada.",
+      "evidence_basis": "quantity_semantics",
+      "sanitation_status": "pending",
+      "mechanical_family_approved": false
+    },
+    {
+      "definition_id": "c3411f9b-9824-46b9-b893-914d8baf601f",
+      "key": "chain_link_reusable",
+      "current_data_type": "boolean",
+      "templates": [
+        "chain_link"
+      ],
+      "review_group": "preserve_boolean_with_prerequisites",
+      "finding_and_disposition": "Conservar Sí/No/desconocido; aplicar sólo después de identificar objeto/construcción y fuente. False no equivale a ausencia. Revisar requisitos por plantilla y por miembro de kit.",
+      "evidence_basis": "three_valued_contract",
+      "sanitation_status": "pending",
+      "mechanical_family_approved": false
+    },
+    {
+      "definition_id": "db11ebac-d3e6-4b8e-a2f0-7d22a971498a",
+      "key": "chain_outer_width_mm",
+      "current_data_type": "number",
+      "templates": [
+        "chain",
+        "chain_link"
+      ],
+      "review_group": "positive_measurement",
+      "finding_and_disposition": "Conservar medida numérica; exigir valor positivo finito sin topes universales derivados del stock. Los límites de montaje pertenecen a referencia/receta, no a este escalar.",
+      "evidence_basis": "quantity_semantics",
+      "sanitation_status": "pending",
+      "mechanical_family_approved": false
+    },
+    {
+      "definition_id": "88dd47b6-9ed4-4406-8576-d9f611c2c3f2",
+      "key": "chain_profile_family",
+      "current_data_type": "multi_select",
+      "templates": [
+        "chain",
+        "chain_link",
+        "chainring",
+        "crankset",
+        "drivetrain_kit"
+      ],
+      "review_group": "legacy_drivetrain_summary",
+      "finding_and_disposition": "Conservar histórico explícito; no usar marca/ecosistema/perfil genérico para aprobar montaje. Relación exacta modelo/generación/velocidades/condiciones, con fuente por fila.",
+      "evidence_basis": "K01_K13",
+      "sanitation_status": "pending",
+      "mechanical_family_approved": false
+    },
+    {
+      "definition_id": "77c74b4d-5adb-4c9c-848d-ebd6d91771bf",
+      "key": "chain_speeds",
+      "current_data_type": "multi_select",
+      "templates": [
+        "chain",
+        "chain_link"
+      ],
+      "review_group": "chain_scoped_fields",
+      "finding_and_disposition": "Base de cadena/conector ya revisada en el piloto; conservar. Velocidades/ancho/aplicación necesitan alcance de modelo/cadena objetivo y no certifican variantes no investigadas.",
+      "evidence_basis": "K01_K07",
+      "sanitation_status": "pending",
+      "mechanical_family_approved": false
+    },
+    {
+      "definition_id": "bb9b622f-9a2d-43f6-abdc-9c1dbd67f29c",
+      "key": "chain_width_family",
+      "current_data_type": "single_select",
+      "templates": [
+        "chain",
+        "chain_link",
+        "chainring",
+        "fixed_cog"
+      ],
+      "review_group": "chain_scoped_fields",
+      "finding_and_disposition": "Base de cadena/conector ya revisada en el piloto; conservar. Velocidades/ancho/aplicación necesitan alcance de modelo/cadena objetivo y no certifican variantes no investigadas.",
+      "evidence_basis": "K01_K07",
+      "sanitation_status": "pending",
+      "mechanical_family_approved": false
+    },
+    {
+      "definition_id": "28854686-ee6c-440a-ac42-9aa1da65e718",
+      "key": "chainline_mm",
+      "current_data_type": "number",
+      "templates": [
+        "chain_guide",
+        "crankset"
+      ],
+      "review_group": "positive_measurement",
+      "finding_and_disposition": "Conservar medida numérica; exigir valor positivo finito sin topes universales derivados del stock. Los límites de montaje pertenecen a referencia/receta, no a este escalar.",
+      "evidence_basis": "quantity_semantics",
+      "sanitation_status": "numeric_domain_deployed_20260906150000",
+      "mechanical_family_approved": false,
+      "remaining_gate": "family_semantics_and_interfaces_review"
+    },
+    {
+      "definition_id": "50322b08-5151-42c0-aa2c-a43afa2ccc45",
+      "key": "chainring_bcd_mm",
+      "current_data_type": "number",
+      "templates": [
+        "chainring"
+      ],
+      "review_group": "positive_measurement",
+      "finding_and_disposition": "Conservar medida numérica; exigir valor positivo finito sin topes universales derivados del stock. Los límites de montaje pertenecen a referencia/receta, no a este escalar.",
+      "evidence_basis": "quantity_semantics",
+      "sanitation_status": "numeric_domain_deployed_20260906150000",
+      "mechanical_family_approved": false,
+      "remaining_gate": "family_semantics_and_interfaces_review"
+    },
+    {
+      "definition_id": "b552b4dc-fcd9-4ca0-a1d3-95362a8b12e8",
+      "key": "chainring_bolt_count",
+      "current_data_type": "single_select",
+      "templates": [
+        "chainring"
+      ],
+      "review_group": "chainring_mount_pattern",
+      "finding_and_disposition": "Separar tipo de montaje, número de tornillos, BCD/patrón y revisión direct mount. Direct mount no es un conteo y BCD igual no basta; faltan montajes de tres pernos/asimétricos.",
+      "evidence_basis": "K12",
+      "sanitation_status": "pending",
+      "mechanical_family_approved": false
+    },
+    {
+      "definition_id": "d6850e3a-07bf-4f96-8119-6bb99b183a1d",
+      "key": "chainring_mount_type",
+      "current_data_type": "single_select",
+      "templates": [
+        "chainring"
+      ],
+      "review_group": "chainring_mount_pattern",
+      "finding_and_disposition": "Separar tipo de montaje, número de tornillos, BCD/patrón y revisión direct mount. Direct mount no es un conteo y BCD igual no basta; faltan montajes de tres pernos/asimétricos.",
+      "evidence_basis": "K12",
+      "sanitation_status": "pending",
+      "mechanical_family_approved": false
+    },
+    {
+      "definition_id": "7ff0fd82-2da6-4435-8265-d250e8e8c5ae",
+      "key": "chainring_offset_mm",
+      "current_data_type": "number",
+      "templates": [
+        "chainring"
+      ],
+      "review_group": "signed_offset",
+      "finding_and_disposition": "Offset con signo y referencia geométrica explícita; no imponer límite universal ni convertir izquierda/derecha a magnitud positiva.",
+      "evidence_basis": "K12_K17",
+      "sanitation_status": "numeric_domain_deployed_20260906150000",
+      "mechanical_family_approved": false,
+      "remaining_gate": "family_semantics_and_interfaces_review"
+    },
+    {
+      "definition_id": "7547914f-7bb0-4a45-b088-1a3b50c3aa22",
+      "key": "chainring_teeth",
+      "current_data_type": "text",
+      "templates": [
+        "chain_guide",
+        "chainring",
+        "crankset",
+        "drivetrain_kit"
+      ],
+      "review_group": "structured_sequence",
+      "finding_and_disposition": "Separar secuencia física ordenada de dentado, conteo intrínseco y rango compatible; texto libre no basta para validar igualdad, extremos y número de coronas.",
+      "evidence_basis": "K08_K12",
+      "sanitation_status": "pending",
+      "mechanical_family_approved": false
+    },
+    {
+      "definition_id": "bc2fb22d-bde5-4f05-b440-f1c4466db15d",
+      "key": "compatible_frame_hint",
+      "current_data_type": "text",
+      "templates": [
+        "derailleur_hanger"
+      ],
+      "review_group": "exact_reference_text",
+      "finding_and_disposition": "Conservar identificador o texto observado; no evaluar compatibilidad por coincidencia aproximada ni convertir uso/objetivo en identidad del objeto. Añadir relación exacta con fuente.",
+      "evidence_basis": "identity_matching_contract",
+      "sanitation_status": "pending",
+      "mechanical_family_approved": false
+    },
+    {
+      "definition_id": "30c4f2b8-b38c-4fc0-a135-d95c537e4bdb",
+      "key": "component_condition",
+      "current_data_type": "single_select",
+      "templates": [],
+      "review_group": "workshop_only",
+      "finding_and_disposition": "Conservar en su dominio de taller; no propagar condición/desgaste de una unidad a todas las unidades nuevas del producto.",
+      "evidence_basis": "domain_identity_split",
+      "sanitation_status": "out_of_product_scope",
+      "mechanical_family_approved": false
+    },
+    {
+      "definition_id": "8354c07a-ef57-4620-8341-5b1b3062273d",
+      "key": "compound_type",
+      "current_data_type": "single_select",
+      "templates": [
+        "brake_pad"
+      ],
+      "review_group": "brake_pad_material_scope",
+      "finding_and_disposition": "Material/compuesto requiere disco/llanta, respaldo/porta-goma y fabricante; no aplicar vocabulario de pastilla de disco a zapata de llanta.",
+      "evidence_basis": "K24_K25",
+      "sanitation_status": "pending",
+      "mechanical_family_approved": false
+    },
+    {
+      "definition_id": "08bd2cb9-d4d5-4d59-9bde-76b574da2459",
+      "key": "contamination_status",
+      "current_data_type": "single_select",
+      "templates": [],
+      "review_group": "workshop_only",
+      "finding_and_disposition": "Conservar en su dominio de taller; no propagar condición/desgaste de una unidad a todas las unidades nuevas del producto.",
+      "evidence_basis": "domain_identity_split",
+      "sanitation_status": "out_of_product_scope",
+      "mechanical_family_approved": false
+    },
+    {
+      "definition_id": "4b2b3bb0-6f53-46d6-8136-8a6b791bfd64",
+      "key": "crank_arm_length_mm",
+      "current_data_type": "number",
+      "templates": [
+        "crank_arm",
+        "crankset",
+        "drivetrain_kit"
+      ],
+      "review_group": "positive_measurement",
+      "finding_and_disposition": "Conservar medida numérica; exigir valor positivo finito sin topes universales derivados del stock. Los límites de montaje pertenecen a referencia/receta, no a este escalar.",
+      "evidence_basis": "quantity_semantics",
+      "sanitation_status": "numeric_domain_deployed_20260906150000",
+      "mechanical_family_approved": false,
+      "remaining_gate": "family_semantics_and_interfaces_review"
+    },
+    {
+      "definition_id": "5cc2441b-a741-48ff-a917-b76b10a6a9d0",
+      "key": "crank_side",
+      "current_data_type": "single_select",
+      "templates": [
+        "crank_arm"
+      ],
+      "review_group": "position_per_member",
+      "finding_and_disposition": "Un par necesita un miembro por lado/función con sus interfaces. Universal sólo si la declaración lo respalda; no usarlo como desconocido.",
+      "evidence_basis": "kit_identity",
+      "sanitation_status": "pending",
+      "mechanical_family_approved": false
+    },
+    {
+      "definition_id": "be66f64e-3ceb-4688-89e8-012549a8a2e4",
+      "key": "derailleur_cage_length",
+      "current_data_type": "single_select",
+      "templates": [
+        "derailleur_pulley",
+        "rear_derailleur"
+      ],
+      "review_group": "derailleur_mount_scope",
+      "finding_and_disposition": "Distinguir interfaz del cambio y patilla, UDH/Full Mount/direct mount por revisión; extensor es otro participante y no identifica capacidad. Longitud de jaula no sustituye modelo.",
+      "evidence_basis": "K10_K13",
+      "sanitation_status": "pending",
+      "mechanical_family_approved": false
+    },
+    {
+      "definition_id": "3f21e282-376b-4bfa-b3cb-45212a7c26ac",
+      "key": "derailleur_clutch",
+      "current_data_type": "boolean",
+      "templates": [
+        "rear_derailleur"
+      ],
+      "review_group": "preserve_boolean_with_prerequisites",
+      "finding_and_disposition": "Conservar Sí/No/desconocido; aplicar sólo después de identificar objeto/construcción y fuente. False no equivale a ausencia. Revisar requisitos por plantilla y por miembro de kit.",
+      "evidence_basis": "three_valued_contract",
+      "sanitation_status": "pending",
+      "mechanical_family_approved": false
+    },
+    {
+      "definition_id": "fbc86660-d659-47dc-a83a-33cfee56e4ff",
+      "key": "diagnosis_notes",
+      "current_data_type": "text",
+      "templates": [],
+      "review_group": "workshop_only",
+      "finding_and_disposition": "Conservar en su dominio de taller; no propagar condición/desgaste de una unidad a todas las unidades nuevas del producto.",
+      "evidence_basis": "domain_identity_split",
+      "sanitation_status": "out_of_product_scope",
+      "mechanical_family_approved": false
+    },
+    {
+      "definition_id": "af56cbe6-307c-4606-acd3-6ee5d7d48735",
+      "key": "drivetrain_declared_compatible_ecosystems",
+      "current_data_type": "multi_select",
+      "templates": [
+        "chain",
+        "chain_link",
+        "drivetrain_kit",
+        "front_derailleur",
+        "rear_derailleur",
+        "shifter"
+      ],
+      "review_group": "legacy_drivetrain_summary",
+      "finding_and_disposition": "Conservar histórico explícito; no usar marca/ecosistema/perfil genérico para aprobar montaje. Relación exacta modelo/generación/velocidades/condiciones, con fuente por fila.",
+      "evidence_basis": "K01_K13",
+      "sanitation_status": "pending",
+      "mechanical_family_approved": false
+    },
+    {
+      "definition_id": "69194005-710c-4fc5-8cad-faf6123cf642",
+      "key": "drivetrain_mode",
+      "current_data_type": "single_select",
+      "templates": [
+        "chain",
+        "chain_link"
+      ],
+      "review_group": "chain_scoped_fields",
+      "finding_and_disposition": "Base de cadena/conector ya revisada en el piloto; conservar. Velocidades/ancho/aplicación necesitan alcance de modelo/cadena objetivo y no certifican variantes no investigadas.",
+      "evidence_basis": "K01_K07",
+      "sanitation_status": "pending",
+      "mechanical_family_approved": false
+    },
+    {
+      "definition_id": "2255c928-f47f-4fab-8f75-2c35e845e995",
+      "key": "drivetrain_platform",
+      "current_data_type": "single_select",
+      "templates": [
+        "chain",
+        "chainring",
+        "crankset",
+        "drivetrain_kit",
+        "front_derailleur",
+        "rear_derailleur",
+        "shifter"
+      ],
+      "review_group": "legacy_drivetrain_summary",
+      "finding_and_disposition": "Conservar histórico explícito; no usar marca/ecosistema/perfil genérico para aprobar montaje. Relación exacta modelo/generación/velocidades/condiciones, con fuente por fila.",
+      "evidence_basis": "K01_K13",
+      "sanitation_status": "pending",
+      "mechanical_family_approved": false
+    },
+    {
+      "definition_id": "415e6b7f-d427-4e93-8df2-fd73feddbce9",
+      "key": "drivetrain_primary_ecosystem",
+      "current_data_type": "single_select",
+      "templates": [
+        "chain",
+        "chain_link",
+        "drivetrain_kit",
+        "front_derailleur",
+        "rear_derailleur",
+        "shifter"
+      ],
+      "review_group": "legacy_drivetrain_summary",
+      "finding_and_disposition": "Conservar histórico explícito; no usar marca/ecosistema/perfil genérico para aprobar montaje. Relación exacta modelo/generación/velocidades/condiciones, con fuente por fila.",
+      "evidence_basis": "K01_K13",
+      "sanitation_status": "pending",
+      "mechanical_family_approved": false
+    },
+    {
+      "definition_id": "4314802c-4b65-47d4-9778-be3423d8d02f",
+      "key": "drivetrain_speeds",
+      "current_data_type": "multi_select",
+      "templates": [
+        "cassette",
+        "chainring",
+        "crankset",
+        "fixed_cog",
+        "freewheel",
+        "front_derailleur",
+        "rear_derailleur",
+        "shifter"
+      ],
+      "review_group": "intrinsic_vs_compatible_cardinality",
+      "finding_and_disposition": "Definición multiuso mezcla número físico singular y conjunto de capacidades compatibles. Crear campos por papel; no cambiar datatype global ni sumar alternativas independientes.",
+      "evidence_basis": "K08_K10_K12",
+      "sanitation_status": "pending",
+      "mechanical_family_approved": false
+    },
+    {
+      "definition_id": "7d4a8477-18a9-4132-b027-ebe866dba164",
+      "key": "fluid_type",
+      "current_data_type": "single_select",
+      "templates": [
+        "brake_caliper",
+        "hydraulic_disc_brake"
+      ],
+      "review_group": "brake_fluid_exact_oem",
+      "finding_and_disposition": "Conservar fluido declarado con modelo y revisión; mineral no significa intercambiable entre fabricantes y DOT no se deduce por marca ni color.",
+      "evidence_basis": "K26",
+      "sanitation_status": "pending",
+      "mechanical_family_approved": false
+    },
+    {
+      "definition_id": "807da31c-82ab-4e3b-8222-c4fa0638e824",
+      "key": "freehub_type",
+      "current_data_type": "single_select",
+      "templates": [
+        "cassette",
+        "cassette_spacer",
+        "fixed_cog",
+        "freewheel",
+        "hub"
+      ],
+      "review_group": "freehub_interface_mixed",
+      "finding_and_disposition": "Núcleo cassette, rueda libre roscada, piñón fijo, driver y contrapedal son objetos/interfaces distintos. Preguntar arquitectura de maza antes del estándar específico; exacta conversión requiere kit.",
+      "evidence_basis": "K08_K11",
+      "sanitation_status": "pending",
+      "mechanical_family_approved": false
+    },
+    {
+      "definition_id": "72f38b2f-ec08-408e-88b5-bf48307dc713",
+      "key": "front_chainring_count",
+      "current_data_type": "multi_select",
+      "templates": [
+        "crankset",
+        "drivetrain_kit",
+        "front_derailleur",
+        "shifter"
+      ],
+      "review_group": "intrinsic_vs_compatible_cardinality",
+      "finding_and_disposition": "Definición multiuso mezcla número físico singular y conjunto de capacidades compatibles. Crear campos por papel; no cambiar datatype global ni sumar alternativas independientes.",
+      "evidence_basis": "K08_K10_K12",
+      "sanitation_status": "pending",
+      "mechanical_family_approved": false
+    },
+    {
+      "definition_id": "e815870a-36da-4ec1-bc33-bb6faf2c3708",
+      "key": "front_derailleur_clamp_mm",
+      "current_data_type": "single_select",
+      "templates": [
+        "front_derailleur"
+      ],
+      "review_group": "front_derailleur_mount",
+      "finding_and_disposition": "Conservar montaje y diámetro sólo si hay abrazadera; tiro de cable, dirección geométrica y electrónico deben separarse. Side swing no equivale simplemente a sentido de tiro.",
+      "evidence_basis": "K10",
+      "sanitation_status": "pending",
+      "mechanical_family_approved": false
+    },
+    {
+      "definition_id": "f3b6ee2a-6d9d-49a4-b156-fe12afc8bc28",
+      "key": "front_derailleur_mount_type",
+      "current_data_type": "single_select",
+      "templates": [
+        "front_derailleur"
+      ],
+      "review_group": "front_derailleur_mount",
+      "finding_and_disposition": "Conservar montaje y diámetro sólo si hay abrazadera; tiro de cable, dirección geométrica y electrónico deben separarse. Side swing no equivale simplemente a sentido de tiro.",
+      "evidence_basis": "K10",
+      "sanitation_status": "pending",
+      "mechanical_family_approved": false
+    },
+    {
+      "definition_id": "071c6c44-9825-479d-a9c7-fb934678bdaa",
+      "key": "front_derailleur_pull_direction",
+      "current_data_type": "single_select",
+      "templates": [
+        "front_derailleur"
+      ],
+      "review_group": "front_derailleur_mount",
+      "finding_and_disposition": "Conservar montaje y diámetro sólo si hay abrazadera; tiro de cable, dirección geométrica y electrónico deben separarse. Side swing no equivale simplemente a sentido de tiro.",
+      "evidence_basis": "K10",
+      "sanitation_status": "pending",
+      "mechanical_family_approved": false
+    },
+    {
+      "definition_id": "61dfef30-5231-49c8-aea8-234e9030fe14",
+      "key": "hanger_model_code",
+      "current_data_type": "text",
+      "templates": [
+        "derailleur_hanger"
+      ],
+      "review_group": "exact_reference_text",
+      "finding_and_disposition": "Conservar identificador o texto observado; no evaluar compatibilidad por coincidencia aproximada ni convertir uso/objetivo en identidad del objeto. Añadir relación exacta con fuente.",
+      "evidence_basis": "identity_matching_contract",
+      "sanitation_status": "pending",
+      "mechanical_family_approved": false
+    },
+    {
+      "definition_id": "b5f274fc-6260-4715-ac4c-3dfb558e4eec",
+      "key": "headset_standard",
+      "current_data_type": "single_select",
+      "templates": [
+        "headset"
+      ],
+      "review_group": "headset_upper_lower",
+      "finding_and_disposition": "Dirección requiere superior e inferior con SHIS, asiento y espiga por extremo; integrado/tapered/rosca mezclan ejes. No colapsar dos códigos a una opción plana.",
+      "evidence_basis": "K19",
+      "sanitation_status": "pending",
+      "mechanical_family_approved": false
+    },
+    {
+      "definition_id": "ecaa9ec5-4849-439c-a81e-9dbadaca0f3a",
+      "key": "hose_fitting_type",
+      "current_data_type": "single_select",
+      "templates": [
+        "brake_caliper",
+        "hydraulic_disc_brake"
+      ],
+      "review_group": "brake_interface_not_tool",
+      "finding_and_disposition": "Puerto de purga no es tamaño de llave ni jeringa; montaje Adaptador requerido no es interfaz física. Definir interfaz real y receta del adaptador por ambos extremos.",
+      "evidence_basis": "K24_K26",
+      "sanitation_status": "pending",
+      "mechanical_family_approved": false
+    },
+    {
+      "definition_id": "2adde90f-610c-4c9a-9cbb-5c0f9aa31c10",
+      "key": "hose_length_mm",
+      "current_data_type": "number",
+      "templates": [
+        "hydraulic_disc_brake"
+      ],
+      "review_group": "positive_measurement",
+      "finding_and_disposition": "Conservar medida numérica; exigir valor positivo finito sin topes universales derivados del stock. Los límites de montaje pertenecen a referencia/receta, no a este escalar.",
+      "evidence_basis": "quantity_semantics",
+      "sanitation_status": "numeric_domain_deployed_20260906150000",
+      "mechanical_family_approved": false,
+      "remaining_gate": "family_semantics_and_interfaces_review"
+    },
+    {
+      "definition_id": "63887ffc-1286-4fbd-a09b-df26e0a76d57",
+      "key": "hub_spacing_mm",
+      "current_data_type": "single_select",
+      "templates": [
+        "hub"
+      ],
+      "review_group": "open_numeric_vocabulary",
+      "finding_and_disposition": "Lista cerrada mezcla medidas/conteos con presentación o es incompleta. Crear cantidad tipada extensible y preservar opción original durante migración; datos de eje/OLD y diámetro no son equivalentes.",
+      "evidence_basis": "quantity_semantics",
+      "sanitation_status": "pending",
+      "mechanical_family_approved": false
+    },
+    {
+      "definition_id": "bab324fa-2459-4a14-b7f9-51de3fdf06e3",
+      "key": "includes_spindle",
+      "current_data_type": "boolean",
+      "templates": [
+        "bottom_bracket"
+      ],
+      "review_group": "preserve_boolean_with_prerequisites",
+      "finding_and_disposition": "Conservar Sí/No/desconocido; aplicar sólo después de identificar objeto/construcción y fuente. False no equivale a ausencia. Revisar requisitos por plantilla y por miembro de kit.",
+      "evidence_basis": "three_valued_contract",
+      "sanitation_status": "pending",
+      "mechanical_family_approved": false
+    },
+    {
+      "definition_id": "2e95f3fb-815b-4ab0-86f9-7532114d79a2",
+      "key": "kit_contents",
+      "current_data_type": "text",
+      "templates": [
+        "drivetrain_kit"
+      ],
+      "review_group": "composed_kit",
+      "finding_and_disposition": "Contenido necesita miembros con rol/posición/cantidad/variante; una lista de texto no define las interfaces ni demuestra que estén incluidos todos los controles.",
+      "evidence_basis": "kit_identity",
+      "sanitation_status": "pending",
+      "mechanical_family_approved": false
+    },
+    {
+      "definition_id": "97c2380a-ec31-4775-8f9a-f451c7d0b427",
+      "key": "largest_cog_teeth",
+      "current_data_type": "number",
+      "templates": [
+        "cassette",
+        "freewheel"
+      ],
+      "review_group": "positive_integer_count",
+      "finding_and_disposition": "Conservar cantidad entera positiva sin topes de catálogo universales; distinguir piezas suministradas, dientes físicos y capacidad declarada.",
+      "evidence_basis": "quantity_semantics",
+      "sanitation_status": "numeric_domain_deployed_20260906150000",
+      "mechanical_family_approved": false,
+      "remaining_gate": "family_semantics_and_interfaces_review"
+    },
+    {
+      "definition_id": "9f6847a0-dff3-49a8-bdbc-c4f37f08a079",
+      "key": "link_count",
+      "current_data_type": "number",
+      "templates": [
+        "chain"
+      ],
+      "review_group": "positive_integer_count",
+      "finding_and_disposition": "Conservar cantidad entera positiva sin topes de catálogo universales; distinguir piezas suministradas, dientes físicos y capacidad declarada.",
+      "evidence_basis": "quantity_semantics",
+      "sanitation_status": "pending",
+      "mechanical_family_approved": false
+    },
+    {
+      "definition_id": "0ea458cc-c939-4a2d-b888-7e21e302f636",
+      "key": "mount_standard",
+      "current_data_type": "single_select",
+      "templates": [
+        "brake_caliper",
+        "hydraulic_disc_brake",
+        "mechanical_disc_brake"
+      ],
+      "review_group": "brake_interface_not_tool",
+      "finding_and_disposition": "Puerto de purga no es tamaño de llave ni jeringa; montaje Adaptador requerido no es interfaz física. Definir interfaz real y receta del adaptador por ambos extremos.",
+      "evidence_basis": "K24_K26",
+      "sanitation_status": "pending",
+      "mechanical_family_approved": false
+    },
+    {
+      "definition_id": "3f272397-c6f3-4e26-baf9-27c6df9cb75c",
+      "key": "narrow_wide",
+      "current_data_type": "boolean",
+      "templates": [
+        "chainring"
+      ],
+      "review_group": "preserve_boolean_with_prerequisites",
+      "finding_and_disposition": "Conservar Sí/No/desconocido; aplicar sólo después de identificar objeto/construcción y fuente. False no equivale a ausencia. Revisar requisitos por plantilla y por miembro de kit.",
+      "evidence_basis": "three_valued_contract",
+      "sanitation_status": "pending",
+      "mechanical_family_approved": false
+    },
+    {
+      "definition_id": "ec0857bc-9737-41f2-97ef-a93cef154e2d",
+      "key": "noise_status",
+      "current_data_type": "single_select",
+      "templates": [],
+      "review_group": "workshop_only",
+      "finding_and_disposition": "Conservar en su dominio de taller; no propagar condición/desgaste de una unidad a todas las unidades nuevas del producto.",
+      "evidence_basis": "domain_identity_split",
+      "sanitation_status": "out_of_product_scope",
+      "mechanical_family_approved": false
+    },
+    {
+      "definition_id": "57aeb10c-bdde-4b8d-9882-2b69a23ff6ed",
+      "key": "overall_status",
+      "current_data_type": "single_select",
+      "templates": [],
+      "review_group": "workshop_only",
+      "finding_and_disposition": "Conservar en su dominio de taller; no propagar condición/desgaste de una unidad a todas las unidades nuevas del producto.",
+      "evidence_basis": "domain_identity_split",
+      "sanitation_status": "out_of_product_scope",
+      "mechanical_family_approved": false
+    },
+    {
+      "definition_id": "c47c075a-8833-437f-8104-2da0dfd673d0",
+      "key": "pad_compatibility_note",
+      "current_data_type": "text",
+      "templates": [
+        "brake_pad"
+      ],
+      "review_group": "exact_reference_text",
+      "finding_and_disposition": "Conservar identificador o texto observado; no evaluar compatibilidad por coincidencia aproximada ni convertir uso/objetivo en identidad del objeto. Añadir relación exacta con fuente.",
+      "evidence_basis": "identity_matching_contract",
+      "sanitation_status": "pending",
+      "mechanical_family_approved": false
+    },
+    {
+      "definition_id": "5ebe066a-b5f8-41f6-b2c1-c7038971c53f",
+      "key": "pad_finned",
+      "current_data_type": "boolean",
+      "templates": [
+        "brake_pad"
+      ],
+      "review_group": "preserve_boolean_with_prerequisites",
+      "finding_and_disposition": "Conservar Sí/No/desconocido; aplicar sólo después de identificar objeto/construcción y fuente. False no equivale a ausencia. Revisar requisitos por plantilla y por miembro de kit.",
+      "evidence_basis": "three_valued_contract",
+      "sanitation_status": "pending",
+      "mechanical_family_approved": false
+    },
+    {
+      "definition_id": "61c2e601-3e8a-4cd4-ad16-e00867358882",
+      "key": "pad_shape_code",
+      "current_data_type": "text",
+      "templates": [
+        "brake_caliper",
+        "brake_pad",
+        "hydraulic_disc_brake",
+        "mechanical_disc_brake"
+      ],
+      "review_group": "exact_reference_text",
+      "finding_and_disposition": "Conservar identificador o texto observado; no evaluar compatibilidad por coincidencia aproximada ni convertir uso/objetivo en identidad del objeto. Añadir relación exacta con fuente.",
+      "evidence_basis": "identity_matching_contract",
+      "sanitation_status": "pending",
+      "mechanical_family_approved": false
+    },
+    {
+      "definition_id": "8db2518c-fd52-4cc6-8a44-13a1f612152b",
+      "key": "pad_spring_included",
+      "current_data_type": "boolean",
+      "templates": [
+        "brake_pad"
+      ],
+      "review_group": "preserve_boolean_with_prerequisites",
+      "finding_and_disposition": "Conservar Sí/No/desconocido; aplicar sólo después de identificar objeto/construcción y fuente. False no equivale a ausencia. Revisar requisitos por plantilla y por miembro de kit.",
+      "evidence_basis": "three_valued_contract",
+      "sanitation_status": "pending",
+      "mechanical_family_approved": false
+    },
+    {
+      "definition_id": "e45fdb4a-65b0-4713-8cb1-5e78832a8a39",
+      "key": "pedal_thread",
+      "current_data_type": "single_select",
+      "templates": [
+        "crank_arm"
+      ],
+      "review_group": "pedal_thread_incomplete",
+      "finding_and_disposition": "Conservar diámetro nominal observado, completar paso/sentido/lado y adaptador exacto. No deducir unión al pedal por longitud o marca de la biela.",
+      "evidence_basis": "K22",
+      "sanitation_status": "pending",
+      "mechanical_family_approved": false
+    },
+    {
+      "definition_id": "c5756549-2382-4f90-9995-6409684067c7",
+      "key": "piston_count",
+      "current_data_type": "single_select",
+      "templates": [
+        "brake_caliper",
+        "hydraulic_disc_brake"
+      ],
+      "review_group": "open_numeric_vocabulary",
+      "finding_and_disposition": "Lista cerrada mezcla medidas/conteos con presentación o es incompleta. Crear cantidad tipada extensible y preservar opción original durante migración; datos de eje/OLD y diámetro no son equivalentes.",
+      "evidence_basis": "quantity_semantics",
+      "sanitation_status": "pending",
+      "mechanical_family_approved": false
+    },
+    {
+      "definition_id": "0138d251-2413-47d7-ad9a-390814a33763",
+      "key": "pulley_teeth",
+      "current_data_type": "number",
+      "templates": [
+        "derailleur_pulley"
+      ],
+      "review_group": "positive_integer_count",
+      "finding_and_disposition": "Conservar cantidad entera positiva sin topes de catálogo universales; distinguir piezas suministradas, dientes físicos y capacidad declarada.",
+      "evidence_basis": "quantity_semantics",
+      "sanitation_status": "numeric_domain_deployed_20260906150000",
+      "mechanical_family_approved": false,
+      "remaining_gate": "family_semantics_and_interfaces_review"
+    },
+    {
+      "definition_id": "8fe2160f-74a7-46c7-8e5c-90427a91429b",
+      "key": "quick_link_included",
+      "current_data_type": "boolean",
+      "templates": [
+        "chain"
+      ],
+      "review_group": "preserve_boolean_with_prerequisites",
+      "finding_and_disposition": "Conservar Sí/No/desconocido; aplicar sólo después de identificar objeto/construcción y fuente. False no equivale a ausencia. Revisar requisitos por plantilla y por miembro de kit.",
+      "evidence_basis": "three_valued_contract",
+      "sanitation_status": "pending",
+      "mechanical_family_approved": false
+    },
+    {
+      "definition_id": "58b593b8-edb8-47a2-852d-4a40ff247543",
+      "key": "reach_adjust",
+      "current_data_type": "boolean",
+      "templates": [
+        "brake_caliper",
+        "brake_lever",
+        "hydraulic_disc_brake",
+        "mechanical_disc_brake",
+        "rim_brake"
+      ],
+      "review_group": "preserve_boolean_with_prerequisites",
+      "finding_and_disposition": "Conservar Sí/No/desconocido; aplicar sólo después de identificar objeto/construcción y fuente. False no equivale a ausencia. Revisar requisitos por plantilla y por miembro de kit.",
+      "evidence_basis": "three_valued_contract",
+      "sanitation_status": "pending",
+      "mechanical_family_approved": false
+    },
+    {
+      "definition_id": "9c5b988c-b6d6-466f-9b12-bd5d03a204ea",
+      "key": "rear_derailleur_max_teeth",
+      "current_data_type": "number",
+      "templates": [
+        "rear_derailleur"
+      ],
+      "review_group": "positive_integer_count",
+      "finding_and_disposition": "Conservar cantidad entera positiva sin topes de catálogo universales; distinguir piezas suministradas, dientes físicos y capacidad declarada.",
+      "evidence_basis": "quantity_semantics",
+      "sanitation_status": "numeric_domain_deployed_20260906150000",
+      "mechanical_family_approved": false,
+      "remaining_gate": "family_semantics_and_interfaces_review"
+    },
+    {
+      "definition_id": "f97ffe1b-d714-4a4e-bdaa-842d91fe59bb",
+      "key": "rear_derailleur_min_teeth",
+      "current_data_type": "number",
+      "templates": [
+        "rear_derailleur"
+      ],
+      "review_group": "positive_integer_count",
+      "finding_and_disposition": "Conservar cantidad entera positiva sin topes de catálogo universales; distinguir piezas suministradas, dientes físicos y capacidad declarada.",
+      "evidence_basis": "quantity_semantics",
+      "sanitation_status": "numeric_domain_deployed_20260906150000",
+      "mechanical_family_approved": false,
+      "remaining_gate": "family_semantics_and_interfaces_review"
+    },
+    {
+      "definition_id": "4d2dc06e-0eec-41b4-923a-3fb69bb534a5",
+      "key": "rear_derailleur_mount_type",
+      "current_data_type": "single_select",
+      "templates": [
+        "derailleur_hanger",
+        "rear_derailleur"
+      ],
+      "review_group": "derailleur_mount_scope",
+      "finding_and_disposition": "Distinguir interfaz del cambio y patilla, UDH/Full Mount/direct mount por revisión; extensor es otro participante y no identifica capacidad. Longitud de jaula no sustituye modelo.",
+      "evidence_basis": "K10_K13",
+      "sanitation_status": "pending",
+      "mechanical_family_approved": false
+    },
+    {
+      "definition_id": "2f8640f2-add3-44b5-8a40-a86344adbc99",
+      "key": "rear_derailleur_total_capacity_teeth",
+      "current_data_type": "number",
+      "templates": [
+        "rear_derailleur"
+      ],
+      "review_group": "nonnegative_count",
+      "finding_and_disposition": "Capacidad declarada de cambio: entero no negativo, separar límites de piñón y capacidad total; verificar receta y configuración del modelo.",
+      "evidence_basis": "K10",
+      "sanitation_status": "numeric_domain_deployed_20260906150000",
+      "mechanical_family_approved": false,
+      "remaining_gate": "family_semantics_and_interfaces_review"
+    },
+    {
+      "definition_id": "9fff510a-d1c9-415a-9b0c-f2ea7cbd1f24",
+      "key": "rim_asymmetric_offset_mm",
+      "current_data_type": "number",
+      "templates": [
+        "rim"
+      ],
+      "review_group": "signed_offset",
+      "finding_and_disposition": "Offset con signo y referencia geométrica explícita; no imponer límite universal ni convertir izquierda/derecha a magnitud positiva.",
+      "evidence_basis": "K12_K17",
+      "sanitation_status": "pending",
+      "mechanical_family_approved": false
+    },
+    {
+      "definition_id": "f0260e2f-6e73-4c4e-b5e6-2075a4985a64",
+      "key": "rim_erd_mm",
+      "current_data_type": "number",
+      "templates": [
+        "rim"
+      ],
+      "review_group": "positive_measurement",
+      "finding_and_disposition": "Conservar medida numérica; exigir valor positivo finito sin topes universales derivados del stock. Los límites de montaje pertenecen a referencia/receta, no a este escalar.",
+      "evidence_basis": "quantity_semantics",
+      "sanitation_status": "numeric_domain_deployed_20260906150000",
+      "mechanical_family_approved": false,
+      "remaining_gate": "family_semantics_and_interfaces_review"
+    },
+    {
+      "definition_id": "45853d96-5284-4d91-a715-20132cac25da",
+      "key": "rim_etrto",
+      "current_data_type": "text",
+      "templates": [
+        "rim"
+      ],
+      "review_group": "iso_size_tuple",
+      "finding_and_disposition": "Conservar marcación literal y descomponer BSD/ancho según objeto; nominal comercial no aprueba fitment. Cámaras necesitan filas BSD+rango por declaración, sin producto cartesiano.",
+      "evidence_basis": "K14",
+      "sanitation_status": "pending",
+      "mechanical_family_approved": false
+    },
+    {
+      "definition_id": "66d43233-31d9-42f1-b9d6-1db9741abfee",
+      "key": "rim_external_width_mm",
+      "current_data_type": "number",
+      "templates": [
+        "rim"
+      ],
+      "review_group": "positive_measurement",
+      "finding_and_disposition": "Conservar medida numérica; exigir valor positivo finito sin topes universales derivados del stock. Los límites de montaje pertenecen a referencia/receta, no a este escalar.",
+      "evidence_basis": "quantity_semantics",
+      "sanitation_status": "numeric_domain_deployed_20260906150000",
+      "mechanical_family_approved": false,
+      "remaining_gate": "family_semantics_and_interfaces_review"
+    },
+    {
+      "definition_id": "82174397-0163-4b0e-971d-5309b7887e3d",
+      "key": "rim_eyelet_type",
+      "current_data_type": "single_select",
+      "templates": [
+        "rim"
+      ],
+      "review_group": "rim_construction",
+      "finding_and_disposition": "Conservar propiedad intrínseca con fuente; añadir interfaz talón/freno y límites de montaje donde faltan. No deducir tubeless, presión ni aptitud por material o cantidad de paredes.",
+      "evidence_basis": "K14_K17",
+      "sanitation_status": "pending",
+      "mechanical_family_approved": false
+    },
+    {
+      "definition_id": "4d51a71d-0e4b-4b2a-add8-4e5622199fe7",
+      "key": "rim_internal_width_mm",
+      "current_data_type": "number",
+      "templates": [
+        "rim"
+      ],
+      "review_group": "positive_measurement",
+      "finding_and_disposition": "Conservar medida numérica; exigir valor positivo finito sin topes universales derivados del stock. Los límites de montaje pertenecen a referencia/receta, no a este escalar.",
+      "evidence_basis": "quantity_semantics",
+      "sanitation_status": "numeric_domain_deployed_20260906150000",
+      "mechanical_family_approved": false,
+      "remaining_gate": "family_semantics_and_interfaces_review"
+    },
+    {
+      "definition_id": "26e16f45-f52f-4473-9fcc-2feab544c267",
+      "key": "rim_material",
+      "current_data_type": "single_select",
+      "templates": [
+        "rim"
+      ],
+      "review_group": "rim_construction",
+      "finding_and_disposition": "Conservar propiedad intrínseca con fuente; añadir interfaz talón/freno y límites de montaje donde faltan. No deducir tubeless, presión ni aptitud por material o cantidad de paredes.",
+      "evidence_basis": "K14_K17",
+      "sanitation_status": "pending",
+      "mechanical_family_approved": false
+    },
+    {
+      "definition_id": "c1ccaaf4-a33e-4c53-abc8-7979c538c0bc",
+      "key": "rim_symmetry",
+      "current_data_type": "single_select",
+      "templates": [
+        "rim"
+      ],
+      "review_group": "rim_construction",
+      "finding_and_disposition": "Conservar propiedad intrínseca con fuente; añadir interfaz talón/freno y límites de montaje donde faltan. No deducir tubeless, presión ni aptitud por material o cantidad de paredes.",
+      "evidence_basis": "K14_K17",
+      "sanitation_status": "pending",
+      "mechanical_family_approved": false
+    },
+    {
+      "definition_id": "3cb6ba45-d125-4c1b-ba83-46a8a122729a",
+      "key": "rim_tubeless_ready",
+      "current_data_type": "boolean",
+      "templates": [
+        "rim"
+      ],
+      "review_group": "preserve_boolean_with_prerequisites",
+      "finding_and_disposition": "Conservar Sí/No/desconocido; aplicar sólo después de identificar objeto/construcción y fuente. False no equivale a ausencia. Revisar requisitos por plantilla y por miembro de kit.",
+      "evidence_basis": "three_valued_contract",
+      "sanitation_status": "pending",
+      "mechanical_family_approved": false
+    },
+    {
+      "definition_id": "2fb6e1ff-ea7f-41db-94d0-d4a9837e807a",
+      "key": "rim_wall_type",
+      "current_data_type": "single_select",
+      "templates": [
+        "rim"
+      ],
+      "review_group": "rim_construction",
+      "finding_and_disposition": "Conservar propiedad intrínseca con fuente; añadir interfaz talón/freno y límites de montaje donde faltan. No deducir tubeless, presión ni aptitud por material o cantidad de paredes.",
+      "evidence_basis": "K14_K17",
+      "sanitation_status": "pending",
+      "mechanical_family_approved": false
+    },
+    {
+      "definition_id": "221402c1-3400-496d-ac3a-93937fc411ca",
+      "key": "rotor_diameter_mm",
+      "current_data_type": "single_select",
+      "templates": [
+        "brake_caliper",
+        "hydraulic_disc_brake",
+        "mechanical_disc_brake",
+        "rotor"
+      ],
+      "review_group": "rotor_diameter_recipe_mixed",
+      "finding_and_disposition": "Diámetro físico singular y receta delantero/trasero o adaptador están mezclados. Crear medida positiva y relaciones de tamaño por rol; conservar etiquetas históricas sin convertir 160/140 a un diámetro.",
+      "evidence_basis": "K24",
+      "sanitation_status": "pending",
+      "mechanical_family_approved": false
+    },
+    {
+      "definition_id": "dd997dab-0448-482b-b998-8604f2a5ec7c",
+      "key": "rotor_floating",
+      "current_data_type": "boolean",
+      "templates": [
+        "rotor"
+      ],
+      "review_group": "preserve_boolean_with_prerequisites",
+      "finding_and_disposition": "Conservar Sí/No/desconocido; aplicar sólo después de identificar objeto/construcción y fuente. False no equivale a ausencia. Revisar requisitos por plantilla y por miembro de kit.",
+      "evidence_basis": "three_valued_contract",
+      "sanitation_status": "pending",
+      "mechanical_family_approved": false
+    },
+    {
+      "definition_id": "a59c8d2a-cfc8-4e0b-839c-d7ce69bdb2ea",
+      "key": "rotor_material",
+      "current_data_type": "single_select",
+      "templates": [
+        "rotor"
+      ],
+      "review_group": "rotor_intrinsic",
+      "finding_and_disposition": "Conservar material/interfaz con fuente; posición universal, espesor, pista y límites del cáliper no se infieren del montaje de maza.",
+      "evidence_basis": "K24",
+      "sanitation_status": "pending",
+      "mechanical_family_approved": false
+    },
+    {
+      "definition_id": "ef1c90f3-20ad-4613-b5ed-866f64ccb15a",
+      "key": "rotor_mount_type",
+      "current_data_type": "single_select",
+      "templates": [
+        "rotor"
+      ],
+      "review_group": "rotor_intrinsic",
+      "finding_and_disposition": "Conservar material/interfaz con fuente; posición universal, espesor, pista y límites del cáliper no se infieren del montaje de maza.",
+      "evidence_basis": "K24",
+      "sanitation_status": "pending",
+      "mechanical_family_approved": false
+    },
+    {
+      "definition_id": "183e12ff-fef7-4172-8390-f2df4020fb43",
+      "key": "rotor_thickness_mm",
+      "current_data_type": "number",
+      "templates": [
+        "rotor"
+      ],
+      "review_group": "positive_measurement",
+      "finding_and_disposition": "Conservar medida numérica; exigir valor positivo finito sin topes universales derivados del stock. Los límites de montaje pertenecen a referencia/receta, no a este escalar.",
+      "evidence_basis": "quantity_semantics",
+      "sanitation_status": "numeric_domain_deployed_20260906150000",
+      "mechanical_family_approved": false,
+      "remaining_gate": "family_semantics_and_interfaces_review"
+    },
+    {
+      "definition_id": "653ad058-52fa-481a-9db9-87ca35a151db",
+      "key": "sealant_volume_ml",
+      "current_data_type": "number",
+      "templates": [
+        "tubeless_consumable"
+      ],
+      "review_group": "positive_measurement",
+      "finding_and_disposition": "Conservar medida numérica; exigir valor positivo finito sin topes universales derivados del stock. Los límites de montaje pertenecen a referencia/receta, no a este escalar.",
+      "evidence_basis": "quantity_semantics",
+      "sanitation_status": "numeric_domain_deployed_20260906150000",
+      "mechanical_family_approved": false,
+      "remaining_gate": "family_semantics_and_interfaces_review"
+    },
+    {
+      "definition_id": "16277f40-31d2-460b-bd2d-be199a289282",
+      "key": "shift_actuation_family",
+      "current_data_type": "single_select",
+      "templates": [
+        "front_derailleur",
+        "rear_derailleur",
+        "shifter"
+      ],
+      "review_group": "legacy_drivetrain_summary",
+      "finding_and_disposition": "Conservar histórico explícito; no usar marca/ecosistema/perfil genérico para aprobar montaje. Relación exacta modelo/generación/velocidades/condiciones, con fuente por fila.",
+      "evidence_basis": "K01_K13",
+      "sanitation_status": "pending",
+      "mechanical_family_approved": false
+    },
+    {
+      "definition_id": "a40d3beb-82ae-4b55-82f3-db9ee9ab3610",
+      "key": "shifter_position",
+      "current_data_type": "single_select",
+      "templates": [
+        "shifter"
+      ],
+      "review_group": "position_per_member",
+      "finding_and_disposition": "Un par necesita un miembro por lado/función con sus interfaces. Universal sólo si la declaración lo respalda; no usarlo como desconocido.",
+      "evidence_basis": "kit_identity",
+      "sanitation_status": "pending",
+      "mechanical_family_approved": false
+    },
+    {
+      "definition_id": "b25c2647-f09b-4a05-84e9-2f18d8a6dc1c",
+      "key": "single_cog_teeth",
+      "current_data_type": "number",
+      "templates": [
+        "fixed_cog"
+      ],
+      "review_group": "positive_integer_count",
+      "finding_and_disposition": "Conservar cantidad entera positiva sin topes de catálogo universales; distinguir piezas suministradas, dientes físicos y capacidad declarada.",
+      "evidence_basis": "quantity_semantics",
+      "sanitation_status": "numeric_domain_deployed_20260906150000",
+      "mechanical_family_approved": false,
+      "remaining_gate": "family_semantics_and_interfaces_review"
+    },
+    {
+      "definition_id": "417b4009-eedf-4e58-81a7-c47c638c24f5",
+      "key": "smallest_cog_teeth",
+      "current_data_type": "number",
+      "templates": [
+        "cassette",
+        "freewheel"
+      ],
+      "review_group": "positive_integer_count",
+      "finding_and_disposition": "Conservar cantidad entera positiva sin topes de catálogo universales; distinguir piezas suministradas, dientes físicos y capacidad declarada.",
+      "evidence_basis": "quantity_semantics",
+      "sanitation_status": "numeric_domain_deployed_20260906150000",
+      "mechanical_family_approved": false,
+      "remaining_gate": "family_semantics_and_interfaces_review"
+    },
+    {
+      "definition_id": "a8a27e19-96a7-4034-baea-7af9f332ba24",
+      "key": "spacer_thickness_mm",
+      "current_data_type": "number",
+      "templates": [
+        "cassette_spacer"
+      ],
+      "review_group": "positive_measurement",
+      "finding_and_disposition": "Conservar medida numérica; exigir valor positivo finito sin topes universales derivados del stock. Los límites de montaje pertenecen a referencia/receta, no a este escalar.",
+      "evidence_basis": "quantity_semantics",
+      "sanitation_status": "numeric_domain_deployed_20260906150000",
+      "mechanical_family_approved": false,
+      "remaining_gate": "family_semantics_and_interfaces_review"
+    },
+    {
+      "definition_id": "4f055961-6c16-430b-a4e2-e6b09dc1cccc",
+      "key": "spec_evidence_source",
+      "current_data_type": "text",
+      "templates": [
+        "bearing",
+        "bottom_bracket",
+        "bottom_bracket_axle",
+        "bottom_bracket_bearing",
+        "bottom_bracket_cup",
+        "brake_caliper",
+        "brake_lever",
+        "brake_pad",
+        "cassette",
+        "cassette_spacer",
+        "chain",
+        "chain_guide",
+        "chain_link",
+        "chainring",
+        "crank_arm",
+        "crankset",
+        "derailleur_hanger",
+        "derailleur_pulley",
+        "drivetrain_kit",
+        "fixed_cog",
+        "freewheel",
+        "front_derailleur",
+        "headset",
+        "hub",
+        "hydraulic_disc_brake",
+        "mechanical_disc_brake",
+        "rear_derailleur",
+        "rim",
+        "rim_brake",
+        "rim_strip",
+        "rotor",
+        "shifter",
+        "spoke",
+        "tire",
+        "tube",
+        "tubeless_consumable",
+        "tubeless_valve"
+      ],
+      "review_group": "provenance_note",
+      "finding_and_disposition": "Conservar nota como evidencia complementaria; no sustituye fuente/cita/alcance/autor por hecho ni convierte inferido en verificado.",
+      "evidence_basis": "provenance_contract",
+      "sanitation_status": "pending",
+      "mechanical_family_approved": false
+    },
+    {
+      "definition_id": "205c58cb-63ca-4e3e-9c7b-d411dce390dd",
+      "key": "spindle_diameter_mm",
+      "current_data_type": "number",
+      "templates": [
+        "bottom_bracket",
+        "bottom_bracket_axle",
+        "bottom_bracket_bearing"
+      ],
+      "review_group": "positive_measurement",
+      "finding_and_disposition": "Conservar medida numérica; exigir valor positivo finito sin topes universales derivados del stock. Los límites de montaje pertenecen a referencia/receta, no a este escalar.",
+      "evidence_basis": "quantity_semantics",
+      "sanitation_status": "numeric_domain_deployed_20260906150000",
+      "mechanical_family_approved": false,
+      "remaining_gate": "family_semantics_and_interfaces_review"
+    },
+    {
+      "definition_id": "660b0e90-180d-44a1-938c-f304a9358094",
+      "key": "spindle_interface",
+      "current_data_type": "single_select",
+      "templates": [
+        "bottom_bracket",
+        "bottom_bracket_axle",
+        "crank_arm",
+        "crankset",
+        "drivetrain_kit"
+      ],
+      "review_group": "spindle_exact_generation",
+      "finding_and_disposition": "Conservar separación eje presente/interfaz aceptada, pero ampliar identidad por generación y geometría; mismo diámetro no aprueba montaje. JIS/ISO, Octalink y modelos requieren alcance.",
+      "evidence_basis": "K18",
+      "sanitation_status": "pending",
+      "mechanical_family_approved": false
+    },
+    {
+      "definition_id": "9aaa1273-6fd9-468b-b295-f1f699d1259e",
+      "key": "spindle_interface_accepted",
+      "current_data_type": "multi_select",
+      "templates": [
+        "bottom_bracket",
+        "bottom_bracket_cup"
+      ],
+      "review_group": "spindle_exact_generation",
+      "finding_and_disposition": "Conservar separación eje presente/interfaz aceptada, pero ampliar identidad por generación y geometría; mismo diámetro no aprueba montaje. JIS/ISO, Octalink y modelos requieren alcance.",
+      "evidence_basis": "K18",
+      "sanitation_status": "pending",
+      "mechanical_family_approved": false
+    },
+    {
+      "definition_id": "9b8f6fa4-de08-4f4e-988d-b57345b3e9d6",
+      "key": "spindle_length_mm",
+      "current_data_type": "number",
+      "templates": [
+        "bottom_bracket",
+        "bottom_bracket_axle"
+      ],
+      "review_group": "positive_measurement",
+      "finding_and_disposition": "Conservar medida numérica; exigir valor positivo finito sin topes universales derivados del stock. Los límites de montaje pertenecen a referencia/receta, no a este escalar.",
+      "evidence_basis": "quantity_semantics",
+      "sanitation_status": "numeric_domain_deployed_20260906150000",
+      "mechanical_family_approved": false,
+      "remaining_gate": "family_semantics_and_interfaces_review"
+    },
+    {
+      "definition_id": "761cda99-daaa-4405-907e-463e0b965ec4",
+      "key": "spoke_bend_type",
+      "current_data_type": "single_select",
+      "templates": [
+        "spoke"
+      ],
+      "review_group": "spoke_geometry",
+      "finding_and_disposition": "Conservar J/recto y perfil, pero galga/texto mixtos necesitan diámetros por tramo, rosca y modelo. Longitud por rueda depende de geometría real, no del aro comercial.",
+      "evidence_basis": "K17",
+      "sanitation_status": "pending",
+      "mechanical_family_approved": false
+    },
+    {
+      "definition_id": "a34c6a16-d587-44d6-bf88-9f3dc10ec903",
+      "key": "spoke_gauge",
+      "current_data_type": "single_select",
+      "templates": [
+        "spoke"
+      ],
+      "review_group": "spoke_geometry",
+      "finding_and_disposition": "Conservar J/recto y perfil, pero galga/texto mixtos necesitan diámetros por tramo, rosca y modelo. Longitud por rueda depende de geometría real, no del aro comercial.",
+      "evidence_basis": "K17",
+      "sanitation_status": "pending",
+      "mechanical_family_approved": false
+    },
+    {
+      "definition_id": "a89f7f84-c80d-449b-9c17-996016b2aa7a",
+      "key": "spoke_holes",
+      "current_data_type": "single_select",
+      "templates": [
+        "hub",
+        "rim"
+      ],
+      "review_group": "open_numeric_vocabulary",
+      "finding_and_disposition": "Lista cerrada mezcla medidas/conteos con presentación o es incompleta. Crear cantidad tipada extensible y preservar opción original durante migración; datos de eje/OLD y diámetro no son equivalentes.",
+      "evidence_basis": "quantity_semantics",
+      "sanitation_status": "pending",
+      "mechanical_family_approved": false
+    },
+    {
+      "definition_id": "df018659-db16-4ecf-ada9-1bba788ecd8f",
+      "key": "spoke_length_mm",
+      "current_data_type": "number",
+      "templates": [
+        "spoke"
+      ],
+      "review_group": "positive_measurement",
+      "finding_and_disposition": "Conservar medida numérica; exigir valor positivo finito sin topes universales derivados del stock. Los límites de montaje pertenecen a referencia/receta, no a este escalar.",
+      "evidence_basis": "quantity_semantics",
+      "sanitation_status": "numeric_domain_deployed_20260906150000",
+      "mechanical_family_approved": false,
+      "remaining_gate": "family_semantics_and_interfaces_review"
+    },
+    {
+      "definition_id": "f38b08bc-7a09-4153-a19f-125250d75101",
+      "key": "steerer_type",
+      "current_data_type": "single_select",
+      "templates": [
+        "headset"
+      ],
+      "review_group": "headset_upper_lower",
+      "finding_and_disposition": "Dirección requiere superior e inferior con SHIS, asiento y espiga por extremo; integrado/tapered/rosca mezclan ejes. No colapsar dos códigos a una opción plana.",
+      "evidence_basis": "K19",
+      "sanitation_status": "pending",
+      "mechanical_family_approved": false
+    },
+    {
+      "definition_id": "71d897da-9f44-4f02-9922-adfe77466930",
+      "key": "tire_bead_type",
+      "current_data_type": "single_select",
+      "templates": [
+        "tire"
+      ],
+      "review_group": "rolling_construction",
+      "finding_and_disposition": "Separar neumático con talón/tubular/sólido y material de cámara; alambre/plegable es subtipo del talón. Sólo con construcción aplicable se habilita cámara/tubeless y reparación química.",
+      "evidence_basis": "K14_K16",
+      "sanitation_status": "pending",
+      "mechanical_family_approved": false
+    },
+    {
+      "definition_id": "6338ca65-e81f-45c4-be71-08da24254a23",
+      "key": "tire_etrto",
+      "current_data_type": "text",
+      "templates": [
+        "tire"
+      ],
+      "review_group": "iso_size_tuple",
+      "finding_and_disposition": "Conservar marcación literal y descomponer BSD/ancho según objeto; nominal comercial no aprueba fitment. Cámaras necesitan filas BSD+rango por declaración, sin producto cartesiano.",
+      "evidence_basis": "K14",
+      "sanitation_status": "pending",
+      "mechanical_family_approved": false
+    },
+    {
+      "definition_id": "406783d3-9376-4167-be05-c01ffdc0297d",
+      "key": "tire_tubeless_ready",
+      "current_data_type": "boolean",
+      "templates": [
+        "tire"
+      ],
+      "review_group": "preserve_boolean_with_prerequisites",
+      "finding_and_disposition": "Conservar Sí/No/desconocido; aplicar sólo después de identificar objeto/construcción y fuente. False no equivale a ausencia. Revisar requisitos por plantilla y por miembro de kit.",
+      "evidence_basis": "three_valued_contract",
+      "sanitation_status": "pending",
+      "mechanical_family_approved": false
+    },
+    {
+      "definition_id": "74479bab-8d64-4b73-acd3-a75d3dfaf83e",
+      "key": "tire_width_in",
+      "current_data_type": "number",
+      "templates": [
+        "tire"
+      ],
+      "review_group": "positive_measurement",
+      "finding_and_disposition": "Conservar medida numérica; exigir valor positivo finito sin topes universales derivados del stock. Los límites de montaje pertenecen a referencia/receta, no a este escalar.",
+      "evidence_basis": "quantity_semantics",
+      "sanitation_status": "numeric_domain_deployed_20260906150000",
+      "mechanical_family_approved": false,
+      "remaining_gate": "family_semantics_and_interfaces_review"
+    },
+    {
+      "definition_id": "12c6003b-86ba-4c1a-bf8a-434e4846afde",
+      "key": "tire_width_mm",
+      "current_data_type": "number",
+      "templates": [
+        "tire"
+      ],
+      "review_group": "positive_measurement",
+      "finding_and_disposition": "Conservar medida numérica; exigir valor positivo finito sin topes universales derivados del stock. Los límites de montaje pertenecen a referencia/receta, no a este escalar.",
+      "evidence_basis": "quantity_semantics",
+      "sanitation_status": "numeric_domain_deployed_20260906150000",
+      "mechanical_family_approved": false,
+      "remaining_gate": "family_semantics_and_interfaces_review"
+    },
+    {
+      "definition_id": "d27e19a6-1746-4239-bea6-82f1e43ff6f3",
+      "key": "tool_size_mm",
+      "current_data_type": "text",
+      "templates": [
+        "mechanical_disc_brake",
+        "rim_brake",
+        "rotor"
+      ],
+      "review_group": "exact_reference_text",
+      "finding_and_disposition": "Conservar identificador o texto observado; no evaluar compatibilidad por coincidencia aproximada ni convertir uso/objetivo en identidad del objeto. Añadir relación exacta con fuente.",
+      "evidence_basis": "identity_matching_contract",
+      "sanitation_status": "pending",
+      "mechanical_family_approved": false
+    },
+    {
+      "definition_id": "8ab6df85-92b9-4cb8-b892-53163cd6be02",
+      "key": "tube_has_sealant",
+      "current_data_type": "boolean",
+      "templates": [
+        "tube"
+      ],
+      "review_group": "preserve_boolean_with_prerequisites",
+      "finding_and_disposition": "Conservar Sí/No/desconocido; aplicar sólo después de identificar objeto/construcción y fuente. False no equivale a ausencia. Revisar requisitos por plantilla y por miembro de kit.",
+      "evidence_basis": "three_valued_contract",
+      "sanitation_status": "pending",
+      "mechanical_family_approved": false
+    },
+    {
+      "definition_id": "cea80d47-25fb-4187-84c2-4f1cdcedd10c",
+      "key": "tube_material",
+      "current_data_type": "single_select",
+      "templates": [
+        "tube"
+      ],
+      "review_group": "rolling_construction",
+      "finding_and_disposition": "Separar neumático con talón/tubular/sólido y material de cámara; alambre/plegable es subtipo del talón. Sólo con construcción aplicable se habilita cámara/tubeless y reparación química.",
+      "evidence_basis": "K14_K16",
+      "sanitation_status": "pending",
+      "mechanical_family_approved": false
+    },
+    {
+      "definition_id": "42c2d225-69e7-4f1c-b80f-4646866593cb",
+      "key": "tube_width_max_in",
+      "current_data_type": "number",
+      "templates": [
+        "tube"
+      ],
+      "review_group": "positive_measurement",
+      "finding_and_disposition": "Conservar medida numérica; exigir valor positivo finito sin topes universales derivados del stock. Los límites de montaje pertenecen a referencia/receta, no a este escalar.",
+      "evidence_basis": "quantity_semantics",
+      "sanitation_status": "numeric_domain_deployed_20260906150000",
+      "mechanical_family_approved": false,
+      "remaining_gate": "family_semantics_and_interfaces_review"
+    },
+    {
+      "definition_id": "7d9c4cbc-4601-4def-8ba5-d6151135f6ce",
+      "key": "tube_width_max_mm",
+      "current_data_type": "number",
+      "templates": [
+        "tube"
+      ],
+      "review_group": "positive_measurement",
+      "finding_and_disposition": "Conservar medida numérica; exigir valor positivo finito sin topes universales derivados del stock. Los límites de montaje pertenecen a referencia/receta, no a este escalar.",
+      "evidence_basis": "quantity_semantics",
+      "sanitation_status": "numeric_domain_deployed_20260906150000",
+      "mechanical_family_approved": false,
+      "remaining_gate": "family_semantics_and_interfaces_review"
+    },
+    {
+      "definition_id": "4e39ebc4-00e0-4816-95df-42d7e49a5e24",
+      "key": "tube_width_min_in",
+      "current_data_type": "number",
+      "templates": [
+        "tube"
+      ],
+      "review_group": "positive_measurement",
+      "finding_and_disposition": "Conservar medida numérica; exigir valor positivo finito sin topes universales derivados del stock. Los límites de montaje pertenecen a referencia/receta, no a este escalar.",
+      "evidence_basis": "quantity_semantics",
+      "sanitation_status": "numeric_domain_deployed_20260906150000",
+      "mechanical_family_approved": false,
+      "remaining_gate": "family_semantics_and_interfaces_review"
+    },
+    {
+      "definition_id": "0efa345d-7dbd-407d-b723-cc1ea220b243",
+      "key": "tube_width_min_mm",
+      "current_data_type": "number",
+      "templates": [
+        "tube"
+      ],
+      "review_group": "positive_measurement",
+      "finding_and_disposition": "Conservar medida numérica; exigir valor positivo finito sin topes universales derivados del stock. Los límites de montaje pertenecen a referencia/receta, no a este escalar.",
+      "evidence_basis": "quantity_semantics",
+      "sanitation_status": "numeric_domain_deployed_20260906150000",
+      "mechanical_family_approved": false,
+      "remaining_gate": "family_semantics_and_interfaces_review"
+    },
+    {
+      "definition_id": "2024bc97-ffcb-44c0-8c8c-734c633a26a4",
+      "key": "tubeless_status",
+      "current_data_type": "single_select",
+      "templates": [],
+      "review_group": "workshop_only",
+      "finding_and_disposition": "Conservar en su dominio de taller; no propagar condición/desgaste de una unidad a todas las unidades nuevas del producto.",
+      "evidence_basis": "domain_identity_split",
+      "sanitation_status": "out_of_product_scope",
+      "mechanical_family_approved": false
+    },
+    {
+      "definition_id": "5be8a611-77b8-4f9e-9c3e-a083ef4ea897",
+      "key": "valve_length_mm",
+      "current_data_type": "single_select",
+      "templates": [
+        "tube",
+        "tubeless_valve"
+      ],
+      "review_group": "open_numeric_vocabulary",
+      "finding_and_disposition": "Lista cerrada mezcla medidas/conteos con presentación o es incompleta. Crear cantidad tipada extensible y preservar opción original durante migración; datos de eje/OLD y diámetro no son equivalentes.",
+      "evidence_basis": "quantity_semantics",
+      "sanitation_status": "pending",
+      "mechanical_family_approved": false
+    },
+    {
+      "definition_id": "e078572e-fe3a-4763-ab7c-fe014e09aa26",
+      "key": "valve_type",
+      "current_data_type": "single_select",
+      "templates": [
+        "rim",
+        "rim_strip",
+        "tube",
+        "tubeless_valve"
+      ],
+      "review_group": "valve_interface",
+      "finding_and_disposition": "Conservar familia de válvula; distinguir cuerpo, obús, alargador, adaptador y base tubeless. No aplicar longitud de cuerpo al obús ni asumir ajuste a llanta por Presta.",
+      "evidence_basis": "K15_K16",
+      "sanitation_status": "pending",
+      "mechanical_family_approved": false
+    },
+    {
+      "definition_id": "92f65083-5358-4c03-bd8d-be27246c5b59",
+      "key": "wear_percent",
+      "current_data_type": "number",
+      "templates": [],
+      "review_group": "workshop_only",
+      "finding_and_disposition": "Conservar en su dominio de taller; no propagar condición/desgaste de una unidad a todas las unidades nuevas del producto.",
+      "evidence_basis": "domain_identity_split",
+      "sanitation_status": "out_of_product_scope",
+      "mechanical_family_approved": false
+    },
+    {
+      "definition_id": "3a351166-ad11-4c87-a075-95e2c13527ab",
+      "key": "wheel_position",
+      "current_data_type": "single_select",
+      "templates": [
+        "hub"
+      ],
+      "review_group": "position_per_member",
+      "finding_and_disposition": "Un par necesita un miembro por lado/función con sus interfaces. Universal sólo si la declaración lo respalda; no usarlo como desconocido.",
+      "evidence_basis": "kit_identity",
+      "sanitation_status": "pending",
+      "mechanical_family_approved": false
+    },
+    {
+      "definition_id": "a91413e3-81ca-40cb-baf3-c6a10340e824",
+      "key": "wheel_size",
+      "current_data_type": "single_select",
+      "templates": [
+        "rim",
+        "rim_strip",
+        "tire",
+        "tube"
+      ],
+      "review_group": "iso_size_tuple",
+      "finding_and_disposition": "Conservar marcación literal y descomponer BSD/ancho según objeto; nominal comercial no aprueba fitment. Cámaras necesitan filas BSD+rango por declaración, sin producto cartesiano.",
+      "evidence_basis": "K14",
+      "sanitation_status": "pending",
+      "mechanical_family_approved": false
+    }
+  ],
+  "status_note": "35 numeric domains deployed and read back; all family-level mechanical approval flags remain false."
+}

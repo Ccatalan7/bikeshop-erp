@@ -1,0 +1,948 @@
+{
+  "cases": [
+    {
+      "id": "sp_missing_evidence_is_pending",
+      "template": "spoke",
+      "values": {
+        "spoke_head_interface": "J-Bend"
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "expected_issue_subset": [
+        {
+          "code": "prerequisite",
+          "field": "spoke_head_interface",
+          "blocking": false
+        }
+      ],
+      "expected_sql_issue_subset": [
+        {
+          "code": "prerequisite_missing",
+          "field": "spoke_head_interface",
+          "blocking": false
+        }
+      ],
+      "expected_sql_blocking": []
+    },
+    {
+      "id": "sp_round_wire",
+      "template": "spoke",
+      "values": {
+        "spoke_wire_sections": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "position": "1",
+                "section_identity": "Sección 1",
+                "shape": "Redonda",
+                "source_url": "https://example.invalid/synthetic",
+                "diameter_mm": "2.0",
+                "source_document": "Synthetic source document"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "expected_sql_blocking": []
+    },
+    {
+      "id": "sp_aero_wire",
+      "template": "spoke",
+      "values": {
+        "spoke_wire_sections": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "position": "1",
+                "section_identity": "Sección 1",
+                "shape": "Plana / aero",
+                "source_url": "https://example.invalid/synthetic",
+                "width_mm": "2.3",
+                "thickness_mm": "0.9",
+                "source_document": "Synthetic source document"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "expected_sql_blocking": []
+    },
+    {
+      "id": "sp_elliptical_wire_is_not_forced_to_be_flat",
+      "template": "spoke",
+      "values": {
+        "spoke_wire_sections": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "position": "1",
+                "section_identity": "Sección 1",
+                "shape": "Elíptica / ovalada",
+                "source_url": "https://example.invalid/synthetic",
+                "width_mm": "1.8",
+                "thickness_mm": "1.2",
+                "source_document": "Synthetic source document"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [
+        "https://www.sheldonbrown.com/wheelbuild.html"
+      ],
+      "expected_sql_blocking": []
+    },
+    {
+      "id": "sp_identified_package_without_public_url",
+      "template": "spoke",
+      "values": {
+        "spoke_wire_sections": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "position": "1",
+                "section_identity": "Sección 1",
+                "shape": "Redonda",
+                "diameter_mm": "2.0",
+                "source_document": "Envase identificado: evidencia adjunta"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "expected_sql_blocking": []
+    },
+    {
+      "id": "sp_package_content_without_public_url",
+      "template": "spoke",
+      "values": {
+        "nipples_included": true,
+        "spoke_supplied_nipples": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "component_identity": "Synthetic nipple A",
+                "quantity": "32",
+                "source_document": "Foto del envase, evidencia adjunta"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "expected_sql_blocking": []
+    },
+    {
+      "id": "sp_a_url_is_still_a_url",
+      "template": "spoke",
+      "values": {
+        "spoke_wire_sections": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "position": "1",
+                "section_identity": "Sección 1",
+                "shape": "Redonda",
+                "source_url": "Envase sin URL",
+                "diameter_mm": "2.0",
+                "source_document": "Synthetic source document"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [
+        {
+          "code": "row_shape",
+          "field": "spoke_wire_sections"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "expected_sql_blocking": [
+        {
+          "code": "row_shape",
+          "field": "spoke_wire_sections"
+        }
+      ]
+    },
+    {
+      "id": "sp_oem_elbow_is_not_forced_to_ninety",
+      "template": "spoke",
+      "values": {
+        "spoke_head_interface": "J-Bend",
+        "spoke_head_elbow_angle_deg": "95",
+        "spec_evidence_source": "https://cnspoke.com/wp-content/uploads/cnSPOKE_Catalogue_v24_web.pdf"
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [
+        "https://cnspoke.com/wp-content/uploads/cnSPOKE_Catalogue_v24_web.pdf"
+      ],
+      "expected_sql_blocking": []
+    },
+    {
+      "id": "sp_another_oem_elbow_angle",
+      "template": "spoke",
+      "values": {
+        "spoke_head_interface": "J-Bend",
+        "spoke_head_elbow_angle_deg": "100",
+        "spec_evidence_source": "https://cnspoke.com/wp-content/uploads/cnSPOKE_Catalogue_v24_web.pdf"
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [
+        "https://cnspoke.com/wp-content/uploads/cnSPOKE_Catalogue_v24_web.pdf"
+      ],
+      "expected_sql_blocking": []
+    },
+    {
+      "id": "sp_straight_pull_cannot_claim_an_elbow",
+      "template": "spoke",
+      "values": {
+        "spoke_head_interface": "Straight Pull",
+        "spoke_head_elbow_angle_deg": "95",
+        "spec_evidence_source": "https://example.invalid/synthetic"
+      },
+      "expected_blocking": [
+        {
+          "code": "field_applicability",
+          "field": "spoke_head_elbow_angle_deg"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "expected_sql_blocking": [
+        {
+          "code": "field_applicability",
+          "field": "spoke_head_elbow_angle_deg"
+        }
+      ]
+    },
+    {
+      "id": "sp_thread_nominal_and_length_have_their_own_meaning",
+      "template": "spoke",
+      "values": {
+        "spoke_nipple_thread_present": true,
+        "spoke_thread_nominal_mm": "2.0",
+        "spoke_thread_length_mm": "9.5",
+        "spoke_thread_major_diameter_mm": "2.3",
+        "spec_evidence_source": "https://example.invalid/synthetic"
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "expected_sql_blocking": []
+    },
+    {
+      "id": "sp_oem_nominal_does_not_require_an_unpublished_thread_name",
+      "template": "spoke",
+      "values": {
+        "spoke_nipple_thread_present": true,
+        "spoke_thread_nominal_mm": "2.0",
+        "spoke_thread_length_mm": "9.5",
+        "spec_evidence_source": "https://cnspoke.com/wp-content/uploads/cnSPOKE_Catalogue_v24_web.pdf"
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [
+        "https://cnspoke.com/wp-content/uploads/cnSPOKE_Catalogue_v24_web.pdf"
+      ],
+      "expected_sql_blocking": [],
+      "forbidden_issue_fields": [
+        "spoke_thread_standard"
+      ]
+    },
+    {
+      "id": "sp_no_thread_disallows_nominal_and_length",
+      "template": "spoke",
+      "values": {
+        "spoke_nipple_thread_present": false,
+        "spoke_thread_nominal_mm": "2.0",
+        "spoke_thread_length_mm": "9.5",
+        "spec_evidence_source": "https://example.invalid/synthetic"
+      },
+      "expected_blocking": [
+        {
+          "code": "field_applicability",
+          "field": "spoke_thread_nominal_mm"
+        },
+        {
+          "code": "field_applicability",
+          "field": "spoke_thread_length_mm"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "expected_sql_blocking": [
+        {
+          "code": "field_applicability",
+          "field": "spoke_thread_length_mm"
+        },
+        {
+          "code": "field_applicability",
+          "field": "spoke_thread_nominal_mm"
+        }
+      ]
+    },
+    {
+      "id": "sp_length_keeps_its_provenance_pending",
+      "template": "spoke",
+      "values": {
+        "spoke_length_mm": "295"
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "expected_issue_subset": [
+        {
+          "code": "prerequisite",
+          "field": "spoke_length_mm",
+          "blocking": false
+        }
+      ],
+      "expected_sql_issue_subset": [
+        {
+          "code": "prerequisite_missing",
+          "field": "spoke_length_mm",
+          "blocking": false
+        }
+      ],
+      "expected_sql_blocking": []
+    },
+    {
+      "id": "sp_internal_label_can_cite_internal_evidence",
+      "template": "spoke",
+      "values": {
+        "spoke_gauge_designation": "14G",
+        "spec_evidence_source": "Lectura histórica conservada; origen interno, sin validación OEM"
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "expected_sql_blocking": []
+    },
+    {
+      "id": "sp_butted_sections_keep_their_positions",
+      "template": "spoke",
+      "values": {
+        "spoke_wire_sections": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "position": "1",
+                "section_identity": "Sección 1",
+                "shape": "Redonda",
+                "source_url": "https://example.invalid/synthetic",
+                "diameter_mm": "2.0",
+                "source_document": "Synthetic source document"
+              },
+              "sources": []
+            },
+            {
+              "id": "r2",
+              "values": {
+                "position": "2",
+                "section_identity": "Sección 2",
+                "shape": "Redonda",
+                "source_url": "https://example.invalid/synthetic",
+                "diameter_mm": "1.8",
+                "source_document": "Synthetic source document"
+              },
+              "sources": []
+            },
+            {
+              "id": "r3",
+              "values": {
+                "position": "3",
+                "section_identity": "Sección 3",
+                "shape": "Redonda",
+                "source_url": "https://example.invalid/synthetic",
+                "diameter_mm": "2.0",
+                "source_document": "Synthetic source document"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "expected_sql_blocking": []
+    },
+    {
+      "id": "sp_same_position_twice_blocks",
+      "template": "spoke",
+      "values": {
+        "spoke_wire_sections": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "position": "1",
+                "section_identity": "Sección 1",
+                "shape": "Redonda",
+                "source_url": "https://example.invalid/synthetic",
+                "diameter_mm": "2.0",
+                "source_document": "Synthetic source document"
+              },
+              "sources": []
+            },
+            {
+              "id": "r2",
+              "values": {
+                "position": "1",
+                "section_identity": "Sección 1",
+                "shape": "Redonda",
+                "source_url": "https://example.invalid/synthetic",
+                "diameter_mm": "2.0",
+                "source_document": "Synthetic source document"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [
+        {
+          "code": "row_shape",
+          "field": "spoke_wire_sections"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "expected_sql_blocking": [
+        {
+          "code": "row_shape",
+          "field": "spoke_wire_sections"
+        }
+      ]
+    },
+    {
+      "id": "sp_aero_cannot_claim_round_diameter",
+      "template": "spoke",
+      "values": {
+        "spoke_wire_sections": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "position": "1",
+                "section_identity": "Sección 1",
+                "shape": "Plana / aero",
+                "source_url": "https://example.invalid/synthetic",
+                "width_mm": "2.3",
+                "thickness_mm": "0.9",
+                "source_document": "Synthetic source document",
+                "diameter_mm": "2"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [
+        {
+          "code": "row_field_applicability",
+          "field": "spoke_wire_sections"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "expected_sql_blocking": [
+        {
+          "code": "row_field_applicability",
+          "field": "spoke_wire_sections"
+        }
+      ]
+    },
+    {
+      "id": "sp_round_cannot_claim_blade_width",
+      "template": "spoke",
+      "values": {
+        "spoke_wire_sections": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "position": "1",
+                "section_identity": "Sección 1",
+                "shape": "Redonda",
+                "source_url": "https://example.invalid/synthetic",
+                "diameter_mm": "2.0",
+                "source_document": "Synthetic source document",
+                "width_mm": "2.3"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [
+        {
+          "code": "row_field_applicability",
+          "field": "spoke_wire_sections"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "expected_sql_blocking": [
+        {
+          "code": "row_field_applicability",
+          "field": "spoke_wire_sections"
+        }
+      ]
+    },
+    {
+      "id": "sp_unknown_section_is_pending",
+      "template": "spoke",
+      "values": {
+        "spoke_wire_sections": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "position": "1",
+                "section_identity": "Sección 1",
+                "shape": "Desconocido / sin confirmar",
+                "source_url": "https://example.invalid/synthetic",
+                "diameter_mm": "2",
+                "source_document": "Synthetic source document"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "expected_issue_subset": [
+        {
+          "code": "row_prerequisite",
+          "field": "spoke_wire_sections",
+          "blocking": false
+        }
+      ],
+      "expected_sql_issue_subset": [
+        {
+          "code": "row_prerequisite",
+          "field": "spoke_wire_sections",
+          "blocking": false
+        }
+      ],
+      "expected_sql_blocking": []
+    },
+    {
+      "id": "sp_negative_section_dimension_blocks",
+      "template": "spoke",
+      "values": {
+        "spoke_wire_sections": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "position": "1",
+                "section_identity": "Sección 1",
+                "shape": "Redonda",
+                "source_url": "https://example.invalid/synthetic",
+                "diameter_mm": "-2",
+                "source_document": "Synthetic source document"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [
+        {
+          "code": "row_shape",
+          "field": "spoke_wire_sections"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "expected_sql_blocking": [
+        {
+          "code": "row_shape",
+          "field": "spoke_wire_sections"
+        }
+      ]
+    },
+    {
+      "id": "sp_gauge_and_major_thread_are_not_equalities",
+      "template": "spoke",
+      "values": {
+        "spec_evidence_source": "https://example.invalid/synthetic",
+        "spoke_gauge_designation": "14G",
+        "spoke_nipple_thread_present": true,
+        "spoke_thread_standard": "OEM synthetic",
+        "spoke_wire_sections": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "position": "1",
+                "section_identity": "Sección 1",
+                "shape": "Redonda",
+                "source_url": "https://example.invalid/synthetic",
+                "diameter_mm": "2.0",
+                "source_document": "Synthetic source document"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "spoke_thread_major_diameter_mm": "2.3"
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "expected_sql_blocking": []
+    },
+    {
+      "id": "sp_no_thread_cannot_have_thread_major_diameter",
+      "template": "spoke",
+      "values": {
+        "spec_evidence_source": "https://example.invalid/synthetic",
+        "spoke_nipple_thread_present": false,
+        "spoke_thread_major_diameter_mm": "2.3"
+      },
+      "expected_blocking": [
+        {
+          "code": "field_applicability",
+          "field": "spoke_thread_major_diameter_mm"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "expected_sql_blocking": [
+        {
+          "code": "field_applicability",
+          "field": "spoke_thread_major_diameter_mm"
+        }
+      ]
+    },
+    {
+      "id": "sp_no_thread_cannot_have_thread_standard",
+      "template": "spoke",
+      "values": {
+        "spec_evidence_source": "https://example.invalid/synthetic",
+        "spoke_nipple_thread_present": false,
+        "spoke_thread_standard": "OEM synthetic"
+      },
+      "expected_blocking": [
+        {
+          "code": "field_applicability",
+          "field": "spoke_thread_standard"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "expected_sql_blocking": [
+        {
+          "code": "field_applicability",
+          "field": "spoke_thread_standard"
+        }
+      ]
+    },
+    {
+      "id": "sp_unknown_thread_is_pending",
+      "template": "spoke",
+      "values": {
+        "spec_evidence_source": "https://example.invalid/synthetic",
+        "spoke_thread_major_diameter_mm": "2.3"
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "expected_issue_subset": [
+        {
+          "code": "prerequisite",
+          "field": "spoke_thread_major_diameter_mm",
+          "blocking": false
+        }
+      ],
+      "expected_sql_issue_subset": [
+        {
+          "code": "field_applicability",
+          "field": "spoke_thread_major_diameter_mm",
+          "blocking": false
+        }
+      ],
+      "expected_sql_blocking": []
+    },
+    {
+      "id": "sp_nipples_absent_disallow_their_rows",
+      "template": "spoke",
+      "values": {
+        "nipples_included": false,
+        "spoke_supplied_nipples": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "component_identity": "Synthetic nipple A",
+                "quantity": "32",
+                "source_url": "https://example.invalid/synthetic",
+                "source_document": "Synthetic source document"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [
+        {
+          "code": "field_applicability",
+          "field": "spoke_supplied_nipples"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "expected_sql_blocking": [
+        {
+          "code": "field_applicability",
+          "field": "spoke_supplied_nipples"
+        }
+      ]
+    },
+    {
+      "id": "sp_spare_nipples_are_possible",
+      "template": "spoke",
+      "values": {
+        "nipples_included": true,
+        "pack_quantity": "32",
+        "spoke_supplied_nipples": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "component_identity": "Synthetic nipple A",
+                "quantity": "34",
+                "source_url": "https://example.invalid/synthetic",
+                "source_document": "Synthetic source document"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "expected_sql_blocking": []
+    },
+    {
+      "id": "sp_same_included_component_twice_blocks",
+      "template": "spoke",
+      "values": {
+        "nipples_included": true,
+        "spoke_supplied_nipples": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "component_identity": "Synthetic nipple A",
+                "quantity": "32",
+                "source_url": "https://example.invalid/synthetic",
+                "source_document": "Synthetic source document"
+              },
+              "sources": []
+            },
+            {
+              "id": "r2",
+              "values": {
+                "component_identity": "Synthetic nipple A",
+                "quantity": "2",
+                "source_url": "https://example.invalid/synthetic",
+                "source_document": "Synthetic source document"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [
+        {
+          "code": "row_shape",
+          "field": "spoke_supplied_nipples"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "expected_sql_blocking": [
+        {
+          "code": "field_constraint",
+          "field": "spoke_supplied_nipples"
+        }
+      ]
+    },
+    {
+      "id": "sp_pack_count_is_not_length",
+      "template": "spoke",
+      "values": {
+        "pack_quantity": "144",
+        "spoke_length_mm": "295"
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "expected_sql_blocking": []
+    },
+    {
+      "id": "sp_fractional_pack_count_blocks",
+      "template": "spoke",
+      "values": {
+        "pack_quantity": "1.5"
+      },
+      "expected_blocking": [
+        {
+          "code": "integer",
+          "field": "pack_quantity"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "expected_sql_blocking": [
+        {
+          "code": "field_constraint",
+          "field": "pack_quantity"
+        }
+      ]
+    },
+    {
+      "id": "sp_old_gauge_and_anchor_preserved",
+      "template": "spoke",
+      "values": {
+        "spoke_gauge": "14/15G",
+        "spoke_bend_type": "J-Bend"
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [
+        "https://www.sheldonbrown.com/wheelbuild.html"
+      ],
+      "expected_sql_blocking": []
+    }
+  ],
+  "pending_cases": [
+    {
+      "id": "spoke_hub_nipple_assembly_requires_exact_relation",
+      "required_result": "unknown_without_model_scoped_evidence",
+      "reason": "No wheel compatibility inference from gauge, length or brand."
+    },
+    {
+      "id": "cn_STD14_product_name_is_not_verified_STD14C_model",
+      "required_result": "identity_pending",
+      "reason": "The read OEM v24 page names STD14C and J-Bend. Product model and anchor both require identity research; MPN/model remain owned by the product."
+    }
+  ],
+  "catalogue_sha256": "4a604b432a05f598dc3d1233880c111e4714fed986a6823b71a3292142f2353f"
+}

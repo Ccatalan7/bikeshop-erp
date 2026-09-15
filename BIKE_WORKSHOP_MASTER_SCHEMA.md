@@ -4355,6 +4355,29 @@ explícitos para las próximas evaluaciones de interfaces. No reemplaza todavía
 el perfil de bicicleta ni declara compatibles montajes por lectura de una fila.
 Referencia: `docs/architecture/product-technical-specifications-contract.md`.
 
+**2026-09-08 — motor publicado de orden dimensional estricto.** Las filas v2
+pueden declarar dos cotas del mismo cuerpo en orden estricto, conservando la
+comparación inclusiva de los rangos. No heredan restricciones por tener nombres
+iguales a campos escalares. La adopción inicial en direcciones separa ID/OD por
+extremo; no aprueba SHIS ni altera sujetos o permisos del taller. El esquema
+publicado y sus sobres permanecen inmutables sin una migración explícita.
+Ver `docs/development/product-specs-research-2026-09-05/strict-row-order-readiness-2026-09-08.md`
+para las pruebas y la publicación verificada `20260908185800`. El despliegue
+conservó las 93 definiciones de filas existentes; no activó esquemas v2 ni
+cambió productos. La adopción de las fichas y la distribución del cliente
+compatible siguen pendientes.
+
+**2026-09-14 — alcance del consumidor de kits (código local).** El despacho de
+`drivetrain_kit` ya no usa el evaluador de bielas, ni su resultado general ni el
+detallado. Una fila de contenido de cadena disparaba una descripción `1x · Mid`
+tomada de la bicicleta y pedía una transmisión trasera sin que el kit la
+incluyera. Ahora conserva cautela por las fichas de sus componentes y las
+uniones del conjunto pendientes. Regresión reproducida antes del cambio,
+83 pruebas de servicio y analizador aprobados; la prueba focal también pasó
+con el sobre real de filas. Esto no implementa evaluación mecánica por miembro
+ni demuestra ejecución/distribución del nuevo cliente. Continuidad y límite:
+`docs/development/product-specs-research-2026-09-05/member-profiles-integration-2026-09-14.md`.
+
 
 **2026-09-06 — requisitos de ficha, no aprobación mecánica.** Migración
 `20260906200000`: las plantillas pueden declarar condiciones tipadas de

@@ -105,7 +105,10 @@ void main() {
       final result = await _assessProduct(
         technicalFamily: 'rotor',
         bikeTechnicalValues: {'brakeType': 'rim', 'frontRotorSizeMm': 180},
-        productSpecs: {'rotor_diameter_mm': 180, 'brake_position': 'front'},
+        productSpecs: {
+          'rotor_diameter_mm_value': 180,
+          'brake_position': 'front'
+        },
       );
       expect(result.level, ProductCompatibilityLevel.caution);
       expect(result.detail, contains('180'));
@@ -125,6 +128,46 @@ void main() {
       );
       expect(result.level, ProductCompatibilityLevel.incompatible);
       expect(result.detail, contains('110'));
+    });
+
+    test('an incomplete field cannot hide a known hub width contradiction',
+        () async {
+      final result = await _assessProduct(
+        technicalFamily: 'front_hub',
+        bikeFrontHubSpacingMm: 100,
+        bikeTechnicalValues: const {},
+        productSpecs: {
+          'wheel_position': 'front',
+          'hub_spacing_mm': 110,
+          '__spec_issues': [
+            {
+              'code': 'required_missing',
+              'field': 'weight_g',
+              'blocking': false
+            },
+          ],
+        },
+      );
+      expect(result.level, ProductCompatibilityLevel.incompatible);
+      expect(result.detail, contains('110'));
+    });
+
+    test('incomplete kit keeps its component-specific assessment', () async {
+      final result = await _assessProduct(
+        technicalFamily: 'drivetrain_kit',
+        bikeTechnicalValues: const {'drivetrainConfig': '1x1'},
+        productSpecs: {
+          '__spec_issues': [
+            {
+              'code': 'row_incomplete',
+              'field': 'kit_members',
+              'blocking': false
+            },
+          ],
+        },
+      );
+      expect(result.level, ProductCompatibilityLevel.caution);
+      expect(result.detail, contains('cada componente'));
     });
 
     for (final system in ['Hollowtech / 24mm externo', 'Cuadrado cartucho']) {
@@ -681,7 +724,61 @@ void main() {
     });
 
     test(
-        'keeps drivetrain kit matches in caution while rear-side kit content stays unresolved',
+        'kit contents cannot inherit crank facts or require a rear transmission',
+        () async {
+      final results = <ProductCompatibilityAssessment>[];
+      for (final rootFacts in [
+        <String, dynamic>{},
+        <String, dynamic>{
+          'front_chainring_count': ['1'],
+          'spindle_interface': 'Cuadradillo',
+        },
+        <String, dynamic>{
+          'front_chainring_count': ['3'],
+          'spindle_interface': '24 mm integrado',
+        },
+      ]) {
+        results.add(await _assessProduct(
+          technicalFamily: 'drivetrain_kit',
+          bikeTechnicalValues: const {
+            'drivetrainConfig': '1x1',
+            'bottomBracketFamily': 'Mid / BMX',
+            'spindleInterface': 'Cuadradillo',
+          },
+          productSpecs: {
+            ...rootFacts,
+            'kit_members': {
+              'schema_version': 1,
+              'rows': [
+                {
+                  'id': 'chain',
+                  'sources': <String>[],
+                  'values': {
+                    'member_role': 'cadena',
+                    'family': 'chain',
+                    'position': 'Sin posición',
+                    'quantity': '1',
+                  },
+                },
+              ],
+            },
+          },
+        ));
+      }
+      for (final result in results) {
+        expect(result.level, ProductCompatibilityLevel.caution);
+        expect(result.detail, contains('cada componente'));
+        expect(result.detail, isNot(contains('1x')));
+        expect(result.detail, isNot(contains('3x')));
+        expect(result.detail, isNot(contains('Mid / BMX')));
+        expect(result.detail, isNot(contains('parte trasera')));
+        expect(result.detail, results.first.detail);
+        expect(result.sortPriority, results.first.sortPriority);
+      }
+    });
+
+    test(
+        'keeps drivetrain kits pending until their actual components are assessed',
         () async {
       final assessment = await _assessProduct(
         technicalFamily: 'drivetrain_kit',
@@ -696,9 +793,8 @@ void main() {
       );
 
       expect(assessment.level, ProductCompatibilityLevel.caution);
-      expect(assessment.detail, contains('1x'));
-      expect(assessment.detail, contains('Mid / BMX'));
-      expect(assessment.detail, contains('parte trasera'));
+      expect(assessment.detail, contains('cada componente'));
+      expect(assessment.detail, contains('conjunto'));
     });
 
     test(
@@ -1112,7 +1208,10 @@ void main() {
           'frontRotorSizeMm': 180,
           'rearRotorSizeMm': 160
         },
-        productSpecs: {'rotor_diameter_mm': 203, 'brake_position': 'front'},
+        productSpecs: {
+          'rotor_diameter_mm_value': 203,
+          'brake_position': 'front'
+        },
       );
       expect(assessment.level, ProductCompatibilityLevel.caution);
       expect(assessment.detail, contains('adaptador'));
@@ -1137,7 +1236,7 @@ void main() {
           'frontRotorSizeMm': 180,
         },
         productSpecs: {
-          'rotor_diameter_mm': 180,
+          'rotor_diameter_mm_value': 180,
           'brake_position': 'front',
         },
       );
@@ -1145,6 +1244,41 @@ void main() {
       expect(assessment.detail, contains('montaje'));
       expect(assessment.detail, contains('espesor'));
     });
+
+    test('numeric rotor successor takes precedence over an old selection',
+        () async {
+      final assessment = await _assessProduct(
+        technicalFamily: 'rotor',
+        bikeTechnicalValues: {'frontRotorSizeMm': 180},
+        productSpecs: {
+          'rotor_diameter_mm_value': '180.0',
+          'rotor_diameter_mm': '203',
+          'brake_position': 'front',
+        },
+      );
+      expect(assessment.level, ProductCompatibilityLevel.caution);
+      expect(assessment.detail, contains('Coincide el diámetro'));
+      expect(assessment.detail, contains('180 mm'));
+      expect(assessment.detail, isNot(contains('203')));
+    });
+
+    for (final value in <Object?>[null, '180/160', '180 mm', '180.5', 180.5]) {
+      test('ambiguous or fractional rotor $value is not rounded into a match',
+          () async {
+        final assessment = await _assessProduct(
+          technicalFamily: 'rotor',
+          bikeTechnicalValues: {'frontRotorSizeMm': 180},
+          productSpecs: {
+            if (value != null) 'rotor_diameter_mm_value': value,
+            'rotor_diameter_mm': '180/160',
+            'brake_position': 'front',
+          },
+        );
+        expect(assessment.level, ProductCompatibilityLevel.caution);
+        expect(assessment.detail, isNot(contains('Coincide el diámetro')));
+        expect(assessment.detail, isNot(contains('Rotor 180')));
+      });
+    }
   });
 }
 

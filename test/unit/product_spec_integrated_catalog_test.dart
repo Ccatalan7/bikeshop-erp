@@ -11,12 +11,14 @@ Map<String, dynamic> object(Object? value) =>
 
 void main() {
   const directory = 'docs/development/product-specs-research-2026-09-05/';
-  final catalog = object(jsonDecode(
-      File('${directory}all-family-port-cardinality-integrated-2026-09-07.json')
-          .readAsStringSync()));
-  final fixtures = object(jsonDecode(
-      File('${directory}all-family-port-cardinality-cases-integrated-2026-09-07.json')
-          .readAsStringSync()));
+  const catalogPath = String.fromEnvironment('SPEC_CATALOG_INPUT',
+      defaultValue:
+          '${directory}all-family-port-cardinality-integrated-2026-09-07.json');
+  const casesPath = String.fromEnvironment('SPEC_CATALOG_CASES',
+      defaultValue:
+          '${directory}all-family-port-cardinality-cases-integrated-2026-09-07.json');
+  final catalog = object(jsonDecode(File(catalogPath).readAsStringSync()));
+  final fixtures = object(jsonDecode(File(casesPath).readAsStringSync()));
   final definitions = object(catalog['definitions']);
   final templates = <String, SpecTemplate>{};
   for (final raw in catalog['templates'] as List) {
@@ -62,16 +64,20 @@ void main() {
       final values = object(fixture['values']);
       final before = jsonEncode(values);
       final issues = validateProductSpecDraft(
-          template: templates[fixture['template']]!,
-          values: values);
+          template: templates[fixture['template']]!, values: values);
       expect(jsonEncode(values), before,
-          reason: 'Validation must preserve declared values, row IDs and sources.');
-      for (final expected in
-          object(fixture['expected_row_counts'] ?? {}).entries) {
+          reason:
+              'Validation must preserve declared values, row IDs and sources.');
+      for (final expected
+          in object(fixture['expected_row_counts'] ?? {}).entries) {
         final field = templates[fixture['template']]!
             .fields
             .singleWhere((field) => field.definition!.key == expected.key);
-        expect(field.definition!.rowSchema!.parse(values[expected.key]).rows.length,
+        expect(
+            field.definition!.rowSchema!
+                .parse(values[expected.key])
+                .rows
+                .length,
             expected.value,
             reason: 'Separate documents and printed units retain their rows.');
       }
@@ -127,6 +133,9 @@ void main() {
           .readAsStringSync()));
   for (final raw in proposal['metadata_negative_cases'] as List) {
     final fixture = object(raw);
+    // A publication slice exercises only its selected families. The default
+    // full-catalogue run still includes every metadata boundary fixture.
+    if (!templates.containsKey(fixture['template'])) continue;
     test('${fixture['id']}: unsupported row condition fails closed', () {
       final original = templates[fixture['template']]!;
       final contract = object(jsonDecode(jsonEncode(original.formContract)));

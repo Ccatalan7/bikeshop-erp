@@ -1,5 +1,25 @@
 # Canonical UI Surface Registry
 
+**Criterios de compras — 2026-09-07:** el workspace y sus accesos contextuales
+desde Jobs usan `supplyNeedCriterionFieldsOf` para compartir entre el buscador
+y `SupplyNeedRefinementEditor` los tipos escalares que pueden expresar.
+Los campos retirados, las tablas por componente y los campos de aplicabilidad
+constante falsa no se ofrecen como criterios nuevos. Un requisito todavía
+desconocido sigue disponible; la visibilidad de tienda no decide esta lista.
+Los predicados guardados que quedan fuera se conservan al cambiar otro campo.
+Las condiciones reciben sólo igualdades escalares unívocas de la petición:
+un límite, exclusión o conjunto de alternativas no es un valor exacto del
+producto. La ausencia de criterio tampoco afirma ausencia de la propiedad.
+Aplicabilidad y restricciones de opciones usan el contrato canónico v2 junto
+a las reglas anteriores. Los borradores de campos no aplicables dejan de
+gobernar sus dependientes. Regresiones de esta corrección: 89 pruebas, incluyendo
+transición de límite a igualdad a 390/834/1280 px y actualización de contrato
+con el mismo ID sin perder el borrador. Los campos nuevos se siembran una sola
+vez por campo; falta verificación en runtime.
+El mismo dueño cubre desktop y compacto. Pruebas de editor ancho/estrecho y
+conservación aprobadas; esta corrección de cliente requiere su siguiente
+distribución y no se atribuye al binario macOS177/Android65 ya publicado.
+
 Website Builder work must also follow the mandatory parity, selection,
 clipping, routing, media, and save contract in
 [`website-editor-contract.md`](website-editor-contract.md).
@@ -598,7 +618,7 @@ certificate that every mechanical dependency of that family has been reviewed.
 
 | Workflow / host | User entry point | Canonical implementation | Required shared behavior |
 |---|---|---|---|
-| Product technical editor | `/inventory/products/new`, `/inventory/products/:id/edit`, web-catalog edit and the canonical product editor embedded from purchase/sales invoices; desktop, tablet and compact hosts | `ProductFormPage` + `SpecEngineService` + `ProductSpecReference` + `ProductSpecBooleanField`; panels use shared `VbFormSection` | Confirm model before choosing a matching manufacturer variant. Reference facts and scoped claims are read-only with their source; manual conflicts remain visible and editable. Model suggestions reuse the canonical identity extractor and require confirmation. Connector type precedes target-chain class; source precedes target models, reuse and direction. A model-only reference preserves the operator MPN and leaves pack quantity unresolved. Independent evidence remains editable beside the reference; matching manual observations preserve provenance through save/reload/detach. Text and numeric ficha inputs expose stable semantic identities; forbidden boolean answers stay disabled while Sin dato remains distinct. Explicit prerequisites precede dependents and explain what is missing. Boolean null is `Sin dato`, distinct from No. A failed or stale category load cannot replace the current draft with an empty result; `Actualizar ficha` preserves it. One surface notice summarizes pending or blocking issues. Identity/facts and optional set components save through `InventoryService.saveProductWithSpecs` / `save_product_with_specs_v1`, with template revision, product revision, timestamp and replay key; stock adjustments remain separate and refresh the authoritative timestamp.  **Pending binding integration 2026-09-06:** the editor reads product-owned template + facts together, keeps drafts by product/template, loads uncategorized products, and shows preserved former-template observations in the existing `VbFormSection` owner. `explicit_unavailable` is visible and never becomes the category default. No new visual tokens; runtime proof for this pending change is still required. |
+| Product technical editor | `/inventory/products/new`, `/inventory/products/:id/edit`, web-catalog edit and the canonical product editor embedded from purchase/sales invoices; desktop, tablet and compact hosts | `ProductFormPage` + `SpecEngineService` + `ProductSpecReference` + `ProductSpecBooleanField`; panels use shared `VbFormSection` | Confirm model before choosing a matching manufacturer variant. Reference facts and scoped claims are read-only with their source; manual conflicts remain visible and editable. Model suggestions reuse the canonical identity extractor and require confirmation. Connector type precedes target-chain class; source precedes target models, reuse and direction. A model-only reference preserves the operator MPN and leaves pack quantity unresolved. Independent evidence remains editable beside the reference; matching manual observations preserve provenance through save/reload/detach. Text and numeric ficha inputs expose stable semantic identities; forbidden boolean answers stay disabled while Sin dato remains distinct. Explicit prerequisites precede dependents and explain what is missing. Boolean null is `Sin dato`, distinct from No. A failed or stale category load cannot replace the current draft with an empty result; `Actualizar ficha` preserves it. One surface notice summarizes pending or blocking issues. Identity/facts and optional set components save through the shared inventory aggregate. **Member integration 2026-09-14, independently reviewed:** the editor loads v3, keeps component drafts at their original product revision through category changes, and submits their stable scopes through `save_product_with_specs_v2`. Both independent-product and stock-set saves adopt the exact `editor_context` receipt before optional WhatsApp sync; a failed external sync cannot leave newly saved pieces marked unsaved. `ProductSpecMemberEditor` composes the same field renderers per piece, with explicit identify/rebind/archive actions. Stock adjustments remain separate and refresh the authoritative timestamp. The focused suite passes 95 tests, including synthetic desktop/tablet/phone light/dark component interaction. Real root draft refresh and compact 430 px layout preserve edits; discard/reopen confirms the original persisted value. All five current callers lock product type. Structured member errors are published. On 2026-09-15 nine collections were enabled and 68 authenticated product read-backs preserved all data. Real desktop AE0317 child-profile creation showed separate accessory-mount identity/fields; closing without saving preserved the product and zero profiles. On 2026-09-15 the actual AE0317 member flow also passed at 430x940, with window restored and authenticated discard read-back unchanged. The shared row selector resolves tenant-scoped family names without changing persisted keys or allowed families; absent names preserve the option with an explicit unavailable-name label, and an optional name-load failure cannot block the editor (26 focused tests). Embedded member interaction remains pending.  **Pending binding integration 2026-09-06:** the editor reads product-owned template + facts together, keeps drafts by product/template, loads uncategorized products, and shows preserved former-template observations in the existing `VbFormSection` owner. `explicit_unavailable` is visible and never becomes the category default. No new visual tokens; runtime proof for this pending change is still required. |
 | Workshop and purchasing compatibility suggestions | Product candidates evaluated by the shared bike compatibility service, including embedded selectors | `BikeProductCompatibilityService` + `get_product_spec_contexts_v1` | Consume normalized current facts, reference claims and issues. Unmapped products have no invented warning. Incomplete prerequisites remain pending; explicit conflicts prevent a positive result. Chain widths/speed counts alone cannot produce green approval; exclusive claims retain their named platform even when the bike platform is unknown. |
 | Public technical projection and other writers | Store product details; legacy spec RPC, OCR/import/AI and direct fact writers | `get_public_product_technical_specs`, `save_product_spec_facts_v1`, deferred product/fact invariants | Keep publication policy, omit private evidence text and retired fields, and suppress blocking fields rather than hiding an incomplete entire ficha. The same server invariants cover bypass paths. Row links keep stable IDs and use derived labels in display; typed consumers receive `row_labels` beside the original IDs. Scalar bound conflicts affect both endpoints. Unchanged facts preserve provenance/readings; no catalogue update rewrites installed-bike observations. |
 
@@ -1939,3 +1959,42 @@ elimina una respuesta contradictoria. Sin dato permanece pendiente y sólo
 lectura muestra el mismo conflicto sin poder editar. El comportamiento está
 en el control compartido, cubierto en 390/768/1280 claro/oscuro; no se atribuye
 prueba de los nuevos metadatos a una recarga con catálogo todavía sin publicar.
+
+### 2026-09-15 — identidad de las piezas del kit de transmisión
+
+La ficha raíz del kit conserva sus once campos históricos como legacy y abre
+el mismo editor de perfiles por pieza. AE0244 abrió una ficha propia de
+Rodamiento en escritorio; sólo se acreditan los campos de su plantilla vigente,
+no los del sucesor pendiente. Se descartó el borrador y la lectura autenticada
+02:29:55 UTC conservó todos los datos y cero perfiles. Las etiquetas de familia
+ya se probaron en escritorio y a 430×940 con AE0317; su carga fallida conserva
+las opciones mediante un rótulo explícito. La interacción embebida sigue pendiente.
+Evidencia: `drivetrain-kit-members-adjudication-2026-09-15.md` y
+`member-profiles-integration-2026-09-14.md` en el directorio de investigación.
+
+**Fichas por pieza, 15-09-2026 04:02 UTC:** el editor enrutado de NNV71,
+en macOS escritorio claro, resolvió `component_set` y abrió una ficha de
+tornillería dentro del contenido. El borrador se abandonó mediante Atrás del
+workspace, sin Guardar; lectura autenticada posterior confirmó cero cambios
+en ambos productos del lote. No acredita todavía la interacción embebida.
+Evidencia y limitaciones en
+[conjuntos de piezas](../development/product-specs-research-2026-09-05/component-set-adjudication-2026-09-15.md).
+
+**Pinza, pastilla y rotor, 15-09-2026 04:43 UTC:** sus sucesores publicados usan
+los campos y validación compartidos del editor enrutado. Prueba real en macOS
+claro: AE0269 conserva legacy 203/2,3 y muestra conflicto nominal/desgaste;
+BB008 aplica requisitos Disco/Llanta y Mecánico; 2000000143019 exige fijación
+al porta-goma y la omite en el recambio. Los tres borradores se abandonaron
+sin Guardar y la lectura autenticada conservó los datos. No acredita esos
+recorridos en teléfono, editor embebido ni una distribución nueva.
+[Evidencia y límites](../development/product-specs-research-2026-09-05/brake-pieces-adjudication-2026-09-15.md).
+
+
+**Maneta, 15-09-2026 05:53 UTC:** sucesor publicado `20260915054000` en el
+editor enrutado macOS/claro. AE0319 ejerció cable/hidráulico, expansor frente a
+abrazadera y auxiliar hidráulica. Un rango interior 22/19 muestra conflicto;
+al cambiar montaje, los valores quedan accesibles con retirada explícita y
+no desaparecen silenciosamente. El borrador se descartó por Atrás del workspace;
+lectura autenticada confirma datos íntegros y cero hechos/perfiles nuevos.
+Teléfono, embebido y distribución siguen abiertos.
+[Evidencia y límites](../development/product-specs-research-2026-09-05/brake-lever-adjudication-2026-09-15.md).

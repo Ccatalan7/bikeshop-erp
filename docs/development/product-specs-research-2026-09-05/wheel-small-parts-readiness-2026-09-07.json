@@ -1,0 +1,282 @@
+{
+  "schema_version": 2,
+  "title": "Aptitud de representación: nueve familias de rueda y piezas pequeñas (revisión ampliada)",
+  "author": "Claude (revisor independiente)",
+  "prepared_on": "2026-09-07",
+  "supersedes": "la versión 1 de este mismo archivo, cuyo «siete de nueve sin cambios» queda retirado",
+  "catalogue": {
+    "artifact": "all-family-port-cardinality-integrated-2026-09-07.json",
+    "artifact_sha256": "16459826fee4c589cce37243afe4e159317212ddf1d47d6d6f1d76f9b3fadf15"
+  },
+  "boundaries": "Sólo lecturas de artefactos, código y fuentes públicas. Sin base de datos, runtime, git, escrituras ni subagentes. Ningún relleno ni reasignación. Ninguna fixture prueba calce.",
+  "families": [
+    "hub_axle",
+    "hub_small_part",
+    "wheel_retention",
+    "spoke_nipple",
+    "tubeless_tape",
+    "tubeless_repair",
+    "valve_small_part",
+    "tire_liner",
+    "tube_repair"
+  ],
+  "headline": "Con la evidencia añadida, mi veredicto anterior no se sostiene: ocho de las nueve tienen un defecto de representación, no dos. Sólo tubeless_tape queda limpia. Ninguno impide publicar metadatos; todos importan antes de abrir el llenado.",
+  "self_corrections": [
+    {
+      "id": "C-1",
+      "about": "WS-2",
+      "verdict": "mi propuesta no era ejecutable",
+      "text": "value_when existe SÓLO para celdas de fila: vive en product_spec_row_conditions.dart y en product_spec_row_condition_metadata.py, y no hay equivalente escalar. Tenías razón.",
+      "executable_alternative": "El evaluador escalar sí admite negación: spec_rule_evaluator.dart:153-160 acepta eq, neq, in, not_in, contains_any y contains_all, más is_set/not_set y lt/lte/gt/gte. Así que la corrección ejecutable es allowed_when sobre axle_hollow con not_in sobre los dos tokens «Hueco …»: si la rosca ya declara el hueco, el booleano deja de ser aplicable y cualquier valor da field_applicability bloqueante.",
+      "note": "Y se comporta bien con el desconocido: con la rosca sin responder, la línea 164 devuelve SpecTruth.unknown, así que el booleano queda pendiente y no bloqueado. required_missing tampoco salta, porque exige aplicabilidad yes."
+    },
+    {
+      "id": "C-2",
+      "about": "WS-1",
+      "verdict": "afirmé de más",
+      "text": "Dije que ninguna de rim, rim_strip, tube y tubeless_valve está publicada. Lo derivé de los tres packets de publicación, que sólo cubren nuestros tres bloques; no cubren las 37 plantillas globales anteriores. La preimagen viva es la autoridad, y ya nos pasó: encontró pedal_thread como compartida histórica que el catálogo no marcaba. Lo correcto es: no aparece en nuestros tres packets; si existe de antes, lo dirá tu preimagen."
+    },
+    {
+      "id": "C-3",
+      "about": "WS-1 y WS-5",
+      "verdict": "afirmé de más",
+      "text": "Dije que la etiqueta es identidad de forma inexorable. No lo es: en la base, id y code de una opción son estables, y una migración puede cambiar sólo label conservándolos. Lo que sí regenera id y code es RECOMPILAR el paquete desde una etiqueta cambiada, porque ambos se derivan de ella. De modo que corregir antes de publicar evita necesitar esa migración; no es que después sea imposible."
+    }
+  ],
+  "findings_v1_kept": [
+    "WS-1 (con la corrección C-2 y C-3)",
+    "WS-2 (con el mecanismo corregido en C-1)",
+    "WS-3",
+    "WS-4",
+    "WS-5 (con la corrección C-3)"
+  ],
+  "findings_new": [
+    {
+      "id": "WS-6",
+      "families": [
+        "spoke_nipple"
+      ],
+      "title": "Falta el eje de la llave: el catálogo guarda la forma de la cabeza, no su medida",
+      "evidence": "Park Tool organiza la selección por la medida entre caras del niple y la publica en el propio nombre de cada herramienta: SW-0 3,23 mm, SW-1 3,30 mm, SW-2 3,45 mm, SW-3 3,96 mm. Y el SW-15 es de niple INTERNO, un accionamiento distinto. spoke_nipple tiene nipple_head con Cuadrado, Hexagonal, Doble cuadrado y Otro —la forma—, y nada para la medida ni para interno frente a externo. Con la ficha completa no se puede contestar qué llave pide el niple.",
+      "minimal_change": "Dos ejes nuevos junto a nipple_head: medida entre caras y accionamiento interno/externo. Son declaraciones del fabricante, no una certificación de calce.",
+      "cases": [
+        {
+          "kind": "positivo",
+          "v": "niple cuadrado con medida 3,45 mm declarada",
+          "e": "sin incidencia; la ficha contesta qué llave pide"
+        },
+        {
+          "kind": "negativo",
+          "v": "hoy: dos niples de 3,23 y 3,45 mm son indistinguibles en la ficha",
+          "e": "la pregunta del taller no tiene respuesta"
+        },
+        {
+          "kind": "desconocido",
+          "v": "medida no publicada",
+          "e": "pendiente no bloqueante; no se deduce de la forma"
+        }
+      ],
+      "sources": [
+        "https://www.parktool.com/en-us/product/spoke-wrench-sw-0",
+        "https://www.parktool.com/en-us/product/spoke-wrench-sw-2",
+        "https://www.parktool.com/en-us/product/3-way-internal-nipple-wrench-sw-15"
+      ]
+    },
+    {
+      "id": "WS-7",
+      "families": [
+        "tube_repair"
+      ],
+      "title": "No hay dónde poner el alcance de material que el fabricante sí declara",
+      "evidence": "Park Tool acota el VP-1: sirve para cámaras de butilo; no para cuerpos tubeless ni para cámaras de TPU, nombrando Tubolito y Schwalbe Aerothan. Y conserva una excepción: un pinchazo en tubeless UST u otro con forro interior de butilo sí puede repararse con un kit vulcanizante. tube_repair sólo tiene repair_kind, conteos, tamaño, volumen de pegamento y toluene_free: el alcance declarado no tiene campo.",
+      "minimal_change": "Filas de alcance declarado —material o carcasa de destino, compatible sí/no, condiciones y fuente— capaces de guardar la excepción. NO un booleano universal «sirve para tubeless»: la propia fuente lo desmiente.",
+      "cases": [
+        {
+          "kind": "positivo",
+          "v": "fila butilo compatible + fila TPU no compatible, ambas citando al fabricante",
+          "e": "sin incidencia"
+        },
+        {
+          "kind": "negativo",
+          "v": "un único booleano «tubeless: no»",
+          "e": "contradice la excepción UST publicada; por eso no lo propongo"
+        },
+        {
+          "kind": "desconocido",
+          "v": "el fabricante no dice nada del material",
+          "e": "sin filas: pendiente, y no se infiere del tipo de parche"
+        }
+      ],
+      "sources": [
+        "https://www.parktool.com/en-us/product/vulcanizing-patch-kit-vp-1",
+        "https://www.parktool.com/en-us/blog/repair-help/tubeless-tire-mounting-and-repair"
+      ],
+      "declaration_not_certification": "Esto documenta lo que el fabricante declara sobre su propio producto. No certifica que un parche pegue en una cámara concreta."
+    },
+    {
+      "id": "WS-8",
+      "families": [
+        "tire_liner"
+      ],
+      "title": "Se exige BSD donde el fabricante publica designaciones, y un intervalo cruza una lista",
+      "evidence": "Mr Tuffy vende por designación nominal, y una misma referencia abarca dos asientos de talón distintos: la roja se lista como «700x20-25 | 27x1 1/8», y hay «26x1.95-2.5», «29x1.9-2.35» y «700x28-32». bead_seat_diameters_supported es requerido y su única columna es un entero en mm, así que llenarlo obliga a CONVERTIR 700c y 27\" a milímetros, que es justo lo que no se hace. Y encima tire_width_min_mm/max_mm es un intervalo único aplicado sobre la lista de diámetros: afirma el producto cartesiano de anchos por diámetro, que no es lo que el fabricante pareó.",
+      "minimal_change": "Una fila por designación publicada, con la designación literal y, opcionalmente, el diámetro y los anchos de ESA fila. Es el patrón de tres representaciones de wheel_size_declarations, ya aprobado.",
+      "cases": [
+        {
+          "kind": "positivo",
+          "v": "una fila «700x20-25» y otra «27x1 1/8», cada una con sus anchos",
+          "e": "sin incidencia y sin convertir"
+        },
+        {
+          "kind": "negativo",
+          "v": "hoy: BSD 622 y 630 con un solo intervalo 20-25",
+          "e": "afirma 20-25 en ambos diámetros; el fabricante no lo pareó así"
+        },
+        {
+          "kind": "desconocido",
+          "v": "sin designación publicada",
+          "e": "pendiente; no se deduce el BSD desde el nombre comercial"
+        }
+      ],
+      "sources": [
+        "https://www.amazon.com/Tuffy-Electric-Tire-Liner-Protector/dp/B07HXMRJZS",
+        "https://trekbikesflorida.com/products/mr-tuffy-mr-tuffy-e-bike-tire-liner-700x20-25-27x1-red-pair"
+      ],
+      "source_limit": "mrtuffy.com/sizes devolvió HTTP 500 y no lo pude leer. Las designaciones anteriores salen de títulos de producto de varios minoristas independientes, uno de ellos una tienda Trek. La estructura —una referencia que abarca 700c y 27\"— es consistente entre ellos."
+    },
+    {
+      "id": "WS-9",
+      "families": [
+        "wheel_retention"
+      ],
+      "title": "Falta un paso de rosca real, y un par no puede tener dos miembros distintos",
+      "evidence": "thru_axle_thread ofrece M12 x 1.0, 1.5 y 1.75, y no M12 x 1.25. El TRA225 de Robert Axle es exactamente M12x1.25, 180 mm, para 12x148: un producto real que hoy no se puede describir. Además wheel_position admite «Par» mientras skewer_length_mm y thru_axle_length_mm son valores únicos, así que un par cuyos dos miembros difieren —delantero y trasero— no se puede representar. Y no hay campo para la cabeza ni el accionamiento: el propio TRA225 se instala con llave hexagonal de 5 mm, y una aguja clásica tiene palanca; tampoco para espaciadores incluidos.",
+      "minimal_change": "Agregar M12 x 1.25 al vocabulario. Para el par, una fila por miembro con su posición y su longitud —el patrón de miembros que ya usan light y bike_bag—. La cabeza y los espaciadores, campos propios.",
+      "cases": [
+        {
+          "kind": "positivo",
+          "v": "eje único M12 x 1.5, 172 mm",
+          "e": "sin incidencia hoy"
+        },
+        {
+          "kind": "negativo",
+          "v": "TRA225 M12x1.25",
+          "e": "hoy no expresable: el paso no está en el vocabulario"
+        },
+        {
+          "kind": "desconocido",
+          "v": "paso no declarado",
+          "e": "«Desconocido / sin confirmar» ya existe y deja pendiente"
+        }
+      ],
+      "sources": [
+        "https://robertaxleproject.com/product/12mm-thru-axle-for-trainer-180-mm-with-1-25-mm-thread/",
+        "https://robertaxleproject.com/what-axle-do-i-need/"
+      ],
+      "source_limit": "La página what-axle-do-i-need devolvió 403; el TRA225 se confirma por su ficha de producto y listados."
+    },
+    {
+      "id": "WS-10",
+      "families": [
+        "hub_small_part"
+      ],
+      "title": "Un adaptador sin rosca está obligado a declarar una rosca",
+      "evidence": "hub_part_kind incluye «Adaptador de eje», y adapter_to es texto libre: «Interfaz de destino del adaptador», que sí admite una interfaz no roscada. Pero axle_diameter_thread es required_when always en toda la plantilla y su allowed_options son sólo roscas más «Desconocido / sin confirmar». Un adaptador de punteras de eje pasante no tiene rosca, así que el operador sólo puede poner una rosca falsa o el token de desconocido, que es ausencia y deja la ficha pendiente para siempre.",
+      "minimal_change": "Condicionar axle_diameter_thread a los tipos que sí tienen rosca, o añadir una opción explícita de interfaz no roscada. La primera es más pequeña y no toca el vocabulario compartido.",
+      "cases": [
+        {
+          "kind": "positivo",
+          "v": "cono con rosca M10 x 1",
+          "e": "sin incidencia"
+        },
+        {
+          "kind": "negativo",
+          "v": "adaptador de punteras 15→12 mm",
+          "e": "hoy exige una rosca que la pieza no tiene"
+        },
+        {
+          "kind": "desconocido",
+          "v": "adaptador con rosca no publicada",
+          "e": "pendiente, que es lo correcto; distinto de «no tiene rosca»"
+        }
+      ]
+    },
+    {
+      "id": "WS-11",
+      "families": [
+        "tubeless_repair"
+      ],
+      "title": "Un repuesto de mecha no puede decir a qué herramienta pertenece",
+      "evidence": "Los repuestos de tapón y boquilla se venden por modelo de herramienta. tubeless_repair sólo tiene plug_count, plug_size con Estándar, Fina y Mixta, tool_included y kit_members, cuyo vocabulario nombra familias, no modelos. Un paquete de mechas de repuesto no puede declarar para qué herramienta sirve, que es la única pregunta que el comprador hace.",
+      "minimal_change": "Un campo de herramienta o modelo de destino, declarado por el fabricante. No una matriz de compatibilidad ni una inferencia por tamaño.",
+      "cases": [
+        {
+          "kind": "positivo",
+          "v": "repuesto que nombra su modelo de destino",
+          "e": "sin incidencia"
+        },
+        {
+          "kind": "negativo",
+          "v": "hoy: dos repuestos de modelos distintos son idénticos en la ficha",
+          "e": "la pregunta no tiene respuesta"
+        },
+        {
+          "kind": "desconocido",
+          "v": "sin modelo declarado",
+          "e": "pendiente; no se deduce de plug_size"
+        }
+      ]
+    },
+    {
+      "id": "WS-12",
+      "families": [
+        "valve_small_part"
+      ],
+      "title": "Un alargador no declara si exige sacar el obús",
+      "evidence": "valve_part_kind incluye «Alargador», pero core_thread está condicionado sólo a «Obús (núcleo)» y no hay ningún campo que distinga el alargador que se rosca sobre la válvula íntegra del que exige retirar el obús antes. Es la diferencia que decide si el alargador sirve con esa válvula, y hoy no se puede registrar.",
+      "minimal_change": "Un campo de requisito de extracción del obús, condicionado a «Alargador».",
+      "cases": [
+        {
+          "kind": "positivo",
+          "v": "alargador que declara requerir extracción del obús",
+          "e": "sin incidencia"
+        },
+        {
+          "kind": "negativo",
+          "v": "hoy: dos alargadores incompatibles entre sí se ven iguales",
+          "e": "sin campo que los separe"
+        },
+        {
+          "kind": "desconocido",
+          "v": "el fabricante no lo dice",
+          "e": "pendiente; no se infiere del largo ni del tipo de válvula"
+        }
+      ]
+    }
+  ],
+  "per_family": {
+    "hub_axle": "defecto (WS-2 corregido) y hueco de vocabulario (WS-3)",
+    "hub_small_part": "defecto (WS-10)",
+    "wheel_retention": "defecto (WS-9)",
+    "spoke_nipple": "defecto (WS-6); WS-5 observación",
+    "tubeless_tape": "apta",
+    "tubeless_repair": "defecto (WS-11)",
+    "valve_small_part": "defectos (WS-1, WS-12)",
+    "tire_liner": "defecto (WS-8); WS-4 a tu criterio",
+    "tube_repair": "defecto (WS-7)"
+  },
+  "counts": {
+    "families": 9,
+    "defects": 8,
+    "families_without_defect": 1,
+    "self_corrections": 3,
+    "new_findings": 7,
+    "structural_impediments_to_publish": 0
+  },
+  "gates_unchanged": {
+    "fill_allowed": false,
+    "compatibility_rules_integrated": false,
+    "all_product_assignment_review_complete": false,
+    "all_family_domain_review_complete": false
+  }
+}

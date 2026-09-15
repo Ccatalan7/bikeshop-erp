@@ -1,0 +1,4304 @@
+{
+  "schema_version": 1,
+  "title": "Adjudicación independiente del addendum A de campos",
+  "prepared_on": "2026-09-07",
+  "reviewer": "Codex / spec_boundary_review",
+  "input_sha256": {
+    "addendum_json": "86c7f7d6b7360d01a771f1aaf63ddba0e63352999d65dc4ea78038da58d25440",
+    "before_json": "7ebf2b5b5e69784e3d146b81ad2bec8b7581113565cef022e8da70ba4c7a66fa"
+  },
+  "scope": [
+    "ND09",
+    "ND10",
+    "ND12",
+    "ND13",
+    "ND21",
+    "ND22",
+    "ND23"
+  ],
+  "overall": {
+    "ready_for_unmodified_import": false,
+    "mechanical_coverage_certified": false,
+    "product_fill_authorized_by_review": false,
+    "reason": "Aceptar piezas de representación; corregir contratos y fuentes antes de consumir el conjunto. Los overrides son propuesta para revisión final del integrador."
+  },
+  "verification": {
+    "before_mismatches": 0,
+    "definition_collisions": 0,
+    "template_count": 8,
+    "condition_predicates_checked_statically": 95,
+    "dependency_edges_checked_statically": 101,
+    "SQL_metadata_shape_errors_static": 0,
+    "SQL_execution_performed": false,
+    "production_access_performed": false,
+    "runtime_access_performed": false,
+    "Dart_probe_command": "fvm flutter test --no-pub .tmp/product-spec-catalog/field-addendum-review-probe.dart --reporter expanded",
+    "Dart_probe_tests": 16,
+    "Dart_probe_passed": 16,
+    "Dart_row_schemas_parsed": 11,
+    "representation_cases_validated": 20,
+    "probe_sha256": "c3e8fde35bd46fee1948dd734c885a1a2bbb612a8856e2d2114633e882c8b281",
+    "interpretation": "Los asserts fijan el comportamiento observado, incluidos defectos admitidos. No son16 aprobaciones de compatibilidad.",
+    "baseline_case_observations": {
+      "cases": 20,
+      "blocking": 0,
+      "nonblocking_issues": 15,
+      "cases_with_nonblocking_issues": 9
+    },
+    "corrected_overrides": {
+      "command": "fvm flutter test --no-pub .tmp/product-spec-catalog/field-addendum-review-probe.dart --reporter expanded",
+      "result": "17/17 assertions pass; the first16 reproduce observed current behavior; last test applies review overrides in memory and checks19 retained cases plus targeted fixes.",
+      "database_executed": false,
+      "runtime_executed": false,
+      "metadata_static_check": {
+        "predicates": 91,
+        "dependency_edges": 103,
+        "errors": 0,
+        "scope": "8 affected templates; before SHA pinned; checks references, types, option literals and cycles. This is a static check, not execution of PostgreSQL."
+      }
+    },
+    "source_and_case_limit": "OEM model claims are scoped to the verified page/manual revision. Synthetic and inventory-title cases are expressly not product facts. No source/tests establish complete-family coverage."
+  },
+  "sources": {
+    "S01": {
+      "title": "Park Tool — Basic Thread Concepts",
+      "url": "https://www.parktool.com/en-us/blog/repair-help/basic-thread-concepts",
+      "verification": "Lectura íntegra; apartados Intro/Bicycle Industry Threads. Diámetro, paso y mano son ejes distintos. Publica diámetros métricos con paso TPI; la tabla no es exhaustiva.",
+      "checked_on": "2026-09-07",
+      "primary": true
+    },
+    "S02": {
+      "title": "Park Tool — CT-3.3",
+      "url": "https://www.parktool.com/en-us/product/chain-tool-ct-3-3",
+      "verification": "Features y asterisco OEM. Separa operaciones admitidas de peen no admitido; 1 velocidad y 5–12 son alcances diferentes.",
+      "checked_on": "2026-09-07",
+      "primary": true
+    },
+    "S03": {
+      "title": "Park Tool — IB-3",
+      "url": "https://www.parktool.com/en-us/product/i-beam-mini-fold-up-with-chain-tool-ib-3",
+      "verification": "Features y asterisco. Bit 8 mm es box wrench; varios hexágonos y llaves de rayos son miembros distintos.",
+      "checked_on": "2026-09-07",
+      "primary": true
+    },
+    "S04": {
+      "title": "Park Tool — Cassette Removal and Installation",
+      "url": "https://www.parktool.com/en-us/blog/repair-help/cassette-removal-and-installation",
+      "verification": "Tabla de herramientas y sección SRAM XD. Interfaz de contratuerca no equivale al spline del núcleo; el par de apriete no es la medida del accionamiento.",
+      "checked_on": "2026-09-07",
+      "primary": true
+    },
+    "S05": {
+      "title": "Park Tool — BBT-9",
+      "url": "https://www.parktool.com/en-us/product/bottom-bracket-tool-bbt-9",
+      "verification": "Features: diámetro mayor 44–45 mm, menor 42.7 mm y 16 muescas. La tabla también contiene modelos thread-together BB30; no rechazar por sigla BB30.",
+      "checked_on": "2026-09-07",
+      "primary": true
+    },
+    "S06": {
+      "title": "Super B — TB-6616",
+      "url": "https://www.superbiketool.com/en/product/detail/Bottom_Crank_tool/TB_6616",
+      "verification": "Texto leído: For standard square type crank; accionamientos 8 mm hex / 15 mm wrench. No dice only, JIS/ISO universal, ni rosca de extractor.",
+      "checked_on": "2026-09-07",
+      "primary": true
+    },
+    "S07": {
+      "title": "Sheldon Brown — Cotterless Cranks",
+      "url": "https://sheldonbrown.com/tooltips/cotterless.html",
+      "verification": "La rosca del extractor depende del modelo de biela; enumera 22 mm y excepciones históricas. El tipo de cono del eje no sustituye esa interfaz.",
+      "checked_on": "2026-09-07",
+      "primary": true
+    },
+    "S08": {
+      "title": "Park Tool — Shimano SPD Pedal Service",
+      "url": "https://www.parktool.com/en-us/blog/repair-help/spd-pedal-overhaul",
+      "verification": "TL-PD40 tiene caras para llave de 36 mm. Corrige el 15 mm de la fuente minorista del addendum.",
+      "checked_on": "2026-09-07",
+      "primary": true
+    },
+    "S09": {
+      "title": "Shimano — TL-PD40",
+      "url": "https://bike.shimano.com/ja-JP/products/service-and-upgrade-parts/pdp.P-TL-PD40.html",
+      "verification": "Página OEM: montaje/desmontaje de eje de pedal con bloqueo de 10 dientes. No usar una lista genérica de SPD-SL como matriz de modelos.",
+      "checked_on": "2026-09-07",
+      "primary": true
+    },
+    "S10": {
+      "title": "Cateye — AMPP800 + ViZ300",
+      "url": "https://www.cateye.com/intl/products/headlights/HL-EL088RC_TL-LD810/",
+      "verification": "La flecha de Group Ride remite a *Spec change: son especificaciones antes/después, no un rango de autonomía ni un modo doble.",
+      "checked_on": "2026-09-07",
+      "primary": true
+    },
+    "S11": {
+      "title": "Cateye — Manual TL-LD810/TL-LD820 v1",
+      "url": "https://www.cateye.com/intl/support/manual/data/doc/TL-LD810_820_HP_ENG_v1.pdf",
+      "verification": "Manual TLLD810/820-201223, páginas 1–2. Puerto/cable Micro-USB y Group Ride antiguo de unas 8 h. No mezclar este estado con el cambio posterior de la web.",
+      "checked_on": "2026-09-07",
+      "primary": true
+    },
+    "S12": {
+      "title": "Quad Lock — Out Front Mounts, oferta actual",
+      "url": "https://www.quadlockcase.com/products/out-front-mount",
+      "verification": "Contenido del resultado indexado oficial leído; open devuelve navegación. Ambos montajes actuales incluyen base de 35 mm y espaciadores menores. La página usa 22 y 22.2 en lugares distintos; preservar literal y revisión, sin inventar tolerancia.",
+      "checked_on": "2026-09-07",
+      "primary": true
+    },
+    "S13": {
+      "title": "Quad Lock — Which Camera/Light Adaptor Do I Need?",
+      "url": "https://support.quadlockcase.com/hc/en-us/articles/13382926442511-Which-Camera-Light-Adaptor-Do-I-need",
+      "verification": "Lectura íntegra: distingue PRO V1 discontinuado, PRO V2 y Standard V3, y cambios de interfaz en agosto de 2025.",
+      "checked_on": "2026-09-07",
+      "primary": true
+    },
+    "S14": {
+      "title": "Quad Lock — Handlebar Mount PRO Spacer Set",
+      "url": "https://www.quadlockcase.com/products/replacement-handlebar-mount-pro-spacer-set",
+      "verification": "Contenido oficial indexado: recambio para Motorcycle Handlebar Mount PRO. No prueba Out Front de bicicleta.",
+      "checked_on": "2026-09-07",
+      "primary": true
+    },
+    "S15": {
+      "title": "Sheldon Brown — Handlebar and Stem Dimensions",
+      "url": "https://www.sheldonbrown.com/cribsheet-handlebars.html",
+      "verification": "Tabla distingue zona de potencia y zona del puño. Esta página no lista 35 mm; no atribuir ese valor a esta tabla.",
+      "checked_on": "2026-09-07",
+      "primary": true
+    },
+    "S16": {
+      "title": "Garmin — Edge 540 Wireless Sensors",
+      "url": "https://www8.garmin.com/manuals/webhelp/GUID-17DE938E-466A-4746-BDBF-7A6FC1B3A32C/EN-US/GUID-09801A97-361B-4675-AD3A-6ACE25854DB3.html",
+      "verification": "Manual v6 agosto 2026. Lista tipos y ejemplos de sensores, con introducción general ANT+ o Bluetooth; no contiene una matriz completa por transporte/perfil/modelo.",
+      "checked_on": "2026-09-07",
+      "primary": true
+    },
+    "S17": {
+      "title": "Garmin — Edge 540 Specifications",
+      "url": "https://www8.garmin.com/manuals/webhelp/GUID-17DE938E-466A-4746-BDBF-7A6FC1B3A32C/EN-US/GUID-62D44DE6-9C4D-4834-8267-8B23F891A9F3.html",
+      "verification": "Esta es la URL colocada erróneamente en todas las filas de sensores. Publica batería, temperaturas, radio e IP, no esas parejas tipo/transporte.",
+      "checked_on": "2026-09-07",
+      "primary": true
+    },
+    "S18": {
+      "title": "Anker — 735 Nano II 65W A2667",
+      "url": "https://service.anker.com/product-description/a085g000004x2BVAAY?recordId=a085g000004x2BVAAY",
+      "verification": "Tabla de salida leída: coinciden máximos y repartos del caso. No trasplantar a A2668/Baseus. GaN II figura bajo tecnología de carga, no es un protocolo negociado.",
+      "checked_on": "2026-09-07",
+      "primary": true
+    },
+    "S19": {
+      "title": "Anker — 715 Nano II 65W A2663",
+      "url": "https://www.anker.com/products/a2663?Sort_by=Recommended&collections_gifts-for-professionals=&variant=41093880250518",
+      "verification": "Especificación OEM indexada: varias parejas de tensión/corriente. Contraejemplo de por qué forma USB-C y 65 W no sustituyen perfiles eléctricos.",
+      "checked_on": "2026-09-07",
+      "primary": true
+    },
+    "S20": {
+      "title": "USB-IF — USB Type-C Language/Packaging Guidelines",
+      "url": "https://www.usb.org/sites/default/files/usb_type-c_language_product_and_packaging_guidelines_20230320.pdf",
+      "verification": "PDF leído: forma del conector, versión/protocolo de datos y Power Delivery no son sinónimos; USB 2.0 Type-C puede transportar potencia sin USB4.",
+      "checked_on": "2026-09-07",
+      "primary": true
+    },
+    "S21": {
+      "title": "USB-IF — USB4",
+      "url": "https://www.usb.org/usb4",
+      "verification": "Estándar y compatibilidad con tecnologías anteriores. USB4 y Thunderbolt son identidades distintas; un token conjunto no certifica ambas.",
+      "checked_on": "2026-09-07",
+      "primary": true
+    },
+    "S22": {
+      "title": "Anker — A8758 USB-C 100W cable",
+      "url": "https://www.anker.com/products/bundle-a8758011-2",
+      "verification": "Página OEM indexada del cable exacto: carga 100 W, datos 480 Mbps, sin salida de vídeo. Ejemplo de capacidades separadas.",
+      "checked_on": "2026-09-07",
+      "primary": true
+    },
+    "S23": {
+      "title": "SanDisk — Extreme microSDXC 128GB SDSQXAA-128G-GN6MN",
+      "url": "https://www.sandisk.com/products/memory-cards/microsd-cards/sandisk-extreme-uhs-i-microsd?sku=SDSQXAA-128G-GN6MN",
+      "verification": "Ficha OEM indexada; formato, bus y declaraciones de velocidad se publican aparte. No asignar esta variante al producto de inventario SanDisk 128GB sin modelo.",
+      "checked_on": "2026-09-07",
+      "primary": true
+    },
+    "S24": {
+      "title": "Maurten — Gel 100 Caf 100, caja US",
+      "url": "https://www.maurten.com/products/us/gel-100-caf-100-box-us",
+      "verification": "Texto OEM leído: distingue caja/unidad/carbohidratos/cafeína e ingredientes y pide revisar envase vigente. No transcribe declaración general sin alérgenos.",
+      "checked_on": "2026-09-07",
+      "primary": true
+    },
+    "S25": {
+      "title": "Maurten — Fuel Guide, revisión 1.0",
+      "url": "https://www.maurten.com/distribution/TheFuelGuideWIP_230620_running.pdf",
+      "verification": "Documento OEM indexado fechado 2020: alternativa GEL 100 para plan sin cafeína. Contraejemplo de dominio que debe admitir cero; no receta ni dosis prescrita aquí.",
+      "checked_on": "2026-09-07",
+      "primary": true
+    }
+  },
+  "findings": [
+    {
+      "id": "FA01",
+      "severity": "P1",
+      "title": "El diámetro no determina la unidad del paso",
+      "reason": "thread_tpi sólo admite nominales fraccionales. M10 + 26 tpi queda bloqueado. El rótulo diámetro nominal tampoco convierte M10 en una designación completa equivalente a 10 mm x 26.",
+      "correction": "Permitir conservar paso OEM en mm o TPI sin inferirlo del prefijo; agregar nominales literales en mm y designación original. Elegir una sola representación de paso o comprobar consistencia si se guardan ambas.",
+      "negative_case": "10 mm x 26 TPI no debe bloquearse ni normalizarse a M10 x 1.0. M8 x 0.75 no se infiere de uso plato.",
+      "source_ids": [
+        "S01"
+      ],
+      "evidence": "Dart reproducido + OEM"
+    },
+    {
+      "id": "FA02",
+      "severity": "P1",
+      "title": "Torx sigue mezclando código con medida y conserva dos dueños",
+      "reason": "El nuevo número torx_size acepta 30 junto a head_drive=Torx T25 sin una incidencia.",
+      "correction": "Guardar código textual T25 en torx_size sólo cuando head_drive=Torx genérico. Si se usan tokens heredados T25/T30, éstos son el único dueño del código.",
+      "negative_case": "Torx T25 + código T30 debe bloquearse; T25 no significa 25 mm.",
+      "source_ids": [
+        "S03"
+      ],
+      "evidence": "Dart reproducido"
+    },
+    {
+      "id": "FA03",
+      "severity": "P1",
+      "title": "El kit exige rosca a golillas y confunde identidad con longitud",
+      "reason": "El caso declara M5 como rosca de una golilla; esquema no tiene sus medidas. unique_by(member_role,length_mm) rechaza pernos M5 y M6 del mismo largo.",
+      "correction": "Rosca opcional según miembro, campos propios para golilla/espaciador y conservar cada fila por ID; retirar unicidad por sólo papel/largo.",
+      "negative_case": "Kit con M5x12 y M6x12 debe admitir dos filas; golilla no requiere inventar rosca.",
+      "source_ids": [
+        "S01"
+      ],
+      "evidence": "Dart reproducido + fuente"
+    },
+    {
+      "id": "FA04",
+      "severity": "P1",
+      "title": "Capacidad de herramienta necesita dimensión identificada y operación",
+      "reason": "Un diámetro escalar sin tipo pierde el 44–45/42.7 del BBT-9. Una misma operación/interfaz puede tener varios tamaños y el unique_by actual los duplica falsamente. supported rotulado Declarada puede convertir false en no documentado.",
+      "correction": "Retirar la unicidad insuficiente; añadir nombre de dimensión, extremos y cantidad de muescas, conservar medida nominal sólo si es exacta. Rotular false como exclusión explícita y nunca inferirla de fila ausente.",
+      "negative_case": "Hex 5 y Hex 6 del mismo miembro deben coexistir; BBT-9 no se reduce a 44 mm exactos ni a toda caja BB30.",
+      "source_ids": [
+        "S02",
+        "S04",
+        "S05"
+      ],
+      "evidence": "Dart reproducido + OEM"
+    },
+    {
+      "id": "FA05",
+      "severity": "P1",
+      "title": "Dos afirmaciones de herramientas no están respaldadas como se citan",
+      "reason": "Super B publica square type, sin only ni equivalencia universal JIS/ISO. E-SHIMANO-TLPD40 copia 15 mm de vendedor; Park indica caras de 36 mm.",
+      "correction": "Limitar TB-6616 al texto OEM y no publicar falsa exclusión Octalink/ISIS desde ausencia. Corregir TL-PD40 con Park/OEM; identificar forma de bloqueo de eje y accionamiento separado.",
+      "negative_case": "Cono cuadrado no garantiza rosca de extractor; no usar llave de pedal 15 mm como interfaz de accionamiento de TL-PD40.",
+      "source_ids": [
+        "S06",
+        "S07",
+        "S08",
+        "S09"
+      ],
+      "evidence": "fuentes leídas; no prueba mecánica ejecutada"
+    },
+    {
+      "id": "FA06",
+      "severity": "P2",
+      "title": "Contenido de multiherramienta se aplana y obliga medidas ficticias",
+      "reason": "IB-3 agrupa ocho hex en size con quantity8, dos rayos en otra cadena y llama llave fija a box wrench. size requerido fuerza compuesto/plano como si fueran medidas.",
+      "correction": "Una fila por pieza/tamaño; size opcional; agregar llave estrella/cerrada. No usar una lista delimitada como conjunto calculable.",
+      "negative_case": "T25, hex 5 y hex 6 conservan sus miembros; un desmontador puede no tener tamaño declarado.",
+      "source_ids": [
+        "S03"
+      ],
+      "evidence": "OEM + esquema"
+    },
+    {
+      "id": "FA07",
+      "severity": "P1",
+      "title": "USB extraíble y juegos conservan guardas escalares incorrectas",
+      "reason": "charge_connector se permite sólo con Recargable USB y bloquea la nueva opción Recargable USB (batería extraíble). power_source aún es obligatorio y global en juegos, y light_mount_kind sigue global.",
+      "correction": "Ampliar guarda de carga para las fuentes USB que cargan; separar entrada de alimentación externa de conector de carga. Aplicar los escalares de alimentación/montaje sólo a luz única y conservar las propiedades por miembro.",
+      "negative_case": "Luz USB extraíble con USB-C debe poder guardar el puerto. Kit dinamo delante + batería atrás no debe inventar una alimentación común.",
+      "source_ids": [
+        "S10",
+        "S11"
+      ],
+      "evidence": "Dart reproducido + lectura de contrato congelado"
+    },
+    {
+      "id": "FA08",
+      "severity": "P1",
+      "title": "Cateye: revisión de especificación se leyó como rango",
+      "reason": "Group Ride 100→15 lm / 8→10 h está señalado con *Spec change. El caso crea modo doble/rango que el OEM no declara. El puerto trasero USB-A contradice Micro-USB del manual.",
+      "correction": "Separar revisión antigua y actual; para el caso de la web actual usar 15 lm/10 h y Micro-USB en TL-LD810. Dejar lote de inventario sin asignación hasta identificar revisión.",
+      "negative_case": "No aprobar una fila 100/15 lm, 8–10 h como modo único de ViZ300; TL-LD810N USB-C sería otro código.",
+      "source_ids": [
+        "S10",
+        "S11"
+      ],
+      "evidence": "OEM web y PDF leídos"
+    },
+    {
+      "id": "FA09",
+      "severity": "P1",
+      "title": "Filas relacionadas no tienen integridad referencial entre campos",
+      "reason": "rows_schema v1 comprueba forma, orden y unicidad local; admite member_id de modo sin luz y port_id de reparto sin puerto. No hay FK, agregación ni condición de celda contra otra ficha.",
+      "correction": "Antes de usar estas filas como dato completo, validar vínculos por ID y revisión, o concentrar la configuración en una fila autocontenida. No inventar claves de schema v1 que Dart/SQL no conocen.",
+      "negative_case": "Modo ghost sin miembro y reparto al puerto ghost deben ser incidencias de coherencia; no incompatibilidad global de la familia.",
+      "source_ids": [
+        "S10",
+        "S18"
+      ],
+      "evidence": "Dart reproducido + lectura SQL190/200"
+    },
+    {
+      "id": "FA10",
+      "severity": "P1",
+      "title": "Quad Lock PRO sin 35 mm es una afirmación sin versión",
+      "reason": "La oferta OEM actual incluye 35 mm en PRO. Soporte distingue V1/V2. La segunda fuente de espaciadores citada es para motocicleta.",
+      "correction": "Rechazar caso PRO_no_35 sin versión. Separar identidad/revisión del montaje y accesorio. No trasladar diámetros ni adaptadores entre V1/V2, estándar/PRO o moto/bicicleta.",
+      "negative_case": "No convertir ausencia de fila35 en negativa; tampoco copiar 35 actual a un PRO antiguo desconocido.",
+      "source_ids": [
+        "S12",
+        "S13",
+        "S14"
+      ],
+      "evidence": "OEM: search oficial + soporte leído"
+    },
+    {
+      "id": "FA11",
+      "severity": "P1",
+      "title": "Ajuste discreto y unión propietaria aún pierden alternativas",
+      "reason": "unique_by sólo diámetro rechaza alternativas de montaje. El caso PRO inventa el método de ajuste y omite versión; el selector de unión no representa una interfaz compatible tanto con carcasa como adaptador. Una celda required omitida sólo genera aviso, no bloqueo.",
+      "correction": "Conservar el método desconocido como celda ausente con aviso; retirar unicidad por diámetro, identificar revisión y separar incluido de necesario. Añadir la opción de interfaz propietaria carcasa/adaptador y permitir device_system ahí.",
+      "negative_case": "Medida publicada con espaciador no identificado sigue incompleta, no imposible. 30 mm no se acepta desde lista22/25.4/31.8/35.",
+      "source_ids": [
+        "S12",
+        "S15"
+      ],
+      "evidence": "OEM + esquema"
+    },
+    {
+      "id": "FA12",
+      "severity": "P1",
+      "title": "Rangos escalares invertidos siguen admitidos",
+      "reason": "Con bar_fit_representation continuo, mínimo35/máximo22 y ancho de dispositivo100/55 no producen bloqueo. Es un hueco heredado expuesto por el rediseño, no una regla OEM pendiente.",
+      "correction": "Añadir orden de extremos en el contrato ejecutable o usar filas con ordered_pairs. No pretender que allowed_when v2 compare dos campos: sólo compara campo/constante.",
+      "negative_case": "Los dos rangos invertidos deben rechazarse por coherencia aritmética, sin certificar ajuste por un rango bien ordenado.",
+      "source_ids": [
+        "S15"
+      ],
+      "evidence": "Dart reproducido + SQL200"
+    },
+    {
+      "id": "FA13",
+      "severity": "P1",
+      "title": "Matriz Garmin por transporte no se obtiene de la fuente citada",
+      "reason": "La URL de cada fila es Specifications, no Wireless Sensors. Esta última tampoco es matriz por protocolo/modelo; llenar ANT+ por intuición no preserva desconocido. ANT+ false con Bluetooth true y fila ANT+ se acepta.",
+      "correction": "Conservar capacidades generales documentadas y parejas por perfil/modelo sólo con fuente exacta. Añadir estado admitido/exclusión y perfil. Validar filas contra falsos explícitos del enlace; enlaces propietarios no se equiparan a ANT+/Bluetooth.",
+      "negative_case": "Radar/ANT+ no puede convivir con ANT+ false; lista general de Heart Rate no garantiza cada modelo/transporte.",
+      "source_ids": [
+        "S16",
+        "S17"
+      ],
+      "evidence": "Dart reproducido + manual OEM"
+    },
+    {
+      "id": "FA14",
+      "severity": "P1",
+      "title": "Puertos aún omiten perfiles eléctricos y género",
+      "reason": "connector/direction/max_power no conserva V/A/protocolo por perfil ni género del conector. No permite explicar por qué dos USB-C 65 W no ofrecen la misma alimentación.",
+      "correction": "Agregar perfiles de salida por puerto y modo con tensión/corriente/PD-PPS y límites declarados; género aparte. Mantener desconocido si la fuente no lo publica.",
+      "negative_case": "Compartir USB-C y 65 W no debe aprobar una pareja que requiere un perfil ausente o desconocido.",
+      "source_ids": [
+        "S18",
+        "S19",
+        "S20"
+      ],
+      "evidence": "OEM + ausencia de columnas; no prueba eléctrica"
+    },
+    {
+      "id": "FA15",
+      "severity": "P1",
+      "title": "Reparto fijo y máximos compartidos necesitan significado diferente",
+      "reason": "Las cifras A2667 del ejemplo coinciden con su tabla. Pero power_w no declara si es reparto fijo, máximo individual o parte de un presupuesto compartido; no existe guard de referencias.",
+      "correction": "Añadir tipo de límite/reparto y presupuesto compartido por configuración. Comprobar cantidades sólo según esa semántica. No aplicar sum(max_por_puerto)<=total universalmente.",
+      "negative_case": "Dos máximos de 65 pueden compartir total 65 sin ser imposibles; dos asignaciones simultáneas garantizadas 65+65 sí contradicen total 65.",
+      "source_ids": [
+        "S18"
+      ],
+      "evidence": "tabla OEM + Dart admite configuración inconsistente con el ejemplo"
+    },
+    {
+      "id": "FA16",
+      "severity": "P1",
+      "title": "Cable y potencia nominal conservan dueños ambiguos",
+      "reason": "USB4 / Thunderbolt une estándares distintos. rated_power_w, ahora total, todavía aplica al cable junto al nuevo cable_power_capacity_w.",
+      "correction": "Conservar declaración de datos literal o protocolos separados; no alias USB4/Thunderbolt. Limitar potencia nominal total al cargador; capacidad de cable queda en su campo con evidencia.",
+      "negative_case": "USB-C 100 W no implica vídeo/USB4. Un cable no debe guardar dos capacidades de potencia contradictorias como total y cable.",
+      "source_ids": [
+        "S20",
+        "S21",
+        "S22"
+      ],
+      "evidence": "OEM + contratos"
+    },
+    {
+      "id": "FA17",
+      "severity": "P1",
+      "title": "Nutrición permite negativos, impide cero cafeína y pierde denominador",
+      "reason": "amount no tiene min; caffeine_mg exige >0. Otro no identifica unidad/nutriente y Por porción declarada no conserva tamaño. Cafeína se duplica en escalar y fila.",
+      "correction": "min0 para magnitudes nutricionales; base cuantificada/referencia de porción y unidad/nutriente literal para Otro. Un solo dueño de cafeína (escalar con base); no duplicarla en filas.",
+      "negative_case": "−25g carbohidratos se rechaza,0mg cafeína se conserva. Cinco de Otro por porción sin unidad/base queda incompleto.",
+      "source_ids": [
+        "S24",
+        "S25"
+      ],
+      "evidence": "Dart reproducido + OEM"
+    },
+    {
+      "id": "FA18",
+      "severity": "P1",
+      "title": "Sin fuente satisface el prerrequisito de declaraciones alimentarias",
+      "reason": "hasKnownSpecValue sólo reconoce los sentinelas desconocido/unknown. Sin fuente + allergen_note/ingredients no produce ni aviso. La única fuente web del caso se declara falsamente Etiqueta del envase.",
+      "correction": "Guarda explícita de fuentes válidas y referencia concreta; agregar documento/página OEM. No guardar una conclusión universal de ausencia de alérgenos en un booleano sin alcance. Conservar el texto exacto de declaración, separado de notas de investigación.",
+      "negative_case": "Sin fuente no habilita ingredientes verificados. Leche vegetal o receta genérica no prueba ausencia de alérgenos/cross-contact.",
+      "source_ids": [
+        "S24"
+      ],
+      "evidence": "Dart reproducido + fuente OEM"
+    },
+    {
+      "id": "FA19",
+      "severity": "P2",
+      "title": "Los 20 casos no son evidencia de llenado ni bloques esperados reales",
+      "reason": "Todos 20 pasan sin blocking bajo validador central; hay 15 avisos en 9 casos. required_missing y prerequisites son no bloqueantes. sources=[] es válido; sólo cada URL presente debe validarse.",
+      "correction": "Renombrar expected_blocking de los casos incompletos a expected_nonblocking; separar fixture sintética, candidato de inventario y dato OEM por revisión. No convertir cantidad de pruebas en cobertura.",
+      "negative_case": "AE sin miembros y Baseus sin puertos siguen borradores incompletos. Un título no prueba leche de vaca ni sustitución ofrecida.",
+      "source_ids": [
+        "S24"
+      ],
+      "evidence": "Dart: 16 pruebas;20 casos de representación, no productos guardados"
+    }
+  ],
+  "patch_adjudications": [
+    {
+      "patch_id": "AD-ND09-label-thread",
+      "patch_index": 0,
+      "template": null,
+      "key": "thread",
+      "path": "/definitions/thread/label",
+      "decision": "corregir",
+      "reason": "La etiqueta debe preservar que el token es una designación nominal declarada, no un diámetro medido ni rosca completa.",
+      "finding_ids": [
+        "FA01"
+      ],
+      "after_override": "Designación nominal de la rosca (según etiqueta)"
+    },
+    {
+      "patch_id": "AD-ND09-def-thread",
+      "patch_index": 1,
+      "template": null,
+      "key": "thread",
+      "path": "/definitions/thread/allowed_values",
+      "decision": "corregir",
+      "reason": "Agregar nominales métricos literales para las combinaciones mm/TPI, preservando opciones previas sin reinterpretarlas.",
+      "finding_ids": [
+        "FA01"
+      ],
+      "after_override": [
+        "M4",
+        "M5",
+        "M6",
+        "M8",
+        "M10",
+        "M12",
+        "M14",
+        "3/8\"",
+        "Otra",
+        "Desconocido / sin confirmar",
+        "M3",
+        "M7",
+        "M9",
+        "M15",
+        "M18",
+        "M19",
+        "M20",
+        "M22",
+        "5/16\"",
+        "1/2\"",
+        "9/16\"",
+        "9 mm",
+        "10 mm",
+        "36 mm",
+        "2.2 mm"
+      ]
+    },
+    {
+      "patch_id": "AD-ND09-def-head_drive",
+      "patch_index": 2,
+      "template": null,
+      "key": "head_drive",
+      "path": "/definitions/head_drive/allowed_values",
+      "decision": "aceptar",
+      "reason": "Representa una propiedad declarada sin deducir ajuste del uso; aplicar sólo junto a correcciones de rosca/kit.",
+      "finding_ids": []
+    },
+    {
+      "patch_id": "AD-ND09-fastener-thread",
+      "patch_index": 3,
+      "template": "fastener",
+      "key": "thread",
+      "path": "/templates/74/form_contract/{allowed_when,required_when}/thread",
+      "decision": "aceptar",
+      "reason": "Representa una propiedad declarada sin deducir ajuste del uso; aplicar sólo junto a correcciones de rosca/kit.",
+      "finding_ids": []
+    },
+    {
+      "patch_id": "AD-ND09-fastener-length_mm",
+      "patch_index": 4,
+      "template": "fastener",
+      "key": "length_mm",
+      "path": "/templates/74/form_contract/{allowed_when,prerequisites}/length_mm",
+      "decision": "aceptar",
+      "reason": "Representa una propiedad declarada sin deducir ajuste del uso; aplicar sólo junto a correcciones de rosca/kit.",
+      "finding_ids": []
+    },
+    {
+      "patch_id": "AD-ND09-fastener-thread_pitch_mm",
+      "patch_index": 5,
+      "template": "fastener",
+      "key": "thread_pitch_mm",
+      "path": "/templates/74/fields/- y /templates/74/form_contract/{roles,semantic_roles,allowed_when,required_when,evidence_requirements[,prerequisites,allowed_options]}/thread_pitch_mm",
+      "decision": "corregir",
+      "reason": "No condicionar mm de paso al prefijo M del diámetro.",
+      "finding_ids": [
+        "FA01"
+      ],
+      "after_override": {
+        "field_entry": {
+          "key": "thread_pitch_mm",
+          "section_key": "measurement",
+          "sort_order": 100,
+          "is_required": false,
+          "visibility_rules": [],
+          "option_rules": [],
+          "constraint_rules": []
+        },
+        "roles": "measurement",
+        "semantic_roles": "compatibility",
+        "allowed_when": {
+          "kind": "when",
+          "rows": [
+            [
+              {
+                "field": "fastener_kind",
+                "operator": "in",
+                "value_type": "token",
+                "value": [
+                  "Perno",
+                  "Tornillo",
+                  "Tuerca",
+                  "Otro"
+                ]
+              }
+            ]
+          ]
+        },
+        "required_when": {
+          "kind": "never"
+        },
+        "evidence_requirements": "package_or_label",
+        "definition_used_by_append": "fastener",
+        "prerequisites": [
+          "thread"
+        ]
+      }
+    },
+    {
+      "patch_id": "AD-ND09-fastener-thread_tpi",
+      "patch_index": 6,
+      "template": "fastener",
+      "key": "thread_tpi",
+      "path": "/templates/74/fields/- y /templates/74/form_contract/{roles,semantic_roles,allowed_when,required_when,evidence_requirements[,prerequisites,allowed_options]}/thread_tpi",
+      "decision": "corregir",
+      "reason": "No condicionar TPI a diámetro fraccional.",
+      "finding_ids": [
+        "FA01"
+      ],
+      "after_override": {
+        "field_entry": {
+          "key": "thread_tpi",
+          "section_key": "measurement",
+          "sort_order": 110,
+          "is_required": false,
+          "visibility_rules": [],
+          "option_rules": [],
+          "constraint_rules": []
+        },
+        "roles": "measurement",
+        "semantic_roles": "compatibility",
+        "allowed_when": {
+          "kind": "when",
+          "rows": [
+            [
+              {
+                "field": "fastener_kind",
+                "operator": "in",
+                "value_type": "token",
+                "value": [
+                  "Perno",
+                  "Tornillo",
+                  "Tuerca",
+                  "Otro"
+                ]
+              }
+            ]
+          ]
+        },
+        "required_when": {
+          "kind": "never"
+        },
+        "evidence_requirements": "package_or_label",
+        "definition_used_by_append": "fastener",
+        "prerequisites": [
+          "thread"
+        ]
+      }
+    },
+    {
+      "patch_id": "AD-ND09-fastener-thread_hand",
+      "patch_index": 7,
+      "template": "fastener",
+      "key": "thread_hand",
+      "path": "/templates/74/fields/- y /templates/74/form_contract/{roles,semantic_roles,allowed_when,required_when,evidence_requirements[,prerequisites,allowed_options]}/thread_hand",
+      "decision": "aceptar",
+      "reason": "Representa una propiedad declarada sin deducir ajuste del uso; aplicar sólo junto a correcciones de rosca/kit.",
+      "finding_ids": []
+    },
+    {
+      "patch_id": "AD-ND09-fastener-length_datum",
+      "patch_index": 8,
+      "template": "fastener",
+      "key": "length_datum",
+      "path": "/templates/74/fields/- y /templates/74/form_contract/{roles,semantic_roles,allowed_when,required_when,evidence_requirements[,prerequisites,allowed_options]}/length_datum",
+      "decision": "aceptar",
+      "reason": "Representa una propiedad declarada sin deducir ajuste del uso; aplicar sólo junto a correcciones de rosca/kit.",
+      "finding_ids": []
+    },
+    {
+      "patch_id": "AD-ND09-fastener-head_drive_size_mm",
+      "patch_index": 9,
+      "template": "fastener",
+      "key": "head_drive_size_mm",
+      "path": "/templates/74/fields/- y /templates/74/form_contract/{roles,semantic_roles,allowed_when,required_when,evidence_requirements[,prerequisites,allowed_options]}/head_drive_size_mm",
+      "decision": "aceptar",
+      "reason": "Representa una propiedad declarada sin deducir ajuste del uso; aplicar sólo junto a correcciones de rosca/kit.",
+      "finding_ids": []
+    },
+    {
+      "patch_id": "AD-ND09-fastener-torx_size",
+      "patch_index": 10,
+      "template": "fastener",
+      "key": "torx_size",
+      "path": "/templates/74/fields/- y /templates/74/form_contract/{roles,semantic_roles,allowed_when,required_when,evidence_requirements[,prerequisites,allowed_options]}/torx_size",
+      "decision": "corregir",
+      "reason": "Código Torx textual y un solo dueño al coexistir con tokens heredados.",
+      "finding_ids": [
+        "FA02"
+      ],
+      "after_override": {
+        "field_entry": {
+          "key": "torx_size",
+          "section_key": "measurement",
+          "sort_order": 150,
+          "is_required": false,
+          "visibility_rules": [],
+          "option_rules": [],
+          "constraint_rules": []
+        },
+        "roles": "declaration",
+        "semantic_roles": "intrinsic",
+        "allowed_when": {
+          "kind": "when",
+          "rows": [
+            [
+              {
+                "field": "head_drive",
+                "operator": "in",
+                "value_type": "token",
+                "value": [
+                  "Torx"
+                ]
+              }
+            ]
+          ]
+        },
+        "required_when": {
+          "kind": "never"
+        },
+        "evidence_requirements": "package_or_label",
+        "definition_used_by_append": "fastener"
+      }
+    },
+    {
+      "patch_id": "AD-ND09-fastener-strength_class_claim",
+      "patch_index": 11,
+      "template": "fastener",
+      "key": "strength_class_claim",
+      "path": "/templates/74/fields/- y /templates/74/form_contract/{roles,semantic_roles,allowed_when,required_when,evidence_requirements[,prerequisites,allowed_options]}/strength_class_claim",
+      "decision": "aceptar",
+      "reason": "Representa una propiedad declarada sin deducir ajuste del uso; aplicar sólo junto a correcciones de rosca/kit.",
+      "finding_ids": []
+    },
+    {
+      "patch_id": "AD-ND09-fastener-fastener_kit_members",
+      "patch_index": 12,
+      "template": "fastener",
+      "key": "fastener_kit_members",
+      "path": "/templates/74/fields/- y /templates/74/form_contract/{roles,semantic_roles,allowed_when,required_when,evidence_requirements[,prerequisites,allowed_options]}/fastener_kit_members",
+      "decision": "corregir",
+      "reason": "Corregir rosca de miembros no roscados y clave de unicidad insuficiente.",
+      "finding_ids": [
+        "FA03"
+      ],
+      "resolution": "definition_overrides[fastener_kit_members]"
+    },
+    {
+      "patch_id": "AD-ND09-seat_clamp-clamp_thread_pitch_mm",
+      "patch_index": 13,
+      "template": "seat_clamp",
+      "key": "clamp_thread_pitch_mm",
+      "path": "/templates/44/fields/- y /templates/44/form_contract/{roles,semantic_roles,allowed_when,required_when,evidence_requirements[,prerequisites,allowed_options]}/clamp_thread_pitch_mm",
+      "decision": "aceptar",
+      "reason": "Representa una propiedad declarada sin deducir ajuste del uso; aplicar sólo junto a correcciones de rosca/kit.",
+      "finding_ids": []
+    },
+    {
+      "patch_id": "AD-ND09-seat_clamp-clamp_bolt_length_mm",
+      "patch_index": 14,
+      "template": "seat_clamp",
+      "key": "clamp_bolt_length_mm",
+      "path": "/templates/44/fields/- y /templates/44/form_contract/{roles,semantic_roles,allowed_when,required_when,evidence_requirements[,prerequisites,allowed_options]}/clamp_bolt_length_mm",
+      "decision": "aceptar",
+      "reason": "Representa una propiedad declarada sin deducir ajuste del uso; aplicar sólo junto a correcciones de rosca/kit.",
+      "finding_ids": []
+    },
+    {
+      "patch_id": "AD-ND09-seat_clamp-length_datum",
+      "patch_index": 15,
+      "template": "seat_clamp",
+      "key": "length_datum",
+      "path": "/templates/44/fields/- y /templates/44/form_contract/{roles,semantic_roles,allowed_when,required_when,evidence_requirements[,prerequisites,allowed_options]}/length_datum",
+      "decision": "aceptar",
+      "reason": "Representa una propiedad declarada sin deducir ajuste del uso; aplicar sólo junto a correcciones de rosca/kit.",
+      "finding_ids": []
+    },
+    {
+      "patch_id": "AD-ND10-def-tool_kind",
+      "patch_index": 16,
+      "template": null,
+      "key": "tool_kind",
+      "path": "/definitions/tool_kind/allowed_values",
+      "decision": "aceptar",
+      "reason": "Separa declaración/resumen o vocabulario de la capacidad por operación; no convierte velocidades ni marca en compatibilidad.",
+      "finding_ids": []
+    },
+    {
+      "patch_id": "AD-ND10-workshop_tool-chain_tool_speeds",
+      "patch_index": 17,
+      "template": "workshop_tool",
+      "key": "chain_tool_speeds",
+      "path": "/templates/75/form_contract/{allowed_when,required_when,roles,semantic_roles}/chain_tool_speeds",
+      "decision": "aceptar",
+      "reason": "Separa declaración/resumen o vocabulario de la capacidad por operación; no convierte velocidades ni marca en compatibilidad.",
+      "finding_ids": []
+    },
+    {
+      "patch_id": "AD-ND10-workshop_tool-tool_interface",
+      "patch_index": 18,
+      "template": "workshop_tool",
+      "key": "tool_interface",
+      "path": "/templates/75/form_contract/{roles,semantic_roles}/tool_interface",
+      "decision": "aceptar",
+      "reason": "Separa declaración/resumen o vocabulario de la capacidad por operación; no convierte velocidades ni marca en compatibilidad.",
+      "finding_ids": []
+    },
+    {
+      "patch_id": "AD-ND10-workshop_tool-tool_capabilities",
+      "patch_index": 19,
+      "template": "workshop_tool",
+      "key": "tool_capabilities",
+      "path": "/templates/75/fields/- y /templates/75/form_contract/{roles,semantic_roles,allowed_when,required_when,evidence_requirements[,prerequisites,allowed_options]}/tool_capabilities",
+      "decision": "corregir",
+      "reason": "Corregir dimensión/operación, exclusión explícita y unicidad; FA05 limita fuentes.",
+      "finding_ids": [
+        "FA04"
+      ],
+      "resolution": "definition_overrides[tool_capabilities]"
+    },
+    {
+      "patch_id": "AD-ND10-workshop_tool-tool_bits_included",
+      "patch_index": 20,
+      "template": "workshop_tool",
+      "key": "tool_bits_included",
+      "path": "/templates/75/fields/- y /templates/75/form_contract/{roles,semantic_roles,allowed_when,required_when,evidence_requirements[,prerequisites,allowed_options]}/tool_bits_included",
+      "decision": "corregir",
+      "reason": "Contenido por miembro/tamaño; no medida obligatoria para toda pieza.",
+      "finding_ids": [
+        "FA06"
+      ],
+      "resolution": "definition_overrides[tool_bits_included]"
+    },
+    {
+      "patch_id": "AD-ND12-def-power_source",
+      "patch_index": 21,
+      "template": null,
+      "key": "power_source",
+      "path": "/definitions/power_source/allowed_values",
+      "decision": "aceptar",
+      "reason": "La guarda reduce la mezcla entre luz única y juego; no certifica modos ni reemplaza los vínculos pendientes.",
+      "finding_ids": []
+    },
+    {
+      "patch_id": "AD-ND12-light-lumens_claimed",
+      "patch_index": 22,
+      "template": "light",
+      "key": "lumens_claimed",
+      "path": "/templates/78/form_contract/{allowed_when}/lumens_claimed",
+      "decision": "aceptar",
+      "reason": "La guarda reduce la mezcla entre luz única y juego; no certifica modos ni reemplaza los vínculos pendientes.",
+      "finding_ids": []
+    },
+    {
+      "patch_id": "AD-ND12-light-battery_capacity_mah",
+      "patch_index": 23,
+      "template": "light",
+      "key": "battery_capacity_mah",
+      "path": "/templates/78/form_contract/{allowed_when}/battery_capacity_mah",
+      "decision": "aceptar",
+      "reason": "La guarda reduce la mezcla entre luz única y juego; no certifica modos ni reemplaza los vínculos pendientes.",
+      "finding_ids": []
+    },
+    {
+      "patch_id": "AD-ND12-light-charge_connector",
+      "patch_index": 24,
+      "template": "light",
+      "key": "charge_connector",
+      "path": "/templates/78/form_contract/{allowed_when}/charge_connector",
+      "decision": "corregir",
+      "reason": "La batería USB extraíble necesita la misma ruta de conector de carga.",
+      "finding_ids": [
+        "FA07"
+      ],
+      "after_override": {
+        "allowed_when": {
+          "kind": "when",
+          "rows": [
+            [
+              {
+                "field": "light_position",
+                "operator": "in",
+                "value_type": "token",
+                "value": [
+                  "Delantera",
+                  "Trasera",
+                  "Casco / otra"
+                ]
+              },
+              {
+                "field": "power_source",
+                "operator": "in",
+                "value_type": "token",
+                "value": [
+                  "Recargable USB",
+                  "Recargable USB (batería extraíble)"
+                ]
+              }
+            ]
+          ]
+        }
+      }
+    },
+    {
+      "patch_id": "AD-ND12-light-mount_diameter_min_mm",
+      "patch_index": 25,
+      "template": "light",
+      "key": "mount_diameter_min_mm",
+      "path": "/templates/78/form_contract/{allowed_when}/mount_diameter_min_mm",
+      "decision": "aceptar",
+      "reason": "La guarda reduce la mezcla entre luz única y juego; no certifica modos ni reemplaza los vínculos pendientes.",
+      "finding_ids": []
+    },
+    {
+      "patch_id": "AD-ND12-light-mount_diameter_max_mm",
+      "patch_index": 26,
+      "template": "light",
+      "key": "mount_diameter_max_mm",
+      "path": "/templates/78/form_contract/{allowed_when}/mount_diameter_max_mm",
+      "decision": "aceptar",
+      "reason": "La guarda reduce la mezcla entre luz única y juego; no certifica modos ni reemplaza los vínculos pendientes.",
+      "finding_ids": []
+    },
+    {
+      "patch_id": "AD-ND12-light-ip_rating",
+      "patch_index": 27,
+      "template": "light",
+      "key": "ip_rating",
+      "path": "/templates/78/form_contract/{allowed_when}/ip_rating",
+      "decision": "aceptar",
+      "reason": "La guarda reduce la mezcla entre luz única y juego; no certifica modos ni reemplaza los vínculos pendientes.",
+      "finding_ids": []
+    },
+    {
+      "patch_id": "AD-ND12-light-modes_count",
+      "patch_index": 28,
+      "template": "light",
+      "key": "modes_count",
+      "path": "/templates/78/form_contract/{allowed_when}/modes_count",
+      "decision": "aceptar",
+      "reason": "La guarda reduce la mezcla entre luz única y juego; no certifica modos ni reemplaza los vínculos pendientes.",
+      "finding_ids": []
+    },
+    {
+      "patch_id": "AD-ND12-light-runtime_claim_h",
+      "patch_index": 29,
+      "template": "light",
+      "key": "runtime_claim_h",
+      "path": "/templates/78/form_contract/{allowed_when,roles,semantic_roles}/runtime_claim_h",
+      "decision": "aceptar",
+      "reason": "La guarda reduce la mezcla entre luz única y juego; no certifica modos ni reemplaza los vínculos pendientes.",
+      "finding_ids": []
+    },
+    {
+      "patch_id": "AD-ND12-light-light_member_configurations",
+      "patch_index": 30,
+      "template": "light",
+      "key": "light_member_configurations",
+      "path": "/templates/78/fields/- y /templates/78/form_contract/{roles,semantic_roles,allowed_when,required_when,evidence_requirements[,prerequisites,allowed_options]}/light_member_configurations",
+      "decision": "corregir",
+      "reason": "Conservar revisión y forma/puerto por miembro; guard de referencias antes de tratar filas como completas.",
+      "finding_ids": [
+        "FA09"
+      ],
+      "resolution": "definition_overrides[light_member_configurations]"
+    },
+    {
+      "patch_id": "AD-ND12-light-light_mode_configurations",
+      "patch_index": 31,
+      "template": "light",
+      "key": "light_mode_configurations",
+      "path": "/templates/78/fields/- y /templates/78/form_contract/{roles,semantic_roles,allowed_when,required_when,evidence_requirements[,prerequisites,allowed_options]}/light_mode_configurations",
+      "decision": "corregir",
+      "reason": "Separar revisiones de modos y resolver member_id; no convertir cambio OEM en rango.",
+      "finding_ids": [
+        "FA08"
+      ],
+      "resolution": "definition_overrides[light_mode_configurations]"
+    },
+    {
+      "patch_id": "AD-ND13-accessory_mount-bike_attachment_kind",
+      "patch_index": 32,
+      "template": "accessory_mount",
+      "key": "bike_attachment_kind",
+      "path": "/templates/82/fields/- y /templates/82/form_contract/{roles,semantic_roles,allowed_when,required_when,evidence_requirements[,prerequisites,allowed_options]}/bike_attachment_kind",
+      "decision": "aceptar",
+      "reason": "Separa lado bicicleta y dispositivo; esta aceptación no cubre todos los soportes ni valida un ajuste.",
+      "finding_ids": []
+    },
+    {
+      "patch_id": "AD-ND13-accessory_mount-bar_fit_representation",
+      "patch_index": 33,
+      "template": "accessory_mount",
+      "key": "bar_fit_representation",
+      "path": "/templates/82/fields/- y /templates/82/form_contract/{roles,semantic_roles,allowed_when,required_when,evidence_requirements[,prerequisites,allowed_options]}/bar_fit_representation",
+      "decision": "corregir",
+      "reason": "El ajuste declarado también puede usar correa y debe identificar zona de montaje.",
+      "finding_ids": [
+        "FA11"
+      ],
+      "after_override": {
+        "field_entry": {
+          "key": "bar_fit_representation",
+          "section_key": "primary",
+          "sort_order": 110,
+          "is_required": false,
+          "visibility_rules": [],
+          "option_rules": [],
+          "constraint_rules": []
+        },
+        "roles": "primary",
+        "semantic_roles": "compatibility",
+        "allowed_when": {
+          "kind": "when",
+          "rows": [
+            [
+              {
+                "field": "accessory_mount_kind",
+                "operator": "eq",
+                "value_type": "token",
+                "value": "Soporte de teléfono"
+              },
+              {
+                "field": "bike_attachment_kind",
+                "operator": "in",
+                "value_type": "token",
+                "value": [
+                  "Abrazadera de manubrio",
+                  "Abrazadera de potencia / tija",
+                  "Correa elástica / silicona"
+                ]
+              }
+            ]
+          ]
+        },
+        "required_when": {
+          "kind": "when",
+          "rows": [
+            [
+              {
+                "field": "accessory_mount_kind",
+                "operator": "eq",
+                "value_type": "token",
+                "value": "Soporte de teléfono"
+              },
+              {
+                "field": "bike_attachment_kind",
+                "operator": "in",
+                "value_type": "token",
+                "value": [
+                  "Abrazadera de manubrio",
+                  "Abrazadera de potencia / tija",
+                  "Correa elástica / silicona"
+                ]
+              }
+            ]
+          ]
+        },
+        "evidence_requirements": "oem_or_package",
+        "definition_used_by_append": "accessory_mount"
+      }
+    },
+    {
+      "patch_id": "AD-ND13-accessory_mount-bar_diameter_min_mm",
+      "patch_index": 34,
+      "template": "accessory_mount",
+      "key": "bar_diameter_min_mm",
+      "path": "/templates/82/form_contract/{allowed_when}/bar_diameter_min_mm",
+      "decision": "corregir",
+      "reason": "La guarda de representación es válida; falta el control ejecutable de orden de extremos.",
+      "finding_ids": [
+        "FA12"
+      ],
+      "resolution": "Resolve the linked finding and additional_required_changes before import; no uncertain override supplied."
+    },
+    {
+      "patch_id": "AD-ND13-accessory_mount-bar_diameter_max_mm",
+      "patch_index": 35,
+      "template": "accessory_mount",
+      "key": "bar_diameter_max_mm",
+      "path": "/templates/82/form_contract/{allowed_when}/bar_diameter_max_mm",
+      "decision": "corregir",
+      "reason": "La guarda de representación es válida; falta el control ejecutable de orden de extremos.",
+      "finding_ids": [
+        "FA12"
+      ],
+      "resolution": "Resolve the linked finding and additional_required_changes before import; no uncertain override supplied."
+    },
+    {
+      "patch_id": "AD-ND13-accessory_mount-bar_clamp_configurations",
+      "patch_index": 36,
+      "template": "accessory_mount",
+      "key": "bar_clamp_configurations",
+      "path": "/templates/82/fields/- y /templates/82/form_contract/{roles,semantic_roles,allowed_when,required_when,evidence_requirements[,prerequisites,allowed_options]}/bar_clamp_configurations",
+      "decision": "corregir",
+      "reason": "No obligar método inventado ni colapsar configuraciones del mismo diámetro.",
+      "finding_ids": [
+        "FA11"
+      ],
+      "resolution": "definition_overrides[bar_clamp_configurations]"
+    },
+    {
+      "patch_id": "AD-ND13-accessory_mount-device_attachment_kind",
+      "patch_index": 37,
+      "template": "accessory_mount",
+      "key": "device_attachment_kind",
+      "path": "/templates/82/fields/- y /templates/82/form_contract/{roles,semantic_roles,allowed_when,required_when,evidence_requirements[,prerequisites,allowed_options]}/device_attachment_kind",
+      "decision": "corregir",
+      "reason": "Una interfaz propietaria puede admitir carcasa y adaptador como alternativas de la misma pieza.",
+      "finding_ids": [
+        "FA11"
+      ],
+      "resolution": "definition_overrides[device_attachment_kind]"
+    },
+    {
+      "patch_id": "AD-ND13-accessory_mount-device_system",
+      "patch_index": 38,
+      "template": "accessory_mount",
+      "key": "device_system",
+      "path": "/templates/82/fields/- y /templates/82/form_contract/{roles,semantic_roles,allowed_when,required_when,evidence_requirements[,prerequisites,allowed_options]}/device_system",
+      "decision": "corregir",
+      "reason": "Incluir la alternativa propietaria combinada en el sistema declarado.",
+      "finding_ids": [
+        "FA11"
+      ],
+      "after_override": {
+        "field_entry": {
+          "key": "device_system",
+          "section_key": "primary",
+          "sort_order": 140,
+          "is_required": false,
+          "visibility_rules": [],
+          "option_rules": [],
+          "constraint_rules": []
+        },
+        "roles": "primary",
+        "semantic_roles": "identity",
+        "allowed_when": {
+          "kind": "when",
+          "rows": [
+            [
+              {
+                "field": "accessory_mount_kind",
+                "operator": "eq",
+                "value_type": "token",
+                "value": "Soporte de teléfono"
+              },
+              {
+                "field": "device_attachment_kind",
+                "operator": "in",
+                "value_type": "token",
+                "value": [
+                  "Carcasa propietaria",
+                  "Adaptador universal adhesivo",
+                  "Interfaz propietaria (carcasa / adaptador)"
+                ]
+              }
+            ]
+          ]
+        },
+        "required_when": {
+          "kind": "never"
+        },
+        "evidence_requirements": "package_or_label",
+        "definition_used_by_append": "accessory_mount"
+      }
+    },
+    {
+      "patch_id": "AD-ND13-accessory_mount-device_width_min_mm",
+      "patch_index": 39,
+      "template": "accessory_mount",
+      "key": "device_width_min_mm",
+      "path": "/templates/82/form_contract/{allowed_when}/device_width_min_mm",
+      "decision": "aceptar",
+      "reason": "Separa lado bicicleta y dispositivo; esta aceptación no cubre todos los soportes ni valida un ajuste.",
+      "finding_ids": []
+    },
+    {
+      "patch_id": "AD-ND13-accessory_mount-device_width_max_mm",
+      "patch_index": 40,
+      "template": "accessory_mount",
+      "key": "device_width_max_mm",
+      "path": "/templates/82/form_contract/{allowed_when}/device_width_max_mm",
+      "decision": "aceptar",
+      "reason": "Separa lado bicicleta y dispositivo; esta aceptación no cubre todos los soportes ni valida un ajuste.",
+      "finding_ids": []
+    },
+    {
+      "patch_id": "AD-ND21-cycle_computer-connection",
+      "patch_index": 41,
+      "template": "cycle_computer",
+      "key": "connection",
+      "path": "/templates/80/form_contract/{required_when,roles,semantic_roles}/connection",
+      "decision": "aceptar",
+      "reason": "Eje descriptivo independiente o contenido; modelos/perfiles requieren evidencia aparte.",
+      "finding_ids": []
+    },
+    {
+      "patch_id": "AD-ND21-cycle_computer-positioning_source",
+      "patch_index": 42,
+      "template": "cycle_computer",
+      "key": "positioning_source",
+      "path": "/templates/80/fields/- y /templates/80/form_contract/{roles,semantic_roles,allowed_when,required_when,evidence_requirements[,prerequisites,allowed_options]}/positioning_source",
+      "decision": "corregir",
+      "reason": "Sin posicionamiento no implica sensor de rueda; fuente de velocidad ya es otro eje.",
+      "finding_ids": [
+        "FA13"
+      ],
+      "resolution": "definition_overrides[positioning_source]"
+    },
+    {
+      "patch_id": "AD-ND21-cycle_computer-speed_source",
+      "patch_index": 43,
+      "template": "cycle_computer",
+      "key": "speed_source",
+      "path": "/templates/80/fields/- y /templates/80/form_contract/{roles,semantic_roles,allowed_when,required_when,evidence_requirements[,prerequisites,allowed_options]}/speed_source",
+      "decision": "aceptar",
+      "reason": "Eje descriptivo independiente o contenido; modelos/perfiles requieren evidencia aparte.",
+      "finding_ids": []
+    },
+    {
+      "patch_id": "AD-ND21-cycle_computer-sensor_link_ant_plus",
+      "patch_index": 44,
+      "template": "cycle_computer",
+      "key": "sensor_link_ant_plus",
+      "path": "/templates/80/fields/- y /templates/80/form_contract/{roles,semantic_roles,allowed_when,required_when,evidence_requirements[,prerequisites,allowed_options]}/sensor_link_ant_plus",
+      "decision": "aceptar",
+      "reason": "Eje descriptivo independiente o contenido; modelos/perfiles requieren evidencia aparte.",
+      "finding_ids": []
+    },
+    {
+      "patch_id": "AD-ND21-cycle_computer-sensor_link_bluetooth",
+      "patch_index": 45,
+      "template": "cycle_computer",
+      "key": "sensor_link_bluetooth",
+      "path": "/templates/80/fields/- y /templates/80/form_contract/{roles,semantic_roles,allowed_when,required_when,evidence_requirements[,prerequisites,allowed_options]}/sensor_link_bluetooth",
+      "decision": "aceptar",
+      "reason": "Eje descriptivo independiente o contenido; modelos/perfiles requieren evidencia aparte.",
+      "finding_ids": []
+    },
+    {
+      "patch_id": "AD-ND21-cycle_computer-sensor_link_wired",
+      "patch_index": 46,
+      "template": "cycle_computer",
+      "key": "sensor_link_wired",
+      "path": "/templates/80/fields/- y /templates/80/form_contract/{roles,semantic_roles,allowed_when,required_when,evidence_requirements[,prerequisites,allowed_options]}/sensor_link_wired",
+      "decision": "aceptar",
+      "reason": "Eje descriptivo independiente o contenido; modelos/perfiles requieren evidencia aparte.",
+      "finding_ids": []
+    },
+    {
+      "patch_id": "AD-ND21-cycle_computer-phone_link",
+      "patch_index": 47,
+      "template": "cycle_computer",
+      "key": "phone_link",
+      "path": "/templates/80/fields/- y /templates/80/form_contract/{roles,semantic_roles,allowed_when,required_when,evidence_requirements[,prerequisites,allowed_options]}/phone_link",
+      "decision": "aceptar",
+      "reason": "Eje descriptivo independiente o contenido; modelos/perfiles requieren evidencia aparte.",
+      "finding_ids": []
+    },
+    {
+      "patch_id": "AD-ND21-cycle_computer-sensor_support_configurations",
+      "patch_index": 48,
+      "template": "cycle_computer",
+      "key": "sensor_support_configurations",
+      "path": "/templates/80/fields/- y /templates/80/form_contract/{roles,semantic_roles,allowed_when,required_when,evidence_requirements[,prerequisites,allowed_options]}/sensor_support_configurations",
+      "decision": "corregir",
+      "reason": "Filas necesitan perfil/estado y coherencia con capacidades de enlace; la fuente genérica no aporta matriz.",
+      "finding_ids": [
+        "FA13"
+      ],
+      "after_override": {
+        "field_entry": {
+          "key": "sensor_support_configurations",
+          "section_key": "measurement",
+          "sort_order": 120,
+          "is_required": false,
+          "visibility_rules": [],
+          "option_rules": [],
+          "constraint_rules": []
+        },
+        "roles": "measurement",
+        "semantic_roles": "compatibility",
+        "allowed_when": {
+          "kind": "always"
+        },
+        "required_when": {
+          "kind": "never"
+        },
+        "evidence_requirements": "oem_spec",
+        "definition_used_by_append": "cycle_computer"
+      }
+    },
+    {
+      "patch_id": "AD-ND21-cycle_computer-wheel_setting",
+      "patch_index": 49,
+      "template": "cycle_computer",
+      "key": "wheel_setting",
+      "path": "/templates/80/form_contract/{allowed_when}/wheel_setting",
+      "decision": "aceptar",
+      "reason": "Eje descriptivo independiente o contenido; modelos/perfiles requieren evidencia aparte.",
+      "finding_ids": []
+    },
+    {
+      "patch_id": "AD-ND21-cycle_computer-computer_contents",
+      "patch_index": 50,
+      "template": "cycle_computer",
+      "key": "computer_contents",
+      "path": "/templates/80/fields/- y /templates/80/form_contract/{roles,semantic_roles,allowed_when,required_when,evidence_requirements[,prerequisites,allowed_options]}/computer_contents",
+      "decision": "aceptar",
+      "reason": "Eje descriptivo independiente o contenido; modelos/perfiles requieren evidencia aparte.",
+      "finding_ids": []
+    },
+    {
+      "patch_id": "AD-ND22-label-rated_power_w",
+      "patch_index": 51,
+      "template": null,
+      "key": "rated_power_w",
+      "path": "/definitions/rated_power_w/label",
+      "decision": "corregir",
+      "reason": "Etiqueta total sólo para cargador; acompañar de guarda que retire ese campo del cable.",
+      "finding_ids": [
+        "FA16"
+      ],
+      "after_override": "Potencia nominal total del cargador"
+    },
+    {
+      "patch_id": "AD-ND22-consumer_electronics-connector_a",
+      "patch_index": 52,
+      "template": "consumer_electronics",
+      "key": "connector_a",
+      "path": "/templates/81/form_contract/{allowed_when}/connector_a",
+      "decision": "aceptar",
+      "reason": "Dato descriptivo/medida que se conserva de fuente exacta; formato/capacidad no crean compatibilidad.",
+      "finding_ids": []
+    },
+    {
+      "patch_id": "AD-ND22-consumer_electronics-power_port_configurations",
+      "patch_index": 53,
+      "template": "consumer_electronics",
+      "key": "power_port_configurations",
+      "path": "/templates/81/fields/- y /templates/81/form_contract/{roles,semantic_roles,allowed_when,required_when,evidence_requirements[,prerequisites,allowed_options]}/power_port_configurations",
+      "decision": "corregir",
+      "reason": "Género, perfiles V/A/protocolo y referencias a puertos aún necesarios.",
+      "finding_ids": [
+        "FA14"
+      ],
+      "resolution": "definition_overrides[power_port_configurations]"
+    },
+    {
+      "patch_id": "AD-ND22-consumer_electronics-power_budget_configurations",
+      "patch_index": 54,
+      "template": "consumer_electronics",
+      "key": "power_budget_configurations",
+      "path": "/templates/81/fields/- y /templates/81/form_contract/{roles,semantic_roles,allowed_when,required_when,evidence_requirements[,prerequisites,allowed_options]}/power_budget_configurations",
+      "decision": "corregir",
+      "reason": "Declarar tipo de reparto/límite y presupuesto compartido antes de comprobar sumas.",
+      "finding_ids": [
+        "FA15"
+      ],
+      "resolution": "Resolve the linked finding and additional_required_changes before import; no uncertain override supplied."
+    },
+    {
+      "patch_id": "AD-ND22-consumer_electronics-cable_power_capacity_w",
+      "patch_index": 55,
+      "template": "consumer_electronics",
+      "key": "cable_power_capacity_w",
+      "path": "/templates/81/fields/- y /templates/81/form_contract/{roles,semantic_roles,allowed_when,required_when,evidence_requirements[,prerequisites,allowed_options]}/cable_power_capacity_w",
+      "decision": "aceptar",
+      "reason": "Dato descriptivo/medida que se conserva de fuente exacta; formato/capacidad no crean compatibilidad.",
+      "finding_ids": []
+    },
+    {
+      "patch_id": "AD-ND22-consumer_electronics-cable_data_capability",
+      "patch_index": 56,
+      "template": "consumer_electronics",
+      "key": "cable_data_capability",
+      "path": "/templates/81/fields/- y /templates/81/form_contract/{roles,semantic_roles,allowed_when,required_when,evidence_requirements[,prerequisites,allowed_options]}/cable_data_capability",
+      "decision": "corregir",
+      "reason": "Eliminar alias USB4/Thunderbolt; conservar estándares/velocidad declarados sin inferencia.",
+      "finding_ids": [
+        "FA16"
+      ],
+      "resolution": "definition_overrides[cable_data_capability]"
+    },
+    {
+      "patch_id": "AD-ND22-consumer_electronics-storage_capacity_label",
+      "patch_index": 57,
+      "template": "consumer_electronics",
+      "key": "storage_capacity_label",
+      "path": "/templates/81/fields/- y /templates/81/form_contract/{roles,semantic_roles,allowed_when,required_when,evidence_requirements[,prerequisites,allowed_options]}/storage_capacity_label",
+      "decision": "aceptar",
+      "reason": "Dato descriptivo/medida que se conserva de fuente exacta; formato/capacidad no crean compatibilidad.",
+      "finding_ids": []
+    },
+    {
+      "patch_id": "AD-ND22-consumer_electronics-card_format",
+      "patch_index": 58,
+      "template": "consumer_electronics",
+      "key": "card_format",
+      "path": "/templates/81/fields/- y /templates/81/form_contract/{roles,semantic_roles,allowed_when,required_when,evidence_requirements[,prerequisites,allowed_options]}/card_format",
+      "decision": "aceptar",
+      "reason": "Dato descriptivo/medida que se conserva de fuente exacta; formato/capacidad no crean compatibilidad.",
+      "finding_ids": []
+    },
+    {
+      "patch_id": "AD-ND22-consumer_electronics-speed_class_claim",
+      "patch_index": 59,
+      "template": "consumer_electronics",
+      "key": "speed_class_claim",
+      "path": "/templates/81/fields/- y /templates/81/form_contract/{roles,semantic_roles,allowed_when,required_when,evidence_requirements[,prerequisites,allowed_options]}/speed_class_claim",
+      "decision": "aceptar",
+      "reason": "Dato descriptivo/medida que se conserva de fuente exacta; formato/capacidad no crean compatibilidad.",
+      "finding_ids": []
+    },
+    {
+      "patch_id": "AD-ND23-def-food_item_kind",
+      "patch_index": 60,
+      "template": null,
+      "key": "food_item_kind",
+      "path": "/definitions/food_item_kind/allowed_values",
+      "decision": "aceptar",
+      "reason": "Distingue preparado/envase, contenido o receta. Cada hecho a llenar aún exige fuente del producto/receta.",
+      "finding_ids": []
+    },
+    {
+      "patch_id": "AD-ND23-label-serving_size",
+      "patch_index": 61,
+      "template": null,
+      "key": "serving_size",
+      "path": "/definitions/serving_size/label",
+      "decision": "aceptar",
+      "reason": "Distingue preparado/envase, contenido o receta. Cada hecho a llenar aún exige fuente del producto/receta.",
+      "finding_ids": []
+    },
+    {
+      "patch_id": "AD-ND23-food_beverage-preparation_kind",
+      "patch_index": 62,
+      "template": "food_beverage",
+      "key": "preparation_kind",
+      "path": "/templates/99/fields/- y /templates/99/form_contract/{roles,semantic_roles,allowed_when,required_when,evidence_requirements[,prerequisites,allowed_options]}/preparation_kind",
+      "decision": "aceptar",
+      "reason": "Distingue preparado/envase, contenido o receta. Cada hecho a llenar aún exige fuente del producto/receta.",
+      "finding_ids": []
+    },
+    {
+      "patch_id": "AD-ND23-food_beverage-spec_evidence_source",
+      "patch_index": 63,
+      "template": "food_beverage",
+      "key": "spec_evidence_source",
+      "path": "/templates/99/fields/- y /templates/99/form_contract/{roles,semantic_roles,allowed_when,required_when,evidence_requirements[,prerequisites,allowed_options]}/spec_evidence_source",
+      "decision": "aceptar",
+      "reason": "Distingue preparado/envase, contenido o receta. Cada hecho a llenar aún exige fuente del producto/receta.",
+      "finding_ids": []
+    },
+    {
+      "patch_id": "AD-ND23-food_beverage-serving_size",
+      "patch_index": 64,
+      "template": "food_beverage",
+      "key": "serving_size",
+      "path": "/templates/99/form_contract/{allowed_when,required_when}/serving_size",
+      "decision": "aceptar",
+      "reason": "Distingue preparado/envase, contenido o receta. Cada hecho a llenar aún exige fuente del producto/receta.",
+      "finding_ids": []
+    },
+    {
+      "patch_id": "AD-ND23-food_beverage-serving_volume_ml",
+      "patch_index": 65,
+      "template": "food_beverage",
+      "key": "serving_volume_ml",
+      "path": "/templates/99/form_contract/{allowed_when}/serving_volume_ml",
+      "decision": "aceptar",
+      "reason": "Distingue preparado/envase, contenido o receta. Cada hecho a llenar aún exige fuente del producto/receta.",
+      "finding_ids": []
+    },
+    {
+      "patch_id": "AD-ND23-food_beverage-temperature",
+      "patch_index": 66,
+      "template": "food_beverage",
+      "key": "temperature",
+      "path": "/templates/99/form_contract/{allowed_when}/temperature",
+      "decision": "aceptar",
+      "reason": "Distingue preparado/envase, contenido o receta. Cada hecho a llenar aún exige fuente del producto/receta.",
+      "finding_ids": []
+    },
+    {
+      "patch_id": "AD-ND23-food_beverage-milk",
+      "patch_index": 67,
+      "template": "food_beverage",
+      "key": "milk",
+      "path": "/templates/99/form_contract/{allowed_when,roles,semantic_roles}/milk",
+      "decision": "aceptar",
+      "reason": "Distingue preparado/envase, contenido o receta. Cada hecho a llenar aún exige fuente del producto/receta.",
+      "finding_ids": []
+    },
+    {
+      "patch_id": "AD-ND23-food_beverage-allergen_note",
+      "patch_index": 68,
+      "template": "food_beverage",
+      "key": "allergen_note",
+      "path": "/templates/99/form_contract/{prerequisites}/allergen_note",
+      "decision": "corregir",
+      "reason": "Sin fuente no debe habilitar una declaración de alérgenos.",
+      "finding_ids": [
+        "FA18"
+      ],
+      "after_override": {
+        "prerequisites": [
+          "allergen_statement_source",
+          "spec_evidence_source"
+        ],
+        "allowed_when": {
+          "kind": "when",
+          "rows": [
+            [
+              {
+                "field": "allergen_statement_source",
+                "operator": "in",
+                "value_type": "token",
+                "value": [
+                  "Etiqueta del envase",
+                  "Receta verificada del negocio",
+                  "Documento / página oficial del fabricante"
+                ]
+              }
+            ]
+          ]
+        }
+      }
+    },
+    {
+      "patch_id": "AD-ND23-food_beverage-milk_in_recipe",
+      "patch_index": 69,
+      "template": "food_beverage",
+      "key": "milk_in_recipe",
+      "path": "/templates/99/fields/- y /templates/99/form_contract/{roles,semantic_roles,allowed_when,required_when,evidence_requirements[,prerequisites,allowed_options]}/milk_in_recipe",
+      "decision": "aceptar",
+      "reason": "Distingue preparado/envase, contenido o receta. Cada hecho a llenar aún exige fuente del producto/receta.",
+      "finding_ids": []
+    },
+    {
+      "patch_id": "AD-ND23-food_beverage-milk_substitution_offered",
+      "patch_index": 70,
+      "template": "food_beverage",
+      "key": "milk_substitution_offered",
+      "path": "/templates/99/fields/- y /templates/99/form_contract/{roles,semantic_roles,allowed_when,required_when,evidence_requirements[,prerequisites,allowed_options]}/milk_substitution_offered",
+      "decision": "aceptar",
+      "reason": "Distingue preparado/envase, contenido o receta. Cada hecho a llenar aún exige fuente del producto/receta.",
+      "finding_ids": []
+    },
+    {
+      "patch_id": "AD-ND23-food_beverage-recipe_reference",
+      "patch_index": 71,
+      "template": "food_beverage",
+      "key": "recipe_reference",
+      "path": "/templates/99/fields/- y /templates/99/form_contract/{roles,semantic_roles,allowed_when,required_when,evidence_requirements[,prerequisites,allowed_options]}/recipe_reference",
+      "decision": "aceptar",
+      "reason": "Distingue preparado/envase, contenido o receta. Cada hecho a llenar aún exige fuente del producto/receta.",
+      "finding_ids": []
+    },
+    {
+      "patch_id": "AD-ND23-food_beverage-net_mass_g",
+      "patch_index": 72,
+      "template": "food_beverage",
+      "key": "net_mass_g",
+      "path": "/templates/99/fields/- y /templates/99/form_contract/{roles,semantic_roles,allowed_when,required_when,evidence_requirements[,prerequisites,allowed_options]}/net_mass_g",
+      "decision": "aceptar",
+      "reason": "Distingue preparado/envase, contenido o receta. Cada hecho a llenar aún exige fuente del producto/receta.",
+      "finding_ids": []
+    },
+    {
+      "patch_id": "AD-ND23-food_beverage-net_volume_ml",
+      "patch_index": 73,
+      "template": "food_beverage",
+      "key": "net_volume_ml",
+      "path": "/templates/99/fields/- y /templates/99/form_contract/{roles,semantic_roles,allowed_when,required_when,evidence_requirements[,prerequisites,allowed_options]}/net_volume_ml",
+      "decision": "aceptar",
+      "reason": "Distingue preparado/envase, contenido o receta. Cada hecho a llenar aún exige fuente del producto/receta.",
+      "finding_ids": []
+    },
+    {
+      "patch_id": "AD-ND23-food_beverage-units_per_pack",
+      "patch_index": 74,
+      "template": "food_beverage",
+      "key": "units_per_pack",
+      "path": "/templates/99/fields/- y /templates/99/form_contract/{roles,semantic_roles,allowed_when,required_when,evidence_requirements[,prerequisites,allowed_options]}/units_per_pack",
+      "decision": "aceptar",
+      "reason": "Distingue preparado/envase, contenido o receta. Cada hecho a llenar aún exige fuente del producto/receta.",
+      "finding_ids": []
+    },
+    {
+      "patch_id": "AD-ND23-food_beverage-unit_mass_g",
+      "patch_index": 75,
+      "template": "food_beverage",
+      "key": "unit_mass_g",
+      "path": "/templates/99/fields/- y /templates/99/form_contract/{roles,semantic_roles,allowed_when,required_when,evidence_requirements[,prerequisites,allowed_options]}/unit_mass_g",
+      "decision": "aceptar",
+      "reason": "Distingue preparado/envase, contenido o receta. Cada hecho a llenar aún exige fuente del producto/receta.",
+      "finding_ids": []
+    },
+    {
+      "patch_id": "AD-ND23-food_beverage-nutrition_facts",
+      "patch_index": 76,
+      "template": "food_beverage",
+      "key": "nutrition_facts",
+      "path": "/templates/99/fields/- y /templates/99/form_contract/{roles,semantic_roles,allowed_when,required_when,evidence_requirements[,prerequisites,allowed_options]}/nutrition_facts",
+      "decision": "corregir",
+      "reason": "No negativos, base y unidad explícitas, un solo dueño para cafeína.",
+      "finding_ids": [
+        "FA17"
+      ],
+      "resolution": "definition_overrides[nutrition_facts]"
+    },
+    {
+      "patch_id": "AD-ND23-food_beverage-ingredients_text",
+      "patch_index": 77,
+      "template": "food_beverage",
+      "key": "ingredients_text",
+      "path": "/templates/99/fields/- y /templates/99/form_contract/{roles,semantic_roles,allowed_when,required_when,evidence_requirements[,prerequisites,allowed_options]}/ingredients_text",
+      "decision": "corregir",
+      "reason": "Ingredientes requieren fuente válida, no el token Sin fuente.",
+      "finding_ids": [
+        "FA18"
+      ],
+      "after_override": {
+        "field_entry": {
+          "key": "ingredients_text",
+          "section_key": "declaration",
+          "sort_order": 170,
+          "is_required": false,
+          "visibility_rules": [],
+          "option_rules": [],
+          "constraint_rules": []
+        },
+        "roles": "declaration",
+        "semantic_roles": "declaration",
+        "allowed_when": {
+          "kind": "when",
+          "rows": [
+            [
+              {
+                "field": "allergen_statement_source",
+                "operator": "in",
+                "value_type": "token",
+                "value": [
+                  "Etiqueta del envase",
+                  "Receta verificada del negocio",
+                  "Documento / página oficial del fabricante"
+                ]
+              }
+            ]
+          ]
+        },
+        "required_when": {
+          "kind": "never"
+        },
+        "evidence_requirements": "package_or_label",
+        "definition_used_by_append": "food_beverage",
+        "prerequisites": [
+          "allergen_statement_source",
+          "spec_evidence_source"
+        ]
+      }
+    },
+    {
+      "patch_id": "AD-ND23-food_beverage-allergen_statement_source",
+      "patch_index": 78,
+      "template": "food_beverage",
+      "key": "allergen_statement_source",
+      "path": "/templates/99/fields/- y /templates/99/form_contract/{roles,semantic_roles,allowed_when,required_when,evidence_requirements[,prerequisites,allowed_options]}/allergen_statement_source",
+      "decision": "corregir",
+      "reason": "Admitir fuente OEM real y exigir referencia trazable, distinta del selector de origen.",
+      "finding_ids": [
+        "FA18"
+      ],
+      "after_override": {
+        "field_entry": {
+          "key": "allergen_statement_source",
+          "section_key": "declaration",
+          "sort_order": 180,
+          "is_required": false,
+          "visibility_rules": [],
+          "option_rules": [],
+          "constraint_rules": []
+        },
+        "roles": "declaration",
+        "semantic_roles": "evidence",
+        "allowed_when": {
+          "kind": "always"
+        },
+        "required_when": {
+          "kind": "never"
+        },
+        "evidence_requirements": "package_or_label",
+        "definition_used_by_append": "food_beverage",
+        "prerequisites": [
+          "spec_evidence_source"
+        ]
+      }
+    },
+    {
+      "patch_id": "AD-ND23-food_beverage-allergens_declared_none",
+      "patch_index": 79,
+      "template": "food_beverage",
+      "key": "allergens_declared_none",
+      "path": "/templates/99/fields/- y /templates/99/form_contract/{roles,semantic_roles,allowed_when,required_when,evidence_requirements[,prerequisites,allowed_options]}/allergens_declared_none",
+      "decision": "rechazar",
+      "reason": "Retirar el booleano universal sin alcance; preservar texto de declaración con evidencia.",
+      "finding_ids": [
+        "FA18"
+      ]
+    },
+    {
+      "patch_id": "AD-ND23-food_beverage-caffeine_mg",
+      "patch_index": 80,
+      "template": "food_beverage",
+      "key": "caffeine_mg",
+      "path": "/templates/99/fields/- y /templates/99/form_contract/{roles,semantic_roles,allowed_when,required_when,evidence_requirements[,prerequisites,allowed_options]}/caffeine_mg",
+      "decision": "corregir",
+      "reason": "Debe admitir cero confirmado.",
+      "finding_ids": [
+        "FA17"
+      ],
+      "resolution": "definition_overrides[caffeine_mg]"
+    },
+    {
+      "patch_id": "AD-ND23-food_beverage-caffeine_basis",
+      "patch_index": 81,
+      "template": "food_beverage",
+      "key": "caffeine_basis",
+      "path": "/templates/99/fields/- y /templates/99/form_contract/{roles,semantic_roles,allowed_when,required_when,evidence_requirements[,prerequisites,allowed_options]}/caffeine_basis",
+      "decision": "corregir",
+      "reason": "Por porción necesita una referencia/cantidad de porción; no sólo una etiqueta.",
+      "finding_ids": [
+        "FA17"
+      ],
+      "resolution": "Resolve the linked finding and additional_required_changes before import; no uncertain override supplied."
+    }
+  ],
+  "definition_overrides": {
+    "torx_size": {
+      "id": null,
+      "key": "torx_size",
+      "origin": "new",
+      "label": "Código Torx (por ejemplo T25)",
+      "data_type": "text",
+      "unit": null,
+      "allowed_values": [],
+      "validation_rules": {},
+      "used_by": []
+    },
+    "fastener_kit_members": {
+      "id": null,
+      "key": "fastener_kit_members",
+      "origin": "new",
+      "label": "Miembros del kit de fijación",
+      "data_type": "json",
+      "unit": null,
+      "allowed_values": [],
+      "validation_rules": {
+        "rows_schema": {
+          "version": 1,
+          "columns": [
+            {
+              "key": "member_role",
+              "label": "Pieza",
+              "type": "text",
+              "required": true
+            },
+            {
+              "key": "thread_nominal",
+              "label": "Designación nominal de rosca",
+              "type": "token",
+              "required": false,
+              "allowed_values": [
+                "M3",
+                "M4",
+                "M5",
+                "M6",
+                "M7",
+                "M8",
+                "M9",
+                "M10",
+                "M12",
+                "M14",
+                "M15",
+                "M18",
+                "M19",
+                "M20",
+                "M22",
+                "5/16\"",
+                "3/8\"",
+                "1/2\"",
+                "9/16\"",
+                "Otra",
+                "Desconocido / sin confirmar",
+                "9 mm",
+                "10 mm",
+                "36 mm",
+                "2.2 mm"
+              ]
+            },
+            {
+              "key": "thread_pitch_mm",
+              "label": "Paso",
+              "type": "decimal",
+              "unit": "mm",
+              "validation": {
+                "positive": true
+              }
+            },
+            {
+              "key": "thread_tpi",
+              "label": "TPI",
+              "type": "integer",
+              "unit": "tpi",
+              "validation": {
+                "positive": true
+              }
+            },
+            {
+              "key": "thread_hand",
+              "label": "Sentido",
+              "type": "token",
+              "allowed_values": [
+                "Derecha",
+                "Izquierda",
+                "Desconocido / sin confirmar"
+              ]
+            },
+            {
+              "key": "length_mm",
+              "label": "Largo",
+              "type": "decimal",
+              "unit": "mm",
+              "validation": {
+                "positive": true
+              }
+            },
+            {
+              "key": "length_datum",
+              "label": "Referencia del largo",
+              "type": "token",
+              "allowed_values": [
+                "Bajo cabeza",
+                "Total",
+                "Longitud roscada",
+                "Desconocido / sin confirmar"
+              ]
+            },
+            {
+              "key": "head_drive",
+              "label": "Accionamiento",
+              "type": "text"
+            },
+            {
+              "key": "quantity",
+              "label": "Cantidad",
+              "type": "integer",
+              "required": true,
+              "validation": {
+                "positive": true
+              }
+            },
+            {
+              "key": "source_url",
+              "label": "Fuente",
+              "type": "url"
+            },
+            {
+              "key": "member_kind",
+              "label": "Tipo de pieza declarado",
+              "type": "text"
+            },
+            {
+              "key": "inner_diameter_mm",
+              "label": "Diámetro interior de golilla / espaciador",
+              "type": "decimal",
+              "unit": "mm",
+              "validation": {
+                "positive": true
+              }
+            },
+            {
+              "key": "outer_diameter_mm",
+              "label": "Diámetro exterior de golilla / espaciador",
+              "type": "decimal",
+              "unit": "mm",
+              "validation": {
+                "positive": true
+              }
+            },
+            {
+              "key": "thickness_mm",
+              "label": "Espesor de golilla / espaciador",
+              "type": "decimal",
+              "unit": "mm",
+              "validation": {
+                "positive": true
+              }
+            }
+          ],
+          "ordered_pairs": [
+            [
+              "inner_diameter_mm",
+              "outer_diameter_mm"
+            ]
+          ]
+        }
+      },
+      "used_by": []
+    },
+    "tool_capabilities": {
+      "id": null,
+      "key": "tool_capabilities",
+      "origin": "new",
+      "label": "Capacidades de la herramienta por operación",
+      "data_type": "json",
+      "unit": null,
+      "allowed_values": [],
+      "validation_rules": {
+        "rows_schema": {
+          "version": 1,
+          "columns": [
+            {
+              "key": "member",
+              "label": "Pieza o bit (multiherramienta)",
+              "type": "text"
+            },
+            {
+              "key": "operation",
+              "label": "Operación",
+              "type": "token",
+              "required": true,
+              "allowed_values": [
+                "Apretar / aflojar",
+                "Extraer",
+                "Instalar",
+                "Cortar / extraer remache",
+                "Instalar remache",
+                "Peenar remache",
+                "Medir",
+                "Centrar / alinear",
+                "Purgar",
+                "Inflar / presurizar",
+                "Limpiar",
+                "Otra"
+              ]
+            },
+            {
+              "key": "target_standard",
+              "label": "Interfaz / estándar del objetivo",
+              "type": "text",
+              "required": true
+            },
+            {
+              "key": "supported",
+              "label": "Operación admitida según fuente (No = exclusión explícita)",
+              "type": "boolean",
+              "required": true
+            },
+            {
+              "key": "interface_measure_mm",
+              "label": "Medida nominal declarada",
+              "type": "decimal",
+              "unit": "mm",
+              "validation": {
+                "positive": true
+              }
+            },
+            {
+              "key": "drive_size",
+              "label": "Accionamiento requerido",
+              "type": "text"
+            },
+            {
+              "key": "speeds_min",
+              "label": "Velocidades mín.",
+              "type": "integer",
+              "validation": {
+                "positive": true
+              }
+            },
+            {
+              "key": "speeds_max",
+              "label": "Velocidades máx.",
+              "type": "integer",
+              "validation": {
+                "positive": true
+              }
+            },
+            {
+              "key": "brand_scope",
+              "label": "Alcance de marca / modelo",
+              "type": "text"
+            },
+            {
+              "key": "adapter_required",
+              "label": "Requiere adaptador",
+              "type": "boolean"
+            },
+            {
+              "key": "adapter_model",
+              "label": "Adaptador",
+              "type": "text"
+            },
+            {
+              "key": "source_url",
+              "label": "Fuente",
+              "type": "url"
+            },
+            {
+              "key": "interface_measure_kind",
+              "label": "Dimensión representada",
+              "type": "text"
+            },
+            {
+              "key": "interface_diameter_min_mm",
+              "label": "Diámetro mayor mínimo",
+              "type": "decimal",
+              "unit": "mm",
+              "validation": {
+                "positive": true
+              }
+            },
+            {
+              "key": "interface_diameter_max_mm",
+              "label": "Diámetro mayor máximo",
+              "type": "decimal",
+              "unit": "mm",
+              "validation": {
+                "positive": true
+              }
+            },
+            {
+              "key": "interface_minor_diameter_mm",
+              "label": "Diámetro menor",
+              "type": "decimal",
+              "unit": "mm",
+              "validation": {
+                "positive": true
+              }
+            },
+            {
+              "key": "interface_feature_count",
+              "label": "Cantidad de muescas / estrías declarada",
+              "type": "integer",
+              "validation": {
+                "positive": true
+              }
+            }
+          ],
+          "ordered_pairs": [
+            [
+              "speeds_min",
+              "speeds_max"
+            ],
+            [
+              "interface_diameter_min_mm",
+              "interface_diameter_max_mm"
+            ]
+          ]
+        }
+      },
+      "used_by": []
+    },
+    "tool_bits_included": {
+      "id": null,
+      "key": "tool_bits_included",
+      "origin": "new",
+      "label": "Piezas / bits incluidos",
+      "data_type": "json",
+      "unit": null,
+      "allowed_values": [],
+      "validation_rules": {
+        "rows_schema": {
+          "version": 1,
+          "columns": [
+            {
+              "key": "bit_kind",
+              "label": "Tipo",
+              "type": "token",
+              "required": true,
+              "allowed_values": [
+                "Hexagonal (Allen)",
+                "Torx",
+                "Destornillador plano",
+                "Destornillador cruz",
+                "Llave fija",
+                "Llave de rayos",
+                "Desmontador",
+                "Corta cadena",
+                "Llave de tubo",
+                "Otro",
+                "Llave estrella / cerrada"
+              ]
+            },
+            {
+              "key": "size",
+              "label": "Medida",
+              "type": "text",
+              "required": false
+            },
+            {
+              "key": "quantity",
+              "label": "Cantidad",
+              "type": "integer",
+              "required": true,
+              "validation": {
+                "positive": true
+              }
+            },
+            {
+              "key": "source_url",
+              "label": "Fuente",
+              "type": "url"
+            }
+          ]
+        }
+      },
+      "used_by": []
+    },
+    "light_member_configurations": {
+      "id": null,
+      "key": "light_member_configurations",
+      "origin": "new",
+      "label": "Luces del producto (una fila por luz)",
+      "data_type": "json",
+      "unit": null,
+      "allowed_values": [],
+      "validation_rules": {
+        "rows_schema": {
+          "version": 1,
+          "columns": [
+            {
+              "key": "member_id",
+              "label": "Luz",
+              "type": "text",
+              "required": true
+            },
+            {
+              "key": "position",
+              "label": "Posición",
+              "type": "token",
+              "required": true,
+              "allowed_values": [
+                "Delantera",
+                "Trasera",
+                "Casco / otra"
+              ]
+            },
+            {
+              "key": "battery_kind",
+              "label": "Batería / alimentación",
+              "type": "token",
+              "allowed_values": [
+                "Li-ion integrada",
+                "Li-ion extraíble",
+                "Pilas AA/AAA",
+                "Pila botón",
+                "Dinamo",
+                "Alimentación externa (USB)",
+                "Desconocido / sin confirmar"
+              ]
+            },
+            {
+              "key": "battery_capacity_mah",
+              "label": "Capacidad",
+              "type": "decimal",
+              "unit": "mAh",
+              "validation": {
+                "positive": true
+              }
+            },
+            {
+              "key": "battery_voltage_v",
+              "label": "Tensión",
+              "type": "decimal",
+              "unit": "V",
+              "validation": {
+                "positive": true
+              }
+            },
+            {
+              "key": "charge_connector",
+              "label": "Conector de carga",
+              "type": "token",
+              "allowed_values": [
+                "USB-C",
+                "Micro-USB",
+                "USB-A integrado",
+                "Propietario",
+                "Sin carga",
+                "Desconocido / sin confirmar",
+                "Otro"
+              ]
+            },
+            {
+              "key": "mount_kind",
+              "label": "Fijación",
+              "type": "token",
+              "allowed_values": [
+                "Correa de silicona",
+                "Abrazadera de manubrio",
+                "Abrazadera de tija",
+                "Soporte de casco",
+                "Soporte de horquilla",
+                "Otro"
+              ]
+            },
+            {
+              "key": "mount_diameter_min_mm",
+              "label": "Diámetro mín. de montaje",
+              "type": "decimal",
+              "unit": "mm",
+              "validation": {
+                "positive": true
+              }
+            },
+            {
+              "key": "mount_diameter_max_mm",
+              "label": "Diámetro máx. de montaje",
+              "type": "decimal",
+              "unit": "mm",
+              "validation": {
+                "positive": true
+              }
+            },
+            {
+              "key": "mount_circumference_max_mm",
+              "label": "Perímetro máx. (tija aero)",
+              "type": "decimal",
+              "unit": "mm",
+              "validation": {
+                "positive": true
+              }
+            },
+            {
+              "key": "ip_rating",
+              "label": "Grado IP",
+              "type": "text"
+            },
+            {
+              "key": "source_url",
+              "label": "Fuente",
+              "type": "url"
+            },
+            {
+              "key": "member_revision",
+              "label": "Revisión del miembro / fuente",
+              "type": "text"
+            },
+            {
+              "key": "mount_zone",
+              "label": "Zona y forma de montaje",
+              "type": "text"
+            },
+            {
+              "key": "power_input_connector",
+              "label": "Entrada de alimentación externa declarada",
+              "type": "text"
+            }
+          ],
+          "ordered_pairs": [
+            [
+              "mount_diameter_min_mm",
+              "mount_diameter_max_mm"
+            ]
+          ],
+          "unique_by": [
+            [
+              "member_id"
+            ]
+          ]
+        }
+      },
+      "used_by": []
+    },
+    "light_mode_configurations": {
+      "id": null,
+      "key": "light_mode_configurations",
+      "origin": "new",
+      "label": "Modos por luz (lúmenes y autonomía juntos)",
+      "data_type": "json",
+      "unit": null,
+      "allowed_values": [],
+      "validation_rules": {
+        "rows_schema": {
+          "version": 1,
+          "columns": [
+            {
+              "key": "member_id",
+              "label": "Luz",
+              "type": "text",
+              "required": true
+            },
+            {
+              "key": "mode",
+              "label": "Modo",
+              "type": "text",
+              "required": true
+            },
+            {
+              "key": "pattern",
+              "label": "Patrón",
+              "type": "token",
+              "allowed_values": [
+                "Constante",
+                "Intermitente",
+                "Constante + intermitente",
+                "Diurno",
+                "Otro"
+              ]
+            },
+            {
+              "key": "lumens",
+              "label": "Lúmenes",
+              "type": "decimal",
+              "unit": "lm",
+              "validation": {
+                "positive": true
+              }
+            },
+            {
+              "key": "lumens_secondary",
+              "label": "Lúmenes secundarios (modo doble)",
+              "type": "decimal",
+              "unit": "lm",
+              "validation": {
+                "positive": true
+              }
+            },
+            {
+              "key": "runtime_h",
+              "label": "Autonomía",
+              "type": "decimal",
+              "unit": "h",
+              "validation": {
+                "positive": true
+              }
+            },
+            {
+              "key": "runtime_max_h",
+              "label": "Autonomía máx. (rango declarado)",
+              "type": "decimal",
+              "unit": "h",
+              "validation": {
+                "positive": true
+              }
+            },
+            {
+              "key": "source_url",
+              "label": "Fuente",
+              "type": "url"
+            },
+            {
+              "key": "member_revision",
+              "label": "Revisión del miembro / fuente",
+              "type": "text"
+            }
+          ],
+          "ordered_pairs": [
+            [
+              "runtime_h",
+              "runtime_max_h"
+            ]
+          ],
+          "unique_by": [
+            [
+              "member_id",
+              "mode"
+            ]
+          ]
+        }
+      },
+      "used_by": []
+    },
+    "bar_clamp_configurations": {
+      "id": null,
+      "key": "bar_clamp_configurations",
+      "origin": "new",
+      "label": "Diámetros de abrazadera admitidos (una fila por medida)",
+      "data_type": "json",
+      "unit": null,
+      "allowed_values": [],
+      "validation_rules": {
+        "rows_schema": {
+          "version": 1,
+          "columns": [
+            {
+              "key": "nominal_diameter_mm",
+              "label": "Diámetro nominal",
+              "type": "decimal",
+              "unit": "mm",
+              "required": true,
+              "validation": {
+                "positive": true
+              }
+            },
+            {
+              "key": "fit_method",
+              "label": "Cómo se logra",
+              "type": "token",
+              "required": true,
+              "allowed_values": [
+                "Directo",
+                "Con espaciador incluido",
+                "Con espaciador opcional",
+                "Variante / versión distinta"
+              ]
+            },
+            {
+              "key": "spacer_or_variant",
+              "label": "Espaciador / variante",
+              "type": "text"
+            },
+            {
+              "key": "included",
+              "label": "Incluido",
+              "type": "boolean"
+            },
+            {
+              "key": "source_url",
+              "label": "Fuente",
+              "type": "url"
+            },
+            {
+              "key": "mount_revision",
+              "label": "Modelo / revisión del montaje",
+              "type": "text"
+            }
+          ]
+        }
+      },
+      "used_by": []
+    },
+    "device_attachment_kind": {
+      "id": null,
+      "key": "device_attachment_kind",
+      "origin": "new",
+      "label": "Unión al dispositivo",
+      "data_type": "single_select",
+      "unit": null,
+      "allowed_values": [
+        "Pinza / brazos ajustables",
+        "Carcasa propietaria",
+        "Adaptador universal adhesivo",
+        "Bolsa / funda transparente",
+        "Otro",
+        "Interfaz propietaria (carcasa / adaptador)"
+      ],
+      "validation_rules": {},
+      "used_by": []
+    },
+    "positioning_source": {
+      "id": null,
+      "key": "positioning_source",
+      "origin": "new",
+      "label": "Posicionamiento",
+      "data_type": "single_select",
+      "unit": null,
+      "allowed_values": [
+        "GNSS multibanda",
+        "GNSS",
+        "Sin posicionamiento",
+        "Desconocido / sin confirmar"
+      ],
+      "validation_rules": {},
+      "used_by": []
+    },
+    "sensor_support_configurations": {
+      "id": null,
+      "key": "sensor_support_configurations",
+      "origin": "new",
+      "label": "Sensores admitidos (tipo + transporte)",
+      "data_type": "json",
+      "unit": null,
+      "allowed_values": [],
+      "validation_rules": {
+        "rows_schema": {
+          "version": 1,
+          "columns": [
+            {
+              "key": "sensor_type",
+              "label": "Tipo de sensor",
+              "type": "token",
+              "required": true,
+              "allowed_values": [
+                "Velocidad",
+                "Cadencia",
+                "Velocidad / cadencia",
+                "Frecuencia cardiaca",
+                "Potencia",
+                "Radar",
+                "Luces",
+                "Cambio electrónico",
+                "eBike",
+                "Control remoto",
+                "Rodillo inteligente",
+                "Otro"
+              ]
+            },
+            {
+              "key": "transport",
+              "label": "Transporte",
+              "type": "token",
+              "required": true,
+              "allowed_values": [
+                "ANT+",
+                "Bluetooth",
+                "Cable",
+                "Propietario inalámbrico"
+              ]
+            },
+            {
+              "key": "models_note",
+              "label": "Modelos / perfiles declarados",
+              "type": "text"
+            },
+            {
+              "key": "source_url",
+              "label": "Fuente",
+              "type": "url"
+            },
+            {
+              "key": "profile",
+              "label": "Perfil / versión de comunicación declarado",
+              "type": "text"
+            },
+            {
+              "key": "supported",
+              "label": "Pareja admitida según fuente (No = exclusión explícita)",
+              "type": "boolean",
+              "required": true
+            }
+          ]
+        }
+      },
+      "used_by": []
+    },
+    "power_port_configurations": {
+      "id": null,
+      "key": "power_port_configurations",
+      "origin": "new",
+      "label": "Puertos (uno por fila)",
+      "data_type": "json",
+      "unit": null,
+      "allowed_values": [],
+      "validation_rules": {
+        "rows_schema": {
+          "version": 1,
+          "columns": [
+            {
+              "key": "port_id",
+              "label": "Puerto",
+              "type": "text",
+              "required": true
+            },
+            {
+              "key": "connector",
+              "label": "Conector",
+              "type": "token",
+              "required": true,
+              "allowed_values": [
+                "USB-C",
+                "USB-A",
+                "Micro-USB",
+                "Lightning",
+                "Otro"
+              ]
+            },
+            {
+              "key": "direction",
+              "label": "Dirección",
+              "type": "token",
+              "required": true,
+              "allowed_values": [
+                "Salida",
+                "Entrada",
+                "Entrada / salida"
+              ]
+            },
+            {
+              "key": "max_power_w",
+              "label": "Potencia máx. sola",
+              "type": "decimal",
+              "unit": "W",
+              "validation": {
+                "positive": true
+              }
+            },
+            {
+              "key": "protocols",
+              "label": "Protocolos declarados",
+              "type": "text"
+            },
+            {
+              "key": "source_url",
+              "label": "Fuente",
+              "type": "url"
+            },
+            {
+              "key": "connector_gender",
+              "label": "Género del conector declarado",
+              "type": "text"
+            }
+          ],
+          "unique_by": [
+            [
+              "port_id"
+            ]
+          ]
+        }
+      },
+      "used_by": []
+    },
+    "cable_data_capability": {
+      "id": null,
+      "key": "cable_data_capability",
+      "origin": "new",
+      "label": "Declaración de datos del cable (estándar y velocidad)",
+      "data_type": "text",
+      "unit": null,
+      "allowed_values": [],
+      "validation_rules": {},
+      "used_by": []
+    },
+    "nutrition_facts": {
+      "id": null,
+      "key": "nutrition_facts",
+      "origin": "new",
+      "label": "Información nutricional (con base explícita)",
+      "data_type": "json",
+      "unit": null,
+      "allowed_values": [],
+      "validation_rules": {
+        "rows_schema": {
+          "version": 1,
+          "columns": [
+            {
+              "key": "nutrient",
+              "label": "Nutriente",
+              "type": "token",
+              "required": true,
+              "allowed_values": [
+                "Energía (kcal)",
+                "Carbohidratos (g)",
+                "Azúcares (g)",
+                "Proteína (g)",
+                "Grasa (g)",
+                "Sodio (mg)",
+                "Fibra (g)",
+                "Otro"
+              ]
+            },
+            {
+              "key": "amount",
+              "label": "Cantidad",
+              "type": "decimal",
+              "required": true,
+              "validation": {
+                "min": "0"
+              }
+            },
+            {
+              "key": "basis",
+              "label": "Base",
+              "type": "token",
+              "required": true,
+              "allowed_values": [
+                "Por unidad / sobre",
+                "Por 100 g",
+                "Por 100 ml",
+                "Por porción declarada",
+                "Por porción servida"
+              ]
+            },
+            {
+              "key": "source_url",
+              "label": "Fuente",
+              "type": "url"
+            },
+            {
+              "key": "nutrient_name",
+              "label": "Nombre del nutriente cuando es Otro",
+              "type": "text"
+            },
+            {
+              "key": "amount_unit",
+              "label": "Unidad cuando es Otro",
+              "type": "text"
+            },
+            {
+              "key": "basis_amount",
+              "label": "Cantidad de la base",
+              "type": "decimal",
+              "validation": {
+                "positive": true
+              }
+            },
+            {
+              "key": "basis_unit",
+              "label": "Unidad de la base",
+              "type": "text"
+            },
+            {
+              "key": "serving_reference",
+              "label": "Referencia de porción / receta",
+              "type": "text"
+            },
+            {
+              "key": "qualifier",
+              "label": "Calificador literal del valor (por ejemplo aproximado)",
+              "type": "text"
+            }
+          ]
+        }
+      },
+      "used_by": []
+    },
+    "caffeine_mg": {
+      "id": null,
+      "key": "caffeine_mg",
+      "origin": "new",
+      "label": "Cafeína declarada",
+      "data_type": "number",
+      "unit": "mg",
+      "allowed_values": [],
+      "validation_rules": {
+        "min": "0"
+      },
+      "used_by": []
+    },
+    "allergen_statement_source": {
+      "id": null,
+      "key": "allergen_statement_source",
+      "origin": "new",
+      "label": "Origen de la declaración de ingredientes / alérgenos",
+      "data_type": "single_select",
+      "unit": null,
+      "allowed_values": [
+        "Etiqueta del envase",
+        "Receta verificada del negocio",
+        "Sin fuente",
+        "Documento / página oficial del fabricante"
+      ],
+      "validation_rules": {},
+      "used_by": []
+    }
+  },
+  "case_overrides": {
+    "fastener_hassns_m8_chainring_bolt_pitch_unknown": {
+      "id": "fastener_hassns_m8_chainring_bolt_pitch_unknown",
+      "template": "fastener",
+      "values": {
+        "fastener_kind": "Perno",
+        "thread": "M8",
+        "declared_purpose": "Perno de plato",
+        "length_datum": "Desconocido / sin confirmar",
+        "length_mm": "8.5",
+        "pack_quantity": "1"
+      },
+      "kind": "inventory_candidate_unverified",
+      "source_ids": [
+        "E-PT-THREAD",
+        "E-INVENTARIO"
+      ],
+      "source_urls": [
+        "https://www.parktool.com/en-us/blog/repair-help/basic-thread-concepts"
+      ],
+      "expected_blocking": [],
+      "inventory_product": "Perno Corona HASSNS M8 8.5mm  NEGRO",
+      "note": "Producto real «Perno Corona HASSNS M8 8.5mm»: el paso 0.75 que Park Tool asocia a pernos de plato NO se escribe desde el uso; queda pendiente hasta etiqueta/OEM. La referencia del largo es desconocida y se declara así.",
+      "review_note": "Título conserva nominal/largo declarado; paso y referencia del largo pendientes de etiqueta/modelo.",
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false
+    },
+    "fastener_rotor_bolt_t25_park_standard_scope": {
+      "id": "fastener_rotor_bolt_t25_park_standard_scope",
+      "template": "fastener",
+      "values": {
+        "fastener_kind": "Perno",
+        "thread": "M5",
+        "thread_pitch_mm": "0.8",
+        "thread_hand": "Derecha",
+        "head_drive": "Torx",
+        "torx_size": "T25",
+        "declared_purpose": "Perno de rotor",
+        "strength_class_claim": "Desconocido / sin confirmar"
+      },
+      "kind": "synthetic_representation",
+      "source_ids": [
+        "E-PT-THREAD",
+        "E-INVENTARIO"
+      ],
+      "source_urls": [
+        "https://www.parktool.com/en-us/blog/repair-help/basic-thread-concepts"
+      ],
+      "expected_blocking": [],
+      "inventory_product": "PERNO FRENO DISCO (ROTOR) PARA TORQ T25 ( MINIMO 20 PCS )",
+      "note": "M5 x 0.8 es el estándar de aplicación que Park Tool documenta para pernos de rotor; como dato del SKU sólo vale si la etiqueta/OEM del perno lo confirma (aquí se muestra el alcance, no una medición).",
+      "review_note": "Ilustración de rosca; Park no identifica este SKU ni prueba accionamiento, mano o resistencia particulares.",
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false
+    },
+    "fastener_kit_rows_shape": {
+      "id": "fastener_kit_rows_shape",
+      "template": "fastener",
+      "values": {
+        "fastener_kind": "Kit",
+        "fastener_kit_members": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r01",
+              "values": {
+                "member_role": "Perno de rotor",
+                "thread_nominal": "M5",
+                "thread_pitch_mm": "0.8",
+                "thread_hand": "Derecha",
+                "length_mm": "10",
+                "length_datum": "Bajo cabeza",
+                "head_drive": "T25",
+                "quantity": "12"
+              },
+              "sources": [
+                "https://www.parktool.com/en-us/blog/repair-help/basic-thread-concepts"
+              ]
+            },
+            {
+              "id": "r02",
+              "values": {
+                "member_role": "Golilla",
+                "quantity": "12"
+              },
+              "sources": [
+                "https://www.parktool.com/en-us/blog/repair-help/basic-thread-concepts"
+              ]
+            }
+          ]
+        }
+      },
+      "kind": "synthetic_representation",
+      "source_ids": [
+        "E-PT-THREAD"
+      ],
+      "source_urls": [
+        "https://www.parktool.com/en-us/blog/repair-help/basic-thread-concepts"
+      ],
+      "expected_blocking": [],
+      "inventory_product": null,
+      "note": "Forma de un kit: dos miembros con rosca/largo/cantidad propios. Valores ilustrativos del estándar Park Tool; no es un SKU del inventario.",
+      "review_note": "Kit ilustrativo, no evidencia de SKU; golilla sin rosca inventada.",
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false
+    },
+    "workshop_tool_park_ct_3_3": {
+      "id": "workshop_tool_park_ct_3_3",
+      "template": "workshop_tool",
+      "values": {
+        "tool_kind": "Corta cadena",
+        "chain_tool_speeds": [
+          "5",
+          "6",
+          "7",
+          "8",
+          "9",
+          "10",
+          "11",
+          "12"
+        ],
+        "tool_capabilities": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r01",
+              "values": {
+                "operation": "Cortar / extraer remache",
+                "target_standard": "Cadenas5–12v en alcance OEM de CT-3.3",
+                "supported": true,
+                "speeds_min": "5",
+                "speeds_max": "12"
+              },
+              "sources": [
+                "https://www.parktool.com/en-us/product/chain-tool-ct-3-3"
+              ]
+            },
+            {
+              "id": "single-speed",
+              "values": {
+                "operation": "Cortar / extraer remache",
+                "target_standard": "Cadenas1v:1/8 pulg,3/16 pulg y half-link según OEM",
+                "supported": true,
+                "speeds_min": "1",
+                "speeds_max": "1"
+              },
+              "sources": [
+                "https://www.parktool.com/en-us/product/chain-tool-ct-3-3"
+              ]
+            },
+            {
+              "id": "r02",
+              "values": {
+                "operation": "Instalar remache",
+                "target_standard": "Remaches Campagnolo 11/12/13v",
+                "supported": true,
+                "brand_scope": "Campagnolo 11, 12 y 13v"
+              },
+              "sources": [
+                "https://www.parktool.com/en-us/product/chain-tool-ct-3-3"
+              ]
+            },
+            {
+              "id": "r03",
+              "values": {
+                "operation": "Peenar remache",
+                "target_standard": "Remaches Campagnolo 11/12/13v",
+                "supported": false,
+                "brand_scope": "Campagnolo 11, 12 y 13v: «install and remove, but not peen»"
+              },
+              "sources": [
+                "https://www.parktool.com/en-us/product/chain-tool-ct-3-3"
+              ]
+            }
+          ]
+        }
+      },
+      "kind": "oem_revision_scoped",
+      "source_ids": [
+        "E-PT-CT33"
+      ],
+      "source_urls": [
+        "https://www.parktool.com/en-us/product/chain-tool-ct-3-3"
+      ],
+      "expected_blocking": [],
+      "inventory_product": null,
+      "note": "Escenario ND10: la cobertura 5–12v no aprueba peenar; la exclusión OEM se representa con supported=false, no con ausencia de fila.",
+      "review_note": "Separar 1v de5–12v; operaciones Campagnolo tienen alcance propio.",
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": "only the source-scoped values retained in this review; inventory identity not established"
+    },
+    "workshop_tool_park_fr_5_2_lockring": {
+      "id": "workshop_tool_park_fr_5_2_lockring",
+      "template": "workshop_tool",
+      "values": {
+        "tool_kind": "Llave de contratuerca (cassette / rotor)",
+        "tool_capabilities": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r01",
+              "values": {
+                "operation": "Extraer",
+                "target_standard": "Contratuerca de cassette 12 estrías (Shimano, SRAM incl. XD, Chris King, Sun Race, Hugi…)",
+                "supported": true,
+                "interface_measure_mm": "23.4",
+                "brand_scope": "SRAM XD usa la misma FR-5.2 que Shimano HG"
+              },
+              "sources": [
+                "https://www.parktool.com/en-us/blog/repair-help/cassette-removal-and-installation"
+              ]
+            },
+            {
+              "id": "r02",
+              "values": {
+                "operation": "Instalar",
+                "target_standard": "Contratuerca de cassette 12 estrías",
+                "supported": true,
+                "interface_measure_mm": "23.4",
+                "drive_size": "Hexágono1 pulg o llave ajustable"
+              },
+              "sources": [
+                "https://www.parktool.com/en-us/blog/repair-help/cassette-removal-and-installation"
+              ]
+            }
+          ]
+        }
+      },
+      "kind": "oem_revision_scoped",
+      "source_ids": [
+        "E-PT-CASSETTE"
+      ],
+      "source_urls": [
+        "https://www.parktool.com/en-us/blog/repair-help/cassette-removal-and-installation"
+      ],
+      "expected_blocking": [],
+      "inventory_product": null,
+      "note": "La interfaz de extracción (contratuerca) es distinta del spline de instalación del cuerpo: un extractor «HG» no se rechaza sobre XD.",
+      "review_note": "Accionamiento no es par; conservar geometría publicada y no una negativa global por marca.",
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": "only the source-scoped values retained in this review; inventory identity not established"
+    },
+    "workshop_tool_park_bbt_9": {
+      "id": "workshop_tool_park_bbt_9",
+      "template": "workshop_tool",
+      "values": {
+        "tool_kind": "Llave de pedalier",
+        "tool_capabilities": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r01",
+              "values": {
+                "operation": "Apretar / aflojar",
+                "target_standard": "Interfaz16muescas, diámetro mayor44–45mm, menor42.7mm; modelos de tabla OEM",
+                "supported": true,
+                "interface_diameter_min_mm": "44",
+                "interface_diameter_max_mm": "45",
+                "interface_minor_diameter_mm": "42.7",
+                "interface_feature_count": "16"
+              },
+              "sources": [
+                "https://www.parktool.com/en-us/product/bottom-bracket-tool-bbt-9"
+              ]
+            },
+            {
+              "id": "r02",
+              "values": {
+                "operation": "Apretar / aflojar",
+                "target_standard": "Tapa de biela Hollowtech II 8 puntas (TL-FC16/18)",
+                "supported": true,
+                "interface_feature_count": "8"
+              },
+              "sources": [
+                "https://www.parktool.com/en-us/product/bottom-bracket-tool-bbt-9"
+              ]
+            },
+            {
+              "id": "r03",
+              "values": {
+                "operation": "Apretar / aflojar",
+                "target_standard": "Contratuerca de rotor Center Lock 16 muescas",
+                "supported": true
+              },
+              "sources": [
+                "https://www.parktool.com/en-us/product/bottom-bracket-tool-bbt-9"
+              ]
+            }
+          ]
+        }
+      },
+      "kind": "oem_revision_scoped",
+      "source_ids": [
+        "E-PT-BBT9"
+      ],
+      "source_urls": [
+        "https://www.parktool.com/en-us/product/bottom-bracket-tool-bbt-9"
+      ],
+      "expected_blocking": [],
+      "inventory_product": null,
+      "note": "Un estándar de copas no equivale a todas las cajas: PF/BB30 no aparecen y quedan desconocidos.",
+      "review_note": "Guardar diámetro mayor44–45, menor42.7 y16muescas; modelos sólo según tabla OEM.",
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": "only the source-scoped values retained in this review; inventory identity not established"
+    },
+    "workshop_tool_super_b_tb_6616": {
+      "id": "workshop_tool_super_b_tb_6616",
+      "template": "workshop_tool",
+      "values": {
+        "tool_kind": "Extractor de biela",
+        "tool_capabilities": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r01",
+              "values": {
+                "operation": "Extraer",
+                "target_standard": "Biela de cuadradillo estándar según descripción OEM",
+                "supported": true,
+                "drive_size": "Hex 8 mm o llave fija 15 mm"
+              },
+              "sources": [
+                "https://www.superbiketool.com/en/product/detail/Bottom_Crank_tool/TB_6616"
+              ]
+            }
+          ]
+        }
+      },
+      "kind": "oem_revision_scoped",
+      "source_ids": [
+        "E-SUPERB-6616",
+        "E-INVENTARIO"
+      ],
+      "source_urls": [
+        "https://www.superbiketool.com/en/product/detail/Bottom_Crank_tool/TB_6616"
+      ],
+      "expected_blocking": [],
+      "inventory_product": "EXTRACTOR DE VOLANTE SUPER B TB-6616 FOR STANDARD SQUARE TYPE",
+      "note": "Producto real del inventario; la página oficial no imprime la rosca del extractor (M22 x 1 no se afirma).",
+      "review_note": "OEM afirma square type; no dice only ni prueba exclusión Octalink/ISIS o toda interfaz JIS/ISO.",
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": "only the source-scoped values retained in this review; inventory identity not established"
+    },
+    "workshop_tool_park_ib_3_multitool": {
+      "id": "workshop_tool_park_ib_3_multitool",
+      "template": "workshop_tool",
+      "values": {
+        "tool_kind": "Multiherramienta",
+        "chain_tool_speeds": [
+          "5",
+          "6",
+          "7",
+          "8",
+          "9",
+          "10",
+          "11",
+          "12"
+        ],
+        "tool_bits_included": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "hex-1-5",
+              "values": {
+                "bit_kind": "Hexagonal (Allen)",
+                "size": "1.5 mm",
+                "quantity": "1"
+              },
+              "sources": [
+                "https://www.parktool.com/en-us/product/i-beam-mini-fold-up-with-chain-tool-ib-3"
+              ]
+            },
+            {
+              "id": "hex-2",
+              "values": {
+                "bit_kind": "Hexagonal (Allen)",
+                "size": "2 mm",
+                "quantity": "1"
+              },
+              "sources": [
+                "https://www.parktool.com/en-us/product/i-beam-mini-fold-up-with-chain-tool-ib-3"
+              ]
+            },
+            {
+              "id": "hex-2-5",
+              "values": {
+                "bit_kind": "Hexagonal (Allen)",
+                "size": "2.5 mm",
+                "quantity": "1"
+              },
+              "sources": [
+                "https://www.parktool.com/en-us/product/i-beam-mini-fold-up-with-chain-tool-ib-3"
+              ]
+            },
+            {
+              "id": "hex-3",
+              "values": {
+                "bit_kind": "Hexagonal (Allen)",
+                "size": "3 mm",
+                "quantity": "1"
+              },
+              "sources": [
+                "https://www.parktool.com/en-us/product/i-beam-mini-fold-up-with-chain-tool-ib-3"
+              ]
+            },
+            {
+              "id": "hex-4",
+              "values": {
+                "bit_kind": "Hexagonal (Allen)",
+                "size": "4 mm",
+                "quantity": "1"
+              },
+              "sources": [
+                "https://www.parktool.com/en-us/product/i-beam-mini-fold-up-with-chain-tool-ib-3"
+              ]
+            },
+            {
+              "id": "hex-5",
+              "values": {
+                "bit_kind": "Hexagonal (Allen)",
+                "size": "5 mm",
+                "quantity": "1"
+              },
+              "sources": [
+                "https://www.parktool.com/en-us/product/i-beam-mini-fold-up-with-chain-tool-ib-3"
+              ]
+            },
+            {
+              "id": "hex-6",
+              "values": {
+                "bit_kind": "Hexagonal (Allen)",
+                "size": "6 mm",
+                "quantity": "1"
+              },
+              "sources": [
+                "https://www.parktool.com/en-us/product/i-beam-mini-fold-up-with-chain-tool-ib-3"
+              ]
+            },
+            {
+              "id": "hex-8",
+              "values": {
+                "bit_kind": "Hexagonal (Allen)",
+                "size": "8 mm",
+                "quantity": "1"
+              },
+              "sources": [
+                "https://www.parktool.com/en-us/product/i-beam-mini-fold-up-with-chain-tool-ib-3"
+              ]
+            },
+            {
+              "id": "r02",
+              "values": {
+                "bit_kind": "Torx",
+                "size": "T25",
+                "quantity": "1"
+              },
+              "sources": [
+                "https://www.parktool.com/en-us/product/i-beam-mini-fold-up-with-chain-tool-ib-3"
+              ]
+            },
+            {
+              "id": "r03",
+              "values": {
+                "bit_kind": "Destornillador plano",
+                "quantity": "1"
+              },
+              "sources": [
+                "https://www.parktool.com/en-us/product/i-beam-mini-fold-up-with-chain-tool-ib-3"
+              ]
+            },
+            {
+              "id": "r04",
+              "values": {
+                "bit_kind": "Llave estrella / cerrada",
+                "size": "8 mm",
+                "quantity": "1"
+              },
+              "sources": [
+                "https://www.parktool.com/en-us/product/i-beam-mini-fold-up-with-chain-tool-ib-3"
+              ]
+            },
+            {
+              "id": "spoke-3-23",
+              "values": {
+                "bit_kind": "Llave de rayos",
+                "size": "3.23 mm",
+                "quantity": "1"
+              },
+              "sources": [
+                "https://www.parktool.com/en-us/product/i-beam-mini-fold-up-with-chain-tool-ib-3"
+              ]
+            },
+            {
+              "id": "spoke-3-45",
+              "values": {
+                "bit_kind": "Llave de rayos",
+                "size": "3.45 mm",
+                "quantity": "1"
+              },
+              "sources": [
+                "https://www.parktool.com/en-us/product/i-beam-mini-fold-up-with-chain-tool-ib-3"
+              ]
+            },
+            {
+              "id": "r06",
+              "values": {
+                "bit_kind": "Desmontador",
+                "quantity": "1"
+              },
+              "sources": [
+                "https://www.parktool.com/en-us/product/i-beam-mini-fold-up-with-chain-tool-ib-3"
+              ]
+            },
+            {
+              "id": "r07",
+              "values": {
+                "bit_kind": "Corta cadena",
+                "quantity": "1"
+              },
+              "sources": [
+                "https://www.parktool.com/en-us/product/i-beam-mini-fold-up-with-chain-tool-ib-3"
+              ]
+            }
+          ]
+        },
+        "tool_capabilities": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r01",
+              "values": {
+                "member": "Corta cadena",
+                "operation": "Cortar / extraer remache",
+                "target_standard": "Cadenas 5–12v incl. SRAM 12v Flattop y T-Type",
+                "supported": true,
+                "speeds_min": "5",
+                "speeds_max": "12"
+              },
+              "sources": [
+                "https://www.parktool.com/en-us/product/i-beam-mini-fold-up-with-chain-tool-ib-3"
+              ]
+            },
+            {
+              "id": "r02",
+              "values": {
+                "member": "Corta cadena",
+                "operation": "Peenar remache",
+                "target_standard": "Remaches Campagnolo 11/12/13v",
+                "supported": false
+              },
+              "sources": [
+                "https://www.parktool.com/en-us/product/i-beam-mini-fold-up-with-chain-tool-ib-3"
+              ]
+            }
+          ]
+        }
+      },
+      "kind": "oem_revision_scoped",
+      "source_ids": [
+        "E-PT-IB3"
+      ],
+      "source_urls": [
+        "https://www.parktool.com/en-us/product/i-beam-mini-fold-up-with-chain-tool-ib-3"
+      ],
+      "expected_blocking": [],
+      "inventory_product": null,
+      "note": "Multiherramienta que sí registra velocidades de cadena (antes prohibido por allowed_when) y separa contenido de capacidad.",
+      "review_note": "Una fila por tamaño, llave estrella8mm; las capacidades no se derivan de contenido aplanado.",
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": "only the source-scoped values retained in this review; inventory identity not established"
+    },
+    "light_cateye_ampp800_viz300_kit": {
+      "id": "light_cateye_ampp800_viz300_kit",
+      "template": "light",
+      "values": {
+        "light_position": "Juego delantera + trasera",
+        "light_member_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r01",
+              "values": {
+                "member_id": "AMPP800 (HL-EL088RC)",
+                "position": "Delantera",
+                "battery_kind": "Li-ion integrada",
+                "battery_capacity_mah": "2500",
+                "battery_voltage_v": "3.7",
+                "charge_connector": "Micro-USB",
+                "mount_kind": "Abrazadera de manubrio",
+                "mount_diameter_min_mm": "22.0",
+                "mount_diameter_max_mm": "35.0",
+                "ip_rating": "IPX4",
+                "member_revision": "Web OEM consultada2026-09-07; lote de inventario no identificado"
+              },
+              "sources": [
+                "https://www.cateye.com/intl/products/headlights/HL-EL088RC_TL-LD810/"
+              ]
+            },
+            {
+              "id": "r02",
+              "values": {
+                "member_id": "ViZ300 (TL-LD810)",
+                "position": "Trasera",
+                "battery_kind": "Li-ion integrada",
+                "charge_connector": "Micro-USB",
+                "mount_kind": "Abrazadera de tija",
+                "mount_diameter_min_mm": "21.5",
+                "mount_diameter_max_mm": "32.0",
+                "mount_circumference_max_mm": "130",
+                "ip_rating": "IPX4",
+                "member_revision": "Web OEM consultada2026-09-07; lote de inventario no identificado"
+              },
+              "sources": [
+                "https://www.cateye.com/intl/products/headlights/HL-EL088RC_TL-LD810/",
+                "https://www.cateye.com/intl/support/manual/data/doc/TL-LD810_820_HP_ENG_v1.pdf"
+              ]
+            }
+          ]
+        },
+        "light_mode_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r01",
+              "values": {
+                "member_id": "AMPP800 (HL-EL088RC)",
+                "mode": "High",
+                "pattern": "Constante",
+                "lumens": "800",
+                "runtime_h": "1.5",
+                "member_revision": "Web OEM consultada2026-09-07; lote de inventario no identificado"
+              },
+              "sources": [
+                "https://www.cateye.com/intl/products/headlights/HL-EL088RC_TL-LD810/"
+              ]
+            },
+            {
+              "id": "r02",
+              "values": {
+                "member_id": "AMPP800 (HL-EL088RC)",
+                "mode": "Middle",
+                "pattern": "Constante",
+                "lumens": "400",
+                "runtime_h": "2",
+                "member_revision": "Web OEM consultada2026-09-07; lote de inventario no identificado"
+              },
+              "sources": [
+                "https://www.cateye.com/intl/products/headlights/HL-EL088RC_TL-LD810/"
+              ]
+            },
+            {
+              "id": "r03",
+              "values": {
+                "member_id": "AMPP800 (HL-EL088RC)",
+                "mode": "Low",
+                "pattern": "Constante",
+                "lumens": "200",
+                "runtime_h": "4",
+                "member_revision": "Web OEM consultada2026-09-07; lote de inventario no identificado"
+              },
+              "sources": [
+                "https://www.cateye.com/intl/products/headlights/HL-EL088RC_TL-LD810/"
+              ]
+            },
+            {
+              "id": "r04",
+              "values": {
+                "member_id": "AMPP800 (HL-EL088RC)",
+                "mode": "Daytime HyperConstant",
+                "pattern": "Constante + intermitente",
+                "lumens": "800",
+                "lumens_secondary": "200",
+                "runtime_h": "5",
+                "member_revision": "Web OEM consultada2026-09-07; lote de inventario no identificado"
+              },
+              "sources": [
+                "https://www.cateye.com/intl/products/headlights/HL-EL088RC_TL-LD810/"
+              ]
+            },
+            {
+              "id": "r05",
+              "values": {
+                "member_id": "AMPP800 (HL-EL088RC)",
+                "mode": "Flashing",
+                "pattern": "Intermitente",
+                "lumens": "200",
+                "runtime_h": "30",
+                "member_revision": "Web OEM consultada2026-09-07; lote de inventario no identificado"
+              },
+              "sources": [
+                "https://www.cateye.com/intl/products/headlights/HL-EL088RC_TL-LD810/"
+              ]
+            },
+            {
+              "id": "r06",
+              "values": {
+                "member_id": "ViZ300 (TL-LD810)",
+                "mode": "Constant",
+                "pattern": "Constante",
+                "lumens": "30",
+                "runtime_h": "5",
+                "member_revision": "Web OEM consultada2026-09-07; lote de inventario no identificado"
+              },
+              "sources": [
+                "https://www.cateye.com/intl/products/headlights/HL-EL088RC_TL-LD810/"
+              ]
+            },
+            {
+              "id": "r07",
+              "values": {
+                "member_id": "ViZ300 (TL-LD810)",
+                "mode": "Flashing",
+                "pattern": "Intermitente",
+                "lumens": "30",
+                "runtime_h": "45",
+                "member_revision": "Web OEM consultada2026-09-07; lote de inventario no identificado"
+              },
+              "sources": [
+                "https://www.cateye.com/intl/products/headlights/HL-EL088RC_TL-LD810/"
+              ]
+            },
+            {
+              "id": "r08",
+              "values": {
+                "member_id": "ViZ300 (TL-LD810)",
+                "mode": "Group Ride",
+                "pattern": "Otro",
+                "lumens": "15",
+                "runtime_h": "10",
+                "member_revision": "Web OEM consultada2026-09-07; lote de inventario no identificado"
+              },
+              "sources": [
+                "https://www.cateye.com/intl/products/headlights/HL-EL088RC_TL-LD810/"
+              ]
+            },
+            {
+              "id": "r09",
+              "values": {
+                "member_id": "ViZ300 (TL-LD810)",
+                "mode": "Daytime Hyperflash",
+                "pattern": "Diurno",
+                "lumens": "300",
+                "runtime_h": "10",
+                "member_revision": "Web OEM consultada2026-09-07; lote de inventario no identificado"
+              },
+              "sources": [
+                "https://www.cateye.com/intl/products/headlights/HL-EL088RC_TL-LD810/"
+              ]
+            }
+          ]
+        }
+      },
+      "kind": "oem_revision_scoped",
+      "source_ids": [
+        "E-CATEYE"
+      ],
+      "source_urls": [
+        "https://www.cateye.com/intl/products/headlights/HL-EL088RC_TL-LD810/"
+      ],
+      "expected_blocking": [],
+      "inventory_product": null,
+      "note": "Escenario ND12: 800 lm y 30 h nunca comparten fila; el trasero conserva su propio montaje y perímetro. Los escalares de luz única no aplican (allowed_when).",
+      "review_note": "Caso de web actual consultada, no asignación al inventario. GroupRide15lm/10h y MicroUSB; revisión anterior separada.",
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": "only the source-scoped values retained in this review; inventory identity not established"
+    },
+    "light_inventory_ae_kit_pending": {
+      "id": "light_inventory_ae_kit_pending",
+      "template": "light",
+      "values": {
+        "light_position": "Juego delantera + trasera",
+        "power_source": "Recargable USB"
+      },
+      "kind": "inventory_candidate_unverified",
+      "source_ids": [
+        "E-INVENTARIO"
+      ],
+      "source_urls": [],
+      "expected_blocking": [],
+      "inventory_product": "Juego de luces delantera + trasera AE",
+      "note": "Producto real sin OEM: las filas requeridas faltan → pendiente (aviso), no contradicción; nada se inventa desde el título.",
+      "review_note": "Ausencias de miembros/modos son avisos no bloqueantes; pendiente investigación exacta.",
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false
+    },
+    "accessory_mount_quad_lock_out_front": {
+      "id": "accessory_mount_quad_lock_out_front",
+      "template": "accessory_mount",
+      "values": {
+        "accessory_mount_kind": "Soporte de teléfono",
+        "bike_attachment_kind": "Abrazadera de manubrio",
+        "bar_fit_representation": "Medidas discretas (filas)",
+        "device_attachment_kind": "Interfaz propietaria (carcasa / adaptador)",
+        "device_system": "Quad Lock",
+        "rotation_360": true,
+        "bar_clamp_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r01",
+              "values": {
+                "nominal_diameter_mm": "35",
+                "fit_method": "Directo",
+                "included": true,
+                "mount_revision": "Standard de la oferta actual consultada2026-09-07"
+              },
+              "sources": [
+                "https://www.quadlockcase.com/products/out-front-mount"
+              ]
+            },
+            {
+              "id": "r02",
+              "values": {
+                "nominal_diameter_mm": "31.8",
+                "fit_method": "Con espaciador incluido",
+                "included": true,
+                "mount_revision": "Standard de la oferta actual consultada2026-09-07"
+              },
+              "sources": [
+                "https://www.quadlockcase.com/products/out-front-mount"
+              ]
+            },
+            {
+              "id": "r03",
+              "values": {
+                "nominal_diameter_mm": "25.4",
+                "fit_method": "Con espaciador incluido",
+                "included": true,
+                "mount_revision": "Standard de la oferta actual consultada2026-09-07"
+              },
+              "sources": [
+                "https://www.quadlockcase.com/products/out-front-mount"
+              ]
+            },
+            {
+              "id": "r04",
+              "values": {
+                "nominal_diameter_mm": "22",
+                "fit_method": "Con espaciador incluido",
+                "spacer_or_variant": "OEM escribe «22 mm»; si es 22,2 se resuelve por variante/manual",
+                "included": true,
+                "mount_revision": "Standard de la oferta actual consultada2026-09-07"
+              },
+              "sources": [
+                "https://www.quadlockcase.com/products/out-front-mount"
+              ]
+            }
+          ]
+        }
+      },
+      "kind": "oem_revision_scoped",
+      "source_ids": [
+        "E-QUADLOCK"
+      ],
+      "source_urls": [
+        "https://www.quadlockcase.com/products/out-front-mount"
+      ],
+      "expected_blocking": [],
+      "inventory_product": null,
+      "note": "Escenario ND13: 30 mm no tiene fila → desconocido, no aprobado. El ancho del teléfono no aplica (carcasa propietaria). Cuál medida es «directa» y cuál con espaciador no lo confirma la lectura: la columna fit_method de la fila 35 es hipótesis a confirmar.",
+      "review_note": "Oferta actual Standard; preservar22literal y revisión. No aplicar a stock anterior sin identificar versión.",
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": "only the source-scoped values retained in this review; inventory identity not established"
+    },
+    "accessory_mount_quad_lock_out_front_pro_no_35": {
+      "id": "accessory_mount_quad_lock_out_front_pro_no_35",
+      "template": "accessory_mount",
+      "values": {
+        "accessory_mount_kind": "Soporte de teléfono",
+        "bike_attachment_kind": "Abrazadera de manubrio",
+        "bar_fit_representation": "Medidas discretas (filas)",
+        "device_attachment_kind": "Carcasa propietaria",
+        "device_system": "Quad Lock",
+        "bar_clamp_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r01",
+              "values": {
+                "nominal_diameter_mm": "31.8",
+                "fit_method": "Con espaciador incluido",
+                "included": true
+              },
+              "sources": [
+                "https://www.quadlockcase.com/products/out-front-mount"
+              ]
+            },
+            {
+              "id": "r02",
+              "values": {
+                "nominal_diameter_mm": "25.4",
+                "fit_method": "Con espaciador incluido",
+                "included": true
+              },
+              "sources": [
+                "https://www.quadlockcase.com/products/out-front-mount"
+              ]
+            },
+            {
+              "id": "r03",
+              "values": {
+                "nominal_diameter_mm": "22",
+                "fit_method": "Con espaciador incluido",
+                "included": true
+              },
+              "sources": [
+                "https://www.quadlockcase.com/products/out-front-mount"
+              ]
+            }
+          ]
+        }
+      },
+      "kind": "unsupported_versionless_negative",
+      "source_ids": [
+        "E-QUADLOCK"
+      ],
+      "source_urls": [
+        "https://www.quadlockcase.com/products/out-front-mount"
+      ],
+      "expected_blocking": [],
+      "inventory_product": null,
+      "note": "La variante PRO no lista 35 mm: sin fila, un manubrio de 35 queda desconocido; no se hereda de la variante estándar.",
+      "review_note": "PRO sin35 carece de versión y contradice oferta actual; ausencia de fila no es exclusión.",
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": "only the source-scoped values retained in this review; inventory identity not established",
+      "exclude": true
+    },
+    "accessory_mount_gub_clamp_range_from_title": {
+      "id": "accessory_mount_gub_clamp_range_from_title",
+      "template": "accessory_mount",
+      "values": {
+        "accessory_mount_kind": "Soporte de teléfono",
+        "device_attachment_kind": "Pinza / brazos ajustables",
+        "device_width_min_mm": "55",
+        "device_width_max_mm": "100",
+        "bike_attachment_kind": "Abrazadera de manubrio",
+        "bar_fit_representation": "Desconocido / sin confirmar"
+      },
+      "kind": "inventory_candidate_unverified",
+      "source_ids": [
+        "E-INVENTARIO"
+      ],
+      "source_urls": [],
+      "expected_blocking": [],
+      "inventory_product": "Soporte Teléfono GUB Aluminio Bicicleta 55-100mm Negro",
+      "note": "Producto real: el título declara 55–100 mm de dispositivo (pinza); el lado bicicleta queda desconocido hasta leer el envase/OEM.",
+      "review_note": "Rango del título conserva carácter provisional; zona/diámetros de bicicleta pendientes OEM.",
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false
+    },
+    "cycle_computer_garmin_edge_540": {
+      "id": "cycle_computer_garmin_edge_540",
+      "template": "cycle_computer",
+      "values": {
+        "sensor_link_ant_plus": true,
+        "sensor_link_bluetooth": true
+      },
+      "kind": "oem_partial_representation",
+      "source_ids": [
+        "E-GARMIN-540"
+      ],
+      "source_urls": [
+        "https://www8.garmin.com/manuals/webhelp/GUID-17DE938E-466A-4746-BDBF-7A6FC1B3A32C/EN-US/GUID-09801A97-361B-4675-AD3A-6ACE25854DB3.html"
+      ],
+      "expected_blocking": [],
+      "inventory_product": null,
+      "note": "Escenario ND21: GNSS y sensores son ejes distintos. El manual dice «ANT+ or Bluetooth» por tipo sin detallar cuál transporte admite cada tipo: las filas por transporte de Radar/Luces/Cambio/eBike/Remoto se dejan sólo en ANT+ como lectura conservadora y se marcan pendientes de confirmar por tipo.",
+      "review_note": "Manual general confirma transportes, no matriz por sensor. Retirar parejas y falsos sin fuente exacta.",
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": "only the source-scoped values retained in this review; inventory identity not established"
+    },
+    "cycle_computer_wired_11_functions_inventory": {
+      "id": "cycle_computer_wired_11_functions_inventory",
+      "template": "cycle_computer",
+      "values": {
+        "positioning_source": "Sin posicionamiento",
+        "speed_source": "Sensor de rueda (imán / cable)",
+        "sensor_link_wired": true,
+        "functions_count": "11",
+        "wheel_setting": "Desconocido / sin confirmar"
+      },
+      "kind": "inventory_candidate_unverified",
+      "source_ids": [
+        "E-INVENTARIO"
+      ],
+      "source_urls": [],
+      "expected_blocking": [],
+      "inventory_product": "CICLOCOMPUTADOR BICICLETA VELOCIMETRO CON CABLE 11 FUNCIONES",
+      "note": "Producto real: velocímetro con cable; el ajuste de rueda aplica (sensor de rueda) pero su método es desconocido hasta leer el manual.",
+      "review_note": "Cableado y11funciones del título no prueban ausencia de ANT+/Bluetooth/teléfono.",
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false
+    },
+    "consumer_electronics_anker_a2667_ports_and_budget": {
+      "id": "consumer_electronics_anker_a2667_ports_and_budget",
+      "template": "consumer_electronics",
+      "values": {
+        "device_kind": "Cargador",
+        "rated_power_w": "65",
+        "ports_count": "3",
+        "charging_protocol_claim": "PPS, PowerIQ3.0, PowerIQ2.0",
+        "power_port_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r01",
+              "values": {
+                "port_id": "USB-C 1",
+                "connector": "USB-C",
+                "direction": "Salida",
+                "max_power_w": "65"
+              },
+              "sources": [
+                "https://service.anker.com/product-description/a085g000004x2BVAAY?recordId=a085g000004x2BVAAY"
+              ]
+            },
+            {
+              "id": "r02",
+              "values": {
+                "port_id": "USB-C 2",
+                "connector": "USB-C",
+                "direction": "Salida",
+                "max_power_w": "65"
+              },
+              "sources": [
+                "https://service.anker.com/product-description/a085g000004x2BVAAY?recordId=a085g000004x2BVAAY"
+              ]
+            },
+            {
+              "id": "r03",
+              "values": {
+                "port_id": "USB-A",
+                "connector": "USB-A",
+                "direction": "Salida",
+                "max_power_w": "22.5"
+              },
+              "sources": [
+                "https://service.anker.com/product-description/a085g000004x2BVAAY?recordId=a085g000004x2BVAAY"
+              ]
+            }
+          ]
+        },
+        "power_budget_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r01",
+              "values": {
+                "configuration": "C1 + C2",
+                "port_id": "USB-C 1",
+                "power_w": "45"
+              },
+              "sources": [
+                "https://service.anker.com/product-description/a085g000004x2BVAAY?recordId=a085g000004x2BVAAY"
+              ]
+            },
+            {
+              "id": "r02",
+              "values": {
+                "configuration": "C1 + C2",
+                "port_id": "USB-C 2",
+                "power_w": "20"
+              },
+              "sources": [
+                "https://service.anker.com/product-description/a085g000004x2BVAAY?recordId=a085g000004x2BVAAY"
+              ]
+            },
+            {
+              "id": "r03",
+              "values": {
+                "configuration": "C1 + A",
+                "port_id": "USB-C 1",
+                "power_w": "40"
+              },
+              "sources": [
+                "https://service.anker.com/product-description/a085g000004x2BVAAY?recordId=a085g000004x2BVAAY"
+              ]
+            },
+            {
+              "id": "r04",
+              "values": {
+                "configuration": "C1 + A",
+                "port_id": "USB-A",
+                "power_w": "22.5"
+              },
+              "sources": [
+                "https://service.anker.com/product-description/a085g000004x2BVAAY?recordId=a085g000004x2BVAAY"
+              ]
+            },
+            {
+              "id": "r05",
+              "values": {
+                "configuration": "C2 + A",
+                "port_id": "USB-C 2",
+                "power_w": "12"
+              },
+              "sources": [
+                "https://service.anker.com/product-description/a085g000004x2BVAAY?recordId=a085g000004x2BVAAY"
+              ]
+            },
+            {
+              "id": "r06",
+              "values": {
+                "configuration": "C2 + A",
+                "port_id": "USB-A",
+                "power_w": "12"
+              },
+              "sources": [
+                "https://service.anker.com/product-description/a085g000004x2BVAAY?recordId=a085g000004x2BVAAY"
+              ]
+            },
+            {
+              "id": "r07",
+              "values": {
+                "configuration": "C1 + C2 + A",
+                "port_id": "USB-C 1",
+                "power_w": "40"
+              },
+              "sources": [
+                "https://service.anker.com/product-description/a085g000004x2BVAAY?recordId=a085g000004x2BVAAY"
+              ]
+            },
+            {
+              "id": "r08",
+              "values": {
+                "configuration": "C1 + C2 + A",
+                "port_id": "USB-C 2",
+                "power_w": "12"
+              },
+              "sources": [
+                "https://service.anker.com/product-description/a085g000004x2BVAAY?recordId=a085g000004x2BVAAY"
+              ]
+            },
+            {
+              "id": "r09",
+              "values": {
+                "configuration": "C1 + C2 + A",
+                "port_id": "USB-A",
+                "power_w": "12"
+              },
+              "sources": [
+                "https://service.anker.com/product-description/a085g000004x2BVAAY?recordId=a085g000004x2BVAAY"
+              ]
+            }
+          ]
+        },
+        "spec_evidence_source": "https://service.anker.com/product-description/a085g000004x2BVAAY?recordId=a085g000004x2BVAAY"
+      },
+      "kind": "oem_revision_scoped",
+      "source_ids": [
+        "E-ANKER-A2667"
+      ],
+      "source_urls": [
+        "https://service.anker.com/product-description/a085g000004x2BVAAY?recordId=a085g000004x2BVAAY"
+      ],
+      "expected_blocking": [],
+      "inventory_product": null,
+      "note": "Escenario ND22: 65 W nunca aparece en dos puertos a la vez; cada combinación son varias filas con el mismo `configuration`. A2668 no hereda nada.",
+      "review_note": "Tabla exacta A2667 confirmada. GaN es tecnología, no protocolo; límites necesitan semántica explícita.",
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": "only the source-scoped values retained in this review; inventory identity not established"
+    },
+    "consumer_electronics_baseus_65w_model_unknown": {
+      "id": "consumer_electronics_baseus_65w_model_unknown",
+      "template": "consumer_electronics",
+      "values": {
+        "device_kind": "Cargador",
+        "rated_power_w": "65"
+      },
+      "kind": "inventory_candidate_unverified",
+      "source_ids": [
+        "E-INVENTARIO"
+      ],
+      "source_urls": [],
+      "expected_blocking": [],
+      "inventory_product": "Cargador 65W Baseus",
+      "note": "Producto real «Cargador 65W Baseus» sin modelo identificado: los puertos requeridos faltan → pendiente; no se copian los de Anker.",
+      "review_note": "65W del título no identifica reparto ni modelo; faltan puertos como aviso.",
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false
+    },
+    "consumer_electronics_baseus_cable_100w_label_claim": {
+      "id": "consumer_electronics_baseus_cable_100w_label_claim",
+      "template": "consumer_electronics",
+      "values": {
+        "device_kind": "Cable de datos/carga",
+        "connector_a": "USB-C",
+        "connector_b": "USB-C",
+        "cable_power_capacity_w": "100",
+        "cable_data_capability": "Desconocido / sin confirmar"
+      },
+      "kind": "inventory_candidate_unverified",
+      "source_ids": [
+        "E-INVENTARIO"
+      ],
+      "source_urls": [],
+      "expected_blocking": [],
+      "inventory_product": "Baseus Cable Usb-c a Usb-c Carga Rapida 100w",
+      "note": "Producto real: 100 W es la declaración del título/etiqueta (requiere spec_evidence_source); la capacidad de datos no se deduce.",
+      "review_note": "100W es claim del título de cable; no derivar datos, vídeo ni certificación.",
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false
+    },
+    "food_maurten_gel_100_caf_100_packaged": {
+      "id": "food_maurten_gel_100_caf_100_packaged",
+      "template": "food_beverage",
+      "values": {
+        "preparation_kind": "Envasado",
+        "food_item_kind": "Gel / barra energética",
+        "units_per_pack": "12",
+        "unit_mass_g": "40",
+        "net_mass_g": "480",
+        "nutrition_facts": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r01",
+              "values": {
+                "nutrient": "Energía (kcal)",
+                "amount": "100",
+                "basis": "Por unidad / sobre",
+                "qualifier": "Aproximadamente, según texto OEM; imagen de etiqueta no transcrita"
+              },
+              "sources": [
+                "https://www.maurten.com/products/us/gel-100-caf-100-box-us"
+              ]
+            },
+            {
+              "id": "r02",
+              "values": {
+                "nutrient": "Carbohidratos (g)",
+                "amount": "25",
+                "basis": "Por unidad / sobre"
+              },
+              "sources": [
+                "https://www.maurten.com/products/us/gel-100-caf-100-box-us"
+              ]
+            }
+          ]
+        },
+        "caffeine_mg": "100",
+        "caffeine_basis": "Por unidad / sobre",
+        "ingredients_text": "Water, glucose, fructose, sodium alginate, gluconic acid, calcium carbonate, caffeine",
+        "allergen_statement_source": "Documento / página oficial del fabricante",
+        "spec_evidence_source": "https://www.maurten.com/products/us/gel-100-caf-100-box-us"
+      },
+      "kind": "oem_revision_scoped",
+      "source_ids": [
+        "E-MAURTEN"
+      ],
+      "source_urls": [
+        "https://www.maurten.com/products/us/gel-100-caf-100-box-us"
+      ],
+      "expected_blocking": [],
+      "inventory_product": null,
+      "note": "Escenario ND23: caja (480 g) ≠ sobre (40 g) ≠ carbohidratos (25 g); allergens_declared_none NO se marca porque nadie lo declara. Los valores por 100 g no se transcribieron (la lectura los daba aproximados). No es un producto del inventario.",
+      "review_note": "Texto OEM US consultado, no envase visto; eliminar nota de investigación de alérgenos y cafeína duplicada.",
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": "only the source-scoped values retained in this review; inventory identity not established"
+    },
+    "food_latte_chico_prepared_inventory": {
+      "id": "food_latte_chico_prepared_inventory",
+      "template": "food_beverage",
+      "values": {
+        "preparation_kind": "Preparado en barra",
+        "food_item_kind": "Latte",
+        "serving_size": "Chico",
+        "allergen_statement_source": "Sin fuente"
+      },
+      "kind": "inventory_candidate_unverified",
+      "source_ids": [
+        "E-INVENTARIO"
+      ],
+      "source_urls": [],
+      "expected_blocking": [],
+      "inventory_product": "Latte Chico",
+      "note": "Producto real del café: la receta no está registrada, así que ingredientes/alérgenos quedan sin declarar (allergen_statement_source = Sin fuente); «Leche de vaca» y la sustitución son supuestos de venta a confirmar con el negocio, no hechos.",
+      "review_note": "LatteChico no prueba leche de vaca, sustitución ofrecida ni temperatura; receta pendiente.",
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false
+    }
+  },
+  "additional_required_changes": [
+    {
+      "id": "AG01",
+      "finding_ids": [
+        "FA01"
+      ],
+      "paths": [
+        "fastener.thread_pitch_mm",
+        "fastener.thread_tpi",
+        "fastener_kit_members"
+      ],
+      "required_change": "Conservar designación original; seleccionar una representación de paso mm o TPI, o validar consistencia exacta si ambas se permiten. No deducir paso desde M, uso o tabla genérica.",
+      "status": "requires_owner_design",
+      "negative_case": "Paso 1 mm y26 TPI no pueden coexistir como el mismo dato confirmado."
+    },
+    {
+      "id": "AG02",
+      "finding_ids": [
+        "FA07"
+      ],
+      "paths": [
+        "light.power_source",
+        "light.light_mount_kind"
+      ],
+      "required_change": "Añadir guards de luz única a alimentación y montaje escalares; juegos usan miembros. Separar entrada externa de puerto de carga.",
+      "status": "additional_patch_required",
+      "negative_case": "Juego dinamo/batería no requiere fuente común."
+    },
+    {
+      "id": "AG03",
+      "finding_ids": [
+        "FA09",
+        "FA13"
+      ],
+      "paths": [
+        "light_mode_configurations.member_id",
+        "power_budget_configurations.port_id",
+        "sensor_support_configurations.transport"
+      ],
+      "required_change": "Contrato ejecutable de referencias por ID/revisión y coherencia de filas con upstream false explícito; cambios upstream marcan obsoletos sin borrar evidencia. Validar en Dart y SQL, no sólo fill.",
+      "status": "representation_engine_gap",
+      "negative_case": "Modo/puerto ghost o ANT+ false con pareja ANT+ supported=true no pueden quedar válidos."
+    },
+    {
+      "id": "AG04",
+      "finding_ids": [
+        "FA11",
+        "FA12"
+      ],
+      "paths": [
+        "accessory_mount.bar_diameter_min_mm",
+        "accessory_mount.bar_diameter_max_mm",
+        "accessory_mount.device_width_min_mm",
+        "accessory_mount.device_width_max_mm"
+      ],
+      "required_change": "Validar orden de extremos y zona de montaje. Lista discreta no se convierte en rango continuo.",
+      "status": "representation_engine_gap",
+      "negative_case": "35→22 y100→55 bloquean;30 no pertenece a22/25.4/31.8/35."
+    },
+    {
+      "id": "AG05",
+      "finding_ids": [
+        "FA14",
+        "FA15"
+      ],
+      "paths": [
+        "power_port_configurations",
+        "power_budget_configurations"
+      ],
+      "required_change": "Perfiles eléctricos por puerto/protocolo/tensión/corriente; distinguir límite individual, asignación simultánea y presupuesto compartido antes de agregar reglas de sumas.",
+      "status": "requires_owner_design",
+      "negative_case": "No aplicar sum(max_por_puerto)<=total universal; validar una asignación fija según su presupuesto y fuente."
+    },
+    {
+      "id": "AG06",
+      "finding_ids": [
+        "FA16"
+      ],
+      "paths": [
+        "consumer_electronics.rated_power_w"
+      ],
+      "required_change": "Restringir el campo de potencia total a cargador; cable tiene un único dueño cable_power_capacity_w.",
+      "status": "additional_patch_required",
+      "negative_case": "Cable no puede publicar total65 y capacidad100 como dos potencias de igual significado."
+    },
+    {
+      "id": "AG07",
+      "finding_ids": [
+        "FA17"
+      ],
+      "paths": [
+        "nutrition_facts",
+        "caffeine_basis"
+      ],
+      "required_change": "Obligatoriedad condicional de nutriente/unidad para Otro, base cuantificada/referencia para porción; campo de base de cafeína debe identificar porción/unidad/receta. No inventar condiciones de filas fuera de rows_schema v1.",
+      "status": "representation_engine_gap",
+      "negative_case": "Otro=5 sin unidad o porción sin denominador sigue incompleto; nunca concluir0 desde dato ausente."
+    },
+    {
+      "id": "AG08",
+      "finding_ids": [
+        "FA18",
+        "FA19"
+      ],
+      "paths": [
+        "spec_evidence_source",
+        "row.sources",
+        "representation_cases"
+      ],
+      "required_change": "El aplicador de llenado debe exigir evidencia vinculada al producto/modelo/revisión/mercado; metadata y URL bien formada no demuestran la afirmación. Borrador incompleto puede guardarse con avisos, pero no se certifica lleno ni compatible.",
+      "status": "fill_gate_required",
+      "negative_case": "Sin fuente, título de inventario o URL de especificaciones generales no habilitan una afirmación OEM concreta."
+    }
+  ],
+  "excluded_new_definitions": [
+    "allergens_declared_none"
+  ],
+  "case_adjudications": [
+    {
+      "case_id": "fastener_hassns_m8_chainring_bolt_pitch_unknown",
+      "decision": "corregir",
+      "evidence_class": "inventory_candidate_unverified",
+      "reason": "Título conserva nominal/largo declarado; paso y referencia del largo pendientes de etiqueta/modelo."
+    },
+    {
+      "case_id": "fastener_rotor_bolt_t25_park_standard_scope",
+      "decision": "corregir",
+      "evidence_class": "synthetic_representation",
+      "reason": "Ilustración de rosca; Park no identifica este SKU ni prueba accionamiento, mano o resistencia particulares."
+    },
+    {
+      "case_id": "fastener_kit_rows_shape",
+      "decision": "corregir",
+      "evidence_class": "synthetic_representation",
+      "reason": "Kit ilustrativo, no evidencia de SKU; golilla sin rosca inventada."
+    },
+    {
+      "case_id": "workshop_tool_park_ct_3_3",
+      "decision": "corregir",
+      "evidence_class": "oem_revision_scoped",
+      "reason": "Separar 1v de5–12v; operaciones Campagnolo tienen alcance propio."
+    },
+    {
+      "case_id": "workshop_tool_park_fr_5_2_lockring",
+      "decision": "corregir",
+      "evidence_class": "oem_revision_scoped",
+      "reason": "Accionamiento no es par; conservar geometría publicada y no una negativa global por marca."
+    },
+    {
+      "case_id": "workshop_tool_park_bbt_9",
+      "decision": "corregir",
+      "evidence_class": "oem_revision_scoped",
+      "reason": "Guardar diámetro mayor44–45, menor42.7 y16muescas; modelos sólo según tabla OEM."
+    },
+    {
+      "case_id": "workshop_tool_super_b_tb_6616",
+      "decision": "corregir",
+      "evidence_class": "oem_revision_scoped",
+      "reason": "OEM afirma square type; no dice only ni prueba exclusión Octalink/ISIS o toda interfaz JIS/ISO."
+    },
+    {
+      "case_id": "workshop_tool_park_ib_3_multitool",
+      "decision": "corregir",
+      "evidence_class": "oem_revision_scoped",
+      "reason": "Una fila por tamaño, llave estrella8mm; las capacidades no se derivan de contenido aplanado."
+    },
+    {
+      "case_id": "light_cateye_ampp800_viz300_kit",
+      "decision": "corregir",
+      "evidence_class": "oem_revision_scoped",
+      "reason": "Caso de web actual consultada, no asignación al inventario. GroupRide15lm/10h y MicroUSB; revisión anterior separada."
+    },
+    {
+      "case_id": "light_inventory_ae_kit_pending",
+      "decision": "corregir",
+      "evidence_class": "inventory_candidate_unverified",
+      "reason": "Ausencias de miembros/modos son avisos no bloqueantes; pendiente investigación exacta."
+    },
+    {
+      "case_id": "accessory_mount_quad_lock_out_front",
+      "decision": "corregir",
+      "evidence_class": "oem_revision_scoped",
+      "reason": "Oferta actual Standard; preservar22literal y revisión. No aplicar a stock anterior sin identificar versión."
+    },
+    {
+      "case_id": "accessory_mount_quad_lock_out_front_pro_no_35",
+      "decision": "rechazar",
+      "evidence_class": "unsupported_versionless_negative",
+      "reason": "PRO sin35 carece de versión y contradice oferta actual; ausencia de fila no es exclusión."
+    },
+    {
+      "case_id": "accessory_mount_gub_clamp_range_from_title",
+      "decision": "corregir",
+      "evidence_class": "inventory_candidate_unverified",
+      "reason": "Rango del título conserva carácter provisional; zona/diámetros de bicicleta pendientes OEM."
+    },
+    {
+      "case_id": "cycle_computer_garmin_edge_540",
+      "decision": "corregir",
+      "evidence_class": "oem_partial_representation",
+      "reason": "Manual general confirma transportes, no matriz por sensor. Retirar parejas y falsos sin fuente exacta."
+    },
+    {
+      "case_id": "cycle_computer_wired_11_functions_inventory",
+      "decision": "corregir",
+      "evidence_class": "inventory_candidate_unverified",
+      "reason": "Cableado y11funciones del título no prueban ausencia de ANT+/Bluetooth/teléfono."
+    },
+    {
+      "case_id": "consumer_electronics_anker_a2667_ports_and_budget",
+      "decision": "corregir",
+      "evidence_class": "oem_revision_scoped",
+      "reason": "Tabla exacta A2667 confirmada. GaN es tecnología, no protocolo; límites necesitan semántica explícita."
+    },
+    {
+      "case_id": "consumer_electronics_baseus_65w_model_unknown",
+      "decision": "corregir",
+      "evidence_class": "inventory_candidate_unverified",
+      "reason": "65W del título no identifica reparto ni modelo; faltan puertos como aviso."
+    },
+    {
+      "case_id": "consumer_electronics_baseus_cable_100w_label_claim",
+      "decision": "corregir",
+      "evidence_class": "inventory_candidate_unverified",
+      "reason": "100W es claim del título de cable; no derivar datos, vídeo ni certificación."
+    },
+    {
+      "case_id": "food_maurten_gel_100_caf_100_packaged",
+      "decision": "corregir",
+      "evidence_class": "oem_revision_scoped",
+      "reason": "Texto OEM US consultado, no envase visto; eliminar nota de investigación de alérgenos y cafeína duplicada."
+    },
+    {
+      "case_id": "food_latte_chico_prepared_inventory",
+      "decision": "corregir",
+      "evidence_class": "inventory_candidate_unverified",
+      "reason": "LatteChico no prueba leche de vaca, sustitución ofrecida ni temperatura; receta pendiente."
+    }
+  ],
+  "override_contract": {
+    "after_override": "Full replacement of this patch after value; root must extend before checks for any added contract buckets.",
+    "definition_overrides": "Full replacement definition for a not-yet-applied new key only.",
+    "case_overrides": "Full fixture replacement by original id; exclude:true means do not import this fixture. No case is authorization to fill production.",
+    "architecture_gaps": "additional_required_changes cannot be encoded as invented rows_schema v1 or allowed_when syntax. Import only after owner integrates the appropriate executable contract."
+  },
+  "decision_counts": {
+    "aceptar": 52,
+    "corregir": 29,
+    "rechazar": 1
+  }
+}

@@ -1,0 +1,52 @@
+# Bicicleta, cuadro y rueda: adjudicación root (7 de septiembre de 2026)
+
+Candidato local: 3 plantillas, 71 definiciones, 101 usos, 50 casos. 53 Dart,50 SQL y cinco regresiones de publicador verdes; aún no aplicado. 55 definiciones nuevas, 103 opciones, 101 usos; 16 compartidas exactas contra preimagen. La referencia congelada conserva sus cinco regresiones intactas. Mechanical coverage y fill siguen false; no escrituras de productos ni asignaciones.
+
+## Correcciones al candidato de Claude
+
+1. El SKU no es el catálogo de tallas. Una sola variante documental identificada gobierna configuraciones completas, suministrada o alternativa OEM. Configuraciones enlazan esa fila por row_id; geometría, recomendación corporal, interfaces y componentes enlazan configuración. El caso que reunía M y L ahora rechaza dos identidades de producto en la misma ficha; sus cifras no se pierden ni se reasignan silenciosamente. El identificador de ámbito de la variante es único y de vocabulario unitario, sin default.
+2. El documento de fuente **no reemplaza la identidad del inventario**. El binding de referencia OEM ya valida marca/modelo/MPN contra el producto; estas observaciones conservan su identidad documental para adjudicarla antes del fill. El motor de filas no compara alias ni conecta el texto libre de esta tabla con `products` por sí solo. La adjudicación upstream de variante/referencia sigue gate global explícito. No convertir una fila completa en certificación de identidad ni de compatibilidad.
+3. Geometría depende de configuración, no de una etiqueta de talla libre repetida. Ángulos usan grados, longitudes unidad lineal y valor positivo, desnivel firmado tiene otra celda. Un dato de punto de medición ausente permanece pendiente; se retiró la sustitución automática por texto «no especificado». [Sheldon](https://sheldonbrown.com/frame-sizing.html) fue abierto en el host sin www; fundamenta la diferencia centro-centro/centro-extremo. [Surly Cross-Check](https://surlybikes.com/products/cross_check_2000) fue abierto completo; no se afirma haber inspeccionado su diagrama ni se copian números de geometría sin datum. Todos los números heredados de esas fixtures son ahora explícitamente sintéticos, con example.invalid.
+4. [Surly Preamble](https://surlybikes.com/blogs/blog/a-preamble-to-the-surly-preamble), prosa OEM, explica ruedas 650b en XS/SM frente a 700c en otras tallas. Reforzar variante/configuración es necesario antes de tomar cualquier dato del catálogo del modelo.
+5. Una rueda física es dueña de BSD, ancho de llanta, perfil, válvula, rayos, tubeless, OLD, retención y puertos. Perfil y válvula antes seguían escalares para todo el par. No se inventa un token Par en `wheel_position` compartido vivo: se preservan sus tres opciones, se retira el uso local y se representan miembros. La ubicación no impone por sí sola ausencia de transmisión; se declara el puerto existente. Claims enlazan la rueda exacta.
+6. Montajes suministrados y alternativas no se suman como caja. Las piezas pertenecen a una configuración; cada componente posee su tipo, modelo/edición, cantidad y propiedades físicas. Batería conserva energía por envase, el cargador su tensión de salida. Horquilla conserva recorrido/eje-corona y amortiguador largo/carrera. Se evitó duplicar tipo/configuración en tablas enlazadas: un enlace row_id sólo verifica existencia, no igualdad de columnas; esas propiedades se consolidaron en la fila del componente. Ninguna coincidencia de voltaje o marca aprueba sistemas eléctricos.
+7. Transmisión por configuración: platos para cadena no aplican a correa; relaciones internas y coronas externas son conteos distintos. No se multiplican para elegir cadena/mando. Retiro de escalares sólo en esta plantilla, sin cambiar definiciones compartidas.
+8. Interfaces intrínsecas de cuadro/horquilla separadas de montajes admitidos. [Park Tool](https://www.parktool.com/en-us/blog/repair-help/bottom-bracket-identification), abierto, explica que las copas thread-together se enroscan entre sí dentro de una caja lisa. No trasladar su rosca al cuadro. Diámetro, paso y unidades independientes; designación OEM sin descomponer es otra forma, sin parser que invente medidas.
+9. Holgura y mazas admitidas conservan configuración, posición, fuente y condiciones. Cross-Check publica en prosa 700c×42 o aprox.40 con guardabarros y dependencia de cubierta/llanta/posición de eje/otros factores. Esos dos máximos declarados se conservan como casos condicionados, no un intervalo universal ni cifras de geometría. OLD físico no equivale al conjunto de OLD admitidos. El caso congelado Gnot-rite queda intacto como observación legacy; el llenado debe adjudicarlo hacia el nuevo ámbito.
+10. Se preservaron `wheel_position`, `bb_shell_width_mm` (lista numérica viva) y `rotor_mount_type` (dos tokens vivos), frente a tres diferencias del congelado. Las 16 compartidas no se publican de nuevo. Los campos legacy se conservan para auditoría, sin generar opciones activas.
+
+## Límites y aceptación pendiente
+
+Claves compuestas sólo actúan con identidad resuelta y no normalizan alias. Pendientes visibles no bloquean guardar. La tabla documenta una fuente; no la valida por HTTP ni aprueba automáticamente una instalación. Continuar con revisión independiente, SQL, backup, publicación/readback y luego editor/consumidores/identidad global. No hay frames reales nuevos ni fill.
+
+El primer compile rechazó condiciones de un campo retirado y un tipo `row_id` inexistente: las referencias usan columna de texto sin dominio limitado, y las condiciones legacy se eliminan de la capa activa. No se cambió el motor para aceptar un esquema malformado. Una ejecución iniciada tras el primer compile fallido sólo leyó el catálogo anterior y se descartó; el log válido actual corresponde al catálogo final con 50 casos.
+
+| Artefacto | SHA-256 |
+|---|---|
+| `scripts/inventory/compile_complete_assembly_catalog.py` | `169cd5acd71dbfadc43a3941d9f7b982dc925a5409329855b4440fb05217661c` |
+| `scripts/inventory/compile_complete_assembly_root.py` | `c67fc9e642f123a3ddf7e3adf1d3fa77476dbb98b4d91bb26821c836ee8579ef` |
+| `scripts/inventory/compile_complete_assembly_publication.py` | `c9b042e4a0564123cd8045410943e328ed5e098e4c473bb55991f965a7fd7ffc` |
+| `docs/development/product-specs-research-2026-09-05/complete-assembly-catalog-2026-09-07.json` | `c941116c127382ae1839b95184b7cd5ff6fdf41674aac5eca759d75d68ad5e7b` |
+| `docs/development/product-specs-research-2026-09-05/complete-assembly-cases-2026-09-07.json` | `86de280e6eeb6b65db013ad6124846e0ab0c215d830415b794fca588891c8bfb` |
+| `docs/development/product-specs-research-2026-09-05/complete-assembly-publication-preimage-2026-09-07.json` | `645a887795e6952b1b689a85f74efce8b5897a4a550f5d2a98db5a9d891f8e21` |
+| `docs/development/product-specs-research-2026-09-05/complete-assembly-publication-packet-2026-09-07.json` | `21a405153ff7cc72d9847fb85f304bb2a461dfa2d33dc01f866d894b31ee3439` |
+| `supabase/migrations/20260908030000_complete_assembly_spec_templates.sql` | `8a37090862b795fb99ab37640b1261500ac157c346c082412091a7672805ee59` |
+| `supabase/manual_checks/verification/20260908030000_complete_assembly_spec_templates.sql` | `783201d90e23c44e02f6ff6b25ed6b61c8d9f566c175e8a527f293652c122831` |
+
+## Cierre de pruebas previo a revisión independiente
+
+53 Dart, 50 SQL y cinco regresiones del publicador verdes. El primer intento SQL se detuvo ANTES de probar: el fixture local tiene `rim_internal_width_mm.unit=null`, producción `mm`. Todos los usos del campo están retirados en este candidato. El arnés ahora acepta una opción explícita para conservar la unidad local sin interpretarla únicamente si todos los usos son legacy y el tipo coincide; sondas rechazaron un uso activo y un campo sin usos. No se actualizó la base local ni el paquete de producción. Los metadatos vivos y la lectura posterior siguen requiriendo igualdad exacta. No se usa esta adaptación como prueba de compatibilidad de producción.
+
+El verificador de producción falló antes por división por cero, como corresponde a plantillas ausentes. Backup preimagen/fingerprint creado y comprobado; publicación pendiente del dictamen final.
+
+### Evidencia puntual de la adaptación del arnés local
+
+La diferencia NO está entre congelado/candidato/preimagen/paquete: los cuatro declaran mm. Está en la base local, cuya lectura quedó en `.tmp/db/complete-assembly-local-shared-types.json`: `rim_internal_width_mm`, `data_type=number`, `unit=null`. La consulta guardada es `.tmp/db/complete-assembly-local-shared-types.sql`. La compuerta está en `scripts/inventory/test_mobility_accessories_publication.py`, funciones `legacy_only_field` y `main(..., allow_legacy_unit_drift=False)`. El log `.tmp/db/complete-assembly-publication-tests.log` registra la opción sólo para ese campo retirado, seguida por los cinco PASS. No se alteró ninguna de las cuatro fuentes ni la DB local.
+
+## Adjudicación de la revisión independiente
+
+Claude aprobó el candidato con30 sondas independientes y11 mutantes (informe SHA-256 b64da7f39591bb4c25724b2a1432f16a8b04826f69a40f2e93f2322a74e57768). Se aceptan sus seis comprobaciones y los límites de legacy/identidad. Se rechaza la objeción documental sobre la unidad local: comparó las fuentes de producción y buscó en compiladores, pero la evidencia divergente está en la lectura de la DB local y la compuerta en el arnés de pruebas, ambos identificados arriba. El compilador de producción no consulta esa base. El informe no invalida el código ni los nueve hashes. Solicitar corrección de su adenda al terminar su edición del mando combinado.
+
+**Frontera legacy, precisión posterior:** la sonda Dart del revisor evalúa sólo el borrador. El escritor atómico sí rechaza añadir/modificar valores legacy; conserva los existentes sin reescribirlos (`spec_write_payload_internal_v2`, migración190000, y escritor compatible). Está cubierto por `supabase/tests/product_spec_legacy_boundary.sql` y `product_spec_research_snapshot_boundary.sql`. No abrir un trabajo para inventar esa compuerta ni confundir omisión de validación con permiso de persistencia. La comprobación viva de la definición se añade al checkpoint.
+
+**Adenda recibida:** Claude comprobó la lectura local y el arnés, retiró su objeción y corrigió su alcance de legacy. Informe con adenda SHA-256 `cf24690bb45d6f18fd41d3a42f786e81a854240e05030e2739fbd645ccf101b6`; veredicto publicable conservado. El checkpoint de integración30000 ya tiene APPLIED y readback.

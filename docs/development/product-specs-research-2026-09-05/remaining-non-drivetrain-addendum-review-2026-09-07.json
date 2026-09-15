@@ -1,0 +1,2340 @@
+{
+ "schema_version": 1,
+ "title": "ND09–ND11, ND13–ND20 y ND23–ND24 contra la base con condiciones por fila",
+ "author": "Claude (Opus 5); root adjudica",
+ "prepared_on": "2026-09-07",
+ "status": "propuesta; no se editó código, base, catálogos, pruebas ni runtime; llenado y publicación siguen en cero",
+ "target": {
+  "base": "all-family-row-conditions-integrated-2026-09-07.json",
+  "base_sha256": "c12204e42f86423fc3bf3eba345a9f07568b4849d9c8d9b8ace4d44430ddcf9a",
+  "source_review": {
+   "file": "non-drivetrain-field-review-2026-09-06.json",
+   "sha256": "298b46d4d91230d3884d0c40925262832d0d6342ae40ea39698fc807bbdbc1b9"
+  },
+  "compiler": "scripts/inventory/product_spec_field_patches.py",
+  "ops_used": [
+   "add_field",
+   "replace_field_contract",
+   "replace_unpublished_options",
+   "replace_unpublished_rows_schema"
+  ]
+ },
+ "headline": "Trece hallazgos revisados: A/B y las condiciones por fila resolvieron once por completo y cuatro dejan un residual. Lo que queda son cuatro huecos de campo o prerrequisito y siete campos de filas sin identidad; ocho más no pueden tenerla sin inventar un dato.",
+ "representation_vs_approval": "Ningún parche aprueba un montaje ni homologa una certificación. Una fila de certificación guarda lo que dice la etiqueta y el estado de su lectura; una capacidad declarada de una herramienta no autoriza la operación sobre un modelo concreto.",
+ "sources": {
+  "S-PARK-THREAD": {
+   "title": "Park Tool — Basic Thread Concepts",
+   "url": "https://www.parktool.com/en-us/blog/repair-help/basic-thread-concepts",
+   "grade": "reference_general",
+   "states": [
+    "Una rosca métrica se designa por diámetro nominal y paso en milímetros; una rosca en pulgadas se designa por diámetro y hilos por pulgada. Son dos sistemas de designación, no dos medidas del mismo tornillo."
+   ]
+  },
+  "S-SHELDON-THREAD": {
+   "title": "Sheldon Brown — Thread sizes / glosario de roscas",
+   "url": "https://www.sheldonbrown.com/gloss_th-z.html",
+   "grade": "reference_general",
+   "states": [
+    "El glosario distingue la designación métrica (paso) de la inglesa (TPI) y advierte que roscas de designación distinta pueden parecerse dimensionalmente sin ser intercambiables."
+   ]
+  },
+  "S-FIDLOCK": {
+   "title": "Fidlock — sistema TWIST de botella y base",
+   "url": "https://fidlock.com/en/bike/twist-bottle",
+   "grade": "oem_page (citada en la revisión ND del 2026-09-06 como N22/N23; no releída aquí)",
+   "states": [
+    "La botella se retiene por una base magnética con giro, no por el aro de un portabidón: no tiene un diámetro de portabidón que declarar."
+   ]
+  },
+  "S-CO2": {
+   "title": "Revisión ND 2026-09-06, fuente N24 (inflador y cartuchos CO2)",
+   "url": null,
+   "grade": "review_cited_not_read",
+   "states": [
+    "Un inflador de CO2 no bombea: entrega el gas del cartucho. La presión final depende del volumen del neumático y de la masa de gas, no de un máximo del aparato."
+   ]
+  },
+  "S-HELMET": {
+   "title": "Revisión ND 2026-09-06, fuentes N25/N26 (cascos y certificación)",
+   "url": null,
+   "grade": "review_cited_not_read",
+   "states": [
+    "La construcción del casco y el público al que se destina son ejes distintos: «Integral» describe la carcasa y «Niño» describe al usuario."
+   ]
+  },
+  "S-ENGINE": {
+   "title": "Motor desplegado: 0200 (condiciones y pares escalares) y 2200/2300 (condiciones por fila)",
+   "url": null,
+   "grade": "structural",
+   "states": [
+    "Una condición sólo mira escalares de la misma plantilla; no existe igualdad ni exclusión mutua entre dos escalares.",
+    "unique_by omite las filas a las que les falta una clave del grupo: una identidad opcional no deduplica.",
+    "Las condiciones por fila gobiernan una celda dentro de su fila; no comparan filas entre sí."
+   ]
+  },
+  "S-BASE": {
+   "title": "Base con condiciones por fila (c12204e42f86423f…)",
+   "url": null,
+   "grade": "structural",
+   "states": [
+    "105 plantillas, 681 definiciones, 48 campos estructurados, 14 plantillas con condiciones por fila; compuertas cerradas y llenado 0."
+   ]
+  }
+ },
+ "findings": [
+  {
+   "id": "ND09",
+   "title": "Rosca y herramienta no pueden deducirse de M8 o del destino",
+   "status": "resuelto por A/B salvo la exclusión paso/TPI",
+   "evidence_in_base": "La base tiene thread_pitch_mm, thread_tpi, thread_hand, length_datum (prerrequisito de length_mm), head_drive_size_mm, torx_size, strength_class_claim y fastener_kit_members; thread ya excluye el tipo Kit y el accionamiento ya no lleva tamaño.",
+   "residual": "Paso y TPI están permitidos bajo la misma condición y con el mismo prerrequisito: nada impide escribir los dos. Es la compuerta AG01, que quedó como diseño pendiente.",
+   "patch_ids": [
+    "RND-ND09-thread_pitch_system",
+    "RND-ND09-thread_pitch_mm-gate",
+    "RND-ND09-thread_tpi-gate"
+   ]
+  },
+  {
+   "id": "ND16",
+   "title": "Botella/base necesita interfaz de retención independiente del cuadro",
+   "status": "resuelto por A/B salvo la asimetría del diámetro",
+   "evidence_in_base": "bottle tiene bottle_retention_system, base_included e included_base_model; bottle_cage tiene cage_retention_system, ancho de tubo con par ordenado, separación y cantidad de insertos y lado de extracción.",
+   "residual": "El mismo campo de diámetro está condicionado en el portabidón y permitido siempre en la botella.",
+   "patch_ids": [
+    "RND-ND16-bottle_diameter-gate"
+   ]
+  },
+  {
+   "id": "ND17",
+   "title": "Inflador CO2 tiene una interfaz de cartucho y contenido propio",
+   "status": "resuelto por A/B salvo la presión máxima",
+   "evidence_in_base": "co2_cartridge_configurations separa masa de gas, roscado, cantidad incluida, peso bruto y medidas del cartucho, con condición por fila que exige la designación de rosca cuando es roscado y el modelo declarado cuando la configuración es un cartucho compatible.",
+   "residual": "max_pressure_psi sigue permitido siempre, también para un inflador de CO2 y para un cartucho de recarga.",
+   "patch_ids": [
+    "RND-ND17-max_pressure-gate",
+    "RND-ND17-co2_cartridge_configurations-unique_by"
+   ]
+  },
+  {
+   "id": "ND18",
+   "title": "Certificación y estado de lectura de etiqueta son ejes distintos",
+   "status": "resuelto por A/B salvo el token de público en el tipo",
+   "evidence_in_base": "certification_claim quedó legacy; certification_configurations guarda norma, texto exacto, edición, mercado, alcance, tipo de evidencia y fecha; label_evidence_state separa el estado de lectura; intended_audience, helmet_construction, oem_size_label con su sistema y el par de circunferencias ya existen.",
+   "residual": "helmet_kind conserva la opción «Niño» junto a las de construcción, que es la mezcla que el hallazgo describe.",
+   "patch_ids": [
+    "RND-ND18-helmet_kind-options"
+   ]
+  },
+  {
+   "id": "ND10",
+   "title": "La herramienta requiere interfaz y operación, no sólo velocidades",
+   "status": "resuelto por A/B salvo la identidad de las capacidades",
+   "evidence_in_base": "tool_capabilities registra operación, estándar objetivo, admitida, medidas de interfaz, tamaño de drive, rango de velocidades, alcance de marca y adaptador, con condición por fila que exige el modelo del adaptador cuando se requiere; chain_tool_speeds ya admite multiherramienta.",
+   "residual": "Sin unique_by, la misma operación sobre el mismo estándar puede quedar admitida y no admitida a la vez.",
+   "patch_ids": [
+    "RND-ND10-tool_capabilities-unique_by"
+   ]
+  },
+  {
+   "id": "ND11",
+   "title": "El tipo Kit U + cable debe permitir las medidas de sus miembros",
+   "status": "resuelto por A/B salvo la identidad del nivel de seguridad",
+   "evidence_in_base": "Las guardas de ancho, alto, largo y diámetro del cable ya incluyen «Kit U + cable»; security_rating_claim quedó legacy y security_rating_configurations guarda componente, emisor, nivel, alcance, modelo, edición y certificado.",
+   "residual": "Sin unique_by, un mismo emisor puede otorgar dos niveles al mismo componente.",
+   "patch_ids": [
+    "RND-ND11-security_rating_configurations-unique_by"
+   ]
+  },
+  {
+   "id": "ND13",
+   "title": "Soporte necesita dos interfaces y diámetros discretos con adaptador",
+   "status": "resuelto por A/B salvo la identidad de las configuraciones",
+   "evidence_in_base": "bike_attachment_kind y device_attachment_kind separan el anclaje a la bici de la unión al aparato; bar_fit_representation decide si el ajuste se declara por rango o por filas y condiciona el rango continuo; el par de diámetros está en scalar_ordered_pairs; bar_clamp_configurations guarda medida, método, espaciador y revisión con su condición por fila.",
+   "residual": "Sin unique_by, la misma medida con el mismo método puede repetirse con resultados distintos.",
+   "patch_ids": [
+    "RND-ND13-bar_clamp_configurations-unique_by"
+   ]
+  },
+  {
+   "id": "ND14",
+   "title": "Bolso y parrilla tienen conexiones distintas y piezas auxiliares",
+   "status": "resuelto por A/B salvo la identidad de los miembros",
+   "evidence_in_base": "bag_rack_interface y rack_top_interface separan bolso→parrilla de parrilla→bici con sistema, generación, contraparte, configuración, pieza requerida y condiciones; auxiliary_part_requirements ya tiene unique_by por configuración y pieza; rack_mount_configurations guarda punto de montaje, diámetros, vanos y exclusiones; load_reference dice a qué se refiere la carga.",
+   "residual": "bag_member_configurations no tiene identidad; las dos interfaces tampoco, y ahí no hay identidad segura (ver límites).",
+   "patch_ids": [
+    "RND-ND14-bag_member_configurations-unique_by"
+   ]
+  },
+  {
+   "id": "ND15",
+   "title": "Pata de apoyo trasera requiere patrón KSA, no sólo tipo y rueda",
+   "status": "resuelto por A/B",
+   "evidence_in_base": "kickstand_mount_standard nombra los patrones KSA con su separación, y existen separación medida, cantidad de pernos, rosca, referencia de la medida y altura instalada; los dos rangos están en scalar_ordered_pairs y ambos exigen la referencia como prerrequisito.",
+   "residual": "Ninguno. La compatibilidad con un cuadro concreto sigue siendo materia de relaciones.",
+   "patch_ids": []
+  },
+  {
+   "id": "ND19",
+   "title": "Fotocromía, polarización y espejo pueden coexistir",
+   "status": "resuelto por A/B salvo la identidad de las lentes",
+   "evidence_in_base": "lens_kind ya no existe en la plantilla: eyewear_lens_configurations guarda por lente el modelo, si viene incluida, fotocromía, polarización, espejo, tinte, categoría y VLT declarados.",
+   "residual": "Sin unique_by, la misma lente puede aparecer dos veces con propiedades contrarias.",
+   "patch_ids": [
+    "RND-ND19-eyewear_lens_configurations-unique_by"
+   ]
+  },
+  {
+   "id": "ND20",
+   "title": "Manga y talla deben seguir la prenda/variante real",
+   "status": "resuelto por A/B",
+   "evidence_in_base": "sleeve ya admite chaqueta; oem_size_label y oem_size_system conservan la etiqueta y la guía exactas; intended_audience separa el público de gender_fit; fit_cut y fabric_composition_text existen.",
+   "residual": "Ninguno en campos. Que una M de dos marcas no sea la misma talla queda como límite del consumidor.",
+   "patch_ids": []
+  },
+  {
+   "id": "ND23",
+   "title": "Alimentos preparados y envasados necesitan unidades y evidencia distintas",
+   "status": "resuelto por A/B salvo la identidad de la tabla nutricional",
+   "evidence_in_base": "preparation_kind condiciona porción y volumen para lo preparado y masa neta y unidades por envase para lo envasado; milk quedó legacy frente a milk_in_recipe y milk_substitution_offered; nutrition_facts guarda nutriente, cantidad y base; allergen_note exige fuente declarada y evidencia; caffeine_mg tiene su base.",
+   "residual": "Sin unique_by, el mismo nutriente sobre la misma base puede llevar dos cantidades.",
+   "patch_ids": [
+    "RND-ND23-nutrition_facts-unique_by"
+   ]
+  },
+  {
+   "id": "ND24",
+   "title": "Datos de fuentes OEM contradictorias no se resuelven por mayor llenado",
+   "status": "resuelto por A/B",
+   "evidence_in_base": "conflicting_claims existe en las dos plantillas que el hallazgo nombra, bike_bag y handlebar, y guarda el campo, el valor, la unidad, el tipo y la fecha de la fuente, el localizador y el contexto de medición.",
+   "residual": "Ninguno en campos. No propongo unique_by: dos afirmaciones distintas del mismo campo son justamente lo que el campo existe para guardar.",
+   "patch_ids": []
+  }
+ ],
+ "new_definitions": {
+  "thread_pitch_system": {
+   "key": "thread_pitch_system",
+   "origin": "new",
+   "id": null,
+   "label": "Sistema de designación de la rosca",
+   "data_type": "single_select",
+   "unit": null,
+   "allowed_values": [
+    "Métrico (paso en mm)",
+    "Imperial (hilos por pulgada)",
+    "Desconocido / sin confirmar"
+   ],
+   "validation_rules": {},
+   "used_by": []
+  }
+ },
+ "patches": [
+  {
+   "id": "RND-ND09-thread_pitch_system",
+   "finding": "ND09",
+   "op": "add_field",
+   "template": "fastener",
+   "key": "thread_pitch_system",
+   "before": null,
+   "after": {
+    "field_entry": {
+     "key": "thread_pitch_system",
+     "section_key": "measurement",
+     "sort_order": 300,
+     "is_required": false,
+     "visibility_rules": [],
+     "option_rules": [],
+     "constraint_rules": []
+    },
+    "definition_used_by_append": "fastener",
+    "roles": "measurement",
+    "semantic_roles": "compatibility",
+    "allowed_when": {
+     "kind": "when",
+     "rows": [
+      [
+       {
+        "field": "fastener_kind",
+        "operator": "in",
+        "value_type": "token",
+        "value": [
+         "Perno",
+         "Tornillo",
+         "Tuerca",
+         "Otro"
+        ]
+       }
+      ]
+     ]
+    },
+    "required_when": {
+     "kind": "never"
+    },
+    "prerequisites": [
+     "thread"
+    ],
+    "evidence_requirements": "oem_spec"
+   },
+   "source_ids": [
+    "S-PARK-THREAD",
+    "S-SHELDON-THREAD",
+    "S-ENGINE"
+   ],
+   "scope": "Sólo fastener. Declara en qué sistema publica el fabricante la designación, para que paso y TPI dejen de poder convivir.",
+   "counter_case": "Paso 1 mm y 26 TPI juntos era el caso negativo de la compuerta AG01 y hoy se escribe sin que nada lo note."
+  },
+  {
+   "id": "RND-ND09-thread_pitch_mm-gate",
+   "finding": "ND09",
+   "op": "replace_field_contract",
+   "template": "fastener",
+   "key": "thread_pitch_mm",
+   "before": {
+    "allowed_when": {
+     "kind": "when",
+     "rows": [
+      [
+       {
+        "field": "fastener_kind",
+        "operator": "in",
+        "value_type": "token",
+        "value": [
+         "Perno",
+         "Tornillo",
+         "Tuerca",
+         "Otro"
+        ]
+       }
+      ]
+     ]
+    }
+   },
+   "after": {
+    "allowed_when": {
+     "kind": "when",
+     "rows": [
+      [
+       {
+        "field": "fastener_kind",
+        "operator": "in",
+        "value_type": "token",
+        "value": [
+         "Perno",
+         "Tornillo",
+         "Tuerca",
+         "Otro"
+        ]
+       },
+       {
+        "field": "thread_pitch_system",
+        "operator": "eq",
+        "value_type": "token",
+        "value": "Métrico (paso en mm)"
+       }
+      ]
+     ]
+    }
+   },
+   "source_ids": [
+    "S-PARK-THREAD",
+    "S-ENGINE"
+   ],
+   "scope": "El motor no compara dos escalares entre sí, así que la exclusión se consigue condicionando cada uno a su sistema declarado.",
+   "counter_case": "Con el sistema en Métrico, el campo de TPI deja de estar disponible; el que ya estuviera escrito queda marcado por el validador."
+  },
+  {
+   "id": "RND-ND09-thread_tpi-gate",
+   "finding": "ND09",
+   "op": "replace_field_contract",
+   "template": "fastener",
+   "key": "thread_tpi",
+   "before": {
+    "allowed_when": {
+     "kind": "when",
+     "rows": [
+      [
+       {
+        "field": "fastener_kind",
+        "operator": "in",
+        "value_type": "token",
+        "value": [
+         "Perno",
+         "Tornillo",
+         "Tuerca",
+         "Otro"
+        ]
+       }
+      ]
+     ]
+    }
+   },
+   "after": {
+    "allowed_when": {
+     "kind": "when",
+     "rows": [
+      [
+       {
+        "field": "fastener_kind",
+        "operator": "in",
+        "value_type": "token",
+        "value": [
+         "Perno",
+         "Tornillo",
+         "Tuerca",
+         "Otro"
+        ]
+       },
+       {
+        "field": "thread_pitch_system",
+        "operator": "eq",
+        "value_type": "token",
+        "value": "Imperial (hilos por pulgada)"
+       }
+      ]
+     ]
+    }
+   },
+   "source_ids": [
+    "S-PARK-THREAD",
+    "S-ENGINE"
+   ],
+   "scope": "El motor no compara dos escalares entre sí, así que la exclusión se consigue condicionando cada uno a su sistema declarado.",
+   "counter_case": "Con el sistema en Métrico, el campo de TPI deja de estar disponible; el que ya estuviera escrito queda marcado por el validador."
+  },
+  {
+   "id": "RND-ND10-tool_capabilities-unique_by",
+   "finding": "ND10",
+   "op": "replace_unpublished_rows_schema",
+   "template": null,
+   "key": "tool_capabilities",
+   "before": {
+    "version": 1,
+    "columns": [
+     {
+      "key": "member",
+      "label": "Pieza o bit (multiherramienta)",
+      "type": "text"
+     },
+     {
+      "key": "operation",
+      "label": "Operación",
+      "type": "token",
+      "required": true,
+      "allowed_values": [
+       "Apretar / aflojar",
+       "Extraer",
+       "Instalar",
+       "Cortar / extraer remache",
+       "Instalar remache",
+       "Peenar remache",
+       "Medir",
+       "Centrar / alinear",
+       "Purgar",
+       "Inflar / presurizar",
+       "Limpiar",
+       "Otra"
+      ]
+     },
+     {
+      "key": "target_standard",
+      "label": "Interfaz / estándar del objetivo",
+      "type": "text",
+      "required": true
+     },
+     {
+      "key": "supported",
+      "label": "Operación admitida según fuente (No = exclusión explícita)",
+      "type": "boolean",
+      "required": true
+     },
+     {
+      "key": "interface_measure_mm",
+      "label": "Medida nominal declarada",
+      "type": "decimal",
+      "unit": "mm",
+      "validation": {
+       "positive": true
+      }
+     },
+     {
+      "key": "drive_size",
+      "label": "Accionamiento requerido",
+      "type": "text"
+     },
+     {
+      "key": "speeds_min",
+      "label": "Velocidades mín.",
+      "type": "integer",
+      "validation": {
+       "positive": true
+      }
+     },
+     {
+      "key": "speeds_max",
+      "label": "Velocidades máx.",
+      "type": "integer",
+      "validation": {
+       "positive": true
+      }
+     },
+     {
+      "key": "brand_scope",
+      "label": "Alcance de marca / modelo",
+      "type": "text"
+     },
+     {
+      "key": "adapter_required",
+      "label": "Requiere adaptador",
+      "type": "boolean"
+     },
+     {
+      "key": "adapter_model",
+      "label": "Adaptador",
+      "type": "text"
+     },
+     {
+      "key": "source_url",
+      "label": "Fuente",
+      "type": "url"
+     },
+     {
+      "key": "interface_measure_kind",
+      "label": "Dimensión representada",
+      "type": "text"
+     },
+     {
+      "key": "interface_diameter_min_mm",
+      "label": "Diámetro mayor mínimo",
+      "type": "decimal",
+      "unit": "mm",
+      "validation": {
+       "positive": true
+      }
+     },
+     {
+      "key": "interface_diameter_max_mm",
+      "label": "Diámetro mayor máximo",
+      "type": "decimal",
+      "unit": "mm",
+      "validation": {
+       "positive": true
+      }
+     },
+     {
+      "key": "interface_minor_diameter_mm",
+      "label": "Diámetro menor",
+      "type": "decimal",
+      "unit": "mm",
+      "validation": {
+       "positive": true
+      }
+     },
+     {
+      "key": "interface_feature_count",
+      "label": "Cantidad de muescas / estrías declarada",
+      "type": "integer",
+      "validation": {
+       "positive": true
+      }
+     }
+    ],
+    "ordered_pairs": [
+     [
+      "speeds_min",
+      "speeds_max"
+     ],
+     [
+      "interface_diameter_min_mm",
+      "interface_diameter_max_mm"
+     ]
+    ]
+   },
+   "after": {
+    "version": 1,
+    "columns": [
+     {
+      "key": "member",
+      "label": "Pieza o bit (multiherramienta)",
+      "type": "text"
+     },
+     {
+      "key": "operation",
+      "label": "Operación",
+      "type": "token",
+      "required": true,
+      "allowed_values": [
+       "Apretar / aflojar",
+       "Extraer",
+       "Instalar",
+       "Cortar / extraer remache",
+       "Instalar remache",
+       "Peenar remache",
+       "Medir",
+       "Centrar / alinear",
+       "Purgar",
+       "Inflar / presurizar",
+       "Limpiar",
+       "Otra"
+      ]
+     },
+     {
+      "key": "target_standard",
+      "label": "Interfaz / estándar del objetivo",
+      "type": "text",
+      "required": true
+     },
+     {
+      "key": "supported",
+      "label": "Operación admitida según fuente (No = exclusión explícita)",
+      "type": "boolean",
+      "required": true
+     },
+     {
+      "key": "interface_measure_mm",
+      "label": "Medida nominal declarada",
+      "type": "decimal",
+      "unit": "mm",
+      "validation": {
+       "positive": true
+      }
+     },
+     {
+      "key": "drive_size",
+      "label": "Accionamiento requerido",
+      "type": "text"
+     },
+     {
+      "key": "speeds_min",
+      "label": "Velocidades mín.",
+      "type": "integer",
+      "validation": {
+       "positive": true
+      }
+     },
+     {
+      "key": "speeds_max",
+      "label": "Velocidades máx.",
+      "type": "integer",
+      "validation": {
+       "positive": true
+      }
+     },
+     {
+      "key": "brand_scope",
+      "label": "Alcance de marca / modelo",
+      "type": "text"
+     },
+     {
+      "key": "adapter_required",
+      "label": "Requiere adaptador",
+      "type": "boolean"
+     },
+     {
+      "key": "adapter_model",
+      "label": "Adaptador",
+      "type": "text"
+     },
+     {
+      "key": "source_url",
+      "label": "Fuente",
+      "type": "url"
+     },
+     {
+      "key": "interface_measure_kind",
+      "label": "Dimensión representada",
+      "type": "text"
+     },
+     {
+      "key": "interface_diameter_min_mm",
+      "label": "Diámetro mayor mínimo",
+      "type": "decimal",
+      "unit": "mm",
+      "validation": {
+       "positive": true
+      }
+     },
+     {
+      "key": "interface_diameter_max_mm",
+      "label": "Diámetro mayor máximo",
+      "type": "decimal",
+      "unit": "mm",
+      "validation": {
+       "positive": true
+      }
+     },
+     {
+      "key": "interface_minor_diameter_mm",
+      "label": "Diámetro menor",
+      "type": "decimal",
+      "unit": "mm",
+      "validation": {
+       "positive": true
+      }
+     },
+     {
+      "key": "interface_feature_count",
+      "label": "Cantidad de muescas / estrías declarada",
+      "type": "integer",
+      "validation": {
+       "positive": true
+      }
+     }
+    ],
+    "ordered_pairs": [
+     [
+      "speeds_min",
+      "speeds_max"
+     ],
+     [
+      "interface_diameter_min_mm",
+      "interface_diameter_max_mm"
+     ]
+    ],
+    "unique_by": [
+     [
+      "operation",
+      "target_standard"
+     ]
+    ]
+   },
+   "source_ids": [
+    "S-ENGINE"
+   ],
+   "scope": "Dos filas con la misma operación y el mismo estándar y distinto valor de admitida son una contradicción, igual que la pareja de sensores del bloque de luces. Todas las columnas de la identidad son required, así que unique_by no las omite.",
+   "counter_case": "Extraer cassette HG admitida y no admitida a la vez dejaba de ser detectable."
+  },
+  {
+   "id": "RND-ND11-security_rating_configurations-unique_by",
+   "finding": "ND11",
+   "op": "replace_unpublished_rows_schema",
+   "template": null,
+   "key": "security_rating_configurations",
+   "before": {
+    "version": 1,
+    "columns": [
+     {
+      "key": "component",
+      "label": "Componente cubierto",
+      "type": "token",
+      "required": true,
+      "allowed_values": [
+       "U / arco",
+       "Cable",
+       "Cadena",
+       "Plegable",
+       "Conjunto (kit)"
+      ]
+     },
+     {
+      "key": "issuer",
+      "label": "Emisor / escala",
+      "type": "token",
+      "required": true,
+      "allowed_values": [
+       "Kryptonite (escala 1–10)",
+       "OnGuard (escala)",
+       "ABUS (escala)",
+       "Sold Secure",
+       "ART",
+       "Otro"
+      ]
+     },
+     {
+      "key": "level",
+      "label": "Nivel tal como se publica",
+      "type": "text",
+      "required": true
+     },
+     {
+      "key": "scope_note",
+      "label": "Alcance / exclusiones",
+      "type": "text"
+     },
+     {
+      "key": "source_url",
+      "label": "Fuente",
+      "type": "url"
+     },
+     {
+      "key": "component_model",
+      "label": "Modelo de componente cubierto",
+      "type": "text"
+     },
+     {
+      "key": "edition",
+      "label": "Edición / fecha de la clasificación",
+      "type": "text"
+     },
+     {
+      "key": "certificate_id",
+      "label": "Identificador de certificado (no nivel)",
+      "type": "text"
+     }
+    ]
+   },
+   "after": {
+    "version": 1,
+    "columns": [
+     {
+      "key": "component",
+      "label": "Componente cubierto",
+      "type": "token",
+      "required": true,
+      "allowed_values": [
+       "U / arco",
+       "Cable",
+       "Cadena",
+       "Plegable",
+       "Conjunto (kit)"
+      ]
+     },
+     {
+      "key": "issuer",
+      "label": "Emisor / escala",
+      "type": "token",
+      "required": true,
+      "allowed_values": [
+       "Kryptonite (escala 1–10)",
+       "OnGuard (escala)",
+       "ABUS (escala)",
+       "Sold Secure",
+       "ART",
+       "Otro"
+      ]
+     },
+     {
+      "key": "level",
+      "label": "Nivel tal como se publica",
+      "type": "text",
+      "required": true
+     },
+     {
+      "key": "scope_note",
+      "label": "Alcance / exclusiones",
+      "type": "text"
+     },
+     {
+      "key": "source_url",
+      "label": "Fuente",
+      "type": "url"
+     },
+     {
+      "key": "component_model",
+      "label": "Modelo de componente cubierto",
+      "type": "text"
+     },
+     {
+      "key": "edition",
+      "label": "Edición / fecha de la clasificación",
+      "type": "text"
+     },
+     {
+      "key": "certificate_id",
+      "label": "Identificador de certificado (no nivel)",
+      "type": "text"
+     }
+    ],
+    "unique_by": [
+     [
+      "component",
+      "issuer"
+     ]
+    ]
+   },
+   "source_ids": [
+    "S-ENGINE"
+   ],
+   "scope": "Un mismo emisor no otorga dos niveles al mismo componente. El nivel se queda fuera de la identidad para que un cambio de nivel se vea como contradicción y no como fila nueva. Todas las columnas de la identidad son required, así que unique_by no las omite.",
+   "counter_case": "Sold Secure Oro y Plata para el arco del mismo candado no pueden convivir."
+  },
+  {
+   "id": "RND-ND13-bar_clamp_configurations-unique_by",
+   "finding": "ND13",
+   "op": "replace_unpublished_rows_schema",
+   "template": null,
+   "key": "bar_clamp_configurations",
+   "before": {
+    "version": 1,
+    "columns": [
+     {
+      "key": "nominal_diameter_mm",
+      "label": "Diámetro nominal",
+      "type": "decimal",
+      "unit": "mm",
+      "required": true,
+      "validation": {
+       "positive": true
+      }
+     },
+     {
+      "key": "fit_method",
+      "label": "Cómo se logra",
+      "type": "token",
+      "required": true,
+      "allowed_values": [
+       "Directo",
+       "Con espaciador incluido",
+       "Con espaciador opcional",
+       "Variante / versión distinta"
+      ]
+     },
+     {
+      "key": "spacer_or_variant",
+      "label": "Espaciador / variante",
+      "type": "text"
+     },
+     {
+      "key": "included",
+      "label": "Incluido",
+      "type": "boolean"
+     },
+     {
+      "key": "source_url",
+      "label": "Fuente",
+      "type": "url"
+     },
+     {
+      "key": "mount_revision",
+      "label": "Modelo / revisión del montaje",
+      "type": "text"
+     }
+    ]
+   },
+   "after": {
+    "version": 1,
+    "columns": [
+     {
+      "key": "nominal_diameter_mm",
+      "label": "Diámetro nominal",
+      "type": "decimal",
+      "unit": "mm",
+      "required": true,
+      "validation": {
+       "positive": true
+      }
+     },
+     {
+      "key": "fit_method",
+      "label": "Cómo se logra",
+      "type": "token",
+      "required": true,
+      "allowed_values": [
+       "Directo",
+       "Con espaciador incluido",
+       "Con espaciador opcional",
+       "Variante / versión distinta"
+      ]
+     },
+     {
+      "key": "spacer_or_variant",
+      "label": "Espaciador / variante",
+      "type": "text"
+     },
+     {
+      "key": "included",
+      "label": "Incluido",
+      "type": "boolean"
+     },
+     {
+      "key": "source_url",
+      "label": "Fuente",
+      "type": "url"
+     },
+     {
+      "key": "mount_revision",
+      "label": "Modelo / revisión del montaje",
+      "type": "text"
+     }
+    ],
+    "unique_by": [
+     [
+      "nominal_diameter_mm",
+      "fit_method"
+     ]
+    ]
+   },
+   "source_ids": [
+    "S-ENGINE"
+   ],
+   "scope": "Una medida discreta con su método de calce identifica la configuración; el mismo diámetro con y sin espaciador son dos filas legítimas. Todas las columnas de la identidad son required, así que unique_by no las omite.",
+   "counter_case": "31,8 con espaciador incluido declarado dos veces con distinto resultado dejaba de pasar."
+  },
+  {
+   "id": "RND-ND14-bag_member_configurations-unique_by",
+   "finding": "ND14",
+   "op": "replace_unpublished_rows_schema",
+   "template": null,
+   "key": "bag_member_configurations",
+   "before": {
+    "version": 1,
+    "columns": [
+     {
+      "key": "member",
+      "label": "Miembro",
+      "type": "text",
+      "required": true
+     },
+     {
+      "key": "position",
+      "label": "Posición",
+      "type": "token",
+      "required": true,
+      "allowed_values": [
+       "Superior",
+       "Lateral izquierda",
+       "Lateral derecha",
+       "Ambos laterales",
+       "Otra"
+      ]
+     },
+     {
+      "key": "volume_l",
+      "label": "Volumen",
+      "type": "decimal",
+      "unit": "L",
+      "validation": {
+       "positive": true
+      }
+     },
+     {
+      "key": "width_mm",
+      "label": "Ancho",
+      "type": "decimal",
+      "unit": "mm",
+      "validation": {
+       "positive": true
+      }
+     },
+     {
+      "key": "height_mm",
+      "label": "Alto",
+      "type": "decimal",
+      "unit": "mm",
+      "validation": {
+       "positive": true
+      }
+     },
+     {
+      "key": "depth_mm",
+      "label": "Fondo",
+      "type": "decimal",
+      "unit": "mm",
+      "validation": {
+       "positive": true
+      }
+     },
+     {
+      "key": "source_url",
+      "label": "Fuente",
+      "type": "url"
+     },
+     {
+      "key": "configuration",
+      "label": "Estado / configuración del miembro",
+      "type": "text"
+     },
+     {
+      "key": "measurement_reference",
+      "label": "Referencia de las dimensiones",
+      "type": "text"
+     }
+    ]
+   },
+   "after": {
+    "version": 1,
+    "columns": [
+     {
+      "key": "member",
+      "label": "Miembro",
+      "type": "text",
+      "required": true
+     },
+     {
+      "key": "position",
+      "label": "Posición",
+      "type": "token",
+      "required": true,
+      "allowed_values": [
+       "Superior",
+       "Lateral izquierda",
+       "Lateral derecha",
+       "Ambos laterales",
+       "Otra"
+      ]
+     },
+     {
+      "key": "volume_l",
+      "label": "Volumen",
+      "type": "decimal",
+      "unit": "L",
+      "validation": {
+       "positive": true
+      }
+     },
+     {
+      "key": "width_mm",
+      "label": "Ancho",
+      "type": "decimal",
+      "unit": "mm",
+      "validation": {
+       "positive": true
+      }
+     },
+     {
+      "key": "height_mm",
+      "label": "Alto",
+      "type": "decimal",
+      "unit": "mm",
+      "validation": {
+       "positive": true
+      }
+     },
+     {
+      "key": "depth_mm",
+      "label": "Fondo",
+      "type": "decimal",
+      "unit": "mm",
+      "validation": {
+       "positive": true
+      }
+     },
+     {
+      "key": "source_url",
+      "label": "Fuente",
+      "type": "url"
+     },
+     {
+      "key": "configuration",
+      "label": "Estado / configuración del miembro",
+      "type": "text"
+     },
+     {
+      "key": "measurement_reference",
+      "label": "Referencia de las dimensiones",
+      "type": "text"
+     }
+    ],
+    "unique_by": [
+     [
+      "member"
+     ]
+    ]
+   },
+   "source_ids": [
+    "S-ENGINE"
+   ],
+   "scope": "Cada miembro del conjunto se nombra una vez; las alforjas izquierda y derecha son miembros distintos. Todas las columnas de la identidad son required, así que unique_by no las omite.",
+   "counter_case": "Dos volúmenes para la misma alforja eran indistinguibles."
+  },
+  {
+   "id": "RND-ND17-co2_cartridge_configurations-unique_by",
+   "finding": "ND17",
+   "op": "replace_unpublished_rows_schema",
+   "template": null,
+   "key": "co2_cartridge_configurations",
+   "before": {
+    "version": 1,
+    "columns": [
+     {
+      "key": "configuration_kind",
+      "label": "Alcance de la fila",
+      "type": "token",
+      "required": true,
+      "allowed_values": [
+       "Cartucho de esta presentación",
+       "Cartucho compatible declarado"
+      ]
+     },
+     {
+      "key": "gas_mass_g",
+      "label": "CO2 neto",
+      "type": "decimal",
+      "unit": "g",
+      "required": true,
+      "validation": {
+       "positive": true
+      }
+     },
+     {
+      "key": "threaded",
+      "label": "Roscado",
+      "type": "boolean",
+      "required": true
+     },
+     {
+      "key": "included_quantity",
+      "label": "Cantidad incluida",
+      "type": "integer",
+      "validation": {
+       "min": "0"
+      }
+     },
+     {
+      "key": "gross_weight_g",
+      "label": "Peso físico del cartucho",
+      "type": "decimal",
+      "unit": "g",
+      "validation": {
+       "positive": true
+      }
+     },
+     {
+      "key": "source_url",
+      "label": "Fuente",
+      "type": "url"
+     },
+     {
+      "key": "thread_designation",
+      "label": "Rosca exacta declarada (diámetro, paso y sentido)",
+      "type": "text"
+     },
+     {
+      "key": "counterpart_model",
+      "label": "Inflador / contraparte declarada",
+      "type": "text"
+     },
+     {
+      "key": "conditions",
+      "label": "Condiciones de la declaración",
+      "type": "text"
+     },
+     {
+      "key": "cartridge_length_mm",
+      "label": "Largo físico del cartucho",
+      "type": "decimal",
+      "unit": "mm",
+      "validation": {
+       "positive": true
+      }
+     },
+     {
+      "key": "cartridge_diameter_mm",
+      "label": "Diámetro físico del cartucho",
+      "type": "decimal",
+      "unit": "mm",
+      "validation": {
+       "positive": true
+      }
+     }
+    ]
+   },
+   "after": {
+    "version": 1,
+    "columns": [
+     {
+      "key": "configuration_kind",
+      "label": "Alcance de la fila",
+      "type": "token",
+      "required": true,
+      "allowed_values": [
+       "Cartucho de esta presentación",
+       "Cartucho compatible declarado"
+      ]
+     },
+     {
+      "key": "gas_mass_g",
+      "label": "CO2 neto",
+      "type": "decimal",
+      "unit": "g",
+      "required": true,
+      "validation": {
+       "positive": true
+      }
+     },
+     {
+      "key": "threaded",
+      "label": "Roscado",
+      "type": "boolean",
+      "required": true
+     },
+     {
+      "key": "included_quantity",
+      "label": "Cantidad incluida",
+      "type": "integer",
+      "validation": {
+       "min": "0"
+      }
+     },
+     {
+      "key": "gross_weight_g",
+      "label": "Peso físico del cartucho",
+      "type": "decimal",
+      "unit": "g",
+      "validation": {
+       "positive": true
+      }
+     },
+     {
+      "key": "source_url",
+      "label": "Fuente",
+      "type": "url"
+     },
+     {
+      "key": "thread_designation",
+      "label": "Rosca exacta declarada (diámetro, paso y sentido)",
+      "type": "text"
+     },
+     {
+      "key": "counterpart_model",
+      "label": "Inflador / contraparte declarada",
+      "type": "text"
+     },
+     {
+      "key": "conditions",
+      "label": "Condiciones de la declaración",
+      "type": "text"
+     },
+     {
+      "key": "cartridge_length_mm",
+      "label": "Largo físico del cartucho",
+      "type": "decimal",
+      "unit": "mm",
+      "validation": {
+       "positive": true
+      }
+     },
+     {
+      "key": "cartridge_diameter_mm",
+      "label": "Diámetro físico del cartucho",
+      "type": "decimal",
+      "unit": "mm",
+      "validation": {
+       "positive": true
+      }
+     }
+    ],
+    "unique_by": [
+     [
+      "configuration_kind",
+      "gas_mass_g",
+      "threaded"
+     ]
+    ]
+   },
+   "source_ids": [
+    "S-ENGINE"
+   ],
+   "scope": "La configuración es el tipo, la masa de gas y si es roscado; la cantidad incluida es su atributo. Todas las columnas de la identidad son required, así que unique_by no las omite.",
+   "counter_case": "Dos cantidades incluidas para el cartucho de 16 g roscado dejaban de convivir."
+  },
+  {
+   "id": "RND-ND19-eyewear_lens_configurations-unique_by",
+   "finding": "ND19",
+   "op": "replace_unpublished_rows_schema",
+   "template": null,
+   "key": "eyewear_lens_configurations",
+   "before": {
+    "version": 1,
+    "columns": [
+     {
+      "key": "model",
+      "label": "Modelo",
+      "type": "text",
+      "required": true
+     },
+     {
+      "key": "included",
+      "label": "Incluida en esta presentación",
+      "type": "boolean",
+      "required": false
+     },
+     {
+      "key": "photochromic",
+      "label": "Fotocromática",
+      "type": "boolean",
+      "required": false
+     },
+     {
+      "key": "polarized",
+      "label": "Polarizada",
+      "type": "boolean",
+      "required": false
+     },
+     {
+      "key": "mirrored",
+      "label": "Espejada",
+      "type": "boolean",
+      "required": false
+     },
+     {
+      "key": "tint",
+      "label": "Tinte o color de la lente",
+      "type": "text",
+      "required": false
+     },
+     {
+      "key": "conditions",
+      "label": "Condiciones de la declaración",
+      "type": "text",
+      "required": false
+     },
+     {
+      "key": "category_min",
+      "label": "Categoría mín. (0–4)",
+      "type": "integer",
+      "validation": {
+       "min": "0",
+       "max": "4"
+      }
+     },
+     {
+      "key": "category_max",
+      "label": "Categoría máx. (0–4)",
+      "type": "integer",
+      "validation": {
+       "min": "0",
+       "max": "4"
+      }
+     },
+     {
+      "key": "vlt_min_pct",
+      "label": "VLT mín.",
+      "type": "decimal",
+      "unit": "%",
+      "validation": {
+       "min": "0",
+       "max": "100"
+      }
+     },
+     {
+      "key": "vlt_max_pct",
+      "label": "VLT máx.",
+      "type": "decimal",
+      "unit": "%",
+      "validation": {
+       "min": "0",
+       "max": "100"
+      }
+     },
+     {
+      "key": "uv_claim",
+      "label": "Protección UV declarada para esta lente",
+      "type": "text"
+     },
+     {
+      "key": "source_url",
+      "label": "Fuente",
+      "type": "url"
+     }
+    ],
+    "ordered_pairs": [
+     [
+      "category_min",
+      "category_max"
+     ],
+     [
+      "vlt_min_pct",
+      "vlt_max_pct"
+     ]
+    ]
+   },
+   "after": {
+    "version": 1,
+    "columns": [
+     {
+      "key": "model",
+      "label": "Modelo",
+      "type": "text",
+      "required": true
+     },
+     {
+      "key": "included",
+      "label": "Incluida en esta presentación",
+      "type": "boolean",
+      "required": false
+     },
+     {
+      "key": "photochromic",
+      "label": "Fotocromática",
+      "type": "boolean",
+      "required": false
+     },
+     {
+      "key": "polarized",
+      "label": "Polarizada",
+      "type": "boolean",
+      "required": false
+     },
+     {
+      "key": "mirrored",
+      "label": "Espejada",
+      "type": "boolean",
+      "required": false
+     },
+     {
+      "key": "tint",
+      "label": "Tinte o color de la lente",
+      "type": "text",
+      "required": false
+     },
+     {
+      "key": "conditions",
+      "label": "Condiciones de la declaración",
+      "type": "text",
+      "required": false
+     },
+     {
+      "key": "category_min",
+      "label": "Categoría mín. (0–4)",
+      "type": "integer",
+      "validation": {
+       "min": "0",
+       "max": "4"
+      }
+     },
+     {
+      "key": "category_max",
+      "label": "Categoría máx. (0–4)",
+      "type": "integer",
+      "validation": {
+       "min": "0",
+       "max": "4"
+      }
+     },
+     {
+      "key": "vlt_min_pct",
+      "label": "VLT mín.",
+      "type": "decimal",
+      "unit": "%",
+      "validation": {
+       "min": "0",
+       "max": "100"
+      }
+     },
+     {
+      "key": "vlt_max_pct",
+      "label": "VLT máx.",
+      "type": "decimal",
+      "unit": "%",
+      "validation": {
+       "min": "0",
+       "max": "100"
+      }
+     },
+     {
+      "key": "uv_claim",
+      "label": "Protección UV declarada para esta lente",
+      "type": "text"
+     },
+     {
+      "key": "source_url",
+      "label": "Fuente",
+      "type": "url"
+     }
+    ],
+    "ordered_pairs": [
+     [
+      "category_min",
+      "category_max"
+     ],
+     [
+      "vlt_min_pct",
+      "vlt_max_pct"
+     ]
+    ],
+    "unique_by": [
+     [
+      "model"
+     ]
+    ]
+   },
+   "source_ids": [
+    "S-ENGINE"
+   ],
+   "scope": "Una lente se identifica por su modelo; fotocromía, polarización y espejo son propiedades suyas y pueden coexistir. Todas las columnas de la identidad son required, así que unique_by no las omite.",
+   "counter_case": "La misma lente declarada polarizada y no polarizada en dos filas dejaba de pasar."
+  },
+  {
+   "id": "RND-ND23-nutrition_facts-unique_by",
+   "finding": "ND23",
+   "op": "replace_unpublished_rows_schema",
+   "template": null,
+   "key": "nutrition_facts",
+   "before": {
+    "version": 1,
+    "columns": [
+     {
+      "key": "nutrient",
+      "label": "Nutriente",
+      "type": "token",
+      "required": true,
+      "allowed_values": [
+       "Energía (kcal)",
+       "Carbohidratos (g)",
+       "Azúcares (g)",
+       "Proteína (g)",
+       "Grasa (g)",
+       "Sodio (mg)",
+       "Fibra (g)",
+       "Otro"
+      ]
+     },
+     {
+      "key": "amount",
+      "label": "Cantidad",
+      "type": "decimal",
+      "required": true,
+      "validation": {
+       "min": "0"
+      }
+     },
+     {
+      "key": "basis",
+      "label": "Base",
+      "type": "token",
+      "required": true,
+      "allowed_values": [
+       "Por unidad / sobre",
+       "Por 100 g",
+       "Por 100 ml",
+       "Por porción declarada",
+       "Por porción servida"
+      ]
+     },
+     {
+      "key": "source_url",
+      "label": "Fuente",
+      "type": "url"
+     },
+     {
+      "key": "nutrient_name",
+      "label": "Nombre del nutriente cuando es Otro",
+      "type": "text"
+     },
+     {
+      "key": "amount_unit",
+      "label": "Unidad cuando es Otro",
+      "type": "text"
+     },
+     {
+      "key": "basis_amount",
+      "label": "Cantidad de la base",
+      "type": "decimal",
+      "validation": {
+       "positive": true
+      }
+     },
+     {
+      "key": "basis_unit",
+      "label": "Unidad de la base",
+      "type": "text"
+     },
+     {
+      "key": "serving_reference",
+      "label": "Referencia de porción / receta",
+      "type": "text"
+     },
+     {
+      "key": "qualifier",
+      "label": "Calificador literal del valor (por ejemplo aproximado)",
+      "type": "text"
+     }
+    ]
+   },
+   "after": {
+    "version": 1,
+    "columns": [
+     {
+      "key": "nutrient",
+      "label": "Nutriente",
+      "type": "token",
+      "required": true,
+      "allowed_values": [
+       "Energía (kcal)",
+       "Carbohidratos (g)",
+       "Azúcares (g)",
+       "Proteína (g)",
+       "Grasa (g)",
+       "Sodio (mg)",
+       "Fibra (g)",
+       "Otro"
+      ]
+     },
+     {
+      "key": "amount",
+      "label": "Cantidad",
+      "type": "decimal",
+      "required": true,
+      "validation": {
+       "min": "0"
+      }
+     },
+     {
+      "key": "basis",
+      "label": "Base",
+      "type": "token",
+      "required": true,
+      "allowed_values": [
+       "Por unidad / sobre",
+       "Por 100 g",
+       "Por 100 ml",
+       "Por porción declarada",
+       "Por porción servida"
+      ]
+     },
+     {
+      "key": "source_url",
+      "label": "Fuente",
+      "type": "url"
+     },
+     {
+      "key": "nutrient_name",
+      "label": "Nombre del nutriente cuando es Otro",
+      "type": "text"
+     },
+     {
+      "key": "amount_unit",
+      "label": "Unidad cuando es Otro",
+      "type": "text"
+     },
+     {
+      "key": "basis_amount",
+      "label": "Cantidad de la base",
+      "type": "decimal",
+      "validation": {
+       "positive": true
+      }
+     },
+     {
+      "key": "basis_unit",
+      "label": "Unidad de la base",
+      "type": "text"
+     },
+     {
+      "key": "serving_reference",
+      "label": "Referencia de porción / receta",
+      "type": "text"
+     },
+     {
+      "key": "qualifier",
+      "label": "Calificador literal del valor (por ejemplo aproximado)",
+      "type": "text"
+     }
+    ],
+    "unique_by": [
+     [
+      "nutrient",
+      "basis"
+     ]
+    ]
+   },
+   "source_ids": [
+    "S-ENGINE"
+   ],
+   "scope": "Un nutriente sobre la misma base tiene un valor. Dos bases del mismo nutriente son dos filas legítimas. Todas las columnas de la identidad son required, así que unique_by no las omite.",
+   "counter_case": "20 g y 25 g de carbohidratos por 100 g dejaban de convivir; por 100 g y por porción siguen conviviendo."
+  },
+  {
+   "id": "RND-ND16-bottle_diameter-gate",
+   "finding": "ND16",
+   "op": "replace_field_contract",
+   "template": "bottle",
+   "key": "bottle_diameter_mm",
+   "before": {
+    "allowed_when": {
+     "kind": "always"
+    }
+   },
+   "after": {
+    "allowed_when": {
+     "kind": "when",
+     "rows": [
+      [
+       {
+        "field": "bottle_retention_system",
+        "operator": "eq",
+        "value_type": "token",
+        "value": "Convencional (portabidón de aro)"
+       }
+      ]
+     ]
+    }
+   },
+   "source_ids": [
+    "S-FIDLOCK",
+    "S-BASE"
+   ],
+   "scope": "Sólo la plantilla bottle. El portabidón ya condiciona el mismo campo a su sistema de retención; la botella quedó permitida siempre.",
+   "counter_case": "Una botella TWIST no tiene diámetro de portabidón: escribirlo la reduce a una botella convencional, que es justo lo que el hallazgo prohíbe."
+  },
+  {
+   "id": "RND-ND17-max_pressure-gate",
+   "finding": "ND17",
+   "op": "replace_field_contract",
+   "template": "pump",
+   "key": "max_pressure_psi",
+   "before": {
+    "allowed_when": {
+     "kind": "always"
+    }
+   },
+   "after": {
+    "allowed_when": {
+     "kind": "when",
+     "rows": [
+      [
+       {
+        "field": "pump_kind",
+        "operator": "in",
+        "value_type": "token",
+        "value": [
+         "De pie",
+         "De mano / mini",
+         "Bomba de suspensión",
+         "Compresor / eléctrica",
+         "Otro"
+        ]
+       }
+      ]
+     ]
+    }
+   },
+   "source_ids": [
+    "S-CO2",
+    "S-BASE"
+   ],
+   "scope": "Sólo la plantilla pump; en workshop_tool el mismo campo no cambia. Un inflador de CO2 no bombea y un cartucho suelto menos: la presión que alcanza depende del volumen del neumático y de la masa de gas.",
+   "counter_case": "Un máximo de la bomba escrito en un inflador de CO2 se lee como promesa de presión final, que es lo que el hallazgo rechaza. inflation_target_note conserva la advertencia del fabricante."
+  },
+  {
+   "id": "RND-ND18-helmet_kind-options",
+   "finding": "ND18",
+   "op": "replace_unpublished_options",
+   "template": null,
+   "key": "helmet_kind",
+   "before": [
+    "Urbano",
+    "MTB / trail",
+    "Enduro (cobertura extendida)",
+    "Integral",
+    "Ruta",
+    "Niño",
+    "Otro"
+   ],
+   "after": [
+    "Urbano",
+    "MTB / trail",
+    "Enduro (cobertura extendida)",
+    "Integral",
+    "Ruta",
+    "Otro"
+   ],
+   "source_ids": [
+    "S-HELMET",
+    "S-BASE"
+   ],
+   "scope": "La definición es origin new y sólo la usa helmet, así que la opción se retira sin migrar hechos. El público ya vive en intended_audience.",
+   "counter_case": "Un casco integral para niño tenía que elegir entre declarar su construcción o su usuario; ahora declara las dos cosas por separado."
+  }
+ ],
+ "rows_without_safe_identity": [
+  {
+   "field": "fastener_kit_members",
+   "required": [
+    "member_role",
+    "quantity"
+   ],
+   "why": "Un kit puede traer dos pernos M5 de largos distintos con el mismo rol: ninguna columna requerida los distingue y la que lo haría, el largo, es opcional. Forzarla obligaría a inventar un dato."
+  },
+  {
+   "field": "tool_bits_included",
+   "required": [
+    "bit_kind",
+    "quantity"
+   ],
+   "why": "Un juego trae varias medidas del mismo tipo de punta y la medida es opcional."
+  },
+  {
+   "field": "bag_rack_interface",
+   "required": [
+    "interface"
+   ],
+   "why": "Un mismo sistema puede aparecer en dos generaciones y la generación es opcional; una identidad con una clave opcional no deduplica nada."
+  },
+  {
+   "field": "rack_top_interface",
+   "required": [
+    "interface"
+   ],
+   "why": "Igual que el anterior."
+  },
+  {
+   "field": "rack_mount_configurations",
+   "required": [
+    "mount_point"
+   ],
+   "why": "El mismo punto de montaje admite varias configuraciones declaradas y la configuración es opcional."
+  },
+  {
+   "field": "certification_configurations",
+   "required": [
+    "standard",
+    "standard_text",
+    "evidence_kind"
+   ],
+   "why": "La misma norma puede constar por etiqueta y por documento, y edición y mercado son opcionales: son filas legítimas, no duplicados."
+  },
+  {
+   "field": "conflicting_claims",
+   "required": [
+    "field_key",
+    "value",
+    "source_kind"
+   ],
+   "why": "Guardar dos valores contradictorios del mismo campo es su función; una identidad los prohibiría."
+  },
+  {
+   "field": "kit_members",
+   "required": [
+    "member_role",
+    "family",
+    "quantity",
+    "position"
+   ],
+   "why": "Compartido por 23 plantillas y con el mismo problema del kit de fijaciones."
+  }
+ ],
+ "limits": {
+  "engine": [
+   "No hay igualdad ni exclusión mutua entre dos escalares: por eso la exclusión de paso y TPI se consigue con un campo de sistema declarado y no con una regla.",
+   "unique_by omite las filas a las que les falta una clave del grupo, así que sólo se propone identidad cuando todas sus columnas son required.",
+   "Las condiciones por fila gobiernan una celda dentro de su fila y no comparan filas entre sí: ninguna de las identidades propuestas se puede sustituir por una condición.",
+   "Nada compara un escalar con las filas del mismo producto: la cantidad por envase de cartuchos y la cantidad incluida por configuración conviven sin control."
+  ],
+  "identity": [
+   "Ocho campos de filas quedan sin identidad porque ninguna combinación de columnas requeridas la da, y forzarla obligaría a inventar un dato que el fabricante no publica. Están listados con su razón.",
+   "Las identidades propuestas son de configuración, no de nombre: ninguna usa un texto libre como clave."
+  ],
+  "consumer": [
+   "Aprobar una representación no aprueba un montaje ni una certificación. Una fila de certificación guarda lo que la etiqueta dice y el estado de su lectura; no homologa el casco.",
+   "Una talla M de dos marcas sigue sin ser comparable aunque las dos se escriban con la etiqueta OEM exacta.",
+   "Una capacidad de la herramienta declarada como admitida no autoriza la operación sobre un modelo concreto: eso es una relación con fuente."
+  ]
+ },
+ "fixtures": [
+  {
+   "id": "RF1",
+   "kind": "válido",
+   "template": "fastener",
+   "about": "ND09",
+   "values": {
+    "fastener_kind": "Perno",
+    "thread": "M5",
+    "thread_pitch_system": "Métrico (paso en mm)",
+    "thread_pitch_mm": "0.8",
+    "length_datum": "Bajo cabeza",
+    "length_mm": "20"
+   },
+   "expected": [],
+   "note": "Designación métrica completa. Con el sistema en métrico, el campo de TPI no está disponible."
+  },
+  {
+   "id": "RF2",
+   "kind": "contradictorio",
+   "template": "fastener",
+   "about": "ND09",
+   "values": {
+    "fastener_kind": "Perno",
+    "thread": "M5",
+    "thread_pitch_system": "Métrico (paso en mm)",
+    "thread_pitch_mm": "1.0",
+    "thread_tpi": 26
+   },
+   "expected": [
+    {
+     "code": "field_constraint",
+     "field": "thread_tpi",
+     "blocking": true
+    }
+   ],
+   "note": "El caso negativo de la compuerta AG01: hoy se escribe sin ruido; con el sistema declarado, el TPI queda fuera de su condición."
+  },
+  {
+   "id": "RF3",
+   "kind": "desconocido",
+   "template": "fastener",
+   "about": "ND09",
+   "values": {
+    "fastener_kind": "Perno",
+    "thread": "M5",
+    "thread_pitch_system": "Desconocido / sin confirmar"
+   },
+   "expected": [],
+   "note": "Sin sistema declarado no se escribe ni paso ni TPI: la designación queda incompleta y visible, no rellenada."
+  },
+  {
+   "id": "RF4",
+   "kind": "contradictorio",
+   "template": "workshop_tool",
+   "about": "ND10",
+   "values": {
+    "tool_kind": "Extractor de cassette / rueda libre",
+    "tool_capabilities": {
+     "schema_version": 1,
+     "rows": [
+      {
+       "id": "a",
+       "values": {
+        "operation": "Extraer",
+        "target_standard": "Shimano HG",
+        "supported": true
+       },
+       "sources": []
+      },
+      {
+       "id": "b",
+       "values": {
+        "operation": "Extraer",
+        "target_standard": "Shimano HG",
+        "supported": false
+       },
+       "sources": []
+      }
+     ]
+    }
+   },
+   "expected": [
+    {
+     "code": "row_shape",
+     "field": "tool_capabilities",
+     "blocking": true
+    }
+   ],
+   "note": "Admitida y no admitida a la vez para la misma operación y estándar. Es el mismo error que los sensores del bloque de luces."
+  },
+  {
+   "id": "RF5",
+   "kind": "válido",
+   "template": "workshop_tool",
+   "about": "ND10",
+   "values": {
+    "tool_kind": "Extractor de cassette / rueda libre",
+    "tool_capabilities": {
+     "schema_version": 1,
+     "rows": [
+      {
+       "id": "a",
+       "values": {
+        "operation": "Extraer",
+        "target_standard": "Shimano HG",
+        "supported": true
+       },
+       "sources": []
+      },
+      {
+       "id": "b",
+       "values": {
+        "operation": "Instalar",
+        "target_standard": "Shimano HG",
+        "supported": false,
+        "brand_scope": "La interfaz de extracción no es el spline de instalación"
+       },
+       "sources": []
+      }
+     ]
+    }
+   },
+   "expected": [],
+   "note": "Dos operaciones sobre el mismo estándar con resultados distintos: legítimo y es justo la corrección que pedía el hallazgo sobre HG y XD."
+  },
+  {
+   "id": "RF6",
+   "kind": "válido",
+   "template": "bottle",
+   "about": "ND16",
+   "values": {
+    "volume_ml": "600",
+    "bottle_retention_system": "FIDLOCK TWIST",
+    "base_included": true,
+    "included_base_model": "TWIST bike base"
+   },
+   "expected": [],
+   "note": "Una botella TWIST sin diámetro de portabidón. Hoy el campo está permitido y su ausencia parece un dato que falta."
+  },
+  {
+   "id": "RF7",
+   "kind": "contradictorio",
+   "template": "bottle",
+   "about": "ND16",
+   "values": {
+    "volume_ml": "600",
+    "bottle_retention_system": "FIDLOCK TWIST",
+    "bottle_diameter_mm": "74"
+   },
+   "expected": [
+    {
+     "code": "field_constraint",
+     "field": "bottle_diameter_mm",
+     "blocking": true
+    }
+   ],
+   "note": "Reducir la TWIST a una botella de un diámetro es lo que el hallazgo prohíbe."
+  },
+  {
+   "id": "RF8",
+   "kind": "contradictorio",
+   "template": "pump",
+   "about": "ND17",
+   "values": {
+    "pump_kind": "Inflador CO2",
+    "max_pressure_psi": "160"
+   },
+   "expected": [
+    {
+     "code": "field_constraint",
+     "field": "max_pressure_psi",
+     "blocking": true
+    }
+   ],
+   "note": "Un inflador de CO2 no tiene presión máxima propia; la que alcance depende del neumático y de la masa de gas."
+  },
+  {
+   "id": "RF9",
+   "kind": "válido",
+   "template": "pump",
+   "about": "ND17",
+   "values": {
+    "pump_kind": "Inflador CO2",
+    "valve_heads_supported": [
+     "Presta (francesa)",
+     "Schrader (americana / auto)"
+    ],
+    "inflation_target_note": "La presión final depende del volumen del neumático",
+    "co2_cartridge_configurations": {
+     "schema_version": 1,
+     "rows": [
+      {
+       "id": "a",
+       "values": {
+        "configuration_kind": "Cartucho incluido",
+        "gas_mass_g": "16",
+        "threaded": true,
+        "thread_designation": "3/8-24 UNF",
+        "included_quantity": 2,
+        "gross_weight_g": "48"
+       },
+       "sources": []
+      }
+     ]
+    }
+   },
+   "expected": [],
+   "note": "Gas neto, peso bruto y cantidad separados, con la designación de rosca que la condición por fila exige por ser roscado."
+  },
+  {
+   "id": "RF10",
+   "kind": "desconocido",
+   "template": "pump",
+   "about": "ND17",
+   "values": {
+    "pump_kind": "Inflador CO2",
+    "valve_heads_supported": [
+     "Presta (francesa)"
+    ]
+   },
+   "expected": [],
+   "note": "Sin cartuchos declarados no se infiere ninguno: la interfaz queda desconocida y no se copia de otro inflador."
+  },
+  {
+   "id": "RF11",
+   "kind": "válido",
+   "template": "helmet",
+   "about": "ND18",
+   "values": {
+    "helmet_kind": "Integral",
+    "intended_audience": "Niño / juvenil",
+    "label_evidence_state": "Etiqueta observada",
+    "certification_configurations": {
+     "schema_version": 1,
+     "rows": [
+      {
+       "id": "a",
+       "values": {
+        "standard": "EN 1078",
+        "standard_text": "EN 1078:2012+A1:2012",
+        "edition": "2012+A1",
+        "market": "UE",
+        "evidence_kind": "Etiqueta",
+        "evidence_date": "2026-09-07"
+       },
+       "sources": []
+      }
+     ]
+    }
+   },
+   "expected": [],
+   "note": "Construcción y público a la vez, que hoy obliga a elegir. La norma conserva su texto, edición y mercado."
+  },
+  {
+   "id": "RF12",
+   "kind": "desconocido",
+   "template": "helmet",
+   "about": "ND18",
+   "values": {
+    "helmet_kind": "Urbano",
+    "intended_audience": "Adulto",
+    "label_evidence_state": "Etiqueta no observada"
+   },
+   "expected": [],
+   "note": "Sin etiqueta observada no hay declaración de norma; la ausencia no se escribe como una norma más."
+  },
+  {
+   "id": "RF13",
+   "kind": "contradictorio",
+   "template": "food_beverage",
+   "about": "ND23",
+   "values": {
+    "food_item_kind": "Snack",
+    "preparation_kind": "Envasado",
+    "net_mass_g": "60",
+    "nutrition_facts": {
+     "schema_version": 1,
+     "rows": [
+      {
+       "id": "a",
+       "values": {
+        "nutrient": "Carbohidratos",
+        "amount": "20",
+        "basis": "Por 100 g"
+       },
+       "sources": []
+      },
+      {
+       "id": "b",
+       "values": {
+        "nutrient": "Carbohidratos",
+        "amount": "25",
+        "basis": "Por 100 g"
+       },
+       "sources": []
+      }
+     ]
+    }
+   },
+   "expected": [
+    {
+     "code": "row_shape",
+     "field": "nutrition_facts",
+     "blocking": true
+    }
+   ],
+   "note": "Dos cantidades del mismo nutriente sobre la misma base."
+  },
+  {
+   "id": "RF14",
+   "kind": "válido",
+   "template": "food_beverage",
+   "about": "ND23",
+   "values": {
+    "food_item_kind": "Snack",
+    "preparation_kind": "Envasado",
+    "net_mass_g": "60",
+    "units_per_pack": "1",
+    "allergen_statement_source": "Etiqueta del envase",
+    "allergen_note": "Contiene leche y frutos secos",
+    "spec_evidence_source": "Envase fotografiado en tienda",
+    "nutrition_facts": {
+     "schema_version": 1,
+     "rows": [
+      {
+       "id": "a",
+       "values": {
+        "nutrient": "Carbohidratos",
+        "amount": "20",
+        "basis": "Por 100 g"
+       },
+       "sources": []
+      },
+      {
+       "id": "b",
+       "values": {
+        "nutrient": "Carbohidratos",
+        "amount": "12",
+        "basis": "Por porción declarada",
+        "serving_reference": "1 barra de 60 g"
+       },
+       "sources": []
+      }
+     ]
+    }
+   },
+   "expected": [],
+   "note": "El mismo nutriente sobre dos bases distintas es legítimo y la identidad lo permite."
+  },
+  {
+   "id": "RF15",
+   "kind": "contradictorio",
+   "template": "eyewear",
+   "about": "ND19",
+   "values": {
+    "eyewear_lens_configurations": {
+     "schema_version": 1,
+     "rows": [
+      {
+       "id": "a",
+       "values": {
+        "model": "Lente gris",
+        "polarized": true,
+        "photochromic": true
+       },
+       "sources": []
+      },
+      {
+       "id": "b",
+       "values": {
+        "model": "Lente gris",
+        "polarized": false
+       },
+       "sources": []
+      }
+     ]
+    }
+   },
+   "expected": [
+    {
+     "code": "row_shape",
+     "field": "eyewear_lens_configurations",
+     "blocking": true
+    }
+   ],
+   "note": "La misma lente polarizada y no polarizada. Que fotocromía y polarización coexistan en una fila sí es válido, y es la corrección del hallazgo."
+  },
+  {
+   "id": "RF16",
+   "kind": "desconocido",
+   "template": "lock",
+   "about": "ND11",
+   "values": {
+    "lock_kind": "Kit U + cable",
+    "inner_width_mm": "110",
+    "inner_height_mm": "230",
+    "cable_length_mm": "1200",
+    "cable_diameter_mm": "10"
+   },
+   "expected": [],
+   "note": "Las medidas del arco y del cable en la misma presentación, sin nivel de seguridad declarado: pendiente, no transferido desde el arco."
+  }
+ ],
+ "preimage_verification": {
+  "method": "cada preimagen se lee de la base y se comprueban las reglas de product_spec_field_patches.py, incluida la exigencia de que toda columna de una identidad sea required",
+  "errors": []
+ },
+ "gates": [
+  "Ningún parche autoriza llenado, asignación ni publicación.",
+  "ND01–ND08 no se tocan: son de otro revisor. ND12, ND21 y ND22 ya se integraron con el bloque de luces.",
+  "Los tres parches de ND09 se aplican juntos: el campo de sistema debe existir antes de que las condiciones lo citen, o el guard de metadatos rechaza la plantilla."
+ ],
+ "stats": {
+  "findings": 13,
+  "fully_resolved": 3,
+  "with_residual": 10,
+  "patches": 13,
+  "identity_patches": 7,
+  "rows_without_safe_identity": 8,
+  "fixtures": 16,
+  "fixtures_by_kind": {
+   "válido": 6,
+   "contradictorio": 6,
+   "desconocido": 4
+  }
+ }
+}

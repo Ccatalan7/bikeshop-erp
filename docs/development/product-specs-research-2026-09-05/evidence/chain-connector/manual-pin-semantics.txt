@@ -1,0 +1,155 @@
+Inicio · 280x32
+Contabilidad · 280x32
+Impuestos · 280x32
+Clientes · 280x32
+Mensajería · 280x32
+Archivos · 280x32
+Taller · 280x32
+Smart Features · 280x32
+Inventario · 268x30
+Productos · [botón seleccionado] · 250x26
+  Productos · 250x26
+Servicios · [botón] · 250x26
+  Servicios · 250x26
+Categorías · [botón] · 250x26
+  Categorías · 250x26
+Marcas · [botón] · 250x26
+  Marcas · 250x26
+Movimientos · [botón] · 250x26
+  Movimientos · 250x26
+Ventas · 280x32
+Compras · 280x32
+POS · 280x32
+RR.HH. · 280x32
+Herramientas · 280x32
+Debug · 280x32
+Sitio Web · 268x30
+Correo
+48 pendientes en Correo · [DESHABILITADO] · 268x38
+Mantención · 280x32
+Análisis · 280x32
+V
+Viñabike
+vinabikechile@gmail.com · 264x42
+Configuración · 268x30
+Cerrar Sesión · 268x30
+Apariencia · [botón] · 232x28
+[botón] · 36x36
+[botón] · 48x48
+Editar producto · 188x32
+Mantén los datos comerciales y de inventario al día para el POS y la contabilidad. · 554x20
+Margen 78.6% · 94x16
+[botón] · 48x48
+Guardar · [botón] · 129x40
+Detalles Generales
+Pestaña 1 de 3 · 161x74
+Tienda Online
+Pestaña 2 de 3 · 126x74
+Ficha Técnica
+Pestaña 3 de 3 · [seleccionado] · 126x74
+Missing Link / Conector Cadena · 203x19
+Conexión De Cadena Kmc Cl573r 6/7/8 Plata 2p · 1301x24
+Actualizar ficha · [botón] · 160x40
+KMC · CL573R · 99x20
+Modelo del fabricante · 1461x16
+= CL573R · [campo] · 1461x33
+  Confirma el modelo antes de elegir su variante. La marca por sí sola no determina compatibilidad. · 589x16
+Código del fabricante (MPN) · 1461x16
+[campo] · 1461x68
+  Identifica la variante exacta. Es distinto del SKU de la tienda. · 367x16
+Referencia del fabricante · 145x16
+Referencia del fabricante · = Completar manualmente · [botón cerrado] · 1461x34
+Las referencias corresponden a la marca y modelo confirmados. Revisa si documentan una presentación o sólo el modelo. Se completa el MPN únicamente cuando está documentado. Al retirar la referencia se quitan sus datos automáticos; tus respuestas manuales se conservan. · 1461x32
+Ficha manual: elige una variante documentada o completa los datos que conoces. · 493x16
+Datos básicos del producto · 176x19
+Tipo de conector · 1461x16
+Tipo de conector · = Pin · [botón cerrado] · 1461x34
+Missing link: cierre rápido de dos placas. Pin: pasador de unión. Half link: medio eslabón. El clip es otro tipo de cierre. · 713x16
+Dejar sin confirmar · [botón] · 158x40
+Clase de cadena declarada · 163x16
+1 · [botón] · 40x30
+5 · [botón] · 43x30
+6 · [botón] · 43x30
+7 · [botón] · 42x30
+8 · [botón] · 43x30
+9 · [botón] · 43x30
+10 · [botón] · 49x30
+11 · [botón] · 47x30
+12 · [botón] · 49x30
+13 · [botón] · 49x30
+Clase indicada para las cadenas que admite este conector. No es el número de piñones de la bicicleta y no confirma por sí sola compatibilidad. · 863x16
+Fuente de la declaración · 1461x16
+Fuente de la declaración · = Envase CL573R revisado · nota de prueba sin guardar · [campo] · 1461x68
+  URL o identificación del envase/manual de este modelo. Se necesita antes de declarar sus cadenas admitidas, reutilización o sentido. · 805x16
+Medidas y características · 165x19
+Denominación de ancho · 1461x16
+Denominación de ancho · = Sin confirmar · [botón cerrado] · 1461x34
+Denominación nominal del fabricante. No es una medición del ancho exterior. · 465x16
+Contenido · 66x10
+Conectores completos por envase · 1461x16
+Conectores completos por envase · [campo] · 1461x68
+  Cuenta cierres completos: dos mitades de un eslabón rápido forman un conector, no dos. · 540x16
+Declaraciones del fabricante · 186x19
+Reutilizable según el fabricante · 238x16
+Reutilizable según el fabricante · 238x51
+  Sin dato · [botón seleccionado] · 77x28
+  Sí. No disponible. Los requisitos elegidos no admiten Sí. · [botón DESHABILITADO] · 77x28
+  No · [botón] · 77x28
+Registra lo indicado para este modelo. Sin dato no autoriza reutilizarlo; un pasador de unión nuevo se utiliza una sola vez. · 735x16
+Cadenas admitidas por el fabricante · 1461x16
+Cadenas admitidas por el fabricante · [campo] · 1461x68
+  Copia los modelos o series admitidos y sus excepciones. Dos cadenas de la misma marca o velocidad pueden necesitar conectores distintos. · 852x16
+Conector con sentido de montaje · 213x16
+Conector con sentido de montaje · 213x32
+  Sin dato · [botón seleccionado] · 68x28
+  Sí · [botón] · 68x28
+  No · [botón] · 68x28
+Confirma las flechas o instrucciones del conector, independientemente del sentido de la cadena. · 584x16
+Imágenes
+Galería adicional
+0 imágenes · 360x508
+  Cambiar imagen principal · [botón] · 296x40
+  [botón] · 48x48
+  Agregar foto · [botón] · 148x40
+Inventario
+El stock actual solo cambia mediante ajustes auditables con motivo, fecha, usuario y asiento contable. · 360x296
+  Stock actual · = 0 · [campo] · 320x68
+    Haz clic en el ícono azul para registrar un ajuste. · 284x16
+  [botón] · 48x48
+  Stock mínimo · = 0 · [campo] · 320x48
+Estado y visibilidad · 360x152
+  Producto activo
+Los productos inactivos no aparecen en el POS ni en catálogos públicos. · 320x76
+Resumen diario, herramienta · [botón] · 48x48
+Nuevo Trabajo, herramienta · [botón] · 48x48
+Buscador de Bicicletas, herramienta · [botón] · 48x48
+Asistente IA, herramienta · [botón] · 48x48
+Mensajería, herramienta · [botón] · 48x48
+Proveedores, herramienta · [botón] · 48x48
+Archivos, herramienta · [botón] · 48x48
+Ejecutar archivos, herramienta · [botón] · 48x48
+Kiosko RRHH, herramienta · [botón] · 48x48
+Venta Rápida, herramienta · [botón] · 48x48
+Gastos Rápidos, herramienta · [botón] · 48x48
+Compras, herramienta · [botón] · 48x48
+Tareas, herramienta · [botón] · 48x48
+Calculadora, herramienta · [botón] · 48x48
+DB Gauge, herramienta · [botón] · 48x48
+Espacio de trabajo Dashboard
+Dashboard · [botón] · 152x39
+Pestañas web, 2 abiertas · [botón cerrado] · 152x39
+Espacio de trabajo Factura AliExpress · 2026-06-15
+Factura AliExpress · 2026-06-15 · [botón] · 152x39
+Espacio de trabajo Productos
+Productos · [botón] · 152x39
+Espacio de trabajo Editar Producto
+Editar Producto · [botón seleccionado] · 152x39
+  Fijar Editar Producto · [botón] · 24x24
+  Cerrar Editar Producto · [botón] · 24x24
+Atrás · [botón] · 32x32
+Adelante · [botón DESHABILITADO] · 32x32
+Copiar enlace de página · [botón] · 32x32
+Capturas · [botón] · 32x32
+Nuevo espacio de trabajo · [botón] · 32x32
+Configuración rápida · [botón] · 32x32
+6/10 · 23x10

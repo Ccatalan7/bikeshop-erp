@@ -1,0 +1,15 @@
+{
+  "approval_scope": "field_representation",
+  "base_sha256": "e709158d0ac49603ab01dfde19326d1f9f2fd0d0ce50723cb5d0076390226d9d",
+  "proposal_sha256": "049060e8daf62c2411980819ff4e568c92b081e13da0612f91916c4b278f5a6f",
+  "source_cases_sha256": "456946a2bb7b2ca23bb9decc77a729a5f157eec7ce983f27d8f0aaaeab5b884e",
+  "patch_adjudications": [
+    {
+      "patch_id": "CARD-01",
+      "decision": "aceptar",
+      "reason": "Compare declared count with distinct supplied crown occurrences. Too few is incomplete; too many contradict the total. No mounting or kit quantity inference."
+    }
+  ],
+  "mechanical_coverage_complete": false,
+  "automatic_fill_authorized": false
+}

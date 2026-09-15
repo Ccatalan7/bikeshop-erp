@@ -1,0 +1,25 @@
+{
+  "approval_scope": "field_representation",
+  "base_sha256": "934ce172a6f3eaf8fa8dc616a912d161c965840b97b647fbee23870ccc154562",
+  "proposal_sha256": "0dbc1d2309f75a12cf90e49c5dd893bf4b89f791603cdae1e8865e3b176e2400",
+  "source_cases_sha256": "bede596b90cabbe070faf3d1df9505be50b2adf682334fa8e37287e24af6bae6",
+  "patch_adjudications": [
+    {
+      "patch_id": "PORT-01",
+      "decision": "aceptar",
+      "reason": "Explicit minimum 1 preserves the existing positive-integer domain."
+    },
+    {
+      "patch_id": "PORT-02",
+      "decision": "aceptar",
+      "reason": "Each port row is one physical port; unique port_id already prevents duplicate named ports. Profiles and input/output directions are not extra ports."
+    }
+  ],
+  "rejected_transfer": {
+    "template": "light",
+    "field": "light_mode_configurations",
+    "reason": "Rows preserve member, source, operating conditions and method. They are observations, not guaranteed distinct modes. A set also contains separate lights. Do not compare their row count with a global modes_count."
+  },
+  "mechanical_coverage_complete": false,
+  "automatic_fill_authorized": false
+}

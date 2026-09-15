@@ -1,0 +1,913 @@
+{
+  "schema_version": 1,
+  "cases": [
+    {
+      "id": "light_single_ampp800_web_revision",
+      "template": "light",
+      "kind": "valid",
+      "source_ids": [
+        "S-CATEYE-WEB"
+      ],
+      "values": {
+        "light_position": "Delantera",
+        "lumens_claimed": "800",
+        "modes_count": "5",
+        "spec_evidence_source": "Página Cateye HL-EL088RC_TL-LD810, leída 2026-09-07",
+        "light_member_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "m-ampp800",
+              "values": {
+                "member_id": "AMPP800 (HL-EL088RC)",
+                "position": "Delantera",
+                "battery_kind": "Li-ion integrada",
+                "battery_capacity_mah": "2500",
+                "battery_voltage_v": "3.7",
+                "charge_connector": "Micro-USB",
+                "mount_kind": "Abrazadera de manubrio",
+                "mount_diameter_min_mm": "22",
+                "mount_diameter_max_mm": "35",
+                "ip_rating": "IPX4"
+              },
+              "sources": [
+                "https://www.cateye.com/intl/products/headlights/HL-EL088RC_TL-LD810/"
+              ]
+            }
+          ]
+        },
+        "light_mode_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "mo-1",
+              "values": {
+                "member_id": "m-ampp800",
+                "mode": "High",
+                "pattern": "Constante",
+                "lumens": "800",
+                "runtime_h": "1.5"
+              },
+              "sources": [
+                "https://www.cateye.com/intl/products/headlights/HL-EL088RC_TL-LD810/"
+              ]
+            },
+            {
+              "id": "mo-2",
+              "values": {
+                "member_id": "m-ampp800",
+                "mode": "Daytime HyperConstant",
+                "pattern": "Constante + intermitente",
+                "lumens": "800",
+                "lumens_secondary": "200",
+                "runtime_h": "5"
+              },
+              "sources": [
+                "https://www.cateye.com/intl/products/headlights/HL-EL088RC_TL-LD810/"
+              ]
+            },
+            {
+              "id": "mo-3",
+              "values": {
+                "member_id": "m-ampp800",
+                "mode": "Flashing",
+                "pattern": "Intermitente",
+                "lumens": "200",
+                "runtime_h": "30"
+              },
+              "sources": [
+                "https://www.cateye.com/intl/products/headlights/HL-EL088RC_TL-LD810/"
+              ]
+            }
+          ]
+        },
+        "kit_members": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "k-1",
+              "values": {
+                "member_role": "cable",
+                "family": "consumer_electronics",
+                "quantity": "1",
+                "position": "Sin posición",
+                "identity_model": "Cable Micro-USB"
+              },
+              "sources": [
+                "https://www.cateye.com/intl/products/headlights/HL-EL088RC_TL-LD810/"
+              ]
+            }
+          ]
+        }
+      },
+      "expected_issues": [],
+      "note": "AMPP800 OEM example; retrieval date removed from member revision; quantity travels as integer text. Declared totals retained; partial mode detail is not a total.",
+      "inventory_write": false,
+      "evidence_scope": "Reference/representation example only, never an inventory attribution",
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false,
+      "expected_blocking": []
+    },
+    {
+      "id": "light_kit_cateye_group_ride_two_revisions",
+      "template": "light",
+      "kind": "documentary_conflict_pending",
+      "source_ids": [
+        "S-CATEYE-WEB",
+        "S-CATEYE-MANUAL-LD810"
+      ],
+      "values": {
+        "light_position": "Juego delantera + trasera",
+        "light_member_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "m-front",
+              "values": {
+                "member_id": "AMPP800 (HL-EL088RC)",
+                "position": "Delantera",
+                "battery_kind": "Li-ion integrada",
+                "battery_capacity_mah": "2500",
+                "charge_connector": "Micro-USB",
+                "ip_rating": "IPX4"
+              },
+              "sources": [
+                "https://www.cateye.com/intl/products/headlights/HL-EL088RC_TL-LD810/"
+              ]
+            },
+            {
+              "id": "m-rear",
+              "values": {
+                "member_id": "ViZ300 (TL-LD810)",
+                "position": "Trasera",
+                "battery_kind": "Li-ion integrada",
+                "battery_capacity_mah": "800",
+                "battery_voltage_v": "3.7",
+                "charge_connector": "Micro-USB",
+                "mount_kind": "Abrazadera de tija",
+                "mount_diameter_min_mm": "21.5",
+                "mount_diameter_max_mm": "32",
+                "mount_circumference_max_mm": "130",
+                "ip_rating": "IPX4",
+                "ip_standard": "JIS C0920 (manual TLLD810/820-201223 1)"
+              },
+              "sources": [
+                "https://www.cateye.com/intl/products/headlights/HL-EL088RC_TL-LD810/",
+                "https://www.cateye.com/intl/support/manual/data/doc/TL-LD810_820_HP_ENG_v1.pdf"
+              ]
+            }
+          ]
+        }
+      },
+      "expected_issues": [
+        {
+          "code": "required_missing",
+          "field": "light_mode_configurations",
+          "blocking": false
+        }
+      ],
+      "note": "Una batería documentada requiere el manual en sources de su fila. Edición del manual y fecha web no se convierten en revisión del miembro. Dos alternativas documentales no son dos modos simultáneos.",
+      "inventory_write": false,
+      "evidence_scope": "Reference/representation example only, never an inventory attribution",
+      "competing_source_observations": [
+        {
+          "mode": "Group Ride",
+          "lumens": "100",
+          "runtime_h": "8",
+          "source_url": "https://www.cateye.com/intl/products/headlights/HL-EL088RC_TL-LD810/",
+          "document_scope": "Anterior a Spec change; fecha de transición/serie física desconocidas"
+        },
+        {
+          "mode": "Group Ride",
+          "lumens": "15",
+          "runtime_h": "10",
+          "source_url": "https://www.cateye.com/intl/products/headlights/HL-EL088RC_TL-LD810/",
+          "document_scope": "Vigente tras Spec change; atribución de unidad física desconocida"
+        }
+      ],
+      "capture_decision": "No canonical Group Ride observation until physical variant is resolved; competing_source_observations is review metadata, not rows_schema DSL.",
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false,
+      "expected_blocking": []
+    },
+    {
+      "id": "light_kit_same_revision_twice",
+      "template": "light",
+      "kind": "conflict_not_detected_by_row_identity",
+      "source_ids": [
+        "S-CATEYE-WEB"
+      ],
+      "values": {
+        "light_position": "Juego delantera + trasera",
+        "light_mode_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "a",
+              "values": {
+                "member_id": "m-rear",
+                "mode": "Group Ride",
+                "lumens": "100",
+                "runtime_h": "8"
+              },
+              "sources": [
+                "https://www.cateye.com/intl/products/headlights/HL-EL088RC_TL-LD810/"
+              ]
+            },
+            {
+              "id": "b",
+              "values": {
+                "member_id": "m-rear",
+                "mode": "Group Ride",
+                "lumens": "15",
+                "runtime_h": "10"
+              },
+              "sources": [
+                "https://www.cateye.com/intl/products/headlights/HL-EL088RC_TL-LD810/"
+              ]
+            }
+          ]
+        },
+        "spec_evidence_source": "Reproducción sintética del conflicto documental; no adoptar como ficha",
+        "light_member_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "m-rear",
+              "values": {
+                "member_id": "ViZ300 — variante pendiente",
+                "position": "Trasera"
+              },
+              "sources": [
+                "https://www.cateye.com/intl/products/headlights/HL-EL088RC_TL-LD810/"
+              ]
+            }
+          ]
+        }
+      },
+      "expected_issues": [],
+      "note": "Conservar row IDs no deduplica semánticamente; no se fabrica una revisión para solucionar el conflicto. Mismo nombre sólo no prueba misma condición, pero este fixture declara el conflicto de la misma condición.",
+      "inventory_write": false,
+      "evidence_scope": "Reference/representation example only, never an inventory attribution",
+      "capture_decision": "Reject simultaneous canonicalization for the same identified operating condition; row parser alone cannot adjudicate claim conflicts.",
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false,
+      "expected_blocking": []
+    },
+    {
+      "id": "light_kit_group_ride_twice_without_revision_undetectable",
+      "template": "light",
+      "kind": "conflict_not_detected_by_row_identity",
+      "source_ids": [
+        "S-ENGINE"
+      ],
+      "values": {
+        "light_position": "Juego delantera + trasera",
+        "light_mode_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "a",
+              "values": {
+                "member_id": "m-rear",
+                "mode": "Group Ride",
+                "lumens": "100",
+                "runtime_h": "8"
+              },
+              "sources": []
+            },
+            {
+              "id": "b",
+              "values": {
+                "member_id": "m-rear",
+                "mode": "Group Ride",
+                "lumens": "15",
+                "runtime_h": "10"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "spec_evidence_source": "Reproducción sintética del conflicto documental; no adoptar como ficha",
+        "light_member_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "m-rear",
+              "values": {
+                "member_id": "ViZ300 — variante pendiente",
+                "position": "Trasera"
+              },
+              "sources": [
+                "https://www.cateye.com/intl/products/headlights/HL-EL088RC_TL-LD810/"
+              ]
+            }
+          ]
+        }
+      },
+      "expected_issues": [],
+      "note": "Conservar row IDs no deduplica semánticamente; no se fabrica una revisión para solucionar el conflicto. Mismo nombre sólo no prueba misma condición, pero este fixture declara el conflicto de la misma condición.",
+      "inventory_write": false,
+      "evidence_scope": "Reference/representation example only, never an inventory attribution",
+      "capture_decision": "Reject simultaneous canonicalization for the same identified operating condition; row parser alone cannot adjudicate claim conflicts.",
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false,
+      "expected_blocking": []
+    },
+    {
+      "id": "light_single_position_mismatch_undetectable",
+      "template": "light",
+      "kind": "contradictory_undetectable",
+      "source_ids": [
+        "S-ENGINE"
+      ],
+      "values": {
+        "light_position": "Delantera",
+        "light_member_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "m",
+              "values": {
+                "member_id": "X",
+                "position": "Trasera"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_issues": [
+        {
+          "code": "required_missing",
+          "field": "light_mode_configurations",
+          "blocking": false
+        }
+      ],
+      "note": "G2: la fila dice Trasera y el escalar Delantera; hoy nada lo detecta. Se registra para que la carencia tenga caso, no para aceptarlo.",
+      "inventory_write": false,
+      "evidence_scope": "Reference/representation example only, never an inventory attribution",
+      "capture_decision": "Do not mark configuration verified; scalar/member position coherence remains unproven.",
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false,
+      "expected_blocking": []
+    },
+    {
+      "id": "light_kit_member_inside_kit_members_undetectable",
+      "template": "light",
+      "kind": "membership_identity_pending",
+      "source_ids": [
+        "S-ENGINE"
+      ],
+      "values": {
+        "light_position": "Juego delantera + trasera",
+        "kit_members": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "k",
+              "values": {
+                "member_role": "otro",
+                "family": "light",
+                "quantity": "1",
+                "position": "Delantero"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "light_member_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "m",
+              "values": {
+                "member_id": "Delantera X",
+                "position": "Delantera"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_issues": [
+        {
+          "code": "required_missing",
+          "field": "light_mode_configurations",
+          "blocking": false
+        }
+      ],
+      "note": "Coincidir familia/posición no demuestra que sea la misma unidad física. Puede haber doble registro o dos unidades diferentes; resolver referencias de miembro, sin deducir identidad del nombre.",
+      "inventory_write": false,
+      "evidence_scope": "Reference/representation example only, never an inventory attribution",
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false,
+      "expected_blocking": []
+    },
+    {
+      "id": "light_inventory_ae_kit_pending",
+      "template": "light",
+      "kind": "unknown",
+      "source_ids": [
+        "S-INVENTARIO"
+      ],
+      "inventory_product": "Juego de luces delantera + trasera AE",
+      "values": {},
+      "expected_issues": [
+        {
+          "code": "required_missing",
+          "field": "light_position",
+          "blocking": false
+        },
+        {
+          "code": "required_missing",
+          "field": "light_member_configurations",
+          "blocking": false
+        },
+        {
+          "code": "required_missing",
+          "field": "light_mode_configurations",
+          "blocking": false
+        }
+      ],
+      "note": "El título guía investigación; ni light_position ni una cantidad se asignan desde este fixture al inventario.",
+      "inventory_write": false,
+      "evidence_scope": "Reference/representation example only, never an inventory attribution",
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false,
+      "expected_blocking": []
+    },
+    {
+      "id": "computer_garmin_540_sensors_transport_unknown",
+      "template": "cycle_computer",
+      "kind": "scoped_declarations_incomplete",
+      "source_ids": [
+        "GAR-SENSORS"
+      ],
+      "values": {
+        "sensor_support_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "s-0",
+              "values": {
+                "sensor_type": "Velocidad",
+                "transport": "Desconocido / sin confirmar",
+                "supported": true,
+                "scope": "Sensores de velocidad citados por Edge 540; modelo/perfil concreto pendiente"
+              },
+              "sources": [
+                "https://www8.garmin.com/manuals/webhelp/GUID-17DE938E-466A-4746-BDBF-7A6FC1B3A32C/EN-US/GUID-09801A97-361B-4675-AD3A-6ACE25854DB3.html"
+              ]
+            },
+            {
+              "id": "s-1",
+              "values": {
+                "sensor_type": "Cadencia",
+                "transport": "Desconocido / sin confirmar",
+                "supported": true,
+                "scope": "Sensores de cadencia citados por Edge 540; no presupone dispositivo combinado"
+              },
+              "sources": [
+                "https://www8.garmin.com/manuals/webhelp/GUID-17DE938E-466A-4746-BDBF-7A6FC1B3A32C/EN-US/GUID-09801A97-361B-4675-AD3A-6ACE25854DB3.html"
+              ]
+            },
+            {
+              "id": "s-2",
+              "values": {
+                "sensor_type": "Frecuencia cardiaca",
+                "transport": "Desconocido / sin confirmar",
+                "supported": true,
+                "scope": "Modelos de monitor cardiaco citados por el manual Edge 540; no todos los monitores"
+              },
+              "sources": [
+                "https://www8.garmin.com/manuals/webhelp/GUID-17DE938E-466A-4746-BDBF-7A6FC1B3A32C/EN-US/GUID-09801A97-361B-4675-AD3A-6ACE25854DB3.html"
+              ]
+            },
+            {
+              "id": "s-3",
+              "values": {
+                "sensor_type": "Potencia",
+                "transport": "Desconocido / sin confirmar",
+                "supported": true,
+                "scope": "Series Rally o Vector citadas por el manual; generación/perfil concretos pendientes"
+              },
+              "sources": [
+                "https://www8.garmin.com/manuals/webhelp/GUID-17DE938E-466A-4746-BDBF-7A6FC1B3A32C/EN-US/GUID-09801A97-361B-4675-AD3A-6ACE25854DB3.html"
+              ]
+            },
+            {
+              "id": "s-4",
+              "values": {
+                "sensor_type": "Radar",
+                "transport": "Desconocido / sin confirmar",
+                "supported": true,
+                "scope": "Familia Varia de radar trasero citada; modelo/perfil concreto pendiente"
+              },
+              "sources": [
+                "https://www8.garmin.com/manuals/webhelp/GUID-17DE938E-466A-4746-BDBF-7A6FC1B3A32C/EN-US/GUID-09801A97-361B-4675-AD3A-6ACE25854DB3.html"
+              ]
+            },
+            {
+              "id": "s-5",
+              "values": {
+                "sensor_type": "Luces",
+                "transport": "Desconocido / sin confirmar",
+                "supported": true,
+                "scope": "Familia Varia de luces citada; modelo/perfil concreto pendiente"
+              },
+              "sources": [
+                "https://www8.garmin.com/manuals/webhelp/GUID-17DE938E-466A-4746-BDBF-7A6FC1B3A32C/EN-US/GUID-09801A97-361B-4675-AD3A-6ACE25854DB3.html"
+              ]
+            },
+            {
+              "id": "s-6",
+              "values": {
+                "sensor_type": "Cambio electrónico",
+                "transport": "Desconocido / sin confirmar",
+                "supported": true,
+                "scope": "Cambios electrónicos y Shimano Di2 citados; modelo/perfil concreto pendiente"
+              },
+              "sources": [
+                "https://www8.garmin.com/manuals/webhelp/GUID-17DE938E-466A-4746-BDBF-7A6FC1B3A32C/EN-US/GUID-09801A97-361B-4675-AD3A-6ACE25854DB3.html"
+              ]
+            },
+            {
+              "id": "s-7",
+              "values": {
+                "sensor_type": "eBike",
+                "transport": "Desconocido / sin confirmar",
+                "supported": true,
+                "scope": "Sistemas eBike compatibles citados, incluido ejemplo Shimano; no todas las eBikes"
+              },
+              "sources": [
+                "https://www8.garmin.com/manuals/webhelp/GUID-17DE938E-466A-4746-BDBF-7A6FC1B3A32C/EN-US/GUID-09801A97-361B-4675-AD3A-6ACE25854DB3.html"
+              ]
+            },
+            {
+              "id": "s-8",
+              "values": {
+                "sensor_type": "Control remoto",
+                "transport": "Desconocido / sin confirmar",
+                "supported": true,
+                "scope": "Edge Remote citado; no todo control remoto"
+              },
+              "sources": [
+                "https://www8.garmin.com/manuals/webhelp/GUID-17DE938E-466A-4746-BDBF-7A6FC1B3A32C/EN-US/GUID-09801A97-361B-4675-AD3A-6ACE25854DB3.html"
+              ]
+            },
+            {
+              "id": "s-9",
+              "values": {
+                "sensor_type": "Control remoto",
+                "transport": "Desconocido / sin confirmar",
+                "supported": true,
+                "scope": "inReach Remote citado; funciones y modelos específicos pendientes"
+              },
+              "sources": [
+                "https://www8.garmin.com/manuals/webhelp/GUID-17DE938E-466A-4746-BDBF-7A6FC1B3A32C/EN-US/GUID-09801A97-361B-4675-AD3A-6ACE25854DB3.html"
+              ]
+            },
+            {
+              "id": "s-10",
+              "values": {
+                "sensor_type": "Rodillo inteligente",
+                "transport": "Desconocido / sin confirmar",
+                "supported": true,
+                "scope": "Rodillo inteligente compatible según manual; modelo/perfil concreto pendiente"
+              },
+              "sources": [
+                "https://www8.garmin.com/manuals/webhelp/GUID-17DE938E-466A-4746-BDBF-7A6FC1B3A32C/EN-US/GUID-09801A97-361B-4675-AD3A-6ACE25854DB3.html"
+              ]
+            }
+          ]
+        }
+      },
+      "expected_issues": [
+        {
+          "code": "required_missing",
+          "field": "positioning_source",
+          "blocking": false
+        },
+        {
+          "code": "required_missing",
+          "field": "speed_source",
+          "blocking": false
+        },
+        {
+          "code": "row_incomplete",
+          "field": "sensor_support_configurations",
+          "blocking": false
+        }
+      ],
+      "note": "Se conserva alcance OEM de función/serie y transporte desconocido. No afirmar compatibilidad con un modelo arbitrario por su tipo; no deducir Bluetooth+Wi-Fi de enlace telefónico ni GNSS multibanda de esta página de sensores.",
+      "inventory_write": false,
+      "evidence_scope": "Reference/representation example only, never an inventory attribution",
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false,
+      "expected_blocking": []
+    },
+    {
+      "id": "computer_sensor_pair_admitted_and_excluded",
+      "template": "cycle_computer",
+      "kind": "explicit_scope_conflict_pending",
+      "source_ids": [
+        "S-ENGINE"
+      ],
+      "values": {
+        "positioning_source": "GNSS",
+        "speed_source": "GNSS o sensor",
+        "sensor_support_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "a",
+              "values": {
+                "sensor_type": "Velocidad",
+                "transport": "ANT+",
+                "supported": true,
+                "scope": "Mismo modelo, generación, perfil y condición explícitos: contradicción sintética"
+              },
+              "sources": []
+            },
+            {
+              "id": "b",
+              "values": {
+                "sensor_type": "Velocidad",
+                "transport": "ANT+",
+                "supported": false,
+                "scope": "Mismo modelo, generación, perfil y condición explícitos: contradicción sintética"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_issues": [],
+      "note": "Un tipo/transporte repetido con modelos distintos sería válido. Este caso fija el mismo alcance explícito para probar un conflicto lógico; no afirma una incompatibilidad OEM.",
+      "inventory_write": false,
+      "evidence_scope": "Reference/representation example only, never an inventory attribution",
+      "capture_decision": "Reject canonical adoption of the conflicting same-scope claim; row IDs alone do not reject it.",
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false,
+      "expected_blocking": []
+    },
+    {
+      "id": "computer_wired_inventory_speed_source_without_rows_undetectable",
+      "template": "cycle_computer",
+      "kind": "contradictory_undetectable",
+      "source_ids": [
+        "S-INVENTARIO",
+        "S-ENGINE"
+      ],
+      "values": {
+        "positioning_source": "Sin posicionamiento",
+        "speed_source": "Sensor de rueda (imán / cable)",
+        "sensor_support_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "a",
+              "values": {
+                "sensor_type": "Velocidad",
+                "transport": "Cable",
+                "supported": false,
+                "scope": "Exclusión global explícita de velocidad por cable, caso sintético"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_issues": [],
+      "note": "No se atribuye al producto del título. Un rechazo de un sensor concreto no contradice velocidad por otro sensor; este contraejemplo declara exclusión global para que el conflicto sea real.",
+      "inventory_write": false,
+      "evidence_scope": "Reference/representation example only, never an inventory attribution",
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false,
+      "expected_blocking": []
+    },
+    {
+      "id": "charger_anker_a2667_ports_budget_profiles_unknown",
+      "template": "consumer_electronics",
+      "kind": "valid",
+      "source_ids": [
+        "S-ANKER-A2667"
+      ],
+      "values": {
+        "device_kind": "Cargador",
+        "rated_power_w": "65",
+        "ports_count": "3",
+        "spec_evidence_source": "Ficha de soporte Anker A2667, leída 2026-09-07",
+        "power_port_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "p-c1",
+              "values": {
+                "port_id": "USB-C 1",
+                "connector": "USB-C",
+                "direction": "Salida",
+                "max_power_w": "65"
+              },
+              "sources": [
+                "https://service.anker.com/product-description/a085g000004x2BVAAY?recordId=a085g000004x2BVAAY"
+              ]
+            },
+            {
+              "id": "p-c2",
+              "values": {
+                "port_id": "USB-C 2",
+                "connector": "USB-C",
+                "direction": "Salida",
+                "max_power_w": "65"
+              },
+              "sources": [
+                "https://service.anker.com/product-description/a085g000004x2BVAAY?recordId=a085g000004x2BVAAY"
+              ]
+            },
+            {
+              "id": "p-a",
+              "values": {
+                "port_id": "USB-A",
+                "connector": "USB-A",
+                "direction": "Salida",
+                "max_power_w": "22.5"
+              },
+              "sources": [
+                "https://service.anker.com/product-description/a085g000004x2BVAAY?recordId=a085g000004x2BVAAY"
+              ]
+            }
+          ]
+        },
+        "power_budget_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "b1",
+              "values": {
+                "configuration": "C1 + C2",
+                "port_id": "p-c1",
+                "power_w": "45"
+              },
+              "sources": [
+                "https://service.anker.com/product-description/a085g000004x2BVAAY?recordId=a085g000004x2BVAAY"
+              ]
+            },
+            {
+              "id": "b2",
+              "values": {
+                "configuration": "C1 + C2",
+                "port_id": "p-c2",
+                "power_w": "20"
+              },
+              "sources": [
+                "https://service.anker.com/product-description/a085g000004x2BVAAY?recordId=a085g000004x2BVAAY"
+              ]
+            },
+            {
+              "id": "b3",
+              "values": {
+                "configuration": "C2 + A",
+                "port_id": "p-c2",
+                "power_w": "12"
+              },
+              "sources": [
+                "https://service.anker.com/product-description/a085g000004x2BVAAY?recordId=a085g000004x2BVAAY"
+              ]
+            },
+            {
+              "id": "b4",
+              "values": {
+                "configuration": "C2 + A",
+                "port_id": "p-a",
+                "power_w": "12"
+              },
+              "sources": [
+                "https://service.anker.com/product-description/a085g000004x2BVAAY?recordId=a085g000004x2BVAAY"
+              ]
+            }
+          ]
+        },
+        "charging_protocol_claim": "PPS; PIQ 3.0; PIQ 2.0 (declaración global de la ficha A2667)"
+      },
+      "expected_issues": [],
+      "note": "Tres puertos y repartos de la ficha exacta. Protocolos se conservan globales: la fuente no los asigna a C1/C2/A. 65 W se interpreta sólo como potencia nominal declarada, nunca suma o máximo agregado calculado. Perfil V/A de salida desconocido en la página leída; input de red no es output.",
+      "inventory_write": false,
+      "evidence_scope": "Reference/representation example only, never an inventory attribution",
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false,
+      "expected_blocking": []
+    },
+    {
+      "id": "charger_budget_names_ghost_port",
+      "template": "consumer_electronics",
+      "kind": "contradictory",
+      "source_ids": [
+        "S-ENGINE"
+      ],
+      "values": {
+        "device_kind": "Cargador",
+        "power_port_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "p-c1",
+              "values": {
+                "port_id": "USB-C 1",
+                "connector": "USB-C",
+                "direction": "Salida"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "power_budget_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "b",
+              "values": {
+                "configuration": "C1 + C2",
+                "port_id": "p-c2",
+                "power_w": "20"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_issues": [
+        {
+          "code": "prerequisite",
+          "field": "power_budget_configurations",
+          "blocking": false
+        },
+        {
+          "code": "row_reference_unresolved",
+          "field": "power_budget_configurations",
+          "row_id": "b",
+          "blocking": true
+        }
+      ],
+      "note": "Ya implementado (vínculo por row.id).",
+      "inventory_write": false,
+      "evidence_scope": "Reference/representation example only, never an inventory attribution",
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false,
+      "expected_blocking": [
+        {
+          "code": "row_reference_unresolved",
+          "field": "power_budget_configurations"
+        }
+      ]
+    },
+    {
+      "id": "charger_baseus_65w_model_unknown",
+      "template": "consumer_electronics",
+      "kind": "unknown",
+      "source_ids": [
+        "S-INVENTARIO"
+      ],
+      "inventory_product": "Cargador 65W Baseus",
+      "values": {
+        "device_kind": "Cargador"
+      },
+      "expected_issues": [
+        {
+          "code": "required_missing",
+          "field": "power_port_configurations",
+          "blocking": false
+        }
+      ],
+      "note": "Tipo de dispositivo como escenario de investigación. El 65 W del título no se confirma como potencia total; no se copian puertos/protocolos Anker.",
+      "inventory_write": false,
+      "evidence_scope": "Reference/representation example only, never an inventory attribution",
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false,
+      "expected_blocking": []
+    },
+    {
+      "id": "card_literal_without_number",
+      "template": "consumer_electronics",
+      "kind": "unknown",
+      "source_ids": [
+        "S-ENGINE"
+      ],
+      "values": {
+        "device_kind": "Tarjeta de memoria",
+        "storage_capacity_label": "1TB",
+        "spec_evidence_source": "Envase: «1TB», leído en tienda"
+      },
+      "expected_issues": [],
+      "note": "Fixture de lectura literal sin normalización, no tarjeta real investigada. Si la etiqueta usa TB/GB conformes al SI, 1 TB son 1000 GB. 1024 GB no es equivalente; capacidad utilizable y etiquetada deben distinguirse.",
+      "inventory_write": false,
+      "evidence_scope": "Reference/representation example only, never an inventory attribution",
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false,
+      "expected_blocking": []
+    }
+  ],
+  "automatic_fill_authorized": false,
+  "mechanical_coverage_complete": false
+}

@@ -1,5 +1,4 @@
-insert into row_cardinality_document(doc) values ($cardinality_fixture$
-{
+insert into row_cardinality_document(doc) values ($cardinality_fixture${
   "schema_version": 1,
   "purpose": "Synthetic cardinality boundaries; one stable row ID is one declared occurrence. No mechanical/OEM/stock assertion.",
   "fields": {
@@ -1931,7 +1930,7 @@ insert into row_cardinality_document(doc) values ($cardinality_fixture$
           "description": "contents"
         },
         "row_coherence": {
-          "version": 3,
+          "version": 4,
           "links": [],
           "cardinalities": [
             {

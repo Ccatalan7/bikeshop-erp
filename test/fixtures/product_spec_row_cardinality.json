@@ -1930,7 +1930,7 @@
           "description": "contents"
         },
         "row_coherence": {
-          "version": 3,
+          "version": 4,
           "links": [],
           "cardinalities": [
             {

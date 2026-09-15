@@ -62,6 +62,16 @@ zero-subagent suspension is active. When the suspension is lifted, Claude
 subagents use `model: inherit` and start only from a parent session that already
 passed the Ultracode preflight.
 
+**Observed desktop mismatch 2026-09-08.** In the existing specification task,
+Settings → Claude Code visibly had **Dynamic workflows: off**, but the effort
+slider still displayed **Ultracode** at detent 5 and **Max** at detent 4. The
+rendered effort word therefore did not establish orchestration state in this
+desktop build. Do not enable workflows or start a replacement task to chase
+`xhigh`. Preserve the off switch and explicit no-subagent prompt; record both
+visible states and keep the owner's requested maximum effort. Do not describe
+the label as `xhigh` when the app actually displays `Ultracode`. Checking the
+wrong selector first cost approximately three minutes in this task.
+
 ## Product-design authority and optional Claude review
 
 The Claude desktop app exposes two separate windows in the macOS Dock:

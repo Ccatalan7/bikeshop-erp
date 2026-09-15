@@ -1,0 +1,285 @@
+{
+  "schema_version": 1,
+  "checked_at": "2026-09-14T19:24:04.744352+00:00",
+  "catalog_sha256": "e0cccea8cdea5835e47301d11060bc735454334a9bdf6e0666b9bb5b5d87b28d",
+  "manifest_sha256": "4e5c974221ba22a179844f15311ef1e3659d1c82e5f056273c71dc085d8ec2c3",
+  "report_sha256": "155e2fcedbe5ce32d6c790f6b900d2c09df2b07738af624550821b813d0c1355",
+  "totals": {
+    "products_evaluated": 868,
+    "products_with_blocking_issues": 0,
+    "products_with_pending_issues": 863,
+    "legacy_observations": 1056,
+    "unprojected_active_observations": 0
+  },
+  "families": {
+    "bearing": {
+      "products_evaluated": 9,
+      "products_with_blocking_issues": 0,
+      "products_with_pending_issues": 9,
+      "legacy_observations": 0,
+      "unprojected_active_observations": 0
+    },
+    "bottom_bracket": {
+      "products_evaluated": 34,
+      "products_with_blocking_issues": 0,
+      "products_with_pending_issues": 29,
+      "legacy_observations": 99,
+      "unprojected_active_observations": 0
+    },
+    "bottom_bracket_axle": {
+      "products_evaluated": 3,
+      "products_with_blocking_issues": 0,
+      "products_with_pending_issues": 3,
+      "legacy_observations": 3,
+      "unprojected_active_observations": 0
+    },
+    "bottom_bracket_bearing": {
+      "products_evaluated": 3,
+      "products_with_blocking_issues": 0,
+      "products_with_pending_issues": 3,
+      "legacy_observations": 3,
+      "unprojected_active_observations": 0
+    },
+    "bottom_bracket_cup": {
+      "products_evaluated": 8,
+      "products_with_blocking_issues": 0,
+      "products_with_pending_issues": 8,
+      "legacy_observations": 27,
+      "unprojected_active_observations": 0
+    },
+    "brake_caliper": {
+      "products_evaluated": 11,
+      "products_with_blocking_issues": 0,
+      "products_with_pending_issues": 11,
+      "legacy_observations": 0,
+      "unprojected_active_observations": 0
+    },
+    "brake_lever": {
+      "products_evaluated": 15,
+      "products_with_blocking_issues": 0,
+      "products_with_pending_issues": 15,
+      "legacy_observations": 0,
+      "unprojected_active_observations": 0
+    },
+    "brake_pad": {
+      "products_evaluated": 53,
+      "products_with_blocking_issues": 0,
+      "products_with_pending_issues": 53,
+      "legacy_observations": 4,
+      "unprojected_active_observations": 0
+    },
+    "hydraulic_disc_brake": {
+      "products_evaluated": 3,
+      "products_with_blocking_issues": 0,
+      "products_with_pending_issues": 3,
+      "legacy_observations": 4,
+      "unprojected_active_observations": 0
+    },
+    "mechanical_disc_brake": {
+      "products_evaluated": 0,
+      "products_with_blocking_issues": 0,
+      "products_with_pending_issues": 0,
+      "legacy_observations": 0,
+      "unprojected_active_observations": 0
+    },
+    "rim_brake": {
+      "products_evaluated": 24,
+      "products_with_blocking_issues": 0,
+      "products_with_pending_issues": 24,
+      "legacy_observations": 0,
+      "unprojected_active_observations": 0
+    },
+    "rotor": {
+      "products_evaluated": 18,
+      "products_with_blocking_issues": 0,
+      "products_with_pending_issues": 18,
+      "legacy_observations": 13,
+      "unprojected_active_observations": 0
+    },
+    "cassette": {
+      "products_evaluated": 31,
+      "products_with_blocking_issues": 0,
+      "products_with_pending_issues": 31,
+      "legacy_observations": 29,
+      "unprojected_active_observations": 0
+    },
+    "freewheel": {
+      "products_evaluated": 28,
+      "products_with_blocking_issues": 0,
+      "products_with_pending_issues": 28,
+      "legacy_observations": 20,
+      "unprojected_active_observations": 0
+    },
+    "fixed_cog": {
+      "products_evaluated": 0,
+      "products_with_blocking_issues": 0,
+      "products_with_pending_issues": 0,
+      "legacy_observations": 0,
+      "unprojected_active_observations": 0
+    },
+    "cassette_spacer": {
+      "products_evaluated": 3,
+      "products_with_blocking_issues": 0,
+      "products_with_pending_issues": 3,
+      "legacy_observations": 0,
+      "unprojected_active_observations": 0
+    },
+    "tire": {
+      "products_evaluated": 113,
+      "products_with_blocking_issues": 0,
+      "products_with_pending_issues": 113,
+      "legacy_observations": 199,
+      "unprojected_active_observations": 0
+    },
+    "tube": {
+      "products_evaluated": 137,
+      "products_with_blocking_issues": 0,
+      "products_with_pending_issues": 137,
+      "legacy_observations": 602,
+      "unprojected_active_observations": 0
+    },
+    "rim_strip": {
+      "products_evaluated": 3,
+      "products_with_blocking_issues": 0,
+      "products_with_pending_issues": 3,
+      "legacy_observations": 1,
+      "unprojected_active_observations": 0
+    },
+    "tubeless_consumable": {
+      "products_evaluated": 3,
+      "products_with_blocking_issues": 0,
+      "products_with_pending_issues": 3,
+      "legacy_observations": 0,
+      "unprojected_active_observations": 0
+    },
+    "tubeless_valve": {
+      "products_evaluated": 8,
+      "products_with_blocking_issues": 0,
+      "products_with_pending_issues": 8,
+      "legacy_observations": 6,
+      "unprojected_active_observations": 0
+    },
+    "spoke": {
+      "products_evaluated": 48,
+      "products_with_blocking_issues": 0,
+      "products_with_pending_issues": 48,
+      "legacy_observations": 19,
+      "unprojected_active_observations": 0
+    },
+    "headset": {
+      "products_evaluated": 15,
+      "products_with_blocking_issues": 0,
+      "products_with_pending_issues": 15,
+      "legacy_observations": 4,
+      "unprojected_active_observations": 0
+    },
+    "hub": {
+      "products_evaluated": 48,
+      "products_with_blocking_issues": 0,
+      "products_with_pending_issues": 48,
+      "legacy_observations": 7,
+      "unprojected_active_observations": 0
+    },
+    "rim": {
+      "products_evaluated": 41,
+      "products_with_blocking_issues": 0,
+      "products_with_pending_issues": 41,
+      "legacy_observations": 15,
+      "unprojected_active_observations": 0
+    },
+    "derailleur_hanger": {
+      "products_evaluated": 23,
+      "products_with_blocking_issues": 0,
+      "products_with_pending_issues": 23,
+      "legacy_observations": 0,
+      "unprojected_active_observations": 0
+    },
+    "derailleur_pulley": {
+      "products_evaluated": 7,
+      "products_with_blocking_issues": 0,
+      "products_with_pending_issues": 7,
+      "legacy_observations": 0,
+      "unprojected_active_observations": 0
+    },
+    "chain_guide": {
+      "products_evaluated": 3,
+      "products_with_blocking_issues": 0,
+      "products_with_pending_issues": 3,
+      "legacy_observations": 0,
+      "unprojected_active_observations": 0
+    },
+    "chain": {
+      "products_evaluated": 32,
+      "products_with_blocking_issues": 0,
+      "products_with_pending_issues": 32,
+      "legacy_observations": 1,
+      "unprojected_active_observations": 0
+    },
+    "chain_link": {
+      "products_evaluated": 9,
+      "products_with_blocking_issues": 0,
+      "products_with_pending_issues": 9,
+      "legacy_observations": 0,
+      "unprojected_active_observations": 0
+    },
+    "drivetrain_kit": {
+      "products_evaluated": 1,
+      "products_with_blocking_issues": 0,
+      "products_with_pending_issues": 1,
+      "legacy_observations": 0,
+      "unprojected_active_observations": 0
+    },
+    "shifter": {
+      "products_evaluated": 32,
+      "products_with_blocking_issues": 0,
+      "products_with_pending_issues": 32,
+      "legacy_observations": 0,
+      "unprojected_active_observations": 0
+    },
+    "rear_derailleur": {
+      "products_evaluated": 36,
+      "products_with_blocking_issues": 0,
+      "products_with_pending_issues": 36,
+      "legacy_observations": 0,
+      "unprojected_active_observations": 0
+    },
+    "front_derailleur": {
+      "products_evaluated": 15,
+      "products_with_blocking_issues": 0,
+      "products_with_pending_issues": 15,
+      "legacy_observations": 0,
+      "unprojected_active_observations": 0
+    },
+    "crankset": {
+      "products_evaluated": 28,
+      "products_with_blocking_issues": 0,
+      "products_with_pending_issues": 28,
+      "legacy_observations": 0,
+      "unprojected_active_observations": 0
+    },
+    "crank_arm": {
+      "products_evaluated": 7,
+      "products_with_blocking_issues": 0,
+      "products_with_pending_issues": 7,
+      "legacy_observations": 0,
+      "unprojected_active_observations": 0
+    },
+    "chainring": {
+      "products_evaluated": 16,
+      "products_with_blocking_issues": 0,
+      "products_with_pending_issues": 16,
+      "legacy_observations": 0,
+      "unprojected_active_observations": 0
+    }
+  },
+  "writes": 0,
+  "publication_authorized": false,
+  "fill_authorized": false,
+  "limitations": [
+    "Tests current assignments only; nominal candidates are not assigned.",
+    "Each product has its own MVCC preimage; publication needs fresh drift guards.",
+    "Source assertions and actual mechanical compatibility are not certified.",
+    "No legacy value is converted or deleted; retained history needs consumer review.",
+    "Simulated contract version is only a decoder input, not a publication revision."
+  ]
+}

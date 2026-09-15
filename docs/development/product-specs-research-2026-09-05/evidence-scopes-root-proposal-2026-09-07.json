@@ -1,0 +1,761 @@
+{
+  "schema_version": 1,
+  "base_sha256": "00041bb82cbddec1278a4d310d26747601518356abce5af4138da9bab7aa4b06",
+  "new_definitions": {
+    "tire_general_max_pressures": {
+      "key": "tire_general_max_pressures",
+      "origin": "new",
+      "id": null,
+      "label": "Máximos generales declarados para esta variante",
+      "data_type": "json",
+      "unit": null,
+      "allowed_values": [],
+      "validation_rules": {
+        "row_label": "Máximo declarado",
+        "rows_schema": {
+          "version": 1,
+          "columns": [
+            {
+              "key": "pressure_unit",
+              "label": "Unidad impresa",
+              "type": "token",
+              "required": true,
+              "allowed_values": [
+                "bar",
+                "psi",
+                "Desconocido / sin confirmar"
+              ]
+            },
+            {
+              "key": "max_pressure_value",
+              "label": "Presión máxima declarada",
+              "type": "decimal",
+              "validation": {
+                "positive": true
+              }
+            },
+            {
+              "key": "declared_scope",
+              "label": "Alcance declarado por el documento",
+              "type": "token",
+              "required": true,
+              "allowed_values": [
+                "Sin condición de llanta en el documento",
+                "El documento lo declara para todo montaje",
+                "Desconocido / sin confirmar"
+              ]
+            },
+            {
+              "key": "source_document",
+              "label": "Documento y edición",
+              "type": "text",
+              "required": true
+            },
+            {
+              "key": "source_url",
+              "label": "Fuente",
+              "type": "url"
+            }
+          ]
+        }
+      },
+      "used_by": []
+    }
+  },
+  "patches": [
+    {
+      "id": "PCB-P01",
+      "op": "replace_unpublished_rows_schema",
+      "template": null,
+      "key": "chainring_teeth_rows",
+      "before": {
+        "version": 1,
+        "columns": [
+          {
+            "key": "position",
+            "label": "Posición",
+            "type": "integer",
+            "required": true,
+            "validation": {
+              "positive": true
+            }
+          },
+          {
+            "key": "teeth",
+            "label": "Dientes",
+            "type": "integer",
+            "required": true,
+            "validation": {
+              "positive": true
+            }
+          }
+        ],
+        "unique_by": [
+          [
+            "position"
+          ]
+        ]
+      },
+      "after": {
+        "version": 1,
+        "columns": [
+          {
+            "key": "position",
+            "label": "Posición OEM numerada, si está declarada",
+            "type": "integer",
+            "required": false,
+            "validation": {
+              "positive": true
+            }
+          },
+          {
+            "key": "teeth",
+            "label": "Dientes",
+            "type": "integer",
+            "required": true,
+            "validation": {
+              "positive": true
+            }
+          }
+        ],
+        "unique_by": []
+      }
+    },
+    {
+      "id": "PCB-P02",
+      "op": "replace_field_contract",
+      "template": "crankset",
+      "key": "included_chainring_count",
+      "before": {
+        "helpers": "Número de platos físicamente suministrados con esta variante. Cero exige evidencia de que no se incluyen; sin confirmación queda Sin dato. No indica cuántos platos admite un montaje."
+      },
+      "after": {
+        "helpers": "Número de platos o coronas dentadas suministrados con esta variante. Dos coronas integradas en una pieza cuentan como dos platos; no es cantidad de unidades comerciales ni de posiciones simultáneas. Cero requiere exclusión documentada. Sin confirmación queda Sin dato; no se deriva de opciones, fotografías incompletas ni condiciones de pesaje."
+      }
+    },
+    {
+      "id": "PCB-P03",
+      "op": "replace_field_contract",
+      "template": "drivetrain_kit",
+      "key": "included_chainring_count",
+      "before": {
+        "helpers": "Número de platos físicamente suministrados con esta variante. Cero exige evidencia de que no se incluyen; sin confirmación queda Sin dato. No indica cuántos platos admite un montaje."
+      },
+      "after": {
+        "helpers": "Número de platos o coronas dentadas suministrados con esta variante. Dos coronas integradas en una pieza cuentan como dos platos; no es cantidad de unidades comerciales ni de posiciones simultáneas. Cero requiere exclusión documentada. Sin confirmación queda Sin dato; no se deriva de opciones, fotografías incompletas ni condiciones de pesaje."
+      }
+    },
+    {
+      "id": "PCB-P04",
+      "op": "replace_field_contract",
+      "template": "crankset",
+      "key": "chainring_teeth_rows",
+      "before": {
+        "labels": "Dientes y posición de los platos incluidos",
+        "helpers": "Describe sólo los platos suministrados. Las configuraciones compatibles u opcionales necesitan sus propias declaraciones; no se copian aquí."
+      },
+      "after": {
+        "labels": "Dientes de los platos incluidos",
+        "helpers": "Una fila por plato o corona dentada realmente suministrada, incluso si varias coronas forman una sola pieza. La posición de montaje es descriptiva y puede repetirse entre repuestos o alternativas incluidas. No conviertas opciones no suministradas ni dos lecturas de la misma corona en dos filas; las configuraciones compatibles se documentan aparte."
+      }
+    },
+    {
+      "id": "TPDU-01-general-max-pressures-table",
+      "op": "add_field",
+      "template": "tire",
+      "key": "tire_general_max_pressures",
+      "before": null,
+      "after": {
+        "field_entry": {
+          "key": "tire_general_max_pressures",
+          "section_key": "measurement",
+          "sort_order": 220,
+          "is_required": false,
+          "visibility_rules": [],
+          "option_rules": [],
+          "constraint_rules": []
+        },
+        "definition_used_by_append": "tire",
+        "roles": "measurement",
+        "semantic_roles": "measurement",
+        "allowed_when": {
+          "kind": "always"
+        },
+        "required_when": {
+          "kind": "never"
+        },
+        "prerequisites": [
+          "spec_evidence_source"
+        ],
+        "evidence_requirements": "package_or_label",
+        "helpers": "Máximos que el documento declara para esta variante sin condicionarlos a un perfil de llanta. Un máximo que la fuente sólo declara para montaje con gancho o sin gancho no es un máximo general: esa cifra vive en «Límites generales de montaje de esta variante de neumático». La unidad se copia tal como está impresa y no se convierte: Schwalbe imprime «max. Bar: 6 Bar» y «max. Psi: 85 PSI» para la misma cubierta, y 6 bar convertidos dan 87 psi. Dos documentos o dos ediciones que declaran cifras distintas son dos filas; ninguna se marca errónea."
+      },
+      "before_extensions_required": {},
+      "replaces": [
+        "WRFP-R3-max-pressure-unit",
+        "WRFP-R3-max-pressure-value"
+      ],
+      "scope": "Una tabla en vez de dos escalares. Cada fila es un máximo declarado con su valor decimal exacto, su unidad impresa, el alcance que le da el documento y la identidad del documento. Copia la gramática que root ya usa en pump_pressure_specifications: magnitud, valor, unidad y a qué corresponde, todo requerido, más contexto y fuente opcionales.",
+      "not_claimed": "ninguna equivalencia entre bar y psi. Dos filas del mismo documento con 6 bar y 85 psi son dos hechos impresos, no uno convertido. El orden de las columnas pone la unidad antes que el valor porque la unidad lo habilita.",
+      "no_unique_by": "Deliberado. 40 de los 57 esquemas de filas de la base tampoco lo llevan. Cualquier clave que junte valor y unidad borraría el segundo documento, y una que junte documento y unidad borraría una edición posterior que repite la cifra. No sé demostrar una clave que sólo funda duplicados ilegítimos, así que no la propongo."
+    },
+    {
+      "id": "TPDU-02-row-conditions-unit-gates-value",
+      "op": "replace_template_coherence",
+      "template": "tire",
+      "key": "row_conditions",
+      "before": {
+        "present": true,
+        "value": {
+          "version": 1,
+          "fields": {
+            "tire_rim_configurations": {
+              "allowed_when": {
+                "max_pressure": {
+                  "kind": "when",
+                  "rows": [
+                    [
+                      {
+                        "field": "pressure_unit",
+                        "operator": "in",
+                        "value_type": "token",
+                        "value": [
+                          "bar",
+                          "psi"
+                        ]
+                      }
+                    ]
+                  ]
+                }
+              },
+              "required_when": {
+                "max_pressure": {
+                  "kind": "when",
+                  "rows": [
+                    [
+                      {
+                        "field": "pressure_unit",
+                        "operator": "in",
+                        "value_type": "token",
+                        "value": [
+                          "bar",
+                          "psi"
+                        ]
+                      }
+                    ]
+                  ]
+                },
+                "pressure_unit": {
+                  "kind": "when",
+                  "rows": [
+                    [
+                      {
+                        "field": "rim_bead_profile",
+                        "operator": "eq",
+                        "value_type": "token",
+                        "value": "Sin gancho (hookless)"
+                      }
+                    ]
+                  ]
+                },
+                "rim_internal_width_max_mm": {
+                  "kind": "when",
+                  "rows": [
+                    [
+                      {
+                        "field": "rim_bead_profile",
+                        "operator": "eq",
+                        "value_type": "token",
+                        "value": "Sin gancho (hookless)"
+                      }
+                    ]
+                  ]
+                }
+              },
+              "allowed_options": {}
+            }
+          }
+        }
+      },
+      "after": {
+        "version": 1,
+        "fields": {
+          "tire_rim_configurations": {
+            "allowed_when": {
+              "max_pressure": {
+                "kind": "when",
+                "rows": [
+                  [
+                    {
+                      "field": "pressure_unit",
+                      "operator": "in",
+                      "value_type": "token",
+                      "value": [
+                        "bar",
+                        "psi"
+                      ]
+                    }
+                  ]
+                ]
+              }
+            },
+            "required_when": {
+              "max_pressure": {
+                "kind": "when",
+                "rows": [
+                  [
+                    {
+                      "field": "pressure_unit",
+                      "operator": "in",
+                      "value_type": "token",
+                      "value": [
+                        "bar",
+                        "psi"
+                      ]
+                    }
+                  ]
+                ]
+              },
+              "pressure_unit": {
+                "kind": "when",
+                "rows": [
+                  [
+                    {
+                      "field": "rim_bead_profile",
+                      "operator": "eq",
+                      "value_type": "token",
+                      "value": "Sin gancho (hookless)"
+                    }
+                  ]
+                ]
+              },
+              "rim_internal_width_max_mm": {
+                "kind": "when",
+                "rows": [
+                  [
+                    {
+                      "field": "rim_bead_profile",
+                      "operator": "eq",
+                      "value_type": "token",
+                      "value": "Sin gancho (hookless)"
+                    }
+                  ]
+                ]
+              }
+            },
+            "allowed_options": {}
+          },
+          "tire_general_max_pressures": {
+            "allowed_when": {
+              "max_pressure_value": {
+                "kind": "when",
+                "rows": [
+                  [
+                    {
+                      "field": "pressure_unit",
+                      "operator": "in",
+                      "value_type": "token",
+                      "value": [
+                        "bar",
+                        "psi"
+                      ]
+                    }
+                  ]
+                ]
+              }
+            },
+            "required_when": {
+              "max_pressure_value": {
+                "kind": "when",
+                "rows": [
+                  [
+                    {
+                      "field": "pressure_unit",
+                      "operator": "in",
+                      "value_type": "token",
+                      "value": [
+                        "bar",
+                        "psi"
+                      ]
+                    }
+                  ]
+                ]
+              }
+            },
+            "allowed_options": {}
+          }
+        }
+      },
+      "before_extensions_required": {},
+      "replaces": [],
+      "scope": "La unidad gobierna el valor dentro de su propia fila: con la unidad en bar o psi el valor es exigible y su falta queda pendiente, y sin unidad el número queda con requisitos por confirmar y la fila incompleta. Digo lo que no hace: no bloquea. Ver G3.",
+      "not_claimed": "que el bloque toque las configuraciones por aro: su entrada anterior se conserva palabra por palabra.",
+      "no_unique_by": null
+    },
+    {
+      "id": "TPDU-03-retire-max-pressure-psi",
+      "op": "replace_field_contract",
+      "template": "tire",
+      "key": "tire_max_pressure_psi",
+      "before": {
+        "roles": "declaration",
+        "semantic_roles": "declaration"
+      },
+      "after": {
+        "roles": "legacy",
+        "semantic_roles": "legacy"
+      },
+      "before_extensions_required": {},
+      "replaces": [
+        "WRFP-R3-retire-max-pressure-psi"
+      ],
+      "scope": "El escalar en psi fija la unidad por adelantado y sería un segundo dueño del mismo hecho que ahora vive en la tabla. Pasa a legado; validateProductSpecDraft descarta los valores de campos legacy antes de validar. Es la misma retirada del paquete anterior, con la preimagen de esta base.",
+      "not_claimed": "que se borre un dato. Ninguna condición del catálogo lo referencia como dependencia. Si prefieres integrar la tabla primero y retirarlo después, este parche se puede adjudicar por separado.",
+      "no_unique_by": null
+    }
+  ],
+  "source_reviews": {
+    "package_contents": "6d112ece1b1dc41c282dea5a3fa751ff779636f7871aaca36da571a8941d0fdd",
+    "dual_pressure": "d732586dd25b2f8d44ffed2a5fa2df6b33dd8648dbcd1a52f5d18cc25ca238a7"
+  },
+  "rebase": {
+    "patch_id": "TPDU-02-row-conditions-unit-gates-value",
+    "before": {
+      "id": "TPDU-02-row-conditions-unit-gates-value",
+      "op": "replace_template_coherence",
+      "template": "tire",
+      "key": "row_conditions",
+      "before": {
+        "present": true,
+        "value": {
+          "version": 1,
+          "fields": {
+            "tire_rim_configurations": {
+              "allowed_when": {
+                "max_pressure": {
+                  "kind": "when",
+                  "rows": [
+                    [
+                      {
+                        "field": "pressure_unit",
+                        "operator": "in",
+                        "value_type": "token",
+                        "value": [
+                          "bar",
+                          "psi"
+                        ]
+                      }
+                    ]
+                  ]
+                }
+              },
+              "required_when": {
+                "max_pressure": {
+                  "kind": "when",
+                  "rows": [
+                    [
+                      {
+                        "field": "pressure_unit",
+                        "operator": "in",
+                        "value_type": "token",
+                        "value": [
+                          "bar",
+                          "psi"
+                        ]
+                      }
+                    ]
+                  ]
+                }
+              },
+              "allowed_options": {}
+            }
+          }
+        }
+      },
+      "after": {
+        "version": 1,
+        "fields": {
+          "tire_rim_configurations": {
+            "allowed_when": {
+              "max_pressure": {
+                "kind": "when",
+                "rows": [
+                  [
+                    {
+                      "field": "pressure_unit",
+                      "operator": "in",
+                      "value_type": "token",
+                      "value": [
+                        "bar",
+                        "psi"
+                      ]
+                    }
+                  ]
+                ]
+              }
+            },
+            "required_when": {
+              "max_pressure": {
+                "kind": "when",
+                "rows": [
+                  [
+                    {
+                      "field": "pressure_unit",
+                      "operator": "in",
+                      "value_type": "token",
+                      "value": [
+                        "bar",
+                        "psi"
+                      ]
+                    }
+                  ]
+                ]
+              }
+            },
+            "allowed_options": {}
+          },
+          "tire_general_max_pressures": {
+            "allowed_when": {
+              "max_pressure_value": {
+                "kind": "when",
+                "rows": [
+                  [
+                    {
+                      "field": "pressure_unit",
+                      "operator": "in",
+                      "value_type": "token",
+                      "value": [
+                        "bar",
+                        "psi"
+                      ]
+                    }
+                  ]
+                ]
+              }
+            },
+            "required_when": {
+              "max_pressure_value": {
+                "kind": "when",
+                "rows": [
+                  [
+                    {
+                      "field": "pressure_unit",
+                      "operator": "in",
+                      "value_type": "token",
+                      "value": [
+                        "bar",
+                        "psi"
+                      ]
+                    }
+                  ]
+                ]
+              }
+            },
+            "allowed_options": {}
+          }
+        }
+      },
+      "before_extensions_required": {},
+      "replaces": [],
+      "scope": "La unidad gobierna el valor dentro de su propia fila: con la unidad en bar o psi el valor es exigible y su falta queda pendiente, y sin unidad el número queda con requisitos por confirmar y la fila incompleta. Digo lo que no hace: no bloquea. Ver G3.",
+      "not_claimed": "que el bloque toque las configuraciones por aro: su entrada anterior se conserva palabra por palabra.",
+      "no_unique_by": null
+    },
+    "after": {
+      "id": "TPDU-02-row-conditions-unit-gates-value",
+      "op": "replace_template_coherence",
+      "template": "tire",
+      "key": "row_conditions",
+      "before": {
+        "present": true,
+        "value": {
+          "version": 1,
+          "fields": {
+            "tire_rim_configurations": {
+              "allowed_when": {
+                "max_pressure": {
+                  "kind": "when",
+                  "rows": [
+                    [
+                      {
+                        "field": "pressure_unit",
+                        "operator": "in",
+                        "value_type": "token",
+                        "value": [
+                          "bar",
+                          "psi"
+                        ]
+                      }
+                    ]
+                  ]
+                }
+              },
+              "required_when": {
+                "max_pressure": {
+                  "kind": "when",
+                  "rows": [
+                    [
+                      {
+                        "field": "pressure_unit",
+                        "operator": "in",
+                        "value_type": "token",
+                        "value": [
+                          "bar",
+                          "psi"
+                        ]
+                      }
+                    ]
+                  ]
+                },
+                "pressure_unit": {
+                  "kind": "when",
+                  "rows": [
+                    [
+                      {
+                        "field": "rim_bead_profile",
+                        "operator": "eq",
+                        "value_type": "token",
+                        "value": "Sin gancho (hookless)"
+                      }
+                    ]
+                  ]
+                },
+                "rim_internal_width_max_mm": {
+                  "kind": "when",
+                  "rows": [
+                    [
+                      {
+                        "field": "rim_bead_profile",
+                        "operator": "eq",
+                        "value_type": "token",
+                        "value": "Sin gancho (hookless)"
+                      }
+                    ]
+                  ]
+                }
+              },
+              "allowed_options": {}
+            }
+          }
+        }
+      },
+      "after": {
+        "version": 1,
+        "fields": {
+          "tire_rim_configurations": {
+            "allowed_when": {
+              "max_pressure": {
+                "kind": "when",
+                "rows": [
+                  [
+                    {
+                      "field": "pressure_unit",
+                      "operator": "in",
+                      "value_type": "token",
+                      "value": [
+                        "bar",
+                        "psi"
+                      ]
+                    }
+                  ]
+                ]
+              }
+            },
+            "required_when": {
+              "max_pressure": {
+                "kind": "when",
+                "rows": [
+                  [
+                    {
+                      "field": "pressure_unit",
+                      "operator": "in",
+                      "value_type": "token",
+                      "value": [
+                        "bar",
+                        "psi"
+                      ]
+                    }
+                  ]
+                ]
+              },
+              "pressure_unit": {
+                "kind": "when",
+                "rows": [
+                  [
+                    {
+                      "field": "rim_bead_profile",
+                      "operator": "eq",
+                      "value_type": "token",
+                      "value": "Sin gancho (hookless)"
+                    }
+                  ]
+                ]
+              },
+              "rim_internal_width_max_mm": {
+                "kind": "when",
+                "rows": [
+                  [
+                    {
+                      "field": "rim_bead_profile",
+                      "operator": "eq",
+                      "value_type": "token",
+                      "value": "Sin gancho (hookless)"
+                    }
+                  ]
+                ]
+              }
+            },
+            "allowed_options": {}
+          },
+          "tire_general_max_pressures": {
+            "allowed_when": {
+              "max_pressure_value": {
+                "kind": "when",
+                "rows": [
+                  [
+                    {
+                      "field": "pressure_unit",
+                      "operator": "in",
+                      "value_type": "token",
+                      "value": [
+                        "bar",
+                        "psi"
+                      ]
+                    }
+                  ]
+                ]
+              }
+            },
+            "required_when": {
+              "max_pressure_value": {
+                "kind": "when",
+                "rows": [
+                  [
+                    {
+                      "field": "pressure_unit",
+                      "operator": "in",
+                      "value_type": "token",
+                      "value": [
+                        "bar",
+                        "psi"
+                      ]
+                    }
+                  ]
+                ]
+              }
+            },
+            "allowed_options": {}
+          }
+        }
+      },
+      "before_extensions_required": {},
+      "replaces": [],
+      "scope": "La unidad gobierna el valor dentro de su propia fila: con la unidad en bar o psi el valor es exigible y su falta queda pendiente, y sin unidad el número queda con requisitos por confirmar y la fila incompleta. Digo lo que no hace: no bloquea. Ver G3.",
+      "not_claimed": "que el bloque toque las configuraciones por aro: su entrada anterior se conserva palabra por palabra.",
+      "no_unique_by": null
+    },
+    "reason": "Preserve integrated R6 verbatim."
+  },
+  "mechanical_coverage_complete": false,
+  "automatic_fill_authorized": false
+}

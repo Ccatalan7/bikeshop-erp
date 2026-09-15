@@ -1,0 +1,2055 @@
+{
+  "schema_version": 2,
+  "templates": [
+    {
+      "id": "1ab4211c-bb7e-5904-837c-cc7baab153dd",
+      "key": "seatpost",
+      "name": "Tija",
+      "technical_family": "seatpost",
+      "form_contract": {
+        "roles": {
+          "color": "primary",
+          "material": "primary",
+          "seatpost_kind": "primary",
+          "dropper_actuation": "legacy",
+          "dropper_travel_mm": "measurement",
+          "seatpost_length_mm": "measurement",
+          "seatpost_offset_mm": "measurement",
+          "dropper_control_kind": "primary",
+          "dropper_remote_model": "contents",
+          "seatpost_diameter_mm": "measurement",
+          "spec_evidence_source": "declaration",
+          "dropper_cable_routing": "primary",
+          "shim_inner_diameter_mm": "legacy",
+          "shim_outer_diameter_mm": "legacy",
+          "dropper_remote_included": "contents",
+          "seatpost_min_exposed_mm": "measurement",
+          "seatpost_shim_length_mm": "legacy",
+          "seatpost_min_insertion_mm": "measurement",
+          "seatpost_dimension_document": "declaration",
+          "seatpost_bottom_clearance_mm": "measurement",
+          "dropper_control_configurations": "measurement",
+          "seatpost_saddle_configurations": "measurement"
+        },
+        "labels": {},
+        "helpers": {
+          "dropper_control_configurations": "Una fila es una declaración con modelo, alcance y fuentes propios; puede estar incompleta. No elegir mandos sólo por marca, accionamiento o nombre y no deducir el contenido de la caja.",
+          "seatpost_kind": "Tija completa. Un casquillo reductor tiene su propia ficha (Casquillo reductor de tija); las medidas de suplemento heredadas se conservan sólo como historial y no se editan aquí."
+        },
+        "allowed_when": {
+          "color": {
+            "kind": "always"
+          },
+          "material": {
+            "kind": "always"
+          },
+          "seatpost_kind": {
+            "kind": "always"
+          },
+          "dropper_actuation": {
+            "kind": "never"
+          },
+          "dropper_travel_mm": {
+            "kind": "when",
+            "rows": [
+              [
+                {
+                  "field": "seatpost_kind",
+                  "value": "Telescópica (dropper)",
+                  "operator": "eq",
+                  "value_type": "token"
+                }
+              ]
+            ]
+          },
+          "seatpost_length_mm": {
+            "kind": "when",
+            "rows": [
+              [
+                {
+                  "field": "seatpost_kind",
+                  "value": [
+                    "Rígida",
+                    "Con suspensión",
+                    "Telescópica (dropper)",
+                    "Otro"
+                  ],
+                  "operator": "in",
+                  "value_type": "token"
+                }
+              ]
+            ]
+          },
+          "seatpost_offset_mm": {
+            "kind": "when",
+            "rows": [
+              [
+                {
+                  "field": "seatpost_kind",
+                  "value": [
+                    "Rígida",
+                    "Con suspensión",
+                    "Telescópica (dropper)",
+                    "Otro"
+                  ],
+                  "operator": "in",
+                  "value_type": "token"
+                }
+              ]
+            ]
+          },
+          "dropper_control_kind": {
+            "kind": "when",
+            "rows": [
+              [
+                {
+                  "field": "seatpost_kind",
+                  "value": "Telescópica (dropper)",
+                  "operator": "eq",
+                  "value_type": "token"
+                }
+              ]
+            ]
+          },
+          "dropper_remote_model": {
+            "kind": "when",
+            "rows": [
+              [
+                {
+                  "field": "seatpost_kind",
+                  "value": "Telescópica (dropper)",
+                  "operator": "eq",
+                  "value_type": "token"
+                },
+                {
+                  "field": "dropper_remote_included",
+                  "value": true,
+                  "operator": "eq",
+                  "value_type": "boolean"
+                }
+              ]
+            ]
+          },
+          "seatpost_diameter_mm": {
+            "kind": "when",
+            "rows": [
+              [
+                {
+                  "field": "seatpost_kind",
+                  "value": [
+                    "Rígida",
+                    "Con suspensión",
+                    "Telescópica (dropper)",
+                    "Otro"
+                  ],
+                  "operator": "in",
+                  "value_type": "token"
+                }
+              ]
+            ]
+          },
+          "spec_evidence_source": {
+            "kind": "always"
+          },
+          "dropper_cable_routing": {
+            "kind": "when",
+            "rows": [
+              [
+                {
+                  "field": "seatpost_kind",
+                  "value": "Telescópica (dropper)",
+                  "operator": "eq",
+                  "value_type": "token"
+                },
+                {
+                  "field": "dropper_control_kind",
+                  "value": [
+                    "Mecánico por cable",
+                    "Hidráulico",
+                    "Otro"
+                  ],
+                  "operator": "in",
+                  "value_type": "token"
+                }
+              ]
+            ]
+          },
+          "shim_inner_diameter_mm": {
+            "kind": "never"
+          },
+          "shim_outer_diameter_mm": {
+            "kind": "never"
+          },
+          "dropper_remote_included": {
+            "kind": "when",
+            "rows": [
+              [
+                {
+                  "field": "seatpost_kind",
+                  "value": "Telescópica (dropper)",
+                  "operator": "eq",
+                  "value_type": "token"
+                }
+              ]
+            ]
+          },
+          "seatpost_min_exposed_mm": {
+            "kind": "when",
+            "rows": [
+              [
+                {
+                  "field": "seatpost_kind",
+                  "value": "Telescópica (dropper)",
+                  "operator": "eq",
+                  "value_type": "token"
+                }
+              ]
+            ]
+          },
+          "seatpost_shim_length_mm": {
+            "kind": "never"
+          },
+          "seatpost_min_insertion_mm": {
+            "kind": "when",
+            "rows": [
+              [
+                {
+                  "field": "seatpost_kind",
+                  "value": [
+                    "Rígida",
+                    "Con suspensión",
+                    "Telescópica (dropper)",
+                    "Otro"
+                  ],
+                  "operator": "in",
+                  "value_type": "token"
+                }
+              ]
+            ]
+          },
+          "seatpost_dimension_document": {
+            "kind": "when",
+            "rows": [
+              [
+                {
+                  "field": "seatpost_kind",
+                  "value": [
+                    "Rígida",
+                    "Con suspensión",
+                    "Telescópica (dropper)",
+                    "Otro"
+                  ],
+                  "operator": "in",
+                  "value_type": "token"
+                }
+              ]
+            ]
+          },
+          "seatpost_bottom_clearance_mm": {
+            "kind": "when",
+            "rows": [
+              [
+                {
+                  "field": "seatpost_kind",
+                  "value": [
+                    "Rígida",
+                    "Con suspensión",
+                    "Telescópica (dropper)",
+                    "Otro"
+                  ],
+                  "operator": "in",
+                  "value_type": "token"
+                }
+              ]
+            ]
+          },
+          "dropper_control_configurations": {
+            "kind": "when",
+            "rows": [
+              [
+                {
+                  "field": "seatpost_kind",
+                  "value": "Telescópica (dropper)",
+                  "operator": "eq",
+                  "value_type": "token"
+                }
+              ]
+            ]
+          },
+          "seatpost_saddle_configurations": {
+            "kind": "when",
+            "rows": [
+              [
+                {
+                  "field": "seatpost_kind",
+                  "value": [
+                    "Rígida",
+                    "Con suspensión",
+                    "Telescópica (dropper)",
+                    "Otro"
+                  ],
+                  "operator": "in",
+                  "value_type": "token"
+                }
+              ]
+            ]
+          }
+        },
+        "prerequisites": {
+          "seatpost_length_mm": [
+            "seatpost_dimension_document"
+          ],
+          "seatpost_min_exposed_mm": [
+            "seatpost_dimension_document"
+          ],
+          "seatpost_min_insertion_mm": [
+            "seatpost_dimension_document"
+          ],
+          "seatpost_bottom_clearance_mm": [
+            "seatpost_dimension_document"
+          ],
+          "shim_inner_diameter_mm": [],
+          "shim_outer_diameter_mm": [],
+          "seatpost_shim_length_mm": []
+        },
+        "required_when": {
+          "color": {
+            "kind": "never"
+          },
+          "material": {
+            "kind": "never"
+          },
+          "seatpost_kind": {
+            "kind": "always"
+          },
+          "dropper_actuation": {
+            "kind": "never"
+          },
+          "dropper_travel_mm": {
+            "kind": "never"
+          },
+          "seatpost_length_mm": {
+            "kind": "never"
+          },
+          "seatpost_offset_mm": {
+            "kind": "never"
+          },
+          "dropper_control_kind": {
+            "kind": "when",
+            "rows": [
+              [
+                {
+                  "field": "seatpost_kind",
+                  "value": "Telescópica (dropper)",
+                  "operator": "eq",
+                  "value_type": "token"
+                }
+              ]
+            ]
+          },
+          "dropper_remote_model": {
+            "kind": "when",
+            "rows": [
+              [
+                {
+                  "field": "seatpost_kind",
+                  "value": "Telescópica (dropper)",
+                  "operator": "eq",
+                  "value_type": "token"
+                },
+                {
+                  "field": "dropper_remote_included",
+                  "value": true,
+                  "operator": "eq",
+                  "value_type": "boolean"
+                }
+              ]
+            ]
+          },
+          "seatpost_diameter_mm": {
+            "kind": "when",
+            "rows": [
+              [
+                {
+                  "field": "seatpost_kind",
+                  "value": [
+                    "Rígida",
+                    "Con suspensión",
+                    "Telescópica (dropper)",
+                    "Otro"
+                  ],
+                  "operator": "in",
+                  "value_type": "token"
+                }
+              ]
+            ]
+          },
+          "spec_evidence_source": {
+            "kind": "never"
+          },
+          "dropper_cable_routing": {
+            "kind": "never"
+          },
+          "shim_inner_diameter_mm": {
+            "kind": "never"
+          },
+          "shim_outer_diameter_mm": {
+            "kind": "never"
+          },
+          "dropper_remote_included": {
+            "kind": "never"
+          },
+          "seatpost_min_exposed_mm": {
+            "kind": "never"
+          },
+          "seatpost_shim_length_mm": {
+            "kind": "never"
+          },
+          "seatpost_min_insertion_mm": {
+            "kind": "never"
+          },
+          "seatpost_dimension_document": {
+            "kind": "never"
+          },
+          "seatpost_bottom_clearance_mm": {
+            "kind": "never"
+          },
+          "dropper_control_configurations": {
+            "kind": "never"
+          },
+          "seatpost_saddle_configurations": {
+            "kind": "when",
+            "rows": [
+              [
+                {
+                  "field": "seatpost_kind",
+                  "value": [
+                    "Rígida",
+                    "Con suspensión",
+                    "Telescópica (dropper)",
+                    "Otro"
+                  ],
+                  "operator": "in",
+                  "value_type": "token"
+                }
+              ]
+            ]
+          }
+        },
+        "rules_version": 2,
+        "row_conditions": {
+          "fields": {
+            "seatpost_saddle_configurations": {
+              "value_when": {
+                "clamp_included": [
+                  {
+                    "when": {
+                      "kind": "when",
+                      "rows": [
+                        [
+                          {
+                            "field": "configuration_state",
+                            "value": "Con kit incluido",
+                            "operator": "eq",
+                            "value_type": "token"
+                          }
+                        ]
+                      ]
+                    },
+                    "expected": {
+                      "value": true,
+                      "value_type": "boolean"
+                    }
+                  }
+                ]
+              },
+              "required_when": {
+                "clamp_part": {
+                  "kind": "when",
+                  "rows": [
+                    [
+                      {
+                        "field": "configuration_state",
+                        "value": [
+                          "Con kit incluido",
+                          "Con kit opcional"
+                        ],
+                        "operator": "in",
+                        "value_type": "token"
+                      }
+                    ]
+                  ]
+                },
+                "mount_system": {
+                  "kind": "when",
+                  "rows": [
+                    [
+                      {
+                        "field": "rail_geometry",
+                        "value": [
+                          "Sistema propietario",
+                          "Otro"
+                        ],
+                        "operator": "in",
+                        "value_type": "token"
+                      }
+                    ]
+                  ]
+                }
+              }
+            }
+          },
+          "version": 1
+        },
+        "semantic_roles": {
+          "color": "intrinsic",
+          "material": "intrinsic",
+          "seatpost_kind": "intrinsic",
+          "dropper_actuation": "legacy",
+          "dropper_travel_mm": "measurement",
+          "seatpost_length_mm": "measurement",
+          "seatpost_offset_mm": "measurement",
+          "dropper_control_kind": "intrinsic",
+          "dropper_remote_model": "contents",
+          "seatpost_diameter_mm": "compatibility",
+          "spec_evidence_source": "evidence",
+          "dropper_cable_routing": "compatibility",
+          "shim_inner_diameter_mm": "legacy",
+          "shim_outer_diameter_mm": "legacy",
+          "dropper_remote_included": "contents",
+          "seatpost_min_exposed_mm": "compatibility",
+          "seatpost_shim_length_mm": "legacy",
+          "seatpost_min_insertion_mm": "compatibility",
+          "seatpost_dimension_document": "evidence",
+          "seatpost_bottom_clearance_mm": "compatibility",
+          "dropper_control_configurations": "compatibility",
+          "seatpost_saddle_configurations": "compatibility"
+        },
+        "allowed_options": {
+          "material": [
+            "Aluminio",
+            "Acero",
+            "Carbono",
+            "Otro"
+          ],
+          "seatpost_kind": [
+            "Rígida",
+            "Con suspensión",
+            "Telescópica (dropper)",
+            "Otro"
+          ]
+        },
+        "evidence_requirements": {
+          "color": "commercial_attribute",
+          "material": "package_or_label",
+          "seatpost_kind": "package_or_label",
+          "dropper_actuation": "oem_spec",
+          "dropper_travel_mm": "oem_spec",
+          "seatpost_length_mm": "package_or_label",
+          "seatpost_offset_mm": "oem_or_package",
+          "dropper_control_kind": "oem_or_package",
+          "dropper_remote_model": "oem_or_package",
+          "seatpost_diameter_mm": "package_or_label",
+          "spec_evidence_source": "oem_or_package",
+          "dropper_cable_routing": "oem_or_package",
+          "shim_inner_diameter_mm": "package_or_label",
+          "shim_outer_diameter_mm": "package_or_label",
+          "dropper_remote_included": "package_or_label",
+          "seatpost_min_exposed_mm": "oem_spec",
+          "seatpost_shim_length_mm": "oem_or_package",
+          "seatpost_min_insertion_mm": "oem_spec",
+          "seatpost_dimension_document": "oem_spec",
+          "seatpost_bottom_clearance_mm": "oem_spec",
+          "dropper_control_configurations": "oem_spec",
+          "seatpost_saddle_configurations": "oem_or_package"
+        }
+      },
+      "fields": [
+        {
+          "key": "seatpost_kind",
+          "section_key": "primary",
+          "sort_order": 0,
+          "is_required": false,
+          "visibility_rules": [],
+          "option_rules": [],
+          "constraint_rules": [],
+          "helper_text": null,
+          "default_value_json": null
+        },
+        {
+          "key": "seatpost_diameter_mm",
+          "section_key": "measurement",
+          "sort_order": 10,
+          "is_required": false,
+          "visibility_rules": [],
+          "option_rules": [],
+          "constraint_rules": [],
+          "helper_text": null,
+          "default_value_json": null
+        },
+        {
+          "key": "shim_outer_diameter_mm",
+          "section_key": "legacy",
+          "sort_order": 20,
+          "is_required": false,
+          "visibility_rules": [],
+          "option_rules": [],
+          "constraint_rules": [],
+          "helper_text": null,
+          "default_value_json": null
+        },
+        {
+          "key": "shim_inner_diameter_mm",
+          "section_key": "legacy",
+          "sort_order": 30,
+          "is_required": false,
+          "visibility_rules": [],
+          "option_rules": [],
+          "constraint_rules": [],
+          "helper_text": null,
+          "default_value_json": null
+        },
+        {
+          "key": "seatpost_length_mm",
+          "section_key": "measurement",
+          "sort_order": 40,
+          "is_required": false,
+          "visibility_rules": [],
+          "option_rules": [],
+          "constraint_rules": [],
+          "helper_text": null,
+          "default_value_json": null
+        },
+        {
+          "key": "seatpost_offset_mm",
+          "section_key": "measurement",
+          "sort_order": 50,
+          "is_required": false,
+          "visibility_rules": [],
+          "option_rules": [],
+          "constraint_rules": [],
+          "helper_text": null,
+          "default_value_json": null
+        },
+        {
+          "key": "seatpost_saddle_configurations",
+          "section_key": "measurement",
+          "sort_order": 60,
+          "is_required": false,
+          "visibility_rules": [],
+          "option_rules": [],
+          "constraint_rules": [],
+          "helper_text": null,
+          "default_value_json": null
+        },
+        {
+          "key": "dropper_travel_mm",
+          "section_key": "measurement",
+          "sort_order": 70,
+          "is_required": false,
+          "visibility_rules": [],
+          "option_rules": [],
+          "constraint_rules": [],
+          "helper_text": null,
+          "default_value_json": null
+        },
+        {
+          "key": "dropper_actuation",
+          "section_key": "legacy",
+          "sort_order": 80,
+          "is_required": false,
+          "visibility_rules": [],
+          "option_rules": [],
+          "constraint_rules": [],
+          "helper_text": null,
+          "default_value_json": null
+        },
+        {
+          "key": "material",
+          "section_key": "primary",
+          "sort_order": 90,
+          "is_required": false,
+          "visibility_rules": [],
+          "option_rules": [],
+          "constraint_rules": [],
+          "helper_text": null,
+          "default_value_json": null
+        },
+        {
+          "key": "color",
+          "section_key": "primary",
+          "sort_order": 100,
+          "is_required": false,
+          "visibility_rules": [],
+          "option_rules": [],
+          "constraint_rules": [],
+          "helper_text": null,
+          "default_value_json": null
+        },
+        {
+          "key": "seatpost_shim_length_mm",
+          "section_key": "legacy",
+          "sort_order": 110,
+          "is_required": false,
+          "visibility_rules": [],
+          "option_rules": [],
+          "constraint_rules": [],
+          "helper_text": null,
+          "default_value_json": null
+        },
+        {
+          "key": "spec_evidence_source",
+          "section_key": "declaration",
+          "sort_order": 120,
+          "is_required": false,
+          "visibility_rules": [],
+          "option_rules": [],
+          "constraint_rules": [],
+          "helper_text": null,
+          "default_value_json": null
+        },
+        {
+          "key": "dropper_control_kind",
+          "section_key": "primary",
+          "sort_order": 130,
+          "is_required": false,
+          "visibility_rules": [],
+          "option_rules": [],
+          "constraint_rules": [],
+          "helper_text": null,
+          "default_value_json": null
+        },
+        {
+          "key": "dropper_cable_routing",
+          "section_key": "primary",
+          "sort_order": 140,
+          "is_required": false,
+          "visibility_rules": [],
+          "option_rules": [],
+          "constraint_rules": [],
+          "helper_text": null,
+          "default_value_json": null
+        },
+        {
+          "key": "dropper_remote_included",
+          "section_key": "contents",
+          "sort_order": 150,
+          "is_required": false,
+          "visibility_rules": [],
+          "option_rules": [],
+          "constraint_rules": [],
+          "helper_text": null,
+          "default_value_json": null
+        },
+        {
+          "key": "dropper_remote_model",
+          "section_key": "contents",
+          "sort_order": 160,
+          "is_required": false,
+          "visibility_rules": [],
+          "option_rules": [],
+          "constraint_rules": [],
+          "helper_text": null,
+          "default_value_json": null
+        },
+        {
+          "key": "seatpost_min_insertion_mm",
+          "section_key": "measurement",
+          "sort_order": 170,
+          "is_required": false,
+          "visibility_rules": [],
+          "option_rules": [],
+          "constraint_rules": [],
+          "helper_text": null,
+          "default_value_json": null
+        },
+        {
+          "key": "seatpost_min_exposed_mm",
+          "section_key": "measurement",
+          "sort_order": 180,
+          "is_required": false,
+          "visibility_rules": [],
+          "option_rules": [],
+          "constraint_rules": [],
+          "helper_text": null,
+          "default_value_json": null
+        },
+        {
+          "key": "seatpost_bottom_clearance_mm",
+          "section_key": "measurement",
+          "sort_order": 190,
+          "is_required": false,
+          "visibility_rules": [],
+          "option_rules": [],
+          "constraint_rules": [],
+          "helper_text": null,
+          "default_value_json": null
+        },
+        {
+          "key": "seatpost_dimension_document",
+          "section_key": "declaration",
+          "sort_order": 200,
+          "is_required": false,
+          "visibility_rules": [],
+          "option_rules": [],
+          "constraint_rules": [],
+          "helper_text": null,
+          "default_value_json": null
+        },
+        {
+          "key": "dropper_control_configurations",
+          "section_key": "measurement",
+          "sort_order": 210,
+          "is_required": false,
+          "visibility_rules": [],
+          "option_rules": [],
+          "constraint_rules": [],
+          "helper_text": null,
+          "default_value_json": null
+        }
+      ]
+    }
+  ],
+  "definitions": {
+    "seatpost_kind": {
+      "id": "18fe5637-8a8f-5ad7-a41e-5a5abc156732",
+      "key": "seatpost_kind",
+      "unit": null,
+      "label": "Tipo de tija",
+      "options": [
+        {
+          "id": "0f8150a3-b909-5aea-a05d-788e7dfa5f38",
+          "code": "catalog_2afd6840cf035b91e80db8c1107df726",
+          "label": "Rígida",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-09-07T23:48:35.383021+00:00",
+          "sort_order": 0,
+          "updated_at": "2026-09-07T23:48:35.383021+00:00",
+          "spec_definition_id": "18fe5637-8a8f-5ad7-a41e-5a5abc156732"
+        },
+        {
+          "id": "685a68ff-8d76-5488-86cb-07a206473eeb",
+          "code": "catalog_c2295235a535ea3e85b7a0e5ab85afb0",
+          "label": "Otro",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-09-07T23:48:35.383021+00:00",
+          "sort_order": 4,
+          "updated_at": "2026-09-07T23:48:35.383021+00:00",
+          "spec_definition_id": "18fe5637-8a8f-5ad7-a41e-5a5abc156732"
+        },
+        {
+          "id": "7ea5f62a-77e0-57b6-aed6-8eceb3ef5381",
+          "code": "catalog_ff3e12f23af59041d6258aae9805cc64",
+          "label": "Suplemento (shim)",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-09-07T23:48:35.383021+00:00",
+          "sort_order": 3,
+          "updated_at": "2026-09-07T23:48:35.383021+00:00",
+          "spec_definition_id": "18fe5637-8a8f-5ad7-a41e-5a5abc156732"
+        },
+        {
+          "id": "8e314307-66a7-54ed-8b24-09bee863b34b",
+          "code": "catalog_b173e2500558d0ff5ab66b6a7cbf0f19",
+          "label": "Con suspensión",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-09-07T23:48:35.383021+00:00",
+          "sort_order": 1,
+          "updated_at": "2026-09-07T23:48:35.383021+00:00",
+          "spec_definition_id": "18fe5637-8a8f-5ad7-a41e-5a5abc156732"
+        },
+        {
+          "id": "d54319c5-4a06-5a88-a4bb-dc39ae546c08",
+          "code": "catalog_41e4740a1bd20aa76c5332cb2dc11d54",
+          "label": "Telescópica (dropper)",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-09-07T23:48:35.383021+00:00",
+          "sort_order": 2,
+          "updated_at": "2026-09-07T23:48:35.383021+00:00",
+          "spec_definition_id": "18fe5637-8a8f-5ad7-a41e-5a5abc156732"
+        }
+      ],
+      "data_type": "single_select",
+      "tenant_id": null,
+      "created_at": "2026-09-07T23:48:35.383021+00:00",
+      "group_name": null,
+      "sort_order": 0,
+      "updated_at": "2026-09-07T23:48:35.383021+00:00",
+      "description": null,
+      "is_filterable": false,
+      "allowed_values": [
+        "Rígida",
+        "Con suspensión",
+        "Telescópica (dropper)",
+        "Suplemento (shim)",
+        "Otro"
+      ],
+      "validation_rules": {},
+      "is_customer_visible": false,
+      "is_mechanic_visible": true,
+      "is_required_by_default": false,
+      "is_compatibility_relevant": false,
+      "origin": "existing",
+      "used_by": [
+        "seatpost"
+      ]
+    },
+    "seatpost_diameter_mm": {
+      "id": "7889a6e1-2f6d-53ef-bdaf-edc7edf41e39",
+      "key": "seatpost_diameter_mm",
+      "unit": "mm",
+      "label": "Diámetro de la tija",
+      "options": [],
+      "data_type": "number",
+      "tenant_id": null,
+      "created_at": "2026-09-07T23:48:35.383021+00:00",
+      "group_name": null,
+      "sort_order": 0,
+      "updated_at": "2026-09-07T23:48:35.383021+00:00",
+      "description": null,
+      "is_filterable": false,
+      "allowed_values": [],
+      "validation_rules": {
+        "positive": true
+      },
+      "is_customer_visible": false,
+      "is_mechanic_visible": true,
+      "is_required_by_default": false,
+      "is_compatibility_relevant": false,
+      "origin": "existing",
+      "used_by": [
+        "seatpost"
+      ]
+    },
+    "shim_outer_diameter_mm": {
+      "id": "f091e753-d9f4-5b85-9f1b-2556821054ec",
+      "key": "shim_outer_diameter_mm",
+      "unit": "mm",
+      "label": "Diámetro exterior del suplemento",
+      "options": [],
+      "data_type": "number",
+      "tenant_id": null,
+      "created_at": "2026-09-07T23:48:35.383021+00:00",
+      "group_name": null,
+      "sort_order": 0,
+      "updated_at": "2026-09-07T23:48:35.383021+00:00",
+      "description": null,
+      "is_filterable": false,
+      "allowed_values": [],
+      "validation_rules": {
+        "positive": true
+      },
+      "is_customer_visible": false,
+      "is_mechanic_visible": true,
+      "is_required_by_default": false,
+      "is_compatibility_relevant": false,
+      "origin": "existing",
+      "used_by": [
+        "seatpost"
+      ]
+    },
+    "shim_inner_diameter_mm": {
+      "id": "fa6ff71e-7b9b-5415-8669-a0dfe586d6c8",
+      "key": "shim_inner_diameter_mm",
+      "unit": "mm",
+      "label": "Diámetro interior del suplemento",
+      "options": [],
+      "data_type": "number",
+      "tenant_id": null,
+      "created_at": "2026-09-07T23:48:35.383021+00:00",
+      "group_name": null,
+      "sort_order": 0,
+      "updated_at": "2026-09-07T23:48:35.383021+00:00",
+      "description": null,
+      "is_filterable": false,
+      "allowed_values": [],
+      "validation_rules": {
+        "positive": true
+      },
+      "is_customer_visible": false,
+      "is_mechanic_visible": true,
+      "is_required_by_default": false,
+      "is_compatibility_relevant": false,
+      "origin": "existing",
+      "used_by": [
+        "seatpost"
+      ]
+    },
+    "seatpost_length_mm": {
+      "id": "2a5c443e-fd2a-518e-8e56-7cb54f2126e8",
+      "key": "seatpost_length_mm",
+      "unit": "mm",
+      "label": "Largo declarado de la tija (referencia OEM)",
+      "options": [],
+      "data_type": "number",
+      "tenant_id": null,
+      "created_at": "2026-09-07T23:48:35.383021+00:00",
+      "group_name": null,
+      "sort_order": 0,
+      "updated_at": "2026-09-07T23:48:35.383021+00:00",
+      "description": null,
+      "is_filterable": false,
+      "allowed_values": [],
+      "validation_rules": {
+        "positive": true
+      },
+      "is_customer_visible": false,
+      "is_mechanic_visible": true,
+      "is_required_by_default": false,
+      "is_compatibility_relevant": false,
+      "origin": "existing",
+      "used_by": [
+        "seatpost"
+      ]
+    },
+    "seatpost_offset_mm": {
+      "id": "df6e0ef6-ca56-5e93-b64b-2774aa157c26",
+      "key": "seatpost_offset_mm",
+      "unit": "mm",
+      "label": "Retroceso de la tija",
+      "options": [],
+      "data_type": "number",
+      "tenant_id": null,
+      "created_at": "2026-09-07T23:48:35.383021+00:00",
+      "group_name": null,
+      "sort_order": 0,
+      "updated_at": "2026-09-07T23:48:35.383021+00:00",
+      "description": null,
+      "is_filterable": false,
+      "allowed_values": [],
+      "validation_rules": {},
+      "is_customer_visible": false,
+      "is_mechanic_visible": true,
+      "is_required_by_default": false,
+      "is_compatibility_relevant": false,
+      "origin": "existing",
+      "used_by": [
+        "seatpost"
+      ]
+    },
+    "seatpost_saddle_configurations": {
+      "id": "cef7dd5c-611e-529f-9830-21de5ef3133d",
+      "key": "seatpost_saddle_configurations",
+      "unit": null,
+      "label": "Configuraciones documentadas de anclaje de sillín",
+      "options": [],
+      "data_type": "json",
+      "tenant_id": null,
+      "created_at": "2026-09-07T23:48:35.383021+00:00",
+      "group_name": null,
+      "sort_order": 0,
+      "updated_at": "2026-09-07T23:48:35.383021+00:00",
+      "description": null,
+      "is_filterable": false,
+      "allowed_values": [],
+      "validation_rules": {
+        "rows_schema": {
+          "columns": [
+            {
+              "key": "rail_geometry",
+              "type": "token",
+              "label": "Geometría del riel o anclaje",
+              "required": true,
+              "allowed_values": [
+                "Redondo 7 mm",
+                "Oval 7x9 mm",
+                "Oval 7x9.6 mm",
+                "Oval 7x10 mm",
+                "Oval 8x8.5 mm",
+                "Sistema propietario",
+                "Otro"
+              ]
+            },
+            {
+              "key": "configuration_state",
+              "type": "token",
+              "label": "Piezas de la configuración",
+              "required": true,
+              "allowed_values": [
+                "De fábrica",
+                "Con kit incluido",
+                "Con kit opcional"
+              ]
+            },
+            {
+              "key": "model",
+              "type": "text",
+              "label": "Modelo",
+              "required": false
+            },
+            {
+              "key": "generation",
+              "type": "text",
+              "label": "Generación o edición",
+              "required": false
+            },
+            {
+              "key": "conditions",
+              "type": "text",
+              "label": "Condiciones de la declaración",
+              "required": false
+            },
+            {
+              "key": "clamp_part",
+              "type": "text",
+              "label": "Pieza de abrazadera exacta (kit)"
+            },
+            {
+              "key": "clamp_included",
+              "type": "boolean",
+              "label": "Abrazadera incluida en esta presentación"
+            },
+            {
+              "key": "source_url",
+              "type": "url",
+              "label": "Fuente"
+            },
+            {
+              "key": "mount_system",
+              "type": "text",
+              "label": "Sistema o geometría de anclaje declarada (detalle OEM)",
+              "required": false
+            }
+          ],
+          "version": 1
+        }
+      },
+      "is_customer_visible": false,
+      "is_mechanic_visible": true,
+      "is_required_by_default": false,
+      "is_compatibility_relevant": false,
+      "origin": "existing",
+      "used_by": [
+        "seatpost"
+      ]
+    },
+    "dropper_travel_mm": {
+      "id": "263d3fdd-37e5-5a66-9f8b-e4e4709cb6b5",
+      "key": "dropper_travel_mm",
+      "unit": "mm",
+      "label": "Recorrido de la tija telescópica",
+      "options": [],
+      "data_type": "number",
+      "tenant_id": null,
+      "created_at": "2026-09-07T23:48:35.383021+00:00",
+      "group_name": null,
+      "sort_order": 0,
+      "updated_at": "2026-09-07T23:48:35.383021+00:00",
+      "description": null,
+      "is_filterable": false,
+      "allowed_values": [],
+      "validation_rules": {
+        "min": 0
+      },
+      "is_customer_visible": false,
+      "is_mechanic_visible": true,
+      "is_required_by_default": false,
+      "is_compatibility_relevant": false,
+      "origin": "existing",
+      "used_by": [
+        "seatpost"
+      ]
+    },
+    "dropper_actuation": {
+      "id": "b28c550f-dba6-54f7-be99-b1af2afb53c7",
+      "key": "dropper_actuation",
+      "unit": null,
+      "label": "Accionamiento de la tija telescópica",
+      "options": [
+        {
+          "id": "1d13e53b-618f-5727-8e9e-bf9772acbd65",
+          "code": "catalog_58a6c1638bf20651ee6442e480fc3a2c",
+          "label": "Hidráulico",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-09-07T23:48:35.383021+00:00",
+          "sort_order": 2,
+          "updated_at": "2026-09-07T23:48:35.383021+00:00",
+          "spec_definition_id": "b28c550f-dba6-54f7-be99-b1af2afb53c7"
+        },
+        {
+          "id": "682121ca-d331-505b-96ef-e4b078192dff",
+          "code": "catalog_98f4f3f23edb5a49032616a7e14c4bc8",
+          "label": "Inalámbrico",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-09-07T23:48:35.383021+00:00",
+          "sort_order": 3,
+          "updated_at": "2026-09-07T23:48:35.383021+00:00",
+          "spec_definition_id": "b28c550f-dba6-54f7-be99-b1af2afb53c7"
+        },
+        {
+          "id": "78cc5300-9110-5d6d-b2d9-2f0d82a3b131",
+          "code": "catalog_f71159b04ba7bd6da009e6643e38d16c",
+          "label": "Cable externo",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-09-07T23:48:35.383021+00:00",
+          "sort_order": 1,
+          "updated_at": "2026-09-07T23:48:35.383021+00:00",
+          "spec_definition_id": "b28c550f-dba6-54f7-be99-b1af2afb53c7"
+        },
+        {
+          "id": "abae55e8-70ed-56ba-9e36-f7140e3a7be1",
+          "code": "catalog_41ab576f434d3d3d5ebac1ff6d15d389",
+          "label": "Cable interno",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-09-07T23:48:35.383021+00:00",
+          "sort_order": 0,
+          "updated_at": "2026-09-07T23:48:35.383021+00:00",
+          "spec_definition_id": "b28c550f-dba6-54f7-be99-b1af2afb53c7"
+        }
+      ],
+      "data_type": "single_select",
+      "tenant_id": null,
+      "created_at": "2026-09-07T23:48:35.383021+00:00",
+      "group_name": null,
+      "sort_order": 0,
+      "updated_at": "2026-09-07T23:48:35.383021+00:00",
+      "description": null,
+      "is_filterable": false,
+      "allowed_values": [
+        "Cable interno",
+        "Cable externo",
+        "Hidráulico",
+        "Inalámbrico"
+      ],
+      "validation_rules": {},
+      "is_customer_visible": false,
+      "is_mechanic_visible": true,
+      "is_required_by_default": false,
+      "is_compatibility_relevant": false,
+      "origin": "existing",
+      "used_by": [
+        "seatpost"
+      ]
+    },
+    "material": {
+      "id": "7da3359a-e29f-57d8-901f-355753d1c6b3",
+      "key": "material",
+      "unit": null,
+      "label": "Material",
+      "options": [
+        {
+          "id": "0f7a88b0-4cf7-5429-9678-30180a13c41e",
+          "code": "catalog_903afabafdfb27787b1e00c966021b0c",
+          "label": "Policarbonato / plástico",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-09-07T22:33:40.381707+00:00",
+          "sort_order": 10,
+          "updated_at": "2026-09-07T22:33:40.381707+00:00",
+          "spec_definition_id": "7da3359a-e29f-57d8-901f-355753d1c6b3"
+        },
+        {
+          "id": "11fbf5fa-89db-5f5d-bf42-d4b4f27ce3b4",
+          "code": "catalog_70cc49d9167b975547d0730eee2beddf",
+          "label": "Titanio",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-09-07T22:33:40.381707+00:00",
+          "sort_order": 11,
+          "updated_at": "2026-09-07T22:33:40.381707+00:00",
+          "spec_definition_id": "7da3359a-e29f-57d8-901f-355753d1c6b3"
+        },
+        {
+          "id": "18676042-bb7f-53a8-825f-6e1779939de0",
+          "code": "catalog_e266cfd65ad46a67fc54b0efd38e40dd",
+          "label": "Polar",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-09-07T22:33:40.381707+00:00",
+          "sort_order": 26,
+          "updated_at": "2026-09-07T22:33:40.381707+00:00",
+          "spec_definition_id": "7da3359a-e29f-57d8-901f-355753d1c6b3"
+        },
+        {
+          "id": "1b12240f-919b-5ff0-ba34-35e949e21483",
+          "code": "catalog_8265ca77f1ed28b82afd09bc72da0884",
+          "label": "Acero",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-09-07T22:33:40.381707+00:00",
+          "sort_order": 0,
+          "updated_at": "2026-09-07T22:33:40.381707+00:00",
+          "spec_definition_id": "7da3359a-e29f-57d8-901f-355753d1c6b3"
+        },
+        {
+          "id": "2a4d8d37-e119-5797-b9be-b168b918353f",
+          "code": "catalog_83c79025b595f0896b60de03d1fc64f2",
+          "label": "Neopreno",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-09-07T22:33:40.381707+00:00",
+          "sort_order": 24,
+          "updated_at": "2026-09-07T22:33:40.381707+00:00",
+          "spec_definition_id": "7da3359a-e29f-57d8-901f-355753d1c6b3"
+        },
+        {
+          "id": "32b400b8-9ed3-5b8e-834a-0252f819e27d",
+          "code": "catalog_5756f15654fa53239591def5b5a0f2bc",
+          "label": "Poliéster",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-09-07T22:33:40.381707+00:00",
+          "sort_order": 25,
+          "updated_at": "2026-09-07T22:33:40.381707+00:00",
+          "spec_definition_id": "7da3359a-e29f-57d8-901f-355753d1c6b3"
+        },
+        {
+          "id": "4ffab964-2ebc-5021-90c0-be85480b68ec",
+          "code": "catalog_f1bf3336d6fd120b3eee3952c39c0677",
+          "label": "Carbono",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-09-07T22:33:40.381707+00:00",
+          "sort_order": 8,
+          "updated_at": "2026-09-07T22:33:40.381707+00:00",
+          "spec_definition_id": "7da3359a-e29f-57d8-901f-355753d1c6b3"
+        },
+        {
+          "id": "5941e1d7-4af1-53fc-891d-07d61d639e01",
+          "code": "catalog_666b8b46df3bf02a807530692d01ecf4",
+          "label": "PE / plástico",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-09-07T22:33:40.381707+00:00",
+          "sort_order": 20,
+          "updated_at": "2026-09-07T22:33:40.381707+00:00",
+          "spec_definition_id": "7da3359a-e29f-57d8-901f-355753d1c6b3"
+        },
+        {
+          "id": "6df2768e-61d3-5383-ad5a-001a88f6879f",
+          "code": "catalog_eda88ba0a167a288dce3e99be54bfa69",
+          "label": "Gel / PU",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-09-07T22:33:40.381707+00:00",
+          "sort_order": 6,
+          "updated_at": "2026-09-07T22:33:40.381707+00:00",
+          "spec_definition_id": "7da3359a-e29f-57d8-901f-355753d1c6b3"
+        },
+        {
+          "id": "72005f61-79a3-54cb-882d-0f3c92ab0efc",
+          "code": "catalog_d09dfb57de9bcb275cdbffe1d9f7d4ed",
+          "label": "Latón",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-09-07T22:33:40.381707+00:00",
+          "sort_order": 12,
+          "updated_at": "2026-09-07T22:33:40.381707+00:00",
+          "spec_definition_id": "7da3359a-e29f-57d8-901f-355753d1c6b3"
+        },
+        {
+          "id": "76ab4355-d966-5e41-b886-d2b357a66e64",
+          "code": "catalog_3add2a4e04f3365b9551044bf9e00baf",
+          "label": "Plástico",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-09-07T22:33:40.381707+00:00",
+          "sort_order": 2,
+          "updated_at": "2026-09-07T22:33:40.381707+00:00",
+          "spec_definition_id": "7da3359a-e29f-57d8-901f-355753d1c6b3"
+        },
+        {
+          "id": "78c8ca78-87a0-5370-9fe0-bfd99b9bb1db",
+          "code": "catalog_978d237a8b99eff81cf349e2409e9ee3",
+          "label": "Plástico / nylon",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-09-07T22:33:40.381707+00:00",
+          "sort_order": 18,
+          "updated_at": "2026-09-07T22:33:40.381707+00:00",
+          "spec_definition_id": "7da3359a-e29f-57d8-901f-355753d1c6b3"
+        },
+        {
+          "id": "7d421327-d744-5f53-9e0f-3a86cb84ae4e",
+          "code": "catalog_c2295235a535ea3e85b7a0e5ab85afb0",
+          "label": "Otro",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-09-07T22:33:40.381707+00:00",
+          "sort_order": 3,
+          "updated_at": "2026-09-07T22:33:40.381707+00:00",
+          "spec_definition_id": "7da3359a-e29f-57d8-901f-355753d1c6b3"
+        },
+        {
+          "id": "81b9ec48-84af-50c5-9331-0c084bf8b952",
+          "code": "catalog_83967661f51953134a64311d65e5541a",
+          "label": "Goma",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-09-07T22:33:40.381707+00:00",
+          "sort_order": 19,
+          "updated_at": "2026-09-07T22:33:40.381707+00:00",
+          "spec_definition_id": "7da3359a-e29f-57d8-901f-355753d1c6b3"
+        },
+        {
+          "id": "8cb43060-b124-5141-aecb-d7ca8c301784",
+          "code": "catalog_d4ab62ce43f88267676dc8fd37c1af6f",
+          "label": "Acero inoxidable",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-09-07T22:33:40.381707+00:00",
+          "sort_order": 16,
+          "updated_at": "2026-09-07T22:33:40.381707+00:00",
+          "spec_definition_id": "7da3359a-e29f-57d8-901f-355753d1c6b3"
+        },
+        {
+          "id": "9aabd194-418e-57b7-9162-b1fa27275915",
+          "code": "catalog_c93a50726342225b7b323e2de4064ebc",
+          "label": "Magnesio / mixta",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-09-07T22:33:40.381707+00:00",
+          "sort_order": 9,
+          "updated_at": "2026-09-07T22:33:40.381707+00:00",
+          "spec_definition_id": "7da3359a-e29f-57d8-901f-355753d1c6b3"
+        },
+        {
+          "id": "a03a449f-2130-5fd7-9b8a-76698d86cb8b",
+          "code": "catalog_959ebb89f0689b5549189de2bcd866c6",
+          "label": "Tritan",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-09-07T22:33:40.381707+00:00",
+          "sort_order": 21,
+          "updated_at": "2026-09-07T22:33:40.381707+00:00",
+          "spec_definition_id": "7da3359a-e29f-57d8-901f-355753d1c6b3"
+        },
+        {
+          "id": "a6404bd8-4942-56d4-b8b0-40404909ed8d",
+          "code": "catalog_e8abd84a32604632f01c81dac8526457",
+          "label": "Poliéster / PET",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-09-07T22:33:40.381707+00:00",
+          "sort_order": 13,
+          "updated_at": "2026-09-07T22:33:40.381707+00:00",
+          "spec_definition_id": "7da3359a-e29f-57d8-901f-355753d1c6b3"
+        },
+        {
+          "id": "aed6613f-f75c-591e-ac95-01d904df245e",
+          "code": "catalog_f0fa8cf43bf1f7c3f4a4b7385d51ce0b",
+          "label": "Algodón",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-09-07T22:33:40.381707+00:00",
+          "sort_order": 27,
+          "updated_at": "2026-09-07T22:33:40.381707+00:00",
+          "spec_definition_id": "7da3359a-e29f-57d8-901f-355753d1c6b3"
+        },
+        {
+          "id": "b6430da5-0bbc-5fb6-8309-830153bfde99",
+          "code": "catalog_d65a2876c47595510cc52a5bd5d589f6",
+          "label": "Mezcla",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-09-07T22:33:40.381707+00:00",
+          "sort_order": 28,
+          "updated_at": "2026-09-07T22:33:40.381707+00:00",
+          "spec_definition_id": "7da3359a-e29f-57d8-901f-355753d1c6b3"
+        },
+        {
+          "id": "bb2e4d96-1e8d-50c2-822b-d2e286f1654c",
+          "code": "catalog_78b342449927661ac3b622233fc2869b",
+          "label": "Acero galvanizado",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-09-07T22:33:40.381707+00:00",
+          "sort_order": 15,
+          "updated_at": "2026-09-07T22:33:40.381707+00:00",
+          "spec_definition_id": "7da3359a-e29f-57d8-901f-355753d1c6b3"
+        },
+        {
+          "id": "c5dfe1a4-1133-5f84-af73-82564d0b5766",
+          "code": "catalog_4ba389f6e8a3692d46102e09d396ddc2",
+          "label": "EVA",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-09-07T22:33:40.381707+00:00",
+          "sort_order": 4,
+          "updated_at": "2026-09-07T22:33:40.381707+00:00",
+          "spec_definition_id": "7da3359a-e29f-57d8-901f-355753d1c6b3"
+        },
+        {
+          "id": "c5fda83c-954f-52a2-a67d-1c6a8ca0808a",
+          "code": "catalog_98b40d133309aed77e37fb1843cdbc27",
+          "label": "PVC / vinilo",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-09-07T22:33:40.381707+00:00",
+          "sort_order": 23,
+          "updated_at": "2026-09-07T22:33:40.381707+00:00",
+          "spec_definition_id": "7da3359a-e29f-57d8-901f-355753d1c6b3"
+        },
+        {
+          "id": "d1ada999-7a10-5de2-837d-d1b4a2f72af6",
+          "code": "catalog_708f9ce7c90b4bd833fed140664df384",
+          "label": "Mimbre",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-09-07T22:33:40.381707+00:00",
+          "sort_order": 22,
+          "updated_at": "2026-09-07T22:33:40.381707+00:00",
+          "spec_definition_id": "7da3359a-e29f-57d8-901f-355753d1c6b3"
+        },
+        {
+          "id": "d3e3d8c7-43eb-5d4e-ac76-fa34e0a57b40",
+          "code": "catalog_6691e26bfeea24b353c9357ca4275ab6",
+          "label": "Aluminio",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-09-07T22:33:40.381707+00:00",
+          "sort_order": 1,
+          "updated_at": "2026-09-07T22:33:40.381707+00:00",
+          "spec_definition_id": "7da3359a-e29f-57d8-901f-355753d1c6b3"
+        },
+        {
+          "id": "dc1c2129-e647-50bc-816f-a315d2621247",
+          "code": "catalog_1ba6129627b0af4dc9d3e3cf9b84e6ea",
+          "label": "Recubierto (teflón / polímero)",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-09-07T22:33:40.381707+00:00",
+          "sort_order": 17,
+          "updated_at": "2026-09-07T22:33:40.381707+00:00",
+          "spec_definition_id": "7da3359a-e29f-57d8-901f-355753d1c6b3"
+        },
+        {
+          "id": "dc2b5e86-8a3f-5283-9b72-338e2c362cbd",
+          "code": "catalog_025d10f299c1af11ed2b61ff7dd07ee8",
+          "label": "Corcho",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-09-07T22:33:40.381707+00:00",
+          "sort_order": 5,
+          "updated_at": "2026-09-07T22:33:40.381707+00:00",
+          "spec_definition_id": "7da3359a-e29f-57d8-901f-355753d1c6b3"
+        },
+        {
+          "id": "f8fd17f7-50df-5e55-9904-bb7d6a3e11e0",
+          "code": "catalog_457724ad08d0131d0c80c98ad534533e",
+          "label": "Silicona",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-09-07T22:33:40.381707+00:00",
+          "sort_order": 7,
+          "updated_at": "2026-09-07T22:33:40.381707+00:00",
+          "spec_definition_id": "7da3359a-e29f-57d8-901f-355753d1c6b3"
+        },
+        {
+          "id": "f94df7ee-e1e0-5d45-8a4c-385ff5bb6671",
+          "code": "catalog_1ab67d54125e7b2bd931c766113c49df",
+          "label": "Nylon",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-09-07T22:33:40.381707+00:00",
+          "sort_order": 14,
+          "updated_at": "2026-09-07T22:33:40.381707+00:00",
+          "spec_definition_id": "7da3359a-e29f-57d8-901f-355753d1c6b3"
+        }
+      ],
+      "data_type": "single_select",
+      "tenant_id": null,
+      "created_at": "2026-09-07T22:33:40.381707+00:00",
+      "group_name": null,
+      "sort_order": 0,
+      "updated_at": "2026-09-07T22:33:40.381707+00:00",
+      "description": null,
+      "is_filterable": false,
+      "allowed_values": [
+        "Acero",
+        "Aluminio",
+        "Plástico",
+        "Otro",
+        "EVA",
+        "Corcho",
+        "Gel / PU",
+        "Silicona",
+        "Carbono",
+        "Magnesio / mixta",
+        "Policarbonato / plástico",
+        "Titanio",
+        "Latón",
+        "Poliéster / PET",
+        "Nylon",
+        "Acero galvanizado",
+        "Acero inoxidable",
+        "Recubierto (teflón / polímero)",
+        "Plástico / nylon",
+        "Goma",
+        "PE / plástico",
+        "Tritan",
+        "Mimbre",
+        "PVC / vinilo",
+        "Neopreno",
+        "Poliéster",
+        "Polar",
+        "Algodón",
+        "Mezcla"
+      ],
+      "validation_rules": {},
+      "is_customer_visible": false,
+      "is_mechanic_visible": true,
+      "is_required_by_default": false,
+      "is_compatibility_relevant": false,
+      "origin": "existing",
+      "used_by": [
+        "seatpost"
+      ]
+    },
+    "color": {
+      "id": "54647fc6-888d-5352-8325-8259b926bd92",
+      "key": "color",
+      "unit": null,
+      "label": "Color",
+      "options": [],
+      "data_type": "text",
+      "tenant_id": null,
+      "created_at": "2026-09-07T22:33:40.381707+00:00",
+      "group_name": null,
+      "sort_order": 0,
+      "updated_at": "2026-09-07T22:33:40.381707+00:00",
+      "description": null,
+      "is_filterable": false,
+      "allowed_values": [],
+      "validation_rules": {},
+      "is_customer_visible": false,
+      "is_mechanic_visible": true,
+      "is_required_by_default": false,
+      "is_compatibility_relevant": false,
+      "origin": "existing",
+      "used_by": [
+        "seatpost"
+      ]
+    },
+    "seatpost_shim_length_mm": {
+      "id": "f60cf6cb-2a3a-504d-acbd-d4e07d1d92d1",
+      "key": "seatpost_shim_length_mm",
+      "unit": "mm",
+      "label": "Longitud del suplemento de tija",
+      "options": [],
+      "data_type": "number",
+      "tenant_id": null,
+      "created_at": "2026-09-07T23:48:35.383021+00:00",
+      "group_name": null,
+      "sort_order": 0,
+      "updated_at": "2026-09-07T23:48:35.383021+00:00",
+      "description": null,
+      "is_filterable": false,
+      "allowed_values": [],
+      "validation_rules": {
+        "positive": true
+      },
+      "is_customer_visible": false,
+      "is_mechanic_visible": true,
+      "is_required_by_default": false,
+      "is_compatibility_relevant": false,
+      "origin": "existing",
+      "used_by": [
+        "seatpost"
+      ]
+    },
+    "spec_evidence_source": {
+      "id": "4f055961-6c16-430b-a4e2-e6b09dc1cccc",
+      "key": "spec_evidence_source",
+      "unit": null,
+      "label": "Fuente de la declaración",
+      "options": [],
+      "data_type": "text",
+      "tenant_id": null,
+      "created_at": "2026-09-06T06:58:57.745728+00:00",
+      "group_name": null,
+      "sort_order": 900,
+      "updated_at": "2026-09-06T06:58:57.745728+00:00",
+      "description": "URL del fabricante, manual o identificación del envase que respalda la declaración.",
+      "is_filterable": false,
+      "allowed_values": [],
+      "validation_rules": {},
+      "is_customer_visible": false,
+      "is_mechanic_visible": true,
+      "is_required_by_default": false,
+      "is_compatibility_relevant": false,
+      "origin": "existing",
+      "used_by": [
+        "seatpost"
+      ]
+    },
+    "dropper_control_kind": {
+      "id": "df9675be-9288-5966-9d46-b02110725257",
+      "key": "dropper_control_kind",
+      "unit": null,
+      "label": "Accionamiento de la telescópica",
+      "options": [
+        {
+          "id": "107f3983-fc0b-5fab-8505-92b8eefb75fd",
+          "code": "catalog_de6e897b1c6ced32e6762f3ceaebffd6",
+          "label": "Desconocido / sin confirmar",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-09-07T23:48:35.383021+00:00",
+          "sort_order": 4,
+          "updated_at": "2026-09-07T23:48:35.383021+00:00",
+          "spec_definition_id": "df9675be-9288-5966-9d46-b02110725257"
+        },
+        {
+          "id": "aab23c43-bc2e-5428-9b50-2b04a5ef5197",
+          "code": "catalog_5e0eb2c391514efe00ad9bc1ba12fad8",
+          "label": "Mecánico por cable",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-09-07T23:48:35.383021+00:00",
+          "sort_order": 0,
+          "updated_at": "2026-09-07T23:48:35.383021+00:00",
+          "spec_definition_id": "df9675be-9288-5966-9d46-b02110725257"
+        },
+        {
+          "id": "b14d964b-bf7d-5301-b8ac-b5122a453182",
+          "code": "catalog_58a6c1638bf20651ee6442e480fc3a2c",
+          "label": "Hidráulico",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-09-07T23:48:35.383021+00:00",
+          "sort_order": 1,
+          "updated_at": "2026-09-07T23:48:35.383021+00:00",
+          "spec_definition_id": "df9675be-9288-5966-9d46-b02110725257"
+        },
+        {
+          "id": "b42f288e-821e-584c-8743-f7148198e946",
+          "code": "catalog_c2295235a535ea3e85b7a0e5ab85afb0",
+          "label": "Otro",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-09-07T23:48:35.383021+00:00",
+          "sort_order": 3,
+          "updated_at": "2026-09-07T23:48:35.383021+00:00",
+          "spec_definition_id": "df9675be-9288-5966-9d46-b02110725257"
+        },
+        {
+          "id": "bd594b72-6f07-5fad-973e-8d7696b25f1b",
+          "code": "catalog_fcd78bca2c580161357799fef2e8a371",
+          "label": "Electrónico inalámbrico",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-09-07T23:48:35.383021+00:00",
+          "sort_order": 2,
+          "updated_at": "2026-09-07T23:48:35.383021+00:00",
+          "spec_definition_id": "df9675be-9288-5966-9d46-b02110725257"
+        }
+      ],
+      "data_type": "single_select",
+      "tenant_id": null,
+      "created_at": "2026-09-07T23:48:35.383021+00:00",
+      "group_name": null,
+      "sort_order": 0,
+      "updated_at": "2026-09-07T23:48:35.383021+00:00",
+      "description": null,
+      "is_filterable": false,
+      "allowed_values": [
+        "Mecánico por cable",
+        "Hidráulico",
+        "Electrónico inalámbrico",
+        "Otro",
+        "Desconocido / sin confirmar"
+      ],
+      "validation_rules": {},
+      "is_customer_visible": false,
+      "is_mechanic_visible": true,
+      "is_required_by_default": false,
+      "is_compatibility_relevant": false,
+      "origin": "existing",
+      "used_by": [
+        "seatpost"
+      ]
+    },
+    "dropper_cable_routing": {
+      "id": "50a8e0ac-e382-522a-b6e0-244bf07fb92e",
+      "key": "dropper_cable_routing",
+      "unit": null,
+      "label": "Ruta del cable o latiguillo de la telescópica",
+      "options": [
+        {
+          "id": "17b1bfda-9941-50bf-b86f-02da87c15c46",
+          "code": "catalog_1690216983f6d2ecf00cd6cf6ba10b25",
+          "label": "Interna (stealth)",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-09-07T23:48:35.383021+00:00",
+          "sort_order": 0,
+          "updated_at": "2026-09-07T23:48:35.383021+00:00",
+          "spec_definition_id": "50a8e0ac-e382-522a-b6e0-244bf07fb92e"
+        },
+        {
+          "id": "4d34a170-76b1-5781-be2d-5d299633c8c0",
+          "code": "catalog_bcac997e9d471e12ab4eb32e4062b30f",
+          "label": "Externa",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-09-07T23:48:35.383021+00:00",
+          "sort_order": 1,
+          "updated_at": "2026-09-07T23:48:35.383021+00:00",
+          "spec_definition_id": "50a8e0ac-e382-522a-b6e0-244bf07fb92e"
+        },
+        {
+          "id": "6b3a48a2-fc81-59e3-9639-319001eae375",
+          "code": "catalog_de6e897b1c6ced32e6762f3ceaebffd6",
+          "label": "Desconocido / sin confirmar",
+          "is_active": true,
+          "tenant_id": null,
+          "created_at": "2026-09-07T23:48:35.383021+00:00",
+          "sort_order": 2,
+          "updated_at": "2026-09-07T23:48:35.383021+00:00",
+          "spec_definition_id": "50a8e0ac-e382-522a-b6e0-244bf07fb92e"
+        }
+      ],
+      "data_type": "single_select",
+      "tenant_id": null,
+      "created_at": "2026-09-07T23:48:35.383021+00:00",
+      "group_name": null,
+      "sort_order": 0,
+      "updated_at": "2026-09-07T23:48:35.383021+00:00",
+      "description": null,
+      "is_filterable": false,
+      "allowed_values": [
+        "Interna (stealth)",
+        "Externa",
+        "Desconocido / sin confirmar"
+      ],
+      "validation_rules": {},
+      "is_customer_visible": false,
+      "is_mechanic_visible": true,
+      "is_required_by_default": false,
+      "is_compatibility_relevant": false,
+      "origin": "existing",
+      "used_by": [
+        "seatpost"
+      ]
+    },
+    "dropper_remote_included": {
+      "id": "3dca4fdd-c725-58c9-b22f-deabe2c09429",
+      "key": "dropper_remote_included",
+      "unit": null,
+      "label": "Mando incluido",
+      "options": [],
+      "data_type": "boolean",
+      "tenant_id": null,
+      "created_at": "2026-09-07T23:48:35.383021+00:00",
+      "group_name": null,
+      "sort_order": 0,
+      "updated_at": "2026-09-07T23:48:35.383021+00:00",
+      "description": null,
+      "is_filterable": false,
+      "allowed_values": [],
+      "validation_rules": {},
+      "is_customer_visible": false,
+      "is_mechanic_visible": true,
+      "is_required_by_default": false,
+      "is_compatibility_relevant": false,
+      "origin": "existing",
+      "used_by": [
+        "seatpost"
+      ]
+    },
+    "dropper_remote_model": {
+      "id": "1168a06b-a78e-51a8-beb8-b7af9e1e620b",
+      "key": "dropper_remote_model",
+      "unit": null,
+      "label": "Modelo del mando incluido",
+      "options": [],
+      "data_type": "text",
+      "tenant_id": null,
+      "created_at": "2026-09-07T23:48:35.383021+00:00",
+      "group_name": null,
+      "sort_order": 0,
+      "updated_at": "2026-09-07T23:48:35.383021+00:00",
+      "description": null,
+      "is_filterable": false,
+      "allowed_values": [],
+      "validation_rules": {},
+      "is_customer_visible": false,
+      "is_mechanic_visible": true,
+      "is_required_by_default": false,
+      "is_compatibility_relevant": false,
+      "origin": "existing",
+      "used_by": [
+        "seatpost"
+      ]
+    },
+    "seatpost_min_insertion_mm": {
+      "id": "155303ed-08b2-53fe-88d2-94f64bf8ae63",
+      "key": "seatpost_min_insertion_mm",
+      "unit": "mm",
+      "label": "Inserción mínima de la tija",
+      "options": [],
+      "data_type": "number",
+      "tenant_id": null,
+      "created_at": "2026-09-07T23:48:35.383021+00:00",
+      "group_name": null,
+      "sort_order": 0,
+      "updated_at": "2026-09-07T23:48:35.383021+00:00",
+      "description": null,
+      "is_filterable": false,
+      "allowed_values": [],
+      "validation_rules": {
+        "positive": true
+      },
+      "is_customer_visible": false,
+      "is_mechanic_visible": true,
+      "is_required_by_default": false,
+      "is_compatibility_relevant": false,
+      "origin": "existing",
+      "used_by": [
+        "seatpost"
+      ]
+    },
+    "seatpost_min_exposed_mm": {
+      "id": "415be9fc-5e89-50ed-b518-320bb0737536",
+      "key": "seatpost_min_exposed_mm",
+      "unit": "mm",
+      "label": "Mínimo expuesto (tope del tubo a riel)",
+      "options": [],
+      "data_type": "number",
+      "tenant_id": null,
+      "created_at": "2026-09-07T23:48:35.383021+00:00",
+      "group_name": null,
+      "sort_order": 0,
+      "updated_at": "2026-09-07T23:48:35.383021+00:00",
+      "description": null,
+      "is_filterable": false,
+      "allowed_values": [],
+      "validation_rules": {
+        "positive": true
+      },
+      "is_customer_visible": false,
+      "is_mechanic_visible": true,
+      "is_required_by_default": false,
+      "is_compatibility_relevant": false,
+      "origin": "existing",
+      "used_by": [
+        "seatpost"
+      ]
+    },
+    "seatpost_bottom_clearance_mm": {
+      "id": "26883883-b05a-535a-908c-5ad586edb4ac",
+      "key": "seatpost_bottom_clearance_mm",
+      "unit": "mm",
+      "label": "Proyección inferior adicional a la longitud declarada (cota OEM)",
+      "options": [],
+      "data_type": "number",
+      "tenant_id": null,
+      "created_at": "2026-09-07T23:48:35.383021+00:00",
+      "group_name": null,
+      "sort_order": 0,
+      "updated_at": "2026-09-07T23:48:35.383021+00:00",
+      "description": null,
+      "is_filterable": false,
+      "allowed_values": [],
+      "validation_rules": {
+        "min": "0"
+      },
+      "is_customer_visible": false,
+      "is_mechanic_visible": true,
+      "is_required_by_default": false,
+      "is_compatibility_relevant": false,
+      "origin": "existing",
+      "used_by": [
+        "seatpost"
+      ]
+    },
+    "seatpost_dimension_document": {
+      "id": "0940b3ac-81d1-5300-bf8f-71a0265cad10",
+      "key": "seatpost_dimension_document",
+      "unit": null,
+      "label": "Documento OEM de cotas (id y revisión)",
+      "options": [],
+      "data_type": "text",
+      "tenant_id": null,
+      "created_at": "2026-09-07T23:48:35.383021+00:00",
+      "group_name": null,
+      "sort_order": 0,
+      "updated_at": "2026-09-07T23:48:35.383021+00:00",
+      "description": null,
+      "is_filterable": false,
+      "allowed_values": [],
+      "validation_rules": {},
+      "is_customer_visible": false,
+      "is_mechanic_visible": true,
+      "is_required_by_default": false,
+      "is_compatibility_relevant": false,
+      "origin": "existing",
+      "used_by": [
+        "seatpost"
+      ]
+    },
+    "dropper_control_configurations": {
+      "id": "58d5a5d1-cd54-5175-b145-630dcd54c51c",
+      "key": "dropper_control_configurations",
+      "unit": null,
+      "label": "Configuraciones documentadas de mando compatible",
+      "options": [],
+      "data_type": "json",
+      "tenant_id": null,
+      "created_at": "2026-09-07T23:48:35.383021+00:00",
+      "group_name": null,
+      "sort_order": 0,
+      "updated_at": "2026-09-07T23:48:35.383021+00:00",
+      "description": null,
+      "is_filterable": false,
+      "allowed_values": [],
+      "validation_rules": {
+        "rows_schema": {
+          "columns": [
+            {
+              "key": "control_model",
+              "type": "text",
+              "label": "Modelo o código exacto de mando",
+              "required": true
+            },
+            {
+              "key": "control_generation",
+              "type": "text",
+              "label": "Generación o revisión del mando",
+              "required": false
+            },
+            {
+              "key": "seatpost_scope",
+              "type": "text",
+              "label": "Modelo/generación de tija cubiertos por la declaración",
+              "required": true
+            },
+            {
+              "key": "control_interface",
+              "type": "text",
+              "label": "Interfaz declarada del mando",
+              "required": false
+            },
+            {
+              "key": "conditions",
+              "type": "text",
+              "label": "Condiciones, firmware o piezas requeridas declaradas",
+              "required": false
+            }
+          ],
+          "version": 1
+        }
+      },
+      "is_customer_visible": false,
+      "is_mechanic_visible": true,
+      "is_required_by_default": false,
+      "is_compatibility_relevant": false,
+      "origin": "existing",
+      "used_by": [
+        "seatpost"
+      ]
+    }
+  },
+  "publication_authorized": false,
+  "automatic_fill_authorized": false,
+  "mechanical_coverage_complete": false
+}

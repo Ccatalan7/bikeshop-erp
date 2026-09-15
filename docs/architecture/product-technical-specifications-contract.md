@@ -1,16 +1,46 @@
 # Arquitectura de fichas técnicas ligadas a identidad y compatibilidad
 
-Diseño: 2026-09-05 (America/Los_Angeles). Actualización: 2026-09-06.
+Actualización 15 de septiembre, 05:53 UTC: **68 plantillas nuevas del plan y cinco
+reemplazos originales (kit, pinza, pastilla, rotor y maneta) publicados; 32 reemplazos originales
+pendientes.** Además se publicó `component_set`, fuera del plan inicial de 105.
+Once plantillas permiten fichas por pieza. Se aplicaron y verificaron 720
+asignaciones; quedan 26 registros sin ficha (nueve no materiales y diecisiete
+por resolver).
+La salida pública omite observaciones raíz `inferred/confirmed=false` desde
+`20260915034000`, sin modificar hechos ni lectores internos. Los demás orígenes
+conservan su política; no es aún el contrato epistemológico completo.
+Saneamiento transversal y llenado abiertos; cero productos rellenados. Evidencia:
+[checkpoint global](../development/product-specs-research-2026-09-05/global-audit-and-sanitation-2026-09-06.md).
+
+Diseño: 2026-09-05 (America/Los_Angeles). Actualización: 2026-09-07.
 Estado: **base transversal implementada; cobertura mecánica por familias en
-desarrollo**. El servidor aplica el contrato versionado desde la migración
-`20260906070000`; el editor y el consumidor de taller están integrados en código
-y recargados en la sesión macOS existente. No se publicó una nueva distribución
-de la app ni se guardó el producto de prueba.
+desarrollo**. El servidor aplica el motor hasta `20260907026000`.
+macOS177 y Android65 están publicados; después se incorporaron
+[12 plantillas no motrices](../development/product-specs-research-2026-09-05/non-drivetrain-publication-integration-2026-09-07.md)
+con `20260907222000` y [14 de movilidad/accesorios](../development/product-specs-research-2026-09-05/mobility-accessories-integration-2026-09-07.md)
+con `20260907233000`, y [10 de puntos de contacto](../development/product-specs-research-2026-09-05/contact-points-integration-2026-09-07.md)
+con `20260907235000`, y [9 de piezas de rueda](../development/product-specs-research-2026-09-05/wheel-small-parts-integration-2026-09-07.md)
+con `20260908001000`, y [4 de suspensión/dirección](../development/product-specs-research-2026-09-05/suspension-headset-parts-integration-2026-09-07.md)
+con `20260908011000`, [4 de transmisión pequeña](../development/product-specs-research-2026-09-05/drivetrain-small-parts-integration-2026-09-07.md)
+con `20260908013000` y [4 de cables de mando](../development/product-specs-research-2026-09-05/control-cable-parts-integration-2026-09-07.md)
+con `20260908022000`: 57 nuevas en aquel checkpoint. Hidráulica, adaptadores,
+ensamblajes y mando combinado completaron después las 68 nuevas; véase el
+checkpoint global. De las 37 iniciales, kit, pinza, pastilla, rotor y maneta tienen
+reemplazos publicados; las 32 restantes siguen pendientes. `20260915043000`
+conservó los datos de 82 productos; los 17 valores retirados siguen en legacy.
+`20260915054000` conserva los datos de las 18 manetas y separa montaje externo
+de expansor, cable anclado de pasante, e hidráulica principal de auxiliar.
+Los cuatro formularios de freno se probaron en escritorio con borradores
+descartados y lectura autenticada intacta; teléfono/embebido siguen pendientes.
+La corrección del consumidor de criterios de compras está probada en código
+y requiere próxima distribución; no se atribuye al binario ya publicado.
+El saneamiento global y el llenado siguen pendientes. Los apartados de diseño
+e inventario inicial de este documento no son el estado actual de despliegue.
 
 La [evidencia de implementación](../development/product-specs-research-2026-09-05/implementation-result.md)
 separa lo entregado de este diseño objetivo: identidad/variante explícita,
 referencias con fuente, requisitos de tres estados, conservación del borrador,
-validación en servidor y guardado atómico. Las 37 plantillas activas usan la base;
+validación en servidor y guardado atómico. Las 37 plantillas iniciales usan la base;
 las tres referencias iniciales son cadenas KMC exactas. Esto no certifica todos
 los modelos de las 36 familias ni implementa todavía cada relación/adaptador
 descrito abajo. Los conteos y defectos de §3 son la auditoría previa al cambio.
@@ -28,8 +58,8 @@ está preparado con auditoría/cola; todavía no se aplicaron lotes de productos
 La [auditoría global y saneamiento](../development/product-specs-research-2026-09-05/global-audit-and-sanitation-2026-09-06.md)
 cubre los 1.664 registros, las 136 definiciones y 280 usos de campo.
 `20260906150000` está desplegada: 35 dominios numéricos corregidos sin modificar
-hechos de productos. El siguiente contrato, `20260906160000`, está en validación
-local: `products.spec_template_id` posee la clase técnica y la categoría es su
+hechos de productos. El contrato `20260906160000` también está desplegado:
+`products.spec_template_id` posee la clase técnica y la categoría es su
 respaldo. Todos los consumidores deben resolver esa asignación; los hechos
 fuera de la nueva ficha siguen disponibles para revisión, excluidos de sus
 filtros técnicos y compatibilidad. Ningún conteo de plantillas equivale a
@@ -179,6 +209,15 @@ Los booleanos nuevos admiten desconocido. `false`, `0`, vacío, desconocido y
 no aplica tienen significados diferentes. Un `is_set` no acepta «desconocido»
 como prerrequisito confirmado.
 
+**Precisión de comparación, 2026-09-08:** compartir unidad no autoriza una
+desigualdad. El volumen vendido de un envase y la dosis de una aplicación son
+dos cantidades distintas: una aplicación puede consumir varios envases.
+Tampoco se ordenan entre sí el bisel de una pieza y su ángulo interno de
+rodadura, ni una presión de ensayo y una presión de uso. Primero se identifica
+qué mide cada campo y a qué pieza, aplicación o ensayo pertenece; después se
+define la comparación que la fuente realmente exige. Una prueba que rechaza
+el caso válido no vuelve correcta la regla porque detecte sus mutaciones.
+
 ### 4.3 Compatibilidad como relaciones y recetas de conjunto
 
 Una afirmación lleva `subject_variant`, `target_interface/model`, relación,
@@ -209,6 +248,65 @@ usar una receta con todos los participantes cuando la fuente lo exige.
 La relación no es necesariamente simétrica ni transitiva. Los adaptadores son
 participantes con identidad, dirección, condiciones y disponibilidad; no un
 booleano «con adaptador».
+
+### 4.4 Ficha de una pieza incluida (framework publicado, 2026-09-14)
+
+El framework se aplicó y verificó en producción mediante
+`20260914213000_product_spec_member_profiles`, sin habilitar colecciones ni
+rellenar productos. El editor está conectado localmente a la lectura v3 y al
+guardado atómico v2; revisión independiente cerrada y 95 pruebas focales pasando.
+Los errores por pieza y la conservación legacy tipada están publicados. La
+app real conservó y descartó correctamente un borrador raíz en ancho compacto;
+el 15-09 se habilitaron nueve colecciones mediante `20260915004000`, con
+revisión independiente y verificación productiva. Sus 68 productos conservaron
+todos los datos. La ficha propia de un soporte incluido en una luz se probó
+en la app real y el borrador se descartó, con lectura posterior intacta.
+El 15-09 también se comprobó la ficha del soporte en compacto 430×940, con
+restauración de ventana, descarte y lectura autenticada sin cambios. Los nombres
+de familia respetan el tenant y no alteran claves ni opciones permitidas; una
+etiqueta ausente no retira la familia y su carga fallida no bloquea el editor.
+Siguen pendientes la interacción embebida y las familias excluidas.
+El kit de transmisión se añadió como décima colección mediante `20260915023000`: 
+once campos reales a legacy, fuente preservada y `kit_members` compartido,
+con seis lecturas autenticadas intactas y descarte comprobado del editor real.
+Los tres prototipos nunca publicados siguen ausentes. Quedan 36 reemplazos
+originales y la auditoría global; esta publicación no rellena productos.
+
+Una pieza incluida en un kit puede usar la ficha completa de su familia sin
+existir como producto de inventario. Su cabecera identifica producto, definición
+de la colección padre y fila concreta, además de plantilla y referencia OEM
+opcional. Sus hechos siguen en `spec_facts`, con `subject_type=product` y
+`subject_scope=member:<UUID de perfil>`. Ningún lector puede fusionarlos con los
+hechos de la raíz ni de otra pieza. La clave de familia de la fila resuelve una
+plantilla; su `technical_family`, que puede ser diferente, gobierna referencias.
+
+El límite es un nivel de perfiles: la cabecera sólo apunta a una colección de
+la raíz, habilitada mediante `form_contract.member_profiles`. La ficha de la
+pieza conserva sus tablas intrínsecas y campos `contents`, porque quitarlos
+rompe los prerrequisitos de la propia familia. Cantidad de paquetes, unidades y
+piezas no se convierten entre sí por inferencia.
+
+Quitar/reclasificar una pieza exige archivar explícitamente su perfil,
+conservando hechos y lecturas. Un cliente anterior conserva los perfiles
+omitidos y rechaza cambios que los dejen huérfanos. Identificar un vacío con
+fuente y volver a vincular a una fila expresamente elegida de igual identidad
+son operaciones distintas de sustituir identidad conocida; quedan auditadas.
+La referencia OEM nunca se deduce del texto ni se copia desde otro producto.
+
+Las colecciones declaran las claves `identity_brand` e `identity_model`, aunque
+el valor todavía sea desconocido. Así, vínculo, formulario y referencia usan
+la misma identidad. La asignación de categoría también pertenece al grafo:
+no puede retirar o sustituir la ficha padre dejando perfiles activos inválidos.
+Su cambio se coordina con altas y ediciones de componentes incluso si la
+transacción comenzó antes de que existieran. El historial de vínculos conserva
+actor y estados; actualizarlo o borrarlo se rechaza, también en rutas privadas.
+
+El guardado agregado v2 protege raíz y miembros con una revisión y recibo común;
+los lectores de edición/investigación mantienen la misma instantánea y separan
+activos de archivados. Esto no certifica ajuste entre piezas. Estado de
+implementación, pruebas y límites en
+`docs/development/product-specs-research-2026-09-05/member-profiles-integration-2026-09-14.md`.
+No hay activación de familias ni llenado mediante esta propuesta todavía.
 
 ## 5. Prerrequisitos y motor de restricciones
 
@@ -495,6 +593,21 @@ plantilla efectiva, IDs de definición, tipo explícito y números leídos como
 La adopción por los evaluadores de ensamblajes es una fase posterior; este
 transporte por sí solo no aprueba un montaje ni llena productos.
 
+**Extensión del motor publicada 2026-09-08:** `rows_schema.version: 2`
+admite `strict_ordered_pairs` para dos columnas numéricas de la misma unidad
+cuando el dueño del dato exige primera < segunda. `ordered_pairs` conserva
+su significado inclusivo. Declarar ID/OD de un cuerpo anular en una fila no
+hereda las restricciones escalares: el esquema de ese cuerpo debe expresar
+su par. Igual unidad no demuestra igual dueño físico ni mismo datum; esa
+declaración se revisa en la familia. Ausencia no se convierte en contradicción,
+ni se comparan celdas de filas distintas. La versión de cada sobre debe
+coincidir con el esquema; v1 no acepta la clave nueva. Los esquemas publicados
+con observaciones/referencias conservan la guarda de significado, y adoptar v2
+exige migración explícita y cliente compatible. La migración `20260908185800`
+publicó y verificó el motor sin activar esquemas v2 ni cambiar productos;
+la adopción de metadata y la distribución del cliente siguen pendientes. Ver
+[evidencia y pendientes](../development/product-specs-research-2026-09-05/strict-row-order-readiness-2026-09-08.md).
+
 
 ### Requisitos de ficha por campo (2026-09-06, migración 20260906200000)
 
@@ -610,6 +723,23 @@ observaciones. El futuro aplicador de sólo ficha debe preservar todo lo ajeno
 al delta, bloquear deriva, verificar el backup y producir recibo. El saneamiento
 global continúa siendo una condición previa al llenado.
 
+El [candidato local de aplicación](../development/product-specs-research-2026-09-05/research-application-readiness-2026-09-07.md)
+ya implementa ese límite, sin activación productiva: paquete ligado a proyecto,
+tenant, actor, revisión independiente y preimagen íntegra; registro privilegiado
+del comando exacto; escritura de hechos cambiados con procedencia `research`
+separada de una observación `mechanic`; y recibo atómico de antes/después.
+Una observación físicamente confirmada requiere adjudicación explícita antes de
+reemplazarla. Las columnas comerciales y observaciones ajenas al delta se
+comparan completas, sin lista reducida de precio/costo como sustituto.
+
+Una respuesta perdida no autoriza crear otra operación. El cliente consulta el
+registro y recupera su recibo; si ya se aplicó, no vuelve a simular la propuesta
+obsoleta ni repite la escritura. Una edición posterior se informa y conserva.
+El ensayo local recorrió SQL/Python y tres contenciones entre dos conexiones,
+pero faltan revisión final, despliegue, lectura autenticada publicada y cierre
+global antes de operar. Las huellas son trazabilidad, no certificación mecánica
+ni prueba de que un investigador leyó una fuente.
+
 ### Valores condicionados y alcance de contenido (2026-09-07)
 
 La infraestructura 2400, aplicada/verificada, amplía `row_conditions` con
@@ -644,6 +774,21 @@ productivo de 2500 se registran en el
 [checkpoint de integración](../development/product-specs-research-2026-09-05/cardinality-integration-2026-09-07.md).
 Los conjuntos de
 transmisión que no tienen tabla de coronas no reciben esa dependencia.
+
+**Extensión candidata 2026-09-08, todavía local:** `row_coherence.version: 3`
+permite alternativamente `{id, field, group_by, total_column}`. `group_by`
+identifica un link existente de esa misma tabla; el total es una columna entera
+con mínimo no negativo de su destino. Cada fila padre se cuenta por separado,
+sin compensar faltantes con sobrantes de otro grupo. La incidencia señala el
+campo, ID y columna de total del padre; `collection_field` conserva el dueño
+de aplicabilidad de las filas contadas. Faltantes y dueño desconocido permanecen
+pendientes; un dueño inexistente explícito es conflicto. Una fila malformada
+no se elimina del conteo para producir una apariencia de consistencia.
+
+V1 y V2 siguen cerradas a esta sintaxis, y V3 también admite la forma escalar
+anterior. El candidato no activa ninguna plantilla. Contar por configuración
+no aprueba compatibilidad ni convierte el catálogo de variantes del fabricante
+en contenido del SKU. Véanse [evidencia y límites de integración](../development/product-specs-research-2026-09-05/grouped-cardinality-engine-candidate-2026-09-08.md).
 
 Una declaración de presión también conserva su alcance documental: cifras
 impresas en unidades distintas no se convierten ni se funden, y un máximo

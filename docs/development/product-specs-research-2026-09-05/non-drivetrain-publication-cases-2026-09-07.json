@@ -1,0 +1,1203 @@
+{
+  "schema_version": 1,
+  "title": "All-family physical-port cardinality",
+  "catalogue_sha256": "16459826fee4c589cce37243afe4e159317212ddf1d47d6d6f1d76f9b3fadf15",
+  "independent_review_hashes": [
+    "4cbd9cd4e1ccb2f41ab3249cbaed83fe419689aa6ba1dbb24a5b9dd856bd66d1",
+    "a1c6bfc5fae5c11b3b7f804b240ea36b2a36db2f6e4ba2ff868c061802856820"
+  ],
+  "mechanical_coverage_complete": false,
+  "automatic_fill_authorized": false,
+  "cases": [
+    {
+      "id": "u_lock_cable_kit_exposes_both_measurements",
+      "template": "lock",
+      "values": {
+        "lock_kind": "Kit U + cable",
+        "inner_width_mm": "83",
+        "inner_height_mm": "178",
+        "cable_length_mm": "1219.2"
+      },
+      "kind": "synthetic_dimensions_source_confirms_kit_kind_only",
+      "source_urls": [
+        "https://www.kryptonitelock.com/en/products/product-information/current-key/002079.html?type=bicycle"
+      ],
+      "expected_blocking": []
+    },
+    {
+      "id": "jacket_can_have_long_sleeves",
+      "template": "rider_apparel",
+      "values": {
+        "garment_kind": "Chaqueta",
+        "sleeve": "Larga"
+      },
+      "kind": "source_scoped_representation",
+      "source_urls": [
+        "https://www.castelli-cycling.com/AU/en/Men/Cycling/Top/Jackets/Cold/PERFETTO-RoS-LONG-SLEEVE/p/4519500_383_52_S"
+      ],
+      "expected_blocking": []
+    },
+    {
+      "id": "oem_size_label_is_not_closed_menu",
+      "template": "rider_apparel",
+      "values": {
+        "garment_kind": "Chaqueta",
+        "oem_size_label": "XXXL / código OEM 56"
+      },
+      "kind": "synthetic_label_no_cross_brand_equivalence",
+      "source_urls": [
+        "https://www.castelli-cycling.com/AU/en/Men/Cycling/Top/Jackets/Cold/PERFETTO-RoS-LONG-SLEEVE/p/4519500_383_52_S"
+      ],
+      "expected_blocking": []
+    },
+    {
+      "id": "food_maurten_gel_100_caf_100_packaged",
+      "template": "food_beverage",
+      "values": {
+        "preparation_kind": "Envasado",
+        "food_item_kind": "Gel / barra energética",
+        "units_per_pack": "12",
+        "unit_mass_g": "40",
+        "net_mass_g": "480",
+        "nutrition_facts": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r01",
+              "values": {
+                "nutrient": "Energía (kcal)",
+                "amount": "100",
+                "basis": "Por unidad / sobre",
+                "qualifier": "Aproximadamente, según texto OEM; imagen de etiqueta no transcrita"
+              },
+              "sources": [
+                "https://www.maurten.com/products/us/gel-100-caf-100-box-us"
+              ]
+            },
+            {
+              "id": "r02",
+              "values": {
+                "nutrient": "Carbohidratos (g)",
+                "amount": "25",
+                "basis": "Por unidad / sobre"
+              },
+              "sources": [
+                "https://www.maurten.com/products/us/gel-100-caf-100-box-us"
+              ]
+            }
+          ]
+        },
+        "caffeine_mg": "100",
+        "caffeine_basis": "Por unidad / sobre",
+        "ingredients_text": "Water, glucose, fructose, sodium alginate, gluconic acid, calcium carbonate, caffeine",
+        "allergen_statement_source": "Documento / página oficial del fabricante",
+        "spec_evidence_source": "https://www.maurten.com/products/us/gel-100-caf-100-box-us"
+      },
+      "kind": "oem_revision_scoped",
+      "source_ids": [
+        "E-MAURTEN"
+      ],
+      "source_urls": [
+        "https://www.maurten.com/products/us/gel-100-caf-100-box-us"
+      ],
+      "expected_blocking": [],
+      "inventory_product": null,
+      "note": "Escenario ND23: caja (480 g) ≠ sobre (40 g) ≠ carbohidratos (25 g); allergens_declared_none NO se marca porque nadie lo declara. Los valores por 100 g no se transcribieron (la lectura los daba aproximados). No es un producto del inventario.",
+      "review_note": "Texto OEM US consultado, no envase visto; eliminar nota de investigación de alérgenos y cafeína duplicada.",
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false,
+      "root_reconciliation": []
+    },
+    {
+      "id": "food_latte_chico_prepared_inventory",
+      "template": "food_beverage",
+      "values": {
+        "preparation_kind": "Preparado en barra",
+        "food_item_kind": "Latte",
+        "serving_size": "Chico",
+        "allergen_statement_source": "Sin fuente"
+      },
+      "kind": "inventory_candidate_unverified",
+      "source_ids": [
+        "E-INVENTARIO"
+      ],
+      "source_urls": [],
+      "expected_blocking": [],
+      "inventory_product": "Latte Chico",
+      "note": "Producto real del café: la receta no está registrada, así que ingredientes/alérgenos quedan sin declarar (allergen_statement_source = Sin fuente); «Leche de vaca» y la sustitución son supuestos de venta a confirmar con el negocio, no hechos.",
+      "review_note": "LatteChico no prueba leche de vaca, sustitución ofrecida ni temperatura; receta pendiente.",
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false,
+      "root_reconciliation": []
+    },
+    {
+      "id": "lock_kryptonite_002079_kit_ratings_by_component",
+      "template": "lock",
+      "values": {
+        "lock_kind": "Kit U + cable",
+        "inner_width_mm": "82.55",
+        "inner_height_mm": "177.8",
+        "shackle_diameter_mm": "13",
+        "cable_length_mm": "1219.2",
+        "keys_included": "3",
+        "mount_bracket_included": true,
+        "security_rating_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r02",
+              "values": {
+                "component": "U / arco",
+                "issuer": "Sold Secure",
+                "level": "Gold",
+                "component_model": "Evolution Mini7 DoubleDeadbolt",
+                "edition": "2024",
+                "scope_note": "La aprobación citada excluye el cable; verificar identidad/generación de la presentación002079 antes de llenar."
+              },
+              "sources": [
+                "https://www.soldsecure.com/files/downloads/Sold%20Secure%202024%20Approved%20Product%20Catalogue%20Web.pdf"
+              ]
+            }
+          ]
+        },
+        "spec_evidence_source": "Kryptonite002079 y Sold Secure catálogo2024"
+      },
+      "kind": "source_scoped_representation",
+      "source_ids": [
+        "S-KRYPTONITE",
+        "S-KRYPTONITE-SIZE",
+        "S-SOLD-SECURE"
+      ],
+      "source_urls": [
+        "https://www.kryptonitelock.com/en/products/product-information/current-key/002079.html?type=bicycle",
+        "https://support.kryptonitelock.com/hc/en-us/article_attachments/360079333594",
+        "https://www.soldsecure.com/files/downloads/Sold%20Secure%202024%20Approved%20Product%20Catalogue%20Web.pdf"
+      ],
+      "expected_blocking": [],
+      "inventory_product": null,
+      "note": "Se omiten ART4 y nivel7 de gráfico no leído. Medidas U son internas según tabla OEM. 4ft=1219.2mm es conversión aritmética nominal, no medición con décimas ni tolerancia. Gold conserva fuente/edición y exclusión del cable.",
+      "eligible_for_product_fill": false,
+      "review_findings": [
+        "FB19"
+      ],
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false,
+      "root_reconciliation": []
+    },
+    {
+      "id": "lock_inventory_onguard_coil_180x12",
+      "template": "lock",
+      "values": {
+        "lock_kind": "Cable / espiral",
+        "cable_length_mm": "1800",
+        "cable_diameter_mm": "12",
+        "locking_mechanism": "Llave"
+      },
+      "kind": "inventory_title_only_candidate",
+      "source_ids": [
+        "E-INVENTARIO"
+      ],
+      "source_urls": [],
+      "expected_blocking": [],
+      "inventory_product": "Candado OnGuard Llave Espiral NS Coil 180cmX12mm Naranjo",
+      "note": "Candidato del título congelado; no verificado como hecho OEM. Producto real: 180 cm x 12 mm son largo y diámetro del cable; sin clasificación de seguridad declarada.",
+      "eligible_for_product_fill": false,
+      "review_findings": [],
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false,
+      "root_reconciliation": []
+    },
+    {
+      "id": "bottle_fidlock_twist_590_with_uni_base",
+      "template": "bottle",
+      "values": {
+        "volume_ml": "590",
+        "bottle_retention_system": "FIDLOCK TWIST",
+        "base_included": true,
+        "included_base_model": "TWIST uni base",
+        "material": "PE / plástico",
+        "bpa_free_claim": true,
+        "spec_evidence_source": "fidlock.com 09641-001032(TBL)"
+      },
+      "kind": "source_scoped_representation",
+      "source_ids": [
+        "S-FIDLOCK-BOTTLE",
+        "S-FIDLOCK-BASE"
+      ],
+      "source_urls": [
+        "https://www.fidlock.com/consumer/en/twist-bottle-590-uni-base/09641-001032-tbl",
+        "https://www.fidlock.com/consumer/en/twist-uni-base/09620-p00002-blk"
+      ],
+      "expected_blocking": [],
+      "inventory_product": null,
+      "note": "Caso basado en índice primario del producto590+uni base, pendiente de lectura directa para llenado. No se registra diámetro: el68 publicado es ancho, no diámetro. Retención propietaria no prohíbe dimensiones físicas.",
+      "eligible_for_product_fill": false,
+      "review_findings": [
+        "FB12"
+      ],
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false,
+      "root_reconciliation": []
+    },
+    {
+      "id": "bottle_cage_fidlock_uni_base_tube_width",
+      "template": "bottle_cage",
+      "values": {
+        "cage_mount": "Bridas (cable ties) al tubo",
+        "cage_retention_system": "FIDLOCK TWIST",
+        "frame_tube_width_min_mm": "28",
+        "frame_tube_width_max_mm": "62",
+        "spec_evidence_source": "fidlock.com 09620-P00002(BLK)"
+      },
+      "kind": "source_scoped_representation",
+      "source_ids": [
+        "S-FIDLOCK-BASE"
+      ],
+      "source_urls": [
+        "https://www.fidlock.com/consumer/en/twist-uni-base/09620-p00002-blk"
+      ],
+      "expected_blocking": [],
+      "inventory_product": null,
+      "note": "28–62 mm es ancho de tubo, no diámetro; «fits all TWIST modules» no incluye botellas convencionales.",
+      "eligible_for_product_fill": false,
+      "review_findings": [
+        "FB11"
+      ],
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false,
+      "root_reconciliation": []
+    },
+    {
+      "id": "bottle_inventory_ztto_750_retention_unknown",
+      "template": "bottle",
+      "values": {
+        "volume_ml": "750",
+        "bottle_retention_system": "Desconocido / sin confirmar"
+      },
+      "kind": "inventory_title_only_candidate",
+      "source_ids": [
+        "E-INVENTARIO"
+      ],
+      "source_urls": [],
+      "expected_blocking": [],
+      "inventory_product": "Botella 750ml ZTTO Blanca/Transparente",
+      "note": "Candidato del título congelado; no verificado como hecho OEM. Producto real: el título no identifica el sistema de retención; no se presume aro convencional.",
+      "eligible_for_product_fill": false,
+      "review_findings": [
+        "FB12"
+      ],
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false,
+      "root_reconciliation": []
+    },
+    {
+      "id": "helmet_smith_mainline_certifications_by_row",
+      "template": "helmet",
+      "values": {
+        "oem_size_label": "M",
+        "head_circumference_min_cm": "55",
+        "head_circumference_max_cm": "59",
+        "intended_audience": "Adulto",
+        "rotational_protection_claimed": true,
+        "rotational_protection_system": "Mips",
+        "label_evidence_state": "Etiqueta no observada",
+        "weight_g": "770",
+        "spec_evidence_source": "smithoptics.com mainline-mips-r",
+        "certification_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r01",
+              "values": {
+                "standard": "CPSC 16 CFR 1203",
+                "scope_model": "Mainline Mips",
+                "evidence_kind": "Página OEM",
+                "evidence_date": "2026-09-07",
+                "standard_text": "CPSC (personas de5 años o más)"
+              },
+              "sources": [
+                "https://www.smithoptics.com/en-us/products/mainline-mips-r"
+              ]
+            },
+            {
+              "id": "r02",
+              "values": {
+                "standard": "EN 1078",
+                "scope_model": "Mainline Mips",
+                "evidence_kind": "Página OEM",
+                "evidence_date": "2026-09-07",
+                "standard_text": "CE EN1078"
+              },
+              "sources": [
+                "https://www.smithoptics.com/en-us/products/mainline-mips-r"
+              ]
+            },
+            {
+              "id": "r03",
+              "values": {
+                "standard": "NTA 8776",
+                "scope_model": "Mainline Mips",
+                "evidence_kind": "Página OEM",
+                "evidence_date": "2026-09-07",
+                "standard_text": "NTA8776"
+              },
+              "sources": [
+                "https://www.smithoptics.com/en-us/products/mainline-mips-r"
+              ]
+            },
+            {
+              "id": "r04",
+              "values": {
+                "standard": "ASTM F1952",
+                "scope_model": "Mainline Mips",
+                "evidence_kind": "Página OEM",
+                "evidence_date": "2026-09-07",
+                "standard_text": "ASTM F1952"
+              },
+              "sources": [
+                "https://www.smithoptics.com/en-us/products/mainline-mips-r"
+              ]
+            }
+          ]
+        },
+        "helmet_construction": "Integral"
+      },
+      "kind": "source_scoped_representation",
+      "source_ids": [
+        "S-SMITH"
+      ],
+      "source_urls": [
+        "https://www.smithoptics.com/en-us/products/mainline-mips-r"
+      ],
+      "expected_blocking": [],
+      "inventory_product": null,
+      "note": "Declaraciones de la página Mainline Mips; tabla adulta M55–59 y770g M. No se observó etiqueta de unidad ni edición EN. Se omiten construcción no publicada y mercados inferidos desde norma/aplicación. No afirmar certificación de cualquier lote/presentación. Integral se conserva como construcción general; no se infiere método de fabricación o materiales.",
+      "eligible_for_product_fill": false,
+      "review_findings": [
+        "FB11",
+        "FB14",
+        "FB15",
+        "FB19"
+      ],
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false,
+      "root_reconciliation": []
+    },
+    {
+      "id": "helmet_inventory_best_enduro_certificado_sin_norma",
+      "template": "helmet",
+      "values": {
+        "oem_size_label": "L",
+        "helmet_kind": "Enduro",
+        "label_evidence_state": "Etiqueta no observada"
+      },
+      "kind": "inventory_title_only_candidate",
+      "source_ids": [
+        "E-INVENTARIO"
+      ],
+      "source_urls": [],
+      "expected_blocking": [],
+      "inventory_product": "CASCO BEST ENDURO NEGRO MATTE TALLA L CERTIFICADO EN CAJA",
+      "note": "Título BEST EnduroL: ni Adulto ni una norma concreta se deducen de L o certificado en caja. Sin filas de certificación hasta evidencia.",
+      "eligible_for_product_fill": false,
+      "review_findings": [
+        "FB14",
+        "FB15"
+      ],
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false,
+      "root_reconciliation": []
+    },
+    {
+      "id": "apparel_castelli_perfetto_ros_ls_jacket",
+      "template": "rider_apparel",
+      "values": {
+        "garment_kind": "Chaqueta",
+        "sleeve": "Larga",
+        "oem_size_label": "S",
+        "oem_size_system": "Castelli hombre S–3XL",
+        "gender_fit": "Hombre",
+        "intended_audience": "Adulto",
+        "fit_cut": "Tailored",
+        "spec_evidence_source": "castelli-cycling.com 4519500-383"
+      },
+      "kind": "source_scoped_representation",
+      "source_ids": [
+        "S-CASTELLI"
+      ],
+      "source_urls": [
+        "https://www.castelli-cycling.com/CY/en/Men/Cycling/Top/Jackets/Cold/PERFETTO-RoS-LONG-SLEEVE/p/4519500_383_52_S"
+      ],
+      "expected_blocking": [],
+      "inventory_product": null,
+      "note": "Mismo SKU4519500-383, tamañoS en página oficial CY indexada. Se conserva Tailored literal, sin Race. Composición no leída: vacío. No transferir valores de otro color/revisión.",
+      "eligible_for_product_fill": false,
+      "review_findings": [
+        "FB15",
+        "FB16"
+      ],
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false,
+      "root_reconciliation": []
+    },
+    {
+      "id": "apparel_inventory_polera_wtb_xl",
+      "template": "rider_apparel",
+      "values": {
+        "garment_kind": "Polera",
+        "oem_size_label": "XL",
+        "intended_audience": "Desconocido / sin confirmar"
+      },
+      "kind": "inventory_title_only_candidate",
+      "source_ids": [
+        "E-INVENTARIO"
+      ],
+      "source_urls": [],
+      "expected_blocking": [],
+      "inventory_product": "Polera Wtb Wilderness Negra Xl",
+      "note": "Candidato del título congelado; no verificado como hecho OEM. Producto real: talla OEM exacta «XL» sin sistema ni guía; público desconocido.",
+      "eligible_for_product_fill": false,
+      "review_findings": [
+        "FB15"
+      ],
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false,
+      "root_reconciliation": []
+    },
+    {
+      "id": "RCF27",
+      "template": "food_beverage",
+      "field": "nutrition_facts",
+      "kind": "synthetic_regression",
+      "values": {
+        "preparation_kind": "Envasado",
+        "nutrition_facts": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "nutrient": "Otro",
+                "amount": "0.01",
+                "basis": "Por porción declarada"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_row_condition_issues": [
+        {
+          "code": "row_required_missing",
+          "field": "nutrition_facts",
+          "row_id": "r1",
+          "column": "nutrient_name",
+          "blocking": false
+        },
+        {
+          "code": "row_required_missing",
+          "field": "nutrition_facts",
+          "row_id": "r1",
+          "column": "amount_unit",
+          "blocking": false
+        },
+        {
+          "code": "row_required_missing",
+          "field": "nutrition_facts",
+          "row_id": "r1",
+          "column": "basis_amount",
+          "blocking": false
+        },
+        {
+          "code": "row_required_missing",
+          "field": "nutrition_facts",
+          "row_id": "r1",
+          "column": "basis_unit",
+          "blocking": false
+        }
+      ],
+      "expected_blocking": [],
+      "source_ids": [
+        "CATALOG",
+        "ENGINE2200"
+      ],
+      "purpose": "Valor sin nombre, unidad y tamaño de porción no está completo.",
+      "gap_ids": [],
+      "not_a_mechanical_verdict": true,
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false
+    },
+    {
+      "id": "RCF28",
+      "template": "food_beverage",
+      "field": "nutrition_facts",
+      "kind": "oem_representation_example",
+      "values": {
+        "preparation_kind": "Envasado",
+        "nutrition_facts": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "nutrient": "Otro",
+                "amount": "0.01",
+                "basis": "Por porción declarada",
+                "nutrient_name": "Sal",
+                "amount_unit": "g",
+                "basis_amount": "60",
+                "basis_unit": "ml",
+                "source_url": "https://www.scienceinsport.com/shop-sis/team-sis/go-isotonic-energy-gels-mixed"
+              },
+              "sources": [
+                "https://www.scienceinsport.com/shop-sis/team-sis/go-isotonic-energy-gels-mixed"
+              ]
+            }
+          ]
+        }
+      },
+      "expected_row_condition_issues": [],
+      "expected_blocking": [],
+      "source_ids": [
+        "SIS_GO"
+      ],
+      "purpose": "Tabla Cherry: sal por 60 ml, conservada como Otro en gramos; no convertir a sodio.",
+      "gap_ids": [],
+      "not_a_mechanical_verdict": true,
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false
+    },
+    {
+      "id": "RCF29",
+      "template": "food_beverage",
+      "field": "nutrition_facts",
+      "kind": "oem_representation_example",
+      "values": {
+        "preparation_kind": "Envasado",
+        "nutrition_facts": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "nutrient": "Carbohidratos (g)",
+                "amount": "36",
+                "basis": "Por 100 ml"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_row_condition_issues": [],
+      "expected_blocking": [],
+      "source_ids": [
+        "SIS_GO"
+      ],
+      "purpose": "La base 100 ml ya está explícita: no requiere duplicar columnas de porción.",
+      "gap_ids": [],
+      "not_a_mechanical_verdict": true,
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false
+    },
+    {
+      "id": "RCF30",
+      "template": "food_beverage",
+      "field": "nutrition_facts",
+      "kind": "synthetic_regression",
+      "values": {
+        "preparation_kind": "Envasado",
+        "nutrition_facts": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "nutrient": "Carbohidratos (g)",
+                "amount": "10",
+                "basis": "Por porción servida",
+                "basis_amount": "200",
+                "basis_unit": "ml"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_row_condition_issues": [
+        {
+          "code": "row_required_missing",
+          "field": "nutrition_facts",
+          "row_id": "r1",
+          "column": "serving_reference",
+          "blocking": false
+        }
+      ],
+      "expected_blocking": [],
+      "source_ids": [
+        "CATALOG",
+        "ENGINE2200"
+      ],
+      "purpose": "Porción servida del envasado necesita referencia de preparación; cantidades sintéticas.",
+      "gap_ids": [],
+      "not_a_mechanical_verdict": true,
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false
+    },
+    {
+      "id": "rnd_RF6",
+      "template": "bottle",
+      "values": {
+        "volume_ml": "600",
+        "bottle_retention_system": "FIDLOCK TWIST",
+        "base_included": true,
+        "included_base_model": "TWIST bike base"
+      },
+      "kind": "synthetic_representation",
+      "note": "Una botella TWIST sin diámetro de portabidón. Hoy el campo está permitido y su ausencia parece un dato que falta.",
+      "expected_blocking": [],
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false
+    },
+    {
+      "id": "rnd_RF7",
+      "template": "bottle",
+      "values": {
+        "volume_ml": "600",
+        "bottle_retention_system": "FIDLOCK TWIST",
+        "bottle_diameter_mm": "74"
+      },
+      "kind": "synthetic_representation",
+      "note": "Reducir la TWIST a una botella de un diámetro es lo que el hallazgo prohíbe.",
+      "expected_blocking": [
+        {
+          "code": "field_applicability",
+          "field": "bottle_diameter_mm"
+        }
+      ],
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false
+    },
+    {
+      "id": "rnd_RF11",
+      "template": "helmet",
+      "values": {
+        "intended_audience": "Niño / juvenil",
+        "label_evidence_state": "Etiqueta observada",
+        "certification_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "a",
+              "values": {
+                "standard": "EN 1078",
+                "standard_text": "EN 1078:2012+A1:2012",
+                "edition": "2012+A1",
+                "market": "UE",
+                "evidence_kind": "Etiqueta observada en la unidad",
+                "evidence_date": "2026-09-07"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "helmet_construction": "Integral"
+      },
+      "kind": "synthetic_representation",
+      "note": "Ejemplo sintético; no se afirma haber observado la etiqueta de un producto real.",
+      "expected_blocking": [],
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false
+    },
+    {
+      "id": "rnd_RF12",
+      "template": "helmet",
+      "values": {
+        "helmet_kind": "Urbano",
+        "intended_audience": "Adulto",
+        "label_evidence_state": "Etiqueta no observada"
+      },
+      "kind": "synthetic_representation",
+      "note": "Sin etiqueta observada no hay declaración de norma; la ausencia no se escribe como una norma más.",
+      "expected_blocking": [],
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false
+    },
+    {
+      "id": "rnd_RF13",
+      "template": "food_beverage",
+      "values": {
+        "food_item_kind": "Snack",
+        "preparation_kind": "Envasado",
+        "net_mass_g": "60",
+        "nutrition_facts": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "a",
+              "values": {
+                "nutrient": "Carbohidratos (g)",
+                "amount": "20",
+                "basis": "Por 100 g"
+              },
+              "sources": []
+            },
+            {
+              "id": "b",
+              "values": {
+                "nutrient": "Carbohidratos (g)",
+                "amount": "25",
+                "basis": "Por 100 g"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "kind": "unresolved_semantic_gap",
+      "note": "Persiste el conflicto documental: no se sustituye por una identidad que rechace configuraciones válidas. No habilita llenado.",
+      "expected_blocking": [],
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false
+    },
+    {
+      "id": "rnd_RF14",
+      "template": "food_beverage",
+      "values": {
+        "food_item_kind": "Snack",
+        "preparation_kind": "Envasado",
+        "net_mass_g": "60",
+        "units_per_pack": "1",
+        "allergen_statement_source": "Etiqueta del envase",
+        "allergen_note": "Contiene leche y frutos secos",
+        "spec_evidence_source": "Envase fotografiado en tienda",
+        "nutrition_facts": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "a",
+              "values": {
+                "nutrient": "Carbohidratos (g)",
+                "amount": "20",
+                "basis": "Por 100 g"
+              },
+              "sources": []
+            },
+            {
+              "id": "b",
+              "values": {
+                "nutrient": "Carbohidratos (g)",
+                "amount": "12",
+                "basis": "Por porción declarada",
+                "serving_reference": "1 barra de 60 g",
+                "basis_amount": "60",
+                "basis_unit": "g"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "kind": "synthetic_representation",
+      "note": "El mismo nutriente sobre dos bases distintas es legítimo y la identidad lo permite.",
+      "expected_blocking": [],
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false
+    },
+    {
+      "id": "rnd_RF16",
+      "template": "lock",
+      "values": {
+        "lock_kind": "Kit U + cable",
+        "inner_width_mm": "110",
+        "inner_height_mm": "230",
+        "cable_length_mm": "1200",
+        "cable_diameter_mm": "10"
+      },
+      "kind": "synthetic_representation",
+      "note": "Las medidas del arco y del cable en la misma presentación, sin nivel de seguridad declarado: pendiente, no transferido desde el arco.",
+      "expected_blocking": [],
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false
+    },
+    {
+      "id": "rnd_root_twist_physical_envelope",
+      "template": "bottle",
+      "values": {
+        "bottle_retention_system": "FIDLOCK TWIST",
+        "bottle_body_dimensions": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "dimension": "Ancho",
+                "value_mm": "76",
+                "configuration": "Botella con base incluida",
+                "datum": "Ancho del conjunto bottle 800 + bike base, plantilla OEM 1:1"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "kind": "synthetic_representation",
+      "note": "Fidlock publica dimensiones del conjunto; medir el exterior no lo convierte en compatible con un aro.",
+      "expected_blocking": [],
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false
+    },
+    {
+      "id": "rnd_root_two_security_programmes",
+      "template": "lock",
+      "values": {
+        "lock_kind": "U-lock",
+        "security_rating_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "component": "U / arco",
+                "issuer": "Sold Secure",
+                "component_model": "GRANIT XPlus 540",
+                "level": "Diamond",
+                "rating_scheme": "Pedal Cycle"
+              },
+              "sources": []
+            },
+            {
+              "id": "r2",
+              "values": {
+                "component": "U / arco",
+                "issuer": "Sold Secure",
+                "component_model": "GRANIT XPlus 540",
+                "level": "Gold",
+                "rating_scheme": "Powered Cycle"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "kind": "synthetic_representation",
+      "note": "ABUS declara ambos programas para el mismo candado; no se deduplica por emisor.",
+      "expected_blocking": [],
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false
+    },
+    {
+      "id": "rnd_root_security_programme_missing",
+      "template": "lock",
+      "values": {
+        "security_rating_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "component": "U / arco",
+                "issuer": "Sold Secure",
+                "component_model": "GRANIT XPlus 540",
+                "level": "Diamond"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "kind": "synthetic_representation",
+      "note": "Contraejemplo de representación; no aprobación de producto.",
+      "expected_blocking": [],
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false,
+      "expected_issue_subset": [
+        {
+          "code": "row_required_missing",
+          "field": "security_rating_configurations",
+          "blocking": false
+        }
+      ]
+    },
+    {
+      "id": "rnd_root_two_other_nutrients",
+      "template": "food_beverage",
+      "values": {
+        "nutrition_facts": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "nutrient": "Otro",
+                "amount_unit": "mg",
+                "basis": "Por 100 g",
+                "nutrient_name": "Potasio",
+                "amount": "100"
+              },
+              "sources": []
+            },
+            {
+              "id": "r2",
+              "values": {
+                "nutrient": "Otro",
+                "amount_unit": "mg",
+                "basis": "Por 100 g",
+                "nutrient_name": "Calcio",
+                "amount": "50"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "kind": "synthetic_representation",
+      "note": "Contraejemplo de representación; no aprobación de producto.",
+      "expected_blocking": [],
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false
+    },
+    {
+      "id": "rnd_root_two_serving_sizes",
+      "template": "food_beverage",
+      "values": {
+        "nutrition_facts": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "nutrient": "Carbohidratos (g)",
+                "basis": "Por porción declarada",
+                "basis_unit": "g",
+                "basis_amount": "30",
+                "amount": "20",
+                "serving_reference": "Porción pequeña"
+              },
+              "sources": []
+            },
+            {
+              "id": "r2",
+              "values": {
+                "nutrient": "Carbohidratos (g)",
+                "basis": "Por porción declarada",
+                "basis_unit": "g",
+                "basis_amount": "60",
+                "amount": "40",
+                "serving_reference": "Porción grande"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "kind": "synthetic_representation",
+      "note": "Contraejemplo de representación; no aprobación de producto.",
+      "expected_blocking": [],
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false
+    },
+    {
+      "id": "rnd_root_helmet_child_full_face",
+      "template": "helmet",
+      "values": {
+        "helmet_kind": "Enduro",
+        "helmet_construction": "Integral",
+        "intended_audience": "Niño / juvenil"
+      },
+      "kind": "synthetic_representation",
+      "note": "Contraejemplo de representación; no aprobación de producto.",
+      "expected_blocking": [],
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false
+    },
+    {
+      "id": "rnd_root_helmet_construction_in_wrong_axis",
+      "template": "helmet",
+      "values": {
+        "helmet_kind": "Integral"
+      },
+      "kind": "synthetic_representation",
+      "note": "Contraejemplo de representación; no aprobación de producto.",
+      "expected_blocking": [
+        {
+          "code": "option",
+          "field": "helmet_kind"
+        }
+      ],
+      "automatic_fill_authorized": false,
+      "facts_verified_for_product": false,
+      "expected_sql_blocking": [
+        {
+          "code": "field_constraint",
+          "field": "helmet_kind"
+        }
+      ],
+      "diagnostic_transport_note": "SQL field_constraint y Dart option: mismo valor explícito fuera del dominio, bloqueante."
+    },
+    {
+      "id": "rv_bottle_missing_datum_is_pending",
+      "template": "bottle",
+      "values": {
+        "bottle_body_dimensions": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "body",
+              "values": {
+                "dimension": "Ancho",
+                "value_mm": "76",
+                "configuration": "Botella con base incluida"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_issue_subset": [
+        {
+          "code": "row_incomplete",
+          "field": "bottle_body_dimensions",
+          "blocking": false
+        }
+      ],
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false
+    },
+    {
+      "id": "nd_kit_lock_light",
+      "template": "lock",
+      "values": {
+        "kit_members": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "included-member",
+              "values": {
+                "member_role": "otro",
+                "quantity": "1",
+                "position": "Sin posición",
+                "family": "light"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false
+    },
+    {
+      "id": "nd_kit_lock_unknown",
+      "template": "lock",
+      "values": {
+        "kit_members": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "included-member",
+              "values": {
+                "member_role": "otro",
+                "quantity": "1",
+                "position": "Sin posición"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "expected_issue_subset": [
+        {
+          "code": "row_incomplete",
+          "field": "kit_members",
+          "blocking": false
+        }
+      ]
+    },
+    {
+      "id": "nd_kit_rider_protection_light",
+      "template": "rider_protection",
+      "values": {
+        "kit_members": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "included-member",
+              "values": {
+                "member_role": "otro",
+                "quantity": "1",
+                "position": "Sin posición",
+                "family": "light"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false
+    },
+    {
+      "id": "nd_kit_rider_protection_unknown",
+      "template": "rider_protection",
+      "values": {
+        "kit_members": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "included-member",
+              "values": {
+                "member_role": "otro",
+                "quantity": "1",
+                "position": "Sin posición"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "expected_issue_subset": [
+        {
+          "code": "row_incomplete",
+          "field": "kit_members",
+          "blocking": false
+        }
+      ]
+    }
+  ],
+  "root_nd_case_overrides": [
+    {
+      "id": "helmet_smith_mainline_certifications_by_row",
+      "reason": "Integral pertenece al eje de construcción, no al uso."
+    },
+    {
+      "id": "helmet_inventory_best_enduro_certificado_sin_norma",
+      "reason": "Se conserva Enduro sin inferir cobertura desde el título."
+    },
+    {
+      "id": "RCF25",
+      "reason": "Una variante distinta del soporte no es montaje de este SKU; se rechaza el token retirado."
+    }
+  ],
+  "root_row_value_case_overrides": [
+    "RCF08",
+    "CPC_GAP_INCLUDED_CLAMP_FALSE"
+  ],
+  "deferred_pressure_fixture_ids": [],
+  "superseded_pressure_fixtures": [
+    "wrfp_hookless_row_maximum_is_not_the_headline",
+    "wrfp_schwalbe_general_maximum_in_bar",
+    "wrfp_unit_without_value_is_pending",
+    "wrfp_value_without_unit_stays_pending"
+  ],
+  "required_server_migration": "20260907025000"
+}

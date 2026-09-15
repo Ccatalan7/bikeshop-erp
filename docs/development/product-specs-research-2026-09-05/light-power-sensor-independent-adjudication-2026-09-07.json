@@ -1,0 +1,2814 @@
+{
+  "schema_version": 1,
+  "title": "Adjudicación independiente: luz, alimentación y sensores",
+  "prepared_on": "2026-09-07",
+  "status": "independent_review_frozen_unapplied",
+  "review_scope": "field_representation_and_source_scope",
+  "integration_authority": "root; independent review is not final approval",
+  "base_artifact": "docs/development/product-specs-research-2026-09-05/all-family-reviewed-fields-2026-09-07.json",
+  "base_sha256": "cf8ebeb1e4e7dd32853b8618657a3f25e3f5428158702ef2e0adeb5b89978577",
+  "proposal_artifact": "docs/development/product-specs-research-2026-09-05/light-power-sensor-sanitation-2026-09-07.json",
+  "proposal_sha256": "0f3685983e76efc3aa605ad63ecba70051e5c3b4ef8ccc0dd03047391b7cae47",
+  "sources_read": [
+    {
+      "id": "CAT-WEB",
+      "url": "https://www.cateye.com/intl/products/headlights/HL-EL088RC_TL-LD810/",
+      "read": "2026-09-07 web, líneas 44–122",
+      "scope": "HL-EL088RC/TL-LD810, página que muestra explícitamente cambio Group Ride. Dato de catálogo OEM, sin atribución al stock.",
+      "finding": "La flecha Spec change no documenta dos modos simultáneos ni fecha/serie de la unidad. La fecha de consulta no es revisión OEM."
+    },
+    {
+      "id": "CAT-MANUAL",
+      "url": "https://www.cateye.com/intl/support/manual/data/doc/TL-LD810_820_HP_ENG_v1.pdf",
+      "read": "2026-09-07, PDF 2 páginas; p.1 marca TLLD810/820-201223 1; p.2 tabla Viz300",
+      "scope": "Documento conjunto: separar Viz300 de Viz450. Edición documental no identifica revisión física.",
+      "finding": "Tabla Viz300 sí declara 3.7 V y 800 mAh. Carga Micro-USB. IPX4 se refiere a JIS C0920 en p.1; no reasignar IEC por intuición."
+    },
+    {
+      "id": "GAR-SPECS",
+      "url": "https://www8.garmin.com/manuals/webhelp/GUID-17DE938E-466A-4746-BDBF-7A6FC1B3A32C/EN-US/GUID-62D44DE6-9C4D-4834-8267-8B23F891A9F3.html",
+      "read": "2026-09-07, Edge Specifications, manual v6 agosto 2026",
+      "scope": "Edge 540/540 Solar; página de especificaciones",
+      "finding": "El enlace original no respalda la lista de sensores ni sus protocolos/perfiles."
+    },
+    {
+      "id": "GAR-SENSORS",
+      "url": "https://www8.garmin.com/manuals/webhelp/GUID-17DE938E-466A-4746-BDBF-7A6FC1B3A32C/EN-US/GUID-09801A97-361B-4675-AD3A-6ACE25854DB3.html",
+      "read": "2026-09-07, Wireless Sensors, manual v6 agosto 2026, líneas 36–55",
+      "scope": "Declaraciones Edge 540; ANT+ o Bluetooth generales, modelos/series citados por función y remisión a compatibilidad específica.",
+      "finding": "Rally/Vector, Varia, Edge Remote y Shimano son alcances; no afirman todos los productos de su tipo. Speed/Cadence describe sensores de velocidad o cadencia; no prueba un sensor combinado."
+    },
+    {
+      "id": "ANKER",
+      "url": "https://service.anker.com/product-description/a085g000004x2BVAAY?recordId=a085g000004x2BVAAY",
+      "read": "2026-09-07, líneas 4–36, ficha A2667",
+      "scope": "Anker 735 Nano II 65W A2667 exclusivamente, tres puertos y reparto por combinaciones",
+      "finding": "Tecnologías listadas globalmente, sin asignación por puerto. No publica perfiles de salida V/A en esta página. Input 100–240 V/1.8 A es entrada de red; no perfil de salida. El manual enlazado no fue abierto."
+    },
+    {
+      "id": "USBIF-PD",
+      "url": "https://www.usb.org/usb-charger-pd",
+      "read": "2026-09-07, líneas 5–29",
+      "scope": "Descripción primaria USB PD 3.1, sin certificación de Anker ni del stock",
+      "finding": "Fijos y ajustables son perfiles distintos. El rango de tensión no es exclusivo de PPS. No inferir perfil eléctrico por forma USB-C."
+    },
+    {
+      "id": "USBIF-2019",
+      "url": "https://www.usb.org/sites/default/files/D2T2-1%20-%20USB%20Power%20Delivery.pdf",
+      "read": "2026-09-07, presentación USB-IF 2019; páginas 7–15 y 21",
+      "scope": "Terminología Source/Sink, perfiles fijos/PPS y administración multiport; histórica, no lista universal vigente",
+      "finding": "La capacidad y asignación dependen de condiciones y del sistema. Una clave por tensión mínima no identifica todos los perfiles ni su condición."
+    },
+    {
+      "id": "SUPERNOVA",
+      "url": "https://supernova-lights.com/en/products/mini-2",
+      "read": "2026-09-07, ficha MINI 2 U-MINI2LDM-BLK",
+      "scope": "Ejemplo externo OEM, no producto de inventario",
+      "finding": "Alimentación DC externa no USB demuestra un hueco del sucesor battery_kind; no transportar su tensión a battery_voltage_v de una batería inexistente."
+    },
+    {
+      "id": "SHELDON",
+      "url": "https://www.sheldonbrown.com/generators.html",
+      "read": "2026-09-07",
+      "scope": "Fundamento iluminación con generador; no especificaciones universales de luces actuales",
+      "finding": "Fuente de energía, regulación y carga deben distinguirse. No toda luz tiene batería o autonomía finita declarable."
+    },
+    {
+      "id": "BIPM",
+      "url": "https://www.bipm.org/en/measurement-units/si-prefixes",
+      "read": "2026-09-07, tabla T=10^12, G=10^9",
+      "scope": "Prefijos decimales, no comprobación de capacidad de una tarjeta física",
+      "finding": "TB y GB conformes al SI tienen relación 1000; 1024 GB no es conversión SI de 1 TB. Mantener literal permite verificar uso OEM y no obliga a escribir un número normalizado."
+    }
+  ],
+  "findings": [
+    {
+      "id": "L01",
+      "severity": "high",
+      "path": "light_mode_configurations/member_revision",
+      "problem": "Dos Group Ride alternativos se convierten en hechos simultáneos de un miembro. La fecha web no identifica hardware ni firmware.",
+      "correction": "Separar observaciones documentales en la capa de referencias/conflicto. No insertar las alternativas simultáneamente en canonical values ni inventar revisión.",
+      "source_ids": [
+        "CAT-WEB",
+        "CAT-MANUAL"
+      ],
+      "reproduction": "P01,P02,P03"
+    },
+    {
+      "id": "L02",
+      "severity": "high",
+      "path": "light_mode_configurations/unique_by; light_member_configurations/unique_by",
+      "problem": "Nombre de modo, nombre de miembro y revisión opcional no son identidad de configuración. El mismo rótulo puede pertenecer a unidades/condiciones distintas; ausencia de revisión omite deduplicación.",
+      "correction": "Usar row.id, retirar esas claves únicas semánticas y conservar condiciones explícitas. Conflicto entre afirmaciones requiere gate de alcance, no queda detectado por ID.",
+      "source_ids": [
+        "CAT-WEB",
+        "USBIF-2019"
+      ],
+      "reproduction": "P01,P02,P14,P15,P16"
+    },
+    {
+      "id": "L03",
+      "severity": "medium",
+      "path": "light_member_configurations/ip_rating",
+      "problem": "Shortlist arbitraria y cambio text→token rechazan literales fuera del conjunto y cambian el tipo de columna. El rótulo IEC tampoco es la norma citada por Cateye.",
+      "correction": "Conservar text literal, norma/edición opcionales. Ausencia de norma desconocida; nunca Sin grado declarado por silencio de la página. No afirmar certificación ni usar orden numérico global de IP.",
+      "source_ids": [
+        "CAT-MANUAL",
+        "GAR-SPECS"
+      ],
+      "reproduction": "P05,P06"
+    },
+    {
+      "id": "L04",
+      "severity": "high",
+      "path": "sensor_support_configurations/unique_by,supported,scope",
+      "problem": "Tipo+transporte excluye varios modelos/perfiles válidos; supported sin alcance generaliza declaraciones de series concretas. El link original Garmin no es Wireless Sensors.",
+      "correction": "Retirar unique_by y añadir alcance requerido (pendiente si falta), modelo/generación/condición opcionales. Guardar el transporte no confirmado; ningún match de tipo aprueba al sensor.",
+      "source_ids": [
+        "GAR-SENSORS",
+        "GAR-SPECS"
+      ],
+      "reproduction": "P04,P12"
+    },
+    {
+      "id": "L05",
+      "severity": "high",
+      "path": "consumer_electronics/charging_protocol_claim",
+      "problem": "La ficha Anker lista tecnologías globales y no dice que PPS/PIQ3 pertenecen a C1 o PIQ2 a A. Retirar el escalar fuerza asignaciones inventadas.",
+      "correction": "Conservar la declaración OEM global con helper explícito; no usarla como compatibilidad. Protocolos por puerto sólo si la fuente señala ese puerto.",
+      "source_ids": [
+        "ANKER"
+      ],
+      "reproduction": "source_read"
+    },
+    {
+      "id": "L06",
+      "severity": "high",
+      "path": "power_port_profile_configurations",
+      "problem": "Protocolo token obligatorio excluye perfiles V/A cuya fuente no nombra protocolo; max voltage sólo PPS es demasiado estrecho. unique_by puerto/protocolo/minV pierde rango/condición y se salta con minV ausente.",
+      "correction": "Texto de protocolo opcional, perfil/condiciones explícitos, magnitudes independientes declaradas, ID estable. No derivar V/A/W ni máximo agregado; el perfil no es una oferta de compatibilidad.",
+      "source_ids": [
+        "USBIF-PD",
+        "USBIF-2019",
+        "ANKER"
+      ],
+      "reproduction": "P09,P10,P13"
+    },
+    {
+      "id": "L07",
+      "severity": "high",
+      "path": "seven light retirements/prerequisites",
+      "problem": "after.prerequisites=null invalida contrato v2 en SQL y falla compilador; Dart runtime lo trata como vacío, por lo que un editor solo no verifica metadata.",
+      "correction": "Cambiar a [] y semantic_roles legacy. Retiros, sucesores y eliminación del par deben entrar como un conjunto revisado.",
+      "source_ids": [
+        "CODE"
+      ],
+      "reproduction": "compiler_and_SQL_source"
+    },
+    {
+      "id": "L08",
+      "severity": "medium",
+      "path": "light_single_ampp800_web_revision/kit_members/quantity",
+      "problem": "Fixture usa JSON number 1; filas integer requieren cadena decimal exacta. El bloqueo persiste aun agregando el rol cable.",
+      "correction": "Usar \"1\". No atribuir un row_shape a compatibilidad mecánica.",
+      "source_ids": [
+        "CODE"
+      ],
+      "reproduction": "P07,P08"
+    },
+    {
+      "id": "L09",
+      "severity": "high",
+      "path": "light_member_configurations/battery_kind",
+      "problem": "Al retirar power_source=Otra, el sucesor carece de Otra y de alimentación externa no USB. Puede forzar una batería inexistente o perder dato válido.",
+      "correction": "Ampliar los descriptores y conservar power_input_connector/note. Magnitudes de entrada no pertenecen a battery_voltage_v. Alcance eléctrico exacto sigue pendiente.",
+      "source_ids": [
+        "SUPERNOVA",
+        "SHELDON"
+      ],
+      "reproduction": "P11"
+    },
+    {
+      "id": "L10",
+      "severity": "medium",
+      "path": "modes_count,ports_count,lumens_claimed",
+      "problem": "Cuenta de filas puede incluir condiciones o repetición de fuente; no equivale a cantidad de modos/puertos físicos. Mayor que total tampoco prueba conflicto antes de resolver identidad/alcance.",
+      "correction": "Mantener declaraciones OEM, sin count ni max automáticos. Completitud/contradicción sólo con inventario de entidades y condiciones alineado.",
+      "source_ids": [
+        "CAT-WEB",
+        "ANKER"
+      ],
+      "reproduction": "source_and_representation"
+    },
+    {
+      "id": "L11",
+      "severity": "medium",
+      "path": "sensor_mount retirement/computer_contents",
+      "problem": "El montaje de un sensor compatible pero no incluido no puede ir al contenido vendido.",
+      "correction": "Retirar resumen ambiguo; computer_contents sólo contenido real y sensor_support_configurations.mount_interface sólo alcance del sensor documentado. No crear contenido para preservar un dato.",
+      "source_ids": [
+        "GAR-SENSORS"
+      ],
+      "reproduction": "source_and_schema"
+    },
+    {
+      "id": "L12",
+      "severity": "medium",
+      "path": "storage_capacity_label and fixture card_literal_without_number",
+      "problem": "El literal es útil, pero decir que 1TB puede convertir indistintamente a 1000/1024GB confunde unidad normalizada con conformidad de la etiqueta.",
+      "correction": "Conservar literal; conversión SI conocida 1000 si se normaliza como TB/GB. La lectura física y bytes útiles/etiquetados son otro alcance. No completar número en este ejemplo.",
+      "source_ids": [
+        "BIPM"
+      ],
+      "reproduction": "source_read"
+    },
+    {
+      "id": "L13",
+      "severity": "medium",
+      "path": "proposal operations and expected_issues",
+      "problem": "La propuesta no tiene new_definitions; cuatro labels llevan template no nulo, add_field embebe definición y vínculo, y operaciones de partes no coinciden con el integrador. Varias fixtures omiten avisos reales o usan prerequisite_missing que aquí es prerequisite.",
+      "correction": "Root normaliza a operaciones existentes con preimagen completa, sin abrir gates. Revisar expectativas con runtime del validador; no declarar 14 fixtures PASS desde sus etiquetas.",
+      "source_ids": [
+        "CODE"
+      ],
+      "reproduction": "protocol_read"
+    }
+  ],
+  "patch_adjudications": [
+    {
+      "patch_id": "LPS-L-retire-power_source",
+      "decision": "corregir",
+      "template": "light",
+      "key": "power_source",
+      "path": "/templates/78/form_contract/{roles,allowed_when,required_when,prerequisites}/power_source",
+      "reason": "Retiro acotado a light aceptable sólo con sucesor representable, conservación legacy y consumidores adaptados; null no es lista de prerrequisitos válida. No migrar hechos automáticamente.",
+      "source_ids": [
+        "CODE",
+        "CAT-WEB"
+      ],
+      "gates": [
+        "G-LEGACY",
+        "G-CONSUMERS",
+        "G-ROWS"
+      ],
+      "after_override": {
+        "roles": "legacy",
+        "allowed_when": {
+          "kind": "never"
+        },
+        "required_when": {
+          "kind": "never"
+        },
+        "prerequisites": [],
+        "semantic_roles": "legacy"
+      },
+      "before_extensions": {
+        "semantic_roles": {
+          "present": true,
+          "value": "intrinsic"
+        }
+      }
+    },
+    {
+      "patch_id": "LPS-L-retire-charge_connector",
+      "decision": "corregir",
+      "template": "light",
+      "key": "charge_connector",
+      "path": "/templates/78/form_contract/{roles,allowed_when,required_when,prerequisites}/charge_connector",
+      "reason": "Retiro acotado a light aceptable sólo con sucesor representable, conservación legacy y consumidores adaptados; null no es lista de prerrequisitos válida. No migrar hechos automáticamente.",
+      "source_ids": [
+        "CODE",
+        "CAT-WEB"
+      ],
+      "gates": [
+        "G-LEGACY",
+        "G-CONSUMERS",
+        "G-ROWS"
+      ],
+      "after_override": {
+        "roles": "legacy",
+        "allowed_when": {
+          "kind": "never"
+        },
+        "required_when": {
+          "kind": "never"
+        },
+        "prerequisites": [],
+        "semantic_roles": "legacy"
+      },
+      "before_extensions": {
+        "semantic_roles": {
+          "present": true,
+          "value": "intrinsic"
+        }
+      }
+    },
+    {
+      "patch_id": "LPS-L-retire-battery_capacity_mah",
+      "decision": "corregir",
+      "template": "light",
+      "key": "battery_capacity_mah",
+      "path": "/templates/78/form_contract/{roles,allowed_when,required_when,prerequisites}/battery_capacity_mah",
+      "reason": "Retiro acotado a light aceptable sólo con sucesor representable, conservación legacy y consumidores adaptados; null no es lista de prerrequisitos válida. No migrar hechos automáticamente.",
+      "source_ids": [
+        "CODE",
+        "CAT-WEB"
+      ],
+      "gates": [
+        "G-LEGACY",
+        "G-CONSUMERS",
+        "G-ROWS"
+      ],
+      "after_override": {
+        "roles": "legacy",
+        "allowed_when": {
+          "kind": "never"
+        },
+        "required_when": {
+          "kind": "never"
+        },
+        "prerequisites": [],
+        "semantic_roles": "legacy"
+      },
+      "before_extensions": {
+        "semantic_roles": {
+          "present": true,
+          "value": "declaration"
+        }
+      }
+    },
+    {
+      "patch_id": "LPS-L-retire-light_mount_kind",
+      "decision": "corregir",
+      "template": "light",
+      "key": "light_mount_kind",
+      "path": "/templates/78/form_contract/{roles,allowed_when,required_when,prerequisites}/light_mount_kind",
+      "reason": "Retiro acotado a light aceptable sólo con sucesor representable, conservación legacy y consumidores adaptados; null no es lista de prerrequisitos válida. No migrar hechos automáticamente.",
+      "source_ids": [
+        "CODE",
+        "CAT-WEB"
+      ],
+      "gates": [
+        "G-LEGACY",
+        "G-CONSUMERS",
+        "G-ROWS"
+      ],
+      "after_override": {
+        "roles": "legacy",
+        "allowed_when": {
+          "kind": "never"
+        },
+        "required_when": {
+          "kind": "never"
+        },
+        "prerequisites": [],
+        "semantic_roles": "legacy"
+      },
+      "before_extensions": {
+        "semantic_roles": {
+          "present": true,
+          "value": "compatibility"
+        }
+      }
+    },
+    {
+      "patch_id": "LPS-L-retire-mount_diameter_min_mm",
+      "decision": "corregir",
+      "template": "light",
+      "key": "mount_diameter_min_mm",
+      "path": "/templates/78/form_contract/{roles,allowed_when,required_when,prerequisites}/mount_diameter_min_mm",
+      "reason": "Retiro acotado a light aceptable sólo con sucesor representable, conservación legacy y consumidores adaptados; null no es lista de prerrequisitos válida. No migrar hechos automáticamente.",
+      "source_ids": [
+        "CODE",
+        "CAT-WEB"
+      ],
+      "gates": [
+        "G-LEGACY",
+        "G-CONSUMERS",
+        "G-ROWS"
+      ],
+      "after_override": {
+        "roles": "legacy",
+        "allowed_when": {
+          "kind": "never"
+        },
+        "required_when": {
+          "kind": "never"
+        },
+        "prerequisites": [],
+        "semantic_roles": "legacy"
+      },
+      "before_extensions": {
+        "semantic_roles": {
+          "present": true,
+          "value": "compatibility"
+        }
+      }
+    },
+    {
+      "patch_id": "LPS-L-retire-mount_diameter_max_mm",
+      "decision": "corregir",
+      "template": "light",
+      "key": "mount_diameter_max_mm",
+      "path": "/templates/78/form_contract/{roles,allowed_when,required_when,prerequisites}/mount_diameter_max_mm",
+      "reason": "Retiro acotado a light aceptable sólo con sucesor representable, conservación legacy y consumidores adaptados; null no es lista de prerrequisitos válida. No migrar hechos automáticamente.",
+      "source_ids": [
+        "CODE",
+        "CAT-WEB"
+      ],
+      "gates": [
+        "G-LEGACY",
+        "G-CONSUMERS",
+        "G-ROWS"
+      ],
+      "after_override": {
+        "roles": "legacy",
+        "allowed_when": {
+          "kind": "never"
+        },
+        "required_when": {
+          "kind": "never"
+        },
+        "prerequisites": [],
+        "semantic_roles": "legacy"
+      },
+      "before_extensions": {
+        "semantic_roles": {
+          "present": true,
+          "value": "compatibility"
+        }
+      }
+    },
+    {
+      "patch_id": "LPS-L-retire-ip_rating",
+      "decision": "corregir",
+      "template": "light",
+      "key": "ip_rating",
+      "path": "/templates/78/form_contract/{roles,allowed_when,required_when,prerequisites}/ip_rating",
+      "reason": "Retiro acotado a light aceptable sólo con sucesor representable, conservación legacy y consumidores adaptados; null no es lista de prerrequisitos válida. No migrar hechos automáticamente.",
+      "source_ids": [
+        "CODE",
+        "CAT-WEB"
+      ],
+      "gates": [
+        "G-LEGACY",
+        "G-CONSUMERS",
+        "G-ROWS"
+      ],
+      "after_override": {
+        "roles": "legacy",
+        "allowed_when": {
+          "kind": "never"
+        },
+        "required_when": {
+          "kind": "never"
+        },
+        "prerequisites": [],
+        "semantic_roles": "legacy"
+      },
+      "before_extensions": {
+        "semantic_roles": {
+          "present": true,
+          "value": "declaration"
+        }
+      }
+    },
+    {
+      "patch_id": "LPS-L-declared-total-modes_count",
+      "decision": "corregir",
+      "template": "light",
+      "key": "modes_count",
+      "path": "/templates/78/form_contract/{roles,prerequisites}/modes_count",
+      "reason": "La separación entre declaración y detalle es correcta; alinear metadata y precisar alcance. count(filas)>declarado tampoco es automáticamente una contradicción si son condiciones/afirmaciones del mismo elemento.",
+      "source_ids": [
+        "CAT-WEB",
+        "CODE"
+      ],
+      "gates": [
+        "G-SCOPE"
+      ],
+      "after_override": {
+        "roles": "declaration",
+        "prerequisites": [
+          "spec_evidence_source"
+        ],
+        "semantic_roles": "declaration",
+        "helpers": "Total declarado para la luz individual y su alcance; no se calcula contando filas, nombres o variantes documentales. Detalle parcial no fija un total."
+      },
+      "before_extensions": {
+        "semantic_roles": {
+          "present": true,
+          "value": "intrinsic"
+        },
+        "helpers": {
+          "present": false,
+          "value": null
+        }
+      }
+    },
+    {
+      "patch_id": "LPS-L-label-modes_count",
+      "decision": "aceptar",
+      "template": "light",
+      "key": "modes_count",
+      "path": "/definitions/modes_count/label",
+      "reason": "Rótulo correcto. Normalizar el parche global con template=null; el rótulo no valida evidencia ni cambia unidades.",
+      "source_ids": [
+        "CODE"
+      ],
+      "gates": [
+        "G-NORMALIZE"
+      ]
+    },
+    {
+      "patch_id": "LPS-C-declared-total-ports_count",
+      "decision": "corregir",
+      "template": "consumer_electronics",
+      "key": "ports_count",
+      "path": "/templates/81/form_contract/{roles,prerequisites}/ports_count",
+      "reason": "La separación entre declaración y detalle es correcta; alinear metadata y precisar alcance. count(filas)>declarado tampoco es automáticamente una contradicción si son condiciones/afirmaciones del mismo elemento.",
+      "source_ids": [
+        "ANKER",
+        "CODE"
+      ],
+      "gates": [
+        "G-SCOPE"
+      ],
+      "after_override": {
+        "roles": "declaration",
+        "prerequisites": [
+          "spec_evidence_source"
+        ],
+        "semantic_roles": "declaration",
+        "helpers": "Total de puertos físicos declarado para este modelo/variante. No contar perfiles, direcciones ni filas de reparto como puertos."
+      },
+      "before_extensions": {
+        "semantic_roles": {
+          "present": true,
+          "value": "intrinsic"
+        },
+        "helpers": {
+          "present": false,
+          "value": null
+        }
+      }
+    },
+    {
+      "patch_id": "LPS-C-label-ports_count",
+      "decision": "aceptar",
+      "template": "consumer_electronics",
+      "key": "ports_count",
+      "path": "/definitions/ports_count/label",
+      "reason": "Rótulo correcto. Normalizar el parche global con template=null; el rótulo no valida evidencia ni cambia unidades.",
+      "source_ids": [
+        "CODE"
+      ],
+      "gates": [
+        "G-NORMALIZE"
+      ]
+    },
+    {
+      "patch_id": "LPS-E-storage-label-owner",
+      "decision": "corregir",
+      "template": "consumer_electronics",
+      "key": "storage_capacity_label",
+      "path": "/templates/81/form_contract/{roles,prerequisites}/storage_capacity_label",
+      "reason": "Conservar evidencia y literal es correcto. Corregir la explicación de unidades; el dato normalizado puede permanecer ausente sin convertir una unidad definida en ambigua.",
+      "source_ids": [
+        "BIPM"
+      ],
+      "gates": [
+        "G-SCOPE"
+      ],
+      "after_override": {
+        "roles": "declaration",
+        "prerequisites": [
+          "spec_evidence_source"
+        ],
+        "helpers": "Conserva el literal y su unidad. Si se normaliza con prefijos SI, 1 TB = 1000 GB; verifica qué magnitud declara la fuente y no confundir capacidad nominal con espacio utilizable. No inferir bytes reales del título."
+      },
+      "before_extensions": {
+        "helpers": {
+          "present": false,
+          "value": null
+        }
+      }
+    },
+    {
+      "patch_id": "LPS-E-storage-label-text",
+      "decision": "aceptar",
+      "template": "consumer_electronics",
+      "key": "storage_capacity_label",
+      "path": "/definitions/storage_capacity_label/label",
+      "reason": "Rótulo correcto. Normalizar el parche global con template=null; el rótulo no valida evidencia ni cambia unidades.",
+      "source_ids": [
+        "CODE"
+      ],
+      "gates": [
+        "G-NORMALIZE"
+      ]
+    },
+    {
+      "patch_id": "LPS-L-drop-mount-pair",
+      "decision": "aceptar",
+      "template": "light",
+      "key": null,
+      "path": "/templates/78/form_contract/scalar_ordered_pairs",
+      "reason": "Necesario en el mismo conjunto de retiros; no dejar un par con extremos legacy. Normalizar a replace_template_coherence con preimagen present/value.",
+      "source_ids": [
+        "CODE"
+      ],
+      "gates": [
+        "G-NORMALIZE",
+        "G-LEGACY"
+      ]
+    },
+    {
+      "patch_id": "LPS-L-members-required",
+      "decision": "aceptar",
+      "template": "light",
+      "key": "light_member_configurations",
+      "path": "/templates/78/form_contract/{allowed_when,required_when}/light_member_configurations",
+      "reason": "Recordatorio de completitud por miembro; required_missing no bloquea un borrador. Esta regla no impone exactamente una fila ni composición front/rear.",
+      "source_ids": [
+        "CODE",
+        "CAT-WEB"
+      ],
+      "gates": [
+        "G-SCOPE",
+        "G-ROWS"
+      ]
+    },
+    {
+      "patch_id": "LPS-L-modes-required",
+      "decision": "corregir",
+      "template": "light",
+      "key": "light_mode_configurations",
+      "path": "/templates/78/form_contract/{required_when}/light_mode_configurations",
+      "reason": "El cambio puede servir como recordatorio no bloqueante; su justificación original es falsa: no se retiran lumens_claimed/modes_count. No convertirlo en requisito físico de modos discretos para toda luz.",
+      "source_ids": [
+        "CODE",
+        "SHELDON"
+      ],
+      "gates": [
+        "G-SCOPE"
+      ],
+      "after_override": {
+        "required_when": {
+          "kind": "always"
+        },
+        "helpers": "Detalle de modos declarados, cuando se conoce. Un pendiente no autoriza inventar un modo, autonomía o medición; lumens_claimed y modes_count se conservan como declaraciones independientes. Para luces sin modos discretos, resolver la aplicabilidad antes de cerrar completitud."
+      },
+      "before_extensions": {
+        "helpers": {
+          "present": false,
+          "value": null
+        }
+      }
+    },
+    {
+      "patch_id": "LPS-L-members-schema",
+      "decision": "corregir",
+      "template": "light",
+      "key": "light_member_configurations",
+      "path": "/definitions/light_member_configurations/validation_rules/rows_schema/{columns[ip_rating],unique_by}",
+      "reason": "Conservar IP como texto y norma literal separada; no forzar IEC. El rótulo humano no identifica un miembro físico: row.id permite dos luces de igual nombre. Ampliar alimentación antes del retiro escalar.",
+      "source_ids": [
+        "CAT-MANUAL",
+        "SUPERNOVA",
+        "CODE"
+      ],
+      "gates": [
+        "G-ROWS",
+        "G-SCOPE"
+      ],
+      "after_override": {
+        "ip_rating": {
+          "key": "ip_rating",
+          "label": "Grado IP declarado (literal)",
+          "type": "text"
+        },
+        "unique_by": []
+      }
+    },
+    {
+      "patch_id": "LPS-L-modes-schema",
+      "decision": "corregir",
+      "template": "light",
+      "key": "light_mode_configurations",
+      "path": "/definitions/light_mode_configurations/validation_rules/rows_schema/{columns[member_revision],unique_by}",
+      "reason": "Revisión OEM física identificada es distinta de edición documental/fecha de consulta. Retirar unique_by de nombres; preservar condiciones. Alternativas de fuente del mismo Group Ride permanecen fuera de los valores canónicos hasta adjudicar variante.",
+      "source_ids": [
+        "CAT-WEB",
+        "CAT-MANUAL",
+        "CODE"
+      ],
+      "gates": [
+        "G-REFERENCE",
+        "G-SCOPE"
+      ],
+      "after_override": {
+        "member_revision": {
+          "key": "member_revision",
+          "label": "Revisión OEM de la luz, si está identificada",
+          "type": "text"
+        },
+        "unique_by": []
+      }
+    },
+    {
+      "patch_id": "LPS-L-link-labels",
+      "decision": "aceptar",
+      "template": "light",
+      "key": null,
+      "path": "/templates/78/form_contract/row_coherence/links[light_member_link]/label_columns",
+      "reason": "Sólo presentación de row.id ya existente; la revisión se muestra únicamente si es revisión OEM identificada. Nunca poner retrievaldate en esa celda.",
+      "source_ids": [
+        "CODE"
+      ],
+      "gates": [
+        "G-NORMALIZE",
+        "G-REFERENCE"
+      ]
+    },
+    {
+      "patch_id": "LPS-L-kit-roles",
+      "decision": "aceptar",
+      "template": null,
+      "key": "kit_members",
+      "path": "/definitions/kit_members/validation_rules/rows_schema/columns[member_role]/allowed_values",
+      "reason": "Vocabulario de contenido, no compatibilidad ni declaración de que todos los kits incluyen esos objetos. computer/light members no se duplican por nombre; sólo una identidad de miembro enlazada permite probar doble conteo.",
+      "source_ids": [
+        "CAT-WEB",
+        "CAT-MANUAL"
+      ],
+      "gates": [
+        "G-ROWS",
+        "G-SCOPE",
+        "G-NORMALIZE"
+      ]
+    },
+    {
+      "patch_id": "LPS-C-sensor-schema",
+      "decision": "corregir",
+      "template": "cycle_computer",
+      "key": "sensor_support_configurations",
+      "path": "/definitions/sensor_support_configurations/validation_rules/rows_schema/{columns[transport].allowed_values,unique_by}",
+      "reason": "Añadir transporte desconocido es honesto; unique_by tipo/transporte no respeta perfiles/modelos. Scope es requerido como completitud; supported se interpreta únicamente en ese alcance. Añadir montaje del sensor como fitment, no contenido vendido.",
+      "source_ids": [
+        "GAR-SENSORS",
+        "CODE"
+      ],
+      "gates": [
+        "G-SCOPE",
+        "G-ROWS",
+        "G-CONSUMERS"
+      ],
+      "after_override": {
+        "transport_allowed_values": [
+          "ANT+",
+          "Bluetooth",
+          "Cable",
+          "Propietario inalámbrico",
+          "Desconocido / sin confirmar"
+        ],
+        "unique_by": []
+      }
+    },
+    {
+      "patch_id": "LPS-C-retire-sensor_mount",
+      "decision": "corregir",
+      "template": "cycle_computer",
+      "key": "sensor_mount",
+      "path": "/templates/80/form_contract/{roles,allowed_when,required_when}/sensor_mount",
+      "reason": "Retirar resumen ambiguo sin transformar sensores compatibles en incluidos. computer_contents para envase; montaje de un sensor compatible en su fila con alcance/modelo, o legacy pendiente.",
+      "source_ids": [
+        "GAR-SENSORS",
+        "CODE"
+      ],
+      "gates": [
+        "G-LEGACY",
+        "G-CONSUMERS",
+        "G-ROWS"
+      ],
+      "after_override": {
+        "roles": "legacy",
+        "allowed_when": {
+          "kind": "never"
+        },
+        "required_when": {
+          "kind": "never"
+        },
+        "semantic_roles": "legacy"
+      },
+      "before_extensions": {
+        "semantic_roles": {
+          "present": true,
+          "value": "compatibility"
+        }
+      }
+    },
+    {
+      "patch_id": "LPS-E-protocol-scope",
+      "decision": "corregir",
+      "template": "consumer_electronics",
+      "key": "charging_protocol_claim",
+      "path": "/templates/81/form_contract/{allowed_when}/charging_protocol_claim",
+      "reason": "La declaración global sigue siendo necesaria: la fuente Anker no distribuye sus tecnologías por puerto. Conservar el escalar como afirmación de alcance de dispositivo; no igualarlo a detalle portuario.",
+      "source_ids": [
+        "ANKER",
+        "USBIF-PD"
+      ],
+      "gates": [
+        "G-SCOPE",
+        "G-CONSUMERS"
+      ],
+      "after_override": {
+        "allowed_when": {
+          "kind": "always"
+        },
+        "helpers": "Declaración del fabricante sobre este dispositivo completo. No asignarla a cada puerto ni usarla como compatibilidad. Los perfiles y protocolos por puerto se registran sólo cuando la fuente identifica el puerto y su condición."
+      },
+      "before_extensions": {
+        "helpers": {
+          "present": false,
+          "value": null
+        }
+      }
+    },
+    {
+      "patch_id": "LPS-E-link-labels",
+      "decision": "aceptar",
+      "template": "consumer_electronics",
+      "key": null,
+      "path": "/templates/81/form_contract/row_coherence/links[consumer_electronics_member_link]/label_columns",
+      "reason": "Rótulo informativo; no infiere protocolos ni potencia. Referencia sigue siendo row.id y requiere normalización de op.",
+      "source_ids": [
+        "CODE"
+      ],
+      "gates": [
+        "G-NORMALIZE"
+      ]
+    },
+    {
+      "patch_id": "LPS-E-port-profiles",
+      "decision": "corregir",
+      "template": "consumer_electronics",
+      "key": "power_port_profile_configurations",
+      "path": "/definitions/power_port_profile_configurations y /templates/81/fields/- y /templates/81/form_contract/{roles,allowed_when,required_when,prerequisites,row_coherence.links[+]}",
+      "reason": "Fila por perfil/condición con identidad estable, protocolo literal opcional y magnitudes publicadas. Rango máximo no es exclusivo PPS; no deducir V/A/W ni capacidad agregada. Nuevos perfiles no cambian el esquema existente.",
+      "source_ids": [
+        "USBIF-PD",
+        "USBIF-2019",
+        "ANKER"
+      ],
+      "gates": [
+        "G-NORMALIZE",
+        "G-SCOPE",
+        "G-CONSUMERS"
+      ],
+      "after_override": {
+        "definition": {
+          "key": "power_port_profile_configurations",
+          "origin": "new",
+          "label": "Perfiles eléctricos por puerto",
+          "data_type": "json",
+          "validation_rules": {
+            "row_label": "Perfil",
+            "rows_schema": {
+              "version": 1,
+              "columns": [
+                {
+                  "key": "port_id",
+                  "label": "Puerto",
+                  "type": "text",
+                  "required": true
+                },
+                {
+                  "key": "protocol",
+                  "label": "Protocolo declarado (literal)",
+                  "type": "text",
+                  "required": false
+                },
+                {
+                  "key": "voltage_v",
+                  "label": "Tensión fija o mínima declarada",
+                  "type": "decimal",
+                  "unit": "V",
+                  "validation": {
+                    "positive": true
+                  }
+                },
+                {
+                  "key": "voltage_max_v",
+                  "label": "Tensión máxima del rango declarado",
+                  "type": "decimal",
+                  "unit": "V",
+                  "validation": {
+                    "positive": true
+                  }
+                },
+                {
+                  "key": "current_a",
+                  "label": "Corriente declarada para este perfil",
+                  "type": "decimal",
+                  "unit": "A",
+                  "validation": {
+                    "positive": true
+                  }
+                },
+                {
+                  "key": "power_w",
+                  "label": "Potencia declarada para este perfil",
+                  "type": "decimal",
+                  "unit": "W",
+                  "validation": {
+                    "positive": true
+                  }
+                },
+                {
+                  "key": "source_url",
+                  "label": "Fuente",
+                  "type": "url",
+                  "required": true
+                },
+                {
+                  "key": "oem_profile_label",
+                  "label": "Nombre del perfil declarado",
+                  "type": "text"
+                },
+                {
+                  "key": "profile_kind",
+                  "label": "Tipo de perfil declarado",
+                  "type": "token",
+                  "allowed_values": [
+                    "Tensión fija",
+                    "Rango de tensión",
+                    "Otro perfil declarado",
+                    "Desconocido / sin confirmar"
+                  ]
+                },
+                {
+                  "key": "current_role",
+                  "label": "Significado de la corriente declarada",
+                  "type": "text"
+                },
+                {
+                  "key": "conditions",
+                  "label": "Condiciones de funcionamiento declaradas",
+                  "type": "text"
+                }
+              ],
+              "ordered_pairs": [
+                [
+                  "voltage_v",
+                  "voltage_max_v"
+                ]
+              ],
+              "unique_by": []
+            }
+          },
+          "used_by": [
+            "consumer_electronics"
+          ]
+        },
+        "field_entry": {
+          "key": "power_port_profile_configurations",
+          "section_key": "declaration",
+          "sort_order": 125,
+          "is_required": false,
+          "visibility_rules": [],
+          "option_rules": [],
+          "constraint_rules": []
+        },
+        "roles": "declaration",
+        "allowed_when": {
+          "kind": "when",
+          "rows": [
+            [
+              {
+                "field": "device_kind",
+                "operator": "eq",
+                "value_type": "token",
+                "value": "Cargador"
+              }
+            ]
+          ]
+        },
+        "required_when": {
+          "kind": "never"
+        },
+        "prerequisites": [
+          "spec_evidence_source"
+        ],
+        "row_coherence_link": {
+          "id": "consumer_electronics_profile_port_link",
+          "field": "power_port_profile_configurations",
+          "column": "port_id",
+          "target_field": "power_port_configurations",
+          "label_columns": [
+            "port_id",
+            "connector"
+          ]
+        },
+        "helpers": "Una fila conserva el perfil y su alcance documentados. Protocolo desconocido no se completa desde el conector. No calcular V, A, W, potencia agregada ni compatibilidad desde esta fila. Usa el ID del puerto vinculado; el nombre del perfil no es identidad.",
+        "semantic_roles": "declaration"
+      }
+    }
+  ],
+  "rows_schema_overrides": {
+    "light_member_configurations": {
+      "before": {
+        "version": 1,
+        "columns": [
+          {
+            "key": "member_id",
+            "label": "Luz",
+            "type": "text",
+            "required": true
+          },
+          {
+            "key": "position",
+            "label": "Posición",
+            "type": "token",
+            "required": true,
+            "allowed_values": [
+              "Delantera",
+              "Trasera",
+              "Casco / otra"
+            ]
+          },
+          {
+            "key": "battery_kind",
+            "label": "Batería / alimentación",
+            "type": "token",
+            "allowed_values": [
+              "Li-ion integrada",
+              "Li-ion extraíble",
+              "Pilas AA/AAA",
+              "Pila botón",
+              "Dinamo",
+              "Alimentación externa (USB)",
+              "Desconocido / sin confirmar"
+            ]
+          },
+          {
+            "key": "battery_capacity_mah",
+            "label": "Capacidad",
+            "type": "decimal",
+            "unit": "mAh",
+            "validation": {
+              "positive": true
+            }
+          },
+          {
+            "key": "battery_voltage_v",
+            "label": "Tensión",
+            "type": "decimal",
+            "unit": "V",
+            "validation": {
+              "positive": true
+            }
+          },
+          {
+            "key": "charge_connector",
+            "label": "Conector de carga",
+            "type": "token",
+            "allowed_values": [
+              "USB-C",
+              "Micro-USB",
+              "USB-A integrado",
+              "Propietario",
+              "Sin carga",
+              "Desconocido / sin confirmar",
+              "Otro"
+            ]
+          },
+          {
+            "key": "mount_kind",
+            "label": "Fijación",
+            "type": "token",
+            "allowed_values": [
+              "Correa de silicona",
+              "Abrazadera de manubrio",
+              "Abrazadera de tija",
+              "Soporte de casco",
+              "Soporte de horquilla",
+              "Otro"
+            ]
+          },
+          {
+            "key": "mount_diameter_min_mm",
+            "label": "Diámetro mín. de montaje",
+            "type": "decimal",
+            "unit": "mm",
+            "validation": {
+              "positive": true
+            }
+          },
+          {
+            "key": "mount_diameter_max_mm",
+            "label": "Diámetro máx. de montaje",
+            "type": "decimal",
+            "unit": "mm",
+            "validation": {
+              "positive": true
+            }
+          },
+          {
+            "key": "mount_circumference_max_mm",
+            "label": "Perímetro máx. (tija aero)",
+            "type": "decimal",
+            "unit": "mm",
+            "validation": {
+              "positive": true
+            }
+          },
+          {
+            "key": "ip_rating",
+            "label": "Grado IP",
+            "type": "text"
+          },
+          {
+            "key": "source_url",
+            "label": "Fuente",
+            "type": "url"
+          },
+          {
+            "key": "member_revision",
+            "label": "Revisión del miembro / fuente",
+            "type": "text"
+          },
+          {
+            "key": "mount_zone",
+            "label": "Zona y forma de montaje",
+            "type": "text"
+          },
+          {
+            "key": "power_input_connector",
+            "label": "Entrada de alimentación externa declarada",
+            "type": "text"
+          }
+        ],
+        "ordered_pairs": [
+          [
+            "mount_diameter_min_mm",
+            "mount_diameter_max_mm"
+          ]
+        ],
+        "unique_by": [
+          [
+            "member_id"
+          ]
+        ]
+      },
+      "after": {
+        "version": 1,
+        "columns": [
+          {
+            "key": "member_id",
+            "label": "Nombre de la luz",
+            "type": "text",
+            "required": true
+          },
+          {
+            "key": "position",
+            "label": "Posición",
+            "type": "token",
+            "required": true,
+            "allowed_values": [
+              "Delantera",
+              "Trasera",
+              "Casco / otra"
+            ]
+          },
+          {
+            "key": "battery_kind",
+            "label": "Batería / alimentación",
+            "type": "token",
+            "allowed_values": [
+              "Li-ion integrada",
+              "Li-ion extraíble",
+              "Pilas AA/AAA",
+              "Pila botón",
+              "Dinamo",
+              "Alimentación externa (USB)",
+              "Desconocido / sin confirmar",
+              "Alimentación externa (no USB)",
+              "Otra batería / alimentación"
+            ]
+          },
+          {
+            "key": "battery_capacity_mah",
+            "label": "Capacidad",
+            "type": "decimal",
+            "unit": "mAh",
+            "validation": {
+              "positive": true
+            }
+          },
+          {
+            "key": "battery_voltage_v",
+            "label": "Tensión",
+            "type": "decimal",
+            "unit": "V",
+            "validation": {
+              "positive": true
+            }
+          },
+          {
+            "key": "charge_connector",
+            "label": "Conector de carga",
+            "type": "token",
+            "allowed_values": [
+              "USB-C",
+              "Micro-USB",
+              "USB-A integrado",
+              "Propietario",
+              "Sin carga",
+              "Desconocido / sin confirmar",
+              "Otro"
+            ]
+          },
+          {
+            "key": "mount_kind",
+            "label": "Fijación",
+            "type": "token",
+            "allowed_values": [
+              "Correa de silicona",
+              "Abrazadera de manubrio",
+              "Abrazadera de tija",
+              "Soporte de casco",
+              "Soporte de horquilla",
+              "Otro"
+            ]
+          },
+          {
+            "key": "mount_diameter_min_mm",
+            "label": "Diámetro mín. de montaje",
+            "type": "decimal",
+            "unit": "mm",
+            "validation": {
+              "positive": true
+            }
+          },
+          {
+            "key": "mount_diameter_max_mm",
+            "label": "Diámetro máx. de montaje",
+            "type": "decimal",
+            "unit": "mm",
+            "validation": {
+              "positive": true
+            }
+          },
+          {
+            "key": "mount_circumference_max_mm",
+            "label": "Perímetro máx. (tija aero)",
+            "type": "decimal",
+            "unit": "mm",
+            "validation": {
+              "positive": true
+            }
+          },
+          {
+            "key": "ip_rating",
+            "label": "Grado IP declarado (literal)",
+            "type": "text"
+          },
+          {
+            "key": "source_url",
+            "label": "Fuente",
+            "type": "url"
+          },
+          {
+            "key": "member_revision",
+            "label": "Revisión OEM de la luz, si está identificada",
+            "type": "text"
+          },
+          {
+            "key": "mount_zone",
+            "label": "Zona y forma de montaje",
+            "type": "text"
+          },
+          {
+            "key": "power_input_connector",
+            "label": "Entrada de alimentación externa declarada",
+            "type": "text"
+          },
+          {
+            "key": "ip_standard",
+            "label": "Norma y edición declaradas",
+            "type": "text"
+          },
+          {
+            "key": "power_source_note",
+            "label": "Alimentación declarada: detalles",
+            "type": "text"
+          }
+        ],
+        "ordered_pairs": [
+          [
+            "mount_diameter_min_mm",
+            "mount_diameter_max_mm"
+          ]
+        ],
+        "unique_by": []
+      },
+      "normalization_op": "replace_unpublished_rows_schema",
+      "scope": "unpublished definition; root must verify no persisted row/reference shape conflict"
+    },
+    "light_mode_configurations": {
+      "before": {
+        "version": 1,
+        "columns": [
+          {
+            "key": "member_id",
+            "label": "Luz",
+            "type": "text",
+            "required": true
+          },
+          {
+            "key": "mode",
+            "label": "Modo",
+            "type": "text",
+            "required": true
+          },
+          {
+            "key": "pattern",
+            "label": "Patrón",
+            "type": "token",
+            "allowed_values": [
+              "Constante",
+              "Intermitente",
+              "Constante + intermitente",
+              "Diurno",
+              "Otro"
+            ]
+          },
+          {
+            "key": "lumens",
+            "label": "Lúmenes",
+            "type": "decimal",
+            "unit": "lm",
+            "validation": {
+              "positive": true
+            }
+          },
+          {
+            "key": "lumens_secondary",
+            "label": "Lúmenes secundarios (modo doble)",
+            "type": "decimal",
+            "unit": "lm",
+            "validation": {
+              "positive": true
+            }
+          },
+          {
+            "key": "runtime_h",
+            "label": "Autonomía",
+            "type": "decimal",
+            "unit": "h",
+            "validation": {
+              "positive": true
+            }
+          },
+          {
+            "key": "runtime_max_h",
+            "label": "Autonomía máx. (rango declarado)",
+            "type": "decimal",
+            "unit": "h",
+            "validation": {
+              "positive": true
+            }
+          },
+          {
+            "key": "source_url",
+            "label": "Fuente",
+            "type": "url"
+          },
+          {
+            "key": "member_revision",
+            "label": "Revisión del miembro / fuente",
+            "type": "text"
+          }
+        ],
+        "ordered_pairs": [
+          [
+            "runtime_h",
+            "runtime_max_h"
+          ]
+        ],
+        "unique_by": [
+          [
+            "member_id",
+            "mode"
+          ]
+        ]
+      },
+      "after": {
+        "version": 1,
+        "columns": [
+          {
+            "key": "member_id",
+            "label": "Luz",
+            "type": "text",
+            "required": true
+          },
+          {
+            "key": "mode",
+            "label": "Modo",
+            "type": "text",
+            "required": true
+          },
+          {
+            "key": "pattern",
+            "label": "Patrón",
+            "type": "token",
+            "allowed_values": [
+              "Constante",
+              "Intermitente",
+              "Constante + intermitente",
+              "Diurno",
+              "Otro"
+            ]
+          },
+          {
+            "key": "lumens",
+            "label": "Lúmenes",
+            "type": "decimal",
+            "unit": "lm",
+            "validation": {
+              "positive": true
+            }
+          },
+          {
+            "key": "lumens_secondary",
+            "label": "Lúmenes secundarios (modo doble)",
+            "type": "decimal",
+            "unit": "lm",
+            "validation": {
+              "positive": true
+            }
+          },
+          {
+            "key": "runtime_h",
+            "label": "Autonomía",
+            "type": "decimal",
+            "unit": "h",
+            "validation": {
+              "positive": true
+            }
+          },
+          {
+            "key": "runtime_max_h",
+            "label": "Autonomía máx. (rango declarado)",
+            "type": "decimal",
+            "unit": "h",
+            "validation": {
+              "positive": true
+            }
+          },
+          {
+            "key": "source_url",
+            "label": "Fuente",
+            "type": "url"
+          },
+          {
+            "key": "member_revision",
+            "label": "Revisión OEM de la luz, si está identificada",
+            "type": "text"
+          },
+          {
+            "key": "operating_conditions",
+            "label": "Condiciones de funcionamiento declaradas",
+            "type": "text"
+          },
+          {
+            "key": "measurement_method",
+            "label": "Método de medición declarado",
+            "type": "text"
+          }
+        ],
+        "ordered_pairs": [
+          [
+            "runtime_h",
+            "runtime_max_h"
+          ]
+        ],
+        "unique_by": []
+      },
+      "normalization_op": "replace_unpublished_rows_schema",
+      "scope": "unpublished definition; root must verify no persisted row/reference shape conflict"
+    },
+    "sensor_support_configurations": {
+      "before": {
+        "version": 1,
+        "columns": [
+          {
+            "key": "sensor_type",
+            "label": "Tipo de sensor",
+            "type": "token",
+            "required": true,
+            "allowed_values": [
+              "Velocidad",
+              "Cadencia",
+              "Velocidad / cadencia",
+              "Frecuencia cardiaca",
+              "Potencia",
+              "Radar",
+              "Luces",
+              "Cambio electrónico",
+              "eBike",
+              "Control remoto",
+              "Rodillo inteligente",
+              "Otro"
+            ]
+          },
+          {
+            "key": "transport",
+            "label": "Transporte",
+            "type": "token",
+            "required": true,
+            "allowed_values": [
+              "ANT+",
+              "Bluetooth",
+              "Cable",
+              "Propietario inalámbrico"
+            ]
+          },
+          {
+            "key": "models_note",
+            "label": "Modelos / perfiles declarados",
+            "type": "text"
+          },
+          {
+            "key": "source_url",
+            "label": "Fuente",
+            "type": "url"
+          },
+          {
+            "key": "profile",
+            "label": "Perfil / versión de comunicación declarado",
+            "type": "text"
+          },
+          {
+            "key": "supported",
+            "label": "Pareja admitida según fuente (No = exclusión explícita)",
+            "type": "boolean",
+            "required": true
+          }
+        ]
+      },
+      "after": {
+        "version": 1,
+        "columns": [
+          {
+            "key": "sensor_type",
+            "label": "Tipo de sensor",
+            "type": "token",
+            "required": true,
+            "allowed_values": [
+              "Velocidad",
+              "Cadencia",
+              "Velocidad / cadencia",
+              "Frecuencia cardiaca",
+              "Potencia",
+              "Radar",
+              "Luces",
+              "Cambio electrónico",
+              "eBike",
+              "Control remoto",
+              "Rodillo inteligente",
+              "Otro"
+            ]
+          },
+          {
+            "key": "transport",
+            "label": "Transporte",
+            "type": "token",
+            "required": true,
+            "allowed_values": [
+              "ANT+",
+              "Bluetooth",
+              "Cable",
+              "Propietario inalámbrico",
+              "Desconocido / sin confirmar"
+            ]
+          },
+          {
+            "key": "models_note",
+            "label": "Modelos / perfiles declarados",
+            "type": "text"
+          },
+          {
+            "key": "source_url",
+            "label": "Fuente",
+            "type": "url"
+          },
+          {
+            "key": "profile",
+            "label": "Perfil / versión de comunicación declarado",
+            "type": "text"
+          },
+          {
+            "key": "supported",
+            "label": "Admitido en el alcance declarado (No = exclusión explícita)",
+            "type": "boolean",
+            "required": true
+          },
+          {
+            "key": "scope",
+            "label": "Alcance de la declaración",
+            "type": "text",
+            "required": true
+          },
+          {
+            "key": "sensor_model",
+            "label": "Modelo de sensor declarado",
+            "type": "text"
+          },
+          {
+            "key": "sensor_generation",
+            "label": "Generación del sensor declarada",
+            "type": "text"
+          },
+          {
+            "key": "conditions",
+            "label": "Condiciones declaradas",
+            "type": "text"
+          },
+          {
+            "key": "mount_interface",
+            "label": "Montaje del sensor declarado",
+            "type": "text"
+          }
+        ],
+        "unique_by": []
+      },
+      "normalization_op": "replace_unpublished_rows_schema",
+      "scope": "unpublished definition; root must verify no persisted row/reference shape conflict"
+    }
+  },
+  "case_overrides": [
+    {
+      "id": "light_single_ampp800_web_revision",
+      "after_override": {
+        "id": "light_single_ampp800_web_revision",
+        "template": "light",
+        "kind": "valid",
+        "source_ids": [
+          "S-CATEYE-WEB"
+        ],
+        "values": {
+          "light_position": "Delantera",
+          "lumens_claimed": "800",
+          "modes_count": "5",
+          "spec_evidence_source": "Página Cateye HL-EL088RC_TL-LD810, leída 2026-09-07",
+          "light_member_configurations": {
+            "schema_version": 1,
+            "rows": [
+              {
+                "id": "m-ampp800",
+                "values": {
+                  "member_id": "AMPP800 (HL-EL088RC)",
+                  "position": "Delantera",
+                  "battery_kind": "Li-ion integrada",
+                  "battery_capacity_mah": "2500",
+                  "battery_voltage_v": "3.7",
+                  "charge_connector": "Micro-USB",
+                  "mount_kind": "Abrazadera de manubrio",
+                  "mount_diameter_min_mm": "22",
+                  "mount_diameter_max_mm": "35",
+                  "ip_rating": "IPX4"
+                },
+                "sources": [
+                  "https://www.cateye.com/intl/products/headlights/HL-EL088RC_TL-LD810/"
+                ]
+              }
+            ]
+          },
+          "light_mode_configurations": {
+            "schema_version": 1,
+            "rows": [
+              {
+                "id": "mo-1",
+                "values": {
+                  "member_id": "m-ampp800",
+                  "mode": "High",
+                  "pattern": "Constante",
+                  "lumens": "800",
+                  "runtime_h": "1.5"
+                },
+                "sources": [
+                  "https://www.cateye.com/intl/products/headlights/HL-EL088RC_TL-LD810/"
+                ]
+              },
+              {
+                "id": "mo-2",
+                "values": {
+                  "member_id": "m-ampp800",
+                  "mode": "Daytime HyperConstant",
+                  "pattern": "Constante + intermitente",
+                  "lumens": "800",
+                  "lumens_secondary": "200",
+                  "runtime_h": "5"
+                },
+                "sources": [
+                  "https://www.cateye.com/intl/products/headlights/HL-EL088RC_TL-LD810/"
+                ]
+              },
+              {
+                "id": "mo-3",
+                "values": {
+                  "member_id": "m-ampp800",
+                  "mode": "Flashing",
+                  "pattern": "Intermitente",
+                  "lumens": "200",
+                  "runtime_h": "30"
+                },
+                "sources": [
+                  "https://www.cateye.com/intl/products/headlights/HL-EL088RC_TL-LD810/"
+                ]
+              }
+            ]
+          },
+          "kit_members": {
+            "schema_version": 1,
+            "rows": [
+              {
+                "id": "k-1",
+                "values": {
+                  "member_role": "cable",
+                  "family": "consumer_electronics",
+                  "quantity": "1",
+                  "position": "Sin posición",
+                  "identity_model": "Cable Micro-USB"
+                },
+                "sources": [
+                  "https://www.cateye.com/intl/products/headlights/HL-EL088RC_TL-LD810/"
+                ]
+              }
+            ]
+          }
+        },
+        "expected_issues": [],
+        "note": "AMPP800 OEM example; retrieval date removed from member revision; quantity travels as integer text. Declared totals retained; partial mode detail is not a total.",
+        "inventory_write": false,
+        "evidence_scope": "Reference/representation example only, never an inventory attribution"
+      }
+    },
+    {
+      "id": "light_kit_cateye_group_ride_two_revisions",
+      "after_override": {
+        "id": "light_kit_cateye_group_ride_two_revisions",
+        "template": "light",
+        "kind": "documentary_conflict_pending",
+        "source_ids": [
+          "S-CATEYE-WEB",
+          "S-CATEYE-MANUAL-LD810"
+        ],
+        "values": {
+          "light_position": "Juego delantera + trasera",
+          "light_member_configurations": {
+            "schema_version": 1,
+            "rows": [
+              {
+                "id": "m-front",
+                "values": {
+                  "member_id": "AMPP800 (HL-EL088RC)",
+                  "position": "Delantera",
+                  "battery_kind": "Li-ion integrada",
+                  "battery_capacity_mah": "2500",
+                  "charge_connector": "Micro-USB",
+                  "ip_rating": "IPX4"
+                },
+                "sources": [
+                  "https://www.cateye.com/intl/products/headlights/HL-EL088RC_TL-LD810/"
+                ]
+              },
+              {
+                "id": "m-rear",
+                "values": {
+                  "member_id": "ViZ300 (TL-LD810)",
+                  "position": "Trasera",
+                  "battery_kind": "Li-ion integrada",
+                  "battery_capacity_mah": "800",
+                  "battery_voltage_v": "3.7",
+                  "charge_connector": "Micro-USB",
+                  "mount_kind": "Abrazadera de tija",
+                  "mount_diameter_min_mm": "21.5",
+                  "mount_diameter_max_mm": "32",
+                  "mount_circumference_max_mm": "130",
+                  "ip_rating": "IPX4",
+                  "ip_standard": "JIS C0920 (manual TLLD810/820-201223 1)"
+                },
+                "sources": [
+                  "https://www.cateye.com/intl/products/headlights/HL-EL088RC_TL-LD810/",
+                  "https://www.cateye.com/intl/support/manual/data/doc/TL-LD810_820_HP_ENG_v1.pdf"
+                ]
+              }
+            ]
+          }
+        },
+        "expected_issues": [
+          {
+            "code": "required_missing",
+            "field": "light_mode_configurations",
+            "blocking": false
+          }
+        ],
+        "note": "Una batería documentada requiere el manual en sources de su fila. Edición del manual y fecha web no se convierten en revisión del miembro. Dos alternativas documentales no son dos modos simultáneos.",
+        "inventory_write": false,
+        "evidence_scope": "Reference/representation example only, never an inventory attribution",
+        "competing_source_observations": [
+          {
+            "mode": "Group Ride",
+            "lumens": "100",
+            "runtime_h": "8",
+            "source_url": "https://www.cateye.com/intl/products/headlights/HL-EL088RC_TL-LD810/",
+            "document_scope": "Anterior a Spec change; fecha de transición/serie física desconocidas"
+          },
+          {
+            "mode": "Group Ride",
+            "lumens": "15",
+            "runtime_h": "10",
+            "source_url": "https://www.cateye.com/intl/products/headlights/HL-EL088RC_TL-LD810/",
+            "document_scope": "Vigente tras Spec change; atribución de unidad física desconocida"
+          }
+        ],
+        "capture_decision": "No canonical Group Ride observation until physical variant is resolved; competing_source_observations is review metadata, not rows_schema DSL."
+      }
+    },
+    {
+      "id": "light_kit_same_revision_twice",
+      "after_override": {
+        "id": "light_kit_same_revision_twice",
+        "template": "light",
+        "kind": "conflict_not_detected_by_row_identity",
+        "source_ids": [
+          "S-CATEYE-WEB"
+        ],
+        "values": {
+          "light_position": "Juego delantera + trasera",
+          "light_mode_configurations": {
+            "schema_version": 1,
+            "rows": [
+              {
+                "id": "a",
+                "values": {
+                  "member_id": "m-rear",
+                  "mode": "Group Ride",
+                  "lumens": "100",
+                  "runtime_h": "8"
+                },
+                "sources": [
+                  "https://www.cateye.com/intl/products/headlights/HL-EL088RC_TL-LD810/"
+                ]
+              },
+              {
+                "id": "b",
+                "values": {
+                  "member_id": "m-rear",
+                  "mode": "Group Ride",
+                  "lumens": "15",
+                  "runtime_h": "10"
+                },
+                "sources": [
+                  "https://www.cateye.com/intl/products/headlights/HL-EL088RC_TL-LD810/"
+                ]
+              }
+            ]
+          },
+          "spec_evidence_source": "Reproducción sintética del conflicto documental; no adoptar como ficha",
+          "light_member_configurations": {
+            "schema_version": 1,
+            "rows": [
+              {
+                "id": "m-rear",
+                "values": {
+                  "member_id": "ViZ300 — variante pendiente",
+                  "position": "Trasera"
+                },
+                "sources": [
+                  "https://www.cateye.com/intl/products/headlights/HL-EL088RC_TL-LD810/"
+                ]
+              }
+            ]
+          }
+        },
+        "expected_issues": [],
+        "note": "Conservar row IDs no deduplica semánticamente; no se fabrica una revisión para solucionar el conflicto. Mismo nombre sólo no prueba misma condición, pero este fixture declara el conflicto de la misma condición.",
+        "inventory_write": false,
+        "evidence_scope": "Reference/representation example only, never an inventory attribution",
+        "capture_decision": "Reject simultaneous canonicalization for the same identified operating condition; row parser alone cannot adjudicate claim conflicts."
+      }
+    },
+    {
+      "id": "light_kit_group_ride_twice_without_revision_undetectable",
+      "after_override": {
+        "id": "light_kit_group_ride_twice_without_revision_undetectable",
+        "template": "light",
+        "kind": "conflict_not_detected_by_row_identity",
+        "source_ids": [
+          "S-ENGINE"
+        ],
+        "values": {
+          "light_position": "Juego delantera + trasera",
+          "light_mode_configurations": {
+            "schema_version": 1,
+            "rows": [
+              {
+                "id": "a",
+                "values": {
+                  "member_id": "m-rear",
+                  "mode": "Group Ride",
+                  "lumens": "100",
+                  "runtime_h": "8"
+                },
+                "sources": []
+              },
+              {
+                "id": "b",
+                "values": {
+                  "member_id": "m-rear",
+                  "mode": "Group Ride",
+                  "lumens": "15",
+                  "runtime_h": "10"
+                },
+                "sources": []
+              }
+            ]
+          },
+          "spec_evidence_source": "Reproducción sintética del conflicto documental; no adoptar como ficha",
+          "light_member_configurations": {
+            "schema_version": 1,
+            "rows": [
+              {
+                "id": "m-rear",
+                "values": {
+                  "member_id": "ViZ300 — variante pendiente",
+                  "position": "Trasera"
+                },
+                "sources": [
+                  "https://www.cateye.com/intl/products/headlights/HL-EL088RC_TL-LD810/"
+                ]
+              }
+            ]
+          }
+        },
+        "expected_issues": [],
+        "note": "Conservar row IDs no deduplica semánticamente; no se fabrica una revisión para solucionar el conflicto. Mismo nombre sólo no prueba misma condición, pero este fixture declara el conflicto de la misma condición.",
+        "inventory_write": false,
+        "evidence_scope": "Reference/representation example only, never an inventory attribution",
+        "capture_decision": "Reject simultaneous canonicalization for the same identified operating condition; row parser alone cannot adjudicate claim conflicts."
+      }
+    },
+    {
+      "id": "light_single_position_mismatch_undetectable",
+      "after_override": {
+        "id": "light_single_position_mismatch_undetectable",
+        "template": "light",
+        "kind": "contradictory_undetectable",
+        "source_ids": [
+          "S-ENGINE"
+        ],
+        "values": {
+          "light_position": "Delantera",
+          "light_member_configurations": {
+            "schema_version": 1,
+            "rows": [
+              {
+                "id": "m",
+                "values": {
+                  "member_id": "X",
+                  "position": "Trasera"
+                },
+                "sources": []
+              }
+            ]
+          }
+        },
+        "expected_issues": [
+          {
+            "code": "required_missing",
+            "field": "light_mode_configurations",
+            "blocking": false
+          }
+        ],
+        "note": "G2: la fila dice Trasera y el escalar Delantera; hoy nada lo detecta. Se registra para que la carencia tenga caso, no para aceptarlo.",
+        "inventory_write": false,
+        "evidence_scope": "Reference/representation example only, never an inventory attribution",
+        "capture_decision": "Do not mark configuration verified; scalar/member position coherence remains unproven."
+      }
+    },
+    {
+      "id": "light_kit_member_inside_kit_members_undetectable",
+      "after_override": {
+        "id": "light_kit_member_inside_kit_members_undetectable",
+        "template": "light",
+        "kind": "membership_identity_pending",
+        "source_ids": [
+          "S-ENGINE"
+        ],
+        "values": {
+          "light_position": "Juego delantera + trasera",
+          "kit_members": {
+            "schema_version": 1,
+            "rows": [
+              {
+                "id": "k",
+                "values": {
+                  "member_role": "otro",
+                  "family": "light",
+                  "quantity": "1",
+                  "position": "Delantero"
+                },
+                "sources": []
+              }
+            ]
+          },
+          "light_member_configurations": {
+            "schema_version": 1,
+            "rows": [
+              {
+                "id": "m",
+                "values": {
+                  "member_id": "Delantera X",
+                  "position": "Delantera"
+                },
+                "sources": []
+              }
+            ]
+          }
+        },
+        "expected_issues": [
+          {
+            "code": "required_missing",
+            "field": "light_mode_configurations",
+            "blocking": false
+          }
+        ],
+        "note": "Coincidir familia/posición no demuestra que sea la misma unidad física. Puede haber doble registro o dos unidades diferentes; resolver referencias de miembro, sin deducir identidad del nombre.",
+        "inventory_write": false,
+        "evidence_scope": "Reference/representation example only, never an inventory attribution"
+      }
+    },
+    {
+      "id": "light_inventory_ae_kit_pending",
+      "after_override": {
+        "id": "light_inventory_ae_kit_pending",
+        "template": "light",
+        "kind": "unknown",
+        "source_ids": [
+          "S-INVENTARIO"
+        ],
+        "inventory_product": "Juego de luces delantera + trasera AE",
+        "values": {},
+        "expected_issues": [
+          {
+            "code": "required_missing",
+            "field": "light_position",
+            "blocking": false
+          },
+          {
+            "code": "required_missing",
+            "field": "light_member_configurations",
+            "blocking": false
+          },
+          {
+            "code": "required_missing",
+            "field": "light_mode_configurations",
+            "blocking": false
+          }
+        ],
+        "note": "El título guía investigación; ni light_position ni una cantidad se asignan desde este fixture al inventario.",
+        "inventory_write": false,
+        "evidence_scope": "Reference/representation example only, never an inventory attribution"
+      }
+    },
+    {
+      "id": "computer_garmin_540_sensors_transport_unknown",
+      "after_override": {
+        "id": "computer_garmin_540_sensors_transport_unknown",
+        "template": "cycle_computer",
+        "kind": "scoped_declarations_incomplete",
+        "source_ids": [
+          "GAR-SENSORS"
+        ],
+        "values": {
+          "sensor_support_configurations": {
+            "schema_version": 1,
+            "rows": [
+              {
+                "id": "s-0",
+                "values": {
+                  "sensor_type": "Velocidad",
+                  "transport": "Desconocido / sin confirmar",
+                  "supported": true,
+                  "scope": "Sensores de velocidad citados por Edge 540; modelo/perfil concreto pendiente"
+                },
+                "sources": [
+                  "https://www8.garmin.com/manuals/webhelp/GUID-17DE938E-466A-4746-BDBF-7A6FC1B3A32C/EN-US/GUID-09801A97-361B-4675-AD3A-6ACE25854DB3.html"
+                ]
+              },
+              {
+                "id": "s-1",
+                "values": {
+                  "sensor_type": "Cadencia",
+                  "transport": "Desconocido / sin confirmar",
+                  "supported": true,
+                  "scope": "Sensores de cadencia citados por Edge 540; no presupone dispositivo combinado"
+                },
+                "sources": [
+                  "https://www8.garmin.com/manuals/webhelp/GUID-17DE938E-466A-4746-BDBF-7A6FC1B3A32C/EN-US/GUID-09801A97-361B-4675-AD3A-6ACE25854DB3.html"
+                ]
+              },
+              {
+                "id": "s-2",
+                "values": {
+                  "sensor_type": "Frecuencia cardiaca",
+                  "transport": "Desconocido / sin confirmar",
+                  "supported": true,
+                  "scope": "Modelos de monitor cardiaco citados por el manual Edge 540; no todos los monitores"
+                },
+                "sources": [
+                  "https://www8.garmin.com/manuals/webhelp/GUID-17DE938E-466A-4746-BDBF-7A6FC1B3A32C/EN-US/GUID-09801A97-361B-4675-AD3A-6ACE25854DB3.html"
+                ]
+              },
+              {
+                "id": "s-3",
+                "values": {
+                  "sensor_type": "Potencia",
+                  "transport": "Desconocido / sin confirmar",
+                  "supported": true,
+                  "scope": "Series Rally o Vector citadas por el manual; generación/perfil concretos pendientes"
+                },
+                "sources": [
+                  "https://www8.garmin.com/manuals/webhelp/GUID-17DE938E-466A-4746-BDBF-7A6FC1B3A32C/EN-US/GUID-09801A97-361B-4675-AD3A-6ACE25854DB3.html"
+                ]
+              },
+              {
+                "id": "s-4",
+                "values": {
+                  "sensor_type": "Radar",
+                  "transport": "Desconocido / sin confirmar",
+                  "supported": true,
+                  "scope": "Familia Varia de radar trasero citada; modelo/perfil concreto pendiente"
+                },
+                "sources": [
+                  "https://www8.garmin.com/manuals/webhelp/GUID-17DE938E-466A-4746-BDBF-7A6FC1B3A32C/EN-US/GUID-09801A97-361B-4675-AD3A-6ACE25854DB3.html"
+                ]
+              },
+              {
+                "id": "s-5",
+                "values": {
+                  "sensor_type": "Luces",
+                  "transport": "Desconocido / sin confirmar",
+                  "supported": true,
+                  "scope": "Familia Varia de luces citada; modelo/perfil concreto pendiente"
+                },
+                "sources": [
+                  "https://www8.garmin.com/manuals/webhelp/GUID-17DE938E-466A-4746-BDBF-7A6FC1B3A32C/EN-US/GUID-09801A97-361B-4675-AD3A-6ACE25854DB3.html"
+                ]
+              },
+              {
+                "id": "s-6",
+                "values": {
+                  "sensor_type": "Cambio electrónico",
+                  "transport": "Desconocido / sin confirmar",
+                  "supported": true,
+                  "scope": "Cambios electrónicos y Shimano Di2 citados; modelo/perfil concreto pendiente"
+                },
+                "sources": [
+                  "https://www8.garmin.com/manuals/webhelp/GUID-17DE938E-466A-4746-BDBF-7A6FC1B3A32C/EN-US/GUID-09801A97-361B-4675-AD3A-6ACE25854DB3.html"
+                ]
+              },
+              {
+                "id": "s-7",
+                "values": {
+                  "sensor_type": "eBike",
+                  "transport": "Desconocido / sin confirmar",
+                  "supported": true,
+                  "scope": "Sistemas eBike compatibles citados, incluido ejemplo Shimano; no todas las eBikes"
+                },
+                "sources": [
+                  "https://www8.garmin.com/manuals/webhelp/GUID-17DE938E-466A-4746-BDBF-7A6FC1B3A32C/EN-US/GUID-09801A97-361B-4675-AD3A-6ACE25854DB3.html"
+                ]
+              },
+              {
+                "id": "s-8",
+                "values": {
+                  "sensor_type": "Control remoto",
+                  "transport": "Desconocido / sin confirmar",
+                  "supported": true,
+                  "scope": "Edge Remote citado; no todo control remoto"
+                },
+                "sources": [
+                  "https://www8.garmin.com/manuals/webhelp/GUID-17DE938E-466A-4746-BDBF-7A6FC1B3A32C/EN-US/GUID-09801A97-361B-4675-AD3A-6ACE25854DB3.html"
+                ]
+              },
+              {
+                "id": "s-9",
+                "values": {
+                  "sensor_type": "Control remoto",
+                  "transport": "Desconocido / sin confirmar",
+                  "supported": true,
+                  "scope": "inReach Remote citado; funciones y modelos específicos pendientes"
+                },
+                "sources": [
+                  "https://www8.garmin.com/manuals/webhelp/GUID-17DE938E-466A-4746-BDBF-7A6FC1B3A32C/EN-US/GUID-09801A97-361B-4675-AD3A-6ACE25854DB3.html"
+                ]
+              },
+              {
+                "id": "s-10",
+                "values": {
+                  "sensor_type": "Rodillo inteligente",
+                  "transport": "Desconocido / sin confirmar",
+                  "supported": true,
+                  "scope": "Rodillo inteligente compatible según manual; modelo/perfil concreto pendiente"
+                },
+                "sources": [
+                  "https://www8.garmin.com/manuals/webhelp/GUID-17DE938E-466A-4746-BDBF-7A6FC1B3A32C/EN-US/GUID-09801A97-361B-4675-AD3A-6ACE25854DB3.html"
+                ]
+              }
+            ]
+          }
+        },
+        "expected_issues": [
+          {
+            "code": "required_missing",
+            "field": "positioning_source",
+            "blocking": false
+          },
+          {
+            "code": "required_missing",
+            "field": "speed_source",
+            "blocking": false
+          },
+          {
+            "code": "row_incomplete",
+            "field": "sensor_support_configurations",
+            "blocking": false
+          }
+        ],
+        "note": "Se conserva alcance OEM de función/serie y transporte desconocido. No afirmar compatibilidad con un modelo arbitrario por su tipo; no deducir Bluetooth+Wi-Fi de enlace telefónico ni GNSS multibanda de esta página de sensores.",
+        "inventory_write": false,
+        "evidence_scope": "Reference/representation example only, never an inventory attribution"
+      }
+    },
+    {
+      "id": "computer_sensor_pair_admitted_and_excluded",
+      "after_override": {
+        "id": "computer_sensor_pair_admitted_and_excluded",
+        "template": "cycle_computer",
+        "kind": "explicit_scope_conflict_pending",
+        "source_ids": [
+          "S-ENGINE"
+        ],
+        "values": {
+          "positioning_source": "GNSS",
+          "speed_source": "GNSS o sensor",
+          "sensor_support_configurations": {
+            "schema_version": 1,
+            "rows": [
+              {
+                "id": "a",
+                "values": {
+                  "sensor_type": "Velocidad",
+                  "transport": "ANT+",
+                  "supported": true,
+                  "scope": "Mismo modelo, generación, perfil y condición explícitos: contradicción sintética"
+                },
+                "sources": []
+              },
+              {
+                "id": "b",
+                "values": {
+                  "sensor_type": "Velocidad",
+                  "transport": "ANT+",
+                  "supported": false,
+                  "scope": "Mismo modelo, generación, perfil y condición explícitos: contradicción sintética"
+                },
+                "sources": []
+              }
+            ]
+          }
+        },
+        "expected_issues": [],
+        "note": "Un tipo/transporte repetido con modelos distintos sería válido. Este caso fija el mismo alcance explícito para probar un conflicto lógico; no afirma una incompatibilidad OEM.",
+        "inventory_write": false,
+        "evidence_scope": "Reference/representation example only, never an inventory attribution",
+        "capture_decision": "Reject canonical adoption of the conflicting same-scope claim; row IDs alone do not reject it."
+      }
+    },
+    {
+      "id": "computer_wired_inventory_speed_source_without_rows_undetectable",
+      "after_override": {
+        "id": "computer_wired_inventory_speed_source_without_rows_undetectable",
+        "template": "cycle_computer",
+        "kind": "contradictory_undetectable",
+        "source_ids": [
+          "S-INVENTARIO",
+          "S-ENGINE"
+        ],
+        "values": {
+          "positioning_source": "Sin posicionamiento",
+          "speed_source": "Sensor de rueda (imán / cable)",
+          "sensor_support_configurations": {
+            "schema_version": 1,
+            "rows": [
+              {
+                "id": "a",
+                "values": {
+                  "sensor_type": "Velocidad",
+                  "transport": "Cable",
+                  "supported": false,
+                  "scope": "Exclusión global explícita de velocidad por cable, caso sintético"
+                },
+                "sources": []
+              }
+            ]
+          }
+        },
+        "expected_issues": [],
+        "note": "No se atribuye al producto del título. Un rechazo de un sensor concreto no contradice velocidad por otro sensor; este contraejemplo declara exclusión global para que el conflicto sea real.",
+        "inventory_write": false,
+        "evidence_scope": "Reference/representation example only, never an inventory attribution"
+      }
+    },
+    {
+      "id": "charger_anker_a2667_ports_budget_profiles_unknown",
+      "after_override": {
+        "id": "charger_anker_a2667_ports_budget_profiles_unknown",
+        "template": "consumer_electronics",
+        "kind": "valid",
+        "source_ids": [
+          "S-ANKER-A2667"
+        ],
+        "values": {
+          "device_kind": "Cargador",
+          "rated_power_w": "65",
+          "ports_count": "3",
+          "spec_evidence_source": "Ficha de soporte Anker A2667, leída 2026-09-07",
+          "power_port_configurations": {
+            "schema_version": 1,
+            "rows": [
+              {
+                "id": "p-c1",
+                "values": {
+                  "port_id": "USB-C 1",
+                  "connector": "USB-C",
+                  "direction": "Salida",
+                  "max_power_w": "65"
+                },
+                "sources": [
+                  "https://service.anker.com/product-description/a085g000004x2BVAAY?recordId=a085g000004x2BVAAY"
+                ]
+              },
+              {
+                "id": "p-c2",
+                "values": {
+                  "port_id": "USB-C 2",
+                  "connector": "USB-C",
+                  "direction": "Salida",
+                  "max_power_w": "65"
+                },
+                "sources": [
+                  "https://service.anker.com/product-description/a085g000004x2BVAAY?recordId=a085g000004x2BVAAY"
+                ]
+              },
+              {
+                "id": "p-a",
+                "values": {
+                  "port_id": "USB-A",
+                  "connector": "USB-A",
+                  "direction": "Salida",
+                  "max_power_w": "22.5"
+                },
+                "sources": [
+                  "https://service.anker.com/product-description/a085g000004x2BVAAY?recordId=a085g000004x2BVAAY"
+                ]
+              }
+            ]
+          },
+          "power_budget_configurations": {
+            "schema_version": 1,
+            "rows": [
+              {
+                "id": "b1",
+                "values": {
+                  "configuration": "C1 + C2",
+                  "port_id": "p-c1",
+                  "power_w": "45"
+                },
+                "sources": [
+                  "https://service.anker.com/product-description/a085g000004x2BVAAY?recordId=a085g000004x2BVAAY"
+                ]
+              },
+              {
+                "id": "b2",
+                "values": {
+                  "configuration": "C1 + C2",
+                  "port_id": "p-c2",
+                  "power_w": "20"
+                },
+                "sources": [
+                  "https://service.anker.com/product-description/a085g000004x2BVAAY?recordId=a085g000004x2BVAAY"
+                ]
+              },
+              {
+                "id": "b3",
+                "values": {
+                  "configuration": "C2 + A",
+                  "port_id": "p-c2",
+                  "power_w": "12"
+                },
+                "sources": [
+                  "https://service.anker.com/product-description/a085g000004x2BVAAY?recordId=a085g000004x2BVAAY"
+                ]
+              },
+              {
+                "id": "b4",
+                "values": {
+                  "configuration": "C2 + A",
+                  "port_id": "p-a",
+                  "power_w": "12"
+                },
+                "sources": [
+                  "https://service.anker.com/product-description/a085g000004x2BVAAY?recordId=a085g000004x2BVAAY"
+                ]
+              }
+            ]
+          },
+          "charging_protocol_claim": "PPS; PIQ 3.0; PIQ 2.0 (declaración global de la ficha A2667)"
+        },
+        "expected_issues": [],
+        "note": "Tres puertos y repartos de la ficha exacta. Protocolos se conservan globales: la fuente no los asigna a C1/C2/A. 65 W se interpreta sólo como potencia nominal declarada, nunca suma o máximo agregado calculado. Perfil V/A de salida desconocido en la página leída; input de red no es output.",
+        "inventory_write": false,
+        "evidence_scope": "Reference/representation example only, never an inventory attribution"
+      }
+    },
+    {
+      "id": "charger_budget_names_ghost_port",
+      "after_override": {
+        "id": "charger_budget_names_ghost_port",
+        "template": "consumer_electronics",
+        "kind": "contradictory",
+        "source_ids": [
+          "S-ENGINE"
+        ],
+        "values": {
+          "device_kind": "Cargador",
+          "power_port_configurations": {
+            "schema_version": 1,
+            "rows": [
+              {
+                "id": "p-c1",
+                "values": {
+                  "port_id": "USB-C 1",
+                  "connector": "USB-C",
+                  "direction": "Salida"
+                },
+                "sources": []
+              }
+            ]
+          },
+          "power_budget_configurations": {
+            "schema_version": 1,
+            "rows": [
+              {
+                "id": "b",
+                "values": {
+                  "configuration": "C1 + C2",
+                  "port_id": "p-c2",
+                  "power_w": "20"
+                },
+                "sources": []
+              }
+            ]
+          }
+        },
+        "expected_issues": [
+          {
+            "code": "prerequisite",
+            "field": "power_budget_configurations",
+            "blocking": false
+          },
+          {
+            "code": "row_reference_unresolved",
+            "field": "power_budget_configurations",
+            "row_id": "b",
+            "blocking": true
+          }
+        ],
+        "note": "Ya implementado (vínculo por row.id).",
+        "inventory_write": false,
+        "evidence_scope": "Reference/representation example only, never an inventory attribution"
+      }
+    },
+    {
+      "id": "charger_baseus_65w_model_unknown",
+      "after_override": {
+        "id": "charger_baseus_65w_model_unknown",
+        "template": "consumer_electronics",
+        "kind": "unknown",
+        "source_ids": [
+          "S-INVENTARIO"
+        ],
+        "inventory_product": "Cargador 65W Baseus",
+        "values": {
+          "device_kind": "Cargador"
+        },
+        "expected_issues": [
+          {
+            "code": "required_missing",
+            "field": "power_port_configurations",
+            "blocking": false
+          }
+        ],
+        "note": "Tipo de dispositivo como escenario de investigación. El 65 W del título no se confirma como potencia total; no se copian puertos/protocolos Anker.",
+        "inventory_write": false,
+        "evidence_scope": "Reference/representation example only, never an inventory attribution"
+      }
+    },
+    {
+      "id": "card_literal_without_number",
+      "after_override": {
+        "id": "card_literal_without_number",
+        "template": "consumer_electronics",
+        "kind": "unknown",
+        "source_ids": [
+          "S-ENGINE"
+        ],
+        "values": {
+          "device_kind": "Tarjeta de memoria",
+          "storage_capacity_label": "1TB",
+          "spec_evidence_source": "Envase: «1TB», leído en tienda"
+        },
+        "expected_issues": [],
+        "note": "Fixture de lectura literal sin normalización, no tarjeta real investigada. Si la etiqueta usa TB/GB conformes al SI, 1 TB son 1000 GB. 1024 GB no es equivalente; capacidad utilizable y etiquetada deben distinguirse.",
+        "inventory_write": false,
+        "evidence_scope": "Reference/representation example only, never an inventory attribution"
+      }
+    }
+  ],
+  "additional_cases": [
+    {
+      "id": "R-PROFILE-SCOPE",
+      "scope": "structural only",
+      "scenario": "Mismo puerto y protocolo con distintos rangos y condiciones documentadas",
+      "expected": "Dos row.id diferentes son representables; no deduplicar por mínimo ni inventar equivalencia. Suficiencia de condiciones pendiente.",
+      "probe_ids": [
+        "P09",
+        "P13"
+      ]
+    },
+    {
+      "id": "R-MODE-CONDITIONS",
+      "scope": "structural only",
+      "scenario": "Mismo nombre High con temperatura/batería/método OEM distintos",
+      "expected": "No bloquear por nombre ni sumar filas como modos distintos. Si condiciones no se conocen, no arbitrar dos valores contradictorios.",
+      "engine_status": "scope adjudication required"
+    },
+    {
+      "id": "R-IP-BASIS",
+      "scope": "CAT-MANUAL",
+      "scenario": "IPX4 con JIS C0920 literal y otro literal no incluido en shortlist",
+      "expected": "Preservar texto y norma de la fuente. No certificación IEC derivada ni incompatibilidad por estar fuera de lista.",
+      "probe_ids": [
+        "P05",
+        "P06"
+      ]
+    },
+    {
+      "id": "R-SENSOR-MODELS",
+      "scope": "structural only",
+      "scenario": "ANT+ Potencia con modelos/perfiles A y B distintos",
+      "expected": "Ambas declaraciones sobreviven por ID y alcance; false del modelo A no excluye B.",
+      "probe_ids": [
+        "P04",
+        "P12"
+      ]
+    },
+    {
+      "id": "R-TOTAL-PARTIAL",
+      "scope": "representation only",
+      "scenario": "ports_count=3 y detalle de un puerto; modes_count=5 y varios ensayos del mismo modo",
+      "expected": "No count/max derivados. Menos filas no implica exclusión; más filas no prueba más puertos/modos físicos sin resolver identidad."
+    },
+    {
+      "id": "R-POWER-NONUSB",
+      "scope": "SUPERNOVA external OEM example, not stock",
+      "scenario": "MINI 2 alimentación externa DC no USB",
+      "expected": "Descriptor externo sin inventar batería. Sus tensiones de entrada no entran en battery_voltage_v.",
+      "probe_ids": [
+        "P11"
+      ]
+    },
+    {
+      "id": "R-STORAGE-SI",
+      "scope": "BIPM units only",
+      "scenario": "Literal 1 TB normalizado a 1024 GB",
+      "expected": "Rechazar esa equivalencia SI en el proceso de normalización. Fila literal sola sigue siendo válida; este catálogo no calcula bytes útiles."
+    },
+    {
+      "id": "R-ONLY-LINK-ID",
+      "scope": "structural only",
+      "scenario": "Dos miembros de igual nombre, IDs diferentes; dos filas con mismo ID",
+      "expected": "Primer caso representable; segundo row_shape. Cambiar rótulo nunca cambia referencia.",
+      "probe_ids": [
+        "P14",
+        "P15",
+        "P16"
+      ]
+    }
+  ],
+  "gates": [
+    {
+      "id": "G-NORMALIZE",
+      "closed": false,
+      "requirement": "Root normaliza los 25 parches a protocolo real. Usar new_definitions separado; replace_unpublished_rows_schema con before completo; etiquetas globales template=null; add_field separado de replace_template_coherence; no aplicar este dictamen directamente."
+    },
+    {
+      "id": "G-LEGACY",
+      "closed": false,
+      "requirement": "Antes de cambios de metadata, root verifica hechos/referencias existentes y backup/versiones. Retiros preservan IDs/valores/procedencia. origin=new en JSON no demuestra ausencia de hechos en DB."
+    },
+    {
+      "id": "G-ROWS",
+      "closed": false,
+      "requirement": "Validar schemas finales y condiciones SQL/Dart sobre snapshot integrado. Cualquier evolución con hechos requiere migración explícita. Esta revisión no consulta DB ni valida despliegue."
+    },
+    {
+      "id": "G-REFERENCE",
+      "closed": false,
+      "requirement": "Conflictos/ediciones de fuente se conservan fuera de canonical values y se vinculan a identidad/variante exacta. Fecha de consulta jamás es member_revision. Modelo/generación desconocidos permanecen pendientes."
+    },
+    {
+      "id": "G-SCOPE",
+      "closed": false,
+      "requirement": "ID de fila garantiza identidad estructural, no suficiencia del alcance ni consistencia entre afirmaciones. Resolver duplicados reales, condiciones, completitud por entidad y exclusiones antes de canonicalizar o aprobar compatibilidad."
+    },
+    {
+      "id": "G-CONSUMERS",
+      "closed": false,
+      "requirement": "Filtros, búsqueda, facetas y comparador deben adoptar filas/alcances antes de retirar sus fuentes escalares. No extrapolar supported de tipo a modelo, ni declaración global de carga a cada puerto."
+    },
+    {
+      "id": "G-RUNTIME",
+      "closed": false,
+      "requirement": "Root verifica editor/UI y transporte final. Nuevo product_spec_row_conditions.dart local está en desarrollo; no se declara desplegado ni sustituye evidencia SQL. Los overrides aquí sólo dependen de rows_schema v1/0200."
+    },
+    {
+      "id": "G-FILL",
+      "closed": false,
+      "requirement": "No comenzar llenado desde fixtures. Resolver identidad de cada producto, fuente exacta, revisión y recibo de backup/aplicación. Este trabajo escribe cero productos."
+    }
+  ],
+  "verification": {
+    "exact_preimages": "25/25 PASS by independent read-only Python assertions",
+    "probe_path": ".tmp/product-spec-catalog/light-power-sensor-review-probe.dart",
+    "probe_result": "31/31 Flutter assertions PASS: 16 targeted row-boundary reproductions, 1 corrected-schema parse assertion, 14 corrected fixture issue-set assertions through validateProductSpecDraft on an in-memory semantic simulation.",
+    "probe_command": "fvm flutter test --no-pub .tmp/product-spec-catalog/light-power-sensor-review-probe.dart --reporter expanded",
+    "not_run": [
+      "DB wrappers/queries",
+      "SQL tests",
+      "production",
+      "runtime UI",
+      "Claude",
+      "publication",
+      "product fill"
+    ],
+    "boundaries": "Synthetic row magnitudes test representation only. OEM examples have no inventory identity binding. All 14 corrected fixture issue sets passed locally; final normalized integration still needs replay, SQL parity and root runtime evidence.",
+    "catalog_contract_validation": "105/105 validate_contract PASS for the same adjudicated in-memory metadata simulation; publication gates remain false. This is not a test of raw Claude patch protocol translation or SQL application.",
+    "original_null_rejection": "Reproduced using compiler.validate_contract: original prerequisites:null raises TypeError: NoneType object is not iterable; SQL 200 metadata guard lines 135–136 separately requires a JSON array. Dart prerequisitesFor lines 188–189 coalesces null to an empty list.",
+    "probe_sha256": "15614207f73c26a0d2624626c2a497b2e0222b4668826655606387bc0a30618a"
+  },
+  "stats": {
+    "patches": 25,
+    "aceptar": 8,
+    "corregir": 17,
+    "rechazar": 0,
+    "original_case_overrides": 14,
+    "additional_cases": 8,
+    "row_schema_corrections": 3,
+    "new_fields_corrected": 1,
+    "preimages_verified": 25,
+    "flutter_assertions": 31,
+    "products_filled": 0,
+    "metadata_contracts_validated_in_memory": 105
+  },
+  "definition_overrides": {
+    "power_port_profile_configurations": {
+      "key": "power_port_profile_configurations",
+      "origin": "new",
+      "label": "Perfiles eléctricos por puerto",
+      "data_type": "json",
+      "validation_rules": {
+        "row_label": "Perfil",
+        "rows_schema": {
+          "version": 1,
+          "columns": [
+            {
+              "key": "port_id",
+              "label": "Puerto",
+              "type": "text",
+              "required": true
+            },
+            {
+              "key": "protocol",
+              "label": "Protocolo declarado (literal)",
+              "type": "text",
+              "required": false
+            },
+            {
+              "key": "voltage_v",
+              "label": "Tensión fija o mínima declarada",
+              "type": "decimal",
+              "unit": "V",
+              "validation": {
+                "positive": true
+              }
+            },
+            {
+              "key": "voltage_max_v",
+              "label": "Tensión máxima del rango declarado",
+              "type": "decimal",
+              "unit": "V",
+              "validation": {
+                "positive": true
+              }
+            },
+            {
+              "key": "current_a",
+              "label": "Corriente declarada para este perfil",
+              "type": "decimal",
+              "unit": "A",
+              "validation": {
+                "positive": true
+              }
+            },
+            {
+              "key": "power_w",
+              "label": "Potencia declarada para este perfil",
+              "type": "decimal",
+              "unit": "W",
+              "validation": {
+                "positive": true
+              }
+            },
+            {
+              "key": "source_url",
+              "label": "Fuente",
+              "type": "url",
+              "required": true
+            },
+            {
+              "key": "oem_profile_label",
+              "label": "Nombre del perfil declarado",
+              "type": "text"
+            },
+            {
+              "key": "profile_kind",
+              "label": "Tipo de perfil declarado",
+              "type": "token",
+              "allowed_values": [
+                "Tensión fija",
+                "Rango de tensión",
+                "Otro perfil declarado",
+                "Desconocido / sin confirmar"
+              ]
+            },
+            {
+              "key": "current_role",
+              "label": "Significado de la corriente declarada",
+              "type": "text"
+            },
+            {
+              "key": "conditions",
+              "label": "Condiciones de funcionamiento declaradas",
+              "type": "text"
+            }
+          ],
+          "ordered_pairs": [
+            [
+              "voltage_v",
+              "voltage_max_v"
+            ]
+          ],
+          "unique_by": []
+        }
+      },
+      "used_by": [
+        "consumer_electronics"
+      ]
+    }
+  },
+  "attempted_sources_not_used": [
+    {
+      "url": "https://www.iec.ch/ip-ratings",
+      "outcome": "web open Internal Error; no full IEC standard or exhaustive token domain was read. Kept literal; did not substitute a secondary explanation as normative evidence."
+    }
+  ],
+  "source_boundary": "Sheldon lighting fundamentals used. No exact Park Tool source was found necessary for these electronic device specifications; no Park claim is manufactured. OEM/USB-IF/BIPM sources listed above own their specific claims."
+}

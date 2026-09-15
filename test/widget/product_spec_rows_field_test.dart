@@ -50,6 +50,144 @@ Widget host(Widget child, {Brightness brightness = Brightness.light}) =>
     );
 
 void main() {
+  testWidgets('missing family names never remove an allowed or stored choice',
+      (tester) async {
+    final rowSchema = ProductSpecRowSchema.fromJson({
+      'version': 1,
+      'columns': [
+        {
+          'key': 'family',
+          'label': 'Familia técnica',
+          'type': 'token',
+          'allowed_values': ['pump', 'accessory_mount']
+        },
+      ],
+    });
+    Map<String, dynamic>? value = {
+      'schema_version': 1,
+      'rows': [
+        {
+          'id': 'piece-a',
+          'values': {'family': 'pump'},
+          'sources': ['https://example.test/pack']
+        },
+      ]
+    };
+    await tester.pumpWidget(host(StatefulBuilder(
+      builder: (context, setState) => ProductSpecRowsField(
+        fieldKey: 'kit_members',
+        label: 'Piezas',
+        schema: rowSchema,
+        value: value,
+        tokenLabels: const {
+          'family': {'accessory_mount': 'Soporte de accesorio'}
+        },
+        onChanged: (next) => setState(() => value = next),
+      ),
+    )));
+    final field = find.byKey(const ValueKey('kit_members-piece-a-family'));
+    final control = tester.widget<VbSearchableSelect<String>>(field);
+    expect(control.value, 'pump');
+    expect(control.options.map((o) => o.value), ['pump', 'accessory_mount']);
+    expect(control.options.first.label, 'Nombre no disponible · pump');
+    final selector = tester.widget<VbSearchableSelect<String>>(
+        find.byKey(const ValueKey('kit_members-row-selector')));
+    expect(selector.options.first.context,
+        'Familia técnica: Nombre no disponible · pump');
+    await tester.tap(field);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Soporte de accesorio').last);
+    await tester.pumpAndSettle();
+    await tester.tap(field);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Nombre no disponible · pump').last);
+    await tester.pumpAndSettle();
+    expect(value!['rows'][0], {
+      'id': 'piece-a',
+      'values': {'family': 'pump'},
+      'sources': ['https://example.test/pack'],
+    });
+  });
+
+  testWidgets('family names preserve keys, row scope and forbidden options',
+      (tester) async {
+    final rowSchema = ProductSpecRowSchema.fromJson({
+      'version': 1,
+      'columns': [
+        {
+          'key': 'family',
+          'label': 'Familia técnica',
+          'type': 'token',
+          'allowed_values': ['accessory_mount', 'helmet', 'light']
+        },
+      ],
+    });
+    final conditions = ProductSpecRowConditions.fromContract({
+      'rules_version': 2,
+      'row_conditions': {
+        'version': 1,
+        'fields': {
+          'kit_members': {
+            'allowed_options': {
+              'family': ['accessory_mount', 'helmet']
+            },
+          }
+        }
+      },
+    }, {
+      'kit_members': rowSchema
+    });
+    Map<String, dynamic>? value = {
+      'schema_version': 1,
+      'rows': [
+        {
+          'id': 'piece-a',
+          'values': {'family': 'accessory_mount'},
+          'sources': ['https://example.test/a']
+        },
+        {
+          'id': 'piece-b',
+          'values': {'family': 'helmet'},
+          'sources': ['https://example.test/b']
+        },
+      ]
+    };
+    final second = jsonEncode(value['rows'][1]);
+    await tester.pumpWidget(host(StatefulBuilder(
+        builder: (context, setState) => ProductSpecRowsField(
+            fieldKey: 'kit_members',
+            label: 'Piezas',
+            schema: rowSchema,
+            value: value,
+            conditions: conditions.fields['kit_members'],
+            tokenLabels: const {
+              'family': {
+                'accessory_mount': 'Soporte de accesorio',
+                'helmet': 'Casco',
+                'light': 'Luz'
+              }
+            },
+            onChanged: (next) => setState(() => value = next)))));
+    final field = find.byKey(const ValueKey('kit_members-piece-a-family'));
+    final control = tester.widget<VbSearchableSelect<String>>(field);
+    expect(
+        control.options.map((o) => o.label), ['Soporte de accesorio', 'Casco']);
+    expect(control.options.map((o) => o.value), ['accessory_mount', 'helmet']);
+    expect(find.text('accessory_mount'), findsNothing);
+    final selector = tester.widget<VbSearchableSelect<String>>(
+        find.byKey(const ValueKey('kit_members-row-selector')));
+    expect(selector.options.first.context,
+        'Familia técnica: Soporte de accesorio');
+    await tester.tap(field);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Casco').last);
+    await tester.pumpAndSettle();
+    expect(value!['rows'][0]['values'], {'family': 'helmet'});
+    expect(value!['rows'][0]['id'], 'piece-a');
+    expect(value!['rows'][0]['sources'], ['https://example.test/a']);
+    expect(jsonEncode(value!['rows'][1]), second);
+  });
+
   for (final width in [390.0, 768.0, 1280.0]) {
     for (final brightness in Brightness.values) {
       testWidgets(

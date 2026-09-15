@@ -2089,7 +2089,7 @@ Phase-one behavior should:
 - compatibility scoring is not allowed to auto-expand those broad ecosystem fields into exact HG+/Linkglide/Eagle/T-Type platform truth. Broad ecosystem claims may gate obvious mismatch or keep the result in caution territory, but exact platform matching must still come from `drivetrain_platform`, `chain_profile_family`, or other true downstream structured fields
 - the same guard applies to dirty legacy values stored in the wrong field: if `drivetrain_platform` contains only a broad brand/ecosystem claim such as `Shimano`, `SRAM`, `Ecosistema Shimano`, or `Compatible SRAM`, the app must refuse to reinterpret that as exact HG/SIS, Eagle, or other downstream platform truth at runtime
 - the same guard applies to `shift_actuation_family`: this field is a refinement-level indexing / cable-pull signal, not the primary ecosystem anchor. Broad values such as `Shimano` or `SRAM` stranded there must not be promoted into ecosystem truth unless the value actually carries actuation semantics like SIS, Dynasys, Linkglide/CUES, Exact Actuation, X-Actuation, AXS, or equivalent real refinement detail
-- drivetrain compatibility scoring must also stay conservative for derailleurs, shifters, and drivetrain kits after a nominal match. Rear derailleurs are not fully compatible from speed alone; actuation family, max-cog support, cage / total-capacity expectations, and mounting still matter. Front derailleurs are not fully compatible from `2x` / `3x` count alone; mount style, pull direction, big-ring size/cage curvature, and road-vs-MTB front indexing still matter. Shifters should only move to full-compatible when the relevant side and exact indexing/actuation seam are actually resolved in structured data. Drivetrain kits should not move to full-compatible from front-side crankset/pedalier facts alone when the rear-side content of the kit is still unresolved; otherwise keep the result in caution territory.
+- drivetrain compatibility scoring must also stay conservative for derailleurs, shifters, and drivetrain kits after a nominal match. Rear derailleurs are not fully compatible from speed alone; actuation family, max-cog support, cage / total-capacity expectations, and mounting still matter. Front derailleurs are not fully compatible from `2x` / `3x` count alone; mount style, pull direction, big-ring size/cage curvature, and road-vs-MTB front indexing still matter. Shifters should only move to full-compatible when the relevant side and exact indexing/actuation seam are actually resolved in structured data. **2026-09-14:** drivetrain kits must not dispatch through crankset matching or assume front/rear contents. Only the actual member profiles and their assembly relationships may supply fitment premises; until that evaluation exists, use kit-specific caution without inherited crank dimensions or configuration claims.
 - cassette / freewheel scoring must also stay conservative after a nominal speed and freehub match. Threaded freewheel vs cassette body remains a hard split, but even when speed and driver family line up the scorer should usually remain in caution territory until the structured range/body-generation/spacer seam is actually resolved, because real hub-body exceptions still exist.
 - cassette / freewheel ficha UI must follow the same rule upstream: `freehub_type` cannot remain implicit, freewheel templates must keep that field as an explicit ficha confirmation instead of auto-deriving it from category/template semantics, and rear-cog templates should expose range fields like `largest_cog_teeth` so the app does not keep speaking as if speed were the only meaningful seam.
 - rear-cog templates (`cassette`, `freewheel`, `fixed_cog`) must not surface `drivetrain_primary_ecosystem`, `drivetrain_declared_compatible_ecosystems`, or `drivetrain_platform` in the runtime ficha flow; those broad semantics are not the real rear-cog seams compared with mount/body family, speeds, and range
@@ -6772,6 +6772,17 @@ The Payroll system automates:
 1. Salary calculations based on attendance/hours worked
 2. Expense creation for each employee payment
 3. Journal entry generation for proper accounting
+
+**Regla del dueño (2026-09-10): cada hora se paga a la tarifa; no existen
+horas extra.** «Horas trabajadas, horas pagadas; ellos eligen qué horas
+quieren trabajar.» El trigger de Asistencias del 2025-12 asumía un tramo extra
+al 1,5× sobre una jornada de 9 h y, además, lo contaba dos veces: `worked_hours`
+ya traía el turno completo y el exceso iba aparte a `overtime_hours`. Vicente
+Díaz, 2026-09-04, 9,63 h → «34,9 h × $3.500» junto a un total de $123.358. Desde
+`20260910133000_flat_hourly_pay_no_overtime` `overtime_hours` es siempre 0 en
+Asistencias; las columnas y la rama × 1,5 de los comandos de borrador siguen
+existiendo pero no reciben horas. No reintroducir un tramo extra sin que el
+dueño lo pida.
 
 ## Canonical Payroll Lifecycle
 

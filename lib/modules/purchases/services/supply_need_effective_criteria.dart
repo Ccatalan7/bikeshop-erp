@@ -2,6 +2,7 @@ import '../../../shared/services/supplier_need_portal_search.dart';
 import '../../inventory/services/product_identity/bike_part_taxonomy.dart';
 import '../../inventory/services/product_identity/product_identity_extractor.dart';
 import '../../inventory/services/spec_engine_service.dart';
+import '../../inventory/utils/spec_rule_evaluator.dart';
 import '../models/intelligent_purchasing_models.dart';
 import '../models/supplier_catalog.dart';
 
@@ -106,6 +107,127 @@ SupplyNeedCriteria effectiveSupplyNeedCriteria({
   );
 }
 
+/// Fields representable by the scalar purchasing predicate contract.
+///
+/// Retired fields and structured rows must not become scalar criteria. This
+/// does not flatten per-member claims or use storefront visibility as a
+/// purchasing permission. With no upstream answer, conditional fields remain
+/// available: an unknown prerequisite is not an incompatibility.
+List<SpecTemplateField> supplyNeedCriterionFieldsOf(
+  SpecTemplate? template, {
+  Map<String, dynamic> exactValues = const {},
+}) {
+  if (template == null) return const <SpecTemplateField>[];
+  const scalarTypes = {
+    'text',
+    'number',
+    'boolean',
+    'single_select',
+    'select',
+    'multi_select',
+    'multiselect',
+  };
+  return List<SpecTemplateField>.unmodifiable(template.fields.where((field) {
+    final definition = field.definition;
+    return definition != null &&
+        scalarTypes.contains(definition.dataType) &&
+        template.roleFor(definition.key) != 'legacy' &&
+        (!template
+                .applicabilityDependencies(field)
+                .every(exactValues.containsKey) ||
+            template.applicabilityFor(field, exactValues) != SpecTruth.no);
+  }));
+}
+
+/// Exact requested scalars usable as prerequisite inputs, not product facts.
+/// A threshold, exclusion or set of alternatives supplies no unique answer.
+/// Even presence rules must stay undecided when the request omits an input.
+Map<String, dynamic> supplyNeedExactPrerequisiteValues(
+  SpecTemplate? template,
+  Iterable<SupplyNeedPredicate> predicates,
+) {
+  if (template == null) return const {};
+  final fields = {
+    for (final field in supplyNeedCriterionFieldsOf(template))
+      field.definition!.key: field,
+  };
+  final byField = <String, List<SupplyNeedPredicate>>{};
+  for (final predicate in predicates) {
+    byField.putIfAbsent(predicate.field, () => []).add(predicate);
+  }
+  final values = <String, dynamic>{};
+  for (final entry in byField.entries) {
+    final definition = fields[entry.key]?.definition;
+    if (definition == null ||
+        const {'multi_select', 'multiselect'}.contains(definition.dataType)) {
+      continue;
+    }
+    final clauses = entry.value;
+    if (clauses.any((p) => p.operator != 'eq' || p.values.length != 1)) {
+      continue;
+    }
+    final value = clauses.first.values.single;
+    if (clauses.any((p) => p.values.single != value) ||
+        !hasKnownSpecValue(value)) {
+      continue;
+    }
+    final valid = switch (definition.dataType) {
+      'number' => specRuleNumber(value) != null,
+      'boolean' => value is bool,
+      'single_select' ||
+      'select' =>
+        value is String && definition.options.contains(value),
+      'text' => value is String,
+      _ => false,
+    };
+    if (valid) values[entry.key] = value;
+  }
+  // An old draft value on an inapplicable field cannot govern its children.
+  // Removing knowledge is conservative and terminates after at most N fields.
+  while (true) {
+    final usable = supplyNeedCriterionFieldsOf(template, exactValues: values)
+        .map((f) => f.definition!.key)
+        .toSet();
+    final rejected = values.keys.where((k) => !usable.contains(k)).toList();
+    if (rejected.isEmpty) break;
+    for (final key in rejected) {
+      values.remove(key);
+    }
+  }
+  return Map<String, dynamic>.unmodifiable(values);
+}
+
+/// Reuse both generations of option rules, only with known request inputs.
+/// Missing criteria do not assert that the product lacks that property.
+List<String> supplyNeedCriterionOptionsOf(
+  SpecTemplate template,
+  SpecTemplateField field,
+  Map<String, dynamic> exactValues,
+) {
+  bool inputsKnown(Map<String, dynamic> rule) =>
+      specConditionDependencies([rule]).every(exactValues.containsKey);
+  final evaluable = SpecTemplateField(
+    specDefinitionId: field.specDefinitionId,
+    sectionKey: field.sectionKey,
+    sortOrder: field.sortOrder,
+    isRequired: field.isRequired,
+    visibilityRules: const [],
+    optionRules: field.optionRules.where(inputsKnown).toList(),
+    constraintRules: field.constraintRules.where(inputsKnown).toList(),
+    definition: field.definition,
+  );
+  final offered = evaluable.allowedOptionsFor(exactValues);
+  final constrained = template
+      .constrainedOptionsFor(evaluable, exactValues)
+      ?.map(SpecTemplateField.normalizeRuleValue)
+      .toSet();
+  return List<String>.unmodifiable(field.definition!.options.where((option) {
+    final normalized = SpecTemplateField.normalizeRuleValue(option);
+    return (offered == null || offered.contains(normalized)) &&
+        (constrained == null || constrained.contains(normalized));
+  }));
+}
+
 /// Los campos de una ficha en el vocabulario del buscador.
 ///
 /// El editor los tiene como `SpecTemplateField` y el buscador como
@@ -115,7 +237,7 @@ SupplyNeedCriteria effectiveSupplyNeedCriteria({
 List<SupplierNeedSearchField> supplyNeedSearchFieldsOf(SpecTemplate? template) {
   if (template == null) return const <SupplierNeedSearchField>[];
   final fields = <SupplierNeedSearchField>[];
-  for (final field in template.fields) {
+  for (final field in supplyNeedCriterionFieldsOf(template)) {
     final definition = field.definition;
     if (definition == null) continue;
     fields.add(SupplierNeedSearchField(

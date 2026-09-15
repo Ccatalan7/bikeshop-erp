@@ -26,8 +26,10 @@ class ProductSpecRowsField extends StatefulWidget {
       this.itemLabel = 'Configuración',
       this.helperText,
       this.conditions,
+      Map<String, Map<String, String>> tokenLabels = const {},
       Map<String, ProductSpecRowLinkOptions> referenceOptions = const {}})
-      : _referenceOptions = referenceOptions;
+      : _referenceOptions = referenceOptions,
+        _tokenLabels = tokenLabels;
 
   final String fieldKey;
   final String label;
@@ -40,6 +42,8 @@ class ProductSpecRowsField extends StatefulWidget {
   final Map<String, ProductSpecRowLinkOptions>? _referenceOptions;
   Map<String, ProductSpecRowLinkOptions> get referenceOptions =>
       _referenceOptions ?? const {};
+  final Map<String, Map<String, String>>? _tokenLabels;
+  Map<String, Map<String, String>> get tokenLabels => _tokenLabels ?? const {};
 
   @override
   State<ProductSpecRowsField> createState() => _ProductSpecRowsFieldState();
@@ -236,8 +240,12 @@ class _ProductSpecRowsFieldState extends State<ProductSpecRowsField> {
           .take(3)
           .map((column) {
         final reference = widget.referenceOptions[column.key];
+        final labels = widget.tokenLabels[column.key];
         final value = reference == null
-            ? values[column.key]
+            ? labels == null
+                ? values[column.key]
+                : labels[values[column.key]] ??
+                    'Nombre no disponible · ${values[column.key]}'
             : reference.choices[values[column.key]] ?? 'Vínculo sin resolver';
         return '${column.label}: ${value is bool ? (value ? 'Sí' : 'No') : value}${column.unit == null ? '' : ' ${column.unit}'}';
       }).join(' · ');
@@ -364,6 +372,9 @@ class _ProductSpecRowsFieldState extends State<ProductSpecRowsField> {
           .where((choice) =>
               conditionalChoices == null || conditionalChoices.contains(choice))
           .toList();
+      final labels = widget.tokenLabels[column.key];
+      final missingNames = labels != null &&
+          choices.any((choice) => !labels.containsKey(choice));
       return VbSearchableSelect<String>(
           key: key,
           label: column.label,
@@ -371,14 +382,24 @@ class _ProductSpecRowsFieldState extends State<ProductSpecRowsField> {
           sheetTitle: column.label,
           allowClear: true,
           clearLabel: 'Sin dato',
-          helperText: helperText,
+          placeholder:
+              value != null && labels != null && !labels.containsKey(value)
+                  ? 'Nombre no disponible · $value'
+                  : null,
+          helperText: helperText ??
+              (missingNames
+                  ? 'Algunos nombres no están disponibles. Las opciones y tu selección se conservan.'
+                  : null),
           errorText: errorText ??
               (value != null && !choices.contains(value)
                   ? 'La opción conservada no pertenece a esta ficha.'
                   : null),
           options: choices
-              .map((option) =>
-                  VbSearchableSelectOption(value: option, label: option))
+              .map((option) => VbSearchableSelectOption(
+                  value: option,
+                  label: labels == null
+                      ? option
+                      : labels[option] ?? 'Nombre no disponible · $option'))
               .toList(),
           onChanged:
               enabled ? (next) => _changeCell(id, column.key, next) : null);

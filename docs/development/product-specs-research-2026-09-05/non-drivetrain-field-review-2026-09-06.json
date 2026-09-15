@@ -1,0 +1,2971 @@
+{
+  "schema_version": 1,
+  "title": "Revisión independiente de campos fuera de transmisión, frenos y ruedas",
+  "prepared_on": "2026-09-06",
+  "reviewer": "Codex subagent spec_boundary_review",
+  "status": "proposal_only_not_applied",
+  "inputs": {
+    "reviewed_fields": {
+      "path": "docs/development/product-specs-research-2026-09-05/all-family-reviewed-fields-2026-09-06.json",
+      "sha256": "4025d8c5e5988d2e64220180e648b78914eda8d3bcd0d95de2b58e96d130e2c5",
+      "observed_initial_full_sha256": "c0acdf92b269d2f7a743dda5fcf06c1c63c1961a2b24e54e3547095d9e34a1d0",
+      "concurrency_note": "El input del integrador cambió durante la revisión. Targets y huella final se leyeron juntos al producir este informe."
+    },
+    "frozen_claude": {
+      "path": "docs/development/product-specs-research-2026-09-05/all-family-compiled-contract-2026-09-06.json",
+      "sha256": "785cd11a39011b643e4bcb1422ab805c242f8a7aae0108b399c6aff0c0d78175"
+    },
+    "reviewed_scope_sha256": "4fb5621d11aeec1b01a8de21812bae7d778ab970fcbdae54bf90ba436fb9b6b2"
+  },
+  "scope": {
+    "templates": [
+      "pedal",
+      "pedal_peg",
+      "grip",
+      "handlebar_covering",
+      "handlebar",
+      "stem",
+      "seatpost",
+      "seat_clamp",
+      "saddle",
+      "saddle_cover",
+      "fastener",
+      "workshop_tool",
+      "workshop_chemical",
+      "lock",
+      "light",
+      "audible_signal",
+      "cycle_computer",
+      "consumer_electronics",
+      "accessory_mount",
+      "bottle_cage",
+      "bottle",
+      "rack_basket",
+      "fender",
+      "kickstand",
+      "bike_bag",
+      "rider_bag",
+      "training_wheel",
+      "bike_protection",
+      "reflector",
+      "souvenir",
+      "rider_glove",
+      "helmet",
+      "eyewear",
+      "rider_apparel",
+      "rider_protection",
+      "food_beverage",
+      "pump"
+    ],
+    "template_count": 37,
+    "field_bindings_read": 305,
+    "unique_definitions_read": 190,
+    "excluded": [
+      "transmisión",
+      "frenos",
+      "ruedas",
+      "dirección/rodamientos/suspensión ya revisados",
+      "inventario nominal completo",
+      "SQL/Dart/runtime/producción"
+    ]
+  },
+  "policy": [
+    "No aplicar estas propuestas como parches automáticos.",
+    "Cada escenario OEM tiene alcance de modelo, variante o edición; no es una regla global.",
+    "unknown no equivale a incompatible; faltar un adaptador incluido no demuestra inexistencia de una solución documentada.",
+    "Los escenarios son datos de dominio propuestos; no se ejecutaron como tests ni son productos observados en inventario.",
+    "Los productos descriptivos pueden llenarse con fuentes exactas sin fabricar compatibilidad.",
+    "Las reglas del contrato congelado se señalan para revisión: no se afirma que estén activas en producción."
+  ],
+  "sources": {
+    "N01": {
+      "title": "Sheldon Brown — Bicycle Pedals",
+      "url": "https://www.sheldonbrown.com/pedals.html",
+      "publisher_kind": "primary",
+      "consulted_on": "2026-09-06",
+      "scope": "Bases de tipos y roscas; el catálogo histórico no sustituye un manual de modelo.",
+      "observed_support": "Distingue retención del pie, roscas usuales 9/16 × 20 y 1/2 × 20, y la francesa 14 × 1.25; izquierda y derecha tienen sentidos distintos."
+    },
+    "N02": {
+      "title": "Park Tool — Pedal Installation and Removal",
+      "url": "https://www.parktool.com/en-us/blog/repair-help/pedal-installation-and-removal",
+      "publisher_kind": "primary",
+      "consulted_on": "2026-09-06",
+      "scope": "Montaje roscado del pedal, no matriz de calas o calzado.",
+      "observed_support": "El pedal derecho usa rosca derecha y el izquierdo rosca izquierda."
+    },
+    "N03": {
+      "title": "Shimano PD-EH500 — EV-4362B",
+      "url": "https://dassets.shimano.com/content/dam/global/cg1SHICCycling/final/ev/ev/EV-PD-EH500-4362B.pdf",
+      "publisher_kind": "primary",
+      "consulted_on": "2026-09-06",
+      "scope": "PD-EH500; despiece diciembre de 2021, página 1.",
+      "observed_support": "El pedal SPD/flat tiene pines de repuesto YL8498050 y ejes diferenciados por lado. Un despiece no prueba que todos los repuestos vengan en la caja."
+    },
+    "N04": {
+      "title": "Crankbrothers — Mallet Enduro",
+      "url": "https://www.crankbrothers.com/products/mallet-e",
+      "publisher_kind": "primary",
+      "consulted_on": "2026-09-06",
+      "scope": "Mallet Enduro SKU 15990/15991 de la página consultada.",
+      "observed_support": "Pedal clip-in con pines ajustables; apoyo Igus interior y cartucho Enduro exterior; declara calas incluidas. El fabricante distingue interfaz de cala y fijación de la cala al calzado."
+    },
+    "N05": {
+      "title": "Ergon — GP1 manual",
+      "url": "https://www.ergonbike.com/infocenter/downloads/manual_gp1.pdf",
+      "publisher_kind": "primary",
+      "consulted_on": "2026-09-06",
+      "scope": "Variantes GP1 Standard, Rohloff/Nexus y Gripshift del manual.",
+      "observed_support": "La variante Rohloff/Nexus incluye largos 128/93 mm por lado y necesita la zona recta de montaje correspondiente; el diámetro nominal de manubrio es 22.2 mm."
+    },
+    "N06": {
+      "title": "Sheldon Brown — Handlebar and Stem Dimensions",
+      "url": "https://www.sheldonbrown.com/cribsheet-handlebars.html",
+      "publisher_kind": "primary",
+      "consulted_on": "2026-09-06",
+      "scope": "Bases para distinguir la zona central de la zona del puño.",
+      "observed_support": "Un manubrio puede tener diferente diámetro de abrazadera y de puño; la tabla no prueba compatibilidad de soportes ni de cascos o alimentos."
+    },
+    "N07": {
+      "title": "Park Tool — Threadless Stem Removal and Installation",
+      "url": "https://www.parktool.com/en-us/blog/repair-help/stem-removal-installation-threadless",
+      "publisher_kind": "primary",
+      "consulted_on": "2026-09-06",
+      "scope": "Interfaz de una potencia externa sobre la zona de montaje del tubo de dirección.",
+      "observed_support": "El montaje ahead abraza el exterior del tubo; la medición relevante se toma donde realmente aprieta la potencia. Stack, inserción y especificaciones OEM siguen siendo relevantes."
+    },
+    "N08": {
+      "title": "Park Tool — Quill Stem Removal and Installation",
+      "url": "https://www.parktool.com/en-us/blog/repair-help/stem-removal-installation-quill-stems",
+      "publisher_kind": "primary",
+      "consulted_on": "2026-09-06",
+      "scope": "Interfaz quill, distinta de la abrazadera ahead.",
+      "observed_support": "Separa diámetro de quill y diámetro del manubrio, y exige respetar la inserción indicada."
+    },
+    "N09": {
+      "title": "Ritchey — WCS Carbon 1-Bolt Complete Clampset",
+      "url": "https://ritcheylogic.com/bike/seatposts/wcs-carbon-1-bolt-seatpost-complete-clampset",
+      "publisher_kind": "primary",
+      "consulted_on": "2026-09-06",
+      "scope": "Kit de abrazadera para los modelos 1-Bolt indicados por Ritchey.",
+      "observed_support": "Ofrece abrazaderas distintas; la variante 7x10 declara aceptar rieles 7x9, 7x9.6 y 7x10. Esa cobertura pertenece al kit exacto."
+    },
+    "N10": {
+      "title": "RockShox — Reverb AXS and XPLR user manual",
+      "url": "https://www.sram.com/globalassets/document-hierarchy/user-manuals/rockshox/seatposts/reverb-axs-and-reverb-axs-xplr-user-manual-eeu.pdf",
+      "publisher_kind": "primary",
+      "consulted_on": "2026-09-06",
+      "scope": "Edición enlazada; no extender a otra generación por nombre Reverb.",
+      "observed_support": "La cobertura de rieles 7x10 se declara con abrazaderas opcionales; las restricciones de suplemento incluyen su largo mínimo y el mínimo del cuadro."
+    },
+    "N11": {
+      "title": "RockShox — Reverb AXS fit dimensions Rev A",
+      "url": "https://www.sram.com/globalassets/document-hierarchy/frame-fit-specifications/rockshox/gen0000000006250-rev-a-reverb-axs-seatpost-specifications.pdf",
+      "publisher_kind": "primary",
+      "consulted_on": "2026-09-06",
+      "scope": "GEN.0000000006250 Rev A, 2020; sólo las medidas de esa edición.",
+      "observed_support": "El ajuste usa inserción disponible del cuadro, mínima exposición, largo total y despeje de válvula; compartir diámetro y carrera no basta."
+    },
+    "N12": {
+      "title": "Specialized — Roval Rapide Cockpit",
+      "url": "https://www.specialized.com/us/en/roval-rapide-cockpit/p/218323?color=352960-218323&searchText=21023-0647",
+      "publisher_kind": "primary",
+      "consulted_on": "2026-09-06",
+      "scope": "Página de producto 218323; datos numéricos contradictorios entre descripción y tabla.",
+      "observed_support": "Es una unidad de manubrio y potencia, con anchos por posición. La página presenta -6/6 frente a -10 grados y drop 127 frente a 125 mm; no resolver esa discrepancia automáticamente."
+    },
+    "N13": {
+      "title": "Park Tool — Basic Thread Concepts",
+      "url": "https://www.parktool.com/en-us/blog/repair-help/basic-thread-concepts",
+      "publisher_kind": "primary",
+      "consulted_on": "2026-09-06",
+      "scope": "Geometría de roscas y diferencias entre nominal, medida y herramienta.",
+      "observed_support": "Diámetro y paso son dimensiones distintas; la tabla contiene M8 x 0.75, x 1.0 y x 1.25. La medida de llave no identifica la rosca."
+    },
+    "N14": {
+      "title": "Park Tool — CT-3.3",
+      "url": "https://www.parktool.com/en-us/product/chain-tool-ct-3-3",
+      "publisher_kind": "primary",
+      "consulted_on": "2026-09-06",
+      "scope": "CT-3.3 actual de la página; no extrapolar a otras herramientas.",
+      "observed_support": "Distingue instalar/extraer un remache Campagnolo de peenarlo: CT-3.3 no hace esa última operación."
+    },
+    "N15": {
+      "title": "Park Tool — Cassette Removal and Installation",
+      "url": "https://www.parktool.com/en-us/blog/repair-help/cassette-removal-and-installation",
+      "publisher_kind": "primary",
+      "consulted_on": "2026-09-06",
+      "scope": "Sección SRAM XD Freehub Cassettes.",
+      "observed_support": "Park Tool indica usar FR-5.2 y sus variantes señaladas sobre el alojamiento de extracción SRAM XD; no se elige la herramienta por igualdad con el spline del freehub."
+    },
+    "N16": {
+      "title": "Kryptonite — Evolution Mini-7 with Flex Cable",
+      "url": "https://www.kryptonitelock.com/en/products/product-information/current-key/002079.html?type=bicycle",
+      "publisher_kind": "primary",
+      "consulted_on": "2026-09-06",
+      "scope": "Modelo 002079, kit comercial de U y cable.",
+      "observed_support": "El kit tiene dimensiones propias del U, cable y llaves; su protección declarada no cubre automáticamente el cable."
+    },
+    "N17": {
+      "title": "Cateye — AMPP800 and ViZ300 Combo",
+      "url": "https://www.cateye.com/intl/products/headlights/HL-EL088RC_TL-LD810/",
+      "publisher_kind": "primary",
+      "consulted_on": "2026-09-06",
+      "scope": "Kit HL-EL088RC_TL-LD810 y modos enumerados.",
+      "observed_support": "El delantero y el trasero tienen diferentes modos, lúmenes, autonomía y montajes. La autonomía y la luminosidad van juntas por modo, no como máximos independientes."
+    },
+    "N18": {
+      "title": "Quad Lock — Out Front Mounts",
+      "url": "https://www.quadlockcase.com/products/out-front-mount",
+      "publisher_kind": "primary",
+      "consulted_on": "2026-09-06",
+      "scope": "Out Front y PRO, con precisión por variante/espaciador.",
+      "observed_support": "La página enumera diámetros discretos con espaciadores, no todo el intervalo. El dispositivo se une por carcasa/adaptador Quad Lock. Hay redacción 22 frente a 22.2 mm que requiere resolver la variante exacta."
+    },
+    "N19": {
+      "title": "Topeak — MTX TrunkBag DXP 2.0",
+      "url": "https://www.topeak.com/global/en/product/1685-MTX-TRUNKBAG-DXP-%28MTX-2.0%29",
+      "publisher_kind": "primary",
+      "consulted_on": "2026-09-06",
+      "scope": "TT9635B2; interfaz MTX QuickTrack 2.0 y uso de alforjas.",
+      "observed_support": "Las alforjas sobre BeamRack requieren los marcos laterales indicados. La página actual declara capacidad 19.4 L."
+    },
+    "N20": {
+      "title": "Topeak — TetraRack M2",
+      "url": "https://www.topeak.com/global/en/product/1286-TETRARACK-M2-%28MTB%29",
+      "publisher_kind": "primary",
+      "consulted_on": "2026-09-06",
+      "scope": "TetraRack M2, montaje por correas en tirantes.",
+      "observed_support": "Puede montarse sin ojales de parrilla; impone límites geométricos y materiales propios. La compatibilidad superior con bolsos es otra interfaz."
+    },
+    "N21": {
+      "title": "Hebie — ABSTELLHELD 18 0669 E",
+      "url": "https://www.hebie.de/ABSTELLHELD-18/0669-E",
+      "publisher_kind": "primary",
+      "consulted_on": "2026-09-06",
+      "scope": "0669 E; no generalizar a toda pata de apoyo.",
+      "observed_support": "Exige el anclaje KSA 18 con separación 18 mm; el tamaño de rueda por sí solo no identifica ese montaje."
+    },
+    "N22": {
+      "title": "Fidlock — TWIST bottle 590 + uni base",
+      "url": "https://www.fidlock.com/consumer/en/twist-bottle-590-uni-base/09641-001032-tbl",
+      "publisher_kind": "primary",
+      "consulted_on": "2026-09-06",
+      "scope": "09641-001032(TBL), set con base universal.",
+      "observed_support": "La botella usa unión magnética y mecánica TWIST y se vende con una base; no es una botella definida sólo por diámetro para un aro convencional."
+    },
+    "N23": {
+      "title": "Fidlock — TWIST uni base",
+      "url": "https://www.fidlock.com/consumer/en/twist-uni-base/09620-p00002-blk",
+      "publisher_kind": "primary",
+      "consulted_on": "2026-09-06",
+      "scope": "09620-P00002(BLK).",
+      "observed_support": "Declara fijación a tubos de ancho 28–62 mm; ancho de tubo no debe renombrarse diámetro circular."
+    },
+    "N24": {
+      "title": "Lezyne — 16G CO2 Cartridge",
+      "url": "https://ride.lezyne.com/products/16g-co2-cartridge",
+      "publisher_kind": "primary",
+      "consulted_on": "2026-09-06",
+      "scope": "1-C2-CRTDG-V116P5; cartuchos roscados de 16 g.",
+      "observed_support": "Presentación de cinco cartuchos y masa de CO2 son datos distintos de la forma de unión al inflador."
+    },
+    "N25": {
+      "title": "Smith — Mainline Mips",
+      "url": "https://www.smithoptics.com/en-gb/products/mainline-mips-r",
+      "publisher_kind": "primary",
+      "consulted_on": "2026-09-06",
+      "scope": "Variante comercial de la página; confirmar etiqueta/mercado para la unidad a llenar.",
+      "observed_support": "La página declara varias normas, incluidas ASTM F1952 y NTA8776; Mips se describe aparte. El diseño integral no prueba una certificación por sí solo."
+    },
+    "N26": {
+      "title": "Smith — EU declaration, bike helmets, 2024-09-09",
+      "url": "https://www.smithoptics.com/on/demandware.static/-/Library-Sites-SmithSharedLibrary/default/pdfs/ProductConformityCerts/EU_Declaration_of_Conformity_-_Bike_Helmets_%2829-language%29_9-9-24.pdf",
+      "publisher_kind": "primary",
+      "consulted_on": "2026-09-06",
+      "scope": "Declaración UE, modelos y tallas enumerados, edición explícita.",
+      "observed_support": "Identifica EN 1078:2012+A1:2012 y modelos alcanzados; norma, edición, modelo y jurisdicción tienen alcance propio."
+    },
+    "N27": {
+      "title": "Julbo — REACTIV Photochromic Lenses",
+      "url": "https://www.julbo.com/en_gb/photochromic-lenses-reactiv",
+      "publisher_kind": "primary",
+      "consulted_on": "2026-09-06",
+      "scope": "Tecnología REACTIV y variantes polarizadas señaladas.",
+      "observed_support": "Fotocromía y polarización pueden coexistir; una propiedad no determina por sí sola categoría/VLT o la protección UV declarada."
+    },
+    "N28": {
+      "title": "Castelli — Perfetto RoS Long Sleeve",
+      "url": "https://www.castelli-cycling.com/AU/en/Men/Cycling/Top/Jackets/Cold/PERFETTO-RoS-LONG-SLEEVE/p/4519500_383_52_S",
+      "publisher_kind": "primary",
+      "consulted_on": "2026-09-06",
+      "scope": "4519500-383, chaqueta y tabla de tallas por modelo.",
+      "observed_support": "El producto es chaqueta de manga larga; la talla nominal remite a una guía de medidas de esa colección."
+    },
+    "N29": {
+      "title": "Garmin Edge 540 — Wireless Sensors",
+      "url": "https://www8.garmin.com/manuals/webhelp/GUID-17DE938E-466A-4746-BDBF-7A6FC1B3A32C/EN-US/GUID-09801A97-361B-4675-AD3A-6ACE25854DB3.html",
+      "publisher_kind": "primary",
+      "consulted_on": "2026-09-06",
+      "scope": "Manual Edge 540 v6, agosto 2026.",
+      "observed_support": "Admite sensores ANT+ o Bluetooth con compatibilidad por sensor; GPS no es un protocolo alternativo de esa conexión."
+    },
+    "N30": {
+      "title": "Anker 735 Nano II 65W — A2667",
+      "url": "https://service.anker.com/product-description/a085g000004x2BVAAY?recordId=a085g000004x2BVAAY",
+      "publisher_kind": "primary",
+      "consulted_on": "2026-09-06",
+      "scope": "A2667, no confundir con GaNPrime A2668.",
+      "observed_support": "Tiene dos puertos USB-C y uno USB-A; la potencia por puerto cambia según los puertos usados simultáneamente."
+    },
+    "N31": {
+      "title": "Maurten — Gel 100 Caf 100 US",
+      "url": "https://www.maurten.com/products/us/gel-100-caf-100-box-us",
+      "publisher_kind": "primary",
+      "consulted_on": "2026-09-06",
+      "scope": "Caja US de 12 sobres; confirmar envase de la unidad y receta/mercado.",
+      "observed_support": "Un sobre pesa 40 g, declara 25 g de carbohidratos y 100 mg de cafeína; la caja y la porción son escalas distintas. El fabricante remite al envase vigente."
+    },
+    "N32": {
+      "title": "Topeak — 2024 new products preview",
+      "url": "https://www.topeak.com/storage/app/media/subsite/de/Download/2024_topeak_new_products_preview.pdf",
+      "publisher_kind": "primary",
+      "consulted_on": "2026-09-06",
+      "scope": "Entrada TT9635B2 del catálogo 2024, frente a la página actual N19.",
+      "observed_support": "El catálogo indica 22.6 L para TT9635B2, mientras la página actual indica 19.4 L; la causa no fue resuelta en esta revisión."
+    }
+  },
+  "findings": [
+    {
+      "id": "ND01",
+      "title": "La presencia de pines no depende de ser sólo plataforma",
+      "severity": "P2",
+      "gate": "before_affected_field_fill",
+      "evidence_kind": "source_grounded_counterexample",
+      "targets": [
+        {
+          "document": "reviewed_fields",
+          "template": "pedal",
+          "key": "replaceable_pins",
+          "path": "/templates/37/form_contract/allowed_when/replaceable_pins",
+          "observed": {
+            "kind": "when",
+            "rows": [
+              [
+                {
+                  "field": "pedal_type",
+                  "operator": "eq",
+                  "value_type": "token",
+                  "value": "Plataforma"
+                }
+              ]
+            ]
+          }
+        },
+        {
+          "document": "reviewed_fields",
+          "template": "pedal",
+          "key": "pedal_type",
+          "path": "/definitions/pedal_type",
+          "observed": {
+            "label": "Tipo de pedal",
+            "data_type": "single_select",
+            "unit": null,
+            "allowed_values": [
+              "Plataforma",
+              "Automático (clipless)",
+              "Mixto",
+              "Con rastrales",
+              "Niño",
+              "Desconocido / sin confirmar"
+            ],
+            "validation_rules": {}
+          }
+        }
+      ],
+      "issue": "La condición sólo permite Plataforma, y pedal_type mezcla retención con usuario Niño. Una selección Mixto o Automático impide registrar pines reales.",
+      "bounded_correction": "Permitir el dato pines cuando esté declarado para cualquier diseño; no inferirlo por pedal_type. Separar público previsto de retención del pie. Si se usa una guarda, basarla en presencia de pines confirmada.",
+      "source_ids": [
+        "N01",
+        "N03",
+        "N04"
+      ],
+      "scenario": {
+        "model": "Shimano PD-EH500",
+        "pedal_type": "Mixto",
+        "replaceable_pins": true
+      },
+      "expected_result": "Debe poder guardar ambos datos con el despiece OEM. No convertir Mixto a Plataforma para eludir la condición.",
+      "implemented": false,
+      "test_execution": "not_executed_domain_fixture"
+    },
+    {
+      "id": "ND02",
+      "title": "Un pedal puede tener apoyos de eje diferentes",
+      "severity": "P2",
+      "gate": "before_affected_field_fill",
+      "evidence_kind": "source_grounded_counterexample",
+      "targets": [
+        {
+          "document": "reviewed_fields",
+          "template": "pedal",
+          "key": "pedal_bearing_kind",
+          "path": "/definitions/pedal_bearing_kind",
+          "observed": {
+            "label": "Apoyo del eje del pedal",
+            "data_type": "single_select",
+            "unit": null,
+            "allowed_values": [
+              "Rodamientos sellados",
+              "Bolas sueltas",
+              "Buje",
+              "Desconocido / sin confirmar"
+            ],
+            "validation_rules": {}
+          }
+        },
+        {
+          "document": "reviewed_fields",
+          "template": "pedal",
+          "key": null,
+          "path": "/templates/37/fields",
+          "observed_keys": [
+            "pedal_thread",
+            "pedal_type",
+            "cleat_system",
+            "pedal_bearing_kind",
+            "body_material",
+            "platform_width_mm",
+            "replaceable_pins",
+            "reflectors_included",
+            "weight_pair_g",
+            "sold_as",
+            "spec_evidence_source"
+          ]
+        }
+      ],
+      "issue": "single_select obliga a escoger cartucho o buje aunque el mismo pedal combina ambos; tampoco conserva posición ni repuesto.",
+      "bounded_correction": "Usar filas por apoyo interior/exterior con tipo y referencia OEM, o al menos una declaración de construcción mixta. Añadir calas incluidas y código de cala como contenido independiente de cleat_system; no inferir contenido de un despiece.",
+      "source_ids": [
+        "N04",
+        "N03"
+      ],
+      "scenario": {
+        "model": "Crankbrothers Mallet Enduro",
+        "supports": [
+          {
+            "position": "interior",
+            "type": "Igus LL-glide"
+          },
+          {
+            "position": "exterior",
+            "type": "Enduro MAX cartucho"
+          }
+        ]
+      },
+      "expected_result": "Conservar ambos apoyos como datos del mismo SKU; la presencia de repuestos en EV no prueba inclusión.",
+      "implemented": false,
+      "test_execution": "not_executed_domain_fixture"
+    },
+    {
+      "id": "ND03",
+      "title": "La rosca de pedal necesita estándar y lado, con vía histórica",
+      "severity": "P2",
+      "gate": "before_compatibility_activation",
+      "evidence_kind": "source_grounded_counterexample",
+      "targets": [
+        {
+          "document": "reviewed_fields",
+          "template": "pedal",
+          "key": "pedal_thread",
+          "path": "/templates/37/form_contract/allowed_options/pedal_thread",
+          "observed": [
+            "9/16",
+            "1/2",
+            "Desconocido / sin confirmar"
+          ]
+        },
+        {
+          "document": "reviewed_fields",
+          "template": "pedal",
+          "key": "sold_as",
+          "path": "/definitions/sold_as",
+          "observed": {
+            "label": "Presentación de venta",
+            "data_type": "single_select",
+            "unit": null,
+            "allowed_values": [
+              "Par",
+              "Unidad izquierda",
+              "Unidad derecha",
+              "Unidad"
+            ],
+            "validation_rules": {}
+          }
+        },
+        {
+          "document": "frozen_claude",
+          "template": "pedal",
+          "key": "pedal_to_crank",
+          "path": "/templates/37/interfaces/0",
+          "observed": {
+            "id": "pedal_to_crank",
+            "rules": [
+              {
+                "id": "pedal_to_crank.pedal_thread",
+                "assertion_kind": "mechanical_claim",
+                "product_field": "pedal_thread",
+                "counterpart": "template:crankset|crank_arm",
+                "counterpart_field": "pedal_thread",
+                "operator": "eq",
+                "value_type": "token",
+                "projection_pending": null,
+                "outcome_on_mismatch": "incompatible",
+                "outcome_on_unknown": "unknown",
+                "unverified_values": [],
+                "unverified_values_outcome": "unknown (evidencia pendiente, nunca bloquea)",
+                "never_alone_approves_assembly": true,
+                "source_ids": [
+                  "S13",
+                  "S19"
+                ],
+                "sources_verified": true,
+                "verified": true,
+                "unverified_reason": null
+              }
+            ],
+            "scope_notes": [
+              "9/16\" en biela 1/2\" o viceversa → incompatible (S13, S19); el izquierdo va con rosca izquierda"
+            ],
+            "source_ids": [
+              "S13",
+              "S19"
+            ]
+          }
+        }
+      ],
+      "issue": "La lista local retira Otro; el token 9/16 no expresa paso, y sold_as captura lado comercial sin incorporarlo a la interfaz congelada.",
+      "bounded_correction": "Mantener aliases legacy 9/16 y 1/2 con significado explícito ×20 TPI sólo cuando estén confirmados; representar otro estándar exacto como 14×1.25 y mano/lado. Comparar diámetro, paso y lado de montaje; no aprobar por igualdad del diámetro abreviado.",
+      "source_ids": [
+        "N01",
+        "N02"
+      ],
+      "scenario": {
+        "product": "pedal francés 14×1.25",
+        "counterpart": "biela 9/16×20"
+      },
+      "expected_result": "No son equivalentes; un dato histórico confirmado debe registrarse sin forzarlo a Desconocido. Un pedal suelto del lado incorrecto no aprueba por diámetro.",
+      "implemented": false,
+      "test_execution": "not_executed_domain_fixture"
+    },
+    {
+      "id": "ND04",
+      "title": "El par de puños necesita largos por lado y zona real del manubrio",
+      "severity": "P2",
+      "gate": "before_affected_product_fill",
+      "evidence_kind": "source_grounded_counterexample",
+      "targets": [
+        {
+          "document": "reviewed_fields",
+          "template": "grip",
+          "key": "grip_length_mm",
+          "path": "/definitions/grip_length_mm",
+          "observed": {
+            "label": "Largo del puño",
+            "data_type": "number",
+            "unit": "mm",
+            "allowed_values": [],
+            "validation_rules": {
+              "positive": true
+            }
+          }
+        },
+        {
+          "document": "reviewed_fields",
+          "template": "grip",
+          "key": "grip_inner_diameter_mm",
+          "path": "/definitions/grip_inner_diameter_mm",
+          "observed": {
+            "label": "Diámetro interior del puño",
+            "data_type": "number",
+            "unit": "mm",
+            "allowed_values": [],
+            "validation_rules": {
+              "positive": true
+            }
+          }
+        },
+        {
+          "document": "frozen_claude",
+          "template": "grip",
+          "key": "grip_to_handlebar",
+          "path": "/templates/39/interfaces/0",
+          "observed": {
+            "id": "grip_to_handlebar",
+            "rules": [
+              {
+                "id": "grip_to_handlebar.grip_inner_diameter_mm",
+                "assertion_kind": "mechanical_claim",
+                "product_field": "grip_inner_diameter_mm",
+                "counterpart": "template:handlebar",
+                "counterpart_field": "grip_area_diameter_mm",
+                "operator": "eq",
+                "value_type": "decimal",
+                "projection_pending": null,
+                "outcome_on_mismatch": "incompatible",
+                "outcome_on_unknown": "unknown",
+                "unverified_values": [],
+                "unverified_values_outcome": "unknown (evidencia pendiente, nunca bloquea)",
+                "never_alone_approves_assembly": true,
+                "source_ids": [
+                  "S06"
+                ],
+                "sources_verified": true,
+                "verified": true,
+                "unverified_reason": null
+              }
+            ],
+            "scope_notes": [
+              "diámetro de puño distinto → incompatible"
+            ],
+            "source_ids": [
+              "S06"
+            ]
+          }
+        }
+      ],
+      "issue": "Un largo único aplana pares asimétricos. Medida interior del puño no es siempre el diámetro nominal de manubrio para el que se diseñó; la regla congelada compara números como medidas sin distinguirlos.",
+      "bounded_correction": "Registrar izquierda/derecha por fila o campos separados, diámetro nominal de manubrio admitido y longitud recta libre requerida. Reservar interior medido para mediciones reales, sin exigir igualdad geométrica literal con el tubo.",
+      "source_ids": [
+        "N05",
+        "N06"
+      ],
+      "scenario": {
+        "model": "Ergon GP1 Rohloff/Nexus",
+        "left_length_mm": "128",
+        "right_length_mm": "93",
+        "bar_nominal_mm": "22.2"
+      },
+      "expected_result": "Conservar 128/93 como el par vendido y evaluar cada lado con su mando y espacio libre.",
+      "implemented": false,
+      "test_execution": "not_executed_domain_fixture"
+    },
+    {
+      "id": "ND05",
+      "title": "La potencia se conecta a un extremo de la espiga, no al perfil completo",
+      "severity": "P1",
+      "gate": "before_compatibility_activation",
+      "evidence_kind": "source_grounded_structural_scenario",
+      "targets": [
+        {
+          "document": "reviewed_fields",
+          "template": "stem",
+          "key": "steerer_fit",
+          "path": "/definitions/steerer_fit",
+          "observed": {
+            "label": "Interfaz de sujeción a la espiga",
+            "data_type": "single_select",
+            "unit": null,
+            "allowed_values": [
+              "1\" (25.4 mm)",
+              "1 1/8\" (28.6 mm)",
+              "1 1/4\" (31.8 mm)",
+              "1.5\" (38.1 mm)",
+              "Tapered 1 1/8\" – 1.5\"",
+              "Desconocido / sin confirmar"
+            ],
+            "validation_rules": {}
+          }
+        },
+        {
+          "document": "reviewed_fields",
+          "template": "stem",
+          "key": "quill_diameter_mm",
+          "path": "/templates/42/form_contract/allowed_when/quill_diameter_mm",
+          "observed": {
+            "kind": "when",
+            "rows": [
+              [
+                {
+                  "field": "stem_kind",
+                  "operator": "in",
+                  "value_type": "token",
+                  "value": [
+                    "Tee de espiga (quill)",
+                    "Adaptador quill → ahead"
+                  ]
+                }
+              ]
+            ]
+          }
+        },
+        {
+          "document": "reviewed_fields",
+          "template": "stem",
+          "key": "bar_clamp_diameter_mm",
+          "path": "/templates/42/form_contract/allowed_when/bar_clamp_diameter_mm",
+          "observed": {
+            "kind": "always"
+          }
+        },
+        {
+          "document": "frozen_claude",
+          "template": "stem",
+          "key": "stem_to_steerer",
+          "path": "/templates/42/interfaces/0",
+          "observed": {
+            "id": "stem_to_steerer",
+            "rules": [
+              {
+                "id": "stem_to_steerer.steerer_fit",
+                "assertion_kind": "mechanical_claim",
+                "product_field": "steerer_fit",
+                "counterpart": "template:fork",
+                "counterpart_field": "steerer_fit",
+                "operator": "eq",
+                "value_type": "token",
+                "projection_pending": null,
+                "outcome_on_mismatch": "incompatible",
+                "outcome_on_unknown": "unknown",
+                "unverified_values": [],
+                "unverified_values_outcome": "unknown (evidencia pendiente, nunca bloquea)",
+                "never_alone_approves_assembly": true,
+                "source_ids": [
+                  "S04",
+                  "S06"
+                ],
+                "sources_verified": true,
+                "verified": true,
+                "unverified_reason": null
+              }
+            ],
+            "scope_notes": [
+              "espiga distinta → incompatible",
+              "quill en horquilla sin rosca → incompatible"
+            ],
+            "source_ids": [
+              "S04",
+              "S06"
+            ]
+          }
+        }
+      ],
+      "issue": "La regla compara steerer_fit de potencia y horquilla completos: 1 1/8 y tapered 1 1/8–1.5 se vuelven distintos aunque la zona superior sea la correcta. El adaptador quill→ahead comparte un campo que no identifica sus dos extremos.",
+      "bounded_correction": "Separar montaje ahead (diámetro exterior en zona superior), quill (diámetro de inserción/interior del tubo) y adaptador con entrada/salida. Un adaptador sin abrazadera de manubrio deja bar_clamp no aplicable. Conservar stack e inserción OEM; no heredar el diámetro inferior de la horquilla a la potencia.",
+      "source_ids": [
+        "N07",
+        "N08"
+      ],
+      "scenario": {
+        "stem_top_interface_mm": "28.6",
+        "fork_profile": "tapered 28.6→38.1",
+        "fork_top_interface_mm": "28.6"
+      },
+      "expected_result": "No bloquear por el texto tapered; evaluar el extremo superior. Esto no aprueba por sí solo la instalación completa.",
+      "implemented": false,
+      "test_execution": "not_executed_domain_fixture"
+    },
+    {
+      "id": "ND06",
+      "title": "Riel y abrazadera deben compartir geometría, con kit y generación",
+      "severity": "P1",
+      "gate": "before_compatibility_activation",
+      "evidence_kind": "source_grounded_counterexample",
+      "targets": [
+        {
+          "document": "reviewed_fields",
+          "template": "seatpost",
+          "key": "rail_clamp_fit",
+          "path": "/definitions/rail_clamp_fit",
+          "observed": {
+            "label": "Interfaz de sujeción de los rieles",
+            "data_type": "single_select",
+            "unit": null,
+            "allowed_values": [
+              "Riel redondo 7 mm",
+              "Riel oval 7x9 / 7x10 (carbono)",
+              "Ambos (con piezas)",
+              "Sillín integrado (I-Beam u otro)",
+              "Desconocido / sin confirmar"
+            ],
+            "validation_rules": {}
+          }
+        },
+        {
+          "document": "reviewed_fields",
+          "template": "saddle",
+          "key": "rail_type",
+          "path": "/definitions/rail_type",
+          "observed": {
+            "label": "Tipo de riel del sillín",
+            "data_type": "single_select",
+            "unit": null,
+            "allowed_values": [
+              "Redondo 7 mm (acero / cromoly / titanio)",
+              "Oval 7x9 (carbono)",
+              "Oval 7x10",
+              "Sillín integrado (I-Beam)",
+              "Niño (fijación propia)",
+              "Desconocido / sin confirmar"
+            ],
+            "validation_rules": {}
+          }
+        },
+        {
+          "document": "frozen_claude",
+          "template": "seatpost",
+          "key": "post_to_saddle_rails",
+          "path": "/templates/43/interfaces/1",
+          "observed": {
+            "id": "post_to_saddle_rails",
+            "rules": [
+              {
+                "id": "post_to_saddle_rails.rail_clamp_fit",
+                "assertion_kind": "mechanical_claim",
+                "product_field": "rail_clamp_fit",
+                "counterpart": "template:saddle",
+                "counterpart_field": "rail_type",
+                "operator": "eq",
+                "value_type": "token",
+                "projection_pending": null,
+                "outcome_on_mismatch": "incompatible",
+                "outcome_on_unknown": "unknown",
+                "unverified_values": [],
+                "unverified_values_outcome": "unknown (evidencia pendiente, nunca bloquea)",
+                "never_alone_approves_assembly": true,
+                "source_ids": [
+                  "S18"
+                ],
+                "sources_verified": true,
+                "verified": true,
+                "unverified_reason": null
+              }
+            ],
+            "scope_notes": [
+              "riel oval en abrazadera redonda → incompatible"
+            ],
+            "source_ids": [
+              "S18"
+            ]
+          }
+        },
+        {
+          "document": "frozen_claude",
+          "template": "saddle",
+          "key": "saddle_to_post",
+          "path": "/templates/45/interfaces/0",
+          "observed": {
+            "id": "saddle_to_post",
+            "rules": [
+              {
+                "id": "saddle_to_post.rail_type",
+                "assertion_kind": "mechanical_claim",
+                "product_field": "rail_type",
+                "counterpart": "template:seatpost",
+                "counterpart_field": "rail_clamp_fit",
+                "operator": "eq",
+                "value_type": "token",
+                "projection_pending": null,
+                "outcome_on_mismatch": "incompatible",
+                "outcome_on_unknown": "unknown",
+                "unverified_values": [],
+                "unverified_values_outcome": "unknown (evidencia pendiente, nunca bloquea)",
+                "never_alone_approves_assembly": true,
+                "source_ids": [
+                  "S18"
+                ],
+                "sources_verified": true,
+                "verified": true,
+                "unverified_reason": null
+              }
+            ],
+            "scope_notes": [
+              "oval en abrazadera redonda → incompatible"
+            ],
+            "source_ids": [
+              "S18"
+            ]
+          }
+        }
+      ],
+      "issue": "rail_clamp_fit agrupa 7x9/7x10 y sus textos nunca igualan los de rail_type; incluso el riel redondo usa textos distintos. La igualdad literal congelada bloquearía pares correctos y el token combinado pierde qué abrazadera hace falta.",
+      "bounded_correction": "Identificar geometría común (redondo 7, oval 7×9, 7×9.6, 7×10, sistemas propietarios separados); usar filas de cobertura por abrazadera instalada/opcional, modelo y generación. Material, geometría y kit incluido son atributos distintos. Nunca expandir Ambos en una aprobación sin piezas.",
+      "source_ids": [
+        "N09",
+        "N10"
+      ],
+      "scenario": {
+        "post_clamp": "Ritchey WCS Carbon 1-Bolt kit 7x10",
+        "rail_geometry": "7x9.6",
+        "adapter_state": "kit exacto instalado"
+      },
+      "expected_result": "Puede representar la cobertura OEM de ese kit; otro clamp desconocido sigue unknown, no se generaliza a todas las tijas ovales.",
+      "implemented": false,
+      "test_execution": "not_executed_domain_fixture"
+    },
+    {
+      "id": "ND07",
+      "title": "Diámetro y carrera no completan el ajuste de una tija",
+      "severity": "P1",
+      "gate": "before_fitment_claim_or_affected_product_fill",
+      "evidence_kind": "source_grounded_counterexample",
+      "targets": [
+        {
+          "document": "reviewed_fields",
+          "template": "seatpost",
+          "key": null,
+          "path": "/templates/43/fields",
+          "observed_keys": [
+            "seatpost_kind",
+            "seatpost_diameter_mm",
+            "shim_outer_diameter_mm",
+            "shim_inner_diameter_mm",
+            "seatpost_length_mm",
+            "seatpost_offset_mm",
+            "rail_clamp_fit",
+            "dropper_travel_mm",
+            "dropper_actuation",
+            "material",
+            "color",
+            "spec_evidence_source"
+          ]
+        },
+        {
+          "document": "reviewed_fields",
+          "template": "seatpost",
+          "key": "dropper_actuation",
+          "path": "/definitions/dropper_actuation",
+          "observed": {
+            "label": "Accionamiento de la tija telescópica",
+            "data_type": "single_select",
+            "unit": null,
+            "allowed_values": [
+              "Cable interno",
+              "Cable externo",
+              "Hidráulico",
+              "Inalámbrico"
+            ],
+            "validation_rules": {}
+          }
+        },
+        {
+          "document": "reviewed_fields",
+          "template": "seatpost",
+          "key": "rail_clamp_fit",
+          "path": "/templates/43/form_contract/allowed_when/rail_clamp_fit",
+          "observed": {
+            "kind": "always"
+          }
+        }
+      ],
+      "issue": "Faltan inserción mínima, longitud insertable/despeje inferior y extensión mínima. dropper_actuation mezcla ruta del cable, fluido y comunicación; un shim conserva campos de tija que no le corresponden.",
+      "bounded_correction": "Añadir longitudes de montaje con definición de extremos y su evidencia por SKU; separar accionamiento (mecánico/hidráulico/electrónico), ruta y mando incluido/compatible. Para shim, mantener diámetros/largo y no aplicar rieles, offset o dropper. No inventar un mínimo global.",
+      "source_ids": [
+        "N10",
+        "N11"
+      ],
+      "scenario": {
+        "model_scope": "Reverb AXS Rev A 2020",
+        "known": [
+          "diameter",
+          "travel"
+        ],
+        "unknown": [
+          "frame_max_insertion",
+          "rider_height",
+          "bottom_clearance"
+        ]
+      },
+      "expected_result": "La compatibilidad de altura/montaje queda desconocida hasta resolver esas dimensiones; no extrapolar los mínimos de esa revisión a toda tija.",
+      "implemented": false,
+      "test_execution": "not_executed_domain_fixture"
+    },
+    {
+      "id": "ND08",
+      "title": "Manubrio integrado y geometría de ruta necesitan un contrato propio",
+      "severity": "P2",
+      "gate": "before_affected_product_fill",
+      "evidence_kind": "source_grounded_counterexample",
+      "targets": [
+        {
+          "document": "reviewed_fields",
+          "template": "handlebar",
+          "key": "bar_clamp_diameter_mm",
+          "path": "/templates/41/form_contract/required_when/bar_clamp_diameter_mm",
+          "observed": {
+            "kind": "always"
+          }
+        },
+        {
+          "document": "reviewed_fields",
+          "template": "handlebar",
+          "key": "bar_width_mm",
+          "path": "/definitions/bar_width_mm",
+          "observed": {
+            "label": "Ancho del manubrio",
+            "data_type": "number",
+            "unit": "mm",
+            "allowed_values": [],
+            "validation_rules": {
+              "positive": true
+            }
+          }
+        },
+        {
+          "document": "reviewed_fields",
+          "template": "handlebar",
+          "key": null,
+          "path": "/templates/41/fields",
+          "observed_keys": [
+            "bar_clamp_diameter_mm",
+            "bar_width_mm",
+            "bar_style",
+            "bar_rise_mm",
+            "bar_backsweep_deg",
+            "bar_upsweep_deg",
+            "grip_area_diameter_mm",
+            "material",
+            "color",
+            "spec_evidence_source"
+          ]
+        }
+      ],
+      "issue": "La ficha exige abrazadera central para todo manubrio y un ancho sin punto de medición; no distingue unidad integrada de dos piezas, reach/drop ni ancho en hoods/drops.",
+      "bounded_correction": "Añadir construcción separada/integrada y hacer no aplicable una abrazadera inexistente. Mantener ancho y referencia de medición, reach/drop y puertos de guiado/soportes OEM. No convertir un dato web contradictorio de abrazadera en un montaje ficticio.",
+      "source_ids": [
+        "N12",
+        "N06"
+      ],
+      "scenario": {
+        "model": "Roval Rapide Cockpit",
+        "assembly": "manubrio+potencia integrado",
+        "measuring_positions": [
+          "hoods",
+          "drops"
+        ]
+      },
+      "expected_result": "La unidad se conserva como una identidad/variante; los valores contradictorios -6/-10 o 127/125 de la página quedan pendientes de manual/etiqueta exactos.",
+      "implemented": false,
+      "test_execution": "not_executed_domain_fixture"
+    },
+    {
+      "id": "ND09",
+      "title": "Rosca y herramienta no pueden deducirse de M8 o del destino",
+      "severity": "P1",
+      "gate": "before_compatibility_activation",
+      "evidence_kind": "source_grounded_counterexample",
+      "targets": [
+        {
+          "document": "reviewed_fields",
+          "template": "fastener",
+          "key": "thread",
+          "path": "/definitions/thread",
+          "observed": {
+            "label": "Rosca",
+            "data_type": "single_select",
+            "unit": null,
+            "allowed_values": [
+              "M4",
+              "M5",
+              "M6",
+              "M8",
+              "M10",
+              "M12",
+              "M14",
+              "3/8\"",
+              "Otra",
+              "Desconocido / sin confirmar"
+            ],
+            "validation_rules": {}
+          }
+        },
+        {
+          "document": "reviewed_fields",
+          "template": "fastener",
+          "key": "head_drive",
+          "path": "/definitions/head_drive",
+          "observed": {
+            "label": "Interfaz de herramienta en la cabeza",
+            "data_type": "single_select",
+            "unit": null,
+            "allowed_values": [
+              "Hexagonal interior (Allen)",
+              "Torx T25",
+              "Torx T30",
+              "Hexagonal exterior",
+              "Otra"
+            ],
+            "validation_rules": {}
+          }
+        },
+        {
+          "document": "reviewed_fields",
+          "template": "fastener",
+          "key": "thread",
+          "path": "/templates/74/form_contract/required_when/thread",
+          "observed": {
+            "kind": "when",
+            "rows": [
+              [
+                {
+                  "field": "fastener_kind",
+                  "operator": "in",
+                  "value_type": "token",
+                  "value": [
+                    "Perno",
+                    "Tornillo",
+                    "Tuerca",
+                    "Kit",
+                    "Otro"
+                  ]
+                }
+              ]
+            ]
+          }
+        },
+        {
+          "document": "reviewed_fields",
+          "template": "fastener",
+          "key": null,
+          "path": "/templates/74/fields",
+          "observed_keys": [
+            "fastener_kind",
+            "thread",
+            "length_mm",
+            "head_drive",
+            "declared_purpose",
+            "washer_inner_diameter_mm",
+            "washer_thickness_mm",
+            "material",
+            "pack_quantity",
+            "spec_evidence_source"
+          ]
+        },
+        {
+          "document": "reviewed_fields",
+          "template": "seat_clamp",
+          "key": "clamp_thread",
+          "path": "/definitions/clamp_thread",
+          "observed": {
+            "label": "Rosca de la abrazadera",
+            "data_type": "single_select",
+            "unit": null,
+            "allowed_values": [
+              "M5",
+              "M6",
+              "Desconocido / sin confirmar"
+            ],
+            "validation_rules": {}
+          }
+        }
+      ],
+      "issue": "M8/M10/M5 no expresa paso o mano; Allen expresa forma, no tamaño. Kit exige una única rosca aunque pueda contener varios pernos; algunas longitudes no tienen datum.",
+      "bounded_correction": "Registrar rosca completa o diámetro nominal+paso+mano, longitud con referencia (bajo cabeza/total), tamaño de accionamiento y clase sólo declarada. Para kit, filas de miembros con su propia rosca/longitud/cantidad. M5/M6 de la aguja de collarín no prueban su largo ni fijación al modelo.",
+      "source_ids": [
+        "N13"
+      ],
+      "scenario": {
+        "a": "M8×0.75",
+        "b": "M8×1.25",
+        "legacy_token": "M8"
+      },
+      "expected_result": "El token parcial no permite declarar compatibilidad entre a y b; no completar paso por el nombre del uso o la llave Allen.",
+      "implemented": false,
+      "test_execution": "not_executed_domain_fixture"
+    },
+    {
+      "id": "ND10",
+      "title": "La herramienta requiere interfaz y operación, no sólo velocidades",
+      "severity": "P1",
+      "gate": "before_compatibility_activation",
+      "evidence_kind": "source_grounded_counterexample",
+      "targets": [
+        {
+          "document": "reviewed_fields",
+          "template": "workshop_tool",
+          "key": "chain_tool_speeds",
+          "path": "/templates/75/form_contract/allowed_when/chain_tool_speeds",
+          "observed": {
+            "kind": "when",
+            "rows": [
+              [
+                {
+                  "field": "tool_kind",
+                  "operator": "eq",
+                  "value_type": "token",
+                  "value": "Corta cadena"
+                }
+              ]
+            ]
+          }
+        },
+        {
+          "document": "reviewed_fields",
+          "template": "workshop_tool",
+          "key": "tool_interface",
+          "path": "/definitions/tool_interface",
+          "observed": {
+            "label": "Interfaz de trabajo de la herramienta",
+            "data_type": "text",
+            "unit": null,
+            "allowed_values": [],
+            "validation_rules": {}
+          }
+        },
+        {
+          "document": "frozen_claude",
+          "template": "workshop_tool",
+          "key": "tool_to_standard",
+          "path": "/templates/75/interfaces/0",
+          "observed": {
+            "id": "tool_to_standard",
+            "rules": [
+              {
+                "id": "tool_to_standard.chain_tool_speeds",
+                "assertion_kind": "mechanical_claim",
+                "product_field": "chain_tool_speeds",
+                "counterpart": "template:chain",
+                "counterpart_field": "chain_speeds",
+                "operator": "in",
+                "value_type": "token",
+                "projection_pending": null,
+                "outcome_on_mismatch": "caution",
+                "outcome_on_unknown": "unknown",
+                "unverified_values": [],
+                "unverified_values_outcome": "unknown (evidencia pendiente, nunca bloquea)",
+                "never_alone_approves_assembly": true,
+                "source_ids": [
+                  "S30",
+                  "S11"
+                ],
+                "sources_verified": true,
+                "verified": true,
+                "unverified_reason": null
+              }
+            ],
+            "scope_notes": [
+              "estándar distinto → no sirve (p. ej. extractor HG en cuerpo XD)"
+            ],
+            "source_ids": [
+              "S30",
+              "S11"
+            ]
+          }
+        }
+      ],
+      "issue": "La cobertura por velocidades no indica si corta, instala o peena. Multiherramienta no puede registrar chain_tool_speeds aunque tenga tronchacadenas. La fuente congelada afirma erróneamente que un extractor HG no sirve en XD.",
+      "bounded_correction": "Permitir capacidades por herramienta/miembro y operación, estándar/modelo/forma y adaptador. Eliminar ese ejemplo de HG/XD: la interfaz de extracción es distinta del spline de instalación. Añadir medidas del drive/herramienta cuando existan sin generalizar compatibilidad de todas las 12v.",
+      "source_ids": [
+        "N14",
+        "N15"
+      ],
+      "scenario": {
+        "tool": "Park Tool CT-3.3",
+        "target": "Campagnolo con remache que requiere peening",
+        "operation": "peenar"
+      },
+      "expected_result": "No aprueba esa operación aunque sí pueda extraer/instalar el remache; FR-5.2 sobre XD no debe rechazarse por la etiqueta HG.",
+      "implemented": false,
+      "test_execution": "not_executed_domain_fixture"
+    },
+    {
+      "id": "ND11",
+      "title": "El tipo Kit U + cable debe permitir las medidas de sus miembros",
+      "severity": "P2",
+      "gate": "before_affected_field_fill",
+      "evidence_kind": "source_grounded_counterexample",
+      "targets": [
+        {
+          "document": "reviewed_fields",
+          "template": "lock",
+          "key": "inner_width_mm",
+          "path": "/templates/77/form_contract/allowed_when/inner_width_mm",
+          "observed": {
+            "kind": "when",
+            "rows": [
+              [
+                {
+                  "field": "lock_kind",
+                  "operator": "eq",
+                  "value_type": "token",
+                  "value": "U-lock"
+                }
+              ]
+            ]
+          }
+        },
+        {
+          "document": "reviewed_fields",
+          "template": "lock",
+          "key": "inner_height_mm",
+          "path": "/templates/77/form_contract/allowed_when/inner_height_mm",
+          "observed": {
+            "kind": "when",
+            "rows": [
+              [
+                {
+                  "field": "lock_kind",
+                  "operator": "eq",
+                  "value_type": "token",
+                  "value": "U-lock"
+                }
+              ]
+            ]
+          }
+        },
+        {
+          "document": "reviewed_fields",
+          "template": "lock",
+          "key": "cable_length_mm",
+          "path": "/templates/77/form_contract/allowed_when/cable_length_mm",
+          "observed": {
+            "kind": "when",
+            "rows": [
+              [
+                {
+                  "field": "lock_kind",
+                  "operator": "in",
+                  "value_type": "token",
+                  "value": [
+                    "Cable / espiral",
+                    "Cadena"
+                  ]
+                }
+              ]
+            ]
+          }
+        }
+      ],
+      "issue": "El kit U+cable excluye las medidas del U y del cable por sus condiciones actuales; obliga a mentir en lock_kind para llenar datos reales.",
+      "bounded_correction": "Ampliar las guardas para el kit o dar a cada miembro su tipo/medidas. Guardar nivel de seguridad con emisor, escala y componente cubierto; no sumar ni transferir la clasificación del U al cable.",
+      "source_ids": [
+        "N16"
+      ],
+      "scenario": {
+        "model": "Kryptonite Evolution Mini-7 002079",
+        "lock_kind": "Kit U + cable",
+        "members": [
+          "U",
+          "cable"
+        ]
+      },
+      "expected_result": "Permite dimensiones del U y largo del cable en la misma presentación de venta, con alcance de rating por componente.",
+      "implemented": false,
+      "test_execution": "not_executed_domain_fixture"
+    },
+    {
+      "id": "ND12",
+      "title": "Un kit de luces y sus modos no caben en máximos globales",
+      "severity": "P1",
+      "gate": "before_affected_product_fill",
+      "evidence_kind": "source_grounded_counterexample",
+      "targets": [
+        {
+          "document": "reviewed_fields",
+          "template": "light",
+          "key": "light_position",
+          "path": "/definitions/light_position",
+          "observed": {
+            "label": "Posición de la luz",
+            "data_type": "single_select",
+            "unit": null,
+            "allowed_values": [
+              "Delantera",
+              "Trasera",
+              "Juego delantera + trasera",
+              "Casco / otra"
+            ],
+            "validation_rules": {}
+          }
+        },
+        {
+          "document": "reviewed_fields",
+          "template": "light",
+          "key": "lumens_claimed",
+          "path": "/definitions/lumens_claimed",
+          "observed": {
+            "label": "Flujo luminoso declarado",
+            "data_type": "number",
+            "unit": "lm",
+            "allowed_values": [],
+            "validation_rules": {
+              "positive": true
+            }
+          }
+        },
+        {
+          "document": "reviewed_fields",
+          "template": "light",
+          "key": "runtime_claim_h",
+          "path": "/definitions/runtime_claim_h",
+          "observed": {
+            "label": "Autonomía declarada por modo",
+            "data_type": "text",
+            "unit": "h",
+            "allowed_values": [],
+            "validation_rules": {}
+          }
+        },
+        {
+          "document": "reviewed_fields",
+          "template": "light",
+          "key": "light_mount_kind",
+          "path": "/definitions/light_mount_kind",
+          "observed": {
+            "label": "Fijación de la luz",
+            "data_type": "single_select",
+            "unit": null,
+            "allowed_values": [
+              "Correa de silicona",
+              "Abrazadera de manubrio",
+              "Abrazadera de tija",
+              "Soporte de casco",
+              "Otro"
+            ],
+            "validation_rules": {}
+          }
+        },
+        {
+          "document": "reviewed_fields",
+          "template": "light",
+          "key": null,
+          "path": "/templates/78/fields",
+          "observed_keys": [
+            "light_position",
+            "lumens_claimed",
+            "power_source",
+            "charge_connector",
+            "battery_capacity_mah",
+            "runtime_claim_h",
+            "light_mount_kind",
+            "mount_diameter_min_mm",
+            "mount_diameter_max_mm",
+            "ip_rating",
+            "modes_count",
+            "kit_members",
+            "color",
+            "spec_evidence_source"
+          ]
+        }
+      ],
+      "issue": "Juego delantera+trasera comparte una batería, lúmenes, montaje y modos; combinar máxima luz con máxima autonomía crearía un rendimiento nunca declarado. kit_members sólo identifica miembros y no transporta estas magnitudes.",
+      "bounded_correction": "Usar referencias a miembros o filas por luz y modo que unan posición, modo, lúmenes y duración; batería/puerto/montaje propios de cada luz. Separar batería extraíble, alimentación externa y química de recarga. Diámetro no describe toda tija aero: preservar forma/circunferencia cuando lo indique OEM.",
+      "source_ids": [
+        "N17"
+      ],
+      "scenario": {
+        "kit": "Cateye AMPP800 + ViZ300",
+        "component": "AMPP800 front",
+        "modes": [
+          {
+            "mode": "High",
+            "lumens": "800",
+            "runtime_h": "1.5"
+          },
+          {
+            "mode": "Flashing",
+            "lumens": "200",
+            "runtime_h": "30"
+          }
+        ]
+      },
+      "expected_result": "No presentar 800 lm durante 30 h. Las cifras traseras y el montaje aero conservan su componente/condición.",
+      "implemented": false,
+      "test_execution": "not_executed_domain_fixture"
+    },
+    {
+      "id": "ND13",
+      "title": "Soporte necesita dos interfaces y diámetros discretos con adaptador",
+      "severity": "P1",
+      "gate": "before_compatibility_activation",
+      "evidence_kind": "source_grounded_counterexample",
+      "targets": [
+        {
+          "document": "reviewed_fields",
+          "template": "accessory_mount",
+          "key": "bar_diameter_min_mm",
+          "path": "/definitions/bar_diameter_min_mm",
+          "observed": {
+            "label": "Diámetro mínimo de manubrio",
+            "data_type": "number",
+            "unit": "mm",
+            "allowed_values": [],
+            "validation_rules": {
+              "positive": true
+            }
+          }
+        },
+        {
+          "document": "reviewed_fields",
+          "template": "accessory_mount",
+          "key": "bar_diameter_max_mm",
+          "path": "/definitions/bar_diameter_max_mm",
+          "observed": {
+            "label": "Diámetro máximo de manubrio",
+            "data_type": "number",
+            "unit": "mm",
+            "allowed_values": [],
+            "validation_rules": {
+              "positive": true
+            }
+          }
+        },
+        {
+          "document": "reviewed_fields",
+          "template": "accessory_mount",
+          "key": "device_width_min_mm",
+          "path": "/definitions/device_width_min_mm",
+          "observed": {
+            "label": "Ancho mínimo del dispositivo",
+            "data_type": "number",
+            "unit": "mm",
+            "allowed_values": [],
+            "validation_rules": {
+              "positive": true
+            }
+          }
+        },
+        {
+          "document": "frozen_claude",
+          "template": "accessory_mount",
+          "key": "mount_to_bar_and_device",
+          "path": "/templates/82/interfaces/0",
+          "observed": {
+            "id": "mount_to_bar_and_device",
+            "rules": [
+              {
+                "id": "mount_to_bar_and_device.bar_diameter_min_mm",
+                "assertion_kind": "mechanical_claim",
+                "product_field": "bar_diameter_min_mm",
+                "counterpart": "template:handlebar",
+                "counterpart_field": "grip_area_diameter_mm",
+                "operator": "lte",
+                "value_type": "decimal",
+                "projection_pending": null,
+                "outcome_on_mismatch": "caution",
+                "outcome_on_unknown": "unknown",
+                "unverified_values": [],
+                "unverified_values_outcome": "unknown (evidencia pendiente, nunca bloquea)",
+                "never_alone_approves_assembly": true,
+                "source_ids": [
+                  "S06"
+                ],
+                "sources_verified": true,
+                "verified": true,
+                "unverified_reason": null
+              },
+              {
+                "id": "mount_to_bar_and_device.bar_diameter_max_mm",
+                "assertion_kind": "mechanical_claim",
+                "product_field": "bar_diameter_max_mm",
+                "counterpart": "template:handlebar",
+                "counterpart_field": "grip_area_diameter_mm",
+                "operator": "gte",
+                "value_type": "decimal",
+                "projection_pending": null,
+                "outcome_on_mismatch": "caution",
+                "outcome_on_unknown": "unknown",
+                "unverified_values": [],
+                "unverified_values_outcome": "unknown (evidencia pendiente, nunca bloquea)",
+                "never_alone_approves_assembly": true,
+                "source_ids": [
+                  "S06"
+                ],
+                "sources_verified": true,
+                "verified": true,
+                "unverified_reason": null
+              }
+            ],
+            "scope_notes": [
+              "fuera de rango → incompatible"
+            ],
+            "source_ids": [
+              "S06"
+            ]
+          }
+        }
+      ],
+      "issue": "El rango puede inventar tamaños intermedios; el counterpart fijo grip_area_diameter_mm puede medir otra zona. Un sistema con carcasa propietaria no se define por ancho de teléfono.",
+      "bounded_correction": "Separar anclaje a bicicleta y unión al dispositivo. Elegir representación de rango continuo sólo si OEM lo declara; si enumera medidas, usar filas diámetro+espaciador/modelo+incluido/instalado. Comparar con la zona real de montaje, no siempre el puño. Guardar interfaz de carcasa y espacio del dispositivo si corresponde.",
+      "source_ids": [
+        "N18",
+        "N06"
+      ],
+      "scenario": {
+        "model": "Quad Lock Out Front PRO",
+        "declared_sizes_mm": [
+          "22.2",
+          "25.4",
+          "31.8",
+          "35"
+        ],
+        "candidate_mm": "30"
+      },
+      "expected_result": "30 no queda aprobado por caer entre mínimo y máximo. La discrepancia OEM 22/22.2 se resuelve por variante/manual, no por tolerancia inventada.",
+      "implemented": false,
+      "test_execution": "not_executed_domain_fixture"
+    },
+    {
+      "id": "ND14",
+      "title": "Bolso y parrilla tienen conexiones distintas y piezas auxiliares",
+      "severity": "P1",
+      "gate": "before_compatibility_activation",
+      "evidence_kind": "source_grounded_counterexample",
+      "targets": [
+        {
+          "document": "reviewed_fields",
+          "template": "bike_bag",
+          "key": "attachment",
+          "path": "/definitions/attachment",
+          "observed": {
+            "label": "Fijación",
+            "data_type": "single_select",
+            "unit": null,
+            "allowed_values": [
+              "Velcro / correas",
+              "Riel",
+              "Abrazadera",
+              "Otro"
+            ],
+            "validation_rules": {}
+          }
+        },
+        {
+          "document": "reviewed_fields",
+          "template": "bike_bag",
+          "key": null,
+          "path": "/templates/88/fields",
+          "observed_keys": [
+            "bag_position",
+            "volume_l",
+            "attachment",
+            "waterproof_claim",
+            "color",
+            "spec_evidence_source"
+          ]
+        },
+        {
+          "document": "reviewed_fields",
+          "template": "rack_basket",
+          "key": "carrier_mount_kind",
+          "path": "/definitions/carrier_mount_kind",
+          "observed": {
+            "label": "Fijación del portaequipaje",
+            "data_type": "single_select",
+            "unit": null,
+            "allowed_values": [
+              "Abrazaderas de manubrio",
+              "Soporte a eje delantero",
+              "Tornillos de parrilla del cuadro",
+              "Abrazadera a tija",
+              "Otro"
+            ],
+            "validation_rules": {}
+          }
+        },
+        {
+          "document": "frozen_claude",
+          "template": "rack_basket",
+          "key": "carrier_to_bike",
+          "path": "/templates/85/interfaces/0",
+          "observed": {
+            "id": "carrier_to_bike",
+            "rules": [
+              {
+                "id": "carrier_to_bike.carrier_mount_kind",
+                "assertion_kind": "mechanical_claim",
+                "product_field": "carrier_mount_kind",
+                "counterpart": "bike_profile",
+                "counterpart_field": "frame.rack_mounts",
+                "operator": "eq",
+                "value_type": "token",
+                "projection_pending": "anclajes exigen rack_mounts = true: proyección token → boolean",
+                "outcome_on_mismatch": "caution",
+                "outcome_on_unknown": "unknown",
+                "unverified_values": [],
+                "unverified_values_outcome": "unknown (evidencia pendiente, nunca bloquea)",
+                "never_alone_approves_assembly": true,
+                "source_ids": [
+                  "S06"
+                ],
+                "sources_verified": true,
+                "verified": false,
+                "unverified_reason": "proyección de tokens pendiente"
+              },
+              {
+                "id": "carrier_to_bike.nominal_wheel_size_min",
+                "assertion_kind": "mechanical_claim",
+                "product_field": "nominal_wheel_size_min",
+                "counterpart": "bike_profile",
+                "counterpart_field": "nominal derivado de bead_seat_diameter_mm",
+                "operator": "in",
+                "value_type": "token",
+                "projection_pending": "rango ordinal min..max de nominales → conjunto de tokens; el nominal del perfil se deriva del BSD (nominal_wheel_size_to_bsd)",
+                "outcome_on_mismatch": "caution",
+                "outcome_on_unknown": "unknown",
+                "unverified_values": [],
+                "unverified_values_outcome": "unknown (evidencia pendiente, nunca bloquea)",
+                "never_alone_approves_assembly": true,
+                "source_ids": [
+                  "S06"
+                ],
+                "sources_verified": true,
+                "verified": false,
+                "unverified_reason": "proyección de tokens pendiente"
+              },
+              {
+                "id": "carrier_to_bike.nominal_wheel_size_max",
+                "assertion_kind": "mechanical_claim",
+                "product_field": "nominal_wheel_size_max",
+                "counterpart": "bike_profile",
+                "counterpart_field": "nominal derivado de bead_seat_diameter_mm",
+                "operator": "in",
+                "value_type": "token",
+                "projection_pending": "idem",
+                "outcome_on_mismatch": "caution",
+                "outcome_on_unknown": "unknown",
+                "unverified_values": [],
+                "unverified_values_outcome": "unknown (evidencia pendiente, nunca bloquea)",
+                "never_alone_approves_assembly": true,
+                "source_ids": [
+                  "S06"
+                ],
+                "sources_verified": true,
+                "verified": false,
+                "unverified_reason": "proyección de tokens pendiente"
+              }
+            ],
+            "scope_notes": [
+              "cuadro sin puntos de anclaje → incompatible"
+            ],
+            "source_ids": [
+              "S06"
+            ]
+          }
+        }
+      ],
+      "issue": "Riel/Abrazadera no identifica sistema o generación. La nota congelada cuadro sin puntos de anclaje=incompatible se vuelve falsa para parrillas por correas; la capacidad no describe el montaje del bolso.",
+      "bounded_correction": "Separar parrilla→bicicleta y bolso→parrilla, conservar sistema/generación/adapter exacto y soporte lateral requerido. Añadir dimensiones/posición por miembro cuando haya alforjas. Los límites de carga deben indicar objeto y configuración; falta de ojales sólo bloquea una configuración que realmente los requiera.",
+      "source_ids": [
+        "N19",
+        "N20"
+      ],
+      "scenario": {
+        "independent_cases": [
+          {
+            "rack": "Topeak TetraRack M2",
+            "frame_rack_eyelets": false,
+            "frame_mount": "seatstay straps"
+          },
+          {
+            "rack": "Topeak MTX BeamRack",
+            "bag": "MTX TrunkBag DXP 2.0",
+            "configuration": "side panniers deployed",
+            "required_auxiliary_part": "MTX Dual Side Frames"
+          }
+        ]
+      },
+      "expected_result": "No bloquear TetraRack por no tener ojales. El uso de alforjas sobre BeamRack conserva el requisito de soportes laterales del OEM.",
+      "implemented": false,
+      "test_execution": "not_executed_domain_fixture"
+    },
+    {
+      "id": "ND15",
+      "title": "Pata de apoyo trasera requiere patrón KSA, no sólo tipo y rueda",
+      "severity": "P1",
+      "gate": "before_compatibility_activation",
+      "evidence_kind": "source_grounded_counterexample",
+      "targets": [
+        {
+          "document": "reviewed_fields",
+          "template": "kickstand",
+          "key": "kickstand_mount_kind",
+          "path": "/definitions/kickstand_mount_kind",
+          "observed": {
+            "label": "Fijación de la pata de apoyo",
+            "data_type": "single_select",
+            "unit": null,
+            "allowed_values": [
+              "Abrazadera a vaina",
+              "Placa central (tornillo)",
+              "Soporte trasero (kickstand plate)",
+              "Otro"
+            ],
+            "validation_rules": {}
+          }
+        },
+        {
+          "document": "reviewed_fields",
+          "template": "kickstand",
+          "key": null,
+          "path": "/templates/87/fields",
+          "observed_keys": [
+            "kickstand_mount_kind",
+            "nominal_wheel_size_min",
+            "nominal_wheel_size_max",
+            "adjustable_length",
+            "length_min_mm",
+            "length_max_mm",
+            "material",
+            "spec_evidence_source"
+          ]
+        },
+        {
+          "document": "frozen_claude",
+          "template": "kickstand",
+          "key": "kickstand_to_frame",
+          "path": "/templates/87/interfaces/0",
+          "observed": {
+            "id": "kickstand_to_frame",
+            "rules": [
+              {
+                "id": "kickstand_to_frame.nominal_wheel_size_min",
+                "assertion_kind": "mechanical_claim",
+                "product_field": "nominal_wheel_size_min",
+                "counterpart": "bike_profile",
+                "counterpart_field": "nominal derivado de bead_seat_diameter_mm",
+                "operator": "in",
+                "value_type": "token",
+                "projection_pending": "rango ordinal min..max de nominales → conjunto de tokens; el nominal del perfil se deriva del BSD (nominal_wheel_size_to_bsd)",
+                "outcome_on_mismatch": "caution",
+                "outcome_on_unknown": "unknown",
+                "unverified_values": [],
+                "unverified_values_outcome": "unknown (evidencia pendiente, nunca bloquea)",
+                "never_alone_approves_assembly": true,
+                "source_ids": [
+                  "S06"
+                ],
+                "sources_verified": true,
+                "verified": false,
+                "unverified_reason": "proyección de tokens pendiente"
+              },
+              {
+                "id": "kickstand_to_frame.nominal_wheel_size_max",
+                "assertion_kind": "mechanical_claim",
+                "product_field": "nominal_wheel_size_max",
+                "counterpart": "bike_profile",
+                "counterpart_field": "nominal derivado de bead_seat_diameter_mm",
+                "operator": "in",
+                "value_type": "token",
+                "projection_pending": "idem",
+                "outcome_on_mismatch": "caution",
+                "outcome_on_unknown": "unknown",
+                "unverified_values": [],
+                "unverified_values_outcome": "unknown (evidencia pendiente, nunca bloquea)",
+                "never_alone_approves_assembly": true,
+                "source_ids": [
+                  "S06"
+                ],
+                "sources_verified": true,
+                "verified": false,
+                "unverified_reason": "proyección de tokens pendiente"
+              }
+            ],
+            "scope_notes": [
+              "montaje sin punto en el cuadro → incompatible"
+            ],
+            "source_ids": [
+              "S06"
+            ]
+          }
+        }
+      ],
+      "issue": "Soporte trasero y el rango nominal de rueda no distinguen separaciones de montaje; los campos de longitud no indican si son largo de pieza o altura instalada.",
+      "bounded_correction": "Añadir estándar/patrón de agujeros, separación, número de fijaciones, rosca y posición con referencia de medida. Guardar altura instalada/rango OEM separado de largo total. No derivar KSA ni compatibilidad de cuadro del diámetro de rueda.",
+      "source_ids": [
+        "N21"
+      ],
+      "scenario": {
+        "model": "Hebie 0669 E KSA18",
+        "frame_hole_spacing_mm": "40"
+      },
+      "expected_result": "No aprueba su montaje directo aunque la rueda esté dentro del rango; una posible adaptación requiere evidencia propia.",
+      "implemented": false,
+      "test_execution": "not_executed_domain_fixture"
+    },
+    {
+      "id": "ND16",
+      "title": "Botella/base necesita interfaz de retención independiente del cuadro",
+      "severity": "P2",
+      "gate": "before_affected_product_fill",
+      "evidence_kind": "source_grounded_counterexample",
+      "targets": [
+        {
+          "document": "reviewed_fields",
+          "template": "bottle",
+          "key": "bottle_diameter_mm",
+          "path": "/definitions/bottle_diameter_mm",
+          "observed": {
+            "label": "Diámetro de la botella",
+            "data_type": "number",
+            "unit": "mm",
+            "allowed_values": [],
+            "validation_rules": {
+              "positive": true
+            }
+          }
+        },
+        {
+          "document": "reviewed_fields",
+          "template": "bottle",
+          "key": null,
+          "path": "/templates/84/fields",
+          "observed_keys": [
+            "volume_ml",
+            "bottle_diameter_mm",
+            "material",
+            "insulated",
+            "bpa_free_claim",
+            "color",
+            "spec_evidence_source"
+          ]
+        },
+        {
+          "document": "reviewed_fields",
+          "template": "bottle_cage",
+          "key": "cage_mount",
+          "path": "/definitions/cage_mount",
+          "observed": {
+            "label": "Fijación del portacaramagiola",
+            "data_type": "single_select",
+            "unit": null,
+            "allowed_values": [
+              "Dos tornillos del cuadro (estándar)",
+              "Abrazadera al tubo",
+              "Otro"
+            ],
+            "validation_rules": {}
+          }
+        },
+        {
+          "document": "reviewed_fields",
+          "template": "bottle_cage",
+          "key": null,
+          "path": "/templates/83/fields",
+          "observed_keys": [
+            "cage_mount",
+            "bottle_diameter_mm",
+            "material",
+            "side_entry",
+            "bolts_included",
+            "color",
+            "spec_evidence_source"
+          ]
+        }
+      ],
+      "issue": "Sólo volumen/diámetro y dos tornillos/abrazadera no describen botellas con base TWIST ni el set vendido. El ancho de un tubo irregular tampoco equivale a diámetro.",
+      "bounded_correction": "Añadir sistema de retención botella→base y base→bicicleta con referencias de modelo y contenido incluido. Conservar medidas con nombre correcto y dar diámetro sólo cuando corresponda. Para jaula lateral añadir lado de extracción; tipo de anclaje no equivale a cantidad o separación correcta de insertos.",
+      "source_ids": [
+        "N22",
+        "N23"
+      ],
+      "scenario": {
+        "model": "FIDLOCK TWIST 590 + uni base",
+        "base_fit_measure": "tube width 28–62 mm",
+        "bottle_interface": "TWIST"
+      },
+      "expected_result": "No reducir TWIST a botella convencional de un diámetro ni renombrar ancho como diámetro; registrar la base incluida.",
+      "implemented": false,
+      "test_execution": "not_executed_domain_fixture"
+    },
+    {
+      "id": "ND17",
+      "title": "Inflador CO2 tiene una interfaz de cartucho y contenido propio",
+      "severity": "P2",
+      "gate": "before_affected_product_fill",
+      "evidence_kind": "source_grounded_counterexample",
+      "targets": [
+        {
+          "document": "reviewed_fields",
+          "template": "pump",
+          "key": null,
+          "path": "/templates/100/fields",
+          "observed_keys": [
+            "pump_kind",
+            "valve_heads_supported",
+            "max_pressure_psi",
+            "gauge",
+            "hose",
+            "barrel_material",
+            "frame_mount_included",
+            "color",
+            "spec_evidence_source"
+          ]
+        },
+        {
+          "document": "reviewed_fields",
+          "template": "pump",
+          "key": "valve_heads_supported",
+          "path": "/definitions/valve_heads_supported",
+          "observed": {
+            "label": "Válvulas admitidas",
+            "data_type": "multi_select",
+            "unit": null,
+            "allowed_values": [
+              "Presta (francesa)",
+              "Schrader (americana / auto)",
+              "Dunlop (inglesa)",
+              "Desconocido / sin confirmar"
+            ],
+            "validation_rules": {}
+          }
+        },
+        {
+          "document": "reviewed_fields",
+          "template": "pump",
+          "key": "max_pressure_psi",
+          "path": "/definitions/max_pressure_psi",
+          "observed": {
+            "label": "Presión máxima declarada",
+            "data_type": "number",
+            "unit": "psi",
+            "allowed_values": [],
+            "validation_rules": {
+              "positive": true
+            }
+          }
+        }
+      ],
+      "issue": "La cabeza Presta/Schrader cubre sólo un lado; no existe unión al cartucho, tamaño admitido, cantidad incluida ni distinción de gas neto/peso del cartucho.",
+      "bounded_correction": "Para CO2 añadir interfaz de cartucho roscado/no roscado exacta, tamaños admitidos declarados y contenido por presentación. El máximo de presión no es promesa de presión final para toda rueda. Mantener requisitos de válvula/adaptador por configuración.",
+      "source_ids": [
+        "N24"
+      ],
+      "scenario": {
+        "product": "presentación CO2 de 5 cartuchos de 16g",
+        "net_gas_per_unit_g": "16",
+        "pack_quantity": "5"
+      },
+      "expected_result": "16 g de gas, peso físico y cinco unidades quedan separados; no inferir compatibilidad del inflador sólo por la válvula de la bicicleta.",
+      "implemented": false,
+      "test_execution": "not_executed_domain_fixture"
+    },
+    {
+      "id": "ND18",
+      "title": "Certificación y estado de lectura de etiqueta son ejes distintos",
+      "severity": "P1",
+      "gate": "before_certification_fill",
+      "evidence_kind": "source_grounded_counterexample",
+      "targets": [
+        {
+          "document": "reviewed_fields",
+          "template": "helmet",
+          "key": "certification_claim",
+          "path": "/definitions/certification_claim",
+          "observed": {
+            "label": "Certificaciones declaradas",
+            "data_type": "multi_select",
+            "unit": null,
+            "allowed_values": [
+              "EN 1078",
+              "CPSC 16 CFR 1203",
+              "AS/NZS 2063",
+              "Otra",
+              "Sin etiqueta visible"
+            ],
+            "validation_rules": {}
+          }
+        },
+        {
+          "document": "reviewed_fields",
+          "template": "helmet",
+          "key": "helmet_kind",
+          "path": "/definitions/helmet_kind",
+          "observed": {
+            "label": "Tipo de casco",
+            "data_type": "single_select",
+            "unit": null,
+            "allowed_values": [
+              "Urbano",
+              "MTB / trail",
+              "Enduro (cobertura extendida)",
+              "Integral",
+              "Ruta",
+              "Niño",
+              "Otro"
+            ],
+            "validation_rules": {}
+          }
+        },
+        {
+          "document": "reviewed_fields",
+          "template": "helmet",
+          "key": "size_label",
+          "path": "/definitions/size_label",
+          "observed": {
+            "label": "Talla o medida comercial",
+            "data_type": "single_select",
+            "unit": null,
+            "allowed_values": [
+              "XS",
+              "S",
+              "M",
+              "L",
+              "XL",
+              "XXL",
+              "Única",
+              "Niño",
+              "Otra"
+            ],
+            "validation_rules": {}
+          }
+        },
+        {
+          "document": "reviewed_fields",
+          "template": "rider_protection",
+          "key": "certification_claim_text",
+          "path": "/definitions/certification_claim_text",
+          "observed": {
+            "label": "Certificación declarada",
+            "data_type": "text",
+            "unit": null,
+            "allowed_values": [],
+            "validation_rules": {}
+          }
+        }
+      ],
+      "issue": "certification_claim mezcla normas con Sin etiqueta visible y un Otro sin nombre. Puede perder edición/mercado/alcance; Niño e Integral mezclan usuario y construcción. La talla nominal no define todas las medidas de ajuste.",
+      "bounded_correction": "Separar estado de evidencia de la lista de declaraciones. Guardar norma/edición/mercado/modelo/alcance y documento o etiqueta; incluir texto exacto para Otra. Mantener protección rotacional como declaración separada, sin tratarla como certificado. Separar construcción y uso/público y conservar talla OEM exacta+tabla de medidas.",
+      "source_ids": [
+        "N25",
+        "N26"
+      ],
+      "scenario": {
+        "helmet": "Smith Mainline Mips",
+        "evidence": [
+          "EU declaration 2024-09-09",
+          "product regional page"
+        ],
+        "label_observed": false
+      },
+      "expected_result": "No seleccionar Sin etiqueta visible como una norma ni dar por observada la etiqueta. Las declaraciones OEM conservan mercado/edición; no deducir ASTM por forma integral.",
+      "implemented": false,
+      "test_execution": "not_executed_domain_fixture"
+    },
+    {
+      "id": "ND19",
+      "title": "Fotocromía, polarización y espejo pueden coexistir",
+      "severity": "P2",
+      "gate": "before_affected_field_fill",
+      "evidence_kind": "source_grounded_counterexample",
+      "targets": [
+        {
+          "document": "reviewed_fields",
+          "template": "eyewear",
+          "key": "lens_kind",
+          "path": "/definitions/lens_kind",
+          "observed": {
+            "label": "Tipo de lente",
+            "data_type": "single_select",
+            "unit": null,
+            "allowed_values": [
+              "Fotocromático",
+              "Polarizado",
+              "Espejado",
+              "Transparente",
+              "Otro"
+            ],
+            "validation_rules": {}
+          }
+        },
+        {
+          "document": "reviewed_fields",
+          "template": "eyewear",
+          "key": "interchangeable_lenses",
+          "path": "/definitions/interchangeable_lenses",
+          "observed": {
+            "label": "Cantidad de lentes intercambiables adicionales",
+            "data_type": "number",
+            "unit": "unidades",
+            "allowed_values": [],
+            "validation_rules": {
+              "min": 0,
+              "integer": true
+            }
+          }
+        }
+      ],
+      "issue": "lens_kind single_select hace mutuamente excluyentes propiedades ortogonales. El conteo de lentes adicionales ya está bien rotulado pero no identifica sus características.",
+      "bounded_correction": "Separar fotocromía, polarización, recubrimiento/color y categoría/VLT declarados. Si se venden varias lentes, registrar fila por lente con incluido/adicional. Conservar la clave actual como resumen legacy si hace falta, sin usarla como exclusión.",
+      "source_ids": [
+        "N27"
+      ],
+      "scenario": {
+        "lens_family": "Julbo REACTIV polarizado",
+        "photochromic": true,
+        "polarized": true
+      },
+      "expected_result": "Admitir las dos propiedades simultáneas sin inferir VLT, homologación o uso autorizado.",
+      "implemented": false,
+      "test_execution": "not_executed_domain_fixture"
+    },
+    {
+      "id": "ND20",
+      "title": "Manga y talla deben seguir la prenda/variante real",
+      "severity": "P2",
+      "gate": "before_affected_field_fill",
+      "evidence_kind": "source_grounded_counterexample",
+      "targets": [
+        {
+          "document": "reviewed_fields",
+          "template": "rider_apparel",
+          "key": "sleeve",
+          "path": "/templates/97/form_contract/allowed_when/sleeve",
+          "observed": {
+            "kind": "when",
+            "rows": [
+              [
+                {
+                  "field": "garment_kind",
+                  "operator": "in",
+                  "value_type": "token",
+                  "value": [
+                    "Jersey",
+                    "Polera"
+                  ]
+                }
+              ]
+            ]
+          }
+        },
+        {
+          "document": "reviewed_fields",
+          "template": "rider_apparel",
+          "key": "size_label",
+          "path": "/definitions/size_label",
+          "observed": {
+            "label": "Talla o medida comercial",
+            "data_type": "single_select",
+            "unit": null,
+            "allowed_values": [
+              "XS",
+              "S",
+              "M",
+              "L",
+              "XL",
+              "XXL",
+              "Única",
+              "Niño",
+              "Otra"
+            ],
+            "validation_rules": {}
+          }
+        },
+        {
+          "document": "reviewed_fields",
+          "template": "rider_glove",
+          "key": "size_label",
+          "path": "/definitions/size_label",
+          "observed": {
+            "label": "Talla o medida comercial",
+            "data_type": "single_select",
+            "unit": null,
+            "allowed_values": [
+              "XS",
+              "S",
+              "M",
+              "L",
+              "XL",
+              "XXL",
+              "Única",
+              "Niño",
+              "Otra"
+            ],
+            "validation_rules": {}
+          }
+        },
+        {
+          "document": "reviewed_fields",
+          "template": "rider_apparel",
+          "key": "gender_fit",
+          "path": "/definitions/gender_fit",
+          "observed": {
+            "label": "Corte declarado",
+            "data_type": "single_select",
+            "unit": null,
+            "allowed_values": [
+              "Unisex",
+              "Mujer",
+              "Hombre",
+              "Niño"
+            ],
+            "validation_rules": {}
+          }
+        }
+      ],
+      "issue": "Chaqueta no puede tener sleeve. size_label pierde códigos como 3XL o S/M; Niño mezcla edad y género/talla. Un único material no guarda composición cuando se conoce.",
+      "bounded_correction": "Permitir manga en las prendas con mangas, incluyendo chaquetas; conservar etiqueta OEM exacta y sistema/guía de talla, sin equiparar M de dos marcas. Separar público/edad de corte/género y registrar composición declarada sin convertirla en una regla universal de ajuste.",
+      "source_ids": [
+        "N28"
+      ],
+      "scenario": {
+        "model": "Castelli Perfetto RoS Long Sleeve",
+        "garment_kind": "Chaqueta",
+        "sleeve": "Larga"
+      },
+      "expected_result": "La ficha acepta la combinación real. La talla se vincula a la variante y guía exactas, no a una categoría Niño.",
+      "implemented": false,
+      "test_execution": "not_executed_domain_fixture"
+    },
+    {
+      "id": "ND21",
+      "title": "GPS no es alternativa al protocolo del sensor",
+      "severity": "P2",
+      "gate": "before_affected_product_fill",
+      "evidence_kind": "source_grounded_counterexample",
+      "targets": [
+        {
+          "document": "reviewed_fields",
+          "template": "cycle_computer",
+          "key": "connection",
+          "path": "/definitions/connection",
+          "observed": {
+            "label": "Tipo de conexión",
+            "data_type": "single_select",
+            "unit": null,
+            "allowed_values": [
+              "Cableado",
+              "Inalámbrico",
+              "GPS",
+              "Otro"
+            ],
+            "validation_rules": {}
+          }
+        },
+        {
+          "document": "reviewed_fields",
+          "template": "cycle_computer",
+          "key": "wheel_setting",
+          "path": "/definitions/wheel_setting",
+          "observed": {
+            "label": "Ajuste de tamaño de rueda",
+            "data_type": "single_select",
+            "unit": null,
+            "allowed_values": [
+              "Por circunferencia (mm)",
+              "Por tabla nominal",
+              "Desconocido / sin confirmar"
+            ],
+            "validation_rules": {}
+          }
+        },
+        {
+          "document": "reviewed_fields",
+          "template": "cycle_computer",
+          "key": null,
+          "path": "/templates/80/fields",
+          "observed_keys": [
+            "connection",
+            "functions_count",
+            "wheel_setting",
+            "sensor_mount",
+            "power_source",
+            "spec_evidence_source"
+          ]
+        }
+      ],
+      "issue": "connection single_select mezcla posicionamiento con conexión. No puede registrar que un equipo GPS tenga sensores ANT+ y Bluetooth; faltan perfiles de sensor y soportes incluidos.",
+      "bounded_correction": "Separar posicionamiento/GNSS, enlace al sensor, enlace al teléfono/red y perfiles/modelos soportados. El ajuste de rueda aplica según la fuente de velocidad; incluir montaje de unidad/sensor y contenido. Compartir Bluetooth no aprueba cualquier sensor.",
+      "source_ids": [
+        "N29"
+      ],
+      "scenario": {
+        "model": "Garmin Edge 540",
+        "positioning": "GNSS",
+        "sensor_transports": [
+          "ANT+",
+          "Bluetooth"
+        ]
+      },
+      "expected_result": "Conservar ambos ejes y limitar cada capacidad al tipo/perfil de sensor documentado.",
+      "implemented": false,
+      "test_execution": "not_executed_domain_fixture"
+    },
+    {
+      "id": "ND22",
+      "title": "Conector único y watts globales no describen un cargador multi-puerto",
+      "severity": "P1",
+      "gate": "before_power_compatibility_claim_or_affected_product_fill",
+      "evidence_kind": "source_grounded_counterexample",
+      "targets": [
+        {
+          "document": "reviewed_fields",
+          "template": "consumer_electronics",
+          "key": "connector_a",
+          "path": "/definitions/connector_a",
+          "observed": {
+            "label": "Conector de origen",
+            "data_type": "single_select",
+            "unit": null,
+            "allowed_values": [
+              "USB-C",
+              "USB-A",
+              "Micro-USB",
+              "Lightning",
+              "Otro"
+            ],
+            "validation_rules": {}
+          }
+        },
+        {
+          "document": "reviewed_fields",
+          "template": "consumer_electronics",
+          "key": "ports_count",
+          "path": "/definitions/ports_count",
+          "observed": {
+            "label": "Cantidad de puertos",
+            "data_type": "number",
+            "unit": null,
+            "allowed_values": [],
+            "validation_rules": {
+              "positive": true,
+              "integer": true
+            }
+          }
+        },
+        {
+          "document": "reviewed_fields",
+          "template": "consumer_electronics",
+          "key": "rated_power_w",
+          "path": "/definitions/rated_power_w",
+          "observed": {
+            "label": "Potencia nominal",
+            "data_type": "number",
+            "unit": "W",
+            "allowed_values": [],
+            "validation_rules": {
+              "positive": true
+            }
+          }
+        },
+        {
+          "document": "reviewed_fields",
+          "template": "consumer_electronics",
+          "key": null,
+          "path": "/templates/81/fields",
+          "observed_keys": [
+            "device_kind",
+            "connector_a",
+            "connector_b",
+            "rated_power_w",
+            "charging_protocol_claim",
+            "cable_length_m",
+            "ports_count",
+            "storage_capacity_gb",
+            "wireless",
+            "color",
+            "spec_evidence_source"
+          ]
+        }
+      ],
+      "issue": "Un cargador con dos USB-C y un USB-A sólo admite un connector_a. rated_power_w no vincula tensión/corriente/protocolo al puerto o uso simultáneo; connector_b no separa género/forma de capacidad de datos.",
+      "bounded_correction": "Registrar puertos por ID y forma/género; perfiles de salida V/A/protocolo y presupuesto simultáneo por configuración, conservando potencia nominal total como declaración distinta. Para cable, extremos/capacidad de carga/datos por variante; para memoria, formato y clase OEM, sin derivarlos de GB.",
+      "source_ids": [
+        "N30"
+      ],
+      "scenario": {
+        "model": "Anker A2667",
+        "ports": [
+          "C1",
+          "C2",
+          "A"
+        ],
+        "C1_only_W": "65",
+        "C1_C2_W": [
+          "45",
+          "20"
+        ]
+      },
+      "expected_result": "No presentar 65 W simultáneos en cada puerto. A2668 no hereda estos valores por llamarse también Anker 735.",
+      "implemented": false,
+      "test_execution": "not_executed_domain_fixture",
+      "representation_note": "Para tarjetas, GB no exige una cantidad entera: el conteo físico entero puede guardarse como bytes, conservando etiqueta y unidad originales. Es una propuesta de representación; no se verificó un SKU de tarjeta en esta ronda."
+    },
+    {
+      "id": "ND23",
+      "title": "Alimentos preparados y envasados necesitan unidades y evidencia distintas",
+      "severity": "P1",
+      "gate": "before_allergen_or_affected_packaged_product_fill",
+      "evidence_kind": "source_grounded_counterexample",
+      "targets": [
+        {
+          "document": "reviewed_fields",
+          "template": "food_beverage",
+          "key": null,
+          "path": "/templates/99/fields",
+          "observed_keys": [
+            "food_item_kind",
+            "serving_size",
+            "serving_volume_ml",
+            "temperature",
+            "milk",
+            "flavor",
+            "allergen_note"
+          ]
+        },
+        {
+          "document": "reviewed_fields",
+          "template": "food_beverage",
+          "key": "serving_size",
+          "path": "/definitions/serving_size",
+          "observed": {
+            "label": "Tamaño de porción",
+            "data_type": "single_select",
+            "unit": null,
+            "allowed_values": [
+              "Chico",
+              "Mediano",
+              "Grande",
+              "Único"
+            ],
+            "validation_rules": {}
+          }
+        },
+        {
+          "document": "reviewed_fields",
+          "template": "food_beverage",
+          "key": "milk",
+          "path": "/definitions/milk",
+          "observed": {
+            "label": "Tipo de leche",
+            "data_type": "single_select",
+            "unit": null,
+            "allowed_values": [
+              "Sin leche",
+              "Leche",
+              "Vegetal",
+              "Opcional"
+            ],
+            "validation_rules": {}
+          }
+        },
+        {
+          "document": "reviewed_fields",
+          "template": "food_beverage",
+          "key": "allergen_note",
+          "path": "/definitions/allergen_note",
+          "observed": {
+            "label": "Información de alérgenos",
+            "data_type": "text",
+            "unit": null,
+            "allowed_values": [],
+            "validation_rules": {}
+          }
+        }
+      ],
+      "issue": "La ficha está orientada a café: Chico/Mediano/Grande y ml no representan sobres, barras o cajas. allergen_note tiene rol declaración pero no campo/prerrequisito de fuente en esta plantilla; Opcional mezcla receta con modificador de venta.",
+      "bounded_correction": "Separar preparado y envasado, receta/variante/modificadores de venta; masa neta, volumen, unidades y porción con base explícita. Añadir fuente y texto de ingredientes/alérgenos/cafeína por etiqueta o receta verificada. No inferir ausencia de alérgenos por título, nombre de leche vegetal o una nota vacía. Nutrición por 100g/porción debe conservar la base.",
+      "source_ids": [
+        "N31"
+      ],
+      "scenario": {
+        "model": "Maurten Gel 100 Caf 100 US",
+        "pack_count": "12",
+        "sachet_mass_g": "40",
+        "carbs_per_sachet_g": "25",
+        "caffeine_per_sachet_mg": "100"
+      },
+      "expected_result": "No confundir peso neto con carbohidratos ni caja con porción. Las bebidas preparadas mantienen receta/ingredientes reales del negocio; no extrapolar este gel al inventario no revisado.",
+      "implemented": false,
+      "test_execution": "not_executed_domain_fixture"
+    },
+    {
+      "id": "ND24",
+      "title": "Datos de fuentes OEM contradictorias no se resuelven por mayor llenado",
+      "severity": "P2",
+      "gate": "before_conflicting_fact_fill",
+      "evidence_kind": "source_grounded_counterexample",
+      "targets": [
+        {
+          "document": "reviewed_fields",
+          "template": "bike_bag",
+          "key": "volume_l",
+          "path": "/definitions/volume_l",
+          "observed": {
+            "label": "Capacidad",
+            "data_type": "number",
+            "unit": "L",
+            "allowed_values": [],
+            "validation_rules": {
+              "positive": true
+            }
+          }
+        },
+        {
+          "document": "reviewed_fields",
+          "template": "handlebar",
+          "key": "bar_width_mm",
+          "path": "/definitions/bar_width_mm",
+          "observed": {
+            "label": "Ancho del manubrio",
+            "data_type": "number",
+            "unit": "mm",
+            "allowed_values": [],
+            "validation_rules": {
+              "positive": true
+            }
+          }
+        }
+      ],
+      "issue": "El mismo código de producto puede tener cifras distintas en la página vigente y un catálogo oficial; escoger el valor más cómodo daría precisión aparente.",
+      "bounded_correction": "Conservar las afirmaciones con fecha/locator y contexto de medición; dejar la magnitud pendiente cuando no puede resolverse variante/revisión. La investigación puede llenar otros atributos no contradictorios del mismo producto.",
+      "source_ids": [
+        "N19",
+        "N32",
+        "N12"
+      ],
+      "scenario": {
+        "model": "Topeak TT9635B2",
+        "current_page_volume_l": "19.4",
+        "2024_catalogue_volume_l": "22.6"
+      },
+      "expected_result": "Registrar conflicto y buscar revisión/etiqueta; no fusionar los dos valores como un rango de capacidad declarado.",
+      "implemented": false,
+      "test_execution": "not_executed_domain_fixture"
+    }
+  ],
+  "coverage": [
+    {
+      "template": "pedal",
+      "reviewed_field_count": 11,
+      "findings": [
+        "ND01",
+        "ND02",
+        "ND03"
+      ],
+      "note": "Ver correcciones acotadas y escenarios del dictamen.",
+      "status": "semantic_review_only_not_family_qualified"
+    },
+    {
+      "template": "pedal_peg",
+      "reviewed_field_count": 6,
+      "findings": [],
+      "note": "El token Ambos con adaptador debe descomponerse en montaje directo/adaptado y contenido; 3/8 se conserva como nominal, no medición literal 10. No se verificó un peg OEM concreto en esta ronda.",
+      "status": "semantic_review_only_not_family_qualified"
+    },
+    {
+      "template": "grip",
+      "reviewed_field_count": 9,
+      "findings": [
+        "ND04"
+      ],
+      "note": "Ver correcciones acotadas y escenarios del dictamen.",
+      "status": "semantic_review_only_not_family_qualified"
+    },
+    {
+      "template": "handlebar_covering",
+      "reviewed_field_count": 10,
+      "findings": [],
+      "note": "La guarda de diámetro interior para funda tubular es coherente. Precisar largo por rollo/pieza frente a total del paquete y ancho de cinta si el producto lo declara.",
+      "status": "semantic_review_only_not_family_qualified"
+    },
+    {
+      "template": "handlebar",
+      "reviewed_field_count": 10,
+      "findings": [
+        "ND08",
+        "ND24"
+      ],
+      "note": "Ver correcciones acotadas y escenarios del dictamen.",
+      "status": "semantic_review_only_not_family_qualified"
+    },
+    {
+      "template": "stem",
+      "reviewed_field_count": 10,
+      "findings": [
+        "ND05"
+      ],
+      "note": "Ver correcciones acotadas y escenarios del dictamen.",
+      "status": "semantic_review_only_not_family_qualified"
+    },
+    {
+      "template": "seatpost",
+      "reviewed_field_count": 12,
+      "findings": [
+        "ND06",
+        "ND07"
+      ],
+      "note": "Ver correcciones acotadas y escenarios del dictamen.",
+      "status": "semantic_review_only_not_family_qualified"
+    },
+    {
+      "template": "seat_clamp",
+      "reviewed_field_count": 6,
+      "findings": [
+        "ND09"
+      ],
+      "note": "Está bien separar diámetro exterior del tubo del diámetro de tija. Los repuestos aún necesitan largo/rosca/modelo; ND09.",
+      "status": "semantic_review_only_not_family_qualified"
+    },
+    {
+      "template": "saddle",
+      "reviewed_field_count": 9,
+      "findings": [
+        "ND06"
+      ],
+      "note": "Ver correcciones acotadas y escenarios del dictamen.",
+      "status": "semantic_review_only_not_family_qualified"
+    },
+    {
+      "template": "saddle_cover",
+      "reviewed_field_count": 6,
+      "findings": [],
+      "note": "No convertir dimensiones máximas en cobertura universal sin geometría/ajuste declarado. Mantener rangos como alcance OEM, no deducirlos de medidas exteriores de la funda.",
+      "status": "semantic_review_only_not_family_qualified"
+    },
+    {
+      "template": "fastener",
+      "reviewed_field_count": 10,
+      "findings": [
+        "ND09"
+      ],
+      "note": "Ver correcciones acotadas y escenarios del dictamen.",
+      "status": "semantic_review_only_not_family_qualified"
+    },
+    {
+      "template": "workshop_tool",
+      "reviewed_field_count": 9,
+      "findings": [
+        "ND10"
+      ],
+      "note": "Ver correcciones acotadas y escenarios del dictamen.",
+      "status": "semantic_review_only_not_family_qualified"
+    },
+    {
+      "template": "workshop_chemical",
+      "reviewed_field_count": 8,
+      "findings": [],
+      "note": "Aplicaciones y exclusiones deben seguir la ficha OEM/SDS exacta. Cantidad en g/ml es contenido neto; falta de una exclusión no es autorización de uso. No se prescribe lubricante universal.",
+      "status": "semantic_review_only_not_family_qualified"
+    },
+    {
+      "template": "lock",
+      "reviewed_field_count": 12,
+      "findings": [
+        "ND11"
+      ],
+      "note": "Ver correcciones acotadas y escenarios del dictamen.",
+      "status": "semantic_review_only_not_family_qualified"
+    },
+    {
+      "template": "light",
+      "reviewed_field_count": 14,
+      "findings": [
+        "ND12"
+      ],
+      "note": "Ver correcciones acotadas y escenarios del dictamen.",
+      "status": "semantic_review_only_not_family_qualified"
+    },
+    {
+      "template": "audible_signal",
+      "reviewed_field_count": 7,
+      "findings": [],
+      "note": "Distinguir medición dB y condiciones/distancia cuando consten; anclaje y alimentación por configuración. No se deduce intensidad de una bocina por su batería.",
+      "status": "semantic_review_only_not_family_qualified"
+    },
+    {
+      "template": "cycle_computer",
+      "reviewed_field_count": 6,
+      "findings": [
+        "ND21"
+      ],
+      "note": "Ver correcciones acotadas y escenarios del dictamen.",
+      "status": "semantic_review_only_not_family_qualified"
+    },
+    {
+      "template": "consumer_electronics",
+      "reviewed_field_count": 11,
+      "findings": [
+        "ND22"
+      ],
+      "note": "Ver correcciones acotadas y escenarios del dictamen.",
+      "status": "semantic_review_only_not_family_qualified"
+    },
+    {
+      "template": "accessory_mount",
+      "reviewed_field_count": 10,
+      "findings": [
+        "ND13"
+      ],
+      "note": "Ver correcciones acotadas y escenarios del dictamen.",
+      "status": "semantic_review_only_not_family_qualified"
+    },
+    {
+      "template": "bottle_cage",
+      "reviewed_field_count": 7,
+      "findings": [
+        "ND16"
+      ],
+      "note": "Ver correcciones acotadas y escenarios del dictamen.",
+      "status": "semantic_review_only_not_family_qualified"
+    },
+    {
+      "template": "bottle",
+      "reviewed_field_count": 7,
+      "findings": [
+        "ND16"
+      ],
+      "note": "Ver correcciones acotadas y escenarios del dictamen.",
+      "status": "semantic_review_only_not_family_qualified"
+    },
+    {
+      "template": "rack_basket",
+      "reviewed_field_count": 9,
+      "findings": [
+        "ND14"
+      ],
+      "note": "Ver correcciones acotadas y escenarios del dictamen.",
+      "status": "semantic_review_only_not_family_qualified"
+    },
+    {
+      "template": "fender",
+      "reviewed_field_count": 9,
+      "findings": [],
+      "note": "Guardar producto/posición y configuración con ancho/diámetro/holgura y anclajes. El rango nominal no equivale a lista exhaustiva de BSD ni montaje garantizado.",
+      "status": "semantic_review_only_not_family_qualified"
+    },
+    {
+      "template": "kickstand",
+      "reviewed_field_count": 8,
+      "findings": [
+        "ND15"
+      ],
+      "note": "Ver correcciones acotadas y escenarios del dictamen.",
+      "status": "semantic_review_only_not_family_qualified"
+    },
+    {
+      "template": "bike_bag",
+      "reviewed_field_count": 6,
+      "findings": [
+        "ND14",
+        "ND24"
+      ],
+      "note": "Ver correcciones acotadas y escenarios del dictamen.",
+      "status": "semantic_review_only_not_family_qualified"
+    },
+    {
+      "template": "rider_bag",
+      "reviewed_field_count": 8,
+      "findings": [],
+      "note": "Separar volumen de carga, capacidad de depósito admitido y depósito incluido. reservoir_l con rol contents sólo es cantidad incluida si eso se observa; cero no es desconocido.",
+      "status": "semantic_review_only_not_family_qualified"
+    },
+    {
+      "template": "training_wheel",
+      "reviewed_field_count": 6,
+      "findings": [],
+      "note": "Antes de cubrir un producto exacto registrar unión al eje/soporte, ancho libre, antirrotación y restricciones OEM. No aprobar por tamaño nominal de rueda y rosca abreviada.",
+      "status": "semantic_review_only_not_family_qualified"
+    },
+    {
+      "template": "bike_protection",
+      "reviewed_field_count": 7,
+      "findings": [],
+      "note": "La lámina/funda puede permanecer descriptiva; distinguir medidas del producto, cantidad de piezas y medida admitida de bicicleta, sin inventar universalidad.",
+      "status": "semantic_review_only_not_family_qualified"
+    },
+    {
+      "template": "reflector",
+      "reviewed_field_count": 4,
+      "findings": [],
+      "note": "Los campos actuales describen principalmente cinta. Si el producto es rígido, de rayo o atornillado, añadir tipo, posición, montaje y cantidad; no forzarlo a longitud de rollo.",
+      "status": "semantic_review_only_not_family_qualified"
+    },
+    {
+      "template": "souvenir",
+      "reviewed_field_count": 4,
+      "findings": [],
+      "note": "Descriptor de tipo/tema/cantidad es suficiente para la evidencia disponible; no requiere una interfaz mecánica ficticia.",
+      "status": "semantic_review_only_not_family_qualified"
+    },
+    {
+      "template": "rider_glove",
+      "reviewed_field_count": 8,
+      "findings": [
+        "ND20"
+      ],
+      "note": "Conservar talla exacta y guía, público y corte por separado; touchscreen no depende necesariamente de largo/corto. No se probó ajuste real por un rótulo.",
+      "status": "semantic_review_only_not_family_qualified"
+    },
+    {
+      "template": "helmet",
+      "reviewed_field_count": 12,
+      "findings": [
+        "ND18"
+      ],
+      "note": "Ver correcciones acotadas y escenarios del dictamen.",
+      "status": "semantic_review_only_not_family_qualified"
+    },
+    {
+      "template": "eyewear",
+      "reviewed_field_count": 5,
+      "findings": [
+        "ND19"
+      ],
+      "note": "Ver correcciones acotadas y escenarios del dictamen.",
+      "status": "semantic_review_only_not_family_qualified"
+    },
+    {
+      "template": "rider_apparel",
+      "reviewed_field_count": 7,
+      "findings": [
+        "ND20"
+      ],
+      "note": "Ver correcciones acotadas y escenarios del dictamen.",
+      "status": "semantic_review_only_not_family_qualified"
+    },
+    {
+      "template": "rider_protection",
+      "reviewed_field_count": 6,
+      "findings": [
+        "ND18"
+      ],
+      "note": "La lista de zonas puede describir un kit, pero tamaño y certificación/miembros deben conservar alcance por pieza; ND18 aplica a la evidencia, no homologa la protección.",
+      "status": "semantic_review_only_not_family_qualified"
+    },
+    {
+      "template": "food_beverage",
+      "reviewed_field_count": 7,
+      "findings": [
+        "ND23"
+      ],
+      "note": "Ver correcciones acotadas y escenarios del dictamen.",
+      "status": "semantic_review_only_not_family_qualified"
+    },
+    {
+      "template": "pump",
+      "reviewed_field_count": 9,
+      "findings": [
+        "ND17"
+      ],
+      "note": "Ver correcciones acotadas y escenarios del dictamen.",
+      "status": "semantic_review_only_not_family_qualified"
+    }
+  ],
+  "stats": {
+    "findings": 24,
+    "source_records": 32,
+    "severity": {
+      "P1": 12,
+      "P2": 12,
+      "P3": 0
+    },
+    "executed_domain_tests": 0,
+    "product_facts_written": 0
+  },
+  "residual_gates": [
+    "Integrador decide las correcciones de metadata, recompila y valida SQL/Dart.",
+    "Conservar backup/legacy de respuestas retiradas y mapa semántico al separar claves.",
+    "Resolver documentos y variantes exactas para cada producto antes del fill; esta revisión no determina existencias ni cobertura del catálogo.",
+    "Verificar filtros/orden/upstream en runtime sólo después de integrar; esta ronda no abrió la app."
+  ],
+  "artifact_validation": {
+    "json_parsed": true,
+    "unique_finding_ids": true,
+    "source_refs_resolved": true,
+    "target_pointers_resolved": 81,
+    "observed_target_metadata_matches_inputs": true,
+    "domain_tests_executed": false,
+    "production_or_runtime_access": false
+  }
+}

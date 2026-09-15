@@ -75,3 +75,37 @@ later activity, replace complete product rows, or restore old idempotency
 receipts. Restore to a synthetic local tenant and test the actual compensating
 command before requesting production restoration. The backup tool intentionally
 does not implement a production apply command.
+
+### Format 2: component profiles (2026-09-14)
+
+Once the member-profile framework is published, a product may own component
+observations stored under `member:<profile id>` in `spec_facts`. Format 1
+already captured those rows but had no owner for them, so the same tool now
+produces **format 2**: the identical snapshot plus `product_spec_member_profiles`
+(confirmed identity, bound row, template, reference, `archived_at`, with the
+generated `scope` and `active_template_guard` columns) and
+`product_spec_member_profile_events` (append-only history with actor and row
+images), read in the same MVCC statement as the facts they own.
+
+- `create` produces format 2 and fails closed before the framework exists, since
+  the export references the new relations. The copy taken before this rollout,
+  `~/Vinabike Backups/Product Specs Legacy/20260914T213727Z-pre-fill`, is
+  format 1 and must stay untouched, key included.
+- `verify`, `view` and `export-local` read both formats with one tool. A
+  format 1 copy that carried member facts is rejected instead of being read
+  as root facts. Format 2 verification also checks that every profile owns its
+  scope, that each member fact has an owner of the same product and tenant,
+  that archived state and identity shape are consistent, that no row has two
+  active profiles, and that events point at their profile. The manifest's
+  `format_version` must match the snapshot.
+- The viewer never flattens member facts onto the product: each piece appears
+  under `piezas` with its identity, sources, archive state, observations with
+  their readings, and history. Readings are shown by quote, model, time and
+  digest; the product text they were read from is not repeated.
+- `spec_member_graph_revisions` is internal concurrency coordination and is
+  not captured; a recovery does not need to restore it.
+
+The reversal discipline above applies unchanged to profiles: identity and
+archived evidence are immutable on the server, history is append-only, and a
+compensating command must archive or re-create profiles explicitly rather than
+rewrite them. Nothing in the bundle is a production applier.

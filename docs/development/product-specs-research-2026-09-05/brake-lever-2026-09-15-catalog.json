@@ -1,0 +1,1599 @@
+{
+  "schema_version": 2,
+  "templates": [
+    {
+      "key": "brake_lever",
+      "name": "Manilla de Freno",
+      "id": "dee33c12-b165-48ea-ac1a-7a10b0144d1a",
+      "technical_family": "brake_lever",
+      "origin": "existing",
+      "form_contract": {
+        "rules_version": 2,
+        "roles": {
+          "brake_actuation": "primary",
+          "lever_cable_pull": "measurement",
+          "handlebar_clamp_mm": "measurement",
+          "brake_type": "legacy",
+          "caliper_hydraulic": "legacy",
+          "reach_adjust": "primary",
+          "brake_system": "legacy",
+          "brake_position": "declaration",
+          "spec_evidence_source": "declaration",
+          "brake_model_fluid_approvals": "measurement",
+          "brake_piece_hydraulic_ports": "declaration",
+          "lever_side": "primary",
+          "lever_mount_method": "primary",
+          "lever_bar_bore_min_mm": "measurement",
+          "lever_bar_bore_max_mm": "measurement",
+          "lever_mount_oem_interface": "measurement",
+          "lever_mount_clearance_mm": "measurement",
+          "lever_cable_interface": "primary",
+          "lever_cable_head_profiles": "measurement",
+          "lever_cable_pull_positions": "measurement",
+          "lever_hydraulic_role": "primary",
+          "lever_inline_hydraulic_ports": "measurement",
+          "brake_bleed_ports": "declaration",
+          "shifter_mount_interface": "measurement",
+          "lever_control_mount_oem_code": "measurement"
+        },
+        "semantic_roles": {
+          "brake_actuation": "intrinsic",
+          "lever_cable_pull": "compatibility",
+          "handlebar_clamp_mm": "compatibility",
+          "brake_type": "legacy",
+          "caliper_hydraulic": "legacy",
+          "reach_adjust": "intrinsic",
+          "brake_system": "legacy",
+          "brake_position": "compatibility",
+          "spec_evidence_source": "evidence",
+          "brake_model_fluid_approvals": "compatibility",
+          "brake_piece_hydraulic_ports": "compatibility",
+          "lever_side": "intrinsic",
+          "lever_mount_method": "intrinsic",
+          "lever_bar_bore_min_mm": "compatibility",
+          "lever_bar_bore_max_mm": "compatibility",
+          "lever_mount_oem_interface": "compatibility",
+          "lever_mount_clearance_mm": "compatibility",
+          "lever_cable_interface": "intrinsic",
+          "lever_cable_head_profiles": "compatibility",
+          "lever_cable_pull_positions": "compatibility",
+          "lever_hydraulic_role": "intrinsic",
+          "lever_inline_hydraulic_ports": "compatibility",
+          "brake_bleed_ports": "compatibility",
+          "shifter_mount_interface": "compatibility",
+          "lever_control_mount_oem_code": "compatibility"
+        },
+        "labels": {},
+        "allowed_when": {
+          "brake_actuation": {
+            "kind": "always"
+          },
+          "lever_cable_pull": {
+            "kind": "when",
+            "rows": [
+              [
+                {
+                  "field": "brake_actuation",
+                  "operator": "eq",
+                  "value_type": "token",
+                  "value": "Mecánico (cable)"
+                }
+              ]
+            ]
+          },
+          "handlebar_clamp_mm": {
+            "kind": "when",
+            "rows": [
+              [
+                {
+                  "field": "lever_mount_method",
+                  "operator": "eq",
+                  "value_type": "token",
+                  "value": "Abrazadera externa"
+                }
+              ]
+            ]
+          },
+          "brake_type": {
+            "kind": "never"
+          },
+          "caliper_hydraulic": {
+            "kind": "never"
+          },
+          "reach_adjust": {
+            "kind": "always"
+          },
+          "brake_system": {
+            "kind": "never"
+          },
+          "brake_position": {
+            "kind": "always"
+          },
+          "spec_evidence_source": {
+            "kind": "always"
+          },
+          "brake_model_fluid_approvals": {
+            "kind": "when",
+            "rows": [
+              [
+                {
+                  "field": "brake_actuation",
+                  "operator": "eq",
+                  "value_type": "token",
+                  "value": "Hidráulico"
+                }
+              ]
+            ]
+          },
+          "brake_piece_hydraulic_ports": {
+            "kind": "when",
+            "rows": [
+              [
+                {
+                  "field": "brake_actuation",
+                  "operator": "eq",
+                  "value_type": "token",
+                  "value": "Hidráulico"
+                },
+                {
+                  "field": "lever_hydraulic_role",
+                  "operator": "eq",
+                  "value_type": "token",
+                  "value": "Principal"
+                }
+              ]
+            ]
+          },
+          "lever_side": {
+            "kind": "always"
+          },
+          "lever_mount_method": {
+            "kind": "always"
+          },
+          "lever_bar_bore_min_mm": {
+            "kind": "when",
+            "rows": [
+              [
+                {
+                  "field": "lever_mount_method",
+                  "operator": "eq",
+                  "value_type": "token",
+                  "value": "Expansor interno"
+                }
+              ]
+            ]
+          },
+          "lever_bar_bore_max_mm": {
+            "kind": "when",
+            "rows": [
+              [
+                {
+                  "field": "lever_mount_method",
+                  "operator": "eq",
+                  "value_type": "token",
+                  "value": "Expansor interno"
+                }
+              ]
+            ]
+          },
+          "lever_mount_oem_interface": {
+            "kind": "when",
+            "rows": [
+              [
+                {
+                  "field": "lever_mount_method",
+                  "operator": "eq",
+                  "value_type": "token",
+                  "value": "Montaje específico del modelo"
+                }
+              ]
+            ]
+          },
+          "lever_mount_clearance_mm": {
+            "kind": "when",
+            "rows": [
+              [
+                {
+                  "field": "lever_mount_method",
+                  "operator": "eq",
+                  "value_type": "token",
+                  "value": "Abrazadera externa"
+                }
+              ]
+            ]
+          },
+          "lever_cable_interface": {
+            "kind": "when",
+            "rows": [
+              [
+                {
+                  "field": "brake_actuation",
+                  "operator": "eq",
+                  "value_type": "token",
+                  "value": "Mecánico (cable)"
+                }
+              ]
+            ]
+          },
+          "lever_cable_head_profiles": {
+            "kind": "when",
+            "rows": [
+              [
+                {
+                  "field": "brake_actuation",
+                  "operator": "eq",
+                  "value_type": "token",
+                  "value": "Mecánico (cable)"
+                },
+                {
+                  "field": "lever_cable_interface",
+                  "operator": "in",
+                  "value_type": "token",
+                  "value": [
+                    "Cabeza de cable anclada",
+                    "Ambos usos documentados por el OEM"
+                  ]
+                }
+              ]
+            ]
+          },
+          "lever_cable_pull_positions": {
+            "kind": "when",
+            "rows": [
+              [
+                {
+                  "field": "brake_actuation",
+                  "operator": "eq",
+                  "value_type": "token",
+                  "value": "Mecánico (cable)"
+                },
+                {
+                  "field": "lever_cable_pull",
+                  "operator": "eq",
+                  "value_type": "token",
+                  "value": "Ajustable"
+                }
+              ]
+            ]
+          },
+          "lever_hydraulic_role": {
+            "kind": "when",
+            "rows": [
+              [
+                {
+                  "field": "brake_actuation",
+                  "operator": "eq",
+                  "value_type": "token",
+                  "value": "Hidráulico"
+                }
+              ]
+            ]
+          },
+          "lever_inline_hydraulic_ports": {
+            "kind": "when",
+            "rows": [
+              [
+                {
+                  "field": "brake_actuation",
+                  "operator": "eq",
+                  "value_type": "token",
+                  "value": "Hidráulico"
+                },
+                {
+                  "field": "lever_hydraulic_role",
+                  "operator": "eq",
+                  "value_type": "token",
+                  "value": "Auxiliar en línea"
+                }
+              ]
+            ]
+          },
+          "brake_bleed_ports": {
+            "kind": "when",
+            "rows": [
+              [
+                {
+                  "field": "brake_actuation",
+                  "operator": "eq",
+                  "value_type": "token",
+                  "value": "Hidráulico"
+                }
+              ]
+            ]
+          },
+          "shifter_mount_interface": {
+            "kind": "always"
+          },
+          "lever_control_mount_oem_code": {
+            "kind": "when",
+            "rows": [
+              [
+                {
+                  "field": "shifter_mount_interface",
+                  "operator": "eq",
+                  "value_type": "token",
+                  "value": "Otro sistema OEM"
+                }
+              ]
+            ]
+          }
+        },
+        "required_when": {
+          "brake_actuation": {
+            "kind": "always"
+          },
+          "lever_cable_pull": {
+            "kind": "when",
+            "rows": [
+              [
+                {
+                  "field": "brake_actuation",
+                  "operator": "eq",
+                  "value_type": "token",
+                  "value": "Mecánico (cable)"
+                }
+              ]
+            ]
+          },
+          "handlebar_clamp_mm": {
+            "kind": "when",
+            "rows": [
+              [
+                {
+                  "field": "lever_mount_method",
+                  "operator": "eq",
+                  "value_type": "token",
+                  "value": "Abrazadera externa"
+                }
+              ]
+            ]
+          },
+          "brake_type": {
+            "kind": "never"
+          },
+          "caliper_hydraulic": {
+            "kind": "never"
+          },
+          "reach_adjust": {
+            "kind": "never"
+          },
+          "brake_system": {
+            "kind": "never"
+          },
+          "brake_position": {
+            "kind": "never"
+          },
+          "spec_evidence_source": {
+            "kind": "never"
+          },
+          "brake_model_fluid_approvals": {
+            "kind": "when",
+            "rows": [
+              [
+                {
+                  "field": "brake_actuation",
+                  "operator": "eq",
+                  "value_type": "token",
+                  "value": "Hidráulico"
+                }
+              ]
+            ]
+          },
+          "brake_piece_hydraulic_ports": {
+            "kind": "never"
+          },
+          "lever_side": {
+            "kind": "always"
+          },
+          "lever_mount_method": {
+            "kind": "always"
+          },
+          "lever_bar_bore_min_mm": {
+            "kind": "when",
+            "rows": [
+              [
+                {
+                  "field": "lever_mount_method",
+                  "operator": "eq",
+                  "value_type": "token",
+                  "value": "Expansor interno"
+                }
+              ]
+            ]
+          },
+          "lever_bar_bore_max_mm": {
+            "kind": "when",
+            "rows": [
+              [
+                {
+                  "field": "lever_mount_method",
+                  "operator": "eq",
+                  "value_type": "token",
+                  "value": "Expansor interno"
+                }
+              ]
+            ]
+          },
+          "lever_mount_oem_interface": {
+            "kind": "when",
+            "rows": [
+              [
+                {
+                  "field": "lever_mount_method",
+                  "operator": "eq",
+                  "value_type": "token",
+                  "value": "Montaje específico del modelo"
+                }
+              ]
+            ]
+          },
+          "lever_mount_clearance_mm": {
+            "kind": "never"
+          },
+          "lever_cable_interface": {
+            "kind": "when",
+            "rows": [
+              [
+                {
+                  "field": "brake_actuation",
+                  "operator": "eq",
+                  "value_type": "token",
+                  "value": "Mecánico (cable)"
+                }
+              ]
+            ]
+          },
+          "lever_cable_head_profiles": {
+            "kind": "never"
+          },
+          "lever_cable_pull_positions": {
+            "kind": "when",
+            "rows": [
+              [
+                {
+                  "field": "brake_actuation",
+                  "operator": "eq",
+                  "value_type": "token",
+                  "value": "Mecánico (cable)"
+                },
+                {
+                  "field": "lever_cable_pull",
+                  "operator": "eq",
+                  "value_type": "token",
+                  "value": "Ajustable"
+                }
+              ]
+            ]
+          },
+          "lever_hydraulic_role": {
+            "kind": "when",
+            "rows": [
+              [
+                {
+                  "field": "brake_actuation",
+                  "operator": "eq",
+                  "value_type": "token",
+                  "value": "Hidráulico"
+                }
+              ]
+            ]
+          },
+          "lever_inline_hydraulic_ports": {
+            "kind": "never"
+          },
+          "brake_bleed_ports": {
+            "kind": "never"
+          },
+          "shifter_mount_interface": {
+            "kind": "never"
+          },
+          "lever_control_mount_oem_code": {
+            "kind": "when",
+            "rows": [
+              [
+                {
+                  "field": "shifter_mount_interface",
+                  "operator": "eq",
+                  "value_type": "token",
+                  "value": "Otro sistema OEM"
+                }
+              ]
+            ]
+          }
+        },
+        "allowed_options": {
+          "brake_actuation": [
+            "Mecánico (cable)",
+            "Hidráulico",
+            "Desconocido / sin confirmar"
+          ]
+        },
+        "prerequisites": {},
+        "helpers": {
+          "brake_model_fluid_approvals": "Aprobación del modelo y edición concretos. La clase mineral por sí sola no identifica un aceite autorizado; se conserva su especificación/producto OEM. Otra URL no crea otro sistema.",
+          "brake_piece_hydraulic_ports": "Salidas hidráulicas de la maneta principal. La auxiliar en línea tiene su propia tabla de conexiones.",
+          "lever_cable_pull": "El tiro que ESTA maneta entrega. Lo que un cáliper exige es otra celda en otra pieza, y una no implica la otra.",
+          "handlebar_clamp_mm": "Diámetro exterior de la sección donde se fija esta maneta. No se restringe a 22,2 o 23,8 ni se deduce del tiro.",
+          "lever_side": "Lado físico de esta pieza. No determina qué rueda frena; no se deduce por país o marca.",
+          "lever_mount_method": "Distingue el diámetro exterior de una abrazadera del diámetro interior que recibe un expansor.",
+          "lever_bar_bore_min_mm": "Rango de montaje de este expansor publicado por el OEM; no es diámetro exterior del manubrio.",
+          "lever_bar_bore_max_mm": "Rango de montaje de este expansor publicado por el OEM; no es diámetro exterior del manubrio.",
+          "lever_mount_oem_interface": "Modelo o código de la interfaz receptora; una marca sin modelo no identifica el montaje.",
+          "lever_mount_clearance_mm": "Longitud libre de manubrio exigida por el OEM. No se deduce del diámetro ni del ancho visual de la abrazadera.",
+          "lever_cable_interface": "Una maneta en línea puede actuar sobre la funda con el cable pasante. Ambos usos requiere documentación del mismo modelo.",
+          "lever_cable_head_profiles": "Describe el alojamiento de esta maneta. Doble cabeza describe un cable sin cortar, no un alojamiento universal.",
+          "lever_cable_pull_positions": "Ajustable no significa compatible en cualquier posición. Cada fila identifica la posición y el tiro que entrega.",
+          "lever_hydraulic_role": "La maneta auxiliar en línea conecta con un mando principal y con el resto del circuito. No es un par de manetas.",
+          "lever_inline_hydraulic_ports": "Un puerto de esta pieza por fila. Los nombres indican extremos de conexión, no una dirección permanente del flujo. No valida el circuito completo.",
+          "brake_bleed_ports": "Sólo puertos que el procedimiento OEM identifica para purgar esta maneta. No convierte un tornillo de sellado en purgador.",
+          "shifter_mount_interface": "Interfaz propia, sin sumar compatibilidades de adaptadores ni afirmar que un mando viene incluido.",
+          "brake_position": "Destino declarado por la presentación. Izquierda y derecha no determinan delantero o trasero.",
+          "brake_actuation": "Cómo acciona esta maneta. Una maneta de cable que mueve un convertidor sigue siendo mecánica."
+        },
+        "evidence_requirements": {
+          "brake_actuation": "package_or_label",
+          "lever_cable_pull": "oem_or_package",
+          "handlebar_clamp_mm": "oem_or_package",
+          "brake_type": "name_reading_hint_only",
+          "caliper_hydraulic": "name_reading_hint_only",
+          "reach_adjust": "oem_or_package",
+          "brake_system": "name_reading_hint_only",
+          "brake_position": "oem_or_package",
+          "spec_evidence_source": "oem_or_package",
+          "brake_model_fluid_approvals": "oem_spec",
+          "brake_piece_hydraulic_ports": "oem_or_package",
+          "lever_side": "oem_or_package",
+          "lever_mount_method": "oem_or_package",
+          "lever_bar_bore_min_mm": "oem_or_package",
+          "lever_bar_bore_max_mm": "oem_or_package",
+          "lever_mount_oem_interface": "oem_or_package",
+          "lever_mount_clearance_mm": "oem_or_package",
+          "lever_cable_interface": "oem_or_package",
+          "lever_cable_head_profiles": "oem_or_package",
+          "lever_cable_pull_positions": "oem_or_package",
+          "lever_hydraulic_role": "oem_or_package",
+          "lever_inline_hydraulic_ports": "oem_or_package",
+          "brake_bleed_ports": "oem_or_package",
+          "shifter_mount_interface": "oem_or_package",
+          "lever_control_mount_oem_code": "oem_or_package"
+        },
+        "row_conditions": {
+          "version": 1,
+          "fields": {
+            "brake_model_fluid_approvals": {
+              "required_when": {
+                "fluid_product": {
+                  "kind": "when",
+                  "rows": [
+                    [
+                      {
+                        "field": "fluid_class",
+                        "operator": "eq",
+                        "value_type": "token",
+                        "value": "Aceite Mineral"
+                      }
+                    ]
+                  ]
+                }
+              }
+            },
+            "brake_piece_hydraulic_ports": {
+              "allowed_options": {
+                "end_role": [
+                  "Salida"
+                ]
+              }
+            },
+            "brake_bleed_ports": {
+              "allowed_options": {
+                "component_role": [
+                  "Maneta"
+                ]
+              }
+            }
+          }
+        },
+        "scalar_ordered_pairs": [
+          [
+            "lever_bar_bore_min_mm",
+            "lever_bar_bore_max_mm"
+          ]
+        ]
+      },
+      "fields": [
+        {
+          "key": "brake_actuation",
+          "section_key": "primary",
+          "sort_order": 0,
+          "is_required": false,
+          "visibility_rules": [],
+          "option_rules": [],
+          "constraint_rules": []
+        },
+        {
+          "key": "lever_cable_pull",
+          "section_key": "measurement",
+          "sort_order": 10,
+          "is_required": false,
+          "visibility_rules": [],
+          "option_rules": [],
+          "constraint_rules": []
+        },
+        {
+          "key": "handlebar_clamp_mm",
+          "section_key": "measurement",
+          "sort_order": 40,
+          "is_required": false,
+          "visibility_rules": [],
+          "option_rules": [],
+          "constraint_rules": []
+        },
+        {
+          "key": "brake_type",
+          "section_key": "legacy",
+          "sort_order": 20,
+          "is_required": false,
+          "visibility_rules": [],
+          "option_rules": [],
+          "constraint_rules": [],
+          "id": "1076f390-06b5-45cd-b776-a4183c6051f8",
+          "tenant_id": null,
+          "created_at": "2026-03-18T21:38:37.526215+00:00",
+          "updated_at": "2026-03-18T21:38:37.526215+00:00",
+          "helper_text": null,
+          "template_id": "dee33c12-b165-48ea-ac1a-7a10b0144d1a",
+          "default_value_json": null,
+          "spec_definition_id": "af057d76-e4ea-40d5-a293-941ad6aa0dc2"
+        },
+        {
+          "key": "caliper_hydraulic",
+          "section_key": "legacy",
+          "sort_order": 10,
+          "is_required": false,
+          "visibility_rules": [],
+          "option_rules": [],
+          "constraint_rules": [],
+          "id": "c9f68741-d979-4b45-9333-ef9e93627965",
+          "tenant_id": null,
+          "created_at": "2026-03-18T21:38:37.526215+00:00",
+          "updated_at": "2026-03-18T21:38:37.526215+00:00",
+          "helper_text": null,
+          "template_id": "dee33c12-b165-48ea-ac1a-7a10b0144d1a",
+          "default_value_json": null,
+          "spec_definition_id": "d72e7f7c-6330-42bd-9e63-5075740e1a96"
+        },
+        {
+          "key": "reach_adjust",
+          "section_key": "primary",
+          "sort_order": 70,
+          "is_required": false,
+          "visibility_rules": [],
+          "option_rules": [],
+          "constraint_rules": []
+        },
+        {
+          "key": "brake_system",
+          "section_key": "legacy",
+          "sort_order": 10,
+          "is_required": false,
+          "visibility_rules": [],
+          "option_rules": [],
+          "constraint_rules": [],
+          "id": "fffa289d-df14-4beb-8a48-31b314ebd851",
+          "tenant_id": null,
+          "created_at": "2026-03-18T21:38:37.526215+00:00",
+          "updated_at": "2026-03-18T21:38:37.526215+00:00",
+          "helper_text": null,
+          "template_id": "dee33c12-b165-48ea-ac1a-7a10b0144d1a",
+          "default_value_json": null,
+          "spec_definition_id": "de380dfb-d1ad-4702-a978-069692dabd49"
+        },
+        {
+          "key": "brake_position",
+          "section_key": "declaration",
+          "sort_order": 110,
+          "is_required": false,
+          "visibility_rules": [],
+          "option_rules": [],
+          "constraint_rules": []
+        },
+        {
+          "key": "spec_evidence_source",
+          "section_key": "declaration",
+          "sort_order": 120,
+          "is_required": false,
+          "visibility_rules": [],
+          "option_rules": [],
+          "constraint_rules": []
+        },
+        {
+          "key": "brake_model_fluid_approvals",
+          "section_key": "measurement",
+          "sort_order": 140,
+          "is_required": false,
+          "visibility_rules": [],
+          "option_rules": [],
+          "constraint_rules": []
+        },
+        {
+          "key": "brake_piece_hydraulic_ports",
+          "section_key": "declaration",
+          "sort_order": 160,
+          "is_required": false,
+          "visibility_rules": [],
+          "option_rules": [],
+          "constraint_rules": []
+        },
+        {
+          "key": "lever_side",
+          "section_key": "primary",
+          "sort_order": 311,
+          "is_required": false,
+          "visibility_rules": [],
+          "option_rules": [],
+          "constraint_rules": []
+        },
+        {
+          "key": "lever_mount_method",
+          "section_key": "primary",
+          "sort_order": 312,
+          "is_required": false,
+          "visibility_rules": [],
+          "option_rules": [],
+          "constraint_rules": []
+        },
+        {
+          "key": "lever_bar_bore_min_mm",
+          "section_key": "measurement",
+          "sort_order": 313,
+          "is_required": false,
+          "visibility_rules": [],
+          "option_rules": [],
+          "constraint_rules": []
+        },
+        {
+          "key": "lever_bar_bore_max_mm",
+          "section_key": "measurement",
+          "sort_order": 314,
+          "is_required": false,
+          "visibility_rules": [],
+          "option_rules": [],
+          "constraint_rules": []
+        },
+        {
+          "key": "lever_mount_oem_interface",
+          "section_key": "measurement",
+          "sort_order": 315,
+          "is_required": false,
+          "visibility_rules": [],
+          "option_rules": [],
+          "constraint_rules": []
+        },
+        {
+          "key": "lever_mount_clearance_mm",
+          "section_key": "measurement",
+          "sort_order": 316,
+          "is_required": false,
+          "visibility_rules": [],
+          "option_rules": [],
+          "constraint_rules": []
+        },
+        {
+          "key": "lever_cable_interface",
+          "section_key": "primary",
+          "sort_order": 317,
+          "is_required": false,
+          "visibility_rules": [],
+          "option_rules": [],
+          "constraint_rules": []
+        },
+        {
+          "key": "lever_cable_head_profiles",
+          "section_key": "measurement",
+          "sort_order": 318,
+          "is_required": false,
+          "visibility_rules": [],
+          "option_rules": [],
+          "constraint_rules": []
+        },
+        {
+          "key": "lever_cable_pull_positions",
+          "section_key": "measurement",
+          "sort_order": 319,
+          "is_required": false,
+          "visibility_rules": [],
+          "option_rules": [],
+          "constraint_rules": []
+        },
+        {
+          "key": "lever_hydraulic_role",
+          "section_key": "primary",
+          "sort_order": 320,
+          "is_required": false,
+          "visibility_rules": [],
+          "option_rules": [],
+          "constraint_rules": []
+        },
+        {
+          "key": "lever_inline_hydraulic_ports",
+          "section_key": "measurement",
+          "sort_order": 321,
+          "is_required": false,
+          "visibility_rules": [],
+          "option_rules": [],
+          "constraint_rules": []
+        },
+        {
+          "key": "brake_bleed_ports",
+          "section_key": "declaration",
+          "sort_order": 322,
+          "is_required": false,
+          "visibility_rules": [],
+          "option_rules": [],
+          "constraint_rules": []
+        },
+        {
+          "key": "shifter_mount_interface",
+          "section_key": "measurement",
+          "sort_order": 323,
+          "is_required": false,
+          "visibility_rules": [],
+          "option_rules": [],
+          "constraint_rules": []
+        },
+        {
+          "key": "lever_control_mount_oem_code",
+          "section_key": "measurement",
+          "sort_order": 324,
+          "is_required": false,
+          "visibility_rules": [],
+          "option_rules": [],
+          "constraint_rules": []
+        }
+      ]
+    }
+  ],
+  "definitions": {
+    "lever_side": {
+      "id": "a5da886a-b632-5d59-b583-43d672af183e",
+      "key": "lever_side",
+      "origin": "new",
+      "label": "Lado de la maneta",
+      "data_type": "single_select",
+      "unit": null,
+      "allowed_values": [
+        "Izquierda",
+        "Derecha",
+        "Ambidiestra",
+        "Desconocido / sin confirmar"
+      ],
+      "validation_rules": {},
+      "used_by": [
+        "brake_lever"
+      ]
+    },
+    "lever_mount_method": {
+      "id": "31a47493-ee80-54d9-a67c-4ad304e2d40e",
+      "key": "lever_mount_method",
+      "origin": "new",
+      "label": "Fijación de la maneta al manubrio",
+      "data_type": "single_select",
+      "unit": null,
+      "allowed_values": [
+        "Abrazadera externa",
+        "Expansor interno",
+        "Montaje específico del modelo",
+        "Desconocido / sin confirmar"
+      ],
+      "validation_rules": {},
+      "used_by": [
+        "brake_lever"
+      ]
+    },
+    "lever_bar_bore_min_mm": {
+      "id": "67c616a9-1c21-5fc2-a9ac-c00665587bbe",
+      "key": "lever_bar_bore_min_mm",
+      "origin": "new",
+      "label": "Diámetro interior mínimo admitido",
+      "data_type": "number",
+      "unit": "mm",
+      "allowed_values": [],
+      "validation_rules": {
+        "positive": true
+      },
+      "used_by": [
+        "brake_lever"
+      ]
+    },
+    "lever_bar_bore_max_mm": {
+      "id": "79f38500-7978-5068-bd14-cbac7f3a4727",
+      "key": "lever_bar_bore_max_mm",
+      "origin": "new",
+      "label": "Diámetro interior máximo admitido",
+      "data_type": "number",
+      "unit": "mm",
+      "allowed_values": [],
+      "validation_rules": {
+        "positive": true
+      },
+      "used_by": [
+        "brake_lever"
+      ]
+    },
+    "lever_mount_oem_interface": {
+      "id": "5c353cf2-7ce6-5ab2-b601-be5e98748ae7",
+      "key": "lever_mount_oem_interface",
+      "origin": "new",
+      "label": "Interfaz específica de montaje",
+      "data_type": "text",
+      "unit": null,
+      "allowed_values": [],
+      "validation_rules": {},
+      "used_by": [
+        "brake_lever"
+      ]
+    },
+    "lever_mount_clearance_mm": {
+      "id": "94b7891a-57e6-500b-960d-fd52cf7cc3b7",
+      "key": "lever_mount_clearance_mm",
+      "origin": "new",
+      "label": "Espacio recto de montaje requerido",
+      "data_type": "number",
+      "unit": "mm",
+      "allowed_values": [],
+      "validation_rules": {
+        "positive": true
+      },
+      "used_by": [
+        "brake_lever"
+      ]
+    },
+    "lever_cable_interface": {
+      "id": "03f5ac17-c35c-50e1-acf3-fa65d414780a",
+      "key": "lever_cable_interface",
+      "origin": "new",
+      "label": "Interfaz de cable de la maneta",
+      "data_type": "single_select",
+      "unit": null,
+      "allowed_values": [
+        "Cabeza de cable anclada",
+        "Cable pasante en línea",
+        "Ambos usos documentados por el OEM",
+        "Desconocido / sin confirmar"
+      ],
+      "validation_rules": {},
+      "used_by": [
+        "brake_lever"
+      ]
+    },
+    "lever_cable_head_profiles": {
+      "id": "99e16044-1746-5bb5-8c87-ef6a4999b6af",
+      "key": "lever_cable_head_profiles",
+      "origin": "new",
+      "label": "Cabezas de cable admitidas",
+      "data_type": "json",
+      "unit": null,
+      "allowed_values": [],
+      "validation_rules": {
+        "rows_schema": {
+          "version": 1,
+          "columns": [
+            {
+              "key": "profile",
+              "label": "Perfil",
+              "type": "token",
+              "required": true,
+              "allowed_values": [
+                "Barril",
+                "Pera",
+                "Específico OEM"
+              ]
+            },
+            {
+              "key": "oem_spec",
+              "label": "Código o dimensiones OEM",
+              "type": "text",
+              "required": true
+            },
+            {
+              "key": "source_url",
+              "label": "Fuente del perfil admitido",
+              "type": "url",
+              "required": true
+            }
+          ],
+          "unique_by": [
+            [
+              "profile",
+              "oem_spec"
+            ]
+          ]
+        }
+      },
+      "used_by": [
+        "brake_lever"
+      ]
+    },
+    "lever_cable_pull_positions": {
+      "id": "0c823739-10ae-5722-a42d-4bf987444859",
+      "key": "lever_cable_pull_positions",
+      "origin": "new",
+      "label": "Posiciones documentadas del tiro ajustable",
+      "data_type": "json",
+      "unit": null,
+      "allowed_values": [],
+      "validation_rules": {
+        "rows_schema": {
+          "version": 1,
+          "columns": [
+            {
+              "key": "position_id",
+              "label": "Posición de ajuste",
+              "type": "text",
+              "required": true
+            },
+            {
+              "key": "pull",
+              "label": "Tiro entregado",
+              "type": "token",
+              "required": true,
+              "allowed_values": [
+                "Tiro corto (ruta / cantilever / caliper)",
+                "Tiro largo (V-brake / disco mecánico tiro largo)"
+              ]
+            },
+            {
+              "key": "setup_note",
+              "label": "Condición de montaje",
+              "type": "text"
+            },
+            {
+              "key": "source_url",
+              "label": "Fuente del ajuste",
+              "type": "url",
+              "required": true
+            }
+          ],
+          "unique_by": [
+            [
+              "position_id"
+            ]
+          ]
+        }
+      },
+      "used_by": [
+        "brake_lever"
+      ]
+    },
+    "lever_hydraulic_role": {
+      "id": "6982fc7e-a8b2-5da4-a685-8685f342c706",
+      "key": "lever_hydraulic_role",
+      "origin": "new",
+      "label": "Función hidráulica de la maneta",
+      "data_type": "single_select",
+      "unit": null,
+      "allowed_values": [
+        "Principal",
+        "Auxiliar en línea",
+        "Desconocido / sin confirmar"
+      ],
+      "validation_rules": {},
+      "used_by": [
+        "brake_lever"
+      ]
+    },
+    "lever_inline_hydraulic_ports": {
+      "id": "e4ae5755-9ac7-5f4d-91ce-1972bb93f17d",
+      "key": "lever_inline_hydraulic_ports",
+      "origin": "new",
+      "label": "Conexiones de la maneta hidráulica en línea",
+      "data_type": "json",
+      "unit": null,
+      "allowed_values": [],
+      "validation_rules": {
+        "rows_schema": {
+          "version": 1,
+          "columns": [
+            {
+              "key": "port_id",
+              "label": "Identificador del puerto físico",
+              "type": "text",
+              "required": true
+            },
+            {
+              "key": "connection_side",
+              "label": "Extremo de conexión",
+              "type": "token",
+              "required": true,
+              "allowed_values": [
+                "Hacia el mando principal",
+                "Hacia la pinza"
+              ]
+            },
+            {
+              "key": "fitting_model",
+              "label": "Conector del modelo",
+              "type": "text"
+            },
+            {
+              "key": "connection_spec",
+              "label": "Especificación de la conexión",
+              "type": "text"
+            },
+            {
+              "key": "source_url",
+              "label": "Fuente OEM",
+              "type": "url",
+              "required": true
+            }
+          ],
+          "unique_by": [
+            [
+              "port_id"
+            ]
+          ]
+        }
+      },
+      "used_by": [
+        "brake_lever"
+      ]
+    },
+    "brake_bleed_ports": {
+      "id": "2132bfb4-5e72-5826-9f5b-5b73039de39b",
+      "key": "brake_bleed_ports",
+      "label": "Puertos de purga del modelo",
+      "data_type": "json",
+      "unit": null,
+      "allowed_values": [],
+      "validation_rules": {
+        "rows_schema": {
+          "columns": [
+            {
+              "key": "component_role",
+              "type": "token",
+              "label": "Componente",
+              "required": true,
+              "allowed_values": [
+                "Maneta",
+                "Cáliper",
+                "Convertidor"
+              ]
+            },
+            {
+              "key": "port_id",
+              "type": "text",
+              "label": "Puerto",
+              "required": true
+            },
+            {
+              "key": "connection_spec",
+              "type": "text",
+              "label": "Rosca / conector de purga",
+              "required": false
+            },
+            {
+              "key": "tool_interface",
+              "type": "text",
+              "label": "Interfaz de herramienta",
+              "required": false
+            },
+            {
+              "key": "procedure_reference",
+              "type": "text",
+              "label": "Procedimiento / revisión OEM",
+              "required": false
+            },
+            {
+              "key": "source_url",
+              "type": "url",
+              "label": "Fuente OEM de esta fila",
+              "required": true
+            }
+          ],
+          "version": 1,
+          "unique_by": [
+            [
+              "component_role",
+              "port_id"
+            ]
+          ]
+        }
+      },
+      "origin": "existing",
+      "used_by": [
+        "brake_caliper",
+        "hydraulic_disc_brake"
+      ]
+    },
+    "shifter_mount_interface": {
+      "id": "b98ba847-34ae-5a9a-8d85-7f71495d44df",
+      "key": "shifter_mount_interface",
+      "origin": "new",
+      "label": "Anclaje para mando separado",
+      "data_type": "single_select",
+      "unit": null,
+      "allowed_values": [
+        "Sin anclaje para mando separado",
+        "I-SPEC EV",
+        "I-SPEC II",
+        "MatchMaker X",
+        "Otro sistema OEM",
+        "Desconocido / sin confirmar"
+      ],
+      "validation_rules": {},
+      "used_by": [
+        "brake_lever"
+      ]
+    },
+    "lever_control_mount_oem_code": {
+      "id": "c494a90c-32ac-5b9a-9391-02ede27a5cf1",
+      "key": "lever_control_mount_oem_code",
+      "origin": "new",
+      "label": "Código del anclaje para mando",
+      "data_type": "text",
+      "unit": null,
+      "allowed_values": [],
+      "validation_rules": {},
+      "used_by": [
+        "brake_lever"
+      ]
+    },
+    "caliper_hydraulic": {
+      "key": "caliper_hydraulic",
+      "id": "d72e7f7c-6330-42bd-9e63-5075740e1a96",
+      "origin": "existing",
+      "label": "Hidráulico",
+      "data_type": "boolean",
+      "unit": null,
+      "allowed_values": [],
+      "validation_rules": {},
+      "used_by": [
+        "brake_caliper",
+        "brake_lever"
+      ]
+    },
+    "spec_evidence_source": {
+      "key": "spec_evidence_source",
+      "id": "4f055961-6c16-430b-a4e2-e6b09dc1cccc",
+      "origin": "existing",
+      "label": "Fuente de la declaración",
+      "data_type": "text",
+      "unit": null,
+      "allowed_values": [],
+      "validation_rules": {},
+      "used_by": [
+        "bearing",
+        "bottom_bracket",
+        "bottom_bracket_axle",
+        "bottom_bracket_bearing",
+        "bottom_bracket_cup",
+        "brake_caliper",
+        "brake_lever",
+        "brake_pad",
+        "cassette",
+        "cassette_spacer",
+        "chain",
+        "chain_guide",
+        "chain_link",
+        "chainring",
+        "crank_arm",
+        "crankset",
+        "derailleur_hanger",
+        "derailleur_pulley",
+        "drivetrain_kit",
+        "fixed_cog",
+        "freewheel",
+        "front_derailleur",
+        "headset",
+        "hub",
+        "hydraulic_disc_brake",
+        "mechanical_disc_brake",
+        "rear_derailleur",
+        "rim",
+        "rim_brake",
+        "rim_strip",
+        "rotor",
+        "shifter",
+        "spoke",
+        "tire",
+        "tube",
+        "tubeless_consumable",
+        "tubeless_valve"
+      ]
+    },
+    "brake_actuation": {
+      "key": "brake_actuation",
+      "id": "4eb570b4-b098-59be-96f2-9c1e0bcd7b65",
+      "origin": "existing",
+      "label": "Accionamiento del freno",
+      "data_type": "single_select",
+      "unit": null,
+      "allowed_values": [
+        "Mecánico (cable)",
+        "Hidráulico",
+        "Híbrido (cable a hidráulico)",
+        "Desconocido / sin confirmar",
+        "Contrapedal",
+        "Otro"
+      ],
+      "validation_rules": {},
+      "used_by": [
+        "brake_caliper",
+        "brake_lever",
+        "rim_brake"
+      ]
+    },
+    "brake_system": {
+      "key": "brake_system",
+      "id": "de380dfb-d1ad-4702-a978-069692dabd49",
+      "origin": "existing",
+      "label": "Sistema de Freno",
+      "data_type": "single_select",
+      "unit": null,
+      "allowed_values": [
+        "Shimano",
+        "SRAM",
+        "Magura",
+        "Tektro",
+        "Hayes",
+        "Bengal",
+        "TRP",
+        "Hope",
+        "Promax",
+        "Genérico"
+      ],
+      "validation_rules": {},
+      "used_by": [
+        "brake_caliper",
+        "brake_lever",
+        "brake_pad",
+        "hydraulic_disc_brake",
+        "mechanical_disc_brake",
+        "rim_brake",
+        "rotor"
+      ]
+    },
+    "brake_piece_hydraulic_ports": {
+      "key": "brake_piece_hydraulic_ports",
+      "id": "6cf165c6-3dc3-5287-ac1b-6c24d1f30736",
+      "origin": "existing",
+      "label": "Puertos hidráulicos de esta pieza",
+      "data_type": "json",
+      "unit": null,
+      "allowed_values": [],
+      "validation_rules": {
+        "rows_schema": {
+          "columns": [
+            {
+              "key": "port_id",
+              "type": "text",
+              "label": "Identificador del puerto físico",
+              "required": true
+            },
+            {
+              "key": "end_role",
+              "type": "token",
+              "label": "Papel del extremo",
+              "required": true,
+              "allowed_values": [
+                "Entrada",
+                "Salida",
+                "Purgador"
+              ]
+            },
+            {
+              "key": "fitting_model",
+              "type": "text",
+              "label": "Conector declarado"
+            },
+            {
+              "key": "connection_spec",
+              "type": "text",
+              "label": "Especificación de la conexión"
+            },
+            {
+              "key": "source_scope",
+              "type": "text",
+              "label": "Apartado y alcance de la fuente",
+              "required": true
+            },
+            {
+              "key": "source_url",
+              "type": "url",
+              "label": "Fuente",
+              "required": true
+            }
+          ],
+          "version": 1,
+          "unique_by": [
+            [
+              "port_id"
+            ]
+          ]
+        }
+      },
+      "used_by": [
+        "brake_caliper",
+        "brake_lever"
+      ]
+    },
+    "brake_type": {
+      "key": "brake_type",
+      "id": "af057d76-e4ea-40d5-a293-941ad6aa0dc2",
+      "origin": "existing",
+      "label": "Tipo de Freno",
+      "data_type": "single_select",
+      "unit": null,
+      "allowed_values": [
+        "Disco Hidráulico",
+        "Disco Mecánico",
+        "V-Brake",
+        "Cantilever"
+      ],
+      "validation_rules": {},
+      "used_by": [
+        "brake_caliper",
+        "brake_lever",
+        "brake_pad"
+      ]
+    },
+    "lever_cable_pull": {
+      "key": "lever_cable_pull",
+      "id": "1a7b9335-419d-5791-bfc0-5203d806c7e7",
+      "origin": "existing",
+      "label": "Tiro de cable de la maneta",
+      "data_type": "single_select",
+      "unit": null,
+      "allowed_values": [
+        "Tiro largo (V-brake / disco mecánico tiro largo)",
+        "Tiro corto (ruta / cantilever / caliper)",
+        "Ajustable",
+        "Desconocido / sin confirmar"
+      ],
+      "validation_rules": {},
+      "used_by": [
+        "brake_lever"
+      ]
+    },
+    "brake_position": {
+      "key": "brake_position",
+      "id": "ef5f6e33-beec-4eb9-9add-26257133cf49",
+      "origin": "existing",
+      "label": "Posición",
+      "data_type": "single_select",
+      "unit": null,
+      "allowed_values": [
+        "Delantero",
+        "Trasero",
+        "Universal"
+      ],
+      "validation_rules": {},
+      "used_by": [
+        "brake_caliper",
+        "brake_lever",
+        "brake_pad",
+        "hydraulic_disc_brake",
+        "mechanical_disc_brake",
+        "rim_brake",
+        "rotor"
+      ]
+    },
+    "handlebar_clamp_mm": {
+      "key": "handlebar_clamp_mm",
+      "id": "8be0553c-6dee-5ab8-97c9-2bffb6cfa631",
+      "origin": "existing",
+      "label": "Diámetro de abrazadera al manubrio",
+      "data_type": "number",
+      "unit": "mm",
+      "allowed_values": [],
+      "validation_rules": {
+        "positive": true
+      },
+      "used_by": [
+        "brake_lever",
+        "shifter"
+      ]
+    },
+    "brake_model_fluid_approvals": {
+      "key": "brake_model_fluid_approvals",
+      "id": "8721f156-3a66-547c-b82a-ea6003d644f4",
+      "origin": "existing",
+      "label": "Fluidos aprobados por modelo y edición",
+      "data_type": "json",
+      "unit": null,
+      "allowed_values": [],
+      "validation_rules": {
+        "rows_schema": {
+          "columns": [
+            {
+              "key": "system_brand",
+              "type": "text",
+              "label": "Marca del sistema",
+              "required": true
+            },
+            {
+              "key": "system_model",
+              "type": "text",
+              "label": "Modelo del sistema",
+              "required": true
+            },
+            {
+              "key": "generation",
+              "type": "text",
+              "label": "Generación / edición del modelo",
+              "required": true
+            },
+            {
+              "key": "fluid_class",
+              "type": "token",
+              "label": "Clase de fluido",
+              "required": true,
+              "allowed_values": [
+                "Aceite Mineral",
+                "DOT 3",
+                "DOT 4",
+                "DOT 5",
+                "DOT 5.1"
+              ]
+            },
+            {
+              "key": "fluid_product",
+              "type": "text",
+              "label": "Producto / especificación OEM del fluido",
+              "required": false
+            },
+            {
+              "key": "conditions",
+              "type": "text",
+              "label": "Condiciones expresas de uso",
+              "required": false
+            },
+            {
+              "key": "source_url",
+              "type": "url",
+              "label": "Fuente OEM de esta fila",
+              "required": true
+            }
+          ],
+          "version": 1,
+          "unique_by": [
+            [
+              "system_brand",
+              "system_model",
+              "generation",
+              "fluid_class",
+              "fluid_product"
+            ]
+          ]
+        }
+      },
+      "used_by": [
+        "brake_caliper",
+        "brake_lever",
+        "hydraulic_disc_brake",
+        "rim_brake"
+      ]
+    },
+    "reach_adjust": {
+      "key": "reach_adjust",
+      "id": "58b593b8-edb8-47a2-852d-4a40ff247543",
+      "origin": "existing",
+      "label": "Regulación de Alcance",
+      "data_type": "boolean",
+      "unit": null,
+      "allowed_values": [],
+      "validation_rules": {},
+      "used_by": [
+        "brake_caliper",
+        "brake_lever",
+        "hydraulic_disc_brake",
+        "mechanical_disc_brake",
+        "rim_brake"
+      ]
+    }
+  },
+  "source_catalog_sha256": "e0cccea8cdea5835e47301d11060bc735454334a9bdf6e0666b9bb5b5d87b28d",
+  "mechanical_coverage_complete": false,
+  "automatic_fill_authorized": false,
+  "publication_authorized": false
+}

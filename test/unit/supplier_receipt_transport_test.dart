@@ -109,6 +109,83 @@ void main() {
     });
   });
 
+  group('un rechazo definitivo no vuelve a la cola', () {
+    // **Medido el 2026-09-15.** El guardián de alcance rechazaba una estampa
+    // vieja con `40001`; un cliente lo reintentó ~900 veces por segundo
+    // durante 16 días (1.14 mil millones de transacciones abortadas). Hoy
+    // rechaza con `23514`, y el cliente tiene que leerlo como «no vuelvas a
+    // mandarlo»: recargar la necesidad, no esperar y repetir.
+    final necesidadCambio = _error(
+      code: '23514',
+      message: 'La necesidad cambió mientras se consultaba al proveedor; '
+          'esa lectura ya no responde lo que se está preguntando.',
+    );
+
+    test('23514 es un rechazo, no un transporte caído', () {
+      expect(
+        SupplierAvailabilityService.isDefinitiveRejection(necesidadCambio),
+        isTrue,
+      );
+      expect(
+        SupplierAvailabilityService.isUnknownOutcome(necesidadCambio),
+        isFalse,
+      );
+      expect(
+        SupplierAvailabilityService.connectionNeverAcquired(necesidadCambio),
+        isFalse,
+      );
+    });
+
+    test('y el tipo que sale dice qué recargar', () {
+      final rejected = SupplierNeedSearchRejected(
+        PostgrestException(
+          message: necesidadCambio.message,
+          code: '23514',
+          details: 'supply_need=n1 expected version 5 revision 2, '
+              'current version 6 revision 3',
+          hint: 'Vuelve a leer la necesidad y repite la búsqueda contra su '
+              'interpretación vigente.',
+        ),
+      );
+      expect(rejected.needChanged, isTrue);
+      expect(rejected.hint, contains('Vuelve a leer la necesidad'));
+      expect(rejected.details, contains('current version 6 revision 3'));
+      expect(rejected.message, contains('La necesidad cambió'));
+    });
+
+    test('toda la clase 22/23 y P0001 se niegan; 40001 sigue siendo otra cosa',
+        () {
+      for (final code in <String>['23505', '23514', '22023', 'P0001']) {
+        expect(
+          SupplierAvailabilityService.isDefinitiveRejection(_error(code: code)),
+          isTrue,
+          reason: '$code es una respuesta del servidor',
+        );
+      }
+      // `40001` no es un rechazo definitivo: es la instrucción «reintenta la
+      // misma transacción», y por eso el guardián dejó de emitirlo.
+      expect(
+        SupplierAvailabilityService.isDefinitiveRejection(
+            _error(code: '40001')),
+        isFalse,
+      );
+    });
+
+    test('el transporte no se confunde con un rechazo', () {
+      for (final code in <String>['PGRST003', '502', '503', '504', '408']) {
+        expect(
+          SupplierAvailabilityService.isDefinitiveRejection(_error(code: code)),
+          isFalse,
+          reason: '$code no dice que el servidor haya leído el recibo',
+        );
+      }
+      expect(
+        SupplierAvailabilityService.isDefinitiveRejection(_error(code: null)),
+        isFalse,
+      );
+    });
+  });
+
   group('el transporte que sí deja el resultado desconocido', () {
     test('502, 503, 504, 408 y 429 se resuelven por clave antes de reintentar',
         () {

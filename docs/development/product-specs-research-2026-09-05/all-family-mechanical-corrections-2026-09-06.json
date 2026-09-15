@@ -1,0 +1,2822 @@
+{
+ "schema_version": 1,
+ "title": "Correcciones mecánicas acotadas — frenos y transmisión",
+ "author": "Propuesta de Claude Fable 5.1; generador recuperado por Codex tras error y límite de sesión. Pendiente de adjudicación mecánica",
+ "prepared_on": "2026-09-06",
+ "target": {
+  "file": "all-family-compiled-contract-2026-09-06.json",
+  "sha256": "785cd11a39011b643e4bcb1422ab805c242f8a7aae0108b399c6aff0c0d78175",
+  "frozen": true
+ },
+ "patch_grammar": {
+  "op": "replace | add | remove",
+  "path": "JSON Pointer RFC 6901 sobre el JSON compilado («/-» = append; MC-13-fixtures lista índices)",
+  "before": "valor actual copiado literal del JSON (null en add)",
+  "after": "valor propuesto completo (null en remove)",
+  "source": "ids de `evidence`",
+  "evidence_grade": "oem_table > oem_page > oem_manual_search_summary > oem_manual_cited_not_read > reference_general > structural > product_decision",
+  "scope": "qué cubre exactamente",
+  "counter_case": "el caso real que la regla anterior juzgaba mal"
+ },
+ "evidence": {
+  "E-C731": {
+   "title": "Shimano C-731 FREEHUB and cassette spline compatibility",
+   "url": "https://productinfo.shimano.com/en/compatibility/C-731",
+   "kind": "oem_table",
+   "how_read": "Dos lecturas web (2026-09-06): filas literales (S14) y notas *1–*7 con los modelos nombrados. Las notas y los modelos coinciden en ambas; la colocación por columna se toma de la lectura literal de filas (S14), no del resumen.",
+   "states": [
+    "C-731 distingue cuerpos HG L, M, S, L2 y MICRO SPLINE; los separadores dependen de la fila y del modelo. Las filas propuestas abajo registran las excepciones nominales; Codex contrasta el alcance."
+   ]
+  },
+  "E-SRAM-UDH": {
+   "title": "SRAM — UDH product page, «Understanding UDH and Full Mount», soporte «Is the UDH compatible with my bike?»",
+   "url": "https://www.sram.com/en/learn/understanding-udh-and-full-mount",
+   "kind": "oem_page",
+   "how_read": "Búsqueda web sobre sram.com (2026-09-06); resúmenes de la herramienta, no lectura línea a línea.",
+   "states": [
+    "Distinguir la patilla UDH del anclaje Full Mount sin patilla; verificar la interfaz del cuadro y el alcance de cada manual."
+   ],
+   "related_urls": [
+    "https://www.sram.com/en/sram/mountain/products/udh",
+    "https://support.sram.com/hc/en-us/articles/13819615060891-Is-the-SRAM-Universal-Derailleur-Hanger-UDH-compatible-with-my-bike",
+    "https://www.sram.com/globalassets/document-hierarchy/user-manuals/sram-mtb/drivetrain/udh-universal-derailleur-hanger-user-manual.pdf"
+   ]
+  },
+  "E-SHIMANO-DM-RD0004": {
+   "title": "Shimano Dealer’s Manual DM-RD0004 (RD-M9000 / RD-M8000)",
+   "url": "https://si.shimano.com/en/pdfs/dm/RD0004/DM-RD0004-09-ENG.pdf",
+   "kind": "oem_manual_search_summary",
+   "how_read": "Localizado por búsqueda; el resumen indica Bracket Axle Unit (Y5RT98010) para tipo normal y B-Axle 2 (Y5RT26000) para tipo direct mount, y que el direct mount sólo va en cuadros compatibles. No leído línea a línea: confirmar antes de bloquear.",
+   "states": [
+    "Un cambio direct mount se convierte a patilla estándar con la Bracket Axle Unit; el tipo direct mount sólo monta en cuadros direct-mount."
+   ]
+  },
+  "E-SHIMANO-DM-FD0003": {
+   "title": "Shimano Dealer’s Manual DM-FD0003 (desviadores: abrazadera, braze-on, E-type, direct mount)",
+   "url": "https://si.shimano.com/en/pdfs/dm/FD0003/DM-FD0003-06-ENG.pdf",
+   "kind": "oem_manual_cited_not_read",
+   "how_read": "URL localizada por búsqueda; no leído. Se cita sólo para que Codex confirme la distinción E-type vs direct mount y los suplementos de abrazadera.",
+   "states": []
+  },
+  "E-SRAM-DOT": {
+   "title": "SRAM — User Manual MTB Disc Brakes and Shifters / service manuals Guide, G2, Road AXS",
+   "url": "https://www.sram.com/globalassets/document-hierarchy/user-manuals/sram-mtb/brakes-and-shifters/user-manual-mtb-disc-brakes-and-shifters.pdf",
+   "kind": "oem_manual_search_summary",
+   "how_read": "Búsqueda sobre sram.com; el resumen cita «SRAM brakes use only DOT 5.1 or 4 brake fluid» y que la contaminación con DOT 5 o aceite mineral exige servicio.",
+   "states": [
+    "DOT 4 y DOT 5.1 son intercambiables en frenos SRAM DOT; DOT 5 (silicona) y aceite mineral contaminan."
+   ]
+  },
+  "E-RTAD05": {
+   "title": "Shimano SM-RTAD05 — Disc Brake Rotor Adapter (6-bolt rotor to CENTER LOCK hub), página oficial",
+   "url": "https://bike.shimano.com/en-US/product/component/deore-m610/SM-RTAD05.html",
+   "kind": "oem_page",
+   "how_read": "Página de producto localizada por búsqueda; resumen de la herramienta.",
+   "states": [
+    "Adaptador OEM para instalar un rotor de 6 pernos en una maza Center Lock; 160–203 mm; no para rotores de dos piezas con araña de aluminio."
+   ]
+  },
+  "S27": {
+   "title": "Park Tool — kits de purga DOT / mineral (fuente registrada S27)",
+   "url": "https://www.parktool.com/en-us/product/hydraulic-brake-bleed-kit-dot-bkd-1-2",
+   "kind": "reference_general",
+   "how_read": "ya registrada en el contrato",
+   "states": [
+    "Nunca cruzar DOT y mineral; kits separados."
+   ]
+  },
+  "S12": {
+   "title": "Park Tool — Brake Pad Replacement: Rim Brakes (2017-01-24)",
+   "url": "https://www.parktool.com/en-us/blog/repair-help/brake-pad-replacement-rim-brakes",
+   "kind": "reference_general",
+   "how_read": "ya registrada en el contrato",
+   "states": [
+    "Roscas de rueda libre ISO 1.37\"x24, francesa 34.7x1, italiana 35x24; contratuerca de piñón fijo 1.29\"x24 izquierda."
+   ]
+  },
+  "S09": {
+   "title": "Park Tool — Bottom Bracket Standards and Terminology (rev. 2019-09-18)",
+   "url": "https://www.parktool.com/en-us/blog/repair-help/bottom-bracket-standards-and-terminology",
+   "kind": "reference_general",
+   "how_read": "ya registrada",
+   "states": [
+    "PF46 agrupa PF30 / BB386EVO / OSBB por diámetro 46; el ancho (61–86) no lo determina la opción legacy."
+   ]
+  },
+  "DESIGN-REVIEW-2026-09-06": {
+   "title": "Hipótesis de diseño de la revisión; no es una instrucción del usuario",
+   "url": null,
+   "kind": "design_hypothesis",
+   "how_read": "mensaje",
+   "states": [
+    "Un desajuste de velocidades declaradas es caution, no incompatibilidad física universal.",
+    "Nunca fijar 24\" nominal → 507.",
+    "Las fixtures de compilación no demuestran un caso real."
+   ]
+  }
+ },
+ "patches": [
+  {
+   "id": "MC-01-shar0",
+   "priority": "P1",
+   "area": "transmisión/freehub",
+   "op": "replace",
+   "path": "/shared_vocabularies/rear_drive_interface/values/2",
+   "before": "Shimano HG spline L (ROAD 12v; ROAD 11v; MTB 11v con espaciador 1,85 mm; ROAD 10v con 1,85 + 1,0 mm)",
+   "after": "Shimano HG spline L (ROAD 11/12v; otras coronas sólo según filas C-731)",
+   "source": [
+    "E-C731"
+   ],
+   "evidence_grade": "oem_table",
+   "scope": "Etiqueta del token HG spline L en las cuatro rutas; los datos de productos no cambian (ninguno tiene aún este token).",
+   "counter_case": "Con la etiqueta vieja, cualquier cassette ROAD 10v se leía como «1,85 + 1,0» en HG L; C-731 *2 limita el 1,0 mm a CS-7900/7800/6700/6600/5700/5600, y CS-HG800/HG700/RS400 (ROAD 11) necesitan 1,85 en L (*3) y van sin espaciador en M (*4).",
+   "note": null
+  },
+  {
+   "id": "MC-01-defi1",
+   "priority": "P1",
+   "area": "transmisión/freehub",
+   "op": "replace",
+   "path": "/definitions/rear_drive_interface/vocabulary/2/value",
+   "before": "Shimano HG spline L (ROAD 12v; ROAD 11v; MTB 11v con espaciador 1,85 mm; ROAD 10v con 1,85 + 1,0 mm)",
+   "after": "Shimano HG spline L (ROAD 11/12v; otras coronas sólo según filas C-731)",
+   "source": [
+    "E-C731"
+   ],
+   "evidence_grade": "oem_table",
+   "scope": "Etiqueta del token HG spline L en las cuatro rutas; los datos de productos no cambian (ninguno tiene aún este token).",
+   "counter_case": "Con la etiqueta vieja, cualquier cassette ROAD 10v se leía como «1,85 + 1,0» en HG L; C-731 *2 limita el 1,0 mm a CS-7900/7800/6700/6600/5700/5600, y CS-HG800/HG700/RS400 (ROAD 11) necesitan 1,85 en L (*3) y van sin espaciador en M (*4).",
+   "note": null
+  },
+  {
+   "id": "MC-01-defi2",
+   "priority": "P1",
+   "area": "transmisión/freehub",
+   "op": "replace",
+   "path": "/definitions/freehub_bodies_accepted/vocabulary/2/value",
+   "before": "Shimano HG spline L (ROAD 12v; ROAD 11v; MTB 11v con espaciador 1,85 mm; ROAD 10v con 1,85 + 1,0 mm)",
+   "after": "Shimano HG spline L (ROAD 11/12v; otras coronas sólo según filas C-731)",
+   "source": [
+    "E-C731"
+   ],
+   "evidence_grade": "oem_table",
+   "scope": "Etiqueta del token HG spline L en las cuatro rutas; los datos de productos no cambian (ninguno tiene aún este token).",
+   "counter_case": "Con la etiqueta vieja, cualquier cassette ROAD 10v se leía como «1,85 + 1,0» en HG L; C-731 *2 limita el 1,0 mm a CS-7900/7800/6700/6600/5700/5600, y CS-HG800/HG700/RS400 (ROAD 11) necesitan 1,85 en L (*3) y van sin espaciador en M (*4).",
+   "note": null
+  },
+  {
+   "id": "MC-01-defi3",
+   "priority": "P1",
+   "area": "transmisión/freehub",
+   "op": "replace",
+   "path": "/definitions/target_rear_drive_interface/vocabulary/2/value",
+   "before": "Shimano HG spline L (ROAD 12v; ROAD 11v; MTB 11v con espaciador 1,85 mm; ROAD 10v con 1,85 + 1,0 mm)",
+   "after": "Shimano HG spline L (ROAD 11/12v; otras coronas sólo según filas C-731)",
+   "source": [
+    "E-C731"
+   ],
+   "evidence_grade": "oem_table",
+   "scope": "Etiqueta del token HG spline L en las cuatro rutas; los datos de productos no cambian (ninguno tiene aún este token).",
+   "counter_case": "Con la etiqueta vieja, cualquier cassette ROAD 10v se leía como «1,85 + 1,0» en HG L; C-731 *2 limita el 1,0 mm a CS-7900/7800/6700/6600/5700/5600, y CS-HG800/HG700/RS400 (ROAD 11) necesitan 1,85 en L (*3) y van sin espaciador en M (*4).",
+   "note": null
+  },
+  {
+   "id": "MC-02-4",
+   "priority": "P1",
+   "area": "transmisión/freehub",
+   "op": "replace",
+   "path": "/shared_vocabularies/rear_drive_interface/values/1",
+   "before": "Shimano HG spline M (10/9/8/7v MTB; MTB 11v; LINKGLIDE 9/10/11v; 7v sólo CS-HG210-7 / CS-HG400-7)",
+   "after": "Shimano HG spline M (8/9/10v y MTB 11v; ROAD 11v y 7v sólo según filas C-731; LINKGLIDE según C-649)",
+   "source": [
+    "E-C731"
+   ],
+   "evidence_grade": "oem_table",
+   "scope": "Etiqueta del token HG spline M en las cuatro rutas.",
+   "counter_case": "La etiqueta vieja omitía ROAD 11v (HG800/HG700/RS400 van en M sin espaciador, *4) y hacía parecer universal el 7v, que sólo admite CS-HG210-7 / CS-HG400-7 (*6).",
+   "note": null
+  },
+  {
+   "id": "MC-02-5",
+   "priority": "P1",
+   "area": "transmisión/freehub",
+   "op": "replace",
+   "path": "/definitions/rear_drive_interface/vocabulary/1/value",
+   "before": "Shimano HG spline M (10/9/8/7v MTB; MTB 11v; LINKGLIDE 9/10/11v; 7v sólo CS-HG210-7 / CS-HG400-7)",
+   "after": "Shimano HG spline M (8/9/10v y MTB 11v; ROAD 11v y 7v sólo según filas C-731; LINKGLIDE según C-649)",
+   "source": [
+    "E-C731"
+   ],
+   "evidence_grade": "oem_table",
+   "scope": "Etiqueta del token HG spline M en las cuatro rutas.",
+   "counter_case": "La etiqueta vieja omitía ROAD 11v (HG800/HG700/RS400 van en M sin espaciador, *4) y hacía parecer universal el 7v, que sólo admite CS-HG210-7 / CS-HG400-7 (*6).",
+   "note": null
+  },
+  {
+   "id": "MC-02-6",
+   "priority": "P1",
+   "area": "transmisión/freehub",
+   "op": "replace",
+   "path": "/definitions/freehub_bodies_accepted/vocabulary/1/value",
+   "before": "Shimano HG spline M (10/9/8/7v MTB; MTB 11v; LINKGLIDE 9/10/11v; 7v sólo CS-HG210-7 / CS-HG400-7)",
+   "after": "Shimano HG spline M (8/9/10v y MTB 11v; ROAD 11v y 7v sólo según filas C-731; LINKGLIDE según C-649)",
+   "source": [
+    "E-C731"
+   ],
+   "evidence_grade": "oem_table",
+   "scope": "Etiqueta del token HG spline M en las cuatro rutas.",
+   "counter_case": "La etiqueta vieja omitía ROAD 11v (HG800/HG700/RS400 van en M sin espaciador, *4) y hacía parecer universal el 7v, que sólo admite CS-HG210-7 / CS-HG400-7 (*6).",
+   "note": null
+  },
+  {
+   "id": "MC-02-7",
+   "priority": "P1",
+   "area": "transmisión/freehub",
+   "op": "replace",
+   "path": "/definitions/target_rear_drive_interface/vocabulary/1/value",
+   "before": "Shimano HG spline M (10/9/8/7v MTB; MTB 11v; LINKGLIDE 9/10/11v; 7v sólo CS-HG210-7 / CS-HG400-7)",
+   "after": "Shimano HG spline M (8/9/10v y MTB 11v; ROAD 11v y 7v sólo según filas C-731; LINKGLIDE según C-649)",
+   "source": [
+    "E-C731"
+   ],
+   "evidence_grade": "oem_table",
+   "scope": "Etiqueta del token HG spline M en las cuatro rutas.",
+   "counter_case": "La etiqueta vieja omitía ROAD 11v (HG800/HG700/RS400 van en M sin espaciador, *4) y hacía parecer universal el 7v, que sólo admite CS-HG210-7 / CS-HG400-7 (*6).",
+   "note": null
+  },
+  {
+   "id": "MC-03",
+   "priority": "P1",
+   "area": "transmisión/freehub",
+   "op": "add",
+   "path": "/shared_vocabularies/rear_drive_interface/c731_rows",
+   "before": null,
+   "after": [
+    {
+     "body": "Shimano MICRO SPLINE (MTB 12v)",
+     "cassette": "MTB 12v HYPERGLIDE+",
+     "spacers_mm": [],
+     "models_only": [],
+     "outcome": "compatible_on_this_interface_only",
+     "footnote": null
+    },
+    {
+     "body": "Shimano HG spline L2 (ROAD 12v dedicado)",
+     "cassette": "ROAD 12v",
+     "spacers_mm": [],
+     "models_only": [],
+     "outcome": "compatible_on_this_interface_only",
+     "footnote": null
+    },
+    {
+     "body": "Shimano HG spline L (ROAD 11/12v; otras coronas sólo según filas C-731)",
+     "cassette": "ROAD 12v",
+     "spacers_mm": [],
+     "models_only": [],
+     "outcome": "compatible_on_this_interface_only",
+     "footnote": null
+    },
+    {
+     "body": "Shimano HG spline L (ROAD 11/12v; otras coronas sólo según filas C-731)",
+     "cassette": "ROAD 11v",
+     "spacers_mm": [],
+     "models_only": [],
+     "outcome": "compatible_on_this_interface_only",
+     "footnote": null
+    },
+    {
+     "body": "Shimano HG spline L (ROAD 11/12v; otras coronas sólo según filas C-731)",
+     "cassette": "ROAD 11v (CS-HG800 / CS-HG700 / CS-RS400)",
+     "spacers_mm": [
+      "1.85"
+     ],
+     "models_only": [
+      "CS-HG800",
+      "CS-HG700",
+      "CS-RS400"
+     ],
+     "outcome": "caution_with_spacer",
+     "footnote": "*3"
+    },
+    {
+     "body": "Shimano HG spline L (ROAD 11/12v; otras coronas sólo según filas C-731)",
+     "cassette": "MTB 11v",
+     "spacers_mm": [
+      "1.85"
+     ],
+     "models_only": [],
+     "outcome": "caution_with_spacer",
+     "footnote": "*1"
+    },
+    {
+     "body": "Shimano HG spline L (ROAD 11/12v; otras coronas sólo según filas C-731)",
+     "cassette": "10/9/8v",
+     "spacers_mm": [
+      "1.85"
+     ],
+     "models_only": [],
+     "outcome": "caution_with_spacer",
+     "footnote": "*2 (1,85 para el grupo)"
+    },
+    {
+     "body": "Shimano HG spline L (ROAD 11/12v; otras coronas sólo según filas C-731)",
+     "cassette": "ROAD 10v (seis modelos)",
+     "spacers_mm": [
+      "1.85",
+      "1.0"
+     ],
+     "models_only": [
+      "CS-7900",
+      "CS-7800",
+      "CS-6700",
+      "CS-6600",
+      "CS-5700",
+      "CS-5600"
+     ],
+     "outcome": "caution_with_spacer",
+     "footnote": "*2"
+    },
+    {
+     "body": "Shimano HG spline M (8/9/10v y MTB 11v; ROAD 11v y 7v sólo según filas C-731; LINKGLIDE según C-649)",
+     "cassette": "ROAD 11v (CS-HG800 / CS-HG700 / CS-RS400)",
+     "spacers_mm": [],
+     "models_only": [
+      "CS-HG800",
+      "CS-HG700",
+      "CS-RS400"
+     ],
+     "outcome": "compatible_on_this_interface_only",
+     "footnote": "*4"
+    },
+    {
+     "body": "Shimano HG spline M (8/9/10v y MTB 11v; ROAD 11v y 7v sólo según filas C-731; LINKGLIDE según C-649)",
+     "cassette": "MTB 11v",
+     "spacers_mm": [],
+     "models_only": [],
+     "outcome": "compatible_on_this_interface_only",
+     "footnote": null
+    },
+    {
+     "body": "Shimano HG spline M (8/9/10v y MTB 11v; ROAD 11v y 7v sólo según filas C-731; LINKGLIDE según C-649)",
+     "cassette": "10/9/8v",
+     "spacers_mm": [],
+     "models_only": [],
+     "outcome": "compatible_on_this_interface_only",
+     "footnote": null
+    },
+    {
+     "body": "Shimano HG spline M (8/9/10v y MTB 11v; ROAD 11v y 7v sólo según filas C-731; LINKGLIDE según C-649)",
+     "cassette": "ROAD 10v (seis modelos)",
+     "spacers_mm": [
+      "1.0"
+     ],
+     "models_only": [
+      "CS-7900",
+      "CS-7800",
+      "CS-6700",
+      "CS-6600",
+      "CS-5700",
+      "CS-5600"
+     ],
+     "outcome": "caution_with_spacer",
+     "footnote": "*5"
+    },
+    {
+     "body": "Shimano HG spline M (8/9/10v y MTB 11v; ROAD 11v y 7v sólo según filas C-731; LINKGLIDE según C-649)",
+     "cassette": "7v (sólo dos modelos)",
+     "spacers_mm": [],
+     "models_only": [
+      "CS-HG210-7",
+      "CS-HG400-7"
+     ],
+     "outcome": "compatible_on_this_interface_only",
+     "footnote": "*6"
+    },
+    {
+     "body": "Shimano HG spline S (7v)",
+     "cassette": "7v (sólo tres modelos)",
+     "spacers_mm": [],
+     "models_only": [
+      "CS-HG41-7",
+      "CS-HG200-7",
+      "CS-HG20-7"
+     ],
+     "outcome": "compatible_on_this_interface_only",
+     "footnote": "*7"
+    }
+   ],
+   "source": [
+    "E-C731"
+   ],
+   "evidence_grade": "oem_table",
+   "scope": "Filas literales de C-731 como estructura tipada; alimentan freehub_bodies_accepted y no se deducen. Sólo Shimano; LINKGLIDE por C-649 (S15); SRAM por S16.",
+   "counter_case": "Sin estas filas, «HG L + ROAD 10v» produce el mismo veredicto para CS-4600 (no listado) que para CS-5700 (listado): C-731 sólo nombra seis modelos.",
+   "note": null
+  },
+  {
+   "id": "MC-04-9",
+   "priority": "P1",
+   "area": "transmisión/freehub",
+   "op": "add",
+   "path": "/row_schemas/freehub_bodies_accepted/columns/-",
+   "before": null,
+   "after": {
+    "key": "models_only",
+    "type": "text_list",
+    "optional": true,
+    "semantics": "si no está vacío, la fila sólo aplica cuando identity.model del cassette está en la lista"
+   },
+   "source": [
+    "E-C731"
+   ],
+   "evidence_grade": "oem_table",
+   "scope": "Columna nueva en el esquema de filas (dos rutas espejo).",
+   "counter_case": "Una fila «HG L, 1.85 + 1.0» sin models_only aprueba con espaciadores un cassette que C-731 no nombra.",
+   "note": null
+  },
+  {
+   "id": "MC-04-10",
+   "priority": "P1",
+   "area": "transmisión/freehub",
+   "op": "add",
+   "path": "/definitions/freehub_bodies_accepted/row_schema/columns/-",
+   "before": null,
+   "after": {
+    "key": "models_only",
+    "type": "text_list",
+    "optional": true,
+    "semantics": "si no está vacío, la fila sólo aplica cuando identity.model del cassette está en la lista"
+   },
+   "source": [
+    "E-C731"
+   ],
+   "evidence_grade": "oem_table",
+   "scope": "Columna nueva en el esquema de filas (dos rutas espejo).",
+   "counter_case": "Una fila «HG L, 1.85 + 1.0» sin models_only aprueba con espaciadores un cassette que C-731 no nombra.",
+   "note": null
+  },
+  {
+   "id": "MC-05-cassette",
+   "priority": "P1",
+   "area": "transmisión/freehub",
+   "op": "add",
+   "path": "/templates/8/interfaces/0/rules/0/row_semantics",
+   "before": null,
+   "after": {
+    "spacer_mm_gt_0": "caution_with_spacer (nunca compatible a secas)",
+    "models_only_non_empty": "la fila sólo aplica si identity.model está en la lista; si el modelo es desconocido → unknown",
+    "no_row_matches": "incompatible sólo si las filas provienen de C-731/C-649/S16 (source_url en esas páginas); si son filas del vendedor → unknown"
+   },
+   "source": [
+    "E-C731",
+    "DESIGN-REVIEW-2026-09-06"
+   ],
+   "evidence_grade": "oem_table",
+   "scope": "Regla /templates/8/interfaces/0/rules/0.",
+   "counter_case": "Un cassette sin modelo conocido y una fila con models_only no debe salir «compatible» ni «incompatible».",
+   "note": null
+  },
+  {
+   "id": "MC-05-hub",
+   "priority": "P1",
+   "area": "transmisión/freehub",
+   "op": "add",
+   "path": "/templates/25/interfaces/1/rules/0/row_semantics",
+   "before": null,
+   "after": {
+    "spacer_mm_gt_0": "caution_with_spacer (nunca compatible a secas)",
+    "models_only_non_empty": "la fila sólo aplica si identity.model está en la lista; si el modelo es desconocido → unknown",
+    "no_row_matches": "incompatible sólo si las filas provienen de C-731/C-649/S16 (source_url en esas páginas); si son filas del vendedor → unknown"
+   },
+   "source": [
+    "E-C731",
+    "DESIGN-REVIEW-2026-09-06"
+   ],
+   "evidence_grade": "oem_table",
+   "scope": "Regla /templates/25/interfaces/1/rules/0.",
+   "counter_case": "Un cassette sin modelo conocido y una fila con models_only no debe salir «compatible» ni «incompatible».",
+   "note": null
+  },
+  {
+   "id": "MC-05-wheel",
+   "priority": "P1",
+   "area": "transmisión/freehub",
+   "op": "add",
+   "path": "/templates/103/interfaces/2/rules/0/row_semantics",
+   "before": null,
+   "after": {
+    "spacer_mm_gt_0": "caution_with_spacer (nunca compatible a secas)",
+    "models_only_non_empty": "la fila sólo aplica si identity.model está en la lista; si el modelo es desconocido → unknown",
+    "no_row_matches": "incompatible sólo si las filas provienen de C-731/C-649/S16 (source_url en esas páginas); si son filas del vendedor → unknown"
+   },
+   "source": [
+    "E-C731",
+    "DESIGN-REVIEW-2026-09-06"
+   ],
+   "evidence_grade": "oem_table",
+   "scope": "Regla /templates/103/interfaces/2/rules/0.",
+   "counter_case": "Un cassette sin modelo conocido y una fila con models_only no debe salir «compatible» ni «incompatible».",
+   "note": null
+  },
+  {
+   "id": "MC-06",
+   "priority": "P0",
+   "area": "transmisión/cambio",
+   "op": "replace",
+   "path": "/templates/26/interfaces/2/rules/0",
+   "before": {
+    "id": "rd_to_hanger.rear_derailleur_mount_type",
+    "assertion_kind": "mechanical_claim",
+    "product_field": "rear_derailleur_mount_type",
+    "counterpart": "bike_profile",
+    "counterpart_field": "rear_derailleur_hanger_interface",
+    "operator": "eq",
+    "value_type": "token",
+    "projection_pending": null,
+    "outcome_on_mismatch": "incompatible",
+    "outcome_on_unknown": "unknown",
+    "unverified_values": [],
+    "unverified_values_outcome": "unknown (evidencia pendiente, nunca bloquea)",
+    "never_alone_approves_assembly": true,
+    "source_ids": [
+     "S17"
+    ],
+    "sources_verified": true,
+    "verified": true,
+    "unverified_reason": null
+   },
+   "after": {
+    "id": "rd_to_hanger.rear_derailleur_mount_type",
+    "assertion_kind": "mechanical_claim",
+    "product_field": "rear_derailleur_mount_type",
+    "counterpart": "bike_profile",
+    "counterpart_field": "rear_derailleur_hanger_interface",
+    "operator": "in",
+    "value_type": "token",
+    "projection_pending": null,
+    "outcome_on_mismatch": "incompatible",
+    "outcome_on_unknown": "unknown",
+    "unverified_values": [],
+    "unverified_values_outcome": "unknown (evidencia pendiente, nunca bloquea)",
+    "never_alone_approves_assembly": true,
+    "source_ids": [
+     "S17"
+    ],
+    "sources_verified": true,
+    "verified": false,
+    "unverified_reason": null,
+    "projection": {
+     "Pata/postiza estándar": {
+      "Patilla estándar (M10x1)": "compatible_on_this_interface_only",
+      "UDH": "compatible_on_this_interface_only (vía patilla UDH AC-DRHG-UDH-A1)"
+     },
+     "Direct mount": {
+      "Direct mount (Shimano)": "compatible_on_this_interface_only",
+      "Patilla estándar (M10x1)": "caution (requiere Bracket Axle Unit del modelo)",
+      "UDH": "caution (patilla UDH + Bracket Axle Unit)"
+     },
+     "Con uña / claw": {
+      "Sin patilla (single speed)": "caution (fijación en el eje; depende de la puntera)"
+     },
+     "Full Mount (T-Type, sin patilla)": {
+      "UDH": "compatible_on_this_interface_only"
+     },
+     "Extensor de pata": "reclasificar a derailleur_hanger_extender"
+    },
+    "outcome_note": "incompatible sólo cuando el par (producto, cuadro) no aparece en projection; los pares marcados caution no bloquean",
+    "evidence_grade": "oem_page + oem_manual_search_summary"
+   },
+   "source": [
+    "E-SRAM-UDH",
+    "E-SHIMANO-DM-RD0004"
+   ],
+   "evidence_grade": "oem_page",
+   "scope": "Regla RD ↔ interfaz de patilla del cuadro. Antes comparaba `eq` dos vocabularios sin ningún token común salvo «Con uña / claw» y «Desconocido»: toda combinación real salía incompatible.",
+   "counter_case": "Cambio «Pata/postiza estándar» en cuadro «UDH» = compatible (UDH acepta todos los cambios MTB comerciales); cambio «Direct mount» Shimano en patilla estándar = monta con Bracket Axle Unit.",
+   "note": null
+  },
+  {
+   "id": "MC-07",
+   "priority": "P0",
+   "area": "transmisión/cambio",
+   "op": "add",
+   "path": "/definitions/rear_derailleur_mount_type/vocabulary/-",
+   "before": null,
+   "after": {
+    "value": "Full Mount (T-Type, sin patilla)",
+    "verified": true,
+    "source_ids": [
+     "E-SRAM-UDH"
+    ],
+    "existing": false
+   },
+   "source": [
+    "E-SRAM-UDH"
+   ],
+   "evidence_grade": "oem_page",
+   "scope": "Adición de opción a la definición existente (sólo agregar; ninguna opción se renombra).",
+   "counter_case": "Un cambio Eagle Transmission no tiene token hoy y quedaría como «Otro», con lo que MC-06 no puede decir que exige cuadro UDH.",
+   "note": null
+  },
+  {
+   "id": "MC-07b",
+   "priority": "P0",
+   "area": "transmisión/cambio",
+   "op": "add",
+   "path": "/definitions/rear_derailleur_mount_type/option_additions_proposed",
+   "before": null,
+   "after": [
+    "Full Mount (T-Type, sin patilla)"
+   ],
+   "source": [
+    "E-SRAM-UDH"
+   ],
+   "evidence_grade": "oem_page",
+   "scope": "Registro de la adición propuesta.",
+   "counter_case": "—",
+   "note": null
+  },
+  {
+   "id": "MC-08",
+   "priority": "P0",
+   "area": "transmisión/desviador",
+   "op": "replace",
+   "path": "/templates/23/interfaces/0/rules/0",
+   "before": {
+    "id": "fd_to_frame.front_derailleur_mount_type",
+    "assertion_kind": "mechanical_claim",
+    "product_field": "front_derailleur_mount_type",
+    "counterpart": "bike_profile",
+    "counterpart_field": "front_derailleur_mount",
+    "operator": "eq",
+    "value_type": "token",
+    "projection_pending": null,
+    "outcome_on_mismatch": "incompatible",
+    "outcome_on_unknown": "unknown",
+    "unverified_values": [],
+    "unverified_values_outcome": "unknown (evidencia pendiente, nunca bloquea)",
+    "never_alone_approves_assembly": true,
+    "source_ids": [
+     "S17"
+    ],
+    "sources_verified": true,
+    "verified": true,
+    "unverified_reason": null
+   },
+   "after": {
+    "id": "fd_to_frame.front_derailleur_mount_type",
+    "assertion_kind": "mechanical_claim",
+    "product_field": "front_derailleur_mount_type",
+    "counterpart": "bike_profile",
+    "counterpart_field": "front_derailleur_mount",
+    "operator": "in",
+    "value_type": "token",
+    "projection_pending": null,
+    "outcome_on_mismatch": "incompatible",
+    "outcome_on_unknown": "unknown",
+    "unverified_values": [],
+    "unverified_values_outcome": "unknown (evidencia pendiente, nunca bloquea)",
+    "never_alone_approves_assembly": true,
+    "source_ids": [
+     "S17"
+    ],
+    "sources_verified": true,
+    "verified": false,
+    "unverified_reason": null,
+    "projection": {
+     "Abrazadera": {
+      "Abrazadera": "compatible_on_this_interface_only",
+      "Braze-on": "caution (abrazadera sobre pestaña: sólo con adaptador)",
+      "Sin montaje (1x)": "incompatible"
+     },
+     "Braze-on": {
+      "Braze-on": "compatible_on_this_interface_only",
+      "Abrazadera": "caution (requiere adaptador braze-on→abrazadera)",
+      "Sin montaje (1x)": "incompatible"
+     },
+     "E-type": {
+      "E-type / direct mount": "caution (el token del cuadro no distingue placa E-type de pestaña direct mount)",
+      "Sin montaje (1x)": "incompatible"
+     },
+     "Direct mount": {
+      "E-type / direct mount": "caution (idem)",
+      "Sin montaje (1x)": "incompatible"
+     }
+    },
+    "outcome_note": "incompatible sólo para «Sin montaje (1x)» y pares ausentes de projection",
+    "evidence_grade": "structural + oem_manual_cited_not_read"
+   },
+   "source": [
+    "E-SHIMANO-DM-FD0003"
+   ],
+   "evidence_grade": "oem_manual_cited_not_read",
+   "scope": "Regla FD ↔ montaje del cuadro; antes `eq` con sólo 3 tokens comunes: «E-type» y «Direct mount» nunca calzaban con «E-type / direct mount».",
+   "counter_case": "Desviador E-type en cuadro «E-type / direct mount» salía incompatible siendo el caso previsto por el token.",
+   "note": null
+  },
+  {
+   "id": "MC-09",
+   "priority": "P0",
+   "area": "transmisión/desviador",
+   "op": "replace",
+   "path": "/templates/23/interfaces/0/rules/1",
+   "before": {
+    "id": "fd_to_frame.front_derailleur_clamp_mm",
+    "assertion_kind": "mechanical_claim",
+    "product_field": "front_derailleur_clamp_mm",
+    "counterpart": "bike_profile",
+    "counterpart_field": "seat_tube_outer_for_fd_mm",
+    "operator": "eq",
+    "value_type": "token",
+    "projection_pending": null,
+    "outcome_on_mismatch": "incompatible",
+    "outcome_on_unknown": "unknown",
+    "unverified_values": [],
+    "unverified_values_outcome": "unknown (evidencia pendiente, nunca bloquea)",
+    "never_alone_approves_assembly": true,
+    "source_ids": [
+     "S17"
+    ],
+    "sources_verified": true,
+    "verified": true,
+    "unverified_reason": null
+   },
+   "after": {
+    "id": "fd_to_frame.front_derailleur_clamp_mm",
+    "assertion_kind": "mechanical_claim",
+    "product_field": "front_derailleur_clamp_mm",
+    "counterpart": "bike_profile",
+    "counterpart_field": "seat_tube_outer_for_fd_mm",
+    "operator": "eq",
+    "value_type": "decimal",
+    "projection_pending": null,
+    "outcome_on_mismatch": "caution",
+    "outcome_on_unknown": "unknown",
+    "unverified_values": [],
+    "unverified_values_outcome": "unknown (evidencia pendiente, nunca bloquea)",
+    "never_alone_approves_assembly": true,
+    "source_ids": [
+     "S17"
+    ],
+    "sources_verified": true,
+    "verified": false,
+    "unverified_reason": null,
+    "projection": {
+     "28.6": "28.6",
+     "31.8": "31.8",
+     "34.9": "34.9",
+     "Otro": "unknown",
+     "No aplica": "skip (sólo abrazadera)"
+    },
+    "outcome_note": "los desviadores de abrazadera 34,9 traen suplementos a 31,8/28,6; un diámetro distinto es caution, no bloqueo",
+    "applies_when": [
+     [
+      {
+       "field": "front_derailleur_mount_type",
+       "operator": "eq",
+       "value_type": "token",
+       "value": "Abrazadera"
+      }
+     ]
+    ],
+    "evidence_grade": "structural + oem_manual_cited_not_read"
+   },
+   "source": [
+    "E-SHIMANO-DM-FD0003"
+   ],
+   "evidence_grade": "oem_manual_cited_not_read",
+   "scope": "Regla token («28.6») vs decimal del cuadro: nunca podía evaluarse.",
+   "counter_case": "Abrazadera «31.8» en tubo 31,8 mm salía unknown por tipos, y «34.9» en tubo 31,8 saldría incompatible sin considerar el suplemento incluido.",
+   "note": null
+  },
+  {
+   "id": "MC-10",
+   "priority": "P0",
+   "area": "transmisión/rueda libre",
+   "op": "replace",
+   "path": "/templates/22/interfaces/0/rules/0",
+   "before": {
+    "id": "freewheel_to_hub_thread.freewheel_thread_standard",
+    "assertion_kind": "mechanical_claim",
+    "product_field": "freewheel_thread_standard",
+    "counterpart": "template:hub",
+    "counterpart_field": "rear_drive_interface",
+    "operator": "eq",
+    "value_type": "token",
+    "projection_pending": null,
+    "outcome_on_mismatch": "incompatible",
+    "outcome_on_unknown": "unknown",
+    "unverified_values": [],
+    "unverified_values_outcome": "unknown (evidencia pendiente, nunca bloquea)",
+    "never_alone_approves_assembly": true,
+    "source_ids": [
+     "S08",
+     "S19"
+    ],
+    "sources_verified": true,
+    "verified": true,
+    "unverified_reason": null
+   },
+   "after": {
+    "id": "freewheel_to_hub_thread.freewheel_thread_standard",
+    "assertion_kind": "mechanical_claim",
+    "product_field": "freewheel_thread_standard",
+    "counterpart": "template:hub",
+    "counterpart_field": "rear_drive_interface",
+    "operator": "in",
+    "value_type": "token",
+    "projection_pending": null,
+    "outcome_on_mismatch": "incompatible",
+    "outcome_on_unknown": "unknown",
+    "unverified_values": [],
+    "unverified_values_outcome": "unknown (evidencia pendiente, nunca bloquea)",
+    "never_alone_approves_assembly": true,
+    "source_ids": [
+     "S08",
+     "S19"
+    ],
+    "sources_verified": true,
+    "verified": false,
+    "unverified_reason": null,
+    "projection": {
+     "1.37\" x 24 tpi (ISO)": {
+      "Rueda libre roscada 1.37\" x 24 tpi": "compatible_on_this_interface_only"
+     },
+     "M30 x 1 (BMX)": {
+      "Rueda libre roscada M30 x 1 (BMX)": "compatible_on_this_interface_only"
+     },
+     "Francés 34.7 x 1": "unknown (sin token de maza)",
+     "Italiano 35 x 24": "unknown (sin token de maza; S12 no autoriza mezclar)"
+    },
+    "outcome_note": "incompatible sólo entre tokens conocidos distintos (ISO vs M30); francesa/italiana → unknown",
+    "evidence_grade": "reference_general"
+   },
+   "source": [
+    "S12"
+   ],
+   "evidence_grade": "reference_general",
+   "scope": "Regla rueda libre ↔ rosca de maza; antes `eq` entre «1.37\" x 24 tpi (ISO)» y «Rueda libre roscada 1.37\" x 24 tpi»: nunca igual.",
+   "counter_case": "Rueda libre ISO en maza roscada ISO salía incompatible.",
+   "note": null
+  },
+  {
+   "id": "MC-11",
+   "priority": "P0",
+   "area": "transmisión/piñón fijo",
+   "op": "replace",
+   "path": "/templates/21/interfaces/0/rules/0",
+   "before": {
+    "id": "cog_to_hub_thread.cog_thread_standard",
+    "assertion_kind": "mechanical_claim",
+    "product_field": "cog_thread_standard",
+    "counterpart": "template:hub",
+    "counterpart_field": "rear_drive_interface",
+    "operator": "eq",
+    "value_type": "token",
+    "projection_pending": null,
+    "outcome_on_mismatch": "incompatible",
+    "outcome_on_unknown": "unknown",
+    "unverified_values": [],
+    "unverified_values_outcome": "unknown (evidencia pendiente, nunca bloquea)",
+    "never_alone_approves_assembly": true,
+    "source_ids": [
+     "S19"
+    ],
+    "sources_verified": true,
+    "verified": true,
+    "unverified_reason": null
+   },
+   "after": {
+    "id": "cog_to_hub_thread.cog_thread_standard",
+    "assertion_kind": "mechanical_claim",
+    "product_field": "cog_thread_standard",
+    "counterpart": "template:hub",
+    "counterpart_field": "rear_drive_interface",
+    "operator": "in",
+    "value_type": "token",
+    "projection_pending": null,
+    "outcome_on_mismatch": "incompatible",
+    "outcome_on_unknown": "unknown",
+    "unverified_values": [],
+    "unverified_values_outcome": "unknown (evidencia pendiente, nunca bloquea)",
+    "never_alone_approves_assembly": true,
+    "source_ids": [
+     "S19"
+    ],
+    "sources_verified": true,
+    "verified": false,
+    "unverified_reason": null,
+    "projection": {
+     "1.37\" x 24 tpi (ISO) + contratuerca 1.29\" x 24 izquierda": {
+      "Piñón fijo roscado 1.37\" x 24 tpi + contratuerca 1.29\" x 24 tpi izquierda": "compatible_on_this_interface_only",
+      "Rueda libre roscada 1.37\" x 24 tpi": "caution (misma rosca de piñón; la maza no tiene rosca izquierda para la contratuerca)"
+     }
+    },
+    "evidence_grade": "reference_general"
+   },
+   "source": [
+    "S12"
+   ],
+   "evidence_grade": "reference_general",
+   "scope": "Idem para piñón fijo.",
+   "counter_case": "Piñón fijo ISO en maza de pista salía incompatible.",
+   "note": null
+  },
+  {
+   "id": "MC-12",
+   "priority": "P0",
+   "area": "frenos/llanta",
+   "op": "replace",
+   "path": "/templates/28/interfaces/0/rules/0",
+   "before": {
+    "id": "rim_brake_to_frame.rim_brake_frame_mount",
+    "assertion_kind": "mechanical_claim",
+    "product_field": "rim_brake_frame_mount",
+    "counterpart": "bike_profile",
+    "counterpart_field": "brake_mount_front|brake_mount_rear",
+    "operator": "eq",
+    "value_type": "token",
+    "projection_pending": null,
+    "outcome_on_mismatch": "incompatible",
+    "outcome_on_unknown": "unknown",
+    "unverified_values": [],
+    "unverified_values_outcome": "unknown (evidencia pendiente, nunca bloquea)",
+    "never_alone_approves_assembly": true,
+    "source_ids": [
+     "S12"
+    ],
+    "sources_verified": true,
+    "verified": true,
+    "unverified_reason": null
+   },
+   "after": {
+    "id": "rim_brake_to_frame.rim_brake_frame_mount",
+    "assertion_kind": "mechanical_claim",
+    "product_field": "rim_brake_frame_mount",
+    "counterpart": "bike_profile",
+    "counterpart_field": "brake_mount_front|brake_mount_rear",
+    "operator": "in",
+    "value_type": "token",
+    "projection_pending": null,
+    "outcome_on_mismatch": "incompatible",
+    "outcome_on_unknown": "unknown",
+    "unverified_values": [],
+    "unverified_values_outcome": "unknown (evidencia pendiente, nunca bloquea)",
+    "never_alone_approves_assembly": true,
+    "source_ids": [
+     "S12"
+    ],
+    "sources_verified": true,
+    "verified": false,
+    "unverified_reason": null,
+    "projection": {
+     "Postes cantilever (2 pivotes)": {
+      "Postes cantilever / V-brake": "compatible_on_this_interface_only"
+     },
+     "Perno central": {
+      "Perno central": "compatible_on_this_interface_only"
+     },
+     "Postes U-brake": "unknown (el cuadro no tiene token de postes U-brake)",
+     "Direct mount": "unknown (el cuadro no tiene token de freno de llanta direct mount)"
+    },
+    "outcome_note": "incompatible entre tokens conocidos distintos (p. ej. cantilever en cuadro sólo disco); unknown donde falta token",
+    "evidence_grade": "structural"
+   },
+   "source": [
+    "DESIGN-REVIEW-2026-09-06"
+   ],
+   "evidence_grade": "structural",
+   "scope": "Regla freno de llanta ↔ montaje del cuadro; antes `eq` con tokens distintos («Postes cantilever (2 pivotes)» vs «Postes cantilever / V-brake»).",
+   "counter_case": "V-brake en cuadro con postes cantilever/V salía incompatible.",
+   "note": null
+  },
+  {
+   "id": "MC-13-22",
+   "priority": "P0",
+   "area": "frenos/tiro",
+   "op": "replace",
+   "path": "/definitions/cable_pull_required/vocabulary/0/value",
+   "before": "Tiro largo",
+   "after": "Tiro largo (V-brake / disco mecánico tiro largo)",
+   "source": [
+    "DESIGN-REVIEW-2026-09-06"
+   ],
+   "evidence_grade": "structural",
+   "scope": "Normalización de etiqueta omitida en la compilación: la maneta usa el token largo y el freno el corto.",
+   "counter_case": "Maneta «Tiro largo (V-brake…)» con V-brake «Tiro largo» = incompatible por texto distinto.",
+   "note": null
+  },
+  {
+   "id": "MC-13-23",
+   "priority": "P0",
+   "area": "frenos/tiro",
+   "op": "replace",
+   "path": "/definitions/lever_pull_required/vocabulary/0/value",
+   "before": "Tiro largo",
+   "after": "Tiro largo (V-brake / disco mecánico tiro largo)",
+   "source": [
+    "DESIGN-REVIEW-2026-09-06"
+   ],
+   "evidence_grade": "structural",
+   "scope": "Normalización de etiqueta omitida en la compilación: la maneta usa el token largo y el freno el corto.",
+   "counter_case": "Maneta «Tiro largo (V-brake…)» con V-brake «Tiro largo» = incompatible por texto distinto.",
+   "note": null
+  },
+  {
+   "id": "MC-13-fixtures-192-product-lever_pull_required",
+   "priority": "P0",
+   "area": "frenos/tiro",
+   "op": "replace",
+   "path": "/fixtures/192/product/lever_pull_required",
+   "before": "Tiro largo",
+   "after": "Tiro largo (V-brake / disco mecánico tiro largo)",
+   "source": [
+    "DESIGN-REVIEW-2026-09-06"
+   ],
+   "evidence_grade": "structural",
+   "scope": "Misma normalización de token en fixture sintética.",
+   "counter_case": "La fixture no acredita una combinación física.",
+   "note": null
+  },
+  {
+   "id": "MC-13-fixtures-192-counterpart-lever_cable_pull",
+   "priority": "P0",
+   "area": "frenos/tiro",
+   "op": "replace",
+   "path": "/fixtures/192/counterpart/lever_cable_pull",
+   "before": "Tiro largo",
+   "after": "Tiro largo (V-brake / disco mecánico tiro largo)",
+   "source": [
+    "DESIGN-REVIEW-2026-09-06"
+   ],
+   "evidence_grade": "structural",
+   "scope": "Misma normalización de token en fixture sintética.",
+   "counter_case": "La fixture no acredita una combinación física.",
+   "note": null
+  },
+  {
+   "id": "MC-13-fixtures-193-product-lever_pull_required",
+   "priority": "P0",
+   "area": "frenos/tiro",
+   "op": "replace",
+   "path": "/fixtures/193/product/lever_pull_required",
+   "before": "Tiro largo",
+   "after": "Tiro largo (V-brake / disco mecánico tiro largo)",
+   "source": [
+    "DESIGN-REVIEW-2026-09-06"
+   ],
+   "evidence_grade": "structural",
+   "scope": "Misma normalización de token en fixture sintética.",
+   "counter_case": "La fixture no acredita una combinación física.",
+   "note": null
+  },
+  {
+   "id": "MC-13-fixtures-194-product-lever_pull_required",
+   "priority": "P0",
+   "area": "frenos/tiro",
+   "op": "replace",
+   "path": "/fixtures/194/product/lever_pull_required",
+   "before": "Tiro largo",
+   "after": "Tiro largo (V-brake / disco mecánico tiro largo)",
+   "source": [
+    "DESIGN-REVIEW-2026-09-06"
+   ],
+   "evidence_grade": "structural",
+   "scope": "Misma normalización de token en fixture sintética.",
+   "counter_case": "La fixture no acredita una combinación física.",
+   "note": null
+  },
+  {
+   "id": "MC-14-brake_caliper",
+   "priority": "P0",
+   "area": "frenos/accionamiento",
+   "op": "replace",
+   "path": "/templates/5/interfaces/2/rules/0",
+   "before": {
+    "id": "caliper_to_lever_actuation.brake_actuation",
+    "assertion_kind": "mechanical_claim",
+    "product_field": "brake_actuation",
+    "counterpart": "template:brake_lever",
+    "counterpart_field": "brake_actuation",
+    "operator": "eq",
+    "value_type": "token",
+    "projection_pending": null,
+    "outcome_on_mismatch": "incompatible",
+    "outcome_on_unknown": "unknown",
+    "unverified_values": [],
+    "unverified_values_outcome": "unknown (evidencia pendiente, nunca bloquea)",
+    "never_alone_approves_assembly": true,
+    "source_ids": [
+     "S27"
+    ],
+    "sources_verified": true,
+    "verified": true,
+    "unverified_reason": null
+   },
+   "after": {
+    "id": "caliper_to_lever_actuation.brake_actuation",
+    "assertion_kind": "mechanical_claim",
+    "product_field": "brake_actuation",
+    "counterpart": "template:brake_lever",
+    "counterpart_field": "brake_actuation",
+    "operator": "in",
+    "value_type": "token",
+    "projection_pending": null,
+    "outcome_on_mismatch": "incompatible",
+    "outcome_on_unknown": "unknown",
+    "unverified_values": [],
+    "unverified_values_outcome": "unknown (evidencia pendiente, nunca bloquea)",
+    "never_alone_approves_assembly": true,
+    "source_ids": [
+     "S27"
+    ],
+    "sources_verified": true,
+    "verified": false,
+    "unverified_reason": null,
+    "projection": {
+     "Híbrido (cable a hidráulico)": {
+      "Mecánico (cable)": "compatible_on_this_interface_only (el cáliper híbrido se acciona por cable; el tiro se juzga en cable_pull_required)"
+     },
+     "Hidráulico": {
+      "Hidráulico": "compatible_on_this_interface_only"
+     },
+     "Mecánico (cable)": {
+      "Mecánico (cable)": "compatible_on_this_interface_only"
+     }
+    },
+    "evidence_grade": "structural"
+   },
+   "source": [
+    "DESIGN-REVIEW-2026-09-06"
+   ],
+   "evidence_grade": "structural",
+   "scope": "Regla accionamiento maneta ↔ cáliper; «Híbrido» no existe en la maneta, así que todo cáliper híbrido salía incompatible.",
+   "counter_case": "Cáliper híbrido (cable→hidráulico) con maneta mecánica es el uso previsto por el propio token.",
+   "note": null
+  },
+  {
+   "id": "MC-14-brake_lever",
+   "priority": "P0",
+   "area": "frenos/accionamiento",
+   "op": "replace",
+   "path": "/templates/6/interfaces/0/rules/0",
+   "before": {
+    "id": "lever_to_brake.brake_actuation",
+    "assertion_kind": "mechanical_claim",
+    "product_field": "brake_actuation",
+    "counterpart": "template:rim_brake|brake_caliper",
+    "counterpart_field": "brake_actuation",
+    "operator": "eq",
+    "value_type": "token",
+    "projection_pending": null,
+    "outcome_on_mismatch": "incompatible",
+    "outcome_on_unknown": "unknown",
+    "unverified_values": [],
+    "unverified_values_outcome": "unknown (evidencia pendiente, nunca bloquea)",
+    "never_alone_approves_assembly": true,
+    "source_ids": [
+     "S12",
+     "S27"
+    ],
+    "sources_verified": true,
+    "verified": true,
+    "unverified_reason": null
+   },
+   "after": {
+    "id": "lever_to_brake.brake_actuation",
+    "assertion_kind": "mechanical_claim",
+    "product_field": "brake_actuation",
+    "counterpart": "template:rim_brake|brake_caliper",
+    "counterpart_field": "brake_actuation",
+    "operator": "in",
+    "value_type": "token",
+    "projection_pending": null,
+    "outcome_on_mismatch": "incompatible",
+    "outcome_on_unknown": "unknown",
+    "unverified_values": [],
+    "unverified_values_outcome": "unknown (evidencia pendiente, nunca bloquea)",
+    "never_alone_approves_assembly": true,
+    "source_ids": [
+     "S12",
+     "S27"
+    ],
+    "sources_verified": true,
+    "verified": false,
+    "unverified_reason": null,
+    "projection": {
+     "Híbrido (cable a hidráulico)": {
+      "Mecánico (cable)": "compatible_on_this_interface_only (el cáliper híbrido se acciona por cable; el tiro se juzga en cable_pull_required)"
+     },
+     "Hidráulico": {
+      "Hidráulico": "compatible_on_this_interface_only"
+     },
+     "Mecánico (cable)": {
+      "Mecánico (cable)": "compatible_on_this_interface_only"
+     }
+    },
+    "evidence_grade": "structural"
+   },
+   "source": [
+    "DESIGN-REVIEW-2026-09-06"
+   ],
+   "evidence_grade": "structural",
+   "scope": "Regla accionamiento maneta ↔ cáliper; «Híbrido» no existe en la maneta, así que todo cáliper híbrido salía incompatible.",
+   "counter_case": "Cáliper híbrido (cable→hidráulico) con maneta mecánica es el uso previsto por el propio token.",
+   "note": null
+  },
+  {
+   "id": "MC-15a",
+   "priority": "P0",
+   "area": "frenos/accionamiento",
+   "op": "replace",
+   "path": "/templates/5/fields/14/allowed_when",
+   "before": {
+    "kind": "when",
+    "rows": [
+     [
+      {
+       "field": "brake_actuation",
+       "operator": "eq",
+       "value_type": "token",
+       "value": "Mecánico (cable)"
+      }
+     ]
+    ]
+   },
+   "after": {
+    "kind": "when",
+    "rows": [
+     [
+      {
+       "field": "brake_actuation",
+       "operator": "in",
+       "value_type": "token",
+       "value": [
+        "Mecánico (cable)",
+        "Híbrido (cable a hidráulico)"
+       ]
+      }
+     ]
+    ]
+   },
+   "source": [
+    "DESIGN-REVIEW-2026-09-06"
+   ],
+   "evidence_grade": "structural",
+   "scope": "cable_pull_required también aplica al cáliper híbrido.",
+   "counter_case": "Un cáliper híbrido no podía declarar su tiro y la regla de tiro quedaba unknown.",
+   "note": null
+  },
+  {
+   "id": "MC-15b",
+   "priority": "P0",
+   "area": "frenos/accionamiento",
+   "op": "replace",
+   "path": "/templates/5/fields/14/required_when",
+   "before": {
+    "kind": "when",
+    "rows": [
+     [
+      {
+       "field": "brake_actuation",
+       "operator": "eq",
+       "value_type": "token",
+       "value": "Mecánico (cable)"
+      }
+     ]
+    ]
+   },
+   "after": {
+    "kind": "when",
+    "rows": [
+     [
+      {
+       "field": "brake_actuation",
+       "operator": "in",
+       "value_type": "token",
+       "value": [
+        "Mecánico (cable)",
+        "Híbrido (cable a hidráulico)"
+       ]
+      }
+     ]
+    ]
+   },
+   "source": [
+    "DESIGN-REVIEW-2026-09-06"
+   ],
+   "evidence_grade": "structural",
+   "scope": "Idem requerido.",
+   "counter_case": "—",
+   "note": null
+  },
+  {
+   "id": "MC-16",
+   "priority": "P0",
+   "area": "transmisión/extensor",
+   "op": "remove",
+   "path": "/definitions/hanger_interface/vocabulary/5",
+   "before": {
+    "value": "Direct mount",
+    "verified": true,
+    "source_ids": []
+   },
+   "after": null,
+   "source": [
+    "DESIGN-REVIEW-2026-09-06"
+   ],
+   "evidence_grade": "structural",
+   "scope": "Token duplicado «Direct mount» junto a «Direct mount (Shimano)» en la unión de vocabularios; el extensor debe usar el segundo.",
+   "counter_case": "Extensor «Direct mount» vs cuadro «Direct mount (Shimano)» = incompatible por texto.",
+   "note": null
+  },
+  {
+   "id": "MC-17a",
+   "priority": "P0",
+   "area": "frenos/cables",
+   "op": "replace",
+   "path": "/templates/60/interfaces/0/rules/0",
+   "before": {
+    "id": "cable_to_lever.cable_purpose",
+    "assertion_kind": "mechanical_claim",
+    "product_field": "cable_purpose",
+    "counterpart": "template:brake_lever|shifter",
+    "counterpart_field": "template",
+    "operator": "eq",
+    "value_type": "token",
+    "projection_pending": null,
+    "outcome_on_mismatch": "incompatible",
+    "outcome_on_unknown": "unknown",
+    "unverified_values": [],
+    "unverified_values_outcome": "unknown (evidencia pendiente, nunca bloquea)",
+    "never_alone_approves_assembly": true,
+    "source_ids": [
+     "S21"
+    ],
+    "sources_verified": true,
+    "verified": true,
+    "unverified_reason": null
+   },
+   "after": {
+    "id": "cable_to_lever.cable_purpose",
+    "assertion_kind": "mechanical_claim",
+    "product_field": "cable_purpose",
+    "counterpart": "template:brake_lever|shifter",
+    "counterpart_field": "template_key",
+    "operator": "eq",
+    "value_type": "token",
+    "projection_pending": null,
+    "outcome_on_mismatch": "incompatible",
+    "outcome_on_unknown": "unknown",
+    "unverified_values": [],
+    "unverified_values_outcome": "unknown (evidencia pendiente, nunca bloquea)",
+    "never_alone_approves_assembly": true,
+    "source_ids": [
+     "S21"
+    ],
+    "sources_verified": true,
+    "verified": false,
+    "unverified_reason": null,
+    "projection": {
+     "Freno": {
+      "brake_lever": "compatible_on_this_interface_only"
+     },
+     "Cambio": {
+      "shifter": "compatible_on_this_interface_only"
+     }
+    },
+    "evidence_grade": "structural"
+   },
+   "source": [
+    "DESIGN-REVIEW-2026-09-06"
+   ],
+   "evidence_grade": "structural",
+   "scope": "La contraparte «template» no era un campo; ahora es la plantilla de la contraparte.",
+   "counter_case": "Cable de freno contra mando de cambio no podía evaluarse.",
+   "note": null
+  },
+  {
+   "id": "MC-17b",
+   "priority": "P0",
+   "area": "frenos/cables",
+   "op": "replace",
+   "path": "/templates/60/interfaces/0/rules/1",
+   "before": {
+    "id": "cable_to_lever.cable_head",
+    "assertion_kind": "mechanical_claim",
+    "product_field": "cable_head",
+    "counterpart": "template:brake_lever|shifter",
+    "counterpart_field": "cable_head_required",
+    "operator": "eq",
+    "value_type": "token",
+    "projection_pending": null,
+    "outcome_on_mismatch": "incompatible",
+    "outcome_on_unknown": "unknown",
+    "unverified_values": [],
+    "unverified_values_outcome": "unknown (evidencia pendiente, nunca bloquea)",
+    "never_alone_approves_assembly": true,
+    "source_ids": [
+     "S21"
+    ],
+    "sources_verified": true,
+    "verified": true,
+    "unverified_reason": null
+   },
+   "after": {
+    "id": "cable_to_lever.cable_head",
+    "assertion_kind": "mechanical_claim",
+    "product_field": "cable_head",
+    "counterpart": "template:brake_lever|shifter",
+    "counterpart_field": null,
+    "operator": "eq",
+    "value_type": "token",
+    "projection_pending": "brake_lever no declara la cabeza de cable que acepta (barril MTB / pera ruta); hace falta un campo `lever_cable_head_required` antes de evaluar",
+    "outcome_on_mismatch": "unknown",
+    "outcome_on_unknown": "unknown",
+    "unverified_values": [],
+    "unverified_values_outcome": "unknown (evidencia pendiente, nunca bloquea)",
+    "never_alone_approves_assembly": true,
+    "source_ids": [
+     "S21"
+    ],
+    "sources_verified": true,
+    "verified": false,
+    "unverified_reason": null,
+    "evidence_grade": "structural"
+   },
+   "source": [
+    "DESIGN-REVIEW-2026-09-06"
+   ],
+   "evidence_grade": "structural",
+   "scope": "`cable_head_required` no existe en brake_lever ni shifter.",
+   "counter_case": "—",
+   "note": null
+  },
+  {
+   "id": "MC-18-brake_caliper",
+   "priority": "P1",
+   "area": "frenos/fluido",
+   "op": "replace",
+   "path": "/templates/5/interfaces/2/rules/1",
+   "before": {
+    "id": "caliper_to_lever_actuation.fluid_type",
+    "assertion_kind": "mechanical_claim",
+    "product_field": "fluid_type",
+    "counterpart": "template:brake_lever",
+    "counterpart_field": "fluid_type",
+    "operator": "eq",
+    "value_type": "token",
+    "projection_pending": null,
+    "outcome_on_mismatch": "incompatible",
+    "outcome_on_unknown": "unknown",
+    "unverified_values": [],
+    "unverified_values_outcome": "unknown (evidencia pendiente, nunca bloquea)",
+    "never_alone_approves_assembly": true,
+    "source_ids": [
+     "S27"
+    ],
+    "sources_verified": true,
+    "verified": true,
+    "unverified_reason": null
+   },
+   "after": {
+    "id": "caliper_to_lever_actuation.fluid_type",
+    "assertion_kind": "mechanical_claim",
+    "product_field": "fluid_type",
+    "counterpart": "template:brake_lever",
+    "counterpart_field": "fluid_type",
+    "operator": "in",
+    "value_type": "token",
+    "projection_pending": null,
+    "outcome_on_mismatch": "incompatible",
+    "outcome_on_unknown": "unknown",
+    "unverified_values": [],
+    "unverified_values_outcome": "unknown (evidencia pendiente, nunca bloquea)",
+    "never_alone_approves_assembly": true,
+    "source_ids": [
+     "S27"
+    ],
+    "sources_verified": true,
+    "verified": false,
+    "unverified_reason": null,
+    "equivalence_classes": [
+     [
+      "DOT 4",
+      "DOT 5.1"
+     ],
+     [
+      "Aceite Mineral"
+     ]
+    ],
+    "projection": {
+     "DOT 4↔DOT 5.1": "caution (misma clase DOT; SRAM admite ambas; otras marcas DOT: confirmar en su manual)",
+     "DOT↔Aceite Mineral": "incompatible",
+     "Aceite Mineral↔Aceite Mineral": "caution (aceites minerales de marcas distintas no están declarados intercambiables)"
+    },
+    "outcome_note": "incompatible sólo entre clases (DOT vs mineral)",
+    "evidence_grade": "oem_manual_search_summary + reference_general"
+   },
+   "source": [
+    "E-SRAM-DOT",
+    "S27"
+   ],
+   "evidence_grade": "oem_manual_search_summary",
+   "scope": "Regla de fluido; antes `eq` literal: DOT 4 vs DOT 5.1 salía incompatible.",
+   "counter_case": "Maneta SRAM (DOT 5.1) con cáliper SRAM marcado DOT 4: el manual admite «DOT 5.1 or 4».",
+   "note": null
+  },
+  {
+   "id": "MC-18-brake_lever",
+   "priority": "P1",
+   "area": "frenos/fluido",
+   "op": "replace",
+   "path": "/templates/6/interfaces/0/rules/2",
+   "before": {
+    "id": "lever_to_brake.fluid_type",
+    "assertion_kind": "mechanical_claim",
+    "product_field": "fluid_type",
+    "counterpart": "template:rim_brake|brake_caliper",
+    "counterpart_field": "fluid_type",
+    "operator": "eq",
+    "value_type": "token",
+    "projection_pending": null,
+    "outcome_on_mismatch": "incompatible",
+    "outcome_on_unknown": "unknown",
+    "unverified_values": [],
+    "unverified_values_outcome": "unknown (evidencia pendiente, nunca bloquea)",
+    "never_alone_approves_assembly": true,
+    "source_ids": [
+     "S12",
+     "S27"
+    ],
+    "sources_verified": true,
+    "verified": true,
+    "unverified_reason": null
+   },
+   "after": {
+    "id": "lever_to_brake.fluid_type",
+    "assertion_kind": "mechanical_claim",
+    "product_field": "fluid_type",
+    "counterpart": "template:rim_brake|brake_caliper",
+    "counterpart_field": "fluid_type",
+    "operator": "in",
+    "value_type": "token",
+    "projection_pending": null,
+    "outcome_on_mismatch": "incompatible",
+    "outcome_on_unknown": "unknown",
+    "unverified_values": [],
+    "unverified_values_outcome": "unknown (evidencia pendiente, nunca bloquea)",
+    "never_alone_approves_assembly": true,
+    "source_ids": [
+     "S12",
+     "S27"
+    ],
+    "sources_verified": true,
+    "verified": false,
+    "unverified_reason": null,
+    "equivalence_classes": [
+     [
+      "DOT 4",
+      "DOT 5.1"
+     ],
+     [
+      "Aceite Mineral"
+     ]
+    ],
+    "projection": {
+     "DOT 4↔DOT 5.1": "caution (misma clase DOT; SRAM admite ambas; otras marcas DOT: confirmar en su manual)",
+     "DOT↔Aceite Mineral": "incompatible",
+     "Aceite Mineral↔Aceite Mineral": "caution (aceites minerales de marcas distintas no están declarados intercambiables)"
+    },
+    "outcome_note": "incompatible sólo entre clases (DOT vs mineral)",
+    "evidence_grade": "oem_manual_search_summary + reference_general"
+   },
+   "source": [
+    "E-SRAM-DOT",
+    "S27"
+   ],
+   "evidence_grade": "oem_manual_search_summary",
+   "scope": "Regla de fluido; antes `eq` literal: DOT 4 vs DOT 5.1 salía incompatible.",
+   "counter_case": "Maneta SRAM (DOT 5.1) con cáliper SRAM marcado DOT 4: el manual admite «DOT 5.1 or 4».",
+   "note": null
+  },
+  {
+   "id": "MC-18-brake_fluid",
+   "priority": "P1",
+   "area": "frenos/fluido",
+   "op": "replace",
+   "path": "/templates/65/interfaces/0/rules/0",
+   "before": {
+    "id": "fluid_to_brake.fluid_type",
+    "assertion_kind": "mechanical_claim",
+    "product_field": "fluid_type",
+    "counterpart": "template:brake_caliper|brake_lever|hydraulic_disc_brake",
+    "counterpart_field": "fluid_type",
+    "operator": "eq",
+    "value_type": "token",
+    "projection_pending": null,
+    "outcome_on_mismatch": "incompatible",
+    "outcome_on_unknown": "unknown",
+    "unverified_values": [],
+    "unverified_values_outcome": "unknown (evidencia pendiente, nunca bloquea)",
+    "never_alone_approves_assembly": true,
+    "source_ids": [
+     "S27"
+    ],
+    "sources_verified": true,
+    "verified": true,
+    "unverified_reason": null
+   },
+   "after": {
+    "id": "fluid_to_brake.fluid_type",
+    "assertion_kind": "mechanical_claim",
+    "product_field": "fluid_type",
+    "counterpart": "template:brake_caliper|brake_lever|hydraulic_disc_brake",
+    "counterpart_field": "fluid_type",
+    "operator": "in",
+    "value_type": "token",
+    "projection_pending": null,
+    "outcome_on_mismatch": "incompatible",
+    "outcome_on_unknown": "unknown",
+    "unverified_values": [],
+    "unverified_values_outcome": "unknown (evidencia pendiente, nunca bloquea)",
+    "never_alone_approves_assembly": true,
+    "source_ids": [
+     "S27"
+    ],
+    "sources_verified": true,
+    "verified": false,
+    "unverified_reason": null,
+    "equivalence_classes": [
+     [
+      "DOT 4",
+      "DOT 5.1"
+     ],
+     [
+      "Aceite Mineral"
+     ]
+    ],
+    "projection": {
+     "DOT 4↔DOT 5.1": "caution (misma clase DOT; SRAM admite ambas; otras marcas DOT: confirmar en su manual)",
+     "DOT↔Aceite Mineral": "incompatible",
+     "Aceite Mineral↔Aceite Mineral": "caution (aceites minerales de marcas distintas no están declarados intercambiables)"
+    },
+    "outcome_note": "incompatible sólo entre clases (DOT vs mineral)",
+    "evidence_grade": "oem_manual_search_summary + reference_general"
+   },
+   "source": [
+    "E-SRAM-DOT",
+    "S27"
+   ],
+   "evidence_grade": "oem_manual_search_summary",
+   "scope": "Regla de fluido; antes `eq` literal: DOT 4 vs DOT 5.1 salía incompatible.",
+   "counter_case": "Maneta SRAM (DOT 5.1) con cáliper SRAM marcado DOT 4: el manual admite «DOT 5.1 or 4».",
+   "note": null
+  },
+  {
+   "id": "MC-19-hub",
+   "priority": "P1",
+   "area": "frenos/rotor",
+   "op": "replace",
+   "path": "/templates/25/interfaces/2/rules/0",
+   "before": {
+    "id": "hub_to_rotor.rotor_mount_type",
+    "assertion_kind": "mechanical_claim",
+    "product_field": "rotor_mount_type",
+    "counterpart": "template:rotor",
+    "counterpart_field": "rotor_mount_type",
+    "operator": "eq",
+    "value_type": "token",
+    "projection_pending": null,
+    "outcome_on_mismatch": "incompatible",
+    "outcome_on_unknown": "unknown",
+    "unverified_values": [],
+    "unverified_values_outcome": "unknown (evidencia pendiente, nunca bloquea)",
+    "never_alone_approves_assembly": true,
+    "source_ids": [
+     "S20"
+    ],
+    "sources_verified": true,
+    "verified": true,
+    "unverified_reason": null
+   },
+   "after": {
+    "id": "hub_to_rotor.rotor_mount_type",
+    "assertion_kind": "mechanical_claim",
+    "product_field": "rotor_mount_type",
+    "counterpart": "template:rotor",
+    "counterpart_field": "rotor_mount_type",
+    "operator": "in",
+    "value_type": "token",
+    "projection_pending": null,
+    "outcome_on_mismatch": "incompatible",
+    "outcome_on_unknown": "unknown",
+    "unverified_values": [],
+    "unverified_values_outcome": "unknown (evidencia pendiente, nunca bloquea)",
+    "never_alone_approves_assembly": true,
+    "source_ids": [
+     "S20"
+    ],
+    "sources_verified": true,
+    "verified": false,
+    "unverified_reason": null,
+    "projection": {
+     "Centerlock (maza) + 6 pernos (rotor)": "caution (adaptador OEM SM-RTAD05, 160–203 mm, no rotores de dos piezas con araña de aluminio)",
+     "6 pernos (maza) + Centerlock (rotor)": "incompatible (sin adaptador OEM Shimano)",
+     "iguales": "compatible_on_this_interface_only"
+    },
+    "evidence_grade": "oem_page"
+   },
+   "source": [
+    "E-RTAD05"
+   ],
+   "evidence_grade": "oem_page",
+   "scope": "Regla montaje de rotor; antes todo desajuste era incompatible.",
+   "counter_case": "Rotor 6 pernos en maza Center Lock monta con SM-RTAD05.",
+   "note": null
+  },
+  {
+   "id": "MC-19-rotor",
+   "priority": "P1",
+   "area": "frenos/rotor",
+   "op": "replace",
+   "path": "/templates/30/interfaces/0/rules/0",
+   "before": {
+    "id": "rotor_to_hub.rotor_mount_type",
+    "assertion_kind": "mechanical_claim",
+    "product_field": "rotor_mount_type",
+    "counterpart": "template:hub",
+    "counterpart_field": "rotor_mount_type",
+    "operator": "eq",
+    "value_type": "token",
+    "projection_pending": null,
+    "outcome_on_mismatch": "incompatible",
+    "outcome_on_unknown": "unknown",
+    "unverified_values": [],
+    "unverified_values_outcome": "unknown (evidencia pendiente, nunca bloquea)",
+    "never_alone_approves_assembly": true,
+    "source_ids": [
+     "S20"
+    ],
+    "sources_verified": true,
+    "verified": true,
+    "unverified_reason": null
+   },
+   "after": {
+    "id": "rotor_to_hub.rotor_mount_type",
+    "assertion_kind": "mechanical_claim",
+    "product_field": "rotor_mount_type",
+    "counterpart": "template:hub",
+    "counterpart_field": "rotor_mount_type",
+    "operator": "in",
+    "value_type": "token",
+    "projection_pending": null,
+    "outcome_on_mismatch": "incompatible",
+    "outcome_on_unknown": "unknown",
+    "unverified_values": [],
+    "unverified_values_outcome": "unknown (evidencia pendiente, nunca bloquea)",
+    "never_alone_approves_assembly": true,
+    "source_ids": [
+     "S20"
+    ],
+    "sources_verified": true,
+    "verified": false,
+    "unverified_reason": null,
+    "projection": {
+     "Centerlock (maza) + 6 pernos (rotor)": "caution (adaptador OEM SM-RTAD05, 160–203 mm, no rotores de dos piezas con araña de aluminio)",
+     "6 pernos (maza) + Centerlock (rotor)": "incompatible (sin adaptador OEM Shimano)",
+     "iguales": "compatible_on_this_interface_only"
+    },
+    "evidence_grade": "oem_page"
+   },
+   "source": [
+    "E-RTAD05"
+   ],
+   "evidence_grade": "oem_page",
+   "scope": "Regla montaje de rotor; antes todo desajuste era incompatible.",
+   "counter_case": "Rotor 6 pernos en maza Center Lock monta con SM-RTAD05.",
+   "note": null
+  },
+  {
+   "id": "MC-19-wheel",
+   "priority": "P1",
+   "area": "frenos/rotor",
+   "op": "replace",
+   "path": "/templates/103/interfaces/3/rules/0",
+   "before": {
+    "id": "wheel_to_rotor.rotor_mount_type",
+    "assertion_kind": "mechanical_claim",
+    "product_field": "rotor_mount_type",
+    "counterpart": "template:rotor",
+    "counterpart_field": "rotor_mount_type",
+    "operator": "eq",
+    "value_type": "token",
+    "projection_pending": null,
+    "outcome_on_mismatch": "incompatible",
+    "outcome_on_unknown": "unknown",
+    "unverified_values": [],
+    "unverified_values_outcome": "unknown (evidencia pendiente, nunca bloquea)",
+    "never_alone_approves_assembly": true,
+    "source_ids": [
+     "S20"
+    ],
+    "sources_verified": true,
+    "verified": true,
+    "unverified_reason": null
+   },
+   "after": {
+    "id": "wheel_to_rotor.rotor_mount_type",
+    "assertion_kind": "mechanical_claim",
+    "product_field": "rotor_mount_type",
+    "counterpart": "template:rotor",
+    "counterpart_field": "rotor_mount_type",
+    "operator": "in",
+    "value_type": "token",
+    "projection_pending": null,
+    "outcome_on_mismatch": "incompatible",
+    "outcome_on_unknown": "unknown",
+    "unverified_values": [],
+    "unverified_values_outcome": "unknown (evidencia pendiente, nunca bloquea)",
+    "never_alone_approves_assembly": true,
+    "source_ids": [
+     "S20"
+    ],
+    "sources_verified": true,
+    "verified": false,
+    "unverified_reason": null,
+    "projection": {
+     "Centerlock (maza) + 6 pernos (rotor)": "caution (adaptador OEM SM-RTAD05, 160–203 mm, no rotores de dos piezas con araña de aluminio)",
+     "6 pernos (maza) + Centerlock (rotor)": "incompatible (sin adaptador OEM Shimano)",
+     "iguales": "compatible_on_this_interface_only"
+    },
+    "evidence_grade": "oem_page"
+   },
+   "source": [
+    "E-RTAD05"
+   ],
+   "evidence_grade": "oem_page",
+   "scope": "Regla montaje de rotor; antes todo desajuste era incompatible.",
+   "counter_case": "Rotor 6 pernos en maza Center Lock monta con SM-RTAD05.",
+   "note": null
+  },
+  {
+   "id": "MC-20-brake_caliper",
+   "priority": "P1",
+   "area": "frenos/pastillas",
+   "op": "replace",
+   "path": "/templates/5/interfaces/1/rules/0",
+   "before": {
+    "id": "caliper_to_pad.pad_shape_code",
+    "assertion_kind": "mechanical_claim",
+    "product_field": "pad_shape_code",
+    "counterpart": "template:brake_pad",
+    "counterpart_field": "pad_shape_code",
+    "operator": "eq",
+    "value_type": "token",
+    "projection_pending": null,
+    "outcome_on_mismatch": "incompatible",
+    "outcome_on_unknown": "unknown",
+    "unverified_values": [],
+    "unverified_values_outcome": "unknown (evidencia pendiente, nunca bloquea)",
+    "never_alone_approves_assembly": true,
+    "source_ids": [
+     "S20"
+    ],
+    "sources_verified": true,
+    "verified": true,
+    "unverified_reason": null
+   },
+   "after": {
+    "id": "caliper_to_pad.pad_shape_code",
+    "assertion_kind": "structural",
+    "product_field": "pad_shape_code",
+    "counterpart": "template:brake_pad",
+    "counterpart_field": "pad_shape_code",
+    "operator": "eq",
+    "value_type": "token",
+    "projection_pending": null,
+    "outcome_on_mismatch": "caution",
+    "outcome_on_unknown": "unknown",
+    "unverified_values": [],
+    "unverified_values_outcome": "unknown (evidencia pendiente, nunca bloquea)",
+    "never_alone_approves_assembly": true,
+    "source_ids": [
+     "S20"
+    ],
+    "sources_verified": true,
+    "verified": false,
+    "unverified_reason": null,
+    "outcome_note": "pad_shape_code es texto libre sin vocabulario: un texto distinto no demuestra forma distinta; la afirmación mecánica vive en compatible_caliper_models con exhaustive=true",
+    "evidence_grade": "structural"
+   },
+   "source": [
+    "DESIGN-REVIEW-2026-09-06"
+   ],
+   "evidence_grade": "structural",
+   "scope": "Texto libre comparado como token bloqueante.",
+   "counter_case": "«G03S» vs «G03S Resin» = incompatible por texto.",
+   "note": null
+  },
+  {
+   "id": "MC-20-brake_pad",
+   "priority": "P1",
+   "area": "frenos/pastillas",
+   "op": "replace",
+   "path": "/templates/7/interfaces/0/rules/0",
+   "before": {
+    "id": "disc_pad_to_caliper.pad_shape_code",
+    "assertion_kind": "mechanical_claim",
+    "product_field": "pad_shape_code",
+    "counterpart": "template:brake_caliper",
+    "counterpart_field": "pad_shape_code",
+    "operator": "row_match",
+    "value_type": "token",
+    "projection_pending": null,
+    "outcome_on_mismatch": "incompatible",
+    "outcome_on_unknown": "unknown",
+    "unverified_values": [],
+    "unverified_values_outcome": "unknown (evidencia pendiente, nunca bloquea)",
+    "never_alone_approves_assembly": true,
+    "source_ids": [
+     "S20"
+    ],
+    "sources_verified": true,
+    "verified": true,
+    "unverified_reason": null
+   },
+   "after": {
+    "id": "disc_pad_to_caliper.pad_shape_code",
+    "assertion_kind": "structural",
+    "product_field": "pad_shape_code",
+    "counterpart": "template:brake_caliper",
+    "counterpart_field": "pad_shape_code",
+    "operator": "row_match",
+    "value_type": "token",
+    "projection_pending": null,
+    "outcome_on_mismatch": "caution",
+    "outcome_on_unknown": "unknown",
+    "unverified_values": [],
+    "unverified_values_outcome": "unknown (evidencia pendiente, nunca bloquea)",
+    "never_alone_approves_assembly": true,
+    "source_ids": [
+     "S20"
+    ],
+    "sources_verified": true,
+    "verified": false,
+    "unverified_reason": null,
+    "outcome_note": "pad_shape_code es texto libre sin vocabulario: un texto distinto no demuestra forma distinta; la afirmación mecánica vive en compatible_caliper_models con exhaustive=true",
+    "evidence_grade": "structural"
+   },
+   "source": [
+    "DESIGN-REVIEW-2026-09-06"
+   ],
+   "evidence_grade": "structural",
+   "scope": "Texto libre comparado como token bloqueante.",
+   "counter_case": "«G03S» vs «G03S Resin» = incompatible por texto.",
+   "note": null
+  },
+  {
+   "id": "MC-21-compatible_caliper_models-43",
+   "priority": "P1",
+   "area": "listas de modelos",
+   "op": "add",
+   "path": "/row_schemas/compatible_caliper_models/columns/-",
+   "before": null,
+   "after": {
+    "key": "exhaustive",
+    "type": "boolean",
+    "semantics": "true sólo si la lista es la tabla OEM completa; false si es lista parcial (vendedor/tienda)"
+   },
+   "source": [
+    "DESIGN-REVIEW-2026-09-06"
+   ],
+   "evidence_grade": "structural",
+   "scope": "Columna nueva (dos rutas espejo por esquema).",
+   "counter_case": "Una pastilla aftermarket lista 3 cálipers; el cuarto no listado no es incompatible, es unknown.",
+   "note": null
+  },
+  {
+   "id": "MC-21-compatible_caliper_models-44",
+   "priority": "P1",
+   "area": "listas de modelos",
+   "op": "add",
+   "path": "/definitions/compatible_caliper_models/row_schema/columns/-",
+   "before": null,
+   "after": {
+    "key": "exhaustive",
+    "type": "boolean",
+    "semantics": "true sólo si la lista es la tabla OEM completa; false si es lista parcial (vendedor/tienda)"
+   },
+   "source": [
+    "DESIGN-REVIEW-2026-09-06"
+   ],
+   "evidence_grade": "structural",
+   "scope": "Columna nueva (dos rutas espejo por esquema).",
+   "counter_case": "Una pastilla aftermarket lista 3 cálipers; el cuarto no listado no es incompatible, es unknown.",
+   "note": null
+  },
+  {
+   "id": "MC-21-shifter_models_compatible-45",
+   "priority": "P1",
+   "area": "listas de modelos",
+   "op": "add",
+   "path": "/row_schemas/shifter_models_compatible/columns/-",
+   "before": null,
+   "after": {
+    "key": "exhaustive",
+    "type": "boolean",
+    "semantics": "true sólo si la lista es la tabla OEM completa; false si es lista parcial (vendedor/tienda)"
+   },
+   "source": [
+    "DESIGN-REVIEW-2026-09-06"
+   ],
+   "evidence_grade": "structural",
+   "scope": "Columna nueva (dos rutas espejo por esquema).",
+   "counter_case": "Una pastilla aftermarket lista 3 cálipers; el cuarto no listado no es incompatible, es unknown.",
+   "note": null
+  },
+  {
+   "id": "MC-21-shifter_models_compatible-46",
+   "priority": "P1",
+   "area": "listas de modelos",
+   "op": "add",
+   "path": "/definitions/shifter_models_compatible/row_schema/columns/-",
+   "before": null,
+   "after": {
+    "key": "exhaustive",
+    "type": "boolean",
+    "semantics": "true sólo si la lista es la tabla OEM completa; false si es lista parcial (vendedor/tienda)"
+   },
+   "source": [
+    "DESIGN-REVIEW-2026-09-06"
+   ],
+   "evidence_grade": "structural",
+   "scope": "Columna nueva (dos rutas espejo por esquema).",
+   "counter_case": "Una pastilla aftermarket lista 3 cálipers; el cuarto no listado no es incompatible, es unknown.",
+   "note": null
+  },
+  {
+   "id": "MC-21-derailleur_models_compatible-47",
+   "priority": "P1",
+   "area": "listas de modelos",
+   "op": "add",
+   "path": "/row_schemas/derailleur_models_compatible/columns/-",
+   "before": null,
+   "after": {
+    "key": "exhaustive",
+    "type": "boolean",
+    "semantics": "true sólo si la lista es la tabla OEM completa; false si es lista parcial (vendedor/tienda)"
+   },
+   "source": [
+    "DESIGN-REVIEW-2026-09-06"
+   ],
+   "evidence_grade": "structural",
+   "scope": "Columna nueva (dos rutas espejo por esquema).",
+   "counter_case": "Una pastilla aftermarket lista 3 cálipers; el cuarto no listado no es incompatible, es unknown.",
+   "note": null
+  },
+  {
+   "id": "MC-21-derailleur_models_compatible-48",
+   "priority": "P1",
+   "area": "listas de modelos",
+   "op": "add",
+   "path": "/definitions/derailleur_models_compatible/row_schema/columns/-",
+   "before": null,
+   "after": {
+    "key": "exhaustive",
+    "type": "boolean",
+    "semantics": "true sólo si la lista es la tabla OEM completa; false si es lista parcial (vendedor/tienda)"
+   },
+   "source": [
+    "DESIGN-REVIEW-2026-09-06"
+   ],
+   "evidence_grade": "structural",
+   "scope": "Columna nueva (dos rutas espejo por esquema).",
+   "counter_case": "Una pastilla aftermarket lista 3 cálipers; el cuarto no listado no es incompatible, es unknown.",
+   "note": null
+  },
+  {
+   "id": "MC-21-compatible_brake_models-49",
+   "priority": "P1",
+   "area": "listas de modelos",
+   "op": "add",
+   "path": "/row_schemas/compatible_brake_models/columns/-",
+   "before": null,
+   "after": {
+    "key": "exhaustive",
+    "type": "boolean",
+    "semantics": "true sólo si la lista es la tabla OEM completa; false si es lista parcial (vendedor/tienda)"
+   },
+   "source": [
+    "DESIGN-REVIEW-2026-09-06"
+   ],
+   "evidence_grade": "structural",
+   "scope": "Columna nueva (dos rutas espejo por esquema).",
+   "counter_case": "Una pastilla aftermarket lista 3 cálipers; el cuarto no listado no es incompatible, es unknown.",
+   "note": null
+  },
+  {
+   "id": "MC-21-compatible_brake_models-50",
+   "priority": "P1",
+   "area": "listas de modelos",
+   "op": "add",
+   "path": "/definitions/compatible_brake_models/row_schema/columns/-",
+   "before": null,
+   "after": {
+    "key": "exhaustive",
+    "type": "boolean",
+    "semantics": "true sólo si la lista es la tabla OEM completa; false si es lista parcial (vendedor/tienda)"
+   },
+   "source": [
+    "DESIGN-REVIEW-2026-09-06"
+   ],
+   "evidence_grade": "structural",
+   "scope": "Columna nueva (dos rutas espejo por esquema).",
+   "counter_case": "Una pastilla aftermarket lista 3 cálipers; el cuarto no listado no es incompatible, es unknown.",
+   "note": null
+  },
+  {
+   "id": "MC-21-compatible_derailleur_models-51",
+   "priority": "P1",
+   "area": "listas de modelos",
+   "op": "add",
+   "path": "/row_schemas/compatible_derailleur_models/columns/-",
+   "before": null,
+   "after": {
+    "key": "exhaustive",
+    "type": "boolean",
+    "semantics": "true sólo si la lista es la tabla OEM completa; false si es lista parcial (vendedor/tienda)"
+   },
+   "source": [
+    "DESIGN-REVIEW-2026-09-06"
+   ],
+   "evidence_grade": "structural",
+   "scope": "Columna nueva (dos rutas espejo por esquema).",
+   "counter_case": "Una pastilla aftermarket lista 3 cálipers; el cuarto no listado no es incompatible, es unknown.",
+   "note": null
+  },
+  {
+   "id": "MC-21-compatible_derailleur_models-52",
+   "priority": "P1",
+   "area": "listas de modelos",
+   "op": "add",
+   "path": "/definitions/compatible_derailleur_models/row_schema/columns/-",
+   "before": null,
+   "after": {
+    "key": "exhaustive",
+    "type": "boolean",
+    "semantics": "true sólo si la lista es la tabla OEM completa; false si es lista parcial (vendedor/tienda)"
+   },
+   "source": [
+    "DESIGN-REVIEW-2026-09-06"
+   ],
+   "evidence_grade": "structural",
+   "scope": "Columna nueva (dos rutas espejo por esquema).",
+   "counter_case": "Una pastilla aftermarket lista 3 cálipers; el cuarto no listado no es incompatible, es unknown.",
+   "note": null
+  },
+  {
+   "id": "MC-21-compatible_frames-53",
+   "priority": "P1",
+   "area": "listas de modelos",
+   "op": "add",
+   "path": "/row_schemas/compatible_frames/columns/-",
+   "before": null,
+   "after": {
+    "key": "exhaustive",
+    "type": "boolean",
+    "semantics": "true sólo si la lista es la tabla OEM completa; false si es lista parcial (vendedor/tienda)"
+   },
+   "source": [
+    "DESIGN-REVIEW-2026-09-06"
+   ],
+   "evidence_grade": "structural",
+   "scope": "Columna nueva (dos rutas espejo por esquema).",
+   "counter_case": "Una pastilla aftermarket lista 3 cálipers; el cuarto no listado no es incompatible, es unknown.",
+   "note": null
+  },
+  {
+   "id": "MC-21-compatible_frames-54",
+   "priority": "P1",
+   "area": "listas de modelos",
+   "op": "add",
+   "path": "/definitions/compatible_frames/row_schema/columns/-",
+   "before": null,
+   "after": {
+    "key": "exhaustive",
+    "type": "boolean",
+    "semantics": "true sólo si la lista es la tabla OEM completa; false si es lista parcial (vendedor/tienda)"
+   },
+   "source": [
+    "DESIGN-REVIEW-2026-09-06"
+   ],
+   "evidence_grade": "structural",
+   "scope": "Columna nueva (dos rutas espejo por esquema).",
+   "counter_case": "Una pastilla aftermarket lista 3 cálipers; el cuarto no listado no es incompatible, es unknown.",
+   "note": null
+  },
+  {
+   "id": "MC-22-rear_derailleur",
+   "priority": "P1",
+   "area": "listas de modelos",
+   "op": "replace",
+   "path": "/templates/26/interfaces/1/rules/0",
+   "before": {
+    "id": "rd_to_shifter.shifter_models_compatible",
+    "assertion_kind": "mechanical_claim",
+    "product_field": "shifter_models_compatible",
+    "counterpart": "template:shifter",
+    "counterpart_field": "identity.brand+identity.model",
+    "operator": "row_match",
+    "value_type": "rows",
+    "projection_pending": null,
+    "outcome_on_mismatch": "incompatible",
+    "outcome_on_unknown": "unknown",
+    "unverified_values": [],
+    "unverified_values_outcome": "unknown (evidencia pendiente, nunca bloquea)",
+    "never_alone_approves_assembly": true,
+    "source_ids": [
+     "S11"
+    ],
+    "sources_verified": true,
+    "verified": true,
+    "unverified_reason": null
+   },
+   "after": {
+    "id": "rd_to_shifter.shifter_models_compatible",
+    "assertion_kind": "mechanical_claim",
+    "product_field": "shifter_models_compatible",
+    "counterpart": "template:shifter",
+    "counterpart_field": "identity.brand+identity.model",
+    "operator": "row_match",
+    "value_type": "rows",
+    "projection_pending": null,
+    "outcome_on_mismatch": "unknown",
+    "outcome_on_unknown": "unknown",
+    "unverified_values": [],
+    "unverified_values_outcome": "unknown (evidencia pendiente, nunca bloquea)",
+    "never_alone_approves_assembly": true,
+    "source_ids": [
+     "S11"
+    ],
+    "sources_verified": true,
+    "verified": false,
+    "unverified_reason": null,
+    "outcome_note": "incompatible sólo si alguna fila trae exhaustive=true con source_url OEM; con listas parciales, no listado = unknown",
+    "evidence_grade": "structural"
+   },
+   "source": [
+    "DESIGN-REVIEW-2026-09-06"
+   ],
+   "evidence_grade": "structural",
+   "scope": "Regla de lista de modelos; antes «no listado» = incompatible.",
+   "counter_case": "Idem MC-21.",
+   "note": null
+  },
+  {
+   "id": "MC-22-shifter",
+   "priority": "P1",
+   "area": "listas de modelos",
+   "op": "replace",
+   "path": "/templates/31/interfaces/0/rules/0",
+   "before": {
+    "id": "shifter_to_derailleur.derailleur_models_compatible",
+    "assertion_kind": "mechanical_claim",
+    "product_field": "derailleur_models_compatible",
+    "counterpart": "template:rear_derailleur|front_derailleur",
+    "counterpart_field": "identity.brand+identity.model",
+    "operator": "row_match",
+    "value_type": "rows",
+    "projection_pending": null,
+    "outcome_on_mismatch": "incompatible",
+    "outcome_on_unknown": "unknown",
+    "unverified_values": [],
+    "unverified_values_outcome": "unknown (evidencia pendiente, nunca bloquea)",
+    "never_alone_approves_assembly": true,
+    "source_ids": [
+     "S11"
+    ],
+    "sources_verified": true,
+    "verified": true,
+    "unverified_reason": null
+   },
+   "after": {
+    "id": "shifter_to_derailleur.derailleur_models_compatible",
+    "assertion_kind": "mechanical_claim",
+    "product_field": "derailleur_models_compatible",
+    "counterpart": "template:rear_derailleur|front_derailleur",
+    "counterpart_field": "identity.brand+identity.model",
+    "operator": "row_match",
+    "value_type": "rows",
+    "projection_pending": null,
+    "outcome_on_mismatch": "unknown",
+    "outcome_on_unknown": "unknown",
+    "unverified_values": [],
+    "unverified_values_outcome": "unknown (evidencia pendiente, nunca bloquea)",
+    "never_alone_approves_assembly": true,
+    "source_ids": [
+     "S11"
+    ],
+    "sources_verified": true,
+    "verified": false,
+    "unverified_reason": null,
+    "outcome_note": "incompatible sólo si alguna fila trae exhaustive=true con source_url OEM; con listas parciales, no listado = unknown",
+    "evidence_grade": "structural"
+   },
+   "source": [
+    "DESIGN-REVIEW-2026-09-06"
+   ],
+   "evidence_grade": "structural",
+   "scope": "Regla de lista de modelos; antes «no listado» = incompatible.",
+   "counter_case": "Idem MC-21.",
+   "note": null
+  },
+  {
+   "id": "MC-22-brake_small_part",
+   "priority": "P1",
+   "area": "listas de modelos",
+   "op": "replace",
+   "path": "/templates/68/interfaces/0/rules/0",
+   "before": {
+    "id": "part_to_brake_model.compatible_brake_models",
+    "assertion_kind": "mechanical_claim",
+    "product_field": "compatible_brake_models",
+    "counterpart": "template:brake_caliper|brake_lever|hydraulic_disc_brake",
+    "counterpart_field": "identity.brand+identity.model",
+    "operator": "row_match",
+    "value_type": "rows",
+    "projection_pending": null,
+    "outcome_on_mismatch": "incompatible",
+    "outcome_on_unknown": "unknown",
+    "unverified_values": [],
+    "unverified_values_outcome": "unknown (evidencia pendiente, nunca bloquea)",
+    "never_alone_approves_assembly": true,
+    "source_ids": [
+     "S12"
+    ],
+    "sources_verified": true,
+    "verified": true,
+    "unverified_reason": null
+   },
+   "after": {
+    "id": "part_to_brake_model.compatible_brake_models",
+    "assertion_kind": "mechanical_claim",
+    "product_field": "compatible_brake_models",
+    "counterpart": "template:brake_caliper|brake_lever|hydraulic_disc_brake",
+    "counterpart_field": "identity.brand+identity.model",
+    "operator": "row_match",
+    "value_type": "rows",
+    "projection_pending": null,
+    "outcome_on_mismatch": "unknown",
+    "outcome_on_unknown": "unknown",
+    "unverified_values": [],
+    "unverified_values_outcome": "unknown (evidencia pendiente, nunca bloquea)",
+    "never_alone_approves_assembly": true,
+    "source_ids": [
+     "S12"
+    ],
+    "sources_verified": true,
+    "verified": false,
+    "unverified_reason": null,
+    "outcome_note": "incompatible sólo si alguna fila trae exhaustive=true con source_url OEM; con listas parciales, no listado = unknown",
+    "evidence_grade": "structural"
+   },
+   "source": [
+    "DESIGN-REVIEW-2026-09-06"
+   ],
+   "evidence_grade": "structural",
+   "scope": "Regla de lista de modelos; antes «no listado» = incompatible.",
+   "counter_case": "Idem MC-21.",
+   "note": null
+  },
+  {
+   "id": "MC-22-derailleur_pulley",
+   "priority": "P1",
+   "area": "listas de modelos",
+   "op": "replace",
+   "path": "/templates/19/interfaces/0/rules/0",
+   "before": {
+    "id": "pulley_to_derailleur.compatible_derailleur_models",
+    "assertion_kind": "mechanical_claim",
+    "product_field": "compatible_derailleur_models",
+    "counterpart": "template:rear_derailleur",
+    "counterpart_field": "identity.brand+identity.model",
+    "operator": "row_match",
+    "value_type": "rows",
+    "projection_pending": null,
+    "outcome_on_mismatch": "incompatible",
+    "outcome_on_unknown": "unknown",
+    "unverified_values": [],
+    "unverified_values_outcome": "unknown (evidencia pendiente, nunca bloquea)",
+    "never_alone_approves_assembly": true,
+    "source_ids": [
+     "S11"
+    ],
+    "sources_verified": true,
+    "verified": true,
+    "unverified_reason": null
+   },
+   "after": {
+    "id": "pulley_to_derailleur.compatible_derailleur_models",
+    "assertion_kind": "mechanical_claim",
+    "product_field": "compatible_derailleur_models",
+    "counterpart": "template:rear_derailleur",
+    "counterpart_field": "identity.brand+identity.model",
+    "operator": "row_match",
+    "value_type": "rows",
+    "projection_pending": null,
+    "outcome_on_mismatch": "unknown",
+    "outcome_on_unknown": "unknown",
+    "unverified_values": [],
+    "unverified_values_outcome": "unknown (evidencia pendiente, nunca bloquea)",
+    "never_alone_approves_assembly": true,
+    "source_ids": [
+     "S11"
+    ],
+    "sources_verified": true,
+    "verified": false,
+    "unverified_reason": null,
+    "outcome_note": "incompatible sólo si alguna fila trae exhaustive=true con source_url OEM; con listas parciales, no listado = unknown",
+    "evidence_grade": "structural"
+   },
+   "source": [
+    "DESIGN-REVIEW-2026-09-06"
+   ],
+   "evidence_grade": "structural",
+   "scope": "Regla de lista de modelos; antes «no listado» = incompatible.",
+   "counter_case": "Idem MC-21.",
+   "note": null
+  },
+  {
+   "id": "MC-22-derailleur_hanger",
+   "priority": "P1",
+   "area": "listas de modelos",
+   "op": "replace",
+   "path": "/templates/18/interfaces/0/rules/0",
+   "before": {
+    "id": "hanger_to_frame.compatible_frames",
+    "assertion_kind": "mechanical_claim",
+    "product_field": "compatible_frames",
+    "counterpart": "bike_profile",
+    "counterpart_field": "identity.brand+identity.model",
+    "operator": "row_match",
+    "value_type": "rows",
+    "projection_pending": null,
+    "outcome_on_mismatch": "incompatible",
+    "outcome_on_unknown": "unknown",
+    "unverified_values": [],
+    "unverified_values_outcome": "unknown (evidencia pendiente, nunca bloquea)",
+    "never_alone_approves_assembly": true,
+    "source_ids": [
+     "S17"
+    ],
+    "sources_verified": true,
+    "verified": true,
+    "unverified_reason": null
+   },
+   "after": {
+    "id": "hanger_to_frame.compatible_frames",
+    "assertion_kind": "mechanical_claim",
+    "product_field": "compatible_frames",
+    "counterpart": "bike_profile",
+    "counterpart_field": "identity.brand+identity.model",
+    "operator": "row_match",
+    "value_type": "rows",
+    "projection_pending": null,
+    "outcome_on_mismatch": "unknown",
+    "outcome_on_unknown": "unknown",
+    "unverified_values": [],
+    "unverified_values_outcome": "unknown (evidencia pendiente, nunca bloquea)",
+    "never_alone_approves_assembly": true,
+    "source_ids": [
+     "S17"
+    ],
+    "sources_verified": true,
+    "verified": false,
+    "unverified_reason": null,
+    "outcome_note": "incompatible sólo si alguna fila trae exhaustive=true con source_url OEM; con listas parciales, no listado = unknown",
+    "evidence_grade": "structural"
+   },
+   "source": [
+    "DESIGN-REVIEW-2026-09-06"
+   ],
+   "evidence_grade": "structural",
+   "scope": "Regla de lista de modelos; antes «no listado» = incompatible.",
+   "counter_case": "Idem MC-21.",
+   "note": null
+  },
+  {
+   "id": "MC-23",
+   "priority": "P1",
+   "area": "pedalier/legado",
+   "op": "replace",
+   "path": "/legacy_value_maps/bb_shell_standard→bb_shell_interface/map/BBRight ~1 OSBB",
+   "before": {
+    "bb_shell_interface": "PF46 (PF30 / BB386EVO / OSBB)"
+   },
+   "after": "unknown",
+   "source": [
+    "S09"
+   ],
+   "evidence_grade": "reference_general",
+   "scope": "Opción legacy que agrupa dos nombres comerciales; OSBB existe en 42 mm (ruta, rodamientos BB30) y en 46 mm (PF30), y BBright es 79 mm de ancho: la opción no determina la interfaz.",
+   "counter_case": "Un cuadro Specialized OSBB de aluminio (42 mm) quedaría marcado PF46.",
+   "note": null
+  },
+  {
+   "id": "MC-24",
+   "priority": "P1",
+   "area": "transmisión/legado",
+   "op": "replace",
+   "path": "/legacy_value_maps/freehub_type→rear_drive_interface (hub) ~1 cassette_spline_standard (cassette) ~1 freewheel_thread_standard (freewheel)/map",
+   "before": {
+    "Shimano HG": "per_template_dictionary_pending",
+    "Shimano HG Road 11": "per_template_dictionary_pending",
+    "Micro Spline": "per_template_dictionary_pending",
+    "SRAM XD": "per_template_dictionary_pending",
+    "SRAM XDR": "per_template_dictionary_pending",
+    "Campagnolo": "per_template_dictionary_pending",
+    "Campagnolo N3W": "per_template_dictionary_pending",
+    "Rueda libre roscada": "per_template_dictionary_pending",
+    "Driver BMX": "per_template_dictionary_pending",
+    "Rosca fija / contratuerca": "per_template_dictionary_pending",
+    "Maza contrapedal": "per_template_dictionary_pending",
+    "Desconocido / sin confirmar": "per_template_dictionary_pending"
+   },
+   "after": {
+    "hub": {
+     "Shimano HG": "unknown (S / M / L no distinguibles por la opción)",
+     "Shimano HG Road 11": "Shimano HG spline L (ROAD 11/12v; otras coronas sólo según filas C-731)",
+     "Micro Spline": "Shimano MICRO SPLINE (MTB 12v)",
+     "SRAM XD": "SRAM XD",
+     "SRAM XDR": "SRAM XDR",
+     "Campagnolo": "Campagnolo",
+     "Campagnolo N3W": "Campagnolo N3W",
+     "Rueda libre roscada": "unknown (ISO 1.37x24 / M30 BMX / francesa / italiana)",
+     "Driver BMX": "unknown (falta token de driver de cassette BMX)",
+     "Rosca fija / contratuerca": "Piñón fijo roscado 1.37\" x 24 tpi + contratuerca 1.29\" x 24 tpi izquierda",
+     "Maza contrapedal": "Contrapedal",
+     "Desconocido / sin confirmar": "unknown"
+    },
+    "cassette (cassette_spline_standard)": {
+     "Shimano HG": "unknown (7v→S; 8/9/10 y MTB 11→M; ROAD 10 → M con 1,0 sólo en seis modelos)",
+     "Shimano HG Road 11": "Shimano HG ruta 11v (L), salvo CS-HG800 / CS-HG700 / CS-RS400 → Shimano HG (M) (C-731 *4)",
+     "Micro Spline": "Shimano MICRO SPLINE",
+     "SRAM XD": "SRAM XD",
+     "SRAM XDR": "SRAM XDR (un cassette XD también entra en XDR con 1,85 mm: S16)",
+     "Campagnolo": "Campagnolo",
+     "Campagnolo N3W": "Campagnolo N3W",
+     "otros": "unknown"
+    },
+    "freewheel (freewheel_thread_standard)": {
+     "Rueda libre roscada": "unknown (ISO / M30 BMX / francesa / italiana)",
+     "otros": "unknown"
+    }
+   },
+   "source": [
+    "E-C731",
+    "S16"
+   ],
+   "evidence_grade": "oem_table",
+   "scope": "Diccionario por plantilla en vez de «pendiente»; sólo mapea lo inequívoco y deja unknown lo comercial ambiguo («Shimano HG», «Rueda libre roscada», «Driver BMX»).",
+   "counter_case": "«Shimano HG Road 11» en un CS-HG800 daría cuerpo L cuando C-731 *4 lo pone en M.",
+   "note": null
+  },
+  {
+   "id": "MC-25",
+   "priority": "P1",
+   "area": "transmisión/cadena",
+   "op": "replace",
+   "path": "/templates/10/interfaces/0/rules/0",
+   "before": {
+    "id": "chain_to_rear_speeds.chain_speeds",
+    "assertion_kind": "mechanical_claim",
+    "product_field": "chain_speeds",
+    "counterpart": "bike_profile",
+    "counterpart_field": "rear_speeds",
+    "operator": "in",
+    "value_type": "token",
+    "projection_pending": null,
+    "outcome_on_mismatch": "caution",
+    "outcome_on_unknown": "unknown",
+    "unverified_values": [],
+    "unverified_values_outcome": "unknown (evidencia pendiente, nunca bloquea)",
+    "never_alone_approves_assembly": true,
+    "source_ids": [
+     "S11",
+     "S07"
+    ],
+    "sources_verified": true,
+    "verified": true,
+    "unverified_reason": null
+   },
+   "after": {
+    "id": "chain_to_rear_speeds.chain_speeds",
+    "assertion_kind": "mechanical_claim",
+    "product_field": "chain_speeds",
+    "counterpart": "bike_profile",
+    "counterpart_field": "rear_speeds",
+    "operator": "in",
+    "value_type": "token",
+    "projection_pending": "rear_speeds entero del perfil → token («11») para el `in` sobre chain_speeds",
+    "outcome_on_mismatch": "caution",
+    "outcome_on_unknown": "unknown",
+    "unverified_values": [],
+    "unverified_values_outcome": "unknown (evidencia pendiente, nunca bloquea)",
+    "never_alone_approves_assembly": true,
+    "source_ids": [
+     "S11",
+     "S07"
+    ],
+    "sources_verified": true,
+    "verified": false,
+    "unverified_reason": null
+   },
+   "source": [
+    "DESIGN-REVIEW-2026-09-06"
+   ],
+   "evidence_grade": "structural",
+   "scope": "Tipos set-token vs entero sin proyección declarada.",
+   "counter_case": "—",
+   "note": null
+  },
+  {
+   "id": "MC-26",
+   "priority": "P1",
+   "area": "transmisión/eslabón",
+   "op": "replace",
+   "path": "/templates/12/interfaces/0/rules/1",
+   "before": {
+    "id": "connector_to_chain_model.chain_speeds",
+    "assertion_kind": "mechanical_claim",
+    "product_field": "chain_speeds",
+    "counterpart": "template:chain",
+    "counterpart_field": "chain_speeds",
+    "operator": "in",
+    "value_type": "token",
+    "projection_pending": null,
+    "outcome_on_mismatch": "incompatible",
+    "outcome_on_unknown": "unknown",
+    "unverified_values": [],
+    "unverified_values_outcome": "unknown (evidencia pendiente, nunca bloquea)",
+    "never_alone_approves_assembly": true,
+    "source_ids": [
+     "S07"
+    ],
+    "sources_verified": true,
+    "verified": true,
+    "unverified_reason": null
+   },
+   "after": {
+    "id": "connector_to_chain_model.chain_speeds",
+    "assertion_kind": "mechanical_claim",
+    "product_field": "chain_speeds",
+    "counterpart": "template:chain",
+    "counterpart_field": "chain_speeds",
+    "operator": "in",
+    "value_type": "token",
+    "projection_pending": null,
+    "outcome_on_mismatch": "caution",
+    "outcome_on_unknown": "unknown",
+    "unverified_values": [],
+    "unverified_values_outcome": "unknown (evidencia pendiente, nunca bloquea)",
+    "never_alone_approves_assembly": true,
+    "source_ids": [
+     "S07"
+    ],
+    "sources_verified": true,
+    "verified": false,
+    "unverified_reason": null,
+    "outcome_note": "velocidades declaradas ≠ ancho medido; el ancho (chain_outer_width_mm, S11) es la comparación física"
+   },
+   "source": [
+    "DESIGN-REVIEW-2026-09-06"
+   ],
+   "evidence_grade": "design_hypothesis",
+   "scope": "Eslabón ↔ cadena por velocidades declaradas era bloqueante.",
+   "counter_case": "Eslabón «9/10v» de un fabricante con cadena «10v» de otro: caution, y se compara el ancho.",
+   "note": null
+  },
+  {
+   "id": "MC-27",
+   "priority": "P1",
+   "area": "semántica",
+   "op": "add",
+   "path": "/assembly_policy/verification_semantics",
+   "before": null,
+   "after": {
+    "rules.verified": "significa únicamente sources_registered (URL general registrada); NO es verificación OEM",
+    "rules.evidence_grade": [
+     "oem_table",
+     "oem_page",
+     "oem_manual_search_summary",
+     "oem_manual_cited_not_read",
+     "reference_general",
+     "structural",
+     "product_decision"
+    ],
+    "blocking_requires": "evidence_grade ∈ {oem_table, oem_page} con alcance exacto, o structural sobre el mismo vocabulario",
+    "fixtures": "origin=compiled para las 476; real_cases_demonstrated=0"
+   },
+   "source": [
+    "DESIGN-REVIEW-2026-09-06"
+   ],
+   "evidence_grade": "product_decision",
+   "scope": "Aclara qué significa `verified` en todo el contrato sin reescribir 170 reglas.",
+   "counter_case": "Una regla con URL de Sheldon y fixture que copia la regla se leía como verificada.",
+   "note": null
+  },
+  {
+   "id": "MC-28",
+   "priority": "P1",
+   "area": "semántica",
+   "op": "add",
+   "path": "/fixtures_policy",
+   "before": null,
+   "after": {
+    "origin": "compiled",
+    "real_cases_demonstrated": 0,
+    "note": "ninguna fixture demuestra un caso real hasta que cite producto y contraparte del catálogo con read-back"
+   },
+   "source": [
+    "DESIGN-REVIEW-2026-09-06"
+   ],
+   "evidence_grade": "product_decision",
+   "scope": "—",
+   "counter_case": "—",
+   "note": null
+  },
+  {
+   "id": "MC-29",
+   "priority": "P1",
+   "area": "semántica",
+   "op": "replace",
+   "path": "/stats/verified_rules",
+   "before": 151,
+   "after": 0,
+   "source": [
+    "DESIGN-REVIEW-2026-09-06"
+   ],
+   "evidence_grade": "product_decision",
+   "scope": "El contador de «verificadas» pasa a 0: ninguna regla ha sido demostrada con caso real; los grados por regla están en evidence_grade.",
+   "counter_case": "—",
+   "note": null
+  }
+ ],
+ "not_changed": [
+  {
+   "item": "wheel_size «24\"» → bead_seat_diameter_mm",
+   "state": "unknown (ya)",
+   "why": "24\" cubre 507 / 520 / 540 / 547; nunca se fija 507 (hipótesis de revisión)."
+  },
+  {
+   "item": "wheel_size «26\"» → BSD",
+   "state": "unknown (ya)",
+   "why": "559 / 571 / 584 / 590 / 597 / 650 según serie."
+  },
+  {
+   "item": "bb_shell_standard «BB30 42 mm» → «PF42 (BB30 / BB30a / BB30ai)»",
+   "state": "sin cambio",
+   "why": "PF42 es la denominación de Park Tool (S09) para la familia de 42 mm; BB30 lleva rodamientos directos, no copas: la etiqueta lo agrupa por diámetro, igual que Park Tool."
+  },
+  {
+   "item": "spindle_interface crank ↔ BB `in` incompatible",
+   "state": "sin cambio",
+   "why": "GXP 24/22 y Hollowtech 24 no son intercambiables; la BB declara lo que acepta en spindle_interface_accepted (S03/S09)."
+  },
+  {
+   "item": "chain ↔ rear_speeds caution",
+   "state": "sin cambio",
+   "why": "hipótesis de revisión 2026-09-06."
+  },
+  {
+   "item": "ruedas, dirección, suspensión, OLD 132,5, hookless/presión, SHIS EC44/ZS44, rodamientos MAX",
+   "state": "fuera de alcance",
+   "why": "lo cubre el otro revisor; no se duplica."
+  }
+ ],
+ "doubts": [
+  "Falta token para driver de cassette BMX en rear_drive_interface («Driver BMX» legacy queda unknown).",
+  "El cuadro no tiene tokens «Postes U-brake» ni «Freno de llanta direct mount»; las reglas quedan unknown para esos frenos (MC-12).",
+  "brake_lever necesita `lever_cable_head_required` (Barril MTB / Pera ruta) para evaluar cable_head (MC-17b).",
+  "front_derailleur_mount del cuadro fusiona «E-type / direct mount»: se propone separarlos en dos tokens tras leer DM-FD0003 (MC-08 queda caution mientras tanto).",
+  "DOT 4 ↔ DOT 5.1: verificado por manual SRAM; para Hayes/Formula/Hope/TRP confirmar en su manual antes de subir de caution a compatible (MC-18).",
+  "wheel_size «14\"» → 254: revisar en S01 si 14\" también designa 288 antes de mantenerlo como único.",
+  "E-SHIMANO-DM-RD0004 y DM-FD0003 se citan por título y resumen de búsqueda, no por lectura completa: Codex confirma antes de que MC-06/MC-08 dejen de ser caution en los pares marcados.",
+  "MC-24 deja «Shimano HG Road 11» en cassette dependiendo del modelo (HG800/HG700/RS400): requiere identity.model conocido; si no, unknown."
+ ],
+ "stats": {
+  "patches": 67,
+  "by_priority": {
+   "P0": 21,
+   "P1": 46
+  },
+  "by_op": {
+   "replace": 44,
+   "add": 22,
+   "remove": 1
+  },
+  "rules_touched": 28,
+  "fixtures_added": 0
+ }
+}
