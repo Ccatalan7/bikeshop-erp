@@ -15,6 +15,10 @@ on:
         type: string
   push:
     branches:
+      # `main` is the canonical line after the cutover in
+      # docs/runbooks/MAIN_BRANCH_CUTOVER.md; `smartpegas1.0` stays listed
+      # during the observation period and is removed when it is retired.
+      - main
       - smartpegas1.0
     paths:
       - "AGENTS.md"

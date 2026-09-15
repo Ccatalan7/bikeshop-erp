@@ -131,7 +131,7 @@ Cmd+Shift+B -> Publish ERP Update (macOS + Android)
 On macOS this combined publisher is the workspace's default build task, so the
 shortcut starts it directly instead of relying on the last task selected in
 VS Code. If an agent-created branch is not authorized for `Production` but its
-HEAD is exactly the live `origin/smartpegas1.0` commit, preparation switches to
+HEAD is exactly the live `origin/main` commit, preparation switches to
 that canonical branch without changing the files. Any different or divergent
 history still stops before dependency resolution, staging, commit, or push.
 
@@ -289,8 +289,11 @@ reproduce the committed copies byte-for-byte. This guarantees that a clean
 release includes the reviewed spreadsheet engine instead of depending on one
 Mac's uncommitted output.
 
-Never create a temporary branch or worktree for publication. Both `main` and
-`smartpegas1.0` are explicitly authorized by the GitHub Production environment.
+Never create a temporary branch or worktree for publication. `main` is the
+canonical branch; `smartpegas1.0` remains authorized by the GitHub Production
+environment only during the observation period of
+`docs/runbooks/MAIN_BRANCH_CUTOVER.md` and is removed from that policy when it
+is retired.
 
 ## First Canary
 

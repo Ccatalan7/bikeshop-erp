@@ -1,9 +1,113 @@
 # Transición canónica de `smartpegas1.0` a `main`
 
-- Estado: **plan operativo revisado; transición no ejecutada**
+- Estado: **ruta simplificada vigente (sección 0); transición no ejecutada**
 - Propietario de la decisión: dueño del repositorio
-- Clase de cambio: Git/GitHub de alto impacto, con despliegues web productivos
-- Última revisión del diseño: 2026-07-29
+- Clase de cambio: Git/GitHub de alto impacto, con un despliegue web productivo
+- Última revisión del diseño: 2026-09-15 (sección 0); 2026-07-29 (secciones 1-19)
+
+## 0. Ruta simplificada (revisión 2026-09-15)
+
+### 0.1 Qué cambió desde el diseño de julio
+
+| Superficie | 2026-07-29 | 2026-09-15 |
+| --- | --- | --- |
+| `origin/main` | `7f87d3af…`, 1 commit exclusivo | `75cb391f…` (`P` de la PR #2, 2026-08-10), **0 commits exclusivos** |
+| `origin/smartpegas1.0` | `32404d36…`, 596 por delante | `f51f3777…` (2026-09-07), 94 por delante, 0 por detrás |
+| PR de promoción | #2 abierta y conflictiva | #2 fusionada el 2026-08-10; no existe PR abierta |
+| Freeze de deploy (5.3) | propuesto | no implementado en ningún workflow |
+| Tienda ante un push a `main` | publicaba | build y verificación solamente: el deploy `live` exige `is_publication=true`, que sólo produce el `workflow_dispatch` durable con `request_id` |
+| Instaladores ante un push a `main` | artifact-only | artifact-only, sin cambio |
+| ERP web ante un push a `main` | publicaba | publica (`firebase-hosting-merge.yml`: integrity → build → deploy → verificación de commit → health de producción) |
+| `erp-integrity-gate.yml` por push | sólo `smartpegas1.0` | `main` y `smartpegas1.0` (cambio preparatorio de esta revisión) |
+| Environment `Production` | `main` y `smartpegas1.0` | sin cambio |
+
+Consecuencia: `main` es hoy un **ancestro puro** de `smartpegas1.0`. Cualquier
+PR `smartpegas1.0 → main` fusiona sin conflicto y el commit `P` tiene
+exactamente el árbol de `F`, sin puente `M`, sin `-s ours` y sin reparar nada.
+Las secciones 5.1, 11 y 12 quedan **sin efecto** mientras
+`git rev-list --count origin/smartpegas1.0..origin/main` sea `0`; si alguna
+vez vuelve a ser mayor que cero, se retoma el diseño de julio.
+
+### 0.2 Lo que se nota y lo que no
+
+- **Se nota una sola cosa:** `project-vinabike.web.app` (ERP web) pasa del
+  build del 2026-08-10 al de `P`, es decir, recibe las cinco semanas de cambios
+  que los instaladores de escritorio ya tienen. Es un cambio hacia adelante con
+  el mismo código que corre el escritorio. Rollback: Firebase Hosting → sitio
+  `project-vinabike` → release anterior (un clic), o forward-fix desde `main`.
+- **No se nota:** la tienda (`vinabike.cl`) sólo se compila y verifica; los
+  instaladores macOS/Windows sólo compilan artefactos; Android no se dispara;
+  Supabase no recibe ninguna escritura; el checkout del Mac no cambia ningún
+  archivo al cambiar de rama porque `tree(P) = tree(F)`; la URL de instalación
+  de Windows apunta a `main`, donde el script es idéntico.
+
+### 0.3 Secuencia
+
+**Paso 0 · Preparación (rama de agente, esta revisión).** Trigger de
+`erp-integrity-gate.yml` con `main`; `prepare_erp_update.sh` con
+`VINABIKE_ERP_RELEASE_BRANCH:-main` y su test; documentos de distribución y
+`copilot-instructions.md` apuntando a `main` con notas transicionales; esta
+sección. Se fusiona en `smartpegas1.0` **inmediatamente antes** del paso 3.
+Entre ese merge y el paso 4 no se publica ningún release: el preparador falla
+cerrado porque `origin/main` todavía no es `F`.
+
+**Paso 1 · Congelar.** En el Mac: sin publicadores, sin agentes escribiendo,
+`git status --porcelain=v1` vacío en dos lecturas, `git ls-remote origin
+main smartpegas1.0` estable entre dos lecturas. Se sigue 9.1 y 9.2 tal cual.
+
+**Paso 2 · Respaldo.** Los dos tags de 10.4 (`cutover-backup/main-before-…` y
+`cutover-backup/smart-before-…`) con push atómico.
+
+**Paso 3 · PR `smartpegas1.0 → main`.** Título «Promote smartpegas1.0 to
+canonical main (fast-forward tree)». Esperar `PR Integrity` (cuatro partes de
+la suite más «Static analysis and packaged web build») y `Secret Scan`. Si
+GitHub muestra un check requerido en estado *expected* que nunca llega, el
+nombre guardado en la protección de `main` está obsoleto: corregir únicamente
+ese contexto como en 12.1 y volver a leer la protección completa.
+
+**Paso 4 · Merge.** Botón «Merge pull request» → «Create a merge commit». Nunca
+squash ni rebase: ambos cambian los SHA que los manifests de release citan.
+Verificar desde cualquier clon:
+
+```bash
+git fetch origin main smartpegas1.0
+git diff --exit-code origin/smartpegas1.0 origin/main --
+git merge-base --is-ancestor origin/smartpegas1.0 origin/main
+```
+
+**Paso 5 · Observar los runs del push a `main`.** «Deploy to Firebase Hosting
+on merge» debe terminar con `release.json.commit` igual a `P` y health de
+producción en verde; «Deploy Storefront» debe terminar sin job de deploy;
+macOS/Windows deben quedar artifact-only; `Secret Scan` y `ERP Integrity Gate`
+en verde. Smoke manual del ERP web: login y tres rutas de uso diario.
+
+**Paso 6 · Alinear.** `git push origin <P>:refs/heads/smartpegas1.0`
+(fast-forward). En el Mac: `git fetch origin && git switch main` (ningún archivo
+cambia; los cambios locales pendientes se conservan). VS Code, tareas y agentes
+pasan a `main` por los documentos del paso 0.
+
+**Paso 7 · Observación y retiro.** Sección 17 sin cambios: mínimo 7 días, una
+PR normal fusionada, un deploy web normal y un release desde `main`. Después
+se retira `smartpegas1.0` de la policy de `Production`, de los triggers y del
+texto transicional; se conserva el tag de respaldo; borrar la rama es una
+decisión aparte.
+
+### 0.4 Rollback
+
+No se mueve `main` hacia atrás nunca. Un problema del ERP web se resuelve con
+el rollback de release de Firebase Hosting o con un forward-fix desde `main`;
+un problema de release de escritorio no puede ocurrir porque ningún job de
+publicación se dispara por push. Todo lo demás de la sección 16 sigue vigente.
+
+### 0.5 Lo que el dueño hace con sus manos
+
+1. Aprobar la PR de preparación (paso 0) o dejar que el agente la fusione.
+2. Mirar la PR `smartpegas1.0 → main` que abre el agente y pulsar «Merge pull
+   request» → «Create a merge commit».
+3. Abrir `project-vinabike.web.app`, iniciar sesión y mirar tres pantallas.
+
+Todo lo demás lo ejecuta y verifica el agente desde el Mac. Las PR abiertas de
+Dependabot contra `main` se rebasan solas al moverse la base.
 
 ## 1. Propósito
 

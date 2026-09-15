@@ -644,8 +644,10 @@ steps, or deployment chores left for the user.
 ### Mandatory Workspace And Branch Continuity
 
 - Work directly in `/Users/Claudio/Dev/bikeshop-erp` on the established
-  `smartpegas1.0` branch. The user runs and debugs that checkout and is not
-  expected to understand or reconcile alternate Git environments.
+  canonical branch: `main` once the cutover in
+  `docs/runbooks/MAIN_BRANCH_CUTOVER.md` has landed, `smartpegas1.0` until
+  then. The user runs and debugs that checkout and is not expected to
+  understand or reconcile alternate Git environments.
 - Do not create Git worktrees, temporary clones, alternate implementation
   branches, or switch the active branch unless the user has first received a
   plain-language explanation and explicitly authorized that exact action.
@@ -655,7 +657,7 @@ steps, or deployment chores left for the user.
 - Never leave the user instructions to run `fetch`, `pull`, `stash`, `reset`,
   resolve conflicts, or synchronize a debug checkout. The agent owns that
   workflow end to end and must confirm that VS Code, the filesystem, `HEAD`,
-  and `origin/smartpegas1.0` all refer to the consolidated version before
+  and the canonical `origin/<branch>` all refer to the consolidated version before
   claiming that a UI fix is visible.
 - Before starting or restarting any debug server/session, verify the absolute
   checkout path, branch name, clean/intentional working-tree state, and exact
@@ -1435,7 +1437,8 @@ Primary files:
   `Publish ERP Update (macOS + Android)` VS Code task.
   `Cmd+Shift+B` resolves that combined task as the macOS-only default. When an
   agent branch is not Production-authorized, preparation may switch to
-  `smartpegas1.0` only if both names identify the exact live canonical commit;
+  the canonical branch (`main`) only if both names identify the exact live
+  canonical commit;
   any other history remains a fail-closed review boundary.
 - `scripts/releases/qualify_erp_update.mjs` waits for the push-triggered
   exact-SHA ERP Integrity Gate, dispatches that gate once when path filters did
@@ -1730,7 +1733,7 @@ The task runs `scripts/publish_windows_update.ps1`. Its current behavior is inte
 Important consequences:
 
 - Anything visible in Source Control will be included. Clean or intentionally keep unrelated changes before running the task.
-- The `Production` environment uses explicit custom branch policies for `main` and `smartpegas1.0`; do not switch it back to protected-branches-only while Windows updates are intentionally published from `smartpegas1.0`.
+- The `Production` environment uses explicit custom branch policies for `main` and `smartpegas1.0`; keep both until `smartpegas1.0` is retired at the end of the observation period in `docs/runbooks/MAIN_BRANCH_CUTOVER.md`, then remove `smartpegas1.0` from that policy. Windows updates are published from the canonical branch (`main` after the cutover).
 - Pushes and default manual dispatches run the full integrity/build/package
   pipeline but remain artifact-only. They use read-only repository permission
   and never expose an update to installed coworker apps.

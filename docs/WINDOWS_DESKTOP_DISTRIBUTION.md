@@ -23,7 +23,7 @@ On each Windows computer, run this once in PowerShell:
 
 ```powershell
 $ErrorActionPreference = 'Stop'
-Invoke-WebRequest -UseBasicParsing https://raw.githubusercontent.com/Ccatalan7/bikeshop-erp/smartpegas1.0/scripts/install_vinabike_erp.ps1 -OutFile "$env:TEMP\install_vinabike_erp.ps1"
+Invoke-WebRequest -UseBasicParsing https://raw.githubusercontent.com/Ccatalan7/bikeshop-erp/main/scripts/install_vinabike_erp.ps1 -OutFile "$env:TEMP\install_vinabike_erp.ps1"
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File "$env:TEMP\install_vinabike_erp.ps1" -Launch
 ```
 

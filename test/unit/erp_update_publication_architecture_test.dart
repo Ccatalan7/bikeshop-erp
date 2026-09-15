@@ -135,7 +135,7 @@ void main() {
     expect(prepareHelper, contains('chmod 600'));
     expect(
       prepareHelper,
-      contains('VINABIKE_ERP_RELEASE_BRANCH:-smartpegas1.0'),
+      contains('VINABIKE_ERP_RELEASE_BRANCH:-main'),
     );
     expect(
       prepareHelper,
