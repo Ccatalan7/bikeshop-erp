@@ -104,6 +104,44 @@ Lifecycle safety rules the script enforces (and you should not work around):
   argv identity, and listener PID immediately before sending TERM; it never
   escalates to a broad kill or `KILL`.
 
+## Preview a pull request from any device (iPad, phone)
+
+Every pull request that touches app code gets its own ERP web build on a
+temporary Firebase Hosting channel, published by
+`.github/workflows/firebase-hosting-preview.yml`. The link appears as a
+comment on the pull request (posted by `github-actions`) and in the run
+summary, about 8-12 minutes after the push; every new push to the PR replaces
+it; it expires after 7 days. Open it in Safari on the iPad and sign in with
+email and password.
+
+What it is and is not:
+
+- It is the **ERP** (`lib/main.dart`), built with the exact recipe of the
+  `main` deployment (`firebase-hosting-merge.yml`). The storefront has its own
+  publication contract and is not previewed here.
+- It talks to the **production** Supabase project. Every sale, payment or edit
+  made on a preview is real. Preview the screens; do not rehearse operations.
+- `release.json` on the preview carries `target: "erp-preview"`, the deployed
+  commit and the PR number, and the workflow refuses to finish until the
+  channel serves that exact commit.
+- A pull request opened from a fork gets no preview: GitHub gives forks no
+  secrets.
+- Google sign-in and e-mail links return to the page that started them, and
+  Supabase only accepts allow-listed return addresses. Preview origins are
+  dynamic (`https://project-vinabike--pr123-branch-abc123.web.app`), so the
+  owner adds one wildcard once in the Supabase dashboard, Authentication →
+  URL Configuration → Redirect URLs: `https://project-vinabike--*.web.app/**`.
+  Email + password sign-in needs nothing.
+
+One-time setup, owner only: the workflow runs in the GitHub environment
+`Preview` and needs the secret `FIREBASE_SERVICE_ACCOUNT_PROJECT_VINABIKE`
+there (the same service account the merge workflow reads from `Production`).
+If the secret is scoped to `Production`, add it to `Preview` in GitHub →
+Settings → Environments. The workflow also accepts a manual run
+(Actions → *ERP web preview* → *Run workflow*, on any branch), which is how
+the setup is verified without opening a pull request: the run summary shows
+the link.
+
 ## Trap 0 — the storefront is not the ERP on another route
 
 Production builds the store from its own entrypoint, `lib/main_store.dart`
