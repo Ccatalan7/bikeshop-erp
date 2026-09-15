@@ -52,7 +52,7 @@ void main() {
       _row('temp-5', pending: true),
       _row('draft-6'),
     ]);
-    await Future<void>.delayed(const Duration(milliseconds: 60));
+    await store.flush();
 
     final restored = await store.read('conv-1', currentUserId: 'user-1');
     expect(restored.map((m) => m.id), ['m2', 'm3', 'm4'],
@@ -65,7 +65,7 @@ void main() {
       () async {
     store.scheduleWrite('conv-1', [_row('m1', sequence: 1)]);
     store.scheduleWrite('conv-1', [_row('m9', sequence: 9)]);
-    await Future<void>.delayed(const Duration(milliseconds: 60));
+    await store.flush();
     expect((await store.read('conv-1')).map((m) => m.id), ['m9']);
     expect(await store.read('conv-none'), isEmpty);
   });
@@ -77,7 +77,7 @@ void main() {
 
   test('clear drops every saved conversation', () async {
     store.scheduleWrite('conv-1', [_row('m1', sequence: 1)]);
-    await Future<void>.delayed(const Duration(milliseconds: 60));
+    await store.flush();
     await store.clear();
     expect(await store.read('conv-1'), isEmpty);
   });

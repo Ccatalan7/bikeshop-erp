@@ -98,6 +98,20 @@ No private Supabase credential is hardcoded in the repository.
 | Production database password | Guarded PostgreSQL reads, schema export, and authorized writes | macOS Keychain service `Vinabike ERP Supabase database password`, account `postgres`; CI `SUPABASE_DB_PASSWORD` |
 | Local-maintenance secret key | Explicit privileged local maintenance/REST consumers | macOS Keychain service `Vinabike ERP Supabase secret key`, account `supabase`; not shared with GitHub |
 | GitHub storefront SEO secret key | Storefront SEO sync and snapshot generation in the protected GitHub workflow only | Protected repository secret `SUPABASE_SECRET_KEY`; not copied to local Keychain |
+
+**The CI copy of the database password goes stale silently (2026-08-10 and
+2026-09-15).** `Deploy to Firebase Hosting on merge` builds, deploys and
+verifies `release.json` on production, and then its last step, `Verify
+read-only production ERP invariants` (`scripts/db/health.sh production`),
+fails with `password authentication failed for user "postgres"` at the
+Supabase pooler. That message means the `SUPABASE_DB_PASSWORD` secret of the
+GitHub `Production` environment no longer matches the database password (the
+pooler reports the user without its `.<project-ref>` suffix, so the username
+is not the problem). The run is red although production is already serving
+the new commit, and it stayed unnoticed for five weeks because `main`
+received no push in between. Fix: refresh that one secret from the Keychain
+entry above and re-run the failed job; never reset the database password for
+this, which would break the Mac wrapper and every other consumer.
 | Publishable key | Public client initialization and RLS-governed requests | macOS Keychain service `Vinabike ERP Supabase publishable key`, account `supabase`; approved client/CI configuration |
 | Staging ref/password | Dormant environment tooling | Keychain services `Vinabike ERP Supabase staging project ref` and `Vinabike ERP Supabase staging database password`; protected environment variables |
 | Staging publishable key/E2E login | Dormant browser fixtures, only after owner reactivation | Keychain services `Vinabike ERP Supabase staging publishable key` and `Vinabike ERP staging E2E password`; protected `SUPABASE_STAGING_PUBLISHABLE_KEY` / `E2E_PASSWORD` |
