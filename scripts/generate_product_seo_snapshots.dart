@@ -5055,7 +5055,17 @@ Future<SeoFirebaseRedirectWritePlan> buildFirebaseStorefrontRedirectPlan({
       firebaseConfigFile.path,
     );
   }
-  final existingBySource = <String, Map<String, dynamic>>{};
+  // hosting[target=store].redirects holds two kinds of rules. The generator
+  // OWNS the ones its previous manifest lists (old /productos and category
+  // aliases) and rewrites them under the strict owned contract. Every other
+  // rule was written by hand for another purpose — `/accept-invitation`, a
+  // 302 to the ERP origin added on 2026-08-05, is one — and is preserved
+  // verbatim, in file order, after a shape check only. Applying the owned
+  // contract to hand-written rules failed every storefront push deploy from
+  // 2026-08-10 to 2026-09-15 (docs/runbooks/MAIN_BRANCH_CUTOVER.md §0.3).
+  final ownedExisting = <String, Map<String, dynamic>>{};
+  final manual = <Map<String, dynamic>>[];
+  final seenSources = <String>{};
   for (final item in (existingRaw as List? ?? const [])) {
     if (item is! Map) {
       throw FormatException(
@@ -5063,50 +5073,50 @@ Future<SeoFirebaseRedirectWritePlan> buildFirebaseStorefrontRedirectPlan({
         firebaseConfigFile.path,
       );
     }
-    final redirect = _validatedExactRedirect(
-      Map<String, dynamic>.from(item),
-      owner: 'firebase.json',
-    );
-    final source = redirect['source']! as String;
-    if (existingBySource.containsKey(source)) {
-      throw StateError(
-        'firebase.json contiene dos redirects para $source.',
+    final candidate = Map<String, dynamic>.from(item);
+    final rawSource = candidate['source'];
+    if (rawSource is! String || rawSource.isEmpty) {
+      throw FormatException(
+        'Cada redirect de hosting[target=store] necesita un source.',
+        firebaseConfigFile.path,
       );
     }
-    existingBySource[source] = redirect;
-  }
-
-  final retained = <Map<String, dynamic>>[];
-  for (final entry in existingBySource.entries) {
-    final previous = previousBySource[entry.key];
-    if (previous != null) {
-      if (!_sameRedirect(previous, entry.value)) {
-        throw StateError(
-          'firebase.json diverge del manifiesto anterior en ${entry.key}; '
-          'no es seguro sobrescribirlo.',
-        );
-      }
+    if (!seenSources.add(rawSource)) {
+      throw StateError(
+        'firebase.json contiene dos redirects para $rawSource.',
+      );
+    }
+    if (previousBySource.containsKey(rawSource)) {
+      ownedExisting[rawSource] = _validatedExactRedirect(
+        candidate,
+        owner: 'firebase.json',
+      );
       continue;
     }
-    if (generatedBySource.containsKey(entry.key)) {
+    if (generatedBySource.containsKey(rawSource)) {
       throw StateError(
-        'El redirect manual ${entry.key} colisiona con uno generado.',
+        'El redirect manual $rawSource colisiona con uno generado.',
       );
     }
-    retained.add(entry.value);
+    manual.add(_validatedManualRedirect(candidate, owner: 'firebase.json'));
+  }
+  for (final entry in ownedExisting.entries) {
+    if (!_sameRedirect(previousBySource[entry.key]!, entry.value)) {
+      throw StateError(
+        'firebase.json diverge del manifiesto anterior en ${entry.key}; '
+        'no es seguro sobrescribirlo.',
+      );
+    }
   }
   for (final source in previousBySource.keys) {
-    if (!existingBySource.containsKey(source)) {
+    if (!ownedExisting.containsKey(source)) {
       throw StateError(
         'El manifiesto anterior declara $source, pero firebase.json no lo '
         'contiene. Repara la divergencia antes de regenerar.',
       );
     }
   }
-  retained.sort(
-    (a, b) => a['source'].toString().compareTo(b['source'].toString()),
-  );
-  final finalRedirects = [...retained, ...generated];
+  final finalRedirects = [...manual, ...generated];
   storeHosting['redirects'] = finalRedirects;
 
   const encoder = JsonEncoder.withIndent('  ');
@@ -5162,6 +5172,41 @@ Map<String, dynamic> _validatedExactRedirect(
     'destination': destination,
     'type': 301,
   };
+}
+
+/// A hand-written store redirect the generator does not own. Only its shape
+/// is checked — the exact Firebase keys, a path source, a non-empty
+/// destination, a 301 or 302 — because a stricter contract here is exactly
+/// what blocked the storefront deploys: the rule belongs to whoever wrote it
+/// (an ERP hand-off such as `/accept-invitation`), and Firebase validates its
+/// syntax at deploy time. It is returned verbatim, never normalised.
+Map<String, dynamic> _validatedManualRedirect(
+  Map<String, dynamic> value, {
+  required String owner,
+}) {
+  const expectedKeys = {'source', 'destination', 'type'};
+  final keys = value.keys.toSet();
+  if (keys.length != expectedKeys.length || !keys.containsAll(expectedKeys)) {
+    throw FormatException(
+      '$owner: un redirect manual debe contener exactamente source, '
+      'destination y type.',
+    );
+  }
+  final source = value['source'];
+  final destination = value['destination'];
+  final type = value['type'];
+  if (source is! String ||
+      !source.startsWith('/') ||
+      destination is! String ||
+      destination.trim().isEmpty ||
+      destination.trim() != destination ||
+      (type != 301 && type != 302) ||
+      source == destination) {
+    throw FormatException(
+      '$owner contiene un redirect manual inválido: $value.',
+    );
+  }
+  return {'source': source, 'destination': destination, 'type': type};
 }
 
 bool _isStrictPublicRedirectPath(String value) {

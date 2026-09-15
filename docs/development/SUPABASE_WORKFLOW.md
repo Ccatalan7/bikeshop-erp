@@ -112,6 +112,13 @@ the new commit, and it stayed unnoticed for five weeks because `main`
 received no push in between. Fix: refresh that one secret from the Keychain
 entry above and re-run the failed job; never reset the database password for
 this, which would break the Mac wrapper and every other consumer.
+Done on 2026-09-15 22:36 UTC with
+`security find-generic-password -w -s '<service>' -a postgres | gh secret set
+SUPABASE_DB_PASSWORD --env Production` (the value never touches the
+terminal); the next deploy run (`35030810641`, `dc1e609`) passed that step on
+its first attempt because environment secrets are read when the job starts,
+not when the run is queued. Prove the Keychain copy first with
+`bash scripts/db/health.sh production`, which uses the same credential path.
 | Publishable key | Public client initialization and RLS-governed requests | macOS Keychain service `Vinabike ERP Supabase publishable key`, account `supabase`; approved client/CI configuration |
 | Staging ref/password | Dormant environment tooling | Keychain services `Vinabike ERP Supabase staging project ref` and `Vinabike ERP Supabase staging database password`; protected environment variables |
 | Staging publishable key/E2E login | Dormant browser fixtures, only after owner reactivation | Keychain services `Vinabike ERP Supabase staging publishable key` and `Vinabike ERP staging E2E password`; protected `SUPABASE_STAGING_PUBLISHABLE_KEY` / `E2E_PASSWORD` |
@@ -327,6 +334,53 @@ without `(select …)`, the ERP shell's 20 s / 30 s pollers, the storefront's
 30 s / 60 s freshness pulses per open tab, and the per-minute pg_cron workers
 with `cron.job_run_details` never purged (215k rows). They are backlog, not
 the alert.
+
+### Backlog de carga residual, 2026-09-15
+
+Medido en producción sobre 17 días desde el 2026-08-30 05:29 UTC (reset de
+`pg_stat_statements`), ya sin el bucle de reintentos `40001`. Cada bloque va
+en su propia PR con migración, `--verify` y read-back, y se mide antes y
+después con `just db-cpu production` y `pg_stat_statements`:
+
+1. **Higiene de RLS e índices.** 58 políticas reevalúan `auth.uid()` /
+   `current_setting()` por fila (envolverlas en `(select …)` sin cambiar
+   semántica); 45 políticas permisivas duplicadas por rol/acción
+   (`email_push_subscriptions` 7, `product_gama_overrides` 7,
+   `customer_addresses` 4, catálogo y `website_*`); 593 FKs sin índice en
+   `public` (indexar las tablas calientes: `messages`, `conversations`,
+   `erp_notifications`, `smart_tasks`, `smart_task_job_items`,
+   `mechanic_jobs`, `sales_invoices`, `employees`); 11 índices duplicados.
+   Los 450 índices sin uso sólo se listan con tamaño y costo de escritura;
+   no se borran sin decisión del dueño. Releer el advisor antes de tocar.
+2. **Realtime.** `list_changes`: 2,07 M llamadas, 2 711 min de CPU, 78 ms por
+   sondeo, ~85 sondeos por minuto; 20 suscripciones (`messages` 2,
+   `erp_notifications` 2, `sales_invoices` 2, `sales_payments`,
+   `purchase_invoices`, `purchase_payments`, `mechanic_jobs`,
+   `stock_adjustments`, `mechanic_job_tasks`, `conversations`). Inventariar
+   cada `postgres_changes` en `lib/`, dejar sólo lo que la pantalla abierta
+   necesita y mover notificaciones y contadores a broadcast desde triggers,
+   como ya hace `financial_projection`.
+3. **Polling del ERP.** `smart_tasks` 118 900 llamadas a 63 ms (125 min),
+   `smart_task_job_items` 116 908 a 19 ms, `smart_task_user_state` 116 881;
+   `erp_notifications` en tres variantes de ~142 k llamadas (la de 17 ms
+   suma 40 min): un cliente preguntando cada 20–40 s. Quitar los ciclos o
+   ponerles backoff con la ventana inactiva; usar Realtime donde ya hay
+   suscripción.
+4. **Mensajería.** `conversation_unread_counts` 1 862 ms de media (1 661
+   llamadas), listado de `messages` 2 098 ms (631) y otra de `messages`
+   249 ms (4 058); `mechanic_job_service_warranty_view` 197 ms; `employees`
+   77 ms × 12 334. Contador materializado o índices, objetivo < 50 ms.
+5. **Housekeeping.** `invoke_transactional_email_worker`,
+   `invoke_mercadopago_preference_worker` y `recover_whatsapp_outbox_v1` a
+   52–58 ms por minuto cada uno; limpieza de `net._http_response` 21 ms ×
+   96 804; `cron.job_run_details` 216 k filas / 42 MB sin purga;
+   `net._http_response` 55 MB. Purga programada (conservar 7 días) y salida
+   temprana de los tres workers cuando no hay cola.
+6. **`raise … errcode '40001'` restantes** en
+   `20260829160000_supply_need_refinement_modes.sql` (siete `using errcode =
+   '40001'`, líneas 263–1200): revisar cada uno con la regla de arriba
+   —`40001` sólo cuando repetir la misma transacción puede tener éxito— y
+   reclasificar los que sean rechazos de negocio.
 
 `supabase/manual_checks/diagnostics/cpu_pressure_profile.sql` (`just db-cpu`)
 measures all of it: execution time by role and by statement, calls per hour,

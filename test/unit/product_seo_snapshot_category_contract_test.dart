@@ -1007,6 +1007,105 @@ void main() {
     );
   });
 
+  test(
+      'Firebase redirects preserve hand-written rules the generator does not own',
+      () async {
+    // 2026-08-05 added `/accept-invitation` (a 302 to the ERP origin) to the
+    // store target by hand. Validating it under the owned-redirect contract
+    // failed every storefront push deploy until 2026-09-15.
+    final root = await Directory.systemTemp.createTemp('seo-manual-redirect-');
+    addTearDown(() async {
+      if (await root.exists()) await root.delete(recursive: true);
+    });
+    final buildDir = Directory('${root.path}/build/web_store')
+      ..createSync(recursive: true);
+    final configFile = File('${root.path}/firebase.json');
+    final manifestFile = File('${root.path}/redirects.json');
+    const invitation = {
+      'source': '/accept-invitation',
+      'destination': 'https://project-vinabike.web.app/accept-invitation',
+      'type': 302,
+    };
+    const aliasPath = '/productos/old-product-id';
+    const canonicalPath = '/productos/producto-publicado/SKU-1';
+    const generated = {
+      'source': aliasPath,
+      'destination': canonicalPath,
+      'type': 301,
+    };
+
+    Future<void> writeConfig(List<Map<String, dynamic>> redirects) =>
+        configFile.writeAsString(
+          jsonEncode({
+            'hosting': [
+              {
+                'target': 'store',
+                'public': buildDir.path,
+                'redirects': redirects,
+              },
+            ],
+          }),
+        );
+    Future<snapshots.SeoFirebaseRedirectWritePlan> plan() =>
+        snapshots.buildFirebaseStorefrontRedirectPlan(
+          firebaseConfigFile: configFile,
+          manifestFile: manifestFile,
+          productRedirects: const [
+            snapshots.SeoProductRedirectAlias(
+              productId: 'product-1',
+              aliasPath: aliasPath,
+            ),
+          ],
+          categoryRedirects: const [],
+          canonicalPathByProductId: const {'product-1': canonicalPath},
+          expectedPublicDirectory: buildDir.path,
+        );
+    Future<List<dynamic>> storeRedirects() async {
+      final config =
+          jsonDecode(await configFile.readAsString()) as Map<String, dynamic>;
+      final store = (config['hosting'] as List).single as Map<String, dynamic>;
+      return store['redirects'] as List;
+    }
+
+    // First generation: no manifest yet, the manual rule sits first.
+    await writeConfig([invitation]);
+    await (await plan()).apply();
+    expect(await storeRedirects(), [invitation, generated]);
+    final manifest =
+        jsonDecode(await manifestFile.readAsString()) as Map<String, dynamic>;
+    expect(manifest['redirects'], [generated]);
+
+    // Second generation over its own output is idempotent and still does not
+    // claim the manual rule.
+    await (await plan()).apply();
+    expect(await storeRedirects(), [invitation, generated]);
+
+    // A manual rule keeps file order relative to other manual rules.
+    const contact = {
+      'source': '/contacto-viejo',
+      'destination': '/contacto',
+      'type': 301,
+    };
+    await writeConfig([invitation, contact, generated]);
+    await (await plan()).apply();
+    expect(await storeRedirects(), [invitation, contact, generated]);
+
+    // A malformed manual rule still fails closed instead of being dropped.
+    await manifestFile.delete();
+    await writeConfig([
+      {'source': '/accept-invitation', 'type': 302},
+    ]);
+    await expectLater(plan(), throwsA(isA<FormatException>()));
+    await writeConfig([
+      {'source': '/accept-invitation', 'destination': '', 'type': 302},
+    ]);
+    await expectLater(plan(), throwsA(isA<FormatException>()));
+    await writeConfig([
+      {'source': '/accept-invitation', 'destination': '/x', 'type': 307},
+    ]);
+    await expectLater(plan(), throwsA(isA<FormatException>()));
+  });
+
   test('artifact validator rejects sitemap routes without snapshots', () async {
     final buildDir = await Directory.systemTemp.createTemp(
       'storefront-seo-artifact-contract-',

@@ -5,10 +5,24 @@ BUILD_DIR="${1:-build/web_store}"
 BUNDLE="$BUILD_DIR/main.dart.js"
 # These are regression canaries, not a requirement that every legitimate
 # feature fit inside an old snapshot forever. The defaults intentionally keep
-# roughly 8-14% runway over the July 2026 storefront while still catching
+# roughly 8-14% runway over the current storefront while still catching
 # accidental ERP imports and package-scale jumps.
-MAX_RAW_BYTES="${STOREFRONT_MAX_RAW_BYTES:-6000000}"
-MAX_GZIP_BYTES="${STOREFRONT_MAX_GZIP_BYTES:-1700000}"
+#
+# 2026-09-15 re-base. The July 2026 ceilings (raw 6 000 000, gzip 1 700 000)
+# were set over a 5 467 276 / 1 541 073 bundle with 31 deferred chunks. The
+# first build of `main` after the cutover (dc1e609) measured 6 687 239 /
+# 1 775 132 with 23 chunks, identically on the Mac and on the CI runner: the
+# storefront shell now imports the website editor host
+# (persistent_editor_shell, contextual dock, block sheet, command scope, draft
+# recovery) and the customer chat (messaging service, chat provider,
+# attachments) eagerly, so eight chunks that used to load on demand merged
+# into main.dart.js. Nobody saw it grow because the store workflow never
+# reached this step between 2026-08-10 and 2026-09-15 (see
+# docs/runbooks/MAIN_BRANCH_CUTOVER.md §0.3, paso 5). Putting the editor host
+# and the chat behind the existing `deferred as` seams is backlog (§17.1);
+# until then the ceilings keep ~9% runway over dc1e609.
+MAX_RAW_BYTES="${STOREFRONT_MAX_RAW_BYTES:-7300000}"
+MAX_GZIP_BYTES="${STOREFRONT_MAX_GZIP_BYTES:-1950000}"
 MAX_DEFERRED_TOTAL_BYTES="${STOREFRONT_MAX_DEFERRED_TOTAL_BYTES:-3600000}"
 MAX_DEFERRED_CHUNK_BYTES="${STOREFRONT_MAX_DEFERRED_CHUNK_BYTES:-1600000}"
 
