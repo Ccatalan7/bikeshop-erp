@@ -151,10 +151,28 @@ jobs:
           PREVIEW_URL: ${{ steps.preview.outputs.details_url }}
         run: |
           test -n "$PREVIEW_URL"
-          curl --fail --silent --show-error --retry 10 --retry-delay 3 \
-            -H 'Cache-Control: no-cache' \
-            "$PREVIEW_URL/release.json?commit=${{ github.sha }}" \
-            | jq -e --arg commit "${{ github.sha }}" '.commit == $commit and .target == "erp-preview"'
+          # A channel that already existed keeps serving its previous version
+          # for a short while after `hosting:channel:deploy` returns (seen on
+          # the second push of PR #29: the deploy succeeded and the very next
+          # read still carried the earlier commit). `curl --retry` only covers
+          # transport errors, so the content itself is polled for up to two
+          # minutes with a fresh cache-buster on every attempt.
+          expected='${{ github.sha }}'
+          served=''
+          for attempt in $(seq 1 20); do
+            served="$(curl --fail --silent --show-error \
+              -H 'Cache-Control: no-cache' \
+              "$PREVIEW_URL/release.json?commit=${expected}&attempt=${attempt}" \
+              | jq -r 'select(.target == "erp-preview") | .commit' || true)"
+            if [ "$served" = "$expected" ]; then
+              echo "Preview serves ${expected} after ${attempt} attempt(s)."
+              exit 0
+            fi
+            echo "Attempt ${attempt}: preview still serves '${served:-<none>}'; waiting."
+            sleep 6
+          done
+          echo "::error::Preview never served ${expected}; last seen '${served:-<none>}'."
+          exit 1
 
       - name: Write the link to the run summary
         if: steps.creds.outputs.enabled == 'true'
