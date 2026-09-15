@@ -645,13 +645,17 @@ a wrapper write would be.
 
 **Governance gap found the same day.** A cloud session clones the default
 branch, `main`, which on 2026-09-15 was 94 commits and five weeks behind the
-working branch `smartpegas1.0`. The function burning the instance, its
-migration (`20260829160000_supply_need_refinement_modes.sql`) and 26 other
-production migrations existed only on the working branch, so the cloud agent
-first concluded, wrongly, that they had never been pushed. Until `main` is the
-working line (`docs/runbooks/MAIN_BRANCH_CUTOVER.md`), a cloud session must
-fetch `origin/smartpegas1.0` before claiming that anything is absent from the
-repository.
+working branch `smartpegas1.0`; and the working branch itself was eight days
+behind the Mac checkout: the function burning the instance had been pushed
+(`20260829160000_supply_need_refinement_modes.sql`, on `smartpegas1.0`), but
+the twenty migrations deployed to production between 2026-09-08 and
+2026-09-15 existed only on the Mac until the owner's local session committed
+them that afternoon. Two rules follow. A cloud session fetches
+`origin/smartpegas1.0` (until `main` is the working line, see
+`docs/runbooks/MAIN_BRANCH_CUTOVER.md`) before claiming that anything is
+absent from the repository. And a deploy through the guarded wrapper is not
+finished until its migration file is pushed: production must never be ahead
+of `origin`.
 
 ## Credentials
 
