@@ -278,15 +278,27 @@ https://mcp.supabase.com/mcp?project_ref=xzdvtzdqjeyqxnkqprtf&read_only=true
 ```
 
 added in claude.ai → Settings → Connectors → *Add custom connector*, then
-authorised with the owner's Supabase login. Its `execute_sql` runs in a
-read-only transaction on the server side, but it does not carry the wrapper's
-journal, row cap, or sensitive-column guard, so in that mode: name the columns
-you need, never star-project a table listed in
-`scripts/db/sensitive_tables.txt`, add `limit` to every row-returning query,
-and keep results out of committed files. Writes remain wrapper-only: a
-migration or fix found from the cloud is deployed from the owner's machine or
-by Codex through `scripts/db/query.sh … --write`, exactly as before. Dropping
-`read_only=true` is an owner decision, not an agent default.
+authorised with the owner's Supabase login. The owner connected it on
+2026-09-15 and the session found it **writable** (`create temp table`
+succeeded), so `read_only` is not something to rely on blindly: probe it, and
+behave as read-only unless the task is an implementation/fix with the owner's
+go-ahead. The connector does not carry the wrapper's journal, row cap, or
+sensitive-column guard: name the columns you need, never star-project a table
+listed in `scripts/db/sensitive_tables.txt`, add `limit` to every
+row-returning query, and keep results out of committed files. Governed
+migrations still go through the wrapper from a machine that holds the
+credential; a live emergency fix applied through the connector (2026-09-15:
+one `create or replace function` that stopped a 900-request/s retry storm) is
+recorded as a migration file in the same task and read back live, exactly as
+a wrapper write would be.
+
+**Governance gap found the same day.** Production carries at least 20
+migrations (`20260908…` to `20260915…`: product spec templates, supplier need
+portal searches, brake successors) that are not in `origin/main`. They were
+deployed from a checkout that was never pushed. An agent that reads only this
+repository cannot find the function that is burning the instance, and
+`core_schema.sql` cannot mirror what it has never seen. The checkout that
+deploys must push what it deploys.
 
 ## Credentials
 

@@ -231,41 +231,59 @@ just db-cpu production
 
 Full manifests and verbose output stay under ignored `.tmp/db/`.
 
-### A Supabase "high CPU usage" email is answered with `just db-cpu`, not by reading code
+### A Supabase "high CPU usage" email is answered with measurements, not by reading code
 
-2026-09-15. The project is small and still received the >80% CPU alert. The
-codebase cannot say which of its recurring loads is the one that burns the
-instance, only that there are several, and each one looks harmless in
-isolation:
+2026-09-15. The project is small and still received the >80% CPU alert every
+Saturday night for three weeks. Reading the code produced five plausible
+suspects (per-minute pg_cron workers, the in-database backup, storefront and
+ERP polling, RLS helpers evaluated per row, Realtime). None was the cause. The
+measurement found it in minutes:
 
-- pg_cron fires three Edge workers **every minute** (`vinabike_transactional_email_worker`,
-  `vinabike_mercadopago_preference_worker`,
-  `vinabike_storefront_publication_dispatcher`), one every 5 min and the backup
-  scheduler every 15 min. Each tick is a Vault decrypt, a `net.http_post`, an
-  Edge invocation and its claim RPC. `cron.job_run_details` is never purged.
-- The scheduled backup serialises the whole tenant into one JSONB row
-  (`create_backup_internal`); an `hourly` schedule turns that into an hourly
-  CPU spike.
-- Every open storefront tab polls categories every 30 s and the unified site
-  payload plus pages every 60 s. Every ERP session polls `erp_notifications`
-  twice every 20 s and tasks every 30 s, on top of its realtime channels.
-- Some 300 RLS policies compare `tenant_id = public.user_tenant_id()` and
-  dozens more call `is_active_tenant_member(tenant_id)` or
-  `can_manage_tenant_*(tenant_id)` with the row's own column. None is wrapped
-  in `(select …)`, so whenever the predicate is not the index key the
-  `user_profiles × tenants` lookup runs once per row instead of once per
-  query.
+- **The cause was one client retrying a rejected RPC in a loop.** A trigger
+  rejected a stale `record_supplier_need_portal_search_v1` receipt with
+  errcode `40001` (serialization_failure). To every client that code means
+  «retry the same transaction», so the ERP retried it ~900 times per second
+  for 16 days: 1.14 billion aborted transactions, PostgREST's whole pool busy,
+  `tenants` and `user_profiles` sequentially scanned 1.16 billion times by
+  `user_tenant_id()` inside each attempt. Changing the errcode to `23514`
+  (class 23, «rejected, do not retry») stopped it within the minute.
+  `supabase/migrations/20260915190000_reject_stale_need_portal_search_definitively.sql`
+  is the exact deployed body.
+- **A failing-request storm is invisible in `pg_stat_statements`.** It only
+  records statements that complete, so §2–§4 of the profile showed Realtime
+  as 66% of tracked time while the real burner was untracked. The tells are
+  `pg_stat_database.xact_rollback` (§12d), the ERROR rate in `postgres_logs`,
+  and PostgREST backends all `active` or `idle in transaction (aborted)` on
+  the same statement (§5).
+- **Identify a PostgREST caller from inside the database.** Nothing in the
+  edge logs matched, so the trigger's exception message temporarily included
+  `current_setting('request.headers', true)`: `x-client-info` named the
+  Flutter app, `x-forwarded-for` the owner's own network, and the bearer's
+  `iat` dated the runaway session to 2026-08-30. One `create or replace`,
+  read the next log lines, put the original back.
+- **Supabase re-sends the CPU alert weekly while the condition persists.**
+  Three emails at the same hour on consecutive weekends were the same
+  continuous storm, not a weekly job.
+- **`40001` is an instruction, not a label.** Raise it only when re-running
+  the identical transaction can succeed. A receipt stamped with a superseded
+  version can never be accepted; that is class 23 or `P0001`, with `detail`
+  and `hint` telling the client what to reload.
 
-`supabase/manual_checks/diagnostics/cpu_pressure_profile.sql` measures which
-of those actually costs: execution time by role and by statement
-(`pg_stat_statements`), calls per hour, live activity, replication-slot lag,
-seq-scan pressure, bloat, the backup schedule, the worker runtimes, pg_cron
-run history, pg_net responses and live Realtime subscriptions. Read §1
-(`avg_active_backends`) and §2 (time by role) first; §3 names the statement.
-Trailing sections read the `cron`, `net` and `realtime` schemas and may stop
-on a permission error without invalidating the earlier ones. It needs the
-hosted credential, so it runs from the owner's machine, not from a remote
-container.
+The measured secondary loads, in order, once the storm was gone: Realtime
+`list_changes` (~11% of one core continuously, 21 published tables, ~19 live
+subscriptions), ~300 RLS policies comparing `tenant_id = public.user_tenant_id()`
+without `(select …)`, the ERP shell's 20 s / 30 s pollers, the storefront's
+30 s / 60 s freshness pulses per open tab, and the per-minute pg_cron workers
+with `cron.job_run_details` never purged (215k rows). They are backlog, not
+the alert.
+
+`supabase/manual_checks/diagnostics/cpu_pressure_profile.sql` (`just db-cpu`)
+measures all of it: execution time by role and by statement, calls per hour,
+live activity, rollbacks, replication-slot lag, seq-scan pressure, bloat, the
+backup schedule, the worker runtimes, pg_cron run history, pg_net responses
+and live Realtime subscriptions. Read §12d and §5 first; then §2/§3. Trailing
+sections read the `cron`, `net` and `realtime` schemas and may stop on a
+permission error without invalidating the earlier ones.
 
 ## Authorized production writes
 

@@ -30,13 +30,13 @@ select
   '1_database_activity' as section,
   datname,
   stats_reset,
-  round(extract(epoch from (now() - stats_reset)) / 3600.0, 1) as hours_since_reset,
-  round((active_time / 1000.0) / greatest(extract(epoch from (now() - stats_reset)), 1)::numeric, 2)
+  round((extract(epoch from (now() - stats_reset)) / 3600.0)::numeric, 1) as hours_since_reset,
+  round(((active_time / 1000.0) / greatest(extract(epoch from (now() - stats_reset)), 1))::numeric, 2)
     as avg_active_backends,
-  round(active_time / 1000.0 / 3600.0, 1) as active_hours,
+  round((active_time / 1000.0 / 3600.0)::numeric, 1) as active_hours,
   xact_commit,
   xact_rollback,
-  round(100.0 * blks_hit / greatest(blks_hit + blks_read, 1), 2) as cache_hit_pct,
+  round((100.0 * blks_hit / greatest(blks_hit + blks_read, 1))::numeric, 2) as cache_hit_pct,
   temp_files,
   pg_size_pretty(temp_bytes) as temp_bytes,
   deadlocks,
@@ -51,9 +51,9 @@ select
   coalesce(r.rolname, s.userid::text) as role_name,
   count(*) as distinct_statements,
   sum(s.calls) as calls,
-  round(sum(s.total_exec_time) / 1000.0, 1) as total_exec_s,
-  round(100.0 * sum(s.total_exec_time) / greatest(sum(sum(s.total_exec_time)) over (), 1), 1) as pct_of_all,
-  round(sum(s.total_exec_time) / greatest(sum(s.calls), 1), 3) as mean_ms
+  round((sum(s.total_exec_time) / 1000.0)::numeric, 1) as total_exec_s,
+  round((100.0 * sum(s.total_exec_time) / greatest(sum(sum(s.total_exec_time)) over (), 1))::numeric, 1) as pct_of_all,
+  round((sum(s.total_exec_time) / greatest(sum(s.calls), 1))::numeric, 3) as mean_ms
 from pg_stat_statements s
 left join pg_roles r on r.oid = s.userid
 where s.dbid = (select oid from pg_database where datname = current_database())
@@ -65,10 +65,10 @@ select
   '3_top_by_total_time' as section,
   coalesce(r.rolname, s.userid::text) as role_name,
   s.calls,
-  round(s.total_exec_time / 1000.0, 1) as total_exec_s,
-  round(100.0 * s.total_exec_time / greatest(sum(s.total_exec_time) over (), 1), 1) as total_pct,
-  round(s.mean_exec_time, 2) as mean_ms,
-  round(s.max_exec_time, 1) as max_ms,
+  round((s.total_exec_time / 1000.0)::numeric, 1) as total_exec_s,
+  round((100.0 * s.total_exec_time / greatest(sum(s.total_exec_time) over (), 1))::numeric, 1) as total_pct,
+  round(s.mean_exec_time::numeric, 2) as mean_ms,
+  round(s.max_exec_time::numeric, 1) as max_ms,
   s.rows,
   s.shared_blks_hit,
   s.shared_blks_read,
@@ -86,11 +86,11 @@ select
   coalesce(r.rolname, s.userid::text) as role_name,
   s.calls,
   round(
-    s.calls / greatest(extract(epoch from (now() - i.stats_reset)) / 3600.0, 0.01)::numeric,
+    (s.calls / greatest(extract(epoch from (now() - i.stats_reset)) / 3600.0, 0.01))::numeric,
     0
   ) as calls_per_hour,
-  round(s.total_exec_time / 1000.0, 1) as total_exec_s,
-  round(s.mean_exec_time, 3) as mean_ms,
+  round((s.total_exec_time / 1000.0)::numeric, 1) as total_exec_s,
+  round(s.mean_exec_time::numeric, 3) as mean_ms,
   left(regexp_replace(s.query, '\s+', ' ', 'g'), 220) as query
 from pg_stat_statements s
 cross join pg_stat_statements_info i
@@ -268,16 +268,8 @@ where singleton;
 
 select
   '11c_storefront_publication_dispatcher' as section,
-  tenant_id,
-  target_key,
-  dispatch_enabled,
-  last_dispatch_tick_at,
-  last_dispatch_request_id,
-  last_dispatch_error_class,
-  left(coalesce(last_dispatch_error_message, ''), 160) as last_dispatch_error_message,
-  updated_at
-from public.storefront_publication_targets
-order by updated_at desc;
+  to_regclass('public.storefront_publication_targets') is not null as targets_table_exists,
+  exists (select 1 from cron.job where jobname = 'vinabike_storefront_publication_dispatcher') as cron_job_installed;
 
 -- §12 pg_cron: installed jobs and the last 24 hours of runs.
 select
@@ -313,6 +305,20 @@ select
   min(start_time) as oldest_row,
   pg_size_pretty(pg_total_relation_size('cron.job_run_details')) as relation_total_size
 from cron.job_run_details;
+
+-- §12d Aborted transactions and error rate. A request storm that FAILS never
+-- shows up in pg_stat_statements (only successfully completed statements are
+-- recorded), so a runaway client retrying a rejected RPC is invisible in §2-§4
+-- and only appears here and in postgres_logs (ERROR lines per hour). This is
+-- what burned the instance on 2026-09-15: 1.14 billion rollbacks in 16 days.
+select
+  '12d_rollbacks' as section,
+  xact_commit,
+  xact_rollback,
+  round((100.0 * xact_rollback / greatest(xact_commit + xact_rollback, 1))::numeric, 1) as rollback_pct,
+  stats_reset
+from pg_stat_database
+where datname = current_database();
 
 -- §13 pg_net responses still retained (default TTL is 6 hours).
 select
