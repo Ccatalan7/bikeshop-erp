@@ -108,3 +108,20 @@ Al reanudar: (1) restaurar la base local; (2) 27 registros sin plantilla;
 (3) reemplazos originales; (4) release del cliente y asignación de AE0266/AE0274;
 (5) gates del llenado.
 
+## Preparación del cutover (runbook 9.2), 2026-09-15
+
+Clasificación del árbol sucio: **producto intencional** → commits `62a68acc`,
+`ea38266b`, `8f3d8926`, `05269b2b`, `60a9a5d9`, `bb739233` y este; el JSON
+`assigned-product-family-adjudication-2026-09-07.json` se revisó y no contiene
+campos comerciales (sólo `establishes_stock_model`), así que entra como producto.
+**Local/temporal:** nada quedó fuera salvo `.tmp/` (ya ignorado). **Cambio
+concurrente:** la otra sesión terminó; sus archivos van íntegros en los commits
+anteriores. `20260723023000_add_audited_sales_payment_corrections.sql` está
+`NOT_APPLIED` en producción (sus objetos entraron por `20260910123000`,
+`APPLIED`); el cambio es sólo la cabecera «SUPERSEDED, never deploy» del 10-09 y
+es legítimo. Fusión con `origin/smartpegas1.0` (`f51f3777`) por estrategia
+`ours`: verificado blob a blob que los 152 archivos que esos tres commits tocan
+están en HEAD idénticos (129) o como evolución local posterior de la misma foto
+del 07-09 (23; el único con hunks exclusivos del clon, `copilot-instructions.md`,
+ya los contiene). Worktrees inventariados: tres de Codex, todos detached.
+
