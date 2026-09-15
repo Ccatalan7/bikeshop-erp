@@ -11,7 +11,7 @@ void main() {
       'lib/modules/inventory/services/inventory_service.dart',
     ).readAsStringSync();
 
-    expect(form, contains('saveProductSetAggregate('));
+    expect(form, contains('saveProductSetAggregateWithContext('));
     expect(form, contains("parentPayload['expected_updated_at']"));
     expect(form, isNot(contains('_createSetComponentProducts')));
     expect(service, contains("'save_product_set_aggregate'"));
