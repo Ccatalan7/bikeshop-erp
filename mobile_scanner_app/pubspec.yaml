@@ -20,7 +20,7 @@ dependencies:
   provider: ^6.1.2
 
   # Storage
-  shared_preferences: ^2.2.3
+  shared_preferences: ^2.5.5
 
   # Utilities
   uuid: ^4.4.0
