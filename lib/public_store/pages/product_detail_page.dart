@@ -2297,6 +2297,13 @@ class _ProductDetailPageState extends State<ProductDetailPage>
       final rodado = _wheelSizeLabelForBsd(raw);
       if (rodado != null) return rodado;
     }
+    // Las filas de ajuste de una cámara llegan ya redactadas por el servidor
+    // («Diámetro de asiento (BSD): 559 mm · Ancho mínimo: 38.1 mm · Ancho
+    // máximo: 44.4 mm»). El cliente compra por aro y ancho.
+    if (spec.specKey == 'tube_fit_rows') {
+      final rodado = _tubeFitLabel(raw);
+      if (rodado != null) return rodado;
+    }
 
     // La coma sólo separa elementos cuando el campo es multi-valor: el RPC une
     // ahí un `value_json` con «, ». En cualquier otro tipo la coma es parte del
@@ -2325,6 +2332,33 @@ class _ProductDetailPageState extends State<ProductDetailPage>
       display = '$display $unit';
     }
     return display;
+  }
+
+  /// «29" / 700c (ISO 622), neumático 19-25 mm» a partir del texto que el
+  /// servidor redacta para cada fila de ajuste; null si el texto no trae el
+  /// diámetro.
+  String? _tubeFitLabel(String raw) {
+    final rows = <String>[];
+    for (final row in raw.split(RegExp(r'\s*\|\s*|\n'))) {
+      final bsd = RegExp(r'BSD\)?\s*:\s*([0-9]+)').firstMatch(row);
+      if (bsd == null) continue;
+      final rodado = _wheelSizeLabelForBsd(bsd.group(1)!) ?? 'ISO ${bsd.group(1)}';
+      final min = RegExp(r'm[ií]nimo\s*:\s*([0-9]+(?:[.,][0-9]+)?)', caseSensitive: false)
+          .firstMatch(row)
+          ?.group(1);
+      final max = RegExp(r'm[aá]ximo\s*:\s*([0-9]+(?:[.,][0-9]+)?)', caseSensitive: false)
+          .firstMatch(row)
+          ?.group(1);
+      final ancho = min != null && max != null
+          ? ', neumático $min-$max mm'
+          : min != null
+              ? ', neumático desde $min mm'
+              : max != null
+                  ? ', neumático hasta $max mm'
+                  : '';
+      rows.add('$rodado$ancho');
+    }
+    return rows.isEmpty ? null : rows.join(' · ');
   }
 
   /// Rodado comercial de un diámetro ISO 5775 (tabla de Sheldon Brown), o

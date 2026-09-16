@@ -59,3 +59,18 @@ importada no la tiene).
   584 frente a una bici 29" es **incompatible**; 622 coincide y nombra ancho y talón), y lee las
   filas de ajuste de la cámara y el BSD del cubre cámara antes que el rótulo retirado
   (`tube_fit_rows`, «aro 29" / 700c para neumático 49.5-55.9 mm»). 127 pruebas verdes (3 nuevas).
+- Las filas de ajuste de la cámara son visibles para el cliente bajo el rótulo «Aro y ancho de
+  neumático» (`20260916202000`, verificado; no filtrables), y la tienda las redacta como
+  «26" (ISO 559), neumático 38.1-44.4 mm» a partir del texto que redacta el servidor
+  (`_tubeFitLabel`). Probado bajo rollback como anónimo antes de publicar la bandera.
+
+## Auditoría global releída (22:34Z)
+
+`refresh_global_coverage_audit.py` contra producción tras las tres pasadas de lectura de nombre y
+este aplicador: productos físicos con hechos **461 → 844**, con plantilla y sin hechos 1.133 →
+750, con pendientes 1.584 → 1.458, **cero bloqueantes**, cero hechos fuera de plantilla. Resumen
+en [global-coverage-summary-2026-09-16b.json](global-coverage-summary-2026-09-16b.json). Hechos
+vivos (no `legacy`, plantilla resuelta por vínculo explícito o categoría): 1.885 en 824 productos
+(892 lecturas de nombre, 654 texto de proveedor, 229 inferidos, 103 importados, 6 investigación,
+1 mecánico).
+

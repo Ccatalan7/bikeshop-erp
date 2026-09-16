@@ -271,3 +271,9 @@ ya los contiene). Worktrees inventariados: tres de Codex, todos detached.
   pedalieres (filas con URL obligatoria). El taller compara neumáticos y cámaras por ISO y la
   tienda muestra «29" / 700c (ISO 622)»:
   [legacy-projections-2026-09-16.md](legacy-projections-2026-09-16.md).
+- **Cámaras con aro visible en la tienda y auditoría global releída.** `tube_fit_rows` pasa a
+  visible bajo «Aro y ancho de neumático» (`20260916202000`) y la tienda lo redacta como «26"
+  (ISO 559), neumático 38.1-44.4 mm». Auditoría global de 22:34Z: físicos con hechos 461 → 844,
+  pendientes 1.584 → 1.458, cero bloqueantes; hechos vivos 1.885 en 824 productos
+  ([global-coverage-summary-2026-09-16b.json](global-coverage-summary-2026-09-16b.json)).
+

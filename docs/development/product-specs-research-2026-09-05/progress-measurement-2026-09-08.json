@@ -1606,5 +1606,33 @@
   ],
   "record": "legacy-projections-2026-09-16.json",
   "note": "legacy-projections-2026-09-16.md"
+ },
+ "global_coverage_audit_2026_09_16b": {
+  "snapshot_at": "2026-09-16T22:34:57.668476+00:00",
+  "summary": "global-coverage-summary-2026-09-16b.json",
+  "physical_with_facts": 844,
+  "physical_with_facts_previous": 461,
+  "physical_with_template_without_facts": 750,
+  "products_with_server_issues": 1458,
+  "products_with_blocking_server_issues": 0,
+  "products_with_facts_outside_template": 0
+ },
+ "live_facts_2026_09_16": {
+  "facts": 1885,
+  "products": 824,
+  "by_source": {
+   "name_reading": 892,
+   "supplier_text": 654,
+   "inferred": 229,
+   "import": 103,
+   "research": 6,
+   "mechanic": 1
+  },
+  "note": "non-legacy facts on the resolved template (explicit binding or category), read 2026-09-16 ~22:40Z"
+ },
+ "tube_fit_rows_visible_2026_09_16": {
+  "migration": "20260916202000",
+  "label": "Aro y ancho de neumático",
+  "storefront_format": "_tubeFitLabel in product_detail_page.dart"
  }
 }
