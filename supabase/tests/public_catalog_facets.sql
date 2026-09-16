@@ -1191,6 +1191,19 @@ values
     '["Presta"]'::jsonb, true, true
   );
 
+-- A rows field («Aro y ancho» of a tube) whose numeric cell carries the key of
+-- the filterable number field: the visitor filters it as that field.
+insert into public.spec_definitions (
+  id, tenant_id, key, label, data_type, unit, allowed_values, validation_rules,
+  is_filterable, is_customer_visible
+)
+values (
+  '7fac5000-0000-4000-8000-000000000005', null, 'facet_test_fit_rows',
+  'Aro y largo (prueba)', 'json', 'mm', '[]'::jsonb,
+  '{"rows_schema": {"version": 1, "columns": [{"key": "facet_test_valve_len", "type": "integer", "unit": "mm", "label": "Largo", "required": true, "validation": {"positive": true}}], "unique_by": [["facet_test_valve_len"]]}}'::jsonb,
+  false, true
+);
+
 insert into public.spec_definition_values (
   id, spec_definition_id, code, label, sort_order, is_active
 )
@@ -1225,7 +1238,8 @@ values
   ('7fac6000-0000-4000-8000-000000000001', '7fac5000-0000-4000-8000-000000000001', 'primary', 1),
   ('7fac6000-0000-4000-8000-000000000001', '7fac5000-0000-4000-8000-000000000002', 'measurement', 2),
   ('7fac6000-0000-4000-8000-000000000001', '7fac5000-0000-4000-8000-000000000003', 'measurement', 3),
-  ('7fac6000-0000-4000-8000-000000000001', '7fac5000-0000-4000-8000-000000000004', 'legacy', 4);
+  ('7fac6000-0000-4000-8000-000000000001', '7fac5000-0000-4000-8000-000000000004', 'legacy', 4),
+  ('7fac6000-0000-4000-8000-000000000001', '7fac5000-0000-4000-8000-000000000005', 'measurement', 5);
 
 update public.products
 set spec_template_id = '7fac6000-0000-4000-8000-000000000001'
@@ -1237,7 +1251,8 @@ where id in (
 
 -- Entry: Presta, 48 mm. Premium: Schrader, 48 mm, plus the private width and
 -- the retired field. Third product: an unconfirmed inference of Presta (never
--- shown) and a confirmed inference of 60 mm (shown).
+-- shown), a confirmed inference of 60 mm (shown) and a fit row declaring 48
+-- (projected onto the length facet: the product counts under 48 and 60).
 insert into public.spec_facts (
   id, tenant_id, subject_type, subject_id, spec_definition_id,
   value_number, source, confirmed
@@ -1284,6 +1299,17 @@ values
     60, 'inferred', true
   );
 
+insert into public.spec_facts (
+  id, tenant_id, subject_type, subject_id, spec_definition_id,
+  value_json, source, confirmed
+)
+values (
+  '7fac7000-0000-4000-8000-000000000009', '7fac0000-0000-4000-8000-000000000001', 'product',
+  '7fac2000-0000-4000-8000-000000000003', '7fac5000-0000-4000-8000-000000000005',
+  '{"rows": [{"id": "len-48", "values": {"facet_test_valve_len": "48"}, "sources": []}], "schema_version": 1}'::jsonb,
+  'catalog', true
+);
+
 insert into public.spec_fact_values (fact_id, value_id, position)
 values
   ('7fac7000-0000-4000-8000-000000000001', '7fac5100-0000-4000-8000-000000000001', 0),
@@ -1305,10 +1331,10 @@ select results_eq(
     values
       ('spec:facet_test_valve:single_select:'::text, 'Auto (Schrader / americana)'::text, 'Tipo de válvula (prueba)'::text, 1::bigint, 2::numeric),
       ('spec:facet_test_valve:single_select:'::text, 'Francesa (Presta)'::text, 'Tipo de válvula (prueba)'::text, 1::bigint, 2::numeric),
-      ('spec:facet_test_valve_len:number:mm'::text, '48'::text, 'Largo de válvula (contrato)'::text, 2::bigint, 3::numeric),
+      ('spec:facet_test_valve_len:number:mm'::text, '48'::text, 'Largo de válvula (contrato)'::text, 3::bigint, 3::numeric),
       ('spec:facet_test_valve_len:number:mm'::text, '60'::text, 'Largo de válvula (contrato)'::text, 1::bigint, 3::numeric)
   $$,
-  'spec facets list filterable visible fields by shop label, counting products per value and per key, and hide private, retired and unconfirmed inferred facts'
+  'spec facets list filterable visible fields by shop label, count products per value and per key (a fit row projects onto the number field it names), and hide private, retired and unconfirmed inferred facts'
 );
 
 select ok(
@@ -1376,6 +1402,25 @@ select results_eq(
       ('7fac2000-0000-4000-8000-000000000003'::uuid)
   $$,
   'several values of one key are alternatives'
+);
+
+select results_eq(
+  $$
+    select product.id
+    from public.get_public_products_faceted_v2(
+      p_tenant_id := '7fac0000-0000-4000-8000-000000000001',
+      p_only_in_stock := false,
+      p_spec_filters := '{"facet_test_valve_len": ["48"]}'::jsonb
+    ) product
+    order by product.id
+  $$,
+  $$
+    values
+      ('7fac2000-0000-4000-8000-000000000001'::uuid),
+      ('7fac2000-0000-4000-8000-000000000002'::uuid),
+      ('7fac2000-0000-4000-8000-000000000003'::uuid)
+  $$,
+  'a value declared in a fit row filters like the scalar field it names'
 );
 
 select is(

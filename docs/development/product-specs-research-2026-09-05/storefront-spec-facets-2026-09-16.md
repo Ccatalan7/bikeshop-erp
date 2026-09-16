@@ -39,6 +39,19 @@ Lectura en producción antes de aplicar (transacción revertida, como `anon`): l
 con «Francesa (Presta)» activa, la página baja de 23 a 5 cámaras y los largos a 48 mm 2 /
 60 mm 2. Sin filtro, v2 y v1 devuelven las mismas 23.
 
+## El aro de la cámara sale de sus filas (`20260916220000_public_spec_facets_tube_rows.sql`)
+
+La primera versión ofrecía «Aro» en neumáticos (campo escalar `bead_seat_diameter_mm`) y no en
+cámaras, que lo declaran dentro de «Aro y ancho de neumático» (una fila por diámetro ISO con el
+rango de ancho). El núcleo de valores proyecta ahora una celda numérica de un campo de filas
+sobre el campo global filtrable del mismo nombre: la celda `bead_seat_diameter_mm` de la cámara
+filtra igual que el escalar del neumático, bajo el mismo rótulo y con la misma redacción («26"
+(ISO 559)»). La proyección es genérica (cualquier columna de filas nombrada como un campo
+numérico global filtrable) y conserva las exclusiones del camino escalar. Lectura en producción
+antes de aplicar, como `anon`: «Cámaras» ofrece 622 → 9, 559 → 8, 584 → 2, 406 → 1, 203 → 1
+(21 de 23 cámaras con aro) y el filtro 559 deja 8 cámaras. pgTAP: una fila sembrada proyecta su
+valor sobre el campo que nombra y filtra como él (67 pruebas verdes).
+
 ## Cómo lo ve el cliente (se despliega con el merge)
 
 - Los filtros técnicos aparecen debajo de «Marca», cada uno con su rótulo de tienda, sus
@@ -63,9 +76,8 @@ con «Francesa (Presta)» activa, la página baja de 23 a 5 cámaras y los largo
 
 - Los números con muchas opciones (largo de rayo: 23 valores; ancho de neumático: 22) salen
   como lista con conteo. Un rango deslizable sería mejor para el ancho; la lista ya vende.
-- La faceta de ancho de cámara (`tube_fit_rows`) no filtra: es una fila JSON y el núcleo sólo
-  lee opción, número y sí/no. La cámara filtra por válvula y largo; el aro de la cámara llegará
-  cuando el ancho y el aro vivan como campos escalares del sucesor o el núcleo lea filas.
+- El ancho de neumático que admite una cámara (`tube_fit_rows`, ancho mínimo y máximo) no
+  filtra: la cámara filtra por aro, válvula y largo de válvula.
 - Rótulos filtrables con mayúsculas de sistema viejo («Tipo de Tubo de Dirección», «Estándar de
   Montaje») viven en campos `legacy` de sus plantillas y no llegan al cliente; si alguno vuelve a
   un contrato vivo, se relabela antes.

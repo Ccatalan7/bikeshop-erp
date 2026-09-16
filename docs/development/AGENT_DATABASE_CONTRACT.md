@@ -731,6 +731,23 @@ cambios de índices), y cada una costó una pasada:
   de aplicar; el deploy quedó aplicado sin stamp y se cerró en una segunda
   pasada idempotente. Leer `contype` antes de escribir el número.
 
+## Una función nueva nace con `service_role`, y un pgTAP ordenado compara con ICU (2026-09-16)
+
+Supabase declara `alter default privileges in schema public grant all on functions to
+anon, authenticated, service_role`. Cada función que una migración crea nace con esos tres
+grants **explícitos**; `revoke all … from public` no toca ninguno. La fachada
+`get_public_product_facets_v2` pasó la revisión de lectura y falló el pgTAP de fachadas
+públicas (`service_role` seguía con EXECUTE): costó una corrida y una reaplicación local.
+
+- Toda migración que cree una función escribe primero
+  `revoke all on function … from public, anon, authenticated, service_role;` y después el
+  `grant execute … to …` que corresponde (patrón de `20260722200000_add_public_catalog_facets.sql`).
+  Un núcleo privado llamado desde una fachada `security definer` no lleva grant alguno.
+- En pgTAP, un `order by` sobre texto usa la collation ICU de la base: la puntuación se ignora
+  en el primer nivel y `spec:x_len` sale antes que `spec:x:`. Cuando el orden de un
+  `results_eq` importa, `order by columna collate "C"` en ambos lados; la expectativa entonces
+  vale en local, en CI y en producción.
+
 ## El archivo `--verify` no admite bloques ni constantes plegables (2026-08-19)
 
 Un read-back de `deploy_migration.sh` corre por la ruta de **lectura remota**, y

@@ -285,3 +285,7 @@ ya los contiene). Worktrees inventariados: tres de Codex, todos detached.
   8 pruebas Dart del formateador («2.1" · 53 mm», «29" / 700c (ISO 622)»). «Largo del rayo»
   reemplaza al único rótulo filtrable de ingeniero:
   [storefront-spec-facets-2026-09-16.md](storefront-spec-facets-2026-09-16.md).
+- **Aro de cámara desde sus filas (`20260916220000`).** El núcleo de facetas proyecta la celda
+  `bead_seat_diameter_mm` de «Aro y ancho de neumático» sobre el campo global «Aro (diámetro
+  ISO)»: en «Cámaras» el cliente filtra por aro (21 de 23 cámaras) igual que en neumáticos. 2
+  prueba pgTAP más (67).

@@ -1,0 +1,2 @@
+-- Verifier: fails (division by zero) until the facet snapshot of «Cámaras» offers «Aro» values read from the tube fit rows.
+select 1/(case when (select count(*) from public.get_public_product_facets_v2('5443b130-cc28-45af-a420-cd500b288890'::uuid, array['f8f5bf86-0ec9-47e7-9c8c-d05a28ba36a4']::uuid[], null, null, false) f where f.facet_key = 'spec:bead_seat_diameter_mm:number:mm' and f.item_count > 0) > 0 then 1 else 0 end) as ok;

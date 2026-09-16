@@ -1669,6 +1669,19 @@
   "relabel": {
    "spoke_length_mm": "Largo del rayo"
   },
-  "record": "storefront-spec-facets-2026-09-16.md"
+  "record": "storefront-spec-facets-2026-09-16.md",
+  "tube_rows_projection": {
+   "migration": "20260916220000",
+   "tubes_with_aro": 21,
+   "tubes": 23,
+   "aro_values": {
+    "622": 9,
+    "559": 8,
+    "584": 2,
+    "406": 1,
+    "203": 1
+   },
+   "pgtap_total": 67
+  }
  }
 }
