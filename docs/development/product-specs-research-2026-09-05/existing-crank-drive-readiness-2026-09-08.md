@@ -1,5 +1,7 @@
 # Volantes, bielas y platos: candidato sin aplicar — 2026-09-08
 
+**Publicado el 2026-09-16** como `20260916070000_crank_drive_successors.sql` sobre 57 productos; ver [crank-drive-successors-adjudication-2026-09-16.md](crank-drive-successors-adjudication-2026-09-16.md).
+
 Sucesor local para las tres últimas originales sin sucesor: `crankset`,
 `crank_arm` y `chainring`. **No aplicado.** Sin escrituras de producción,
 migración, publicación, asignaciones ni llenado; sin SQL local, commit, push ni

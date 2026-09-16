@@ -312,7 +312,7 @@ cinco están activos como reemplazos adaptados: `drivetrain_kit`,
 **Actualización 2026-09-16:** publicado el reemplazo de `tire`, `tube`, `rim_strip`,
 `tubeless_consumable` y `tubeless_valve` (`20260916030000`, 271 productos, cero
 bloqueantes); ver [su adjudicación](tire-tube-successors-adjudication-2026-09-16.md).
-**Quedan 27.** Rayos se publicó después (`20260916040000`, 58 productos) y maza y llanta también (`20260916050000`, 96 productos) y mandos y desviadores (`20260916060000`, 94 productos) y cadena y conector (`20260916080000`, 44 productos): **quedan 19.** El molde para los siguientes es `scripts/inventory/compile_tire_tube_successors.py`:
+**Quedan 27.** Rayos se publicó después (`20260916040000`, 58 productos) y maza y llanta también (`20260916050000`, 96 productos) y mandos y desviadores (`20260916060000`, 94 productos) y cadena y conector (`20260916080000`, 44 productos) y bielas, platos y volantes (`20260916070000`, 57 productos): **quedan 16.** El molde para los siguientes es `scripts/inventory/compile_tire_tube_successors.py`:
 preimagen fresca comparada con la congelada, delta de IDs, captura de fichas por
 RPC con los IDs resueltos antes de cambiar de rol, ensayo local, arnés Dart,
 adopción, verificador que falla antes, despliegue con `--verify` y lectura posterior.
