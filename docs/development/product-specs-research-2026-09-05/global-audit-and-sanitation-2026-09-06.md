@@ -69,6 +69,27 @@ plantillas; los reemplazos del kit y de cuatro piezas de freno llevan la entrega
 73/105. No repetirla como respuesta al avance global ni inventar un
 porcentaje total; informar los criterios entregados y pendientes.
 
+**Auditoría estructural fresca, 2026-09-16 09:17 UTC** (releída después de las 724
+asignaciones y de los 37 reemplazos originales, como pedía la primera compuerta del
+llenado): 1.673 registros, 1.614 productos físicos, **1.594 con plantilla efectiva**
+(726 explícitas y 868 por categoría) y **20 sin plantilla**, que son exactamente los
+veinte ya adjudicados en [assignment-remaining-2026-09-16.md](assignment-remaining-2026-09-16.md)
+(diez sin ficha aplicable, dos piñones inactivos sin identidad y ocho registros sin
+descripción ni imagen). 197 físicos sin categoría, sin cambio. 461 físicos con
+observaciones, la misma cifra del 14: cero llenado. 1.133 con plantilla y sin observaciones
+(eran 408, por las asignaciones). Un solo producto conserva un hecho fuera de su plantilla
+efectiva (C1087, `spindle_diameter_mm` en `bottom_bracket_cup`; eran dos). La evaluación por
+56 lotes con el validador desplegado dio 1.584 productos con pendientes, diez sin incidencia,
+**cero bloqueantes** y cero revisiones desfasadas: 3.876 incidencias, de ellas 3.553
+`required_missing`, 218 `row_cardinality_pending`, 89 `prerequisite_missing` y 16
+`field_applicability`. 107 plantillas activas en 106 familias; cinco sin productos
+(`bicycle`, `fixed_cog`, `frame`, `hub_brake`, `wheel`) y sólo 19 familias con alguna
+observación. Cero perfiles persistidos. Huella comercial y de stock `9d6827fa…`, sólo para
+comparar. Estos resultados no certifican identidad, asignación ni cobertura mecánica:
+[resumen](global-coverage-summary-2026-09-16.json) (sha256 `bcd6d2af0d446873…`; instantánea
+`adddd7c1c86851a6…`, evaluación `e842cd2fef0b9571…`), producido por
+`scripts/inventory/refresh_global_coverage_audit.py`, que deja el detalle privado en
+`.tmp/product-spec-catalog/global-audit-20260916/`. Llenado por esta tarea: cero productos.
 **Auditoría estructural fresca, 2026-09-14 22:45 UTC:** 1.673 registros,
 1.614 productos físicos, 868 con plantilla efectiva y 746 sin plantilla;
 197 físicos sin categoría. Hay 461 físicos con observaciones y 408 con

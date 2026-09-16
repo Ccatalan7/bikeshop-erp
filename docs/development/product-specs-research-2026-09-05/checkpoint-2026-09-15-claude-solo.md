@@ -156,3 +156,8 @@ ya los contiene). Worktrees inventariados: tres de Codex, todos detached.
   par de llanta). Entregas planificadas: **105 de 105**; quedan 0 reemplazos originales. Lo que no
   prueba: comparación entre perfiles (E2), un par con un solo circuito, cambio de presentación
   conservando filas. Llenado técnico persistido: 0.
+- Primera compuerta del llenado: auditoría global releída el 2026-09-16 09:17Z con el runner
+  versionado `refresh_global_coverage_audit.py` (instantánea MVCC única + 56 lotes de 30):
+  1.594 con plantilla, 20 sin ella, cero bloqueantes, 1.584 con pendientes, 461 con
+  observaciones (sin cambio), un hecho fuera de plantilla (C1087). Resumen en
+  `global-coverage-summary-2026-09-16.json`. Llenado técnico persistido: 0.

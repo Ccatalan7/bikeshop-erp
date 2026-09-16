@@ -28,7 +28,7 @@
  "integrated_pending_cases": 40,
  "integrated_catalog_sha256": "e0cccea8cdea5835e47301d11060bc735454334a9bdf6e0666b9bb5b5d87b28d",
  "effective_original_products": 868,
- "adoption_refresh_status": "Historical 868-product authenticated adoption predates 720 assignment repairs and the adapted kit replacement. Refresh each remaining original-family cohort against its exact replacement before publication.",
+ "adoption_refresh_status": "Historical 868-product authenticated adoption predates the 724 assignment repairs; every original-family cohort was re-audited against its exact replacement before publication (2026-09-16). Structural coverage re-read on 2026-09-16 09:17Z: see global_coverage_audit_2026_09_16.",
  "adoption": {
   "products_evaluated": 868,
   "products_with_blocking_issues": 0,
@@ -1153,5 +1153,61 @@
   },
   "record": "brake-presentations-adjudication-2026-09-16.md",
   "technical_fill_persisted": 0
+ },
+ "global_coverage_audit_2026_09_16": {
+  "snapshot_at": "2026-09-16T09:17:09.03235+00:00",
+  "summary_file": "global-coverage-summary-2026-09-16.json",
+  "summary_sha256": "bcd6d2af0d44687314c7713a11e60ef89d75cc5d707ff49302fefd5f2d687e20",
+  "snapshot_sha256": "adddd7c1c86851a6d80822a4b651b2cf5e7d94eab8b0120392d29e5eaeadad92",
+  "server_evaluation_sha256": "e842cd2fef0b9571a29a91c45bf694609ebe8a5ca58f78c5afe01379f53ec2cf",
+  "runner": "scripts/inventory/refresh_global_coverage_audit.py",
+  "writes": 0,
+  "all_products": 1673,
+  "physical_products": 1614,
+  "physical_with_template": 1594,
+  "physical_without_template": 20,
+  "explicit_bindings": 726,
+  "category_bindings": 868,
+  "physical_with_facts": 461,
+  "physical_with_template_without_facts": 1133,
+  "products_with_facts_outside_template": 1,
+  "products_with_server_issues": 1584,
+  "products_with_blocking_server_issues": 0,
+  "issue_codes": {
+   "required_missing": 3553,
+   "row_cardinality_pending": 218,
+   "prerequisite_missing": 89,
+   "field_applicability": 16
+  },
+  "active_templates": 107,
+  "families_without_products": [
+   "bicycle",
+   "fixed_cog",
+   "frame",
+   "hub_brake",
+   "wheel"
+  ],
+  "families_with_any_facts": 19,
+  "member_profiles": 0,
+  "delta_vs_2026_09_14": {
+   "all_products_audited": 0,
+   "physical_products": 0,
+   "services": 0,
+   "physical_with_template": 726,
+   "physical_without_template": -726,
+   "physical_with_facts": 0,
+   "physical_with_template_without_facts": 725,
+   "physical_without_category": 0,
+   "products_with_facts_outside_template": -1,
+   "products_with_legacy_specifications": 0,
+   "products_with_server_issues": 1537,
+   "products_with_blocking_server_issues": 0,
+   "stale_server_evaluations": 0,
+   "active_templates": 2,
+   "active_template_families": 2
+  },
+  "fill_gate_1_reread_global_audit": "done",
+  "technical_fill_persisted": 0,
+  "scope_limit": "Does not adjudicate product identity, compatibility, assignment correctness, or research completeness."
  }
 }

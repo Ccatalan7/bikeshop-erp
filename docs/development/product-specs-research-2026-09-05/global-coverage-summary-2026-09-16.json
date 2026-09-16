@@ -1,0 +1,1181 @@
+{
+  "format_version": 1,
+  "scope": "all_products_and_all_templates",
+  "snapshot_at": "2026-09-16T09:17:09.03235+00:00",
+  "summary": {
+    "all_products_audited": 1673,
+    "physical_products": 1614,
+    "services": 59,
+    "physical_with_template": 1594,
+    "physical_without_template": 20,
+    "physical_with_facts": 461,
+    "physical_with_template_without_facts": 1133,
+    "physical_without_category": 197,
+    "products_with_facts_outside_template": 1,
+    "products_with_legacy_specifications": 0,
+    "products_with_server_issues": 1584,
+    "products_with_blocking_server_issues": 0,
+    "stale_server_evaluations": 0,
+    "active_templates": 107,
+    "active_template_families": 106,
+    "semantically_complete_families": null,
+    "semantic_completion_measurement": "not_assessed_by_structural_audit",
+    "bulk_fill_enabled": false
+  },
+  "snapshot_sha256": "adddd7c1c86851a6d80822a4b651b2cf5e7d94eab8b0120392d29e5eaeadad92",
+  "server_evaluation_sha256": "e842cd2fef0b9571a29a91c45bf694609ebe8a5ca58f78c5afe01379f53ec2cf",
+  "audit_kind": "structural_coverage_only",
+  "semantic_completion": null,
+  "source": {
+    "snapshot": "single MVCC statement (product_spec_legacy_export.sql)",
+    "server_evaluation": "54 bounded read-only batches of 30, exact product revision/updated_at/template/version check, 0 stale evaluations"
+  },
+  "scope_limit": "Does not adjudicate product identity, compatibility, assignment correctness, or research completeness.",
+  "task_product_fills": 0,
+  "operational_fingerprint": {
+    "purpose": "comparison_only_never_restore_commercial_or_stock_fields",
+    "products": 1673,
+    "member_profiles": 0,
+    "physical_products": 1614,
+    "commercial_stock_md5": "9d6827fa7dceed6c0b4c7572cad905c9"
+  },
+  "families": [
+    {
+      "key": "accessory_mount",
+      "family": "accessory_mount",
+      "contract_version": 16,
+      "products": 9,
+      "products_with_facts": 0,
+      "products_with_pending_issues": 9,
+      "products_with_blocking_issues": 0,
+      "products_with_facts_outside_template": 0
+    },
+    {
+      "key": "audible_signal",
+      "family": "audible_signal",
+      "contract_version": 8,
+      "products": 7,
+      "products_with_facts": 0,
+      "products_with_pending_issues": 7,
+      "products_with_blocking_issues": 0,
+      "products_with_facts_outside_template": 0
+    },
+    {
+      "key": "bearing",
+      "family": "bearing",
+      "contract_version": 22,
+      "products": 16,
+      "products_with_facts": 0,
+      "products_with_pending_issues": 16,
+      "products_with_blocking_issues": 0,
+      "products_with_facts_outside_template": 0
+    },
+    {
+      "key": "bicycle",
+      "family": "bicycle",
+      "contract_version": 47,
+      "products": 0,
+      "products_with_facts": 0,
+      "products_with_pending_issues": 0,
+      "products_with_blocking_issues": 0,
+      "products_with_facts_outside_template": 0
+    },
+    {
+      "key": "bike_bag",
+      "family": "bike_bag",
+      "contract_version": 13,
+      "products": 5,
+      "products_with_facts": 0,
+      "products_with_pending_issues": 5,
+      "products_with_blocking_issues": 0,
+      "products_with_facts_outside_template": 0
+    },
+    {
+      "key": "bike_protection",
+      "family": "bike_protection",
+      "contract_version": 8,
+      "products": 4,
+      "products_with_facts": 0,
+      "products_with_pending_issues": 4,
+      "products_with_blocking_issues": 0,
+      "products_with_facts_outside_template": 0
+    },
+    {
+      "key": "bmx_cable_detangler",
+      "family": "bmx_cable_detangler",
+      "contract_version": 8,
+      "products": 1,
+      "products_with_facts": 0,
+      "products_with_pending_issues": 1,
+      "products_with_blocking_issues": 0,
+      "products_with_facts_outside_template": 0
+    },
+    {
+      "key": "bottle",
+      "family": "bottle",
+      "contract_version": 12,
+      "products": 7,
+      "products_with_facts": 0,
+      "products_with_pending_issues": 7,
+      "products_with_blocking_issues": 0,
+      "products_with_facts_outside_template": 0
+    },
+    {
+      "key": "bottle_cage",
+      "family": "bottle_cage",
+      "contract_version": 14,
+      "products": 11,
+      "products_with_facts": 0,
+      "products_with_pending_issues": 11,
+      "products_with_blocking_issues": 0,
+      "products_with_facts_outside_template": 0
+    },
+    {
+      "key": "bottom_bracket",
+      "family": "bottom_bracket",
+      "contract_version": 31,
+      "products": 38,
+      "products_with_facts": 34,
+      "products_with_pending_issues": 33,
+      "products_with_blocking_issues": 0,
+      "products_with_facts_outside_template": 0
+    },
+    {
+      "key": "bottom_bracket_axle",
+      "family": "bottom_bracket_axle",
+      "contract_version": 13,
+      "products": 4,
+      "products_with_facts": 3,
+      "products_with_pending_issues": 4,
+      "products_with_blocking_issues": 0,
+      "products_with_facts_outside_template": 0
+    },
+    {
+      "key": "bottom_bracket_bearing",
+      "family": "bottom_bracket_bearing",
+      "contract_version": 19,
+      "products": 5,
+      "products_with_facts": 3,
+      "products_with_pending_issues": 5,
+      "products_with_blocking_issues": 0,
+      "products_with_facts_outside_template": 0
+    },
+    {
+      "key": "bottom_bracket_cup",
+      "family": "bottom_bracket_cup",
+      "contract_version": 19,
+      "products": 9,
+      "products_with_facts": 8,
+      "products_with_pending_issues": 9,
+      "products_with_blocking_issues": 0,
+      "products_with_facts_outside_template": 1
+    },
+    {
+      "key": "brake_caliper",
+      "family": "brake_caliper",
+      "contract_version": 32,
+      "products": 11,
+      "products_with_facts": 0,
+      "products_with_pending_issues": 11,
+      "products_with_blocking_issues": 0,
+      "products_with_facts_outside_template": 0
+    },
+    {
+      "key": "brake_fluid",
+      "family": "brake_fluid",
+      "contract_version": 9,
+      "products": 4,
+      "products_with_facts": 0,
+      "products_with_pending_issues": 4,
+      "products_with_blocking_issues": 0,
+      "products_with_facts_outside_template": 0
+    },
+    {
+      "key": "brake_lever",
+      "family": "brake_lever",
+      "contract_version": 28,
+      "products": 18,
+      "products_with_facts": 0,
+      "products_with_pending_issues": 18,
+      "products_with_blocking_issues": 0,
+      "products_with_facts_outside_template": 0
+    },
+    {
+      "key": "brake_mount_adapter",
+      "family": "brake_mount_adapter",
+      "contract_version": 10,
+      "products": 4,
+      "products_with_facts": 0,
+      "products_with_pending_issues": 4,
+      "products_with_blocking_issues": 0,
+      "products_with_facts_outside_template": 0
+    },
+    {
+      "key": "brake_pad",
+      "family": "brake_pad",
+      "contract_version": 23,
+      "products": 53,
+      "products_with_facts": 13,
+      "products_with_pending_issues": 53,
+      "products_with_blocking_issues": 0,
+      "products_with_facts_outside_template": 0
+    },
+    {
+      "key": "brake_shift_combined_control",
+      "family": "brake_shift_combined_control",
+      "contract_version": 16,
+      "products": 1,
+      "products_with_facts": 0,
+      "products_with_pending_issues": 1,
+      "products_with_blocking_issues": 0,
+      "products_with_facts_outside_template": 0
+    },
+    {
+      "key": "brake_small_part",
+      "family": "brake_small_part",
+      "contract_version": 8,
+      "products": 1,
+      "products_with_facts": 0,
+      "products_with_pending_issues": 1,
+      "products_with_blocking_issues": 0,
+      "products_with_facts_outside_template": 0
+    },
+    {
+      "key": "cassette",
+      "family": "cassette",
+      "contract_version": 18,
+      "products": 32,
+      "products_with_facts": 29,
+      "products_with_pending_issues": 32,
+      "products_with_blocking_issues": 0,
+      "products_with_facts_outside_template": 0
+    },
+    {
+      "key": "cassette_lockring",
+      "family": "cassette_lockring",
+      "contract_version": 6,
+      "products": 1,
+      "products_with_facts": 0,
+      "products_with_pending_issues": 1,
+      "products_with_blocking_issues": 0,
+      "products_with_facts_outside_template": 0
+    },
+    {
+      "key": "cassette_spacer",
+      "family": "cassette_spacer",
+      "contract_version": 8,
+      "products": 3,
+      "products_with_facts": 0,
+      "products_with_pending_issues": 3,
+      "products_with_blocking_issues": 0,
+      "products_with_facts_outside_template": 0
+    },
+    {
+      "key": "chain",
+      "family": "chain",
+      "contract_version": 25,
+      "products": 35,
+      "products_with_facts": 29,
+      "products_with_pending_issues": 35,
+      "products_with_blocking_issues": 0,
+      "products_with_facts_outside_template": 0
+    },
+    {
+      "key": "chain_guide",
+      "family": "chain_guide",
+      "contract_version": 16,
+      "products": 3,
+      "products_with_facts": 0,
+      "products_with_pending_issues": 3,
+      "products_with_blocking_issues": 0,
+      "products_with_facts_outside_template": 0
+    },
+    {
+      "key": "chain_link",
+      "family": "chain_link",
+      "contract_version": 40,
+      "products": 9,
+      "products_with_facts": 0,
+      "products_with_pending_issues": 9,
+      "products_with_blocking_issues": 0,
+      "products_with_facts_outside_template": 0
+    },
+    {
+      "key": "chainring",
+      "family": "chainring",
+      "contract_version": 30,
+      "products": 17,
+      "products_with_facts": 0,
+      "products_with_pending_issues": 17,
+      "products_with_blocking_issues": 0,
+      "products_with_facts_outside_template": 0
+    },
+    {
+      "key": "chainring_guard",
+      "family": "chainring_guard",
+      "contract_version": 9,
+      "products": 1,
+      "products_with_facts": 0,
+      "products_with_pending_issues": 1,
+      "products_with_blocking_issues": 0,
+      "products_with_facts_outside_template": 0
+    },
+    {
+      "key": "hydraulic_disc_brake",
+      "family": "complete_brake",
+      "contract_version": 18,
+      "products": 4,
+      "products_with_facts": 1,
+      "products_with_pending_issues": 4,
+      "products_with_blocking_issues": 0,
+      "products_with_facts_outside_template": 0
+    },
+    {
+      "key": "mechanical_disc_brake",
+      "family": "complete_brake",
+      "contract_version": 13,
+      "products": 1,
+      "products_with_facts": 0,
+      "products_with_pending_issues": 1,
+      "products_with_blocking_issues": 0,
+      "products_with_facts_outside_template": 0
+    },
+    {
+      "key": "component_set",
+      "family": "component_set",
+      "contract_version": 3,
+      "products": 2,
+      "products_with_facts": 0,
+      "products_with_pending_issues": 2,
+      "products_with_blocking_issues": 0,
+      "products_with_facts_outside_template": 0
+    },
+    {
+      "key": "consumer_electronics",
+      "family": "consumer_electronics",
+      "contract_version": 20,
+      "products": 4,
+      "products_with_facts": 0,
+      "products_with_pending_issues": 4,
+      "products_with_blocking_issues": 0,
+      "products_with_facts_outside_template": 0
+    },
+    {
+      "key": "control_cable",
+      "family": "control_cable",
+      "contract_version": 10,
+      "products": 18,
+      "products_with_facts": 0,
+      "products_with_pending_issues": 18,
+      "products_with_blocking_issues": 0,
+      "products_with_facts_outside_template": 0
+    },
+    {
+      "key": "control_housing",
+      "family": "control_housing",
+      "contract_version": 10,
+      "products": 13,
+      "products_with_facts": 0,
+      "products_with_pending_issues": 13,
+      "products_with_blocking_issues": 0,
+      "products_with_facts_outside_template": 0
+    },
+    {
+      "key": "control_small_part",
+      "family": "control_small_part",
+      "contract_version": 12,
+      "products": 20,
+      "products_with_facts": 0,
+      "products_with_pending_issues": 20,
+      "products_with_blocking_issues": 0,
+      "products_with_facts_outside_template": 0
+    },
+    {
+      "key": "crank_arm",
+      "family": "crank_arm",
+      "contract_version": 20,
+      "products": 8,
+      "products_with_facts": 0,
+      "products_with_pending_issues": 8,
+      "products_with_blocking_issues": 0,
+      "products_with_facts_outside_template": 0
+    },
+    {
+      "key": "crankset",
+      "family": "crankset",
+      "contract_version": 34,
+      "products": 32,
+      "products_with_facts": 0,
+      "products_with_pending_issues": 32,
+      "products_with_blocking_issues": 0,
+      "products_with_facts_outside_template": 0
+    },
+    {
+      "key": "cycle_computer",
+      "family": "cycle_computer",
+      "contract_version": 12,
+      "products": 1,
+      "products_with_facts": 0,
+      "products_with_pending_issues": 1,
+      "products_with_blocking_issues": 0,
+      "products_with_facts_outside_template": 0
+    },
+    {
+      "key": "derailleur_hanger",
+      "family": "derailleur_hanger",
+      "contract_version": 12,
+      "products": 28,
+      "products_with_facts": 0,
+      "products_with_pending_issues": 28,
+      "products_with_blocking_issues": 0,
+      "products_with_facts_outside_template": 0
+    },
+    {
+      "key": "derailleur_hanger_extender",
+      "family": "derailleur_hanger_extender",
+      "contract_version": 9,
+      "products": 1,
+      "products_with_facts": 0,
+      "products_with_pending_issues": 1,
+      "products_with_blocking_issues": 0,
+      "products_with_facts_outside_template": 0
+    },
+    {
+      "key": "derailleur_pulley",
+      "family": "derailleur_pulley",
+      "contract_version": 20,
+      "products": 7,
+      "products_with_facts": 0,
+      "products_with_pending_issues": 7,
+      "products_with_blocking_issues": 0,
+      "products_with_facts_outside_template": 0
+    },
+    {
+      "key": "drivetrain_kit",
+      "family": "drivetrain_kit",
+      "contract_version": 16,
+      "products": 6,
+      "products_with_facts": 0,
+      "products_with_pending_issues": 6,
+      "products_with_blocking_issues": 0,
+      "products_with_facts_outside_template": 0
+    },
+    {
+      "key": "eyewear",
+      "family": "eyewear",
+      "contract_version": 6,
+      "products": 3,
+      "products_with_facts": 0,
+      "products_with_pending_issues": 3,
+      "products_with_blocking_issues": 0,
+      "products_with_facts_outside_template": 0
+    },
+    {
+      "key": "fastener",
+      "family": "fastener",
+      "contract_version": 21,
+      "products": 22,
+      "products_with_facts": 0,
+      "products_with_pending_issues": 22,
+      "products_with_blocking_issues": 0,
+      "products_with_facts_outside_template": 0
+    },
+    {
+      "key": "fender",
+      "family": "fender",
+      "contract_version": 10,
+      "products": 4,
+      "products_with_facts": 0,
+      "products_with_pending_issues": 4,
+      "products_with_blocking_issues": 0,
+      "products_with_facts_outside_template": 0
+    },
+    {
+      "key": "fixed_cog",
+      "family": "fixed_cog",
+      "contract_version": 11,
+      "products": 0,
+      "products_with_facts": 0,
+      "products_with_pending_issues": 0,
+      "products_with_blocking_issues": 0,
+      "products_with_facts_outside_template": 0
+    },
+    {
+      "key": "food_beverage",
+      "family": "food_beverage",
+      "contract_version": 22,
+      "products": 19,
+      "products_with_facts": 0,
+      "products_with_pending_issues": 19,
+      "products_with_blocking_issues": 0,
+      "products_with_facts_outside_template": 0
+    },
+    {
+      "key": "fork",
+      "family": "fork",
+      "contract_version": 26,
+      "products": 11,
+      "products_with_facts": 0,
+      "products_with_pending_issues": 11,
+      "products_with_blocking_issues": 0,
+      "products_with_facts_outside_template": 0
+    },
+    {
+      "key": "frame",
+      "family": "frame",
+      "contract_version": 34,
+      "products": 0,
+      "products_with_facts": 0,
+      "products_with_pending_issues": 0,
+      "products_with_blocking_issues": 0,
+      "products_with_facts_outside_template": 0
+    },
+    {
+      "key": "freewheel",
+      "family": "freewheel",
+      "contract_version": 17,
+      "products": 29,
+      "products_with_facts": 21,
+      "products_with_pending_issues": 29,
+      "products_with_blocking_issues": 0,
+      "products_with_facts_outside_template": 0
+    },
+    {
+      "key": "front_derailleur",
+      "family": "front_derailleur",
+      "contract_version": 19,
+      "products": 18,
+      "products_with_facts": 0,
+      "products_with_pending_issues": 18,
+      "products_with_blocking_issues": 0,
+      "products_with_facts_outside_template": 0
+    },
+    {
+      "key": "grip",
+      "family": "grip",
+      "contract_version": 19,
+      "products": 28,
+      "products_with_facts": 0,
+      "products_with_pending_issues": 28,
+      "products_with_blocking_issues": 0,
+      "products_with_facts_outside_template": 0
+    },
+    {
+      "key": "handlebar",
+      "family": "handlebar",
+      "contract_version": 23,
+      "products": 14,
+      "products_with_facts": 0,
+      "products_with_pending_issues": 14,
+      "products_with_blocking_issues": 0,
+      "products_with_facts_outside_template": 0
+    },
+    {
+      "key": "handlebar_covering",
+      "family": "handlebar_covering",
+      "contract_version": 12,
+      "products": 8,
+      "products_with_facts": 0,
+      "products_with_pending_issues": 8,
+      "products_with_blocking_issues": 0,
+      "products_with_facts_outside_template": 0
+    },
+    {
+      "key": "headset",
+      "family": "headset",
+      "contract_version": 16,
+      "products": 16,
+      "products_with_facts": 3,
+      "products_with_pending_issues": 16,
+      "products_with_blocking_issues": 0,
+      "products_with_facts_outside_template": 0
+    },
+    {
+      "key": "headset_small_part",
+      "family": "headset_small_part",
+      "contract_version": 12,
+      "products": 3,
+      "products_with_facts": 0,
+      "products_with_pending_issues": 3,
+      "products_with_blocking_issues": 0,
+      "products_with_facts_outside_template": 0
+    },
+    {
+      "key": "helmet",
+      "family": "helmet",
+      "contract_version": 18,
+      "products": 13,
+      "products_with_facts": 0,
+      "products_with_pending_issues": 13,
+      "products_with_blocking_issues": 0,
+      "products_with_facts_outside_template": 0
+    },
+    {
+      "key": "hub",
+      "family": "hub",
+      "contract_version": 34,
+      "products": 52,
+      "products_with_facts": 2,
+      "products_with_pending_issues": 52,
+      "products_with_blocking_issues": 0,
+      "products_with_facts_outside_template": 0
+    },
+    {
+      "key": "hub_axle",
+      "family": "hub_axle",
+      "contract_version": 11,
+      "products": 21,
+      "products_with_facts": 0,
+      "products_with_pending_issues": 21,
+      "products_with_blocking_issues": 0,
+      "products_with_facts_outside_template": 0
+    },
+    {
+      "key": "hub_brake",
+      "family": "hub_brake",
+      "contract_version": 9,
+      "products": 0,
+      "products_with_facts": 0,
+      "products_with_pending_issues": 0,
+      "products_with_blocking_issues": 0,
+      "products_with_facts_outside_template": 0
+    },
+    {
+      "key": "hub_small_part",
+      "family": "hub_small_part",
+      "contract_version": 11,
+      "products": 8,
+      "products_with_facts": 0,
+      "products_with_pending_issues": 8,
+      "products_with_blocking_issues": 0,
+      "products_with_facts_outside_template": 0
+    },
+    {
+      "key": "hydraulic_fitting",
+      "family": "hydraulic_fitting",
+      "contract_version": 13,
+      "products": 10,
+      "products_with_facts": 0,
+      "products_with_pending_issues": 10,
+      "products_with_blocking_issues": 0,
+      "products_with_facts_outside_template": 0
+    },
+    {
+      "key": "hydraulic_hose",
+      "family": "hydraulic_hose",
+      "contract_version": 12,
+      "products": 2,
+      "products_with_facts": 0,
+      "products_with_pending_issues": 2,
+      "products_with_blocking_issues": 0,
+      "products_with_facts_outside_template": 0
+    },
+    {
+      "key": "kickstand",
+      "family": "kickstand",
+      "contract_version": 17,
+      "products": 2,
+      "products_with_facts": 0,
+      "products_with_pending_issues": 2,
+      "products_with_blocking_issues": 0,
+      "products_with_facts_outside_template": 0
+    },
+    {
+      "key": "light",
+      "family": "light",
+      "contract_version": 18,
+      "products": 20,
+      "products_with_facts": 0,
+      "products_with_pending_issues": 20,
+      "products_with_blocking_issues": 0,
+      "products_with_facts_outside_template": 0
+    },
+    {
+      "key": "lock",
+      "family": "lock",
+      "contract_version": 17,
+      "products": 31,
+      "products_with_facts": 0,
+      "products_with_pending_issues": 31,
+      "products_with_blocking_issues": 0,
+      "products_with_facts_outside_template": 0
+    },
+    {
+      "key": "pedal",
+      "family": "pedal",
+      "contract_version": 18,
+      "products": 34,
+      "products_with_facts": 0,
+      "products_with_pending_issues": 34,
+      "products_with_blocking_issues": 0,
+      "products_with_facts_outside_template": 0
+    },
+    {
+      "key": "pedal_peg",
+      "family": "pedal_peg",
+      "contract_version": 7,
+      "products": 1,
+      "products_with_facts": 0,
+      "products_with_pending_issues": 1,
+      "products_with_blocking_issues": 0,
+      "products_with_facts_outside_template": 0
+    },
+    {
+      "key": "pump",
+      "family": "pump",
+      "contract_version": 15,
+      "products": 15,
+      "products_with_facts": 0,
+      "products_with_pending_issues": 15,
+      "products_with_blocking_issues": 0,
+      "products_with_facts_outside_template": 0
+    },
+    {
+      "key": "rack_basket",
+      "family": "rack_basket",
+      "contract_version": 13,
+      "products": 6,
+      "products_with_facts": 0,
+      "products_with_pending_issues": 6,
+      "products_with_blocking_issues": 0,
+      "products_with_facts_outside_template": 0
+    },
+    {
+      "key": "rear_derailleur",
+      "family": "rear_derailleur",
+      "contract_version": 24,
+      "products": 40,
+      "products_with_facts": 0,
+      "products_with_pending_issues": 40,
+      "products_with_blocking_issues": 0,
+      "products_with_facts_outside_template": 0
+    },
+    {
+      "key": "rear_shock",
+      "family": "rear_shock",
+      "contract_version": 10,
+      "products": 1,
+      "products_with_facts": 0,
+      "products_with_pending_issues": 1,
+      "products_with_blocking_issues": 0,
+      "products_with_facts_outside_template": 0
+    },
+    {
+      "key": "reflector",
+      "family": "reflector",
+      "contract_version": 5,
+      "products": 1,
+      "products_with_facts": 0,
+      "products_with_pending_issues": 0,
+      "products_with_blocking_issues": 0,
+      "products_with_facts_outside_template": 0
+    },
+    {
+      "key": "rider_apparel",
+      "family": "rider_apparel",
+      "contract_version": 12,
+      "products": 4,
+      "products_with_facts": 0,
+      "products_with_pending_issues": 4,
+      "products_with_blocking_issues": 0,
+      "products_with_facts_outside_template": 0
+    },
+    {
+      "key": "rider_bag",
+      "family": "rider_bag",
+      "contract_version": 12,
+      "products": 4,
+      "products_with_facts": 0,
+      "products_with_pending_issues": 4,
+      "products_with_blocking_issues": 0,
+      "products_with_facts_outside_template": 0
+    },
+    {
+      "key": "rider_glove",
+      "family": "rider_glove",
+      "contract_version": 13,
+      "products": 33,
+      "products_with_facts": 0,
+      "products_with_pending_issues": 33,
+      "products_with_blocking_issues": 0,
+      "products_with_facts_outside_template": 0
+    },
+    {
+      "key": "rider_protection",
+      "family": "rider_protection",
+      "contract_version": 11,
+      "products": 1,
+      "products_with_facts": 0,
+      "products_with_pending_issues": 1,
+      "products_with_blocking_issues": 0,
+      "products_with_facts_outside_template": 0
+    },
+    {
+      "key": "rim",
+      "family": "rim",
+      "contract_version": 35,
+      "products": 44,
+      "products_with_facts": 6,
+      "products_with_pending_issues": 44,
+      "products_with_blocking_issues": 0,
+      "products_with_facts_outside_template": 0
+    },
+    {
+      "key": "rim_brake",
+      "family": "rim_brake",
+      "contract_version": 10,
+      "products": 28,
+      "products_with_facts": 0,
+      "products_with_pending_issues": 28,
+      "products_with_blocking_issues": 0,
+      "products_with_facts_outside_template": 0
+    },
+    {
+      "key": "rim_strip",
+      "family": "rim_strip",
+      "contract_version": 12,
+      "products": 4,
+      "products_with_facts": 1,
+      "products_with_pending_issues": 4,
+      "products_with_blocking_issues": 0,
+      "products_with_facts_outside_template": 0
+    },
+    {
+      "key": "rotor",
+      "family": "rotor",
+      "contract_version": 17,
+      "products": 18,
+      "products_with_facts": 10,
+      "products_with_pending_issues": 18,
+      "products_with_blocking_issues": 0,
+      "products_with_facts_outside_template": 0
+    },
+    {
+      "key": "rotor_mount_adapter",
+      "family": "rotor_mount_adapter",
+      "contract_version": 5,
+      "products": 1,
+      "products_with_facts": 0,
+      "products_with_pending_issues": 1,
+      "products_with_blocking_issues": 0,
+      "products_with_facts_outside_template": 0
+    },
+    {
+      "key": "saddle",
+      "family": "saddle",
+      "contract_version": 12,
+      "products": 22,
+      "products_with_facts": 0,
+      "products_with_pending_issues": 22,
+      "products_with_blocking_issues": 0,
+      "products_with_facts_outside_template": 0
+    },
+    {
+      "key": "saddle_cover",
+      "family": "saddle_cover",
+      "contract_version": 7,
+      "products": 4,
+      "products_with_facts": 0,
+      "products_with_pending_issues": 0,
+      "products_with_blocking_issues": 0,
+      "products_with_facts_outside_template": 0
+    },
+    {
+      "key": "seat_clamp",
+      "family": "seat_clamp",
+      "contract_version": 10,
+      "products": 12,
+      "products_with_facts": 0,
+      "products_with_pending_issues": 12,
+      "products_with_blocking_issues": 0,
+      "products_with_facts_outside_template": 0
+    },
+    {
+      "key": "seatpost",
+      "family": "seatpost",
+      "contract_version": 27,
+      "products": 14,
+      "products_with_facts": 0,
+      "products_with_pending_issues": 14,
+      "products_with_blocking_issues": 0,
+      "products_with_facts_outside_template": 0
+    },
+    {
+      "key": "seatpost_shim",
+      "family": "seatpost_shim",
+      "contract_version": 11,
+      "products": 2,
+      "products_with_facts": 0,
+      "products_with_pending_issues": 2,
+      "products_with_blocking_issues": 0,
+      "products_with_facts_outside_template": 0
+    },
+    {
+      "key": "shifter",
+      "family": "shifter",
+      "contract_version": 21,
+      "products": 36,
+      "products_with_facts": 0,
+      "products_with_pending_issues": 36,
+      "products_with_blocking_issues": 0,
+      "products_with_facts_outside_template": 0
+    },
+    {
+      "key": "souvenir",
+      "family": "souvenir",
+      "contract_version": 5,
+      "products": 7,
+      "products_with_facts": 0,
+      "products_with_pending_issues": 7,
+      "products_with_blocking_issues": 0,
+      "products_with_facts_outside_template": 0
+    },
+    {
+      "key": "spacer",
+      "family": "spacer",
+      "contract_version": 10,
+      "products": 8,
+      "products_with_facts": 0,
+      "products_with_pending_issues": 8,
+      "products_with_blocking_issues": 0,
+      "products_with_facts_outside_template": 0
+    },
+    {
+      "key": "spoke",
+      "family": "spoke",
+      "contract_version": 24,
+      "products": 58,
+      "products_with_facts": 48,
+      "products_with_pending_issues": 58,
+      "products_with_blocking_issues": 0,
+      "products_with_facts_outside_template": 0
+    },
+    {
+      "key": "spoke_nipple",
+      "family": "spoke_nipple",
+      "contract_version": 10,
+      "products": 3,
+      "products_with_facts": 0,
+      "products_with_pending_issues": 3,
+      "products_with_blocking_issues": 0,
+      "products_with_facts_outside_template": 0
+    },
+    {
+      "key": "stem",
+      "family": "stem",
+      "contract_version": 13,
+      "products": 18,
+      "products_with_facts": 0,
+      "products_with_pending_issues": 18,
+      "products_with_blocking_issues": 0,
+      "products_with_facts_outside_template": 0
+    },
+    {
+      "key": "tire",
+      "family": "tire",
+      "contract_version": 19,
+      "products": 118,
+      "products_with_facts": 113,
+      "products_with_pending_issues": 118,
+      "products_with_blocking_issues": 0,
+      "products_with_facts_outside_template": 0
+    },
+    {
+      "key": "tire_liner",
+      "family": "tire_liner",
+      "contract_version": 7,
+      "products": 1,
+      "products_with_facts": 0,
+      "products_with_pending_issues": 1,
+      "products_with_blocking_issues": 0,
+      "products_with_facts_outside_template": 0
+    },
+    {
+      "key": "training_wheel",
+      "family": "training_wheel",
+      "contract_version": 7,
+      "products": 3,
+      "products_with_facts": 0,
+      "products_with_pending_issues": 3,
+      "products_with_blocking_issues": 0,
+      "products_with_facts_outside_template": 0
+    },
+    {
+      "key": "tube",
+      "family": "tube",
+      "contract_version": 21,
+      "products": 138,
+      "products_with_facts": 133,
+      "products_with_pending_issues": 138,
+      "products_with_blocking_issues": 0,
+      "products_with_facts_outside_template": 0
+    },
+    {
+      "key": "tube_repair",
+      "family": "tube_repair",
+      "contract_version": 10,
+      "products": 9,
+      "products_with_facts": 0,
+      "products_with_pending_issues": 9,
+      "products_with_blocking_issues": 0,
+      "products_with_facts_outside_template": 0
+    },
+    {
+      "key": "tubeless_consumable",
+      "family": "tubeless_consumable",
+      "contract_version": 11,
+      "products": 3,
+      "products_with_facts": 1,
+      "products_with_pending_issues": 3,
+      "products_with_blocking_issues": 0,
+      "products_with_facts_outside_template": 0
+    },
+    {
+      "key": "tubeless_repair",
+      "family": "tubeless_repair",
+      "contract_version": 9,
+      "products": 1,
+      "products_with_facts": 0,
+      "products_with_pending_issues": 1,
+      "products_with_blocking_issues": 0,
+      "products_with_facts_outside_template": 0
+    },
+    {
+      "key": "tubeless_tape",
+      "family": "tubeless_tape",
+      "contract_version": 7,
+      "products": 10,
+      "products_with_facts": 0,
+      "products_with_pending_issues": 10,
+      "products_with_blocking_issues": 0,
+      "products_with_facts_outside_template": 0
+    },
+    {
+      "key": "tubeless_valve",
+      "family": "tubeless_valve",
+      "contract_version": 12,
+      "products": 8,
+      "products_with_facts": 3,
+      "products_with_pending_issues": 8,
+      "products_with_blocking_issues": 0,
+      "products_with_facts_outside_template": 0
+    },
+    {
+      "key": "valve_small_part",
+      "family": "valve_small_part",
+      "contract_version": 5,
+      "products": 6,
+      "products_with_facts": 0,
+      "products_with_pending_issues": 6,
+      "products_with_blocking_issues": 0,
+      "products_with_facts_outside_template": 0
+    },
+    {
+      "key": "wheel",
+      "family": "wheel",
+      "contract_version": 23,
+      "products": 0,
+      "products_with_facts": 0,
+      "products_with_pending_issues": 0,
+      "products_with_blocking_issues": 0,
+      "products_with_facts_outside_template": 0
+    },
+    {
+      "key": "wheel_retention",
+      "family": "wheel_retention",
+      "contract_version": 15,
+      "products": 15,
+      "products_with_facts": 0,
+      "products_with_pending_issues": 15,
+      "products_with_blocking_issues": 0,
+      "products_with_facts_outside_template": 0
+    },
+    {
+      "key": "workshop_chemical",
+      "family": "workshop_chemical",
+      "contract_version": 9,
+      "products": 30,
+      "products_with_facts": 0,
+      "products_with_pending_issues": 30,
+      "products_with_blocking_issues": 0,
+      "products_with_facts_outside_template": 0
+    },
+    {
+      "key": "workshop_tool",
+      "family": "workshop_tool",
+      "contract_version": 13,
+      "products": 45,
+      "products_with_facts": 0,
+      "products_with_pending_issues": 45,
+      "products_with_blocking_issues": 0,
+      "products_with_facts_outside_template": 0
+    }
+  ],
+  "unmapped_categories": [
+    {
+      "category_id": null,
+      "path": null,
+      "products": 16,
+      "product_ids": [
+        "122bc792-47f0-47a7-a007-05c8d53e6802",
+        "20f982dc-02f0-4612-8754-fed9934eabe4",
+        "443886d9-3c28-483c-b19f-bc45d2be4740",
+        "54aa6f11-e04d-446c-aa33-7e6580dbe7e1",
+        "63001381-18eb-4812-9346-c452bca6165b",
+        "88154c74-0a20-43d9-9fd6-7361299aedac",
+        "88d6bbd6-2bb9-4375-a626-c4287869c2cf",
+        "8e0be162-e824-4bc4-be0f-9be8f19ec7db",
+        "a4373f06-b5b1-48e6-b501-64091f999fd3",
+        "b679e9c0-b7ab-4028-b1b4-a1a0351c2103",
+        "be5b3f76-aaa7-4694-badb-89317bc4325f",
+        "cc9f7f88-0401-4eb2-bbd6-74b1b1b07336",
+        "d5803c84-0678-44c7-b204-dd2f9be5f7e4",
+        "db0e972a-bbb9-4c0c-b9fa-f462f7224b25",
+        "e21dd68b-a0b5-4b1e-8d3c-c4ceb235fc47",
+        "fe2c9570-bc9f-4ac1-9115-2a604a508b45"
+      ],
+      "classification_review": "pending"
+    },
+    {
+      "category_id": "266b99d3-f0b4-4deb-b156-c192ec024ee0",
+      "path": "Servicio",
+      "products": 3,
+      "product_ids": [
+        "c1885a05-91bd-48ed-9afe-054f45c97360",
+        "dec02e89-94f5-4fb4-bcec-b59231176120",
+        "f8089a2e-da2a-430c-8949-137fdd1930a7"
+      ],
+      "classification_review": "pending"
+    },
+    {
+      "category_id": "f4bbf969-a871-4e49-80ce-7d50420c95d2",
+      "path": "Accesorios / Adaptadores",
+      "products": 1,
+      "product_ids": [
+        "689f23ee-650f-4f9a-9919-5f02674bb7b0"
+      ],
+      "classification_review": "pending"
+    }
+  ],
+  "previous": {
+    "file": "global-coverage-summary-2026-09-14.json",
+    "snapshot_at": "2026-09-14T22:45:57.045606+00:00",
+    "delta": {
+      "all_products_audited": 0,
+      "physical_products": 0,
+      "services": 0,
+      "physical_with_template": 726,
+      "physical_without_template": -726,
+      "physical_with_facts": 0,
+      "physical_with_template_without_facts": 725,
+      "physical_without_category": 0,
+      "products_with_facts_outside_template": -1,
+      "products_with_legacy_specifications": 0,
+      "products_with_server_issues": 1537,
+      "products_with_blocking_server_issues": 0,
+      "stale_server_evaluations": 0,
+      "active_templates": 2,
+      "active_template_families": 2
+    }
+  }
+}

@@ -6,6 +6,14 @@ las correcciones de las 37 originales siguen pendientes.** Saneamiento
 transversal y llenado abiertos; cero asignaciones o llenado nuevos. Evidencia:
 [checkpoint global](../development/product-specs-research-2026-09-05/global-audit-and-sanitation-2026-09-06.md).
 
+**Actualización 2026-09-16:** los 37 reemplazos originales están publicados como
+sucesores adaptados (los últimos, las tres presentaciones completas de freno,
+`20260916130000`); 107 plantillas globales activas (105 planificadas más
+`component_set` y `seatpost_shim`). Cobertura estructural releída ese día:
+1.594 físicos con plantilla, 20 sin ella, cero bloqueantes; llenado técnico
+persistido 0. Evidencia en
+[global-audit-and-sanitation-2026-09-06.md](../development/product-specs-research-2026-09-05/global-audit-and-sanitation-2026-09-06.md).
+
 Diseño: 2026-09-05; estado actualizado el 2026-09-07. **Matriz objetivo de
 cobertura; la base transversal ya está implementada.** Complementa el
 [contrato de fichas](product-technical-specifications-contract.md) y la

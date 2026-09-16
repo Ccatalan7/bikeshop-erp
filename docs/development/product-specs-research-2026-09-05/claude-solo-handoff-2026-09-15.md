@@ -350,7 +350,13 @@ consumidores y un aplicador autenticado.
 ### Antes de investigar productos
 
 1. Relee la auditoría global contra producción. El snapshot de 1.673 registros
-   ya está envejecido respecto de las 720 reparaciones.
+   ya está envejecido respecto de las 720 reparaciones. **Hecho el 2026-09-16
+   09:17Z** con `scripts/inventory/refresh_global_coverage_audit.py`:
+   1.594 con plantilla, 20 sin ella (los veinte ya adjudicados), cero
+   bloqueantes, 461 con observaciones (sin cambio: cero llenado); ver
+   [global-coverage-summary-2026-09-16.json](global-coverage-summary-2026-09-16.json)
+   y el párrafo fechado en [global-audit-and-sanitation-2026-09-06.md](global-audit-and-sanitation-2026-09-06.md).
+   Vuelve a correrlo antes de cada lote.
 2. Audita **todos** los productos con ficha y sin ficha, y cada definición que
    tiene consumidores. Cuenta clase real, plantilla efectiva, hechos dentro y
    fuera de plantilla, conflictos, observaciones no confirmadas y referencias.
