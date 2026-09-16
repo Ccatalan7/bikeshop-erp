@@ -17,7 +17,7 @@
 | `origin/smartpegas1.0` | `32404d36…`, 596 por delante | `f51f3777…` (2026-09-07), 94 por delante, 0 por detrás |
 | PR de promoción | #2 abierta y conflictiva | #2 fusionada el 2026-08-10; no existe PR abierta |
 | Freeze de deploy (5.3) | propuesto | no implementado en ningún workflow |
-| Tienda ante un push a `main` | publicaba | build y verificación solamente: el deploy `live` exige `is_publication=true`, que sólo produce el `workflow_dispatch` durable con `request_id` |
+| Tienda ante un push a `main` | publicaba | **publica** (corregido el 2026-09-15: la fila anterior decía «build y verificación solamente»; el paso `Deploy store target` corre cuando `is_publication != 'true'`, es decir, en todo push que llegue verde). Lo que **no** existe es el conducto durable por `request_id`: su contrato `20260728230000_add_storefront_publication_contract.sql` no está en producción |
 | Instaladores ante un push a `main` | artifact-only | artifact-only, sin cambio |
 | ERP web ante un push a `main` | publicaba | publica (`firebase-hosting-merge.yml`: integrity → build → deploy → verificación de commit → health de producción) |
 | `erp-integrity-gate.yml` por push | sólo `smartpegas1.0` | `main` y `smartpegas1.0` (cambio preparatorio de esta revisión) |
@@ -37,7 +37,11 @@ vez vuelve a ser mayor que cero, se retoma el diseño de julio.
   que los instaladores de escritorio ya tienen. Es un cambio hacia adelante con
   el mismo código que corre el escritorio. Rollback: Firebase Hosting → sitio
   `project-vinabike` → release anterior (un clic), o forward-fix desde `main`.
-- **No se nota:** la tienda (`vinabike.cl`) sólo se compila y verifica; los
+- **También se nota, si el run llega verde:** la tienda (`vinabike.cl`) se
+  publica desde el mismo push (corrección 2026-09-15; antes decía que sólo se
+  compilaba). Hasta ese día ningún push la había publicado desde el
+  2026-07-27 por dos defectos de `main`, no por diseño: ver paso 5.
+- **No se nota:** los
   instaladores macOS/Windows sólo compilan artefactos; Android no se dispara;
   Supabase no recibe ninguna escritura; el checkout del Mac no cambia ningún
   archivo al cambiar de rama porque `tree(P) = tree(F)`; la URL de instalación
@@ -79,6 +83,14 @@ un guard de arquitectura que buscaba un nombre de método renombrado en el
 último commit del Mac (`analyzer clean` no es `flutter test`); se corrigió en
 el mismo PR sin tocar el invariante.
 
+*Precisión 2026-09-15:* el check «expected» que nunca llegaba existía de
+verdad —`integrity / Database and application regression gate`, nombre de
+antes de partir el gate en shards— y no se corrigió en el paso 3: las PR #29 y
+#30 se fusionaron como admin (`enforce_admins=false`) con la protección en
+`BLOCKED`. Se reparó por §12.1 después del cutover, con el registro exacto en
+§18 («Cambio exacto de protección»); desde entonces una PR normal llega a
+`CLEAN` sola.
+
 **Paso 4 · Merge.** Botón «Merge pull request» → «Create a merge commit». Nunca
 squash ni rebase: ambos cambian los SHA que los manifests de release citan.
 Verificar desde cualquier clon:
@@ -91,9 +103,53 @@ git merge-base --is-ancestor origin/smartpegas1.0 origin/main
 
 **Paso 5 · Observar los runs del push a `main`.** «Deploy to Firebase Hosting
 on merge» debe terminar con `release.json.commit` igual a `P` y health de
-producción en verde; «Deploy Storefront» debe terminar sin job de deploy;
-macOS/Windows deben quedar artifact-only; `Secret Scan` y `ERP Integrity Gate`
-en verde. Smoke manual del ERP web: login y tres rutas de uso diario.
+producción en verde; «Deploy Storefront» (push) debe terminar con su paso
+`Deploy store target` en verde y `release.json.commit` igual a `P` en
+`vinabike-store.web.app` **y** `vinabike.cl`; macOS/Windows deben quedar
+artifact-only; `Secret Scan` y `ERP Integrity Gate` en verde. Smoke manual del
+ERP web: login y tres rutas de uso diario.
+
+*Corrección 2026-09-15 (esta línea decía «“Deploy Storefront” debe terminar
+sin job de deploy»).* El workflow de la tienda sí publica en un push: cada paso
+de `build_and_deploy` corre cuando `is_publication != 'true'`, y el run del
+2026-07-27 (`30236101497`) lo demuestra con `Deploy store target: success`. Lo
+que no existe en producción es el conducto **durable** (`workflow_dispatch`
+con `request_id`, ledger `storefront_publication_*`, cron y la edge function
+`dispatch-storefront-publication`): su migración
+`20260728230000_add_storefront_publication_contract.sql` no está aplicada, y
+sin ella el dueño no puede publicar desde el editor del sitio. Mientras eso
+siga así, la tienda se publica **por el push a `main`** o, si ese run no
+llega, desde el Mac con la porción `hosting:store` de `scripts/deploy.sh`
+(sync SEO → build `web_store` → presupuesto → snapshots →
+`write_storefront_release_evidence.sh` → `firebase deploy --only
+hosting:store`), verificando `release.json` en los dos orígenes. El comando
+`verify` de `storefront_publication_workflow.mjs` no sirve para una
+publicación manual: exige `GITHUB_RUN_ID` y compara el `run` de la evidencia.
+
+Por qué ningún push publicó la tienda entre el 2026-07-27 y el 2026-09-15 —dos
+defectos de `main`, ninguno del diseño—:
+
+1. El 2026-08-05 (`069e6b5e`) se agregó a mano a `firebase.json` la regla
+   `/accept-invitation → https://project-vinabike.web.app/accept-invitation`
+   (302) para que una invitación abierta en el dominio de la tienda llegue al
+   ERP. `generate_product_seo_snapshots.dart` validaba **todas** las reglas del
+   target `store` con el contrato de sus redirects generados (301, rutas
+   relativas) y reventaba con «firebase.json contiene un
+   source/destination/type inválido». Cayeron así el push del 2026-08-10
+   (`31409100983`, paso «Generate SEO snapshots, sitemap, and product
+   redirects») y `scripts/deploy.sh` en el Mac; la tienda en vivo quedó en
+   `32404d36` (código del 2026-07-27, evidencia `manual-shell`, `dirty:
+   true`, construida el 2026-09-02). Arreglo: el generador sólo posee las
+   reglas que lista su manifiesto y conserva las demás tal cual, en su orden.
+2. El primer build de `main` después del cutover (`dc1e609`) superó el
+   presupuesto del bundle (`main.dart.js` 6 687 239 B contra 6 000 000; gzip
+   1 775 132 contra 1 700 000), igual en el Mac y en CI (`35030810512`, paso
+   «Build storefront release»). El bundle en vivo pesa 5 467 276 B: siete
+   semanas de trabajo dejaron el host del editor del sitio y el chat de
+   clientes importados de forma ansiosa en la tienda, y ocho trozos diferidos
+   se fundieron en el principal. El canario nunca corrió en CI en ese período
+   por el defecto 1. Se re-basó el presupuesto con ~9 % de holgura y el
+   diferimiento quedó en §17.1.
 
 **Paso 6 · Alinear.** `git push origin <P>:refs/heads/smartpegas1.0`
 (fast-forward). En el Mac: `git fetch origin && git switch main` (ningún archivo
@@ -1087,32 +1143,66 @@ Al cumplir las condiciones:
 4. Decidir por separado si la rama se conserva archivada o se elimina. La
    eliminación requiere autorización nueva y no forma parte de este runbook.
 
+### 17.1 Backlog registrado el 2026-09-15 (no ejecutado ese día)
+
+Cada punto es una tarea con su propia PR; ninguno bloquea el cierre de §19.
+
+1. **Instalar el conducto durable de publicación de la tienda en
+   producción:** desplegar `20260728230000_add_storefront_publication_contract.sql`
+   con `scripts/db/deploy_migration.sh` y su `--verify`, cargar en Vault el
+   secreto que la edge function `dispatch-storefront-publication` usa para
+   firmar el `workflow_dispatch` (GitHub App con permiso `actions:write`
+   sobre `firebase-hosting-store.yml`), desplegar esa función con
+   `scripts/supabase_cli.sh`, activar `dispatch_enabled` en
+   `storefront_publication_targets` en un paso separado y probar una
+   publicación de punta a punta desde el editor del sitio. Hasta entonces la
+   tienda se publica por push a `main` (paso 5).
+2. **Retirar `smartpegas1.0` después del 2026-09-22** (7 días desde el
+   cutover), siguiendo §17: `on.push.branches` de `secret-scan.yml` y
+   `erp-integrity-gate.yml`, la custom branch policy del environment
+   `Production`, y los textos transicionales en
+   `.github/copilot-instructions.md` («Mandatory Workspace And Branch
+   Continuity» y la nota del environment en los runbooks de escritorio) y
+   `docs/MACOS_DESKTOP_DISTRIBUTION.md`. El tag de respaldo se conserva.
+3. **Diferir en la tienda lo que sólo usa el dueño:** poner el host del
+   editor del sitio (`persistent_editor_shell`, dock contextual, hoja de
+   bloques, command scope, recuperación de borradores) y el chat de clientes
+   detrás de los `deferred as` que ya existen, y volver a bajar el
+   presupuesto de `check_storefront_bundle_budget.sh` a la medida del
+   resultado (paso 5, defecto 2).
+4. **Deuda de carga en Supabase**, medida en
+   `docs/development/SUPABASE_WORKFLOW.md` («Backlog de carga residual,
+   2026-09-15»): Realtime `list_changes`, políticas RLS sin `(select …)`,
+   pollers del ERP y de la tienda, purga de `cron.job_run_details` y de
+   `net._http_response`, y los `raise … errcode 40001` restantes de
+   `20260829160000_supply_need_refinement_modes.sql`.
+
 ## 18. Registro de ejecución
 
-Completar durante la ventana:
+Ruta simplificada (§0), ejecutada el 2026-09-15:
 
 | Campo | Valor |
 | --- | --- |
-| Fecha/hora UTC inicio |  |
-| Modo: completo / Git-only |  |
-| Dueño / operador / verificador |  |
-| `N` — main anterior |  |
-| `F` — smart final aprobado |  |
-| Tags de respaldo |  |
-| `M` — puente |  |
-| `T` — merge de prueba y runs que lo evaluaron |  |
-| Cambio exacto de protección |  |
-| `P` — main promovida |  |
-| Árbol esperado / árbol observado |  |
-| Run ERP / deployment / release anterior |  |
-| Run tienda / deployment / release anterior |  |
-| Runs macOS/Windows/secret scan |  |
-| Tags/releases antes y después |  |
-| SHA final de ambas ramas |  |
-| Freeze activado/desactivado |  |
-| Smokes |  |
-| Incidencias y decisiones |  |
-| Fecha/hora UTC cierre |  |
+| Fecha/hora UTC inicio | 2026-09-15 ~21:30 (merge de la PR #29) |
+| Modo: completo / Git-only | completo, ruta simplificada de §0 |
+| Dueño / operador / verificador | dueño (merge de #29 y #30); agentes Claude (sesión en la nube: preparación y promoción; sesión en el Mac: publicaciones, tienda, secreto, documentación) |
+| `N` — main anterior | `75cb391f…` |
+| `F` — smart final aprobado | `f51f3777…` (+ paso 0 en `claude/gifted-fermi-otkemj`) |
+| Tags de respaldo | ramas `cutover-backup/main-before-20260915` → `75cb391f…`, `cutover-backup/smart-before-20260915` → `f51f3777…` |
+| `M` — puente | sin efecto (`main` era ancestro puro) |
+| `T` — merge de prueba y runs que lo evaluaron | sin efecto; `PR Integrity` y `Secret Scan` de la PR #29 |
+| Cambio exacto de protección | 2026-09-15 ~23:20 UTC, §12.1: `required_status_checks.checks` de `main` pasó de `[Reject newly committed credentials, integrity / Database and application regression gate]` (el segundo no lo produce ningún job desde que el gate se partió en shards; toda PR quedaba `BLOCKED` y #29/#30 se fusionaron como admin) a `[Reject newly committed credentials, integrity / Static analysis and packaged web build, integrity / Application regression gate 0..3]`; `strict=true`, `enforce_admins=false`, `required_conversation_resolution=true` y el resto sin cambio; PATCH sobre `…/protection/required_status_checks` únicamente; la PR #31 pasó a `CLEAN` |
+| `P` — main promovida | `820ea45d` (PR #29); head observado al cerrar: `dc1e6093` (PR #30) |
+| Árbol esperado / árbol observado | `tree(P) = tree(F)`; `git diff --exit-code origin/smartpegas1.0 origin/main` vacío |
+| Run ERP / deployment / release anterior | `35026128013` (`820ea45`, deploy en verde, health rojo por el secreto) y `35030810641` (`dc1e609`, todo en verde al primer intento); `release.json` en vivo: `{"commit":"dc1e609…","run":"35030810641","built_at":"2026-09-15T22:48:12Z"}`; release anterior: build del 2026-08-10 |
+| Run tienda / deployment / release anterior | `35026128122` (gate 1 rojo, test de mensajería corregido en #30) y `35030810512` (rojo en «Build storefront release» por el presupuesto); en vivo sigue `32404d36` (`manual-shell`, `dirty: true`, 2026-09-02) hasta que se fusione la PR #31 y el push publique, o se publique desde el Mac (paso 5) |
+| Runs macOS/Windows/secret scan | push `dc1e609`: `Secret Scan` `35030810046` verde, `ERP Integrity Gate` `35030810103`, gates macOS `35030810951` y Windows `35030810513` artifact-only; publicaciones por `workflow_dispatch` sobre `dc1e609`: macOS `35030916303`, Android `35030919542`, Windows `35030922803`, las tres en verde |
+| Tags/releases antes y después | macOS `macos-v1.0.3-177` → `macos-v1.0.3-180` (`macos-latest` cita `dc1e609`, `vinabike_erp_macos_1.0.3-180.zip`); Windows → `windows-v1.0.3_61-55` (`windows-release-manifest.json` cita `dc1e609`); Android → `latest.json` privado con `version_name 1.0.3`, `build_number 66`, `version_code 2066`, `vinabike-erp-1.0.3+66-arm64-v8a.apk` (97,6 MB), `published_at 2026-09-15T23:12:17Z`; evidencia `android-release-manifest.json` con `commit dc1e609` en el artifact `vinabike-erp-android-release-evidence` del run |
+| SHA final de ambas ramas | `origin/main = origin/smartpegas1.0 = dc1e6093` |
+| Freeze activado/desactivado | no implementado (§0.1); no aplica |
+| Smokes | ERP web: `release.json` y health de producción por el workflow; escritorio: el aviso de actualización a 1.0.3 (180) llegó a la app instalada del dueño el 2026-09-15 ~23:15 UTC |
+| Incidencias y decisiones | (1) secreto `SUPABASE_DB_PASSWORD` de `Production` desactualizado desde 2026-08-10, refrescado 22:36 UTC desde el Keychain; (2) la tienda no se publicaba por push desde el 2026-07-27 por la regla `/accept-invitation` y, hoy, por el presupuesto del bundle —paso 5—; (3) el revisor Copilot cae por el tamaño de `copilot-instructions.md`, no es hallazgo; (4) required check obsoleto en la protección de `main`, reparado (fila de arriba); (5) backlog en §17.1 |
+| Fecha/hora UTC cierre | pendiente: se cierra cuando la tienda sirva el SHA de `main` (paso 5) y termine la observación de §17 (a partir del 2026-09-22) |
 
 ## 19. Criterio de cierre
 

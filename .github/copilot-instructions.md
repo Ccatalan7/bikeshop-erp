@@ -112,6 +112,19 @@ extrae a un documento propio **con su puntero desde acá**.
   que hace que el siguiente lo lea.
 - **Apuntando de vuelta acá** cuando toca el proceso general.
 
+### El revisor Copilot de PR cae por el tamaño de este archivo (2026-09-15)
+
+`Running Copilot Code Review` termina en rojo en cada PR con `Error: Prompt
+too big after adding PR context` (`autofind.js`, `MaxPromptTokens=110000`)
+**antes de leer el diff**: este archivo pesa ~423 KB / 7 500 líneas y el
+revisor lo carga entero como instrucciones. No es un hallazgo sobre la PR ni
+un check requerido de `main`; no se diagnostica el diff por eso, no se
+reintenta y no se le pide al dueño que lo mire. Se vio en las dos corridas de
+la PR #30 (runs `35029187965` y `35029312586`) con un diff de tres archivos.
+La única salida es adelgazar este archivo moviendo secciones a sus documentos
+dueños —decisión aparte, con su propia PR—; mientras tanto el rojo de Copilot
+se ignora y se dice por qué.
+
 ### Flutter widget tests: verify clipboard writes at the platform channel
 
 **2026-08-08 — one full test round was lost to this trap.** In a Flutter

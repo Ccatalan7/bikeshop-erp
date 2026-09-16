@@ -786,6 +786,11 @@
           "type": 301
         },
         {
+          "source": "/productos/03ba399b-4f95-437f-8fd2-c0c2bef0fd5b",
+          "destination": "/productos/guia-freno-curva-90-rallex/448015",
+          "type": 301
+        },
+        {
           "source": "/productos/03c663b9-c2da-4ea6-8119-e4f800a3672c",
           "destination": "/productos/cambio-shimano-altus-rd-m310-l-7-8v-direct-attachment-black-ind-pack-erdm310dl/4524667130925",
           "type": 301
@@ -1328,6 +1333,11 @@
         {
           "source": "/productos/141877f8-f6cd-4255-9d35-e2ed33d9c54f",
           "destination": "/productos/tubo-sillin-zoom-sp-c261-iso-m-31-6x400-bed-bed-labk/18996",
+          "type": 301
+        },
+        {
+          "source": "/productos/141886b5-3621-4bb2-ae3d-92365998f178",
+          "destination": "/productos/motor-sellado-73x118mm-neco-mod-b910-ja21011/118B910-4",
           "type": 301
         },
         {
@@ -2433,6 +2443,11 @@
         {
           "source": "/productos/38d18ebf-3199-446c-91a8-3a2c4116afe2",
           "destination": "/productos/missinglink-risk-6-7-8-v-par-2-piezas/AE0073",
+          "type": 301
+        },
+        {
+          "source": "/productos/3947c1aa-92af-4ad1-90bc-b9001fa1babf",
+          "destination": "/productos/volante-42x34x24x170mm-c-cubre-fc-ty301/23304",
           "type": 301
         },
         {
@@ -3996,6 +4011,11 @@
           "type": 301
         },
         {
+          "source": "/productos/6d66efa0-1b58-4a9f-961e-2d7689193fda",
+          "destination": "/productos/motor-vp-bc73-sellado-122-5x68mm/15125",
+          "type": 301
+        },
+        {
           "source": "/productos/6d762940-67c2-4499-aae9-1856f0ff7db8",
           "destination": "/productos/guantes-dedo-completo-negro-west-biking-silicona-l/AE0308",
           "type": 301
@@ -4098,6 +4118,11 @@
         {
           "source": "/productos/70d1700d-56a9-4464-8567-073825d2e82a",
           "destination": "/productos/pinon-shimano-atornillado-6v-14-28-mf-tz500-6-ind-pack-amftz5006428/S60076",
+          "type": 301
+        },
+        {
+          "source": "/productos/715c6eb5-e6b2-48e0-9748-05615b20bc45",
+          "destination": "/productos/motor-sellado-73x122-5mm-neco-mod-b91o-ja21011/118B910-9",
           "type": 301
         },
         {
@@ -5307,7 +5332,7 @@
         },
         {
           "source": "/productos/9868a88c-370b-420c-9966-eb9a1eb19887",
-          "destination": "/productos/terminal-de-piola-aluminio/AE0362",
+          "destination": "/productos/terminal-de-piola-aluminio/AE0361",
           "type": 301
         },
         {
@@ -5606,6 +5631,11 @@
           "type": 301
         },
         {
+          "source": "/productos/a1014296-b596-4824-8bea-7171cf13dcd8",
+          "destination": "/productos/funda-freno-2p-50-mts-rollo-negro/1798",
+          "type": 301
+        },
+        {
           "source": "/productos/a142ba96-3162-4aa3-894e-831e25703bc2",
           "destination": "/productos/shimano-cues-sl-u6000-11r/AE0328",
           "type": 301
@@ -5617,7 +5647,7 @@
         },
         {
           "source": "/productos/a19eb224-2ae1-46d4-990a-216a8f09a269",
-          "destination": "/productos/cadena-1-2-x-3-32-116-e-6vel-dark-silve-kmc-10278-cu-bod-d/10278",
+          "destination": "/productos/cadena-1-2-x-3-32-116-e-6vel-kmc-hv408-grey-brown/10278",
           "type": 301
         },
         {
@@ -5746,6 +5776,11 @@
           "type": 301
         },
         {
+          "source": "/productos/a630f910-7f0c-4a27-bdc0-9a72ad073a5e",
+          "destination": "/productos/cable-de-freno-mtb-tope-barril-2000mm/403",
+          "type": 301
+        },
+        {
           "source": "/productos/a63bfa58-1f57-4dff-89d9-289f4af38796",
           "destination": "/productos/cambio-negro-rd-m200-negro-6-7-8-vel-pata-larga-nuevo/18835",
           "type": 301
@@ -5783,6 +5818,11 @@
         {
           "source": "/productos/a72eea6d-1102-4dfa-a7ac-1619477a8968",
           "destination": "/productos/pastillas-freno-disco-copper-con-disipador-caliper-ruta-shimano-tj944-marca-ztto/AE0252",
+          "type": 301
+        },
+        {
+          "source": "/productos/a736abca-d01a-4e5d-aba4-ae4fb0fa042f",
+          "destination": "/productos/cable-cambio-1-2-x-2000-mm/407",
           "type": 301
         },
         {
@@ -6016,8 +6056,18 @@
           "type": 301
         },
         {
+          "source": "/productos/b1841731-bd72-4834-a0e5-82c940977e57",
+          "destination": "/productos/manguera-de-freno-hidraulico-2-5m-id2-2-od5-0/AE0370",
+          "type": 301
+        },
+        {
           "source": "/productos/b19abb0f-f8ed-4f60-8bf6-e73f55da8146",
           "destination": "/productos/camara-chao-yang-700x18-23-f-v-60mm-con-liquido/6927116108656",
+          "type": 301
+        },
+        {
+          "source": "/productos/b1a0c768-fb62-49c4-b70d-97f970b9314f",
+          "destination": "/productos/cadena-1-2-x-3-32-116-e-6-vel-en-caja-hv408-silver-kmc-c-u/16448",
           "type": 301
         },
         {
@@ -6626,6 +6676,11 @@
           "type": 301
         },
         {
+          "source": "/productos/c6b580e0-39c0-4098-83d2-9522b96555ba",
+          "destination": "/productos/pinon-8-veloc-cassette-12-32t-cs-hg200-8v/23310",
+          "type": 301
+        },
+        {
           "source": "/productos/c6f5fa2c-e63b-428f-8ac2-37dc8a2717c7",
           "destination": "/productos/eje-de-motor-sellado-ozono-68mm-x-113-5mm/4701",
           "type": 301
@@ -6743,6 +6798,11 @@
         {
           "source": "/productos/cadac9d4-f402-4a8b-a281-5efc44b5f59a",
           "destination": "/productos/camara-27-5x1-90-2-10-av-48mm-chaoyang-con-liquido/6927116109813",
+          "type": 301
+        },
+        {
+          "source": "/productos/cadena-1-2-x-3-32-116-e-6vel-dark-silve-kmc-10278-cu-bod-d/10278",
+          "destination": "/productos/cadena-1-2-x-3-32-116-e-6vel-kmc-hv408-grey-brown/10278",
           "type": 301
         },
         {
@@ -7321,6 +7381,11 @@
           "type": 301
         },
         {
+          "source": "/productos/ddd85969-3c5f-45d5-b5cb-710b936013a6",
+          "destination": "/productos/funda-cambio-4mm-sis-50-mts-c-u/3551",
+          "type": 301
+        },
+        {
           "source": "/productos/ddddc669-47e0-4d3a-b1b8-aa4123a6a0bc",
           "destination": "/productos/resorte-de-aguja-bloqueo/AE0074",
           "type": 301
@@ -7761,6 +7826,11 @@
           "type": 301
         },
         {
+          "source": "/productos/ed2a104b-04b8-4407-bd53-e02db19afecf",
+          "destination": "/productos/pinon-7-veloc-12-32t-cs-hg200-7v/23309",
+          "type": 301
+        },
+        {
           "source": "/productos/ed62898c-8843-4224-ab7f-129d7f96d029",
           "destination": "/productos/rodamiento-7-32-en-bolsa-de-1-gruesa/2000000155753",
           "type": 301
@@ -7978,6 +8048,11 @@
         {
           "source": "/productos/f53674a0-f2e0-42ca-8f95-eec5996c3a7e",
           "destination": "/productos/rayo-282-mm-c-niples-stella-en-bolsa-compatibles-genericos/682",
+          "type": 301
+        },
+        {
+          "source": "/productos/f5566b5a-93d6-4478-96fa-744261c9bbca",
+          "destination": "/productos/desviador-trasero-shimano-tourney-ty500-c-apernar-6-7veloc/23302",
           "type": 301
         },
         {
