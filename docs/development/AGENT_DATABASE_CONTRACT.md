@@ -706,6 +706,31 @@ commands. Sources and per-consumer scope are in `SUPABASE_WORKFLOW.md`
 identity and does not bypass RLS; a secret key is privileged and is never an
 ordinary test identity.
 
+## Tres trampas de una migración de catálogo grande (2026-09-16)
+
+Salieron del bloque 1 de carga residual (487 políticas reescritas, 44
+cambios de índices), y cada una costó una pasada:
+
+- **Postgres deparsea `(select f())` como `( SELECT f() AS f)`**, en
+  mayúsculas y con alias. Un read-back que busque «llamada sin envolver» con
+  `~ '(?<!select )…'` cuenta como sin envolver todo lo que acaba de envolver;
+  en local dio 426 «pendientes» tras una migración correcta. Se compara con
+  `~*` (o con `lower()`), y el generador que envuelve también ignora
+  mayúsculas para no envolver dos veces.
+- **Cada sentencia por el pooler cuesta ~200 ms de viaje.** 550 `ALTER
+  POLICY` sueltos dentro de una transacción son ~110 s con ACCESS EXCLUSIVE
+  sobre ~290 tablas. Se agrupa cada sección en un `do $block$ … end $block$`
+  con `execute $ddl$ … $ddl$` por sentencia: un viaje por sección, la
+  transacción dura segundos y `lock_timeout = '5s'` sigue cubriendo la
+  espera. El archivo sigue siendo legible sentencia por sentencia.
+- **Un índice único sin constraint no tiene «constraint propio».** Al contar
+  `pg_constraint.conindid = <índice>` para afirmar cuántas FKs cuelgan de un
+  índice, un `uq_*` creado con `create unique index` cuenta sólo FKs (17),
+  mientras que su gemelo `*_key` creado con `unique (…)` cuenta 1 propio más
+  las FKs. Restarle «uno» a todos por igual hizo fallar el read-back después
+  de aplicar; el deploy quedó aplicado sin stamp y se cerró en una segunda
+  pasada idempotente. Leer `contype` antes de escribir el número.
+
 ## El archivo `--verify` no admite bloques ni constantes plegables (2026-08-19)
 
 Un read-back de `deploy_migration.sh` corre por la ruta de **lectura remota**, y

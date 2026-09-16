@@ -382,6 +382,122 @@ después con `just db-cpu production` y `pg_stat_statements`:
    —`40001` sólo cuando repetir la misma transacción puede tener éxito— y
    reclasificar los que sean rechazos de negocio.
 
+### Bloque 1 — higiene de RLS e índices (2026-09-16)
+
+Migraciones `20260916000100_rls_hoist_stable_calls_and_permissive_policy_hygiene`
+y `20260916000200_hot_fk_indexes_and_duplicate_index_cleanup`, cada una con su
+`verify_*.sql` al lado (corridos contra producción **antes** del deploy y
+exigiendo el fallo, y después exigiendo el paso). Generadas mecánicamente
+desde el catálogo de producción (`pg_policies`, `pg_constraint`,
+`pg_stat_user_indexes`) el 2026-09-15; la evidencia del antes vive en el PR.
+
+**La causa que el advisor no nombra.** Sus 58 `auth_rls_initplan` cuentan
+sólo `auth.<fn>()` y `current_setting()`. El costo real por fila estaba en
+`user_tenant_id()`: una función SQL `STABLE SECURITY DEFINER` con una
+subconsulta a `user_profiles`, que aparecía **441 veces** en 687 políticas
+de 293 tablas sin `(select …)`, de modo que cada fila leída la ejecutaba de
+nuevo. Junto con `auth.uid()` (66), `erp_member_tenant_id()` (26),
+`current_erp_employee_id()` (18), `worker_portal_*` (9) y `current_setting`
+(2), 487 políticas evaluaban por fila algo que es constante por sentencia.
+Todas esas funciones son `STABLE` (`pg_proc.provolatile = 's'`), así que
+`tenant_id = (select user_tenant_id())` es exactamente equivalente y se
+evalúa una vez como initplan. La migración reescribe 473 políticas con
+`ALTER POLICY` y crea 21 ya envueltas.
+
+**Duplicados permisivos: 45 hallazgos, 36 resueltos, 9 dejados a propósito.**
+- 16 eran duplicados puros —una política `SELECT` idéntica a una `FOR ALL`
+  para los mismos roles— en `email_push_subscriptions` (7),
+  `product_gama_overrides` (7), `spec_facts`, `spec_fact_values` y
+  `online_shipping_rate_tiers`: se borra la `SELECT`.
+- 14 eran el trío del catálogo público (`X_select` para `public` +
+  `public_X_select` para `anon` + `public_X_select_authenticated`) en
+  `categories`, `featured_products`, `product_brands`, `product_categories`,
+  `products`, `website_banners` y `website_content`. Para `anon` la política
+  de tenant nunca acertaba (`user_tenant_id()` es null sin sesión) pero se
+  evaluaba fila por fila en cada lectura anónima de la tienda: `X_select`
+  pasa a `authenticated` y absorbe con `OR` la variante autenticada; la de
+  `anon` no cambia.
+- `website_navigation` (1) y `sales_invoices` (1): la política pública pasa
+  a `anon` y la autenticada absorbe la otra con `OR`; la política legada
+  «Customers can view their own invoices» (`customer_id = auth.uid()`) se
+  conserva dentro del `OR` porque nada demuestra que sea letra muerta.
+- 4 `FOR ALL` que tapaban una `SELECT` más amplia (`business_sites`,
+  `journal_entries`, `journal_lines`, `spec_definition_values`) se parten en
+  `INSERT`/`UPDATE`/`DELETE`; la `SELECT` queda sola porque el cuerpo de
+  `can_edit_tenant_settings` y `can_manage_tenant_accounting` exige lo mismo
+  que `is_active_tenant_member` más un rol, y `tenant_id = user_tenant_id()`
+  está contenido en `(tenant_id is null) or …`. Con 6 390 filas en
+  `journal_lines`, eso es una llamada `SECURITY DEFINER` menos por fila.
+- Se dejan tal cual las 8 parejas staff/cliente de `customer_addresses`,
+  `bikes`, `mechanic_jobs`, `online_orders`, `online_order_items` y la pareja
+  de `website_blocks`: `supabase/tests/auth_tenant_provisioning_hardening.sql`
+  y `supabase/tests/website_editor_read_authority.sql` fijan ese conjunto de
+  políticas por nombre como contrato, y fusionarlas no ahorra ninguna
+  llamada (las dos ramas se evalúan igual dentro del `OR`).
+
+**Índices.** 32 índices btree para las FKs sin cobertura de las tablas
+calientes (`messages` 3, `conversations` 3, `smart_tasks` 10,
+`mechanic_jobs` 5, `sales_invoices` 3, `smart_task_user_state` 2, y una en
+`bug_reports`, `customer_addresses`, `employees`, `erp_notifications`,
+`message_reactions`, `smart_task_job_items`). Ninguna de esas tablas pasa de
+906 filas vivas hoy, así que no mueven CPU: existen para que un borrado en
+`auth.users` o en la tabla referenciada no recorra la hija bajo lock cuando
+crezcan, y aparecerán en la próxima lista de «índices sin uso» hasta que
+haya tráfico que los use. De los 11 grupos duplicados se borra el índice sin
+scans de cada par; `products_tenant_id_id_key` y `suppliers_tenant_id_id_key`
+son constraints UNIQUE cuyo gemelo (`uq_*`, índices únicos sin constraint)
+carga las 17 y 19 FKs respectivamente, así que cae el que no tiene
+dependientes (la primera versión del read-back esperaba 16 y 18 porque contó
+como «propio» un constraint que el índice `uq_*` no tiene: el deploy aplicó
+el bloque, el read-back falló en esa aserción y el stamp se registró en la
+segunda pasada, idempotente, con el número corregido);
+`uq_purchase_invoices_tenant_id_id` es un índice único sin constraint y su
+gemelo lleva las 3 FKs. Los 450 índices sin uso (19,3 MB en total; el mayor
+`products.idx_products_embedding`, 9,9 MB; los de mayor costo de escritura
+son los diez de `mechanic_jobs`, 1 200 escrituras en la ventana) están en
+`docs/development/supabase-load-2026-09-15/unused-indexes.csv` con tamaño,
+escrituras de la tabla y definición; no se borra ninguno sin decisión del
+dueño.
+
+**Ensayo y prueba semántica.** Antes del deploy se replicó el catálogo de
+políticas de producción en la base local (267 de 293 tablas existen ahí) y
+se corrió la migración dos veces (idempotencia). La equivalencia se prueba
+con conteos visibles por rol —`set local role anon`, y `authenticated` con
+`request.jwt.claims` del dueño y de un cliente de la tienda— sobre las 51
+tablas afectadas, antes y después: deben ser idénticos.
+
+**Antes / después.** Desplegado el 2026-09-16 00:05–00:15 UTC; ambas
+migraciones `APPLIED`; `scripts/db/health.sh production` en verde; los
+conteos visibles por rol idénticos en las 51 tablas.
+
+| Advisor de rendimiento | antes | después |
+| --- | ---: | ---: |
+| `auth_rls_initplan` | 58 | 0 |
+| `multiple_permissive_policies` | 45 | 9 (los dejados a propósito) |
+| `unindexed_foreign_keys` | 594 | 562 (0 en las tablas calientes) |
+| `duplicate_index` | 11 | 0 |
+| `unused_index` | 450 | 460 (+32 nuevos sin tráfico aún, −10 duplicados sin scans, y otros que empezaron a usarse) |
+
+`pg_stat_statements`, media por sentencia: «antes» es la media acumulada
+desde el 2026-08-30 (17 días, todas las horas); «después» es la media del
+intervalo 23:49–00:16 UTC posterior al deploy, con tráfico nocturno, así que
+la comparación es indicativa hasta medir 24 h completas.
+
+| Sentencia (rol) | llamadas en el intervalo | media antes | media después |
+| --- | ---: | ---: | ---: |
+| Realtime `list_changes` (`supabase_admin`) | 2 596 | 78,2 ms | 9,4 ms |
+| `smart_tasks` (poll del ERP, `authenticated`) | 109 | 63,2 ms | 6,0 ms |
+| `erp_notifications` variante de 17 ms | 162 | 17,0 ms | 2,0 ms |
+| `erp_notifications` variantes de 2 ms | 162 + 162 | 1,9 / 2,1 ms | 0,6 / 0,5 ms |
+| `employees` listado (`authenticated`) | 27 | 76,1 ms | 7,7 ms |
+| `get_checked_in_employees()` | 27 | 27,6 ms | 2,3 ms |
+
+Por qué `list_changes` también baja: Realtime evalúa las políticas RLS de
+cada tabla suscrita por cada suscriptor en `realtime.apply_rls`, así que el
+`user_tenant_id()` por fila también le costaba a él. El bloque 2 sigue siendo
+necesario: 2 596 sondeos en 27 minutos son ~96 por minuto, y el objetivo del
+dueño es bajar la frecuencia, no sólo el costo de cada uno.
+
 `supabase/manual_checks/diagnostics/cpu_pressure_profile.sql` (`just db-cpu`)
 measures all of it: execution time by role and by statement, calls per hour,
 live activity, rollbacks, replication-slot lag, seq-scan pressure, bloat, the

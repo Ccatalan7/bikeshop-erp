@@ -1,0 +1,451 @@
+table,index,size_bytes,size,table_writes_since_2026-08-30,live_rows,definition
+products,idx_products_embedding,10133504,9896 kB,891,1674,CREATE INDEX idx_products_embedding ON public.products USING ivfflat (embedding vector_cosine_ops) WITH (lists='100')
+mechanic_job_timeline,idx_mechanic_job_timeline_created_at,311296,304 kB,294,294,CREATE INDEX idx_mechanic_job_timeline_created_at ON public.mechanic_job_timeline USING btree (created_at DESC)
+journal_entries,idx_journal_entries_entry_number,188416,184 kB,679,2515,CREATE INDEX idx_journal_entries_entry_number ON public.journal_entries USING btree (entry_number)
+journal_lines,idx_journal_lines_journal_entry,188416,184 kB,682,6393,CREATE INDEX idx_journal_lines_journal_entry ON public.journal_lines USING btree (entry_id)
+inventory_accounting_operations,idx_inventory_operations_tenant_created,155648,152 kB,572,1662,"CREATE INDEX idx_inventory_operations_tenant_created ON public.inventory_accounting_operations USING btree (tenant_id, created_at DESC)"
+product_tax_classification_events,idx_product_tax_classification_events_product_time,147456,144 kB,4,4,"CREATE INDEX idx_product_tax_classification_events_product_time ON public.product_tax_classification_events USING btree (tenant_id, product_id, occurred_at DESC)"
+inventory_accounting_operations,idx_inventory_operations_actor,139264,136 kB,572,1662,"CREATE INDEX idx_inventory_operations_actor ON public.inventory_accounting_operations USING btree (actor_id, created_at DESC)"
+bike_observations,idx_bike_observations_bike,122880,120 kB,457,993,"CREATE INDEX idx_bike_observations_bike ON public.bike_observations USING btree (bike_id, observed_at DESC, created_at DESC)"
+accounting_source_identity_backfill_rows,idx_accounting_source_identity_rows_run,106496,104 kB,0,0,"CREATE INDEX idx_accounting_source_identity_rows_run ON public.accounting_source_identity_backfill_rows USING btree (run_id, created_at, id)"
+smart_purchase_list,idx_smart_purchase_list_priority,106496,104 kB,96,31,CREATE INDEX idx_smart_purchase_list_priority ON public.smart_purchase_list USING btree (priority DESC)
+workshop_line_identity_backfill_rows,idx_workshop_line_identity_backfill_rows_run,106496,104 kB,0,0,"CREATE INDEX idx_workshop_line_identity_backfill_rows_run ON public.workshop_line_identity_backfill_rows USING btree (run_id, created_at, id)"
+journal_entries,idx_journal_entries_type,73728,72 kB,679,2515,CREATE INDEX idx_journal_entries_type ON public.journal_entries USING btree (type)
+journal_entries,idx_journal_entries_entry_date,65536,64 kB,679,2515,CREATE INDEX idx_journal_entries_entry_date ON public.journal_entries USING btree (entry_date)
+smart_purchase_list,idx_smart_purchase_list_added_date,65536,64 kB,96,31,CREATE INDEX idx_smart_purchase_list_added_date ON public.smart_purchase_list USING btree (added_date DESC)
+mechanic_job_status_transition_events,idx_mechanic_job_status_transition_events_job,57344,56 kB,79,309,"CREATE INDEX idx_mechanic_job_status_transition_events_job ON public.mechanic_job_status_transition_events USING btree (tenant_id, job_id, occurred_at DESC, id DESC)"
+mechanic_jobs,idx_mechanic_jobs_job_number,57344,56 kB,1200,501,CREATE INDEX idx_mechanic_jobs_job_number ON public.mechanic_jobs USING btree (job_number)
+app_files,idx_app_files_metadata,49152,48 kB,4,4,CREATE INDEX idx_app_files_metadata ON public.app_files USING gin (metadata)
+assistant_threads,assistant_threads_actor_activity_idx,49152,48 kB,25,3,"CREATE INDEX assistant_threads_actor_activity_idx ON public.assistant_threads USING btree (tenant_id, actor_user_id, last_activity_at DESC)"
+bike_interventions,idx_bike_interventions_bike,49152,48 kB,20,10,"CREATE INDEX idx_bike_interventions_bike ON public.bike_interventions USING btree (bike_id, performed_at DESC, created_at DESC)"
+bike_observations,idx_bike_observations_slot,49152,48 kB,457,993,"CREATE INDEX idx_bike_observations_slot ON public.bike_observations USING btree (bike_id, component_slot_key, location_key, observed_at DESC) WHERE (component_slot_key IS NOT NULL)"
+bikes,idx_bikes_brand_model,49152,48 kB,20,20,"CREATE INDEX idx_bikes_brand_model ON public.bikes USING gin (to_tsvector('spanish'::regconfig, COALESCE(((brand || ' '::text) || model), ''::text)))"
+journal_entries,idx_journal_entries_entry_type,49152,48 kB,679,2515,CREATE INDEX idx_journal_entries_entry_type ON public.journal_entries USING btree (entry_type)
+journal_entries,idx_journal_entries_status,49152,48 kB,679,2515,CREATE INDEX idx_journal_entries_status ON public.journal_entries USING btree (status)
+bike_events,idx_bike_events_bike_id,40960,40 kB,89,89,CREATE INDEX idx_bike_events_bike_id ON public.bike_events USING btree (bike_id)
+bike_observations,idx_bike_observations_job_bike,40960,40 kB,457,993,CREATE INDEX idx_bike_observations_job_bike ON public.bike_observations USING btree (job_bike_id) WHERE (job_bike_id IS NOT NULL)
+bike_system_states,idx_bike_system_states_bike,40960,40 kB,480,695,CREATE INDEX idx_bike_system_states_bike ON public.bike_system_states USING btree (bike_id)
+bike_system_states,idx_bike_system_states_job_bike,40960,40 kB,480,695,CREATE INDEX idx_bike_system_states_job_bike ON public.bike_system_states USING btree (job_bike_id) WHERE (job_bike_id IS NOT NULL)
+journal_lines,idx_journal_lines_counterparty,40960,40 kB,682,6393,"CREATE INDEX idx_journal_lines_counterparty ON public.journal_lines USING btree (tenant_id, counterparty_party_id, created_at DESC) WHERE (counterparty_party_id IS NOT NULL)"
+journal_supersession_evidence,idx_journal_supersession_operation,40960,40 kB,56,56,"CREATE INDEX idx_journal_supersession_operation ON public.journal_supersession_evidence USING btree (tenant_id, operation_id, captured_at) WHERE (operation_id IS NOT NULL)"
+mechanic_job_delivery_events,idx_mechanic_job_delivery_events_warranty,40960,40 kB,21,21,"CREATE INDEX idx_mechanic_job_delivery_events_warranty ON public.mechanic_job_delivery_events USING btree (tenant_id, warranty_expires_at) WHERE starts_warranty_window"
+mechanic_job_status_transitions,idx_job_status_transitions_job,40960,40 kB,111,291,"CREATE INDEX idx_job_status_transitions_job ON public.mechanic_job_status_transitions USING btree (tenant_id, job_id, occurred_at)"
+mechanic_jobs,idx_mechanic_jobs_bike_id,40960,40 kB,1200,501,CREATE INDEX idx_mechanic_jobs_bike_id ON public.mechanic_jobs USING btree (bike_id)
+payroll_statement_rows,idx_payroll_statement_rows_tenant_base_fingerprint,40960,40 kB,0,0,"CREATE INDEX idx_payroll_statement_rows_tenant_base_fingerprint ON public.payroll_statement_rows USING btree (tenant_id, base_fingerprint)"
+payroll_statement_rows,idx_payroll_statement_rows_tenant_fingerprint,40960,40 kB,0,0,"CREATE INDEX idx_payroll_statement_rows_tenant_fingerprint ON public.payroll_statement_rows USING btree (tenant_id, fingerprint)"
+product_categories,idx_product_categories_full_path,40960,40 kB,0,0,CREATE INDEX idx_product_categories_full_path ON public.product_categories USING btree (full_path)
+product_spec_values,idx_product_spec_values_tenant,40960,40 kB,325,14,CREATE INDEX idx_product_spec_values_tenant ON public.product_spec_values USING btree (tenant_id)
+sales_invoices,idx_sales_invoices_bike,40960,40 kB,368,906,CREATE INDEX idx_sales_invoices_bike ON public.sales_invoices USING btree (bike_id)
+sales_invoices,idx_sales_invoices_type,40960,40 kB,368,906,CREATE INDEX idx_sales_invoices_type ON public.sales_invoices USING btree (invoice_type)
+smart_purchase_list,idx_smart_purchase_list_category,40960,40 kB,96,31,CREATE INDEX idx_smart_purchase_list_category ON public.smart_purchase_list USING btree (category_id)
+smart_purchase_list,idx_smart_purchase_list_linked_job,40960,40 kB,96,31,CREATE INDEX idx_smart_purchase_list_linked_job ON public.smart_purchase_list USING btree (linked_job_id)
+smart_purchase_list,idx_smart_purchase_list_supplier,40960,40 kB,96,31,CREATE INDEX idx_smart_purchase_list_supplier ON public.smart_purchase_list USING btree (supplier_id)
+smart_purchase_list,idx_smart_purchase_list_tenant,40960,40 kB,96,31,CREATE INDEX idx_smart_purchase_list_tenant ON public.smart_purchase_list USING btree (tenant_id)
+stock_adjustments,idx_stock_adjustments_tenant,40960,40 kB,0,0,CREATE INDEX idx_stock_adjustments_tenant ON public.stock_adjustments USING btree (tenant_id)
+bike_observations,idx_bike_observations_key,32768,32 kB,457,993,CREATE INDEX idx_bike_observations_key ON public.bike_observations USING btree (observation_key)
+mechanic_job_status_transitions,idx_job_status_transitions_tenant_time,32768,32 kB,111,291,"CREATE INDEX idx_job_status_transitions_tenant_time ON public.mechanic_job_status_transitions USING btree (tenant_id, occurred_at)"
+mechanic_job_tasks,idx_mechanic_job_tasks_order,32768,32 kB,122,274,"CREATE INDEX idx_mechanic_job_tasks_order ON public.mechanic_job_tasks USING btree (job_id, display_order)"
+product_spec_values,idx_product_spec_values_filterable,32768,32 kB,325,14,"CREATE INDEX idx_product_spec_values_filterable ON public.product_spec_values USING btree (spec_definition_id, value_option) WHERE (value_option IS NOT NULL)"
+products,idx_products_gtin,32768,32 kB,891,1674,CREATE INDEX idx_products_gtin ON public.products USING btree (gtin)
+products,idx_products_website,32768,32 kB,891,1674,CREATE INDEX idx_products_website ON public.products USING btree (show_on_website) WHERE (show_on_website = true)
+spec_definition_values,spec_definition_values_tenant,32768,32 kB,910,1451,CREATE INDEX spec_definition_values_tenant ON public.spec_definition_values USING btree (tenant_id)
+stock_adjustments,idx_stock_adjustments_adjustment_date,32768,32 kB,0,0,CREATE INDEX idx_stock_adjustments_adjustment_date ON public.stock_adjustments USING btree (adjustment_date)
+whatsapp_webhook_events,idx_whatsapp_webhook_events_tenant,32768,32 kB,357,1330,CREATE INDEX idx_whatsapp_webhook_events_tenant ON public.whatsapp_webhook_events USING btree (tenant_id)
+workshop_financial_backfill_rows,idx_workshop_financial_backfill_rows_run,32768,32 kB,0,0,"CREATE INDEX idx_workshop_financial_backfill_rows_run ON public.workshop_financial_backfill_rows USING btree (run_id, created_at, id)"
+app_files,idx_app_files_tags,24576,24 kB,4,4,CREATE INDEX idx_app_files_tags ON public.app_files USING gin (tags)
+bike_catalog,idx_bike_catalog_model_fts,24576,24 kB,0,0,"CREATE INDEX idx_bike_catalog_model_fts ON public.bike_catalog USING gin (to_tsvector('english'::regconfig, model_name))"
+bike_catalog,idx_bike_catalog_specs,24576,24 kB,0,0,CREATE INDEX idx_bike_catalog_specs ON public.bike_catalog USING gin (full_specs_json)
+companies,idx_companies_identity_search,24576,24 kB,0,0,"CREATE INDEX idx_companies_identity_search ON public.companies USING gin (to_tsvector('spanish'::regconfig, ((((((((COALESCE(name, ''::text) || ' '::text) || COALESCE(legal_name, ''::text)) || ' '::text) || COALESCE(fantasy_name, ''::text)) || ' '::text) || COALESCE(tax_id, ''::text)) || ' '::text) || COALESCE(business_activity, ''::text))))"
+employees,idx_employees_name,24576,24 kB,0,0,"CREATE INDEX idx_employees_name ON public.employees USING gin (to_tsvector('spanish'::regconfig, ((COALESCE(first_name, ''::text) || ' '::text) || COALESCE(last_name, ''::text))))"
+product_categories,idx_product_categories_name,24576,24 kB,0,0,"CREATE INDEX idx_product_categories_name ON public.product_categories USING gin (to_tsvector('spanish'::regconfig, COALESCE(name, ''::text)))"
+suppliers,idx_suppliers_aliases,24576,24 kB,18,0,CREATE INDEX idx_suppliers_aliases ON public.suppliers USING gin (aliases)
+suppliers,idx_suppliers_identity_search,24576,24 kB,18,0,"CREATE INDEX idx_suppliers_identity_search ON public.suppliers USING gin (to_tsvector('spanish'::regconfig, ((((((COALESCE(name, ''::text) || ' '::text) || COALESCE(legal_name, ''::text)) || ' '::text) || COALESCE(trade_name, ''::text)) || ' '::text) || COALESCE(owner_name, ''::text))))"
+suppliers,idx_suppliers_name,24576,24 kB,18,0,"CREATE INDEX idx_suppliers_name ON public.suppliers USING gin (to_tsvector('spanish'::regconfig, COALESCE(name, ''::text)))"
+aliexpress_sku_reservation_receipts,idx_aliexpress_sku_receipts_supplier,16384,16 kB,0,0,"CREATE INDEX idx_aliexpress_sku_receipts_supplier ON public.aliexpress_sku_reservation_receipts USING btree (tenant_id, supplier_id, created_at DESC, id DESC)"
+app_files,idx_app_files_source,16384,16 kB,4,4,"CREATE INDEX idx_app_files_source ON public.app_files USING btree (tenant_id, source_type, created_at DESC) WHERE (deleted_at IS NULL)"
+assistant_approvals,assistant_approvals_pending_expiry_idx,16384,16 kB,0,0,CREATE INDEX assistant_approvals_pending_expiry_idx ON public.assistant_approvals USING btree (expires_at) WHERE (state = 'pending'::text)
+assistant_run_leases,assistant_leases_expiry_idx,16384,16 kB,151,0,CREATE INDEX assistant_leases_expiry_idx ON public.assistant_run_leases USING btree (lease_expires_at)
+bike_aggregate_save_operations,idx_bike_aggregate_save_operations_bike,16384,16 kB,20,20,"CREATE INDEX idx_bike_aggregate_save_operations_bike ON public.bike_aggregate_save_operations USING btree (tenant_id, bike_id, completed_at DESC)"
+bike_brands,idx_bike_brands_is_active,16384,16 kB,3,3,CREATE INDEX idx_bike_brands_is_active ON public.bike_brands USING btree (is_active)
+bike_brands,idx_bike_brands_name,16384,16 kB,3,3,CREATE INDEX idx_bike_brands_name ON public.bike_brands USING btree (lower(name))
+bike_catalog,idx_bike_catalog_brand,16384,16 kB,0,0,CREATE INDEX idx_bike_catalog_brand ON public.bike_catalog USING btree (lower(brand))
+bike_catalog,idx_bike_catalog_model,16384,16 kB,0,0,CREATE INDEX idx_bike_catalog_model ON public.bike_catalog USING btree (lower(model_name))
+bike_catalog,idx_bike_catalog_search,16384,16 kB,0,0,"CREATE INDEX idx_bike_catalog_search ON public.bike_catalog USING btree (lower(brand), model_year, lower(model_name))"
+bike_catalog,idx_bike_catalog_source,16384,16 kB,0,0,CREATE INDEX idx_bike_catalog_source ON public.bike_catalog USING btree (data_source)
+bike_catalog,idx_bike_catalog_type,16384,16 kB,0,0,CREATE INDEX idx_bike_catalog_type ON public.bike_catalog USING btree (bike_type) WHERE (bike_type IS NOT NULL)
+bike_catalog,idx_bike_catalog_year,16384,16 kB,0,0,CREATE INDEX idx_bike_catalog_year ON public.bike_catalog USING btree (model_year)
+bike_component_lifecycles,idx_bike_component_lifecycles_bike,16384,16 kB,16,6,CREATE INDEX idx_bike_component_lifecycles_bike ON public.bike_component_lifecycles USING btree (bike_id)
+bike_component_lifecycles,idx_bike_component_lifecycles_job_bike,16384,16 kB,16,6,CREATE INDEX idx_bike_component_lifecycles_job_bike ON public.bike_component_lifecycles USING btree (job_bike_id) WHERE (job_bike_id IS NOT NULL)
+bike_component_lifecycles,idx_bike_component_lifecycles_product,16384,16 kB,16,6,CREATE INDEX idx_bike_component_lifecycles_product ON public.bike_component_lifecycles USING btree (product_id) WHERE (product_id IS NOT NULL)
+bike_component_lifecycles,idx_bike_component_lifecycles_tenant,16384,16 kB,16,6,CREATE INDEX idx_bike_component_lifecycles_tenant ON public.bike_component_lifecycles USING btree (tenant_id)
+bike_events,idx_bike_events_event_type,16384,16 kB,89,89,CREATE INDEX idx_bike_events_event_type ON public.bike_events USING btree (event_type)
+bike_events,idx_bike_events_job_id,16384,16 kB,89,89,CREATE INDEX idx_bike_events_job_id ON public.bike_events USING btree (job_id) WHERE (job_id IS NOT NULL)
+bike_events,idx_bike_events_tenant,16384,16 kB,89,89,CREATE INDEX idx_bike_events_tenant ON public.bike_events USING btree (tenant_id)
+bike_interventions,idx_bike_interventions_job_bike,16384,16 kB,20,10,CREATE INDEX idx_bike_interventions_job_bike ON public.bike_interventions USING btree (job_bike_id) WHERE (job_bike_id IS NOT NULL)
+bike_interventions,idx_bike_interventions_tenant,16384,16 kB,20,10,CREATE INDEX idx_bike_interventions_tenant ON public.bike_interventions USING btree (tenant_id)
+bike_models,idx_bike_models_is_active,16384,16 kB,11,11,CREATE INDEX idx_bike_models_is_active ON public.bike_models USING btree (is_active)
+bike_models,idx_bike_models_name,16384,16 kB,11,11,CREATE INDEX idx_bike_models_name ON public.bike_models USING btree (lower(name))
+bike_models,idx_bike_models_tenant,16384,16 kB,11,11,CREATE INDEX idx_bike_models_tenant ON public.bike_models USING btree (tenant_id)
+bike_observations,idx_bike_observations_tenant,16384,16 kB,457,993,CREATE INDEX idx_bike_observations_tenant ON public.bike_observations USING btree (tenant_id)
+bike_profiles,idx_bike_profiles_bike,16384,16 kB,20,20,CREATE INDEX idx_bike_profiles_bike ON public.bike_profiles USING btree (bike_id)
+bike_profiles,idx_bike_profiles_catalog_bike_id,16384,16 kB,20,20,CREATE INDEX idx_bike_profiles_catalog_bike_id ON public.bike_profiles USING btree (catalog_bike_id) WHERE (catalog_bike_id IS NOT NULL)
+bike_profiles,idx_bike_profiles_tenant,16384,16 kB,20,20,CREATE INDEX idx_bike_profiles_tenant ON public.bike_profiles USING btree (tenant_id)
+bike_system_states,idx_bike_system_states_tenant,16384,16 kB,480,695,CREATE INDEX idx_bike_system_states_tenant ON public.bike_system_states USING btree (tenant_id)
+bikes,idx_bikes_brand_id,16384,16 kB,20,20,CREATE INDEX idx_bikes_brand_id ON public.bikes USING btree (brand_id)
+bikes,idx_bikes_model_id,16384,16 kB,20,20,CREATE INDEX idx_bikes_model_id ON public.bikes USING btree (model_id)
+bikes,idx_bikes_serial_number,16384,16 kB,20,20,CREATE INDEX idx_bikes_serial_number ON public.bikes USING btree (serial_number) WHERE (serial_number IS NOT NULL)
+bug_reports,idx_bug_reports_module,16384,16 kB,0,0,"CREATE INDEX idx_bug_reports_module ON public.bug_reports USING btree (tenant_id, module)"
+bug_reports,idx_bug_reports_status,16384,16 kB,0,0,"CREATE INDEX idx_bug_reports_status ON public.bug_reports USING btree (tenant_id, status)"
+bug_reports,idx_bug_reports_tenant,16384,16 kB,0,0,CREATE INDEX idx_bug_reports_tenant ON public.bug_reports USING btree (tenant_id)
+category_tech_mappings,idx_category_tech_mappings_tenant,16384,16 kB,0,0,CREATE INDEX idx_category_tech_mappings_tenant ON public.category_tech_mappings USING btree (tenant_id)
+companies,idx_companies_default,16384,16 kB,0,0,"CREATE INDEX idx_companies_default ON public.companies USING btree (tenant_id, is_default)"
+companies,idx_companies_tenant,16384,16 kB,0,0,CREATE INDEX idx_companies_tenant ON public.companies USING btree (tenant_id)
+company_bank_accounts,idx_company_bank_accounts_company,16384,16 kB,0,0,CREATE INDEX idx_company_bank_accounts_company ON public.company_bank_accounts USING btree (company_id)
+company_bank_accounts,idx_company_bank_accounts_default,16384,16 kB,0,0,"CREATE INDEX idx_company_bank_accounts_default ON public.company_bank_accounts USING btree (tenant_id, company_id, is_default)"
+company_bank_accounts,idx_company_bank_accounts_tenant,16384,16 kB,0,0,CREATE INDEX idx_company_bank_accounts_tenant ON public.company_bank_accounts USING btree (tenant_id)
+company_settings,idx_company_settings_tenant,16384,16 kB,0,0,CREATE INDEX idx_company_settings_tenant ON public.company_settings USING btree (tenant_id)
+company_settings,idx_company_settings_website_status,16384,16 kB,0,0,CREATE INDEX idx_company_settings_website_status ON public.company_settings USING btree (website_status)
+company_settings,idx_company_settings_website_subdomain,16384,16 kB,0,0,CREATE INDEX idx_company_settings_website_subdomain ON public.company_settings USING btree (website_subdomain) WHERE (website_subdomain IS NOT NULL)
+conversation_contexts,idx_conv_contexts_conversation,16384,16 kB,117,23,CREATE INDEX idx_conv_contexts_conversation ON public.conversation_contexts USING btree (conversation_id)
+conversation_contexts,idx_conv_contexts_lookup,16384,16 kB,117,23,"CREATE INDEX idx_conv_contexts_lookup ON public.conversation_contexts USING btree (context_type, context_id)"
+conversation_contexts,idx_conversation_contexts_context,16384,16 kB,117,23,"CREATE INDEX idx_conversation_contexts_context ON public.conversation_contexts USING btree (context_type, context_id)"
+conversations,idx_conversations_status,16384,16 kB,676,30,CREATE INDEX idx_conversations_status ON public.conversations USING btree (status)
+conversations,idx_conversations_tenant,16384,16 kB,676,30,CREATE INDEX idx_conversations_tenant ON public.conversations USING btree (tenant_id)
+customer_addresses,idx_customer_addresses_default,16384,16 kB,0,0,"CREATE INDEX idx_customer_addresses_default ON public.customer_addresses USING btree (customer_id, is_default) WHERE (is_default = true)"
+database_backups,idx_database_backups_status,16384,16 kB,0,0,CREATE INDEX idx_database_backups_status ON public.database_backups USING btree (status)
+database_backups,idx_database_backups_tenant,16384,16 kB,0,0,CREATE INDEX idx_database_backups_tenant ON public.database_backups USING btree (tenant_id)
+database_backups,idx_database_backups_type,16384,16 kB,0,0,CREATE INDEX idx_database_backups_type ON public.database_backups USING btree (backup_type)
+departments,idx_departments_code,16384,16 kB,0,0,CREATE INDEX idx_departments_code ON public.departments USING btree (code)
+departments,idx_departments_manager,16384,16 kB,0,0,CREATE INDEX idx_departments_manager ON public.departments USING btree (manager_id)
+departments,idx_departments_tenant,16384,16 kB,0,0,CREATE INDEX idx_departments_tenant ON public.departments USING btree (tenant_id)
+document_sequences,idx_document_sequences_tenant,16384,16 kB,195,8,CREATE INDEX idx_document_sequences_tenant ON public.document_sequences USING btree (tenant_id)
+email_accounts,idx_email_accounts_tenant,16384,16 kB,767,4,CREATE INDEX idx_email_accounts_tenant ON public.email_accounts USING btree (tenant_id)
+email_push_subscriptions,idx_email_push_email,16384,16 kB,118,2,CREATE INDEX idx_email_push_email ON public.email_push_subscriptions USING btree (email_address)
+email_push_subscriptions,idx_email_push_provider,16384,16 kB,118,2,CREATE INDEX idx_email_push_provider ON public.email_push_subscriptions USING btree (provider)
+email_push_subscriptions,idx_email_push_user,16384,16 kB,118,2,CREATE INDEX idx_email_push_user ON public.email_push_subscriptions USING btree (user_id)
+employee_advance_allocations,idx_employee_advance_allocations_advance,16384,16 kB,0,0,CREATE INDEX idx_employee_advance_allocations_advance ON public.employee_advance_allocations USING btree (advance_id)
+employee_advances,idx_employee_advances_employee_status,16384,16 kB,2,1,"CREATE INDEX idx_employee_advances_employee_status ON public.employee_advances USING btree (tenant_id, employee_id, status)"
+employee_advances,idx_employee_advances_paid_at,16384,16 kB,2,1,"CREATE INDEX idx_employee_advances_paid_at ON public.employee_advances USING btree (tenant_id, paid_at)"
+employee_advances,idx_employee_advances_tenant_employee_paid_cursor,16384,16 kB,2,1,"CREATE INDEX idx_employee_advances_tenant_employee_paid_cursor ON public.employee_advances USING btree (tenant_id, employee_id, paid_at DESC, id DESC)"
+employee_default_shift_blocks,idx_employee_default_shift_blocks_employee,16384,16 kB,0,0,"CREATE INDEX idx_employee_default_shift_blocks_employee ON public.employee_default_shift_blocks USING btree (employee_id, day_of_week)"
+employee_portal_accounts,idx_employee_portal_accounts_employee,16384,16 kB,0,0,CREATE INDEX idx_employee_portal_accounts_employee ON public.employee_portal_accounts USING btree (employee_id)
+employee_portal_accounts,idx_employee_portal_accounts_tenant,16384,16 kB,0,0,CREATE INDEX idx_employee_portal_accounts_tenant ON public.employee_portal_accounts USING btree (tenant_id)
+employees,employees_company_id_department_id_idx,16384,16 kB,0,0,"CREATE INDEX employees_company_id_department_id_idx ON public.employees USING btree (company_id, department_id)"
+employees,idx_employees_department,16384,16 kB,0,0,CREATE INDEX idx_employees_department ON public.employees USING btree (department_id)
+employees,idx_employees_employee_number,16384,16 kB,0,0,CREATE INDEX idx_employees_employee_number ON public.employees USING btree (employee_number)
+employees,idx_employees_rut,16384,16 kB,0,0,CREATE INDEX idx_employees_rut ON public.employees USING btree (rut)
+employees,idx_employees_salary_account,16384,16 kB,0,0,CREATE INDEX idx_employees_salary_account ON public.employees USING btree (salary_account_id)
+employees,idx_employees_user_id,16384,16 kB,0,0,CREATE INDEX idx_employees_user_id ON public.employees USING btree (user_id)
+expense_aggregate_save_operations,idx_expense_aggregate_save_operations_expense,16384,16 kB,0,0,"CREATE INDEX idx_expense_aggregate_save_operations_expense ON public.expense_aggregate_save_operations USING btree (tenant_id, expense_id, created_at DESC)"
+expense_categories,idx_expense_categories_name,16384,16 kB,0,0,CREATE INDEX idx_expense_categories_name ON public.expense_categories USING btree (lower(name))
+expense_lines,idx_expense_lines_tenant,16384,16 kB,4,4,CREATE INDEX idx_expense_lines_tenant ON public.expense_lines USING btree (tenant_id)
+expense_links,idx_expense_links_expense,16384,16 kB,3,3,CREATE INDEX idx_expense_links_expense ON public.expense_links USING btree (expense_id)
+expense_links,idx_expense_links_purchase_invoice,16384,16 kB,3,3,CREATE INDEX idx_expense_links_purchase_invoice ON public.expense_links USING btree (purchase_invoice_id)
+expense_payments,idx_expense_payments_method,16384,16 kB,0,0,CREATE INDEX idx_expense_payments_method ON public.expense_payments USING btree (payment_method_id)
+expense_templates,idx_expense_templates_category,16384,16 kB,0,0,CREATE INDEX idx_expense_templates_category ON public.expense_templates USING btree (trigger_category_id)
+expense_templates,idx_expense_templates_supplier,16384,16 kB,0,0,CREATE INDEX idx_expense_templates_supplier ON public.expense_templates USING btree (trigger_supplier_id)
+expense_templates,idx_expense_templates_tenant,16384,16 kB,0,0,CREATE INDEX idx_expense_templates_tenant ON public.expense_templates USING btree (tenant_id)
+expenses,idx_expenses_category_id,16384,16 kB,20,4,CREATE INDEX idx_expenses_category_id ON public.expenses USING btree (category_id)
+expenses,idx_expenses_issue_date,16384,16 kB,20,4,CREATE INDEX idx_expenses_issue_date ON public.expenses USING btree (issue_date)
+expenses,idx_expenses_payment_status,16384,16 kB,20,4,CREATE INDEX idx_expenses_payment_status ON public.expenses USING btree (payment_status)
+expenses,idx_expenses_posting_status,16384,16 kB,20,4,CREATE INDEX idx_expenses_posting_status ON public.expenses USING btree (posting_status)
+external_parties,idx_external_parties_tenant_name,16384,16 kB,4,0,"CREATE INDEX idx_external_parties_tenant_name ON public.external_parties USING btree (tenant_id, lower(display_name))"
+f29_declarations,idx_f29_declarations_period,16384,16 kB,0,0,"CREATE INDEX idx_f29_declarations_period ON public.f29_declarations USING btree (tenant_id, period_year, period_month)"
+f29_declarations,idx_f29_declarations_status,16384,16 kB,0,0,"CREATE INDEX idx_f29_declarations_status ON public.f29_declarations USING btree (tenant_id, status)"
+f29_declarations,idx_f29_declarations_tenant,16384,16 kB,0,0,CREATE INDEX idx_f29_declarations_tenant ON public.f29_declarations USING btree (tenant_id)
+featured_products,idx_featured_products_active,16384,16 kB,0,0,"CREATE INDEX idx_featured_products_active ON public.featured_products USING btree (active, order_index)"
+featured_products,idx_featured_products_product,16384,16 kB,0,0,CREATE INDEX idx_featured_products_product ON public.featured_products USING btree (product_id)
+featured_products,idx_featured_products_tenant,16384,16 kB,0,0,CREATE INDEX idx_featured_products_tenant ON public.featured_products USING btree (tenant_id)
+job_roles,idx_job_roles_system_role,16384,16 kB,0,0,CREATE INDEX idx_job_roles_system_role ON public.job_roles USING btree (system_role)
+job_roles,idx_job_roles_tenant,16384,16 kB,0,0,CREATE INDEX idx_job_roles_tenant ON public.job_roles USING btree (tenant_id)
+job_status_supply_capability_events,idx_job_status_supply_capability_events_status,16384,16 kB,0,0,"CREATE INDEX idx_job_status_supply_capability_events_status ON public.job_status_supply_capability_events USING btree (tenant_id, status_id, occurred_at DESC, id DESC)"
+job_statuses,idx_job_statuses_code,16384,16 kB,0,0,"CREATE INDEX idx_job_statuses_code ON public.job_statuses USING btree (tenant_id, code)"
+job_statuses,idx_job_statuses_phase,16384,16 kB,0,0,"CREATE INDEX idx_job_statuses_phase ON public.job_statuses USING btree (tenant_id, phase)"
+job_subjects,idx_job_subjects_tenant_active,16384,16 kB,0,0,"CREATE INDEX idx_job_subjects_tenant_active ON public.job_subjects USING btree (tenant_id, is_active)"
+loyalty,idx_loyalty_tenant,16384,16 kB,20,20,CREATE INDEX idx_loyalty_tenant ON public.loyalty USING btree (tenant_id)
+loyalty,idx_loyalty_tier,16384,16 kB,20,20,CREATE INDEX idx_loyalty_tier ON public.loyalty USING btree (tier)
+mechanic_job_bikes,idx_mechanic_job_bikes_status,16384,16 kB,504,452,CREATE INDEX idx_mechanic_job_bikes_status ON public.mechanic_job_bikes USING btree (status_id)
+mechanic_job_bikes,idx_mechanic_job_bikes_tenant,16384,16 kB,504,452,CREATE INDEX idx_mechanic_job_bikes_tenant ON public.mechanic_job_bikes USING btree (tenant_id)
+mechanic_job_items,idx_mechanic_job_items_service_product_id,16384,16 kB,407,1453,CREATE INDEX idx_mechanic_job_items_service_product_id ON public.mechanic_job_items USING btree (service_product_id) WHERE (service_product_id IS NOT NULL)
+mechanic_job_items,idx_mechanic_job_items_system_location,16384,16 kB,407,1453,"CREATE INDEX idx_mechanic_job_items_system_location ON public.mechanic_job_items USING btree (system_key, location_key) WHERE (system_key IS NOT NULL)"
+mechanic_job_tasks,idx_mechanic_job_tasks_completion,16384,16 kB,122,274,"CREATE INDEX idx_mechanic_job_tasks_completion ON public.mechanic_job_tasks USING btree (is_completed, job_id)"
+mechanic_job_tasks,idx_mechanic_job_tasks_job,16384,16 kB,122,274,CREATE INDEX idx_mechanic_job_tasks_job ON public.mechanic_job_tasks USING btree (job_id)
+mechanic_job_tasks,idx_mechanic_job_tasks_tenant,16384,16 kB,122,274,CREATE INDEX idx_mechanic_job_tasks_tenant ON public.mechanic_job_tasks USING btree (tenant_id)
+mechanic_jobs,idx_mechanic_jobs_deadline,16384,16 kB,1200,501,CREATE INDEX idx_mechanic_jobs_deadline ON public.mechanic_jobs USING btree (deadline) WHERE (deadline IS NOT NULL)
+mechanic_jobs,idx_mechanic_jobs_deleted_at,16384,16 kB,1200,501,CREATE INDEX idx_mechanic_jobs_deleted_at ON public.mechanic_jobs USING btree (deleted_at) WHERE (deleted_at IS NOT NULL)
+mechanic_jobs,idx_mechanic_jobs_mode_review,16384,16 kB,1200,501,"CREATE INDEX idx_mechanic_jobs_mode_review ON public.mechanic_jobs USING btree (tenant_id, mode_needs_review, created_at DESC) WHERE ((deleted_at IS NULL) AND mode_needs_review)"
+mechanic_jobs,idx_mechanic_jobs_priority,16384,16 kB,1200,501,CREATE INDEX idx_mechanic_jobs_priority ON public.mechanic_jobs USING btree (priority)
+mechanic_jobs,idx_mechanic_jobs_status,16384,16 kB,1200,501,CREATE INDEX idx_mechanic_jobs_status ON public.mechanic_jobs USING btree (status)
+mechanic_jobs,idx_mechanic_jobs_subject,16384,16 kB,1200,501,CREATE INDEX idx_mechanic_jobs_subject ON public.mechanic_jobs USING btree (subject_id) WHERE (subject_id IS NOT NULL)
+message_reactions,message_reactions_tenant_idx,16384,16 kB,18,15,CREATE INDEX message_reactions_tenant_idx ON public.message_reactions USING btree (tenant_id)
+messages,idx_messages_external_provider,16384,16 kB,535,421,CREATE INDEX idx_messages_external_provider ON public.messages USING btree (external_provider) WHERE (external_provider IS NOT NULL)
+messages,idx_messages_thread_replies,16384,16 kB,535,421,"CREATE INDEX idx_messages_thread_replies ON public.messages USING btree (conversation_id, thread_root_message_id, message_sequence) WHERE (thread_root_message_id IS NOT NULL)"
+messaging_command_receipts,idx_messaging_command_receipts_conversation,16384,16 kB,11,11,"CREATE INDEX idx_messaging_command_receipts_conversation ON public.messaging_command_receipts USING btree (tenant_id, conversation_id, created_at DESC)"
+messaging_context_projection_reconciliation_audit,idx_messaging_context_projection_audit_context_lookup,16384,16 kB,0,0,"CREATE INDEX idx_messaging_context_projection_audit_context_lookup ON public.messaging_context_projection_reconciliation_audit USING btree (context_type, context_id)"
+messaging_context_projection_reconciliation_audit,idx_messaging_context_projection_audit_conversation_recorded,16384,16 kB,0,0,"CREATE INDEX idx_messaging_context_projection_audit_conversation_recorded ON public.messaging_context_projection_reconciliation_audit USING btree (conversation_id, recorded_at DESC)"
+messaging_context_projection_reconciliation_audit,idx_messaging_context_projection_audit_tenant_recorded,16384,16 kB,0,0,"CREATE INDEX idx_messaging_context_projection_audit_tenant_recorded ON public.messaging_context_projection_reconciliation_audit USING btree (tenant_id, recorded_at DESC)"
+meta_channels,idx_meta_channels_tenant_active,16384,16 kB,0,0,"CREATE INDEX idx_meta_channels_tenant_active ON public.meta_channels USING btree (tenant_id, provider, is_active)"
+meta_conversation_bindings,idx_meta_bindings_reply_window,16384,16 kB,0,0,"CREATE INDEX idx_meta_bindings_reply_window ON public.meta_conversation_bindings USING btree (tenant_id, reply_window_expires_at) WHERE (reply_window_expires_at IS NOT NULL)"
+meta_conversation_bindings,idx_meta_bindings_tenant_conversation,16384,16 kB,0,0,"CREATE INDEX idx_meta_bindings_tenant_conversation ON public.meta_conversation_bindings USING btree (tenant_id, conversation_id)"
+meta_oauth_states,idx_meta_oauth_states_expiry,16384,16 kB,0,0,CREATE INDEX idx_meta_oauth_states_expiry ON public.meta_oauth_states USING btree (expires_at) WHERE (consumed_at IS NULL)
+meta_webhook_events,idx_meta_events_external_message,16384,16 kB,0,0,"CREATE INDEX idx_meta_events_external_message ON public.meta_webhook_events USING btree (channel_id, external_message_id) WHERE (external_message_id IS NOT NULL)"
+meta_webhook_events,idx_meta_events_tenant_created,16384,16 kB,0,0,"CREATE INDEX idx_meta_events_tenant_created ON public.meta_webhook_events USING btree (tenant_id, created_at DESC)"
+online_order_access_tokens,idx_online_order_access_tokens_active,16384,16 kB,0,0,"CREATE INDEX idx_online_order_access_tokens_active ON public.online_order_access_tokens USING btree (token_sha256, expires_at) WHERE (revoked_at IS NULL)"
+online_order_access_tokens,idx_online_order_access_tokens_order,16384,16 kB,0,0,"CREATE INDEX idx_online_order_access_tokens_order ON public.online_order_access_tokens USING btree (tenant_id, order_id, created_at DESC)"
+online_order_events,idx_online_order_events_order,16384,16 kB,0,0,"CREATE INDEX idx_online_order_events_order ON public.online_order_events USING btree (tenant_id, order_id, occurred_at DESC, id DESC)"
+online_order_inventory_reservation_events,idx_online_inventory_reservation_events_order,16384,16 kB,0,0,"CREATE INDEX idx_online_inventory_reservation_events_order ON public.online_order_inventory_reservation_events USING btree (tenant_id, order_id, occurred_at DESC, id DESC)"
+online_order_inventory_reservation_events,idx_online_inventory_reservation_events_reservation,16384,16 kB,0,0,"CREATE INDEX idx_online_inventory_reservation_events_reservation ON public.online_order_inventory_reservation_events USING btree (reservation_id, id)"
+online_order_inventory_reservations,idx_online_inventory_reservations_order,16384,16 kB,0,0,"CREATE INDEX idx_online_inventory_reservations_order ON public.online_order_inventory_reservations USING btree (tenant_id, order_id, state, product_id)"
+online_order_items,idx_online_order_items_product,16384,16 kB,0,0,CREATE INDEX idx_online_order_items_product ON public.online_order_items USING btree (product_id)
+online_order_items,idx_online_order_items_tenant,16384,16 kB,0,0,CREATE INDEX idx_online_order_items_tenant ON public.online_order_items USING btree (tenant_id)
+online_order_payment_preferences,idx_online_order_payment_preferences_order,16384,16 kB,0,0,"CREATE INDEX idx_online_order_payment_preferences_order ON public.online_order_payment_preferences USING btree (tenant_id, order_id, generation DESC, created_at DESC)"
+online_orders,idx_online_orders_cancellation_operation,16384,16 kB,0,0,"CREATE INDEX idx_online_orders_cancellation_operation ON public.online_orders USING btree (tenant_id, cancellation_operation_id) WHERE (cancellation_operation_id IS NOT NULL)"
+online_orders,idx_online_orders_created,16384,16 kB,0,0,CREATE INDEX idx_online_orders_created ON public.online_orders USING btree (created_at DESC)
+online_orders,idx_online_orders_number,16384,16 kB,0,0,CREATE INDEX idx_online_orders_number ON public.online_orders USING btree (order_number)
+online_orders,idx_online_orders_payment_status,16384,16 kB,0,0,CREATE INDEX idx_online_orders_payment_status ON public.online_orders USING btree (payment_status)
+online_orders,idx_online_orders_status,16384,16 kB,0,0,CREATE INDEX idx_online_orders_status ON public.online_orders USING btree (status)
+online_orders,idx_online_orders_tenant,16384,16 kB,0,0,CREATE INDEX idx_online_orders_tenant ON public.online_orders USING btree (tenant_id)
+online_shipping_rate_tiers,idx_online_shipping_rate_tiers_lookup,16384,16 kB,0,0,"CREATE INDEX idx_online_shipping_rate_tiers_lookup ON public.online_shipping_rate_tiers USING btree (tenant_id, country_code, is_active, min_order_gross)"
+payment_methods,idx_payment_methods_code,16384,16 kB,0,0,CREATE INDEX idx_payment_methods_code ON public.payment_methods USING btree (code)
+payment_methods,idx_payment_methods_sort_order,16384,16 kB,0,0,CREATE INDEX idx_payment_methods_sort_order ON public.payment_methods USING btree (sort_order)
+payment_methods,idx_payment_methods_terminal_profile,16384,16 kB,0,0,"CREATE INDEX idx_payment_methods_terminal_profile ON public.payment_methods USING btree (tenant_id, terminal_profile_id) WHERE (terminal_profile_id IS NOT NULL)"
+payment_methods,idx_payment_methods_usage_scope,16384,16 kB,0,0,"CREATE INDEX idx_payment_methods_usage_scope ON public.payment_methods USING btree (tenant_id, usage_scope, is_active, sort_order)"
+payment_terminal_profiles,idx_payment_terminal_profiles_tenant_active,16384,16 kB,0,0,"CREATE INDEX idx_payment_terminal_profiles_tenant_active ON public.payment_terminal_profiles USING btree (tenant_id, is_active, provider_code)"
+payment_terminal_terms,idx_payment_terminal_terms_method_effective,16384,16 kB,0,0,"CREATE INDEX idx_payment_terminal_terms_method_effective ON public.payment_terminal_terms USING btree (payment_method_id, effective_from DESC)"
+payment_terminal_terms,idx_payment_terminal_terms_profile_effective,16384,16 kB,0,0,"CREATE INDEX idx_payment_terminal_terms_profile_effective ON public.payment_terminal_terms USING btree (terminal_profile_id, instrument, effective_from DESC)"
+payroll_money_operation_movements,idx_payroll_money_operation_movements_operation,16384,16 kB,0,0,"CREATE INDEX idx_payroll_money_operation_movements_operation ON public.payroll_money_operation_movements USING btree (tenant_id, operation_id)"
+payroll_money_operations,idx_payroll_money_operations_voucher,16384,16 kB,1,1,"CREATE INDEX idx_payroll_money_operations_voucher ON public.payroll_money_operations USING btree (tenant_id, voucher_id) WHERE (voucher_id IS NOT NULL)"
+payroll_payment_statement_allocations,idx_payroll_payment_statement_allocations_row,16384,16 kB,0,0,"CREATE INDEX idx_payroll_payment_statement_allocations_row ON public.payroll_payment_statement_allocations USING btree (tenant_id, statement_row_id)"
+payroll_payment_statement_allocations,idx_payroll_payment_statement_allocations_workspace,16384,16 kB,0,0,"CREATE INDEX idx_payroll_payment_statement_allocations_workspace ON public.payroll_payment_statement_allocations USING btree (workspace_id, workspace_leg_id)"
+payroll_payment_workspace_legs,idx_payroll_payment_workspace_legs_voucher,16384,16 kB,0,0,"CREATE INDEX idx_payroll_payment_workspace_legs_voucher ON public.payroll_payment_workspace_legs USING btree (voucher_id, voucher_line_id) WHERE (voucher_id IS NOT NULL)"
+payroll_payment_workspace_legs,idx_payroll_payment_workspace_legs_workspace,16384,16 kB,0,0,"CREATE INDEX idx_payroll_payment_workspace_legs_workspace ON public.payroll_payment_workspace_legs USING btree (workspace_id, target_ordinal, leg_ordinal)"
+payroll_payment_workspaces,idx_payroll_payment_workspaces_open,16384,16 kB,0,0,"CREATE INDEX idx_payroll_payment_workspaces_open ON public.payroll_payment_workspaces USING btree (tenant_id, status, updated_at DESC)"
+payroll_statement_import_operations,idx_payroll_statement_import_operations_import,16384,16 kB,0,0,"CREATE INDEX idx_payroll_statement_import_operations_import ON public.payroll_statement_import_operations USING btree (import_id, revision)"
+payroll_statement_imports,idx_payroll_statement_imports_review,16384,16 kB,0,0,"CREATE INDEX idx_payroll_statement_imports_review ON public.payroll_statement_imports USING btree (tenant_id, status, created_at DESC)"
+payroll_statement_rows,idx_payroll_statement_rows_import_date,16384,16 kB,0,0,"CREATE INDEX idx_payroll_statement_rows_import_date ON public.payroll_statement_rows USING btree (import_id, transaction_date, row_ordinal)"
+payroll_voucher_draft_operations,idx_payroll_voucher_draft_operations_voucher,16384,16 kB,3,3,"CREATE INDEX idx_payroll_voucher_draft_operations_voucher ON public.payroll_voucher_draft_operations USING btree (tenant_id, voucher_id)"
+payroll_voucher_lines,idx_pvl_employee,16384,16 kB,19,18,CREATE INDEX idx_pvl_employee ON public.payroll_voucher_lines USING btree (employee_id)
+payroll_voucher_lines,idx_pvl_voucher,16384,16 kB,19,18,CREATE INDEX idx_pvl_voucher ON public.payroll_voucher_lines USING btree (voucher_id)
+payroll_vouchers,idx_payroll_vouchers_tenant,16384,16 kB,26,3,CREATE INDEX idx_payroll_vouchers_tenant ON public.payroll_vouchers USING btree (tenant_id)
+payroll_vouchers,idx_payroll_vouchers_tenant_history_cursor,16384,16 kB,26,3,"CREATE INDEX idx_payroll_vouchers_tenant_history_cursor ON public.payroll_vouchers USING btree (tenant_id, period_end DESC, id DESC) WHERE (status = ANY (ARRAY['paid'::text, 'voided'::text]))"
+planned_shifts,idx_planned_shifts_status,16384,16 kB,8,8,"CREATE INDEX idx_planned_shifts_status ON public.planned_shifts USING btree (tenant_id, status)"
+planned_shifts,idx_planned_shifts_tenant_time,16384,16 kB,8,8,"CREATE INDEX idx_planned_shifts_tenant_time ON public.planned_shifts USING btree (tenant_id, start_at, end_at)"
+product_brands,idx_product_brands_is_active,16384,16 kB,0,0,CREATE INDEX idx_product_brands_is_active ON public.product_brands USING btree (is_active)
+product_brands,idx_product_brands_name,16384,16 kB,0,0,CREATE INDEX idx_product_brands_name ON public.product_brands USING btree (lower(name))
+product_brands,idx_product_brands_tenant,16384,16 kB,0,0,CREATE INDEX idx_product_brands_tenant ON public.product_brands USING btree (tenant_id)
+product_bulk_edit_history,idx_product_bulk_edit_history_created_by,16384,16 kB,0,0,CREATE INDEX idx_product_bulk_edit_history_created_by ON public.product_bulk_edit_history USING btree (created_by)
+product_bulk_edit_history,idx_product_bulk_edit_history_tenant_created_at,16384,16 kB,0,0,"CREATE INDEX idx_product_bulk_edit_history_tenant_created_at ON public.product_bulk_edit_history USING btree (tenant_id, created_at DESC)"
+product_catalog_sync_events,idx_product_catalog_sync_events_catalog_retailer,16384,16 kB,13,13,"CREATE INDEX idx_product_catalog_sync_events_catalog_retailer ON public.product_catalog_sync_events USING btree (catalog_id, retailer_id, created_at DESC)"
+product_catalog_sync_events,idx_product_catalog_sync_events_product_created,16384,16 kB,13,13,"CREATE INDEX idx_product_catalog_sync_events_product_created ON public.product_catalog_sync_events USING btree (product_id, created_at DESC)"
+product_catalog_sync_events,idx_product_catalog_sync_events_tenant_created,16384,16 kB,13,13,"CREATE INDEX idx_product_catalog_sync_events_tenant_created ON public.product_catalog_sync_events USING btree (tenant_id, created_at DESC)"
+product_categories,idx_product_categories_is_active,16384,16 kB,0,0,CREATE INDEX idx_product_categories_is_active ON public.product_categories USING btree (is_active)
+product_categories,idx_product_categories_show_on_website,16384,16 kB,0,0,CREATE INDEX idx_product_categories_show_on_website ON public.product_categories USING btree (show_on_website) WHERE (show_on_website = true)
+product_set_components,idx_product_set_components_component,16384,16 kB,0,0,CREATE INDEX idx_product_set_components_component ON public.product_set_components USING btree (component_product_id)
+product_tax_classification_batches,idx_product_tax_classification_batches_tenant_time,16384,16 kB,0,0,"CREATE INDEX idx_product_tax_classification_batches_tenant_time ON public.product_tax_classification_batches USING btree (tenant_id, applied_at DESC)"
+products,idx_products_is_set,16384,16 kB,891,1674,CREATE INDEX idx_products_is_set ON public.products USING btree (is_set) WHERE (is_set = true)
+products,idx_products_whatsapp_catalog,16384,16 kB,891,1674,"CREATE INDEX idx_products_whatsapp_catalog ON public.products USING btree (tenant_id, updated_at DESC) WHERE (is_whatsapp_catalog = true)"
+purchase_credit_note_lines,idx_purchase_credit_note_lines_source,16384,16 kB,0,0,"CREATE INDEX idx_purchase_credit_note_lines_source ON public.purchase_credit_note_lines USING btree (tenant_id, purchase_invoice_id, source_line_key)"
+purchase_invoices,idx_purchase_invoices_confirmed_date,16384,16 kB,63,85,CREATE INDEX idx_purchase_invoices_confirmed_date ON public.purchase_invoices USING btree (confirmed_date DESC NULLS LAST)
+purchase_invoices,idx_purchase_invoices_date,16384,16 kB,63,85,CREATE INDEX idx_purchase_invoices_date ON public.purchase_invoices USING btree (date)
+purchase_invoices,idx_purchase_invoices_paid_date,16384,16 kB,63,85,CREATE INDEX idx_purchase_invoices_paid_date ON public.purchase_invoices USING btree (paid_date DESC NULLS LAST)
+purchase_invoices,idx_purchase_invoices_prepayment_model,16384,16 kB,63,85,CREATE INDEX idx_purchase_invoices_prepayment_model ON public.purchase_invoices USING btree (prepayment_model)
+purchase_invoices,idx_purchase_invoices_received_date,16384,16 kB,63,85,"CREATE INDEX idx_purchase_invoices_received_date ON public.purchase_invoices USING btree (tenant_id, received_date) WHERE (received_date IS NOT NULL)"
+purchase_invoices,idx_purchase_invoices_sent_date,16384,16 kB,63,85,"CREATE INDEX idx_purchase_invoices_sent_date ON public.purchase_invoices USING btree (tenant_id, sent_date) WHERE (sent_date IS NOT NULL)"
+purchase_invoices,idx_purchase_invoices_status,16384,16 kB,63,85,CREATE INDEX idx_purchase_invoices_status ON public.purchase_invoices USING btree (status)
+purchase_order_items,idx_purchase_order_items_order,16384,16 kB,0,0,CREATE INDEX idx_purchase_order_items_order ON public.purchase_order_items USING btree (purchase_order_id)
+purchase_order_items,idx_purchase_order_items_tenant,16384,16 kB,0,0,CREATE INDEX idx_purchase_order_items_tenant ON public.purchase_order_items USING btree (tenant_id)
+purchase_orders,idx_purchase_orders_status,16384,16 kB,0,0,CREATE INDEX idx_purchase_orders_status ON public.purchase_orders USING btree (status)
+purchase_orders,idx_purchase_orders_supplier,16384,16 kB,0,0,CREATE INDEX idx_purchase_orders_supplier ON public.purchase_orders USING btree (supplier_id)
+purchase_orders,idx_purchase_orders_tenant,16384,16 kB,0,0,CREATE INDEX idx_purchase_orders_tenant ON public.purchase_orders USING btree (tenant_id)
+purchase_orders,purchase_orders_company_id_order_date_idx,16384,16 kB,0,0,"CREATE INDEX purchase_orders_company_id_order_date_idx ON public.purchase_orders USING btree (company_id, order_date)"
+purchase_payments,idx_purchase_payments_deleted_at,16384,16 kB,6,4,CREATE INDEX idx_purchase_payments_deleted_at ON public.purchase_payments USING btree (deleted_at) WHERE (deleted_at IS NOT NULL)
+purchase_payments,idx_purchase_payments_payment_method_id,16384,16 kB,6,4,CREATE INDEX idx_purchase_payments_payment_method_id ON public.purchase_payments USING btree (payment_method_id)
+purchase_plan_events,idx_purchase_plan_events_plan,16384,16 kB,0,0,"CREATE INDEX idx_purchase_plan_events_plan ON public.purchase_plan_events USING btree (tenant_id, plan_id, occurred_at DESC, id DESC)"
+purchase_plan_lines,idx_purchase_plan_lines_plan_active,16384,16 kB,0,0,"CREATE INDEX idx_purchase_plan_lines_plan_active ON public.purchase_plan_lines USING btree (tenant_id, plan_id, updated_at DESC, id) WHERE (state = 'active'::text)"
+purchase_receipt_compatibility_events,idx_purchase_receipt_compatibility_invoice,16384,16 kB,0,0,"CREATE INDEX idx_purchase_receipt_compatibility_invoice ON public.purchase_receipt_compatibility_events USING btree (tenant_id, purchase_invoice_id, occurred_at DESC)"
+purchase_receipt_compatibility_events,idx_purchase_receipt_compatibility_operation,16384,16 kB,0,0,"CREATE INDEX idx_purchase_receipt_compatibility_operation ON public.purchase_receipt_compatibility_events USING btree (tenant_id, operation_id) WHERE (operation_id IS NOT NULL)"
+purchase_receipt_compatibility_events,idx_purchase_receipt_compatibility_tenant_time,16384,16 kB,0,0,"CREATE INDEX idx_purchase_receipt_compatibility_tenant_time ON public.purchase_receipt_compatibility_events USING btree (tenant_id, occurred_at DESC)"
+purchase_receipt_resolution_cases,idx_purchase_receipt_resolution_cases_receipt,16384,16 kB,0,0,"CREATE INDEX idx_purchase_receipt_resolution_cases_receipt ON public.purchase_receipt_resolution_cases USING btree (tenant_id, purchase_receipt_id, created_at DESC)"
+purchase_supplier_refunds,idx_purchase_supplier_refunds_note,16384,16 kB,0,0,"CREATE INDEX idx_purchase_supplier_refunds_note ON public.purchase_supplier_refunds USING btree (tenant_id, purchase_credit_note_id, created_at DESC)"
+purchase_supplier_return_line_movements,idx_purchase_supplier_return_movements_product,16384,16 kB,0,0,"CREATE INDEX idx_purchase_supplier_return_movements_product ON public.purchase_supplier_return_line_movements USING btree (tenant_id, product_id, created_at DESC)"
+purchase_supplier_return_lines,idx_purchase_supplier_return_lines_receipt_line,16384,16 kB,0,0,"CREATE INDEX idx_purchase_supplier_return_lines_receipt_line ON public.purchase_supplier_return_lines USING btree (tenant_id, purchase_receipt_line_id, created_at DESC)"
+purchase_supplier_returns,idx_purchase_supplier_returns_receipt,16384,16 kB,0,0,"CREATE INDEX idx_purchase_supplier_returns_receipt ON public.purchase_supplier_returns USING btree (tenant_id, purchase_receipt_id, created_at DESC)"
+reset_configurations,idx_reset_configurations_tenant,16384,16 kB,0,0,CREATE INDEX idx_reset_configurations_tenant ON public.reset_configurations USING btree (tenant_id)
+sales_channel_payment_events,idx_sales_channel_payment_events_order,16384,16 kB,0,0,"CREATE INDEX idx_sales_channel_payment_events_order ON public.sales_channel_payment_events USING btree (tenant_id, order_id, created_at DESC)"
+sales_channel_payment_processing,idx_sales_channel_payment_processing_attention,16384,16 kB,0,0,"CREATE INDEX idx_sales_channel_payment_processing_attention ON public.sales_channel_payment_processing USING btree (tenant_id, processing_state, updated_at DESC, payment_event_id DESC)"
+sales_channel_payment_processing_attempts,idx_sales_channel_payment_processing_attempts_order,16384,16 kB,0,0,"CREATE INDEX idx_sales_channel_payment_processing_attempts_order ON public.sales_channel_payment_processing_attempts USING btree (tenant_id, order_id, attempted_at DESC, id DESC)"
+sales_customer_refunds,idx_sales_customer_refunds_note,16384,16 kB,0,0,"CREATE INDEX idx_sales_customer_refunds_note ON public.sales_customer_refunds USING btree (tenant_id, sales_credit_note_id, created_at DESC)"
+sales_invoices,idx_sales_invoices_job_number,16384,16 kB,368,906,CREATE INDEX idx_sales_invoices_job_number ON public.sales_invoices USING btree (job_number) WHERE (job_number IS NOT NULL)
+sales_order_items,idx_sales_order_items_tenant,16384,16 kB,0,0,CREATE INDEX idx_sales_order_items_tenant ON public.sales_order_items USING btree (tenant_id)
+sales_orders,idx_sales_orders_customer,16384,16 kB,0,0,CREATE INDEX idx_sales_orders_customer ON public.sales_orders USING btree (customer_id)
+sales_orders,idx_sales_orders_status,16384,16 kB,0,0,CREATE INDEX idx_sales_orders_status ON public.sales_orders USING btree (status)
+sales_orders,idx_sales_orders_tenant,16384,16 kB,0,0,CREATE INDEX idx_sales_orders_tenant ON public.sales_orders USING btree (tenant_id)
+sales_orders,sales_orders_company_id_order_date_idx,16384,16 kB,0,0,"CREATE INDEX sales_orders_company_id_order_date_idx ON public.sales_orders USING btree (company_id, order_date)"
+sales_payment_command_receipts,idx_sales_payment_command_receipts_invoice,16384,16 kB,26,26,"CREATE INDEX idx_sales_payment_command_receipts_invoice ON public.sales_payment_command_receipts USING btree (tenant_id, invoice_id, completed_at DESC)"
+sales_payment_edit_events,idx_sales_payment_edit_events_payment,16384,16 kB,1,1,"CREATE INDEX idx_sales_payment_edit_events_payment ON public.sales_payment_edit_events USING btree (tenant_id, payment_id, created_at DESC, id DESC)"
+sales_payments,idx_sales_payments_deleted_at,16384,16 kB,42,39,CREATE INDEX idx_sales_payments_deleted_at ON public.sales_payments USING btree (deleted_at) WHERE (deleted_at IS NOT NULL)
+sales_payments,idx_sales_payments_payment_method_id,16384,16 kB,42,39,CREATE INDEX idx_sales_payments_payment_method_id ON public.sales_payments USING btree (payment_method_id)
+sales_return_lines,idx_sales_return_lines_source,16384,16 kB,0,0,"CREATE INDEX idx_sales_return_lines_source ON public.sales_return_lines USING btree (tenant_id, sales_invoice_id, source_line_key)"
+sales_returns,idx_sales_returns_invoice,16384,16 kB,0,0,"CREATE INDEX idx_sales_returns_invoice ON public.sales_returns USING btree (tenant_id, sales_invoice_id, created_at DESC)"
+service_packages,idx_service_packages_name,16384,16 kB,0,0,"CREATE INDEX idx_service_packages_name ON public.service_packages USING gin (to_tsvector('spanish'::regconfig, COALESCE(name, ''::text)))"
+service_product_profile_mappings,idx_svc_product_map_profile,16384,16 kB,0,0,CREATE INDEX idx_svc_product_map_profile ON public.service_product_profile_mappings USING btree (service_profile_id)
+service_profile_part_rules,idx_svc_profile_part_rules_profile,16384,16 kB,0,0,CREATE INDEX idx_svc_profile_part_rules_profile ON public.service_profile_part_rules USING btree (service_profile_id)
+service_profile_task_templates,idx_svc_profile_task_templates_profile,16384,16 kB,0,0,CREATE INDEX idx_svc_profile_task_templates_profile ON public.service_profile_task_templates USING btree (service_profile_id)
+service_profiles,idx_service_profiles_tenant,16384,16 kB,0,0,CREATE INDEX idx_service_profiles_tenant ON public.service_profiles USING btree (tenant_id)
+smart_task_events,idx_smart_task_events_task,16384,16 kB,0,0,"CREATE INDEX idx_smart_task_events_task ON public.smart_task_events USING btree (task_id, created_at DESC)"
+smart_tasks,idx_smart_tasks_assigned_to,16384,16 kB,0,0,CREATE INDEX idx_smart_tasks_assigned_to ON public.smart_tasks USING btree (assigned_to)
+smart_tasks,idx_smart_tasks_linked_job_id,16384,16 kB,0,0,CREATE INDEX idx_smart_tasks_linked_job_id ON public.smart_tasks USING btree (linked_job_id)
+smart_tasks,idx_smart_tasks_status,16384,16 kB,0,0,CREATE INDEX idx_smart_tasks_status ON public.smart_tasks USING btree (status)
+smart_tasks,idx_smart_tasks_tenant_assigned_status,16384,16 kB,0,0,"CREATE INDEX idx_smart_tasks_tenant_assigned_status ON public.smart_tasks USING btree (tenant_id, assigned_to, status)"
+smart_tasks,idx_smart_tasks_tenant_id,16384,16 kB,0,0,CREATE INDEX idx_smart_tasks_tenant_id ON public.smart_tasks USING btree (tenant_id)
+spec_definitions,idx_spec_definitions_tenant,16384,16 kB,614,707,CREATE INDEX idx_spec_definitions_tenant ON public.spec_definitions USING btree (tenant_id)
+spec_fact_readings,spec_fact_readings_tenant,16384,16 kB,181,14,CREATE INDEX spec_fact_readings_tenant ON public.spec_fact_readings USING btree (tenant_id)
+spec_templates,idx_spec_templates_tenant,16384,16 kB,1115,107,CREATE INDEX idx_spec_templates_tenant ON public.spec_templates USING btree (tenant_id)
+spreadsheet_cells,idx_cells_position,16384,16 kB,0,0,"CREATE INDEX idx_cells_position ON public.spreadsheet_cells USING btree (spreadsheet_id, row_index, col_index)"
+spreadsheet_cells,idx_cells_spreadsheet,16384,16 kB,0,0,CREATE INDEX idx_cells_spreadsheet ON public.spreadsheet_cells USING btree (spreadsheet_id)
+spreadsheets,idx_spreadsheets_tenant,16384,16 kB,0,0,CREATE INDEX idx_spreadsheets_tenant ON public.spreadsheets USING btree (tenant_id)
+stock_adjustments,idx_stock_adjustments_operation,16384,16 kB,0,0,"CREATE INDEX idx_stock_adjustments_operation ON public.stock_adjustments USING btree (tenant_id, operation_id) WHERE (operation_id IS NOT NULL)"
+supplier_contacts,supplier_contacts_tenant_phone_idx,16384,16 kB,16,10,"CREATE INDEX supplier_contacts_tenant_phone_idx ON public.supplier_contacts USING btree (tenant_id, phone_digits) WHERE (phone_digits IS NOT NULL)"
+supplier_credential_access_events,idx_supplier_credential_events_supplier_time,16384,16 kB,62,108,"CREATE INDEX idx_supplier_credential_events_supplier_time ON public.supplier_credential_access_events USING btree (tenant_id, supplier_id, occurred_at DESC)"
+supply_need_events,idx_supply_need_events_need,16384,16 kB,15,11,"CREATE INDEX idx_supply_need_events_need ON public.supply_need_events USING btree (tenant_id, supply_need_id, occurred_at DESC, id DESC)"
+supply_needs,idx_supply_needs_job_bike_active,16384,16 kB,15,5,"CREATE INDEX idx_supply_needs_job_bike_active ON public.supply_needs USING btree (tenant_id, job_bike_id, supply_state, updated_at DESC, id) WHERE (job_bike_id IS NOT NULL)"
+tenants,idx_tenants_custom_domain,16384,16 kB,0,0,CREATE INDEX idx_tenants_custom_domain ON public.tenants USING btree (custom_domain)
+transactional_email_delivery_phase_events,idx_transactional_email_delivery_phase_events_tenant_time,16384,16 kB,0,0,"CREATE INDEX idx_transactional_email_delivery_phase_events_tenant_time ON public.transactional_email_delivery_phase_events USING btree (tenant_id, occurred_at DESC)"
+transactional_email_outbox,idx_transactional_email_outbox_claim,16384,16 kB,0,0,"CREATE INDEX idx_transactional_email_outbox_claim ON public.transactional_email_outbox USING btree (delivery_mode, state, available_at, created_at) WHERE (state = ANY (ARRAY['pending'::text, 'leased'::text]))"
+transactional_email_outbox,idx_transactional_email_outbox_event,16384,16 kB,0,0,CREATE INDEX idx_transactional_email_outbox_event ON public.transactional_email_outbox USING btree (order_event_id) WHERE (order_event_id IS NOT NULL)
+transactional_email_outbox,idx_transactional_email_outbox_provider_message,16384,16 kB,0,0,"CREATE INDEX idx_transactional_email_outbox_provider_message ON public.transactional_email_outbox USING btree (provider, provider_message_id) WHERE (provider_message_id IS NOT NULL)"
+transactional_email_provider_events,idx_transactional_email_provider_events_message,16384,16 kB,0,0,"CREATE INDEX idx_transactional_email_provider_events_message ON public.transactional_email_provider_events USING btree (provider, provider_message_id, occurred_at DESC) WHERE (provider_message_id IS NOT NULL)"
+transactional_email_provider_events,idx_transactional_email_provider_events_outbox,16384,16 kB,0,0,"CREATE INDEX idx_transactional_email_provider_events_outbox ON public.transactional_email_provider_events USING btree (outbox_id, occurred_at DESC) WHERE (outbox_id IS NOT NULL)"
+user_invitations,idx_invitations_email_status,16384,16 kB,0,0,"CREATE INDEX idx_invitations_email_status ON public.user_invitations USING btree (email, status)"
+user_invitations,idx_invitations_tenant,16384,16 kB,0,0,CREATE INDEX idx_invitations_tenant ON public.user_invitations USING btree (tenant_id)
+user_invitations,idx_user_invitations_email,16384,16 kB,0,0,CREATE INDEX idx_user_invitations_email ON public.user_invitations USING btree (email) WHERE (status = 'pending'::text)
+user_invitations,idx_user_invitations_employee_id,16384,16 kB,0,0,CREATE INDEX idx_user_invitations_employee_id ON public.user_invitations USING btree (employee_id)
+user_invitations,idx_user_invitations_tenant,16384,16 kB,0,0,CREATE INDEX idx_user_invitations_tenant ON public.user_invitations USING btree (tenant_id)
+user_profiles,idx_user_profiles_employee,16384,16 kB,0,0,CREATE INDEX idx_user_profiles_employee ON public.user_profiles USING btree (employee_id)
+user_profiles,idx_user_profiles_user,16384,16 kB,0,0,CREATE INDEX idx_user_profiles_user ON public.user_profiles USING btree (user_id)
+users_profiles,idx_users_profiles_tenant,16384,16 kB,0,0,CREATE INDEX idx_users_profiles_tenant ON public.users_profiles USING btree (tenant_id)
+website_backups,idx_website_backups_auto,16384,16 kB,0,0,CREATE INDEX idx_website_backups_auto ON public.website_backups USING btree (is_auto_backup)
+website_backups,idx_website_backups_created,16384,16 kB,0,0,CREATE INDEX idx_website_backups_created ON public.website_backups USING btree (created_at DESC)
+website_backups,idx_website_backups_tenant,16384,16 kB,0,0,CREATE INDEX idx_website_backups_tenant ON public.website_backups USING btree (tenant_id)
+website_blocks,idx_website_blocks_type,16384,16 kB,0,0,CREATE INDEX idx_website_blocks_type ON public.website_blocks USING btree (block_type)
+website_blocks,idx_website_blocks_visible,16384,16 kB,0,0,"CREATE INDEX idx_website_blocks_visible ON public.website_blocks USING btree (is_visible, order_index)"
+website_content,idx_website_content_tenant,16384,16 kB,0,0,CREATE INDEX idx_website_content_tenant ON public.website_content USING btree (tenant_id)
+website_navigation,idx_website_navigation_location,16384,16 kB,0,0,CREATE INDEX idx_website_navigation_location ON public.website_navigation USING btree (menu_location)
+website_navigation,idx_website_navigation_tenant,16384,16 kB,0,0,CREATE INDEX idx_website_navigation_tenant ON public.website_navigation USING btree (tenant_id)
+whatsapp_channels,idx_whatsapp_channels_tenant,16384,16 kB,0,0,CREATE INDEX idx_whatsapp_channels_tenant ON public.whatsapp_channels USING btree (tenant_id)
+whatsapp_conversation_bindings,idx_whatsapp_bindings_customer,16384,16 kB,353,20,CREATE INDEX idx_whatsapp_bindings_customer ON public.whatsapp_conversation_bindings USING btree (customer_id) WHERE (customer_id IS NOT NULL)
+whatsapp_conversation_bindings,idx_whatsapp_bindings_supplier_contact,16384,16 kB,353,20,CREATE INDEX idx_whatsapp_bindings_supplier_contact ON public.whatsapp_conversation_bindings USING btree (supplier_contact_id) WHERE (supplier_contact_id IS NOT NULL)
+wheel_builds,idx_wheel_builds_bike,16384,16 kB,0,0,CREATE INDEX idx_wheel_builds_bike ON public.wheel_builds USING btree (bike_id)
+wheel_builds,idx_wheel_builds_tenant,16384,16 kB,0,0,CREATE INDEX idx_wheel_builds_tenant ON public.wheel_builds USING btree (tenant_id)
+wheel_hubs,idx_wheel_hubs_hub_type,16384,16 kB,0,0,CREATE INDEX idx_wheel_hubs_hub_type ON public.wheel_hubs USING btree (hub_type)
+wheel_hubs,idx_wheel_hubs_old,16384,16 kB,0,0,CREATE INDEX idx_wheel_hubs_old ON public.wheel_hubs USING btree (old_mm)
+wheel_hubs,idx_wheel_hubs_product,16384,16 kB,0,0,CREATE INDEX idx_wheel_hubs_product ON public.wheel_hubs USING btree (product_id)
+wheel_hubs,idx_wheel_hubs_spoke_holes,16384,16 kB,0,0,CREATE INDEX idx_wheel_hubs_spoke_holes ON public.wheel_hubs USING btree (spoke_holes)
+wheel_hubs,idx_wheel_hubs_tenant,16384,16 kB,0,0,CREATE INDEX idx_wheel_hubs_tenant ON public.wheel_hubs USING btree (tenant_id)
+wheel_rims,idx_wheel_rims_erd,16384,16 kB,0,0,CREATE INDEX idx_wheel_rims_erd ON public.wheel_rims USING btree (erd_mm)
+wheel_rims,idx_wheel_rims_product,16384,16 kB,0,0,CREATE INDEX idx_wheel_rims_product ON public.wheel_rims USING btree (product_id)
+wheel_rims,idx_wheel_rims_spoke_holes,16384,16 kB,0,0,CREATE INDEX idx_wheel_rims_spoke_holes ON public.wheel_rims USING btree (spoke_holes)
+wheel_rims,idx_wheel_rims_tenant,16384,16 kB,0,0,CREATE INDEX idx_wheel_rims_tenant ON public.wheel_rims USING btree (tenant_id)
+wheel_rims,idx_wheel_rims_wheel_size,16384,16 kB,0,0,CREATE INDEX idx_wheel_rims_wheel_size ON public.wheel_rims USING btree (wheel_size)
+wheel_spokes,idx_wheel_spokes_gauge,16384,16 kB,0,0,CREATE INDEX idx_wheel_spokes_gauge ON public.wheel_spokes USING btree (gauge)
+wheel_spokes,idx_wheel_spokes_length,16384,16 kB,0,0,CREATE INDEX idx_wheel_spokes_length ON public.wheel_spokes USING btree (length_mm)
+wheel_spokes,idx_wheel_spokes_product,16384,16 kB,0,0,CREATE INDEX idx_wheel_spokes_product ON public.wheel_spokes USING btree (product_id)
+wheel_spokes,idx_wheel_spokes_tenant,16384,16 kB,0,0,CREATE INDEX idx_wheel_spokes_tenant ON public.wheel_spokes USING btree (tenant_id)
+work_schedules,idx_work_schedules_active,16384,16 kB,0,0,CREATE INDEX idx_work_schedules_active ON public.work_schedules USING btree (active)
+work_schedules,idx_work_schedules_tenant,16384,16 kB,0,0,CREATE INDEX idx_work_schedules_tenant ON public.work_schedules USING btree (tenant_id)
+zoho_tokens,idx_zoho_tokens_user_id,16384,16 kB,0,0,CREATE INDEX idx_zoho_tokens_user_id ON public.zoho_tokens USING btree (user_id)
+analytics_snapshots,idx_analytics_snapshots_tenant,8192,8192 bytes,0,0,CREATE INDEX idx_analytics_snapshots_tenant ON public.analytics_snapshots USING btree (tenant_id)
+attendance_records,idx_attendance_records_tenant,8192,8192 bytes,0,0,CREATE INDEX idx_attendance_records_tenant ON public.attendance_records USING btree (tenant_id)
+backup_schedules,idx_backup_schedules_next_run,8192,8192 bytes,0,0,CREATE INDEX idx_backup_schedules_next_run ON public.backup_schedules USING btree (next_run_at) WHERE (enabled = true)
+backup_schedules,idx_backup_schedules_tenant,8192,8192 bytes,0,0,CREATE INDEX idx_backup_schedules_tenant ON public.backup_schedules USING btree (tenant_id)
+bank_statement_imports,idx_bank_statement_imports_tenant_status,8192,8192 bytes,0,0,"CREATE INDEX idx_bank_statement_imports_tenant_status ON public.bank_statement_imports USING btree (tenant_id, status, updated_at DESC)"
+bank_statement_rows,idx_bank_statement_rows_fingerprint,8192,8192 bytes,0,0,"CREATE INDEX idx_bank_statement_rows_fingerprint ON public.bank_statement_rows USING btree (tenant_id, fingerprint)"
+bank_statement_rows,idx_bank_statement_rows_import_date,8192,8192 bytes,0,0,"CREATE INDEX idx_bank_statement_rows_import_date ON public.bank_statement_rows USING btree (import_id, booking_date, ordinal)"
+bike_component_lifecycles,idx_bike_component_lifecycles_service_product,8192,8192 bytes,16,6,CREATE INDEX idx_bike_component_lifecycles_service_product ON public.bike_component_lifecycles USING btree (service_product_id) WHERE (service_product_id IS NOT NULL)
+bikes,idx_bikes_qr_code,8192,8192 bytes,20,20,CREATE INDEX idx_bikes_qr_code ON public.bikes USING btree (qr_code) WHERE (qr_code IS NOT NULL)
+campaign_metrics,idx_campaign_metrics_campaign,8192,8192 bytes,0,0,CREATE INDEX idx_campaign_metrics_campaign ON public.campaign_metrics USING btree (campaign_id)
+campaign_metrics,idx_campaign_metrics_tenant,8192,8192 bytes,0,0,CREATE INDEX idx_campaign_metrics_tenant ON public.campaign_metrics USING btree (tenant_id)
+campaigns,idx_campaigns_status,8192,8192 bytes,0,0,CREATE INDEX idx_campaigns_status ON public.campaigns USING btree (status)
+campaigns,idx_campaigns_tenant,8192,8192 bytes,0,0,CREATE INDEX idx_campaigns_tenant ON public.campaigns USING btree (tenant_id)
+content_items,idx_content_items_slug,8192,8192 bytes,0,0,CREATE INDEX idx_content_items_slug ON public.content_items USING btree (slug)
+content_items,idx_content_items_tenant,8192,8192 bytes,0,0,CREATE INDEX idx_content_items_tenant ON public.content_items USING btree (tenant_id)
+content_media,idx_content_media_tenant,8192,8192 bytes,0,0,CREATE INDEX idx_content_media_tenant ON public.content_media USING btree (tenant_id)
+employee_contracts,idx_contracts_dates,8192,8192 bytes,0,0,"CREATE INDEX idx_contracts_dates ON public.employee_contracts USING btree (start_date, end_date)"
+employee_contracts,idx_contracts_employee,8192,8192 bytes,0,0,CREATE INDEX idx_contracts_employee ON public.employee_contracts USING btree (employee_id)
+employee_contracts,idx_contracts_tenant,8192,8192 bytes,0,0,CREATE INDEX idx_contracts_tenant ON public.employee_contracts USING btree (tenant_id)
+employee_contracts,idx_employee_contracts_tenant,8192,8192 bytes,0,0,CREATE INDEX idx_employee_contracts_tenant ON public.employee_contracts USING btree (tenant_id)
+employee_planning_roles,idx_employee_planning_roles_employee,8192,8192 bytes,0,0,CREATE INDEX idx_employee_planning_roles_employee ON public.employee_planning_roles USING btree (employee_id)
+employee_planning_roles,idx_employee_planning_roles_role,8192,8192 bytes,0,0,CREATE INDEX idx_employee_planning_roles_role ON public.employee_planning_roles USING btree (planning_role_id)
+employment_contracts,idx_employment_contracts_employee,8192,8192 bytes,0,0,CREATE INDEX idx_employment_contracts_employee ON public.employment_contracts USING btree (employee_id)
+employment_contracts,idx_employment_contracts_status,8192,8192 bytes,0,0,"CREATE INDEX idx_employment_contracts_status ON public.employment_contracts USING btree (tenant_id, status)"
+employment_contracts,idx_employment_contracts_tenant,8192,8192 bytes,0,0,CREATE INDEX idx_employment_contracts_tenant ON public.employment_contracts USING btree (tenant_id)
+expense_attachments,idx_expense_attachments_expense_id,8192,8192 bytes,0,0,CREATE INDEX idx_expense_attachments_expense_id ON public.expense_attachments USING btree (expense_id)
+inventory_adjustments,idx_inventory_adjustments_product,8192,8192 bytes,0,0,CREATE INDEX idx_inventory_adjustments_product ON public.inventory_adjustments USING btree (product_id)
+inventory_adjustments,idx_inventory_adjustments_tenant,8192,8192 bytes,0,0,CREATE INDEX idx_inventory_adjustments_tenant ON public.inventory_adjustments USING btree (tenant_id)
+leave_requests,idx_leave_requests_employee,8192,8192 bytes,0,0,CREATE INDEX idx_leave_requests_employee ON public.leave_requests USING btree (employee_id)
+leave_requests,idx_leave_requests_status,8192,8192 bytes,0,0,CREATE INDEX idx_leave_requests_status ON public.leave_requests USING btree (status)
+leave_requests,idx_leave_requests_tenant,8192,8192 bytes,0,0,CREATE INDEX idx_leave_requests_tenant ON public.leave_requests USING btree (tenant_id)
+mechanic_job_task_preferences,idx_task_prefs_tenant,8192,8192 bytes,0,0,CREATE INDEX idx_task_prefs_tenant ON public.mechanic_job_task_preferences USING btree (tenant_id)
+mechanic_job_task_preferences,idx_task_prefs_user_job,8192,8192 bytes,0,0,"CREATE INDEX idx_task_prefs_user_job ON public.mechanic_job_task_preferences USING btree (user_id, job_id)"
+mechanic_job_warranty_claim_events,idx_mechanic_job_warranty_claim_events_source,8192,8192 bytes,0,0,"CREATE INDEX idx_mechanic_job_warranty_claim_events_source ON public.mechanic_job_warranty_claim_events USING btree (tenant_id, source_job_id, occurred_at DESC) WHERE (source_job_id IS NOT NULL)"
+mechanic_jobs,idx_mechanic_jobs_assigned_to,8192,8192 bytes,1200,501,CREATE INDEX idx_mechanic_jobs_assigned_to ON public.mechanic_jobs USING btree (assigned_to) WHERE (assigned_to IS NOT NULL)
+mechanic_jobs,idx_mechanic_jobs_converted,8192,8192 bytes,1200,501,CREATE INDEX idx_mechanic_jobs_converted ON public.mechanic_jobs USING btree (converted_from_id) WHERE (converted_from_id IS NOT NULL)
+medical_leaves,idx_medical_leaves_dates,8192,8192 bytes,0,0,"CREATE INDEX idx_medical_leaves_dates ON public.medical_leaves USING btree (start_date, end_date)"
+medical_leaves,idx_medical_leaves_employee,8192,8192 bytes,0,0,CREATE INDEX idx_medical_leaves_employee ON public.medical_leaves USING btree (employee_id)
+medical_leaves,idx_medical_leaves_status,8192,8192 bytes,0,0,"CREATE INDEX idx_medical_leaves_status ON public.medical_leaves USING btree (tenant_id, status)"
+medical_leaves,idx_medical_leaves_tenant,8192,8192 bytes,0,0,CREATE INDEX idx_medical_leaves_tenant ON public.medical_leaves USING btree (tenant_id)
+meta_outbound_send_attempts,idx_meta_attempts_conversation_created,8192,8192 bytes,0,0,"CREATE INDEX idx_meta_attempts_conversation_created ON public.meta_outbound_send_attempts USING btree (tenant_id, conversation_id, created_at DESC)"
+meta_outbound_send_attempts,idx_meta_attempts_tenant_created,8192,8192 bytes,0,0,"CREATE INDEX idx_meta_attempts_tenant_created ON public.meta_outbound_send_attempts USING btree (tenant_id, created_at DESC)"
+online_order_correction_events,idx_online_order_correction_events_order,8192,8192 bytes,0,0,"CREATE INDEX idx_online_order_correction_events_order ON public.online_order_correction_events USING btree (tenant_id, order_id, occurred_at DESC, id DESC)"
+online_order_corrections,idx_online_order_corrections_attention,8192,8192 bytes,0,0,"CREATE INDEX idx_online_order_corrections_attention ON public.online_order_corrections USING btree (tenant_id, processing_state, updated_at DESC) WHERE (processing_state = ANY (ARRAY['provider_pending'::text, 'ready_to_apply'::text, 'action_required'::text]))"
+online_order_corrections,idx_online_order_corrections_order,8192,8192 bytes,0,0,"CREATE INDEX idx_online_order_corrections_order ON public.online_order_corrections USING btree (tenant_id, order_id, requested_at DESC, id DESC)"
+online_order_inventory_reservations,idx_online_inventory_reservations_invoice,8192,8192 bytes,0,0,"CREATE INDEX idx_online_inventory_reservations_invoice ON public.online_order_inventory_reservations USING btree (tenant_id, sales_invoice_id) WHERE (sales_invoice_id IS NOT NULL)"
+online_order_official_documents,idx_online_order_official_documents_invoice,8192,8192 bytes,0,0,"CREATE INDEX idx_online_order_official_documents_invoice ON public.online_order_official_documents USING btree (tenant_id, sales_invoice_id, issued_at DESC, id DESC)"
+online_order_official_documents,idx_online_order_official_documents_operation,8192,8192 bytes,0,0,"CREATE INDEX idx_online_order_official_documents_operation ON public.online_order_official_documents USING btree (tenant_id, provider, payment_operation_id) WHERE (payment_operation_id IS NOT NULL)"
+online_order_official_documents,idx_online_order_official_documents_order,8192,8192 bytes,0,0,"CREATE INDEX idx_online_order_official_documents_order ON public.online_order_official_documents USING btree (tenant_id, order_id, issued_at DESC, id DESC)"
+online_orders,idx_online_orders_payment_confirmation_operation,8192,8192 bytes,0,0,"CREATE INDEX idx_online_orders_payment_confirmation_operation ON public.online_orders USING btree (tenant_id, payment_confirmation_operation_id) WHERE (payment_confirmation_operation_id IS NOT NULL)"
+order_items,idx_order_items_tenant,8192,8192 bytes,0,0,CREATE INDEX idx_order_items_tenant ON public.order_items USING btree (tenant_id)
+orders,idx_orders_tenant,8192,8192 bytes,0,0,CREATE INDEX idx_orders_tenant ON public.orders USING btree (tenant_id)
+payment_terminal_settlements,idx_payment_terminal_settlements_profile_date,8192,8192 bytes,0,0,"CREATE INDEX idx_payment_terminal_settlements_profile_date ON public.payment_terminal_settlements USING btree (tenant_id, terminal_profile_id, created_at DESC)"
+payroll_beneficiary_aliases,idx_payroll_beneficiary_aliases_employee,8192,8192 bytes,0,0,"CREATE INDEX idx_payroll_beneficiary_aliases_employee ON public.payroll_beneficiary_aliases USING btree (tenant_id, employee_id)"
+payroll_entries,idx_payroll_entries_employee,8192,8192 bytes,0,0,CREATE INDEX idx_payroll_entries_employee ON public.payroll_entries USING btree (employee_id)
+payroll_entries,idx_payroll_entries_run,8192,8192 bytes,0,0,CREATE INDEX idx_payroll_entries_run ON public.payroll_entries USING btree (payroll_run_id)
+payroll_entries,idx_payroll_entries_tenant,8192,8192 bytes,0,0,CREATE INDEX idx_payroll_entries_tenant ON public.payroll_entries USING btree (tenant_id)
+payroll_records,idx_payroll_records_employee,8192,8192 bytes,0,0,CREATE INDEX idx_payroll_records_employee ON public.payroll_records USING btree (employee_id)
+payroll_records,idx_payroll_records_period,8192,8192 bytes,0,0,"CREATE INDEX idx_payroll_records_period ON public.payroll_records USING btree (tenant_id, period_year, period_month)"
+payroll_records,idx_payroll_records_tenant,8192,8192 bytes,0,0,CREATE INDEX idx_payroll_records_tenant ON public.payroll_records USING btree (tenant_id)
+payroll_runs,idx_payroll_runs_period,8192,8192 bytes,0,0,"CREATE INDEX idx_payroll_runs_period ON public.payroll_runs USING btree (period_start, period_end)"
+payroll_runs,idx_payroll_runs_tenant,8192,8192 bytes,0,0,CREATE INDEX idx_payroll_runs_tenant ON public.payroll_runs USING btree (tenant_id)
+payroll_statement_decisions,idx_payroll_statement_decisions_import,8192,8192 bytes,0,0,"CREATE INDEX idx_payroll_statement_decisions_import ON public.payroll_statement_decisions USING btree (import_id, decision_ordinal)"
+product_spec_member_profile_events,product_spec_member_profile_events_profile,8192,8192 bytes,0,0,"CREATE INDEX product_spec_member_profile_events_profile ON public.product_spec_member_profile_events USING btree (profile_id, occurred_at, id)"
+products,idx_products_featured,8192,8192 bytes,891,1674,CREATE INDEX idx_products_featured ON public.products USING btree (website_featured) WHERE (website_featured = true)
+purchase_invoice_lines,idx_purchase_invoice_lines_source_need,8192,8192 bytes,140,444,"CREATE INDEX idx_purchase_invoice_lines_source_need ON public.purchase_invoice_lines USING btree (tenant_id, source_need_id, id) WHERE (source_need_id IS NOT NULL)"
+purchase_payment_edit_events,idx_purchase_payment_edit_events_payment,8192,8192 bytes,0,0,"CREATE INDEX idx_purchase_payment_edit_events_payment ON public.purchase_payment_edit_events USING btree (tenant_id, payment_id, created_at DESC, id DESC)"
+sales_channel_payment_events,idx_sales_channel_payment_events_invoice,8192,8192 bytes,0,0,"CREATE INDEX idx_sales_channel_payment_events_invoice ON public.sales_channel_payment_events USING btree (tenant_id, invoice_id, created_at DESC) WHERE (invoice_id IS NOT NULL)"
+sales_invoices,idx_sales_invoices_mechanic,8192,8192 bytes,368,906,CREATE INDEX idx_sales_invoices_mechanic ON public.sales_invoices USING btree (mechanic_id) WHERE (mechanic_id IS NOT NULL)
+service_packages,idx_service_packages_tenant,8192,8192 bytes,0,0,CREATE INDEX idx_service_packages_tenant ON public.service_packages USING btree (tenant_id)
+shift_change_requests,idx_shift_change_requests_employee,8192,8192 bytes,0,0,"CREATE INDEX idx_shift_change_requests_employee ON public.shift_change_requests USING btree (employee_id, status, created_at DESC)"
+shifts,idx_shifts_date,8192,8192 bytes,0,0,CREATE INDEX idx_shifts_date ON public.shifts USING btree (shift_date)
+shifts,idx_shifts_employee,8192,8192 bytes,0,0,CREATE INDEX idx_shifts_employee ON public.shifts USING btree (employee_id)
+shifts,idx_shifts_tenant,8192,8192 bytes,0,0,CREATE INDEX idx_shifts_tenant ON public.shifts USING btree (tenant_id)
+smart_tasks,idx_smart_tasks_tenant_private_creator,8192,8192 bytes,0,0,"CREATE INDEX idx_smart_tasks_tenant_private_creator ON public.smart_tasks USING btree (tenant_id, created_by) WHERE (visibility = 'private'::text)"
+supplier_accounting_evidence,idx_supplier_accounting_evidence_source,8192,8192 bytes,0,0,"CREATE INDEX idx_supplier_accounting_evidence_source ON public.supplier_accounting_evidence USING btree (tenant_id, source_type, source_id, applied_at DESC)"
+supplier_accounting_rules,idx_supplier_accounting_rules_version_priority,8192,8192 bytes,0,0,"CREATE INDEX idx_supplier_accounting_rules_version_priority ON public.supplier_accounting_rules USING btree (tenant_id, policy_version_id, is_active, priority)"
+supplier_engagements,idx_supplier_engagements_site,8192,8192 bytes,0,0,"CREATE INDEX idx_supplier_engagements_site ON public.supplier_engagements USING btree (tenant_id, site_id) WHERE (site_id IS NOT NULL)"
+tenant_sii_boleta_emission_model_events,idx_tenant_sii_boleta_model_effective,8192,8192 bytes,0,0,"CREATE INDEX idx_tenant_sii_boleta_model_effective ON public.tenant_sii_boleta_emission_model_events USING btree (tenant_id, effective_from DESC, recorded_at DESC, id DESC)"
+transactional_email_suppressions,idx_transactional_email_suppressions_tenant,8192,8192 bytes,0,0,"CREATE INDEX idx_transactional_email_suppressions_tenant ON public.transactional_email_suppressions USING btree (tenant_id, suppressed_at DESC)"
+vehicles,idx_vehicles_tenant,8192,8192 bytes,0,0,CREATE INDEX idx_vehicles_tenant ON public.vehicles USING btree (tenant_id)
+website_banners,idx_website_banners_active,8192,8192 bytes,0,0,"CREATE INDEX idx_website_banners_active ON public.website_banners USING btree (active, order_index)"
+website_banners,idx_website_banners_tenant,8192,8192 bytes,0,0,CREATE INDEX idx_website_banners_tenant ON public.website_banners USING btree (tenant_id)
+wheel_builds,idx_wheel_builds_hub,8192,8192 bytes,0,0,CREATE INDEX idx_wheel_builds_hub ON public.wheel_builds USING btree (hub_id)
+wheel_builds,idx_wheel_builds_job,8192,8192 bytes,0,0,CREATE INDEX idx_wheel_builds_job ON public.wheel_builds USING btree (mechanic_job_id)
+wheel_builds,idx_wheel_builds_rim,8192,8192 bytes,0,0,CREATE INDEX idx_wheel_builds_rim ON public.wheel_builds USING btree (rim_id)
+work_order_items,idx_work_order_items_tenant,8192,8192 bytes,0,0,CREATE INDEX idx_work_order_items_tenant ON public.work_order_items USING btree (tenant_id)
+work_order_items,idx_work_order_items_work_order,8192,8192 bytes,0,0,CREATE INDEX idx_work_order_items_work_order ON public.work_order_items USING btree (work_order_id)
+work_orders,work_orders_company_id_status_idx,8192,8192 bytes,0,0,"CREATE INDEX work_orders_company_id_status_idx ON public.work_orders USING btree (company_id, status)"
+workshop_inventory_commitment_events,idx_workshop_inventory_commitment_events_commitment,8192,8192 bytes,0,0,"CREATE INDEX idx_workshop_inventory_commitment_events_commitment ON public.workshop_inventory_commitment_events USING btree (commitment_id, id)"
+workshop_inventory_commitment_events,idx_workshop_inventory_commitment_events_need,8192,8192 bytes,0,0,"CREATE INDEX idx_workshop_inventory_commitment_events_need ON public.workshop_inventory_commitment_events USING btree (tenant_id, supply_need_id, occurred_at DESC, id DESC)"
+workshop_inventory_commitments,idx_workshop_inventory_commitments_need,8192,8192 bytes,0,0,"CREATE INDEX idx_workshop_inventory_commitments_need ON public.workshop_inventory_commitments USING btree (tenant_id, supply_need_id, state, product_id)"
+workshop_invoice_control_events,idx_workshop_invoice_control_events_invoice,8192,8192 bytes,0,0,"CREATE INDEX idx_workshop_invoice_control_events_invoice ON public.workshop_invoice_control_events USING btree (tenant_id, invoice_id, created_at DESC) WHERE (invoice_id IS NOT NULL)"
+workshop_invoice_control_events,idx_workshop_invoice_control_events_job,8192,8192 bytes,0,0,"CREATE INDEX idx_workshop_invoice_control_events_job ON public.workshop_invoice_control_events USING btree (tenant_id, job_id, created_at DESC) WHERE (job_id IS NOT NULL)"
+workshop_invoice_control_events,idx_workshop_invoice_control_events_tenant_created,8192,8192 bytes,0,0,"CREATE INDEX idx_workshop_invoice_control_events_tenant_created ON public.workshop_invoice_control_events USING btree (tenant_id, created_at DESC)"
