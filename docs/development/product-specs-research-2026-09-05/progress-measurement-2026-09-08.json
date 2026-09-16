@@ -19,7 +19,7 @@
     "Member framework and 11 template opt-ins deployed, authenticated read-backs verified, root desktop/compact editor exercised. Embedded editor, OEM relations, consumers, client distribution, remaining original replacements and global sanitation remain open. Template-delivery percentage is not overall completion."
   ],
   "plan_sha256": "16459826fee4c589cce37243afe4e159317212ddf1d47d6d6f1d76f9b3fadf15",
-  "candidate_status_updated_at": "2026-09-15T20:03:00Z",
+  "candidate_status_updated_at": "2026-09-16T02:12:00Z",
   "original_candidates_with_root_local_sql_and_adoption": 37,
   "original_candidates_under_root_adjudication": 0,
   "shared_engine_migration_verified": "20260908185800",
@@ -340,22 +340,23 @@
   "delivery_status_updated_at": "2026-09-15T05:53:53.666444+00:00",
   "assignment_repair_progress": {
     "initial_missing": 746,
-    "repaired": 720,
-    "remaining": 26,
-    "stage_percent": 96.51474530831099,
+    "repaired": 724,
+    "remaining": 22,
+    "stage_percent": 97.05,
     "scope": "Only repairs in the initial missing-template cohort; not overall completion or confirmed physical-product count.",
-    "non_material_dispositions": 9,
-    "unresolved_after_nonmaterial_review": 17
+    "non_material_dispositions": 10,
+    "awaiting_client_distribution": 2,
+    "identity_needed": 10
   },
   "assignment_coverage_live": {
-    "observed_at": "2026-09-16T00:20:00Z",
+    "observed_at": "2026-09-16T02:05:28.163095+00:00",
     "tenant": "vinabike",
     "all_products": 1673,
     "service_products": 59,
-    "nonservice_with_template": 1588,
-    "nonservice_without_template": 26,
-    "explicit_bindings": 720,
-    "count_definition": "Tenant vinabike only. Database product_type/is_service flags; effective template = explicit binding or active category mapping; includes unresolved non-material records. A 2026-09-15 reading of 27/1674 mixed in one product of the test tenant testbike and was withdrawn."
+    "nonservice_with_template": 1592,
+    "nonservice_without_template": 22,
+    "explicit_bindings": 724,
+    "count_definition": "Tenant vinabike only. Database product_type/is_service flags; effective template = explicit binding or active category mapping; includes unresolved non-material records."
   },
   "assignment_original_parts_2026_09_15": {
     "assignments_applied": 108,
@@ -662,5 +663,24 @@
     "dart_checks": 9,
     "technical_facts_filled": 0,
     "record": "checkpoint-2026-09-15-claude-solo.md"
+  },
+  "assignment_remaining_2026_09_16": {
+    "verified_at": "2026-09-16T02:05:28.163095+00:00",
+    "authenticated_actor": "7bb76d88-5455-462e-a838-5f78af922914",
+    "project": "xzdvtzdqjeyqxnkqprtf",
+    "assignments_applied_and_read_back": 4,
+    "by_family": {
+      "brake_fluid": 1,
+      "hub_small_part": 1,
+      "rack_basket": 1,
+      "wheel_retention": 1
+    },
+    "technical_facts_filled": 0,
+    "all_non_assignment_data_preserved": true,
+    "proposal_sha256": "fb3f32cf81a698dc919d3befe8c4fb904f7dadcee34615dfe4f4998df42d78aa",
+    "application_sha256": "7eb50771396a3fd4ddca2a21fac09dec516719c4fd6eab0e8c820d1d982829c3",
+    "persisted_receipts": 4,
+    "review": "Claude solo review; identity-only assignments, no compatibility claim",
+    "record": "assignment-remaining-2026-09-16.md"
   }
 }
