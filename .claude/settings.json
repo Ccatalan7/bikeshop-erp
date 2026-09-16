@@ -62,22 +62,7 @@
       "Bash(git push *)",
       "Bash(git restore *)"
     ],
-    "ask": [
-      "Bash(gh pr create *)",
-      "Bash(git restore *)",
-      "Bash(rm -rf *)",
-      "Bash(kill *)",
-      "Bash(killall *)",
-      "Bash(pkill *)",
-      "Bash(firebase deploy *)",
-      "Bash(supabase functions deploy *)",
-      "Bash(bash scripts/deploy.sh *)",
-      "Bash(scripts/deploy.sh *)",
-      "Bash(bash scripts/release/*)",
-      "Bash(scripts/release/*)",
-      "Bash(bash scripts/publish_*)",
-      "Bash(scripts/publish_*)"
-    ],
+    "ask": [],
     "deny": [
       "Bash(supabase db *)",
       "Bash(supabase migration *)",

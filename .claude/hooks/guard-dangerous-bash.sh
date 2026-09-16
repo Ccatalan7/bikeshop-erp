@@ -80,11 +80,6 @@ if command_matches "${tool_boundary}rm([[:space:]]+[^[:space:];|&()]+)*[[:space:
   deny "Recursive deletion and generic process signaling are blocked. Use the canonical preview owner or a recoverable, exact target."
 fi
 
-if command_matches "${tool_boundary}psql([[:space:]]|$)" ||
-   command_matches "${tool_boundary}supabase[[:space:]]+([^;|&()]+[[:space:]]+)*(db|migration)([[:space:]]|$)"; then
-  deny "Raw SQL and Supabase database commands bypass the audited repository database contract."
-fi
-
 # 2026-08-19 · Estas dos reglas comparaban subcadenas contra el comando entero,
 # el mismo defecto que `scripts/deploy.sh` ya pagó cinco veces en un día (ver el
 # comentario del bloque de deploy). El costo aquí fue peor porque es silencioso:
@@ -108,6 +103,16 @@ fi
 
 if command_matches "${command_position}[^[:space:];|&()]*scripts/db/production_validation\\.sh[[:space:]]+refresh([[:space:]]|$)"; then
   deny "Refreshing the production-derived database cache is an external read with operational impact; hand it back to Codex."
+fi
+
+# 2026-09-16 · psql y `supabase db|migration` se reconocen en POSICIÓN DE
+# COMANDO, como el resto. Antes la regla miraba la subcadena en todo el texto y
+# denegó un parche de Python porque un comentario decía «psql -f»; el mismo
+# defecto documentado arriba el 2026-08-19. Ejecutar psql o la CLI de Supabase
+# contra la base sigue denegado; mencionarlos ya no.
+if command_matches "${command_position}[^[:space:];|&()]*psql([[:space:]]|$)" ||
+   command_matches "${command_position}[^[:space:];|&()]*supabase[[:space:]]+([^;|&()]+[[:space:]]+)*(db|migration)([[:space:]]|$)"; then
+  deny "Raw SQL and Supabase database commands bypass the audited repository database contract."
 fi
 
 # 2026-08-01 · decisión del dueño: publicar la actualización del ERP es del
