@@ -2173,6 +2173,16 @@ class _ProductDetailPageState extends State<ProductDetailPage>
       case 'identificacion':
       case 'general':
         return 'Características';
+      // Section keys of the 2026-09 template contracts (`form_contract`
+      // roles). Without these the storefront printed the raw key in English.
+      case 'primary':
+        return 'Principales';
+      case 'measurement':
+        return 'Medidas';
+      case 'contents':
+        return 'Contenido del envase';
+      case 'declaration':
+        return 'Declaraciones del fabricante';
       case 'compatibility':
       case 'compatibilidad':
         return 'Compatibilidad';

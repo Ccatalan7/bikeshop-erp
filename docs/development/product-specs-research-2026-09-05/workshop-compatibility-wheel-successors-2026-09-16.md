@@ -34,6 +34,27 @@ la regla detallada.
 - BSD por rótulo según ISO 5775 (tabla de Sheldon Brown): 622 = 29"/700c, 584 = 27.5"/650B; el
   resto de rótulos comerciales cubre varios diámetros ISO y no se convierte en veredicto.
 
+## Búsqueda en portales de proveedor (hallazgo 2)
+
+`lib/shared/services/supplier_need_portal_search.dart` traduce claves de la necesidad a tipos
+de medida (`_identityKindByField`); 9 de sus 15 claves eran `legacy`. Se añadieron los sucesores
+al mismo mapa, con la clave retirada al lado: `spoke_hole_count`, `hub_old_mm`,
+`hub_axle_diameter_mm`, `hub_drive_receiver_kind`, `hub_package_position` (un «Juego» ya no se
+lee como delantera), `valve_standard`, `valve_length_mm_value`, `sprocket_count`,
+`chainring_bcd_mm`, `crank_arm_length_mm`, `bar_clamp_diameter_mm`, `pack_quantity` y los
+materiales por familia. `seatpost_diameter_mm`, que el matcher devolvía `unresolved` por no ser
+filtrable, es filtrable desde la publicación de flags del 09-16. 122 pruebas verdes en los cinco
+archivos del portal (1 nueva: maza por `hub_old_mm` + `spoke_hole_count` y cámara por
+`valve_standard` discriminan igual que las claves retiradas).
+
+La ficha pública de la tienda (hallazgo 3) no necesita migrar claves: la página pinta lo que
+devuelve la RPC, que ya excluye `legacy` y trae los sucesores con su etiqueta; su mapa de claves
+sólo sobreescribe rótulos. Lo que sí faltaba, visto en vinabike.cl con la maza Novatec AE0313
+(«Cantidad de agujeros para rayos: 32», «Posición de las mazas de este envase: Trasera»): los
+títulos de sección de los contratos nuevos salían en inglés (`MEASUREMENT`, `PRIMARY`); ahora
+`primary` → Principales, `measurement` → Medidas, `contents` → Contenido del envase,
+`declaration` → Declaraciones del fabricante. Se despliega con el merge a `main`.
+
 ## Qué sigue en este consumidor
 
 Transmisión (`drivetrain_*`, `chain_*`, `freehub_type` → `freehub_bodies_accepted` en cassettes,

@@ -237,3 +237,5 @@ ya los contiene). Worktrees inventariados: tres de Codex, todos detached.
   núcleo de cassette refuta bici roscada y deja el estriado por confirmar; un juego se revisa por
   pieza. 100 pruebas verdes (9 nuevas). Transmisión, pedalier y freno siguen en `legacy` (30
   claves): [workshop-compatibility-wheel-successors-2026-09-16.md](workshop-compatibility-wheel-successors-2026-09-16.md).
+  La búsqueda en portales de proveedor recibió los mismos sucesores en su mapa de medidas (122
+  pruebas verdes, 1 nueva); la ficha pública de la tienda no necesita cambio.

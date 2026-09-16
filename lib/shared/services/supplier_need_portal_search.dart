@@ -2381,6 +2381,8 @@ String _canonicalIdentityValue(PartSpecKind kind, String raw) {
       }
       return value;
     case PartSpecKind.position:
+      // `Juego delantera + trasera` names both pieces; it is not a front hub.
+      if (value.contains('juego')) return 'set';
       if (value.contains('delanter')) return 'front';
       if (value.contains('traser')) return 'rear';
       return value;
@@ -2603,29 +2605,47 @@ double? _uniqueNumberWithUnit(String text, String unit) {
   return found.length == 1 ? found.single : null;
 }
 
+// The 2026-09 templates retired several of these keys to `legacy`; their
+// successors carry the same measure under a new key and are listed next to
+// them so a need written against the live template still discriminates.
 const Map<String, PartSpecKind> _identityKindByField = <String, PartSpecKind>{
   'spoke_holes': PartSpecKind.spokeCount,
+  'spoke_hole_count': PartSpecKind.spokeCount,
   'rotor_diameter_mm': PartSpecKind.rotorDiameterMm,
   'rotor_diameter_mm_value': PartSpecKind.rotorDiameterMm,
   'clamp_diameter_mm': PartSpecKind.clampDiameterMm,
+  'bar_clamp_diameter_mm': PartSpecKind.clampDiameterMm,
   'seatpost_diameter_mm': PartSpecKind.postDiameterMm,
   'crank_length_mm': PartSpecKind.crankLengthMm,
+  'crank_arm_length_mm': PartSpecKind.crankLengthMm,
   'bcd_mm': PartSpecKind.boltCircleMm,
+  'chainring_bcd_mm': PartSpecKind.boltCircleMm,
   'wheel_size': PartSpecKind.wheelSize,
   'hub_spacing_mm': PartSpecKind.axleWidthMm,
+  'hub_old_mm': PartSpecKind.axleWidthMm,
   'axle_width_mm': PartSpecKind.axleWidthMm,
   'axle_diameter_mm': PartSpecKind.axleDiameterMm,
+  'hub_axle_diameter_mm': PartSpecKind.axleDiameterMm,
   'freehub_type': PartSpecKind.freehubStandard,
+  'hub_drive_receiver_kind': PartSpecKind.freehubStandard,
   'valve_type': PartSpecKind.valveType,
+  'valve_standard': PartSpecKind.valveType,
   'valve_length_mm': PartSpecKind.lengthMm,
+  'valve_length_mm_value': PartSpecKind.lengthMm,
   'wheel_position': PartSpecKind.position,
+  'hub_package_position': PartSpecKind.position,
   'brake_position': PartSpecKind.position,
   'chain_speeds': PartSpecKind.speeds,
   'drivetrain_speeds': PartSpecKind.speeds,
+  'sprocket_count': PartSpecKind.speeds,
   'bb_shell_standard': PartSpecKind.shellStandard,
   'rotor_mount_type': PartSpecKind.brakeMount,
   'pack_count': PartSpecKind.packCount,
+  'pack_quantity': PartSpecKind.packCount,
   'material': PartSpecKind.constructionMaterial,
+  'rim_material': PartSpecKind.constructionMaterial,
+  'body_material': PartSpecKind.constructionMaterial,
+  'rotor_material': PartSpecKind.constructionMaterial,
 };
 
 bool _sameOriginUrl(String candidate, String reference) {

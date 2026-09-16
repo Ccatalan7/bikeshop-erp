@@ -627,6 +627,84 @@ void main() {
       );
     });
 
+    test('las claves sucesoras de rueda discriminan igual que las retiradas',
+        () {
+      // Las plantillas de 2026-09 retiraron `hub_spacing_mm`, `spoke_holes`
+      // y `valve_type`; una necesidad escrita contra la plantilla viva trae
+      // `hub_old_mm`, `spoke_hole_count` y `valve_standard`.
+      final hub = _request(
+        needId: 'need-hub-successor',
+        description: 'Maza trasera 148 mm 32H',
+        technicalFamily: 'hub',
+        fields: const <SupplierNeedSearchField>[
+          SupplierNeedSearchField(
+            key: 'hub_old_mm',
+            label: 'Ancho entre tuercas (OLD)',
+            dataType: 'number',
+          ),
+          SupplierNeedSearchField(
+            key: 'spoke_hole_count',
+            label: 'Cantidad de agujeros para rayos',
+            dataType: 'number',
+          ),
+        ],
+        predicates: const <SupplierNeedSearchPredicate>[
+          SupplierNeedSearchPredicate(
+            field: 'hub_old_mm',
+            operator: 'eq',
+            values: <Object>[148],
+          ),
+          SupplierNeedSearchPredicate(
+            field: 'spoke_hole_count',
+            operator: 'eq',
+            values: <Object>[32],
+          ),
+        ],
+      );
+      final matches = matchSupplierNeedCandidates(
+        _plan(hub),
+        <SupplierPortalCatalogCandidate>[
+          _candidate('MAZA TRASERA BOOST 148X12 32H MICRO SPLINE'),
+          _candidate('MAZA TRASERA 135X10 36H'),
+        ],
+      );
+      expect(matches.first.state, SupplierNeedMatchState.exact);
+      expect(matches.last.state, isNot(SupplierNeedMatchState.exact));
+
+      final tube = _request(
+        needId: 'need-tube-successor',
+        description: 'Cámara 700 válvula francesa',
+        technicalFamily: 'tube',
+        fields: const <SupplierNeedSearchField>[
+          SupplierNeedSearchField(
+            key: 'valve_standard',
+            label: 'Tipo de válvula',
+            dataType: 'single_select',
+            allowedValues: <Object>[
+              'Presta (francesa)',
+              'Schrader (americana / auto)',
+            ],
+          ),
+        ],
+        predicates: const <SupplierNeedSearchPredicate>[
+          SupplierNeedSearchPredicate(
+            field: 'valve_standard',
+            operator: 'eq',
+            values: <Object>['Presta (francesa)'],
+          ),
+        ],
+      );
+      final tubes = matchSupplierNeedCandidates(
+        _plan(tube),
+        <SupplierPortalCatalogCandidate>[
+          _candidate('CAMARA 700 X 18/25C V/FRANCESA 60MM'),
+          _candidate('CAMARA 700 X 28/38C V/AUTO 48MM'),
+        ],
+      );
+      expect(tubes.first.state, SupplierNeedMatchState.exact);
+      expect(tubes.last.state, isNot(SupplierNeedMatchState.exact));
+    });
+
     test('evalúa operadores numéricos sobre hechos estructurados', () {
       final request = _request(
         needId: 'need-range',
