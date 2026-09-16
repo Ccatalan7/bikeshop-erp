@@ -63,9 +63,6 @@
       "Bash(git restore *)"
     ],
     "ask": [
-      "Bash(git commit *)",
-      "Bash(git push)",
-      "Bash(git push *)",
       "Bash(gh pr create *)",
       "Bash(git restore *)",
       "Bash(rm -rf *)",
