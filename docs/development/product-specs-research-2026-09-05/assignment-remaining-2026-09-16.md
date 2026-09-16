@@ -33,7 +33,7 @@ efectiva, 22 sin ella, 724 vinculaciones explícitas. Reparación del lote inici
   notas de crédito ya adjudicados, más `M010` (cámara sin identificar + servicio).
   Salen del denominador técnico; no se cambian flags comerciales ni contables,
   que son un saneamiento aparte.
-- **Casquillos `AE0266` y `AE0274` (2):** plantilla publicada; la asignación
+- **Casquillos `AE0266` y `AE0274` (2):** **asignados el 2026-09-16** tras la distribución del cliente (`dc1e6093`); ver [seatpost-shim-assignment-2026-09-16.md](seatpost-shim-assignment-2026-09-16.md). Texto original: plantilla publicada; la asignación
   espera la distribución del cliente (la app instalada rechaza pares de tres
   elementos).
 - **`NNV125` y `NNV126` (2):** piñón 1v Bettabikes, inactivos, sin foto ni

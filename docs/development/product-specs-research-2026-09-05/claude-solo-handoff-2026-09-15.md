@@ -275,7 +275,7 @@ evita que la rama antigua compita con el nuevo dueño:
 - verifica antes el uso productivo exacto de las tres claves, incluido
   cualquier criterio, referencia o hecho fuera de plantilla;
 - publica la nueva plantilla y sólo después prepara una asignación aislada para
-  AE0266 (`b052062b-6da4-41a8-abcd-f5c37fd32aca`) y AE0274
+  **Asignados el 2026-09-16** (ver `seatpost-shim-assignment-2026-09-16.md`; el cliente dc1e6093 publicado el 2026-09-15 22:25Z contiene la extensión 8f3d8926). Texto original: AE0266 (`b052062b-6da4-41a8-abcd-f5c37fd32aca`) y AE0274
   (`5e8bbaed-194d-4c0f-b836-86fa1ec89da7`);
 - asignar no significa rellenar. Sus títulos son insuficientes para afirmar
   diámetro, longitud, material, interfaz o compatibilidad. Mantén cero hechos

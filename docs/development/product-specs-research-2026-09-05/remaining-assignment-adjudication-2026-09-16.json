@@ -1,220 +1,241 @@
 {
-  "schema_version": 1,
-  "updated_at": "2026-09-16T02:10:00Z",
-  "supersedes": "remaining-assignment-adjudication-2026-09-15.json",
-  "scope": "Vinabike tenant; the 26 records left without an effective template after the 720 verified assignments",
-  "reviewed_by": "Claude (solo ownership since 2026-09-15)",
-  "assignments_applied_2026_09_16": [
-    {
-      "product_id": "44e000b9-c8ed-4ac7-8b71-bbe20da9033a",
-      "sku": "AE0178",
-      "family": "rack_basket",
-      "template_id": "d640c11b-36dc-5d3b-90f5-cbb04a27f64f",
-      "contract_version": 13,
-      "reason": "Elástico de carga con ganchos según fotografía vinculada. La ficha rack_basket cubre la clase «Correa / pulpo de carga» como sujeción de carga sobre la bicicleta. Asignación únicamente; sin medidas, carga máxima ni compatibilidad."
-    },
-    {
-      "product_id": "8ab9c7f1-bc66-4904-b943-b098ae615358",
-      "sku": "NNV49",
-      "family": "wheel_retention",
-      "template_id": "18bf5b75-1306-5851-8c19-9551a780698f",
-      "contract_version": 15,
-      "reason": "Eje delantero «bloqueo» Bettabikes (producto inactivo). «Bloqueo» designa el cierre de rueda delantera (aguja de cierre rápido o eje con tuerca), no el eje interno de la maza; ambas lecturas caen en wheel_retention. Asignación únicamente; clase exacta y medidas pendientes."
-    },
-    {
-      "product_id": "9dace983-0f30-49c7-9a3f-7a1b8ea62133",
-      "sku": "2854",
-      "family": "brake_fluid",
-      "template_id": "2a8d4d76-2120-51e6-a2f7-42be2563c7d7",
-      "contract_version": 9,
-      "reason": "Aceite mineral de la marca Chepark. El fabricante (chepark.com, referencia BIC-860) y sus distribuidores lo publican como aceite mineral de freno para sistemas hidráulicos Shimano/Magura, y la marca no comercializa otro aceite mineral. Asignación de clase brake_fluid únicamente; no se afirma tipo, volumen, aprobación ni compatibilidad de modelo."
-    },
-    {
-      "product_id": "a23b30c2-de31-4520-bbcb-3ac072990333",
-      "sku": "AE0281",
-      "family": "hub_small_part",
-      "template_id": "7da02100-d1ba-568b-bd73-46ef593b5910",
-      "contract_version": 11,
-      "reason": "Adaptador de eje M10 a M14: el nombre identifica un adaptador de eje de maza y la ficha hub_small_part incluye la clase «Adaptador de eje». Asignación únicamente; rosca, largo y aplicación (maza, peg u otra) quedan por documentar con fuente."
-    }
-  ],
-  "proposal_sha256": "fb3f32cf81a698dc919d3befe8c4fb904f7dadcee34615dfe4f4998df42d78aa",
-  "application_sha256": "7eb50771396a3fd4ddca2a21fac09dec516719c4fd6eab0e8c820d1d982829c3",
-  "readback": {
-    "verified_at": "2026-09-16T02:05:28.163095+00:00",
-    "assignments_applied_and_read_back": 4,
-    "technical_facts_filled": 0
+ "schema_version": 1,
+ "updated_at": "2026-09-16T07:45:00Z",
+ "supersedes": "remaining-assignment-adjudication-2026-09-15.json",
+ "scope": "Vinabike tenant; the 26 records left without an effective template after the 720 verified assignments",
+ "reviewed_by": "Claude (solo ownership since 2026-09-15)",
+ "assignments_applied_2026_09_16": [
+  {
+   "product_id": "44e000b9-c8ed-4ac7-8b71-bbe20da9033a",
+   "sku": "AE0178",
+   "family": "rack_basket",
+   "template_id": "d640c11b-36dc-5d3b-90f5-cbb04a27f64f",
+   "contract_version": 13,
+   "reason": "Elástico de carga con ganchos según fotografía vinculada. La ficha rack_basket cubre la clase «Correa / pulpo de carga» como sujeción de carga sobre la bicicleta. Asignación únicamente; sin medidas, carga máxima ni compatibilidad."
   },
-  "still_unassigned": [
-    {
-      "id": "f8089a2e-da2a-430c-8949-137fdd1930a7",
-      "sku": "M010",
-      "name": "Cámara nueva + servicio de cambio",
-      "disposition": "technical_specs_not_applicable",
-      "reason": "La presentación combina una cámara no identificada y trabajo. Separar contenido técnico de la operación; no elegir medidas o cámara concreta por el título.",
-      "claude_note": "Presentación mixta cámara + servicio; la parte física no está identificada. Fuera del denominador técnico; sin cambio de flags comerciales."
-    },
-    {
-      "id": "dec02e89-94f5-4fb4-bcec-b59231176120",
-      "sku": "NNV43",
-      "name": "Descontaminación Disco de Freno",
-      "disposition": "technical_specs_not_applicable",
-      "reason": "El nombre identifica trabajo, diagnóstico, costo/gasto o nota de crédito, no una pieza. No requiere ficha de componente. La corrección de flags comerciales/contables es distinta; no se altera ni se cuenta como asignación."
-    },
-    {
-      "id": "c1885a05-91bd-48ed-9afe-054f45c97360",
-      "sku": "NNV155",
-      "name": "Retiro de Óxido",
-      "disposition": "technical_specs_not_applicable",
-      "reason": "El nombre identifica trabajo, diagnóstico, costo/gasto o nota de crédito, no una pieza. No requiere ficha de componente. La corrección de flags comerciales/contables es distinta; no se altera ni se cuenta como asignación."
-    },
-    {
-      "id": "b052062b-6da4-41a8-abcd-f5c37fd32aca",
-      "sku": "AE0266",
-      "name": "Adaptador de Tija de Asiento 28.6-27.2mm MUQZI",
-      "disposition": "schema_gap",
-      "reason": "Casquillo de reducción de tija: necesita diámetro de tija aceptado, alojamiento de cuadro objetivo y longitud de apoyo/limitaciones con fuente. spacer_components no equivale a un adaptador radial.",
-      "claude_note": "Plantilla seatpost_shim publicada (20260915203000); la asignación espera la distribución del cliente, que rechaza pares de tres elementos."
-    },
-    {
-      "id": "5e8bbaed-194d-4c0f-b836-86fa1ec89da7",
-      "sku": "AE0274",
-      "name": "Adaptador de Tija de Asiento 30-27.2mm MUQZI",
-      "disposition": "schema_gap",
-      "reason": "Casquillo de reducción de tija; mismo contrato de dos interfaces que AE0266. La cifra 30 equivale numéricamente a 30.0, pero no autoriza sustituirla por 30.9 ni verificar la medida sin su fuente.",
-      "claude_note": "Plantilla seatpost_shim publicada (20260915203000); la asignación espera la distribución del cliente, que rechaza pares de tres elementos."
-    },
-    {
-      "id": "689f23ee-650f-4f9a-9919-5f02674bb7b0",
-      "sku": "ACC-TES-59147",
-      "name": "Test",
-      "disposition": "identity_needed",
-      "reason": "Nombre insuficiente para identificar un objeto técnico; sin modelo, descripción ni imagen. No forzar familia desde una marca, proveedor o etiqueta genérica."
-    },
-    {
-      "id": "cc9f7f88-0401-4eb2-bbd6-74b1b1b07336",
-      "sku": "NNV7",
-      "name": "ALIEXPRESS",
-      "disposition": "identity_needed",
-      "reason": "Nombre insuficiente para identificar un objeto técnico; sin modelo, descripción ni imagen. No forzar familia desde una marca, proveedor o etiqueta genérica."
-    },
-    {
-      "id": "a4373f06-b5b1-48e6-b501-64091f999fd3",
-      "sku": "NNV8",
-      "name": "Andes",
-      "disposition": "identity_needed",
-      "reason": "Nombre insuficiente para identificar un objeto técnico; sin modelo, descripción ni imagen. No forzar familia desde una marca, proveedor o etiqueta genérica."
-    },
-    {
-      "id": "54aa6f11-e04d-446c-aa33-7e6580dbe7e1",
-      "sku": "NNV15",
-      "name": "BETTABIKES",
-      "disposition": "identity_needed",
-      "reason": "Nombre insuficiente para identificar un objeto técnico; sin modelo, descripción ni imagen. No forzar familia desde una marca, proveedor o etiqueta genérica."
-    },
-    {
-      "id": "88154c74-0a20-43d9-9fd6-7361299aedac",
-      "sku": "NNV36",
-      "name": "Centrado de Rueda BettaBikes",
-      "disposition": "technical_specs_not_applicable",
-      "reason": "El nombre identifica trabajo, diagnóstico, costo/gasto o nota de crédito, no una pieza. No requiere ficha de componente. La corrección de flags comerciales/contables es distinta; no se altera ni se cuenta como asignación."
-    },
-    {
-      "id": "b679e9c0-b7ab-4028-b1b4-a1a0351c2103",
-      "sku": "NNV41",
-      "name": "Costo de bicicleta",
-      "disposition": "technical_specs_not_applicable",
-      "reason": "El nombre identifica trabajo, diagnóstico, costo/gasto o nota de crédito, no una pieza. No requiere ficha de componente. La corrección de flags comerciales/contables es distinta; no se altera ni se cuenta como asignación."
-    },
-    {
-      "id": "443886d9-3c28-483c-b19f-bc45d2be4740",
-      "sku": "00000000",
-      "name": "Diagnóstico",
-      "disposition": "technical_specs_not_applicable",
-      "reason": "El nombre identifica trabajo, diagnóstico, costo/gasto o nota de crédito, no una pieza. No requiere ficha de componente. La corrección de flags comerciales/contables es distinta; no se altera ni se cuenta como asignación."
-    },
-    {
-      "id": "8e0be162-e824-4bc4-be0f-9be8f19ec7db",
-      "sku": "NNV47",
-      "name": "Dr. Bike",
-      "disposition": "identity_needed",
-      "reason": "Nombre insuficiente para identificar un objeto técnico; sin modelo, descripción ni imagen. No forzar familia desde una marca, proveedor o etiqueta genérica."
-    },
-    {
-      "id": "122bc792-47f0-47a7-a007-05c8d53e6802",
-      "sku": "NNV60",
-      "name": "Gasto por transporte",
-      "disposition": "technical_specs_not_applicable",
-      "reason": "El nombre identifica trabajo, diagnóstico, costo/gasto o nota de crédito, no una pieza. No requiere ficha de componente. La corrección de flags comerciales/contables es distinta; no se altera ni se cuenta como asignación."
-    },
-    {
-      "id": "fe2c9570-bc9f-4ac1-9115-2a604a508b45",
-      "sku": "NNV68",
-      "name": "Instalación rayo trasero disco + centrado zona afectada",
-      "disposition": "technical_specs_not_applicable",
-      "reason": "El nombre identifica trabajo, diagnóstico, costo/gasto o nota de crédito, no una pieza. No requiere ficha de componente. La corrección de flags comerciales/contables es distinta; no se altera ni se cuenta como asignación."
-    },
-    {
-      "id": "20f982dc-02f0-4612-8754-fed9934eabe4",
-      "sku": "NNV102",
-      "name": "MKR",
-      "disposition": "identity_needed",
-      "reason": "Nombre insuficiente para identificar un objeto técnico; sin modelo, descripción ni imagen. No forzar familia desde una marca, proveedor o etiqueta genérica."
-    },
-    {
-      "id": "be5b3f76-aaa7-4694-badb-89317bc4325f",
-      "sku": "NNV111",
-      "name": "Nota de Crédito Por Cámara Chaoyang 700x25/32C F/V 60MM",
-      "disposition": "technical_specs_not_applicable",
-      "reason": "El nombre identifica trabajo, diagnóstico, costo/gasto o nota de crédito, no una pieza. No requiere ficha de componente. La corrección de flags comerciales/contables es distinta; no se altera ni se cuenta como asignación."
-    },
-    {
-      "id": "d5803c84-0678-44c7-b204-dd2f9be5f7e4",
-      "sku": "NNV112",
-      "name": "Pack",
-      "disposition": "identity_needed",
-      "reason": "Nombre insuficiente para identificar un objeto técnico; sin modelo, descripción ni imagen. No forzar familia desde una marca, proveedor o etiqueta genérica."
-    },
-    {
-      "id": "88d6bbd6-2bb9-4375-a626-c4287869c2cf",
-      "sku": "NNV113",
-      "name": "Parche Vulcanizado",
-      "disposition": "identity_needed",
-      "reason": "Nombre insuficiente para identificar un objeto técnico; registro sin modelo, descripción ni imagen. Parche Vulcanizado tampoco distingue repuesto de servicio."
-    },
-    {
-      "id": "e21dd68b-a0b5-4b1e-8d3c-c4ceb235fc47",
-      "sku": "NNV125",
-      "name": "Piñon 1v Bettabikes",
-      "disposition": "identity_or_application_needed",
-      "reason": "Piñón 1v: falta distinguir rueda libre y piñón fijo; la cantidad de velocidades no decide esa interfaz.",
-      "claude_note": "Rueda libre o piñón fijo sin evidencia (sin foto ni modelo; producto inactivo). No se asigna por nombre."
-    },
-    {
-      "id": "db0e972a-bbb9-4c0c-b9fa-f462f7224b25",
-      "sku": "NNV126",
-      "name": "Piñon 1v Monsoon Bettabikes",
-      "disposition": "identity_or_application_needed",
-      "reason": "Piñón 1v Monsoon: misma ambigüedad rueda libre/fijo; marca/nombre comercial no decide.",
-      "claude_note": "Rueda libre o piñón fijo sin evidencia (sin foto ni modelo; producto inactivo). No se asigna por nombre."
-    },
-    {
-      "id": "63001381-18eb-4812-9346-c452bca6165b",
-      "sku": "NNV154",
-      "name": "Restauración de Freno Hidráulico",
-      "disposition": "technical_specs_not_applicable",
-      "reason": "El nombre identifica trabajo, diagnóstico, costo/gasto o nota de crédito, no una pieza. No requiere ficha de componente. La corrección de flags comerciales/contables es distinta; no se altera ni se cuenta como asignación."
-    }
-  ],
-  "counts": {
-    "assigned_2026_09_16": 4,
-    "still_unassigned": 22,
-    "by_disposition": {
-      "technical_specs_not_applicable": 10,
-      "schema_gap": 2,
-      "identity_needed": 8,
-      "identity_or_application_needed": 2
-    },
-    "technical_specs_not_applicable_excluded_from_denominator": 10
+  {
+   "product_id": "8ab9c7f1-bc66-4904-b943-b098ae615358",
+   "sku": "NNV49",
+   "family": "wheel_retention",
+   "template_id": "18bf5b75-1306-5851-8c19-9551a780698f",
+   "contract_version": 15,
+   "reason": "Eje delantero «bloqueo» Bettabikes (producto inactivo). «Bloqueo» designa el cierre de rueda delantera (aguja de cierre rápido o eje con tuerca), no el eje interno de la maza; ambas lecturas caen en wheel_retention. Asignación únicamente; clase exacta y medidas pendientes."
+  },
+  {
+   "product_id": "9dace983-0f30-49c7-9a3f-7a1b8ea62133",
+   "sku": "2854",
+   "family": "brake_fluid",
+   "template_id": "2a8d4d76-2120-51e6-a2f7-42be2563c7d7",
+   "contract_version": 9,
+   "reason": "Aceite mineral de la marca Chepark. El fabricante (chepark.com, referencia BIC-860) y sus distribuidores lo publican como aceite mineral de freno para sistemas hidráulicos Shimano/Magura, y la marca no comercializa otro aceite mineral. Asignación de clase brake_fluid únicamente; no se afirma tipo, volumen, aprobación ni compatibilidad de modelo."
+  },
+  {
+   "product_id": "a23b30c2-de31-4520-bbcb-3ac072990333",
+   "sku": "AE0281",
+   "family": "hub_small_part",
+   "template_id": "7da02100-d1ba-568b-bd73-46ef593b5910",
+   "contract_version": 11,
+   "reason": "Adaptador de eje M10 a M14: el nombre identifica un adaptador de eje de maza y la ficha hub_small_part incluye la clase «Adaptador de eje». Asignación únicamente; rosca, largo y aplicación (maza, peg u otra) quedan por documentar con fuente."
   }
+ ],
+ "proposal_sha256": "fb3f32cf81a698dc919d3befe8c4fb904f7dadcee34615dfe4f4998df42d78aa",
+ "application_sha256": "7eb50771396a3fd4ddca2a21fac09dec516719c4fd6eab0e8c820d1d982829c3",
+ "readback": {
+  "verified_at": "2026-09-16T02:05:28.163095+00:00",
+  "assignments_applied_and_read_back": 4,
+  "technical_facts_filled": 0
+ },
+ "still_unassigned": [
+  {
+   "id": "f8089a2e-da2a-430c-8949-137fdd1930a7",
+   "sku": "M010",
+   "name": "Cámara nueva + servicio de cambio",
+   "disposition": "technical_specs_not_applicable",
+   "reason": "La presentación combina una cámara no identificada y trabajo. Separar contenido técnico de la operación; no elegir medidas o cámara concreta por el título.",
+   "claude_note": "Presentación mixta cámara + servicio; la parte física no está identificada. Fuera del denominador técnico; sin cambio de flags comerciales."
+  },
+  {
+   "id": "dec02e89-94f5-4fb4-bcec-b59231176120",
+   "sku": "NNV43",
+   "name": "Descontaminación Disco de Freno",
+   "disposition": "technical_specs_not_applicable",
+   "reason": "El nombre identifica trabajo, diagnóstico, costo/gasto o nota de crédito, no una pieza. No requiere ficha de componente. La corrección de flags comerciales/contables es distinta; no se altera ni se cuenta como asignación."
+  },
+  {
+   "id": "c1885a05-91bd-48ed-9afe-054f45c97360",
+   "sku": "NNV155",
+   "name": "Retiro de Óxido",
+   "disposition": "technical_specs_not_applicable",
+   "reason": "El nombre identifica trabajo, diagnóstico, costo/gasto o nota de crédito, no una pieza. No requiere ficha de componente. La corrección de flags comerciales/contables es distinta; no se altera ni se cuenta como asignación."
+  },
+  {
+   "id": "689f23ee-650f-4f9a-9919-5f02674bb7b0",
+   "sku": "ACC-TES-59147",
+   "name": "Test",
+   "disposition": "identity_needed",
+   "reason": "Nombre insuficiente para identificar un objeto técnico; sin modelo, descripción ni imagen. No forzar familia desde una marca, proveedor o etiqueta genérica."
+  },
+  {
+   "id": "cc9f7f88-0401-4eb2-bbd6-74b1b1b07336",
+   "sku": "NNV7",
+   "name": "ALIEXPRESS",
+   "disposition": "identity_needed",
+   "reason": "Nombre insuficiente para identificar un objeto técnico; sin modelo, descripción ni imagen. No forzar familia desde una marca, proveedor o etiqueta genérica."
+  },
+  {
+   "id": "a4373f06-b5b1-48e6-b501-64091f999fd3",
+   "sku": "NNV8",
+   "name": "Andes",
+   "disposition": "identity_needed",
+   "reason": "Nombre insuficiente para identificar un objeto técnico; sin modelo, descripción ni imagen. No forzar familia desde una marca, proveedor o etiqueta genérica."
+  },
+  {
+   "id": "54aa6f11-e04d-446c-aa33-7e6580dbe7e1",
+   "sku": "NNV15",
+   "name": "BETTABIKES",
+   "disposition": "identity_needed",
+   "reason": "Nombre insuficiente para identificar un objeto técnico; sin modelo, descripción ni imagen. No forzar familia desde una marca, proveedor o etiqueta genérica."
+  },
+  {
+   "id": "88154c74-0a20-43d9-9fd6-7361299aedac",
+   "sku": "NNV36",
+   "name": "Centrado de Rueda BettaBikes",
+   "disposition": "technical_specs_not_applicable",
+   "reason": "El nombre identifica trabajo, diagnóstico, costo/gasto o nota de crédito, no una pieza. No requiere ficha de componente. La corrección de flags comerciales/contables es distinta; no se altera ni se cuenta como asignación."
+  },
+  {
+   "id": "b679e9c0-b7ab-4028-b1b4-a1a0351c2103",
+   "sku": "NNV41",
+   "name": "Costo de bicicleta",
+   "disposition": "technical_specs_not_applicable",
+   "reason": "El nombre identifica trabajo, diagnóstico, costo/gasto o nota de crédito, no una pieza. No requiere ficha de componente. La corrección de flags comerciales/contables es distinta; no se altera ni se cuenta como asignación."
+  },
+  {
+   "id": "443886d9-3c28-483c-b19f-bc45d2be4740",
+   "sku": "00000000",
+   "name": "Diagnóstico",
+   "disposition": "technical_specs_not_applicable",
+   "reason": "El nombre identifica trabajo, diagnóstico, costo/gasto o nota de crédito, no una pieza. No requiere ficha de componente. La corrección de flags comerciales/contables es distinta; no se altera ni se cuenta como asignación."
+  },
+  {
+   "id": "8e0be162-e824-4bc4-be0f-9be8f19ec7db",
+   "sku": "NNV47",
+   "name": "Dr. Bike",
+   "disposition": "identity_needed",
+   "reason": "Nombre insuficiente para identificar un objeto técnico; sin modelo, descripción ni imagen. No forzar familia desde una marca, proveedor o etiqueta genérica."
+  },
+  {
+   "id": "122bc792-47f0-47a7-a007-05c8d53e6802",
+   "sku": "NNV60",
+   "name": "Gasto por transporte",
+   "disposition": "technical_specs_not_applicable",
+   "reason": "El nombre identifica trabajo, diagnóstico, costo/gasto o nota de crédito, no una pieza. No requiere ficha de componente. La corrección de flags comerciales/contables es distinta; no se altera ni se cuenta como asignación."
+  },
+  {
+   "id": "fe2c9570-bc9f-4ac1-9115-2a604a508b45",
+   "sku": "NNV68",
+   "name": "Instalación rayo trasero disco + centrado zona afectada",
+   "disposition": "technical_specs_not_applicable",
+   "reason": "El nombre identifica trabajo, diagnóstico, costo/gasto o nota de crédito, no una pieza. No requiere ficha de componente. La corrección de flags comerciales/contables es distinta; no se altera ni se cuenta como asignación."
+  },
+  {
+   "id": "20f982dc-02f0-4612-8754-fed9934eabe4",
+   "sku": "NNV102",
+   "name": "MKR",
+   "disposition": "identity_needed",
+   "reason": "Nombre insuficiente para identificar un objeto técnico; sin modelo, descripción ni imagen. No forzar familia desde una marca, proveedor o etiqueta genérica."
+  },
+  {
+   "id": "be5b3f76-aaa7-4694-badb-89317bc4325f",
+   "sku": "NNV111",
+   "name": "Nota de Crédito Por Cámara Chaoyang 700x25/32C F/V 60MM",
+   "disposition": "technical_specs_not_applicable",
+   "reason": "El nombre identifica trabajo, diagnóstico, costo/gasto o nota de crédito, no una pieza. No requiere ficha de componente. La corrección de flags comerciales/contables es distinta; no se altera ni se cuenta como asignación."
+  },
+  {
+   "id": "d5803c84-0678-44c7-b204-dd2f9be5f7e4",
+   "sku": "NNV112",
+   "name": "Pack",
+   "disposition": "identity_needed",
+   "reason": "Nombre insuficiente para identificar un objeto técnico; sin modelo, descripción ni imagen. No forzar familia desde una marca, proveedor o etiqueta genérica."
+  },
+  {
+   "id": "88d6bbd6-2bb9-4375-a626-c4287869c2cf",
+   "sku": "NNV113",
+   "name": "Parche Vulcanizado",
+   "disposition": "identity_needed",
+   "reason": "Nombre insuficiente para identificar un objeto técnico; registro sin modelo, descripción ni imagen. Parche Vulcanizado tampoco distingue repuesto de servicio."
+  },
+  {
+   "id": "e21dd68b-a0b5-4b1e-8d3c-c4ceb235fc47",
+   "sku": "NNV125",
+   "name": "Piñon 1v Bettabikes",
+   "disposition": "identity_or_application_needed",
+   "reason": "Piñón 1v: falta distinguir rueda libre y piñón fijo; la cantidad de velocidades no decide esa interfaz.",
+   "claude_note": "Rueda libre o piñón fijo sin evidencia (sin foto ni modelo; producto inactivo). No se asigna por nombre."
+  },
+  {
+   "id": "db0e972a-bbb9-4c0c-b9fa-f462f7224b25",
+   "sku": "NNV126",
+   "name": "Piñon 1v Monsoon Bettabikes",
+   "disposition": "identity_or_application_needed",
+   "reason": "Piñón 1v Monsoon: misma ambigüedad rueda libre/fijo; marca/nombre comercial no decide.",
+   "claude_note": "Rueda libre o piñón fijo sin evidencia (sin foto ni modelo; producto inactivo). No se asigna por nombre."
+  },
+  {
+   "id": "63001381-18eb-4812-9346-c452bca6165b",
+   "sku": "NNV154",
+   "name": "Restauración de Freno Hidráulico",
+   "disposition": "technical_specs_not_applicable",
+   "reason": "El nombre identifica trabajo, diagnóstico, costo/gasto o nota de crédito, no una pieza. No requiere ficha de componente. La corrección de flags comerciales/contables es distinta; no se altera ni se cuenta como asignación."
+  }
+ ],
+ "counts": {
+  "assigned_2026_09_16": 4,
+  "still_unassigned": 20,
+  "by_disposition": {
+   "technical_specs_not_applicable": 10,
+   "schema_gap": 2,
+   "identity_needed": 8,
+   "identity_or_application_needed": 2
+  },
+  "technical_specs_not_applicable_excluded_from_denominator": 10
+ },
+ "shim_assignments_applied_2026_09_16": {
+  "verified_at": "2026-09-16T07:36:49Z",
+  "products": [
+   {
+    "sku": "AE0266",
+    "product_id": "b052062b-6da4-41a8-abcd-f5c37fd32aca"
+   },
+   {
+    "sku": "AE0274",
+    "product_id": "5e8bbaed-194d-4c0f-b836-86fa1ec89da7"
+   }
+  ],
+  "template_id": "bdd99089-75c5-5370-919c-38a6cdefd892",
+  "contract_version": 11,
+  "client_release_commit": "dc1e6093",
+  "proposal_sha256": "b3e68405be0e863f5401c90dafd8a9e89328011423bc57333ced5a706657e22f",
+  "application_sha256": "392728a0386988d1d7ec35c8d5aef909c5b3a324ecdec02b6681ca098bb6959b",
+  "record": "seatpost-shim-assignment-2026-09-16.md",
+  "moved_from_still_unassigned": [
+   {
+    "id": "b052062b-6da4-41a8-abcd-f5c37fd32aca",
+    "sku": "AE0266",
+    "name": "Adaptador de Tija de Asiento 28.6-27.2mm MUQZI",
+    "disposition": "schema_gap",
+    "reason": "Casquillo de reducción de tija: necesita diámetro de tija aceptado, alojamiento de cuadro objetivo y longitud de apoyo/limitaciones con fuente. spacer_components no equivale a un adaptador radial.",
+    "claude_note": "Plantilla seatpost_shim publicada (20260915203000); la asignación espera la distribución del cliente, que rechaza pares de tres elementos."
+   },
+   {
+    "id": "5e8bbaed-194d-4c0f-b836-86fa1ec89da7",
+    "sku": "AE0274",
+    "name": "Adaptador de Tija de Asiento 30-27.2mm MUQZI",
+    "disposition": "schema_gap",
+    "reason": "Casquillo de reducción de tija; mismo contrato de dos interfaces que AE0266. La cifra 30 equivale numéricamente a 30.0, pero no autoriza sustituirla por 30.9 ni verificar la medida sin su fuente.",
+    "claude_note": "Plantilla seatpost_shim publicada (20260915203000); la asignación espera la distribución del cliente, que rechaza pares de tres elementos."
+   }
+  ]
+ }
 }

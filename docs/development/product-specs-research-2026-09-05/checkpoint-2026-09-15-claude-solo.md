@@ -147,3 +147,6 @@ ya los contiene). Worktrees inventariados: tres de Codex, todos detached.
 - Dos reglas nuevas quedaron escritas en los compiladores: un campo nuevo nacido `legacy` sólo
   se crea si Root lo retiró con casos; y una publicación que cambia coherencia sobre campos con
   hechos necesita diagnóstico inline y suspensión acotada de la guardia (piñonería).
+- El cliente publicado desde `dc1e6093` (macOS, Android y Windows, 2026-09-15 22:25Z) contiene
+  la extensión `8f3d8926`; con eso AE0266 y AE0274 se asignaron a `seatpost_shim` por la ruta
+  auditada. Cobertura viva: 1.594 con plantilla, 20 sin ella, 726 explícitas.

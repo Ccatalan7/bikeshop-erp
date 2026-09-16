@@ -337,25 +337,25 @@
   "review": "Root; no Claude review claimed",
   "record": "assignment-sanitation-checkpoint-2026-09-14.md"
  },
- "delivery_status_updated_at": "2026-09-16T07:40:00Z",
+ "delivery_status_updated_at": "2026-09-16T07:45:00Z",
  "assignment_repair_progress": {
   "initial_missing": 746,
-  "repaired": 724,
-  "remaining": 22,
-  "stage_percent": 97.05,
+  "repaired": 726,
+  "remaining": 20,
+  "stage_percent": 97.32,
   "scope": "Only repairs in the initial missing-template cohort; not overall completion or confirmed physical-product count.",
   "non_material_dispositions": 10,
-  "awaiting_client_distribution": 2,
+  "awaiting_client_distribution": 0,
   "identity_needed": 10
  },
  "assignment_coverage_live": {
-  "observed_at": "2026-09-16T02:05:28.163095+00:00",
+  "observed_at": "2026-09-16T07:45:00Z",
   "tenant": "vinabike",
   "all_products": 1673,
   "service_products": 59,
-  "nonservice_with_template": 1592,
-  "nonservice_without_template": 22,
-  "explicit_bindings": 724,
+  "nonservice_with_template": 1594,
+  "nonservice_without_template": 20,
+  "explicit_bindings": 726,
   "count_definition": "Tenant vinabike only. Database product_type/is_service flags; effective template = explicit binding or active category mapping; includes unresolved non-material records."
  },
  "assignment_original_parts_2026_09_15": {
@@ -1082,5 +1082,21 @@
    "mechanical_disc_brake"
   ],
   "blocker": "brake-member-ownership-adjudication-2026-09-15.md acceptance conditions (revision 223 pending)"
+ },
+ "assignment_seatpost_shim_2026_09_16": {
+  "verified_at": "2026-09-16T07:36:49Z",
+  "actor_id": "7bb76d88-5455-462e-a838-5f78af922914",
+  "project": "xzdvtzdqjeyqxnkqprtf",
+  "assignments_applied_and_read_back": 2,
+  "by_family": {
+   "seatpost_shim": 2
+  },
+  "client_release_commit": "dc1e6093",
+  "client_release_contains": "8f3d8926",
+  "technical_facts_filled": 0,
+  "all_non_assignment_data_preserved": true,
+  "proposal_sha256": "b3e68405be0e863f5401c90dafd8a9e89328011423bc57333ced5a706657e22f",
+  "application_sha256": "392728a0386988d1d7ec35c8d5aef909c5b3a324ecdec02b6681ca098bb6959b",
+  "record": "seatpost-shim-assignment-2026-09-16.md"
  }
 }
