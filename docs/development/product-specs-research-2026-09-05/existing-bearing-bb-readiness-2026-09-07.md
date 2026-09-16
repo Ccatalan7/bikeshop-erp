@@ -1,5 +1,7 @@
 # Rodamiento y motor: sucesor de cinco plantillas existentes (2026-09-07)
 
+**Publicado el 2026-09-16** como `20260916100000_bearing_bb_successors.sql` sobre 72 productos; ver [bearing-bb-successors-adjudication-2026-09-16.md](bearing-bb-successors-adjudication-2026-09-16.md).
+
 `bearing`, `bottom_bracket`, `bottom_bracket_axle`, `bottom_bracket_bearing` y
 `bottom_bracket_cup`. Candidato para adjudicación. Sólo metadatos; sin migración,
 sin base productiva, sin git, sin runtime, sin hechos ni asignaciones.
