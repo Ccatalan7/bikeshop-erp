@@ -1,5 +1,7 @@
 # Patillas, roldanas y guías: candidato sin aplicar — 2026-09-08
 
+**Publicado el 2026-09-16** como `20260916090000_drivetrain_service_parts_successors.sql` sobre 38 productos, con adopción medida; ver [service-parts-successors-adjudication-2026-09-16.md](service-parts-successors-adjudication-2026-09-16.md).
+
 **Propuesta histórica de Claude.** El candidato vigente incorpora correcciones
 de alcance del peso, identidad y declaraciones por ocurrencia en la
 [adjudicación de Root](existing-drivetrain-service-parts-root-decisions-2026-09-08.md).

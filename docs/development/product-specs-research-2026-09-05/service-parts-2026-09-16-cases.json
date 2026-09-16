@@ -1,0 +1,1796 @@
+{
+  "schema_version": 1,
+  "catalogue_sha256": "a5a8832255288f39fe63a3334f6c4fa6c628a30453441b44b086f40b5a16023c",
+  "cases": [
+    {
+      "id": "hg_a_hanger_names_both_of_its_ends",
+      "template": "derailleur_hanger",
+      "values": {
+        "spec_evidence_source": "https://example.invalid/synthetic",
+        "hanger_frame_interface": "Puntera con anclaje propio del cuadro",
+        "hanger_derailleur_interface": "Rosca M10 x 1"
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "hg_a_udh_frame_interface_still_needs_its_derailleur_end",
+      "template": "derailleur_hanger",
+      "values": {
+        "spec_evidence_source": "https://example.invalid/synthetic",
+        "hanger_frame_interface": "Interfaz UDH del cuadro",
+        "hanger_derailleur_interface": "Rosca M10 x 1"
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [
+        "https://www.sram.com/en/learn/understanding-udh-and-full-mount"
+      ]
+    },
+    {
+      "id": "hg_a_hanger_without_its_ends_is_pending",
+      "template": "derailleur_hanger",
+      "values": {
+        "spec_evidence_source": "https://example.invalid/synthetic"
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "expected_issue_subset": [
+        {
+          "code": "required_missing",
+          "field": "hanger_frame_interface",
+          "blocking": false
+        },
+        {
+          "code": "required_missing",
+          "field": "hanger_derailleur_interface",
+          "blocking": false
+        }
+      ],
+      "expected_sql_issue_subset": [
+        {
+          "code": "required_missing",
+          "field": "hanger_frame_interface",
+          "blocking": false
+        },
+        {
+          "code": "required_missing",
+          "field": "hanger_derailleur_interface",
+          "blocking": false
+        }
+      ]
+    },
+    {
+      "id": "hg_the_interchange_code_is_not_required",
+      "template": "derailleur_hanger",
+      "values": {
+        "spec_evidence_source": "https://example.invalid/synthetic",
+        "hanger_frame_interface": "Puntera con anclaje propio del cuadro",
+        "hanger_derailleur_interface": "Rosca M10 x 1"
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [
+        "https://wheelsmfg.com/products/derailleur-hanger-25",
+        "https://wheelsmfg.com/products/derailleur-hanger-70"
+      ],
+      "forbidden_issue_fields": [
+        "hanger_model_code"
+      ]
+    },
+    {
+      "id": "hg_two_codes_share_a_bolt_without_sharing_identity",
+      "template": "derailleur_hanger",
+      "values": {
+        "spec_evidence_source": "https://example.invalid/synthetic",
+        "hanger_frame_interface": "Puntera con anclaje propio del cuadro",
+        "hanger_derailleur_interface": "Rosca M10 x 1",
+        "hanger_model_code": "DROPOUT-25",
+        "bolt_pattern": "Un perno M8"
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [
+        "https://wheelsmfg.com/products/derailleur-hanger-25",
+        "https://wheelsmfg.com/products/derailleur-hanger-70"
+      ]
+    },
+    {
+      "id": "hg_a_claim_by_frame_model_names_its_model",
+      "template": "derailleur_hanger",
+      "values": {
+        "spec_evidence_source": "https://example.invalid/synthetic",
+        "hanger_frame_interface": "Puntera con anclaje propio del cuadro",
+        "hanger_derailleur_interface": "Rosca M10 x 1",
+        "compatible_frames": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "claim_identity": "c1",
+                "scope_kind": "Modelo documentado",
+                "source_document": "Publicación del fabricante identificada",
+                "brand": "Marca sintética",
+                "model": "Modelo sintético",
+                "years": "2019-2021"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "hg_a_claim_by_interface_needs_no_frame_name",
+      "template": "derailleur_hanger",
+      "values": {
+        "spec_evidence_source": "https://example.invalid/synthetic",
+        "hanger_frame_interface": "Puntera con anclaje propio del cuadro",
+        "hanger_derailleur_interface": "Rosca M10 x 1",
+        "compatible_frames": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "claim_identity": "c1",
+                "scope_kind": "Interfaz o estándar documentado",
+                "source_document": "Publicación del fabricante identificada",
+                "declared_interface": "Interfaz UDH"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [
+        "https://www.sram.com/en/learn/understanding-udh-and-full-mount"
+      ]
+    },
+    {
+      "id": "hg_a_model_claim_cannot_hide_behind_an_interface",
+      "template": "derailleur_hanger",
+      "values": {
+        "spec_evidence_source": "https://example.invalid/synthetic",
+        "hanger_frame_interface": "Puntera con anclaje propio del cuadro",
+        "hanger_derailleur_interface": "Rosca M10 x 1",
+        "compatible_frames": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "claim_identity": "c1",
+                "scope_kind": "Modelo documentado",
+                "source_document": "Publicación del fabricante identificada",
+                "brand": "Marca",
+                "model": "Modelo",
+                "declared_interface": "Interfaz UDH"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [
+        {
+          "code": "row_field_applicability",
+          "field": "compatible_frames"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "hg_an_interface_claim_cannot_invent_a_frame",
+      "template": "derailleur_hanger",
+      "values": {
+        "spec_evidence_source": "https://example.invalid/synthetic",
+        "hanger_frame_interface": "Puntera con anclaje propio del cuadro",
+        "hanger_derailleur_interface": "Rosca M10 x 1",
+        "compatible_frames": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "claim_identity": "c1",
+                "scope_kind": "Interfaz o estándar documentado",
+                "source_document": "Publicación del fabricante identificada",
+                "declared_interface": "Interfaz UDH",
+                "brand": "Marca inventada"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [
+        {
+          "code": "row_field_applicability",
+          "field": "compatible_frames"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "hg_the_same_claim_twice_blocks",
+      "template": "derailleur_hanger",
+      "values": {
+        "spec_evidence_source": "https://example.invalid/synthetic",
+        "hanger_frame_interface": "Puntera con anclaje propio del cuadro",
+        "hanger_derailleur_interface": "Rosca M10 x 1",
+        "compatible_frames": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "claim_identity": "c1",
+                "scope_kind": "Interfaz o estándar documentado",
+                "source_document": "Publicación del fabricante identificada",
+                "declared_interface": "UDH"
+              },
+              "sources": []
+            },
+            {
+              "id": "r2",
+              "values": {
+                "claim_identity": "c1",
+                "scope_kind": "Interfaz o estándar documentado",
+                "source_document": "Publicación del fabricante identificada",
+                "declared_interface": "UDH"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [
+        {
+          "code": "row_shape",
+          "field": "compatible_frames"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "hg_a_claim_without_its_document_is_pending",
+      "template": "derailleur_hanger",
+      "values": {
+        "spec_evidence_source": "https://example.invalid/synthetic",
+        "hanger_frame_interface": "Puntera con anclaje propio del cuadro",
+        "hanger_derailleur_interface": "Rosca M10 x 1",
+        "compatible_frames": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "claim_identity": "c1",
+                "scope_kind": "Interfaz o estándar documentado",
+                "declared_interface": "UDH"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "expected_issue_subset": [
+        {
+          "code": "row_incomplete",
+          "field": "compatible_frames",
+          "blocking": false
+        }
+      ],
+      "expected_sql_issue_subset": [
+        {
+          "code": "row_incomplete",
+          "field": "compatible_frames",
+          "blocking": false
+        }
+      ]
+    },
+    {
+      "id": "hg_a_missing_year_is_left_missing",
+      "template": "derailleur_hanger",
+      "values": {
+        "spec_evidence_source": "https://example.invalid/synthetic",
+        "hanger_frame_interface": "Puntera con anclaje propio del cuadro",
+        "hanger_derailleur_interface": "Rosca M10 x 1",
+        "compatible_frames": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "claim_identity": "c1",
+                "scope_kind": "Modelo documentado",
+                "source_document": "Publicación del fabricante identificada",
+                "brand": "Marca",
+                "model": "Modelo"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [
+        "https://wheelsmfg.com/products/derailleur-hanger-25"
+      ]
+    },
+    {
+      "id": "hg_legacy_interface_and_mount_are_preserved",
+      "template": "derailleur_hanger",
+      "values": {
+        "spec_evidence_source": "https://example.invalid/synthetic",
+        "hanger_frame_interface": "Puntera con anclaje propio del cuadro",
+        "hanger_derailleur_interface": "Rosca M10 x 1",
+        "hanger_interface": "UDH",
+        "rear_derailleur_mount_type": "Direct mount",
+        "compatible_frame_hint": "Lectura histórica"
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "pu_a_single_pulley_declares_its_teeth",
+      "template": "derailleur_pulley",
+      "values": {
+        "pulley_package_kind": "Roldana individual",
+        "spec_evidence_source": "https://example.invalid/synthetic",
+        "pulley_teeth": "11"
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "pu_a_single_pulley_keeps_its_own_dimensions",
+      "template": "derailleur_pulley",
+      "values": {
+        "pulley_package_kind": "Roldana individual",
+        "spec_evidence_source": "https://example.invalid/synthetic",
+        "pulley_teeth": "11",
+        "pulley_outer_diameter_mm": "32.4",
+        "pulley_width_mm": "6.5",
+        "pulley_bore_diameter_mm": "5",
+        "pulley_declared_speeds": [
+          "11"
+        ],
+        "pulley_tooth_profile": "Narrow-wide"
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "pu_a_bushing_has_no_element_material",
+      "template": "derailleur_pulley",
+      "values": {
+        "pulley_package_kind": "Roldana individual",
+        "spec_evidence_source": "https://example.invalid/synthetic",
+        "pulley_teeth": "11",
+        "pulley_bearing_construction": "Buje",
+        "pulley_bearing_element_material": "Cerámico"
+      },
+      "expected_blocking": [
+        {
+          "code": "field_applicability",
+          "field": "pulley_bearing_element_material"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "pu_a_ceramic_element_needs_a_rolling_construction",
+      "template": "derailleur_pulley",
+      "values": {
+        "pulley_package_kind": "Roldana individual",
+        "spec_evidence_source": "https://example.invalid/synthetic",
+        "pulley_teeth": "11",
+        "pulley_bearing_construction": "Rodamiento de bolas",
+        "pulley_bearing_element_material": "Cerámico"
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "pu_a_pair_cannot_carry_one_scalar_teeth",
+      "template": "derailleur_pulley",
+      "values": {
+        "pulley_package_kind": "Par de roldanas en el mismo envase",
+        "spec_evidence_source": "https://example.invalid/synthetic",
+        "pulley_unit_count": "2",
+        "pulley_teeth": "11"
+      },
+      "expected_blocking": [
+        {
+          "code": "field_applicability",
+          "field": "pulley_teeth"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "pu_a_pair_cannot_carry_one_scalar_profile",
+      "template": "derailleur_pulley",
+      "values": {
+        "pulley_package_kind": "Par de roldanas en el mismo envase",
+        "spec_evidence_source": "https://example.invalid/synthetic",
+        "pulley_unit_count": "2",
+        "pulley_tooth_profile": "Narrow-wide"
+      },
+      "expected_blocking": [
+        {
+          "code": "field_applicability",
+          "field": "pulley_tooth_profile"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "pu_equal_teeth_do_not_resolve_identity_or_position",
+      "template": "derailleur_pulley",
+      "values": {
+        "pulley_package_kind": "Par de roldanas en el mismo envase",
+        "spec_evidence_source": "https://example.invalid/synthetic",
+        "pulley_unit_count": "2",
+        "pulley_units": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "unit_identity": "Roldana A",
+                "teeth": "11",
+                "declared_position": "La fuente no declara la posición",
+                "source_document": "Envase identificado"
+              },
+              "sources": []
+            },
+            {
+              "id": "r2",
+              "values": {
+                "unit_identity": "Roldana B",
+                "teeth": "11",
+                "declared_position": "La fuente no declara la posición",
+                "source_document": "Envase identificado"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [
+        "https://www.parktool.com/en-us/blog/repair-help/how-a-rear-derailleur-works"
+      ]
+    },
+    {
+      "id": "pu_a_declared_pair_of_positions_is_kept_as_declared",
+      "template": "derailleur_pulley",
+      "values": {
+        "pulley_package_kind": "Par de roldanas en el mismo envase",
+        "spec_evidence_source": "https://example.invalid/synthetic",
+        "pulley_unit_count": "2",
+        "pulley_units": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "unit_identity": "Superior",
+                "teeth": "11",
+                "declared_position": "Guía (superior)",
+                "source_document": "Envase identificado"
+              },
+              "sources": []
+            },
+            {
+              "id": "r2",
+              "values": {
+                "unit_identity": "Inferior",
+                "teeth": "11",
+                "declared_position": "Tensión (inferior)",
+                "source_document": "Envase identificado"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [
+        "https://www.parktool.com/en-us/blog/repair-help/how-a-rear-derailleur-works"
+      ]
+    },
+    {
+      "id": "pu_a_pair_with_one_documented_unit_stays_pending",
+      "template": "derailleur_pulley",
+      "values": {
+        "pulley_package_kind": "Par de roldanas en el mismo envase",
+        "spec_evidence_source": "https://example.invalid/synthetic",
+        "pulley_unit_count": "2",
+        "pulley_units": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "unit_identity": "Roldana A",
+                "teeth": "11",
+                "declared_position": "La fuente no declara la posición",
+                "source_document": "Envase identificado"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "expected_issue_subset": [
+        {
+          "code": "row_cardinality_pending",
+          "field": "pulley_units",
+          "blocking": false
+        }
+      ],
+      "expected_sql_issue_subset": [
+        {
+          "code": "row_cardinality_pending",
+          "field": "pulley_units",
+          "blocking": false
+        }
+      ]
+    },
+    {
+      "id": "pu_the_same_unit_twice_blocks",
+      "template": "derailleur_pulley",
+      "values": {
+        "pulley_package_kind": "Par de roldanas en el mismo envase",
+        "spec_evidence_source": "https://example.invalid/synthetic",
+        "pulley_unit_count": "2",
+        "pulley_units": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "unit_identity": "Roldana A",
+                "teeth": "11",
+                "declared_position": "La fuente no declara la posición",
+                "source_document": "Envase identificado"
+              },
+              "sources": []
+            },
+            {
+              "id": "r2",
+              "values": {
+                "unit_identity": "Roldana A",
+                "teeth": "13",
+                "declared_position": "La fuente no declara la posición",
+                "source_document": "Envase identificado"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [
+        {
+          "code": "row_shape",
+          "field": "pulley_units"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "pu_a_bushing_row_has_no_element_material",
+      "template": "derailleur_pulley",
+      "values": {
+        "pulley_package_kind": "Par de roldanas en el mismo envase",
+        "spec_evidence_source": "https://example.invalid/synthetic",
+        "pulley_unit_count": "2",
+        "pulley_units": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "unit_identity": "Roldana A",
+                "teeth": "11",
+                "declared_position": "La fuente no declara la posición",
+                "source_document": "Envase identificado",
+                "bearing_construction": "Buje",
+                "bearing_element_material": "Cerámico"
+              },
+              "sources": []
+            },
+            {
+              "id": "r2",
+              "values": {
+                "unit_identity": "Roldana B",
+                "teeth": "11",
+                "declared_position": "La fuente no declara la posición",
+                "source_document": "Envase identificado"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [
+        {
+          "code": "row_field_applicability",
+          "field": "pulley_units"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "pu_a_unit_without_its_document_is_pending",
+      "template": "derailleur_pulley",
+      "values": {
+        "pulley_package_kind": "Par de roldanas en el mismo envase",
+        "spec_evidence_source": "https://example.invalid/synthetic",
+        "pulley_unit_count": "2",
+        "pulley_units": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "unit_identity": "Roldana A",
+                "teeth": "11"
+              },
+              "sources": []
+            },
+            {
+              "id": "r2",
+              "values": {
+                "unit_identity": "Roldana B",
+                "teeth": "11",
+                "source_document": "Envase"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "expected_issue_subset": [
+        {
+          "code": "row_incomplete",
+          "field": "pulley_units",
+          "blocking": false
+        }
+      ],
+      "expected_sql_issue_subset": [
+        {
+          "code": "row_incomplete",
+          "field": "pulley_units",
+          "blocking": false
+        }
+      ]
+    },
+    {
+      "id": "pu_a_claim_by_derailleur_model",
+      "template": "derailleur_pulley",
+      "values": {
+        "pulley_package_kind": "Roldana individual",
+        "spec_evidence_source": "https://example.invalid/synthetic",
+        "pulley_teeth": "11",
+        "compatible_derailleur_models": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "claim_identity": "c1",
+                "scope_kind": "Modelo documentado",
+                "source_document": "Publicación del fabricante identificada",
+                "brand": "Marca sintética",
+                "model": "Modelo sintético"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "pu_a_claim_by_declared_interface",
+      "template": "derailleur_pulley",
+      "values": {
+        "pulley_package_kind": "Roldana individual",
+        "spec_evidence_source": "https://example.invalid/synthetic",
+        "pulley_teeth": "11",
+        "compatible_derailleur_models": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "claim_identity": "c1",
+                "scope_kind": "Interfaz o estándar documentado",
+                "source_document": "Publicación del fabricante identificada",
+                "declared_interface": "Jaula sintética de 11v"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "pu_the_cage_length_declaration_is_preserved",
+      "template": "derailleur_pulley",
+      "values": {
+        "pulley_package_kind": "Roldana individual",
+        "spec_evidence_source": "https://example.invalid/synthetic",
+        "pulley_teeth": "11",
+        "derailleur_cage_length": "GS / media"
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "cg_a_guide_documents_two_mount_standards",
+      "template": "chain_guide",
+      "values": {
+        "spec_evidence_source": "https://example.invalid/synthetic",
+        "chain_guide_mount_options": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "option_identity": "ISCG-03",
+                "mount_standard": "ISCG-03",
+                "source_document": "Envase identificado"
+              },
+              "sources": []
+            },
+            {
+              "id": "r2",
+              "values": {
+                "option_identity": "ISCG-05",
+                "mount_standard": "ISCG-05",
+                "source_document": "Envase identificado"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "cg_a_guide_without_its_mounts_is_pending",
+      "template": "chain_guide",
+      "values": {
+        "spec_evidence_source": "https://example.invalid/synthetic"
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "expected_issue_subset": [
+        {
+          "code": "required_missing",
+          "field": "chain_guide_mount_options",
+          "blocking": false
+        }
+      ],
+      "expected_sql_issue_subset": [
+        {
+          "code": "required_missing",
+          "field": "chain_guide_mount_options",
+          "blocking": false
+        }
+      ]
+    },
+    {
+      "id": "cg_the_same_mount_option_twice_blocks",
+      "template": "chain_guide",
+      "values": {
+        "spec_evidence_source": "https://example.invalid/synthetic",
+        "chain_guide_mount_options": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "option_identity": "ISCG-05",
+                "mount_standard": "ISCG-05",
+                "source_document": "Envase identificado"
+              },
+              "sources": []
+            },
+            {
+              "id": "r2",
+              "values": {
+                "option_identity": "ISCG-05",
+                "mount_standard": "ISCG-05",
+                "source_document": "Envase identificado"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [
+        {
+          "code": "row_shape",
+          "field": "chain_guide_mount_options"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "expected_sql_blocking": [
+        {
+          "code": "field_constraint",
+          "field": "chain_guide_mount_options"
+        }
+      ]
+    },
+    {
+      "id": "cg_included_plates_keep_their_own_ranges",
+      "template": "chain_guide",
+      "values": {
+        "spec_evidence_source": "https://example.invalid/synthetic",
+        "chain_guide_mount_options": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "option_identity": "ISCG-05",
+                "mount_standard": "ISCG-05",
+                "source_document": "Envase identificado"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "chainring_teeth_min": "28",
+        "chainring_teeth_max": "36",
+        "chain_guide_included_parts": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "part_identity": "Placa 28-30T",
+                "part_role": "Placa protectora",
+                "chainring_teeth_min": "28",
+                "chainring_teeth_max": "30",
+                "installed_from_factory": false,
+                "source_document": "Instrucciones identificadas"
+              },
+              "sources": []
+            },
+            {
+              "id": "r2",
+              "values": {
+                "part_identity": "Placa 32-34T",
+                "part_role": "Placa protectora",
+                "chainring_teeth_min": "32",
+                "chainring_teeth_max": "34",
+                "installed_from_factory": true,
+                "source_document": "Instrucciones identificadas"
+              },
+              "sources": []
+            },
+            {
+              "id": "r3",
+              "values": {
+                "part_identity": "Placa 36T",
+                "part_role": "Placa protectora",
+                "chainring_teeth_min": "36",
+                "chainring_teeth_max": "36",
+                "installed_from_factory": false,
+                "source_document": "Instrucciones identificadas"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "chain_guide_assembled_weights": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "configuration_identity": "Conjunto con Placa 28-30T",
+                "mounted_part_reference": "r1",
+                "weight_g": "90",
+                "source_document": "OneUp Bash Guide ISCG05 V2, peso por configuración",
+                "source_url": "https://www.oneupcomponents.com/products/bashguide-v2-iscg05"
+              },
+              "sources": []
+            },
+            {
+              "id": "r2",
+              "values": {
+                "configuration_identity": "Conjunto con Placa 32-34T",
+                "mounted_part_reference": "r2",
+                "weight_g": "105",
+                "source_document": "OneUp Bash Guide ISCG05 V2, peso por configuración",
+                "source_url": "https://www.oneupcomponents.com/products/bashguide-v2-iscg05"
+              },
+              "sources": []
+            },
+            {
+              "id": "r3",
+              "values": {
+                "configuration_identity": "Conjunto con Placa 36T",
+                "mounted_part_reference": "r3",
+                "weight_g": "110",
+                "source_document": "OneUp Bash Guide ISCG05 V2, peso por configuración",
+                "source_url": "https://www.oneupcomponents.com/products/bashguide-v2-iscg05"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [
+        "https://www.oneupcomponents.com/products/bashguide-v2-iscg05",
+        "https://eu.oneupcomponents.com/blogs/bashguides-chainguides/bashguard-chainguide-install-instructions"
+      ]
+    },
+    {
+      "id": "cg_an_inverted_plate_range_blocks",
+      "template": "chain_guide",
+      "values": {
+        "spec_evidence_source": "https://example.invalid/synthetic",
+        "chain_guide_mount_options": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "option_identity": "ISCG-05",
+                "mount_standard": "ISCG-05",
+                "source_document": "Envase identificado"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "chain_guide_included_parts": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "part_identity": "Placa",
+                "part_role": "Placa protectora",
+                "chainring_teeth_min": "36",
+                "chainring_teeth_max": "28",
+                "installed_from_factory": true,
+                "source_document": "Instrucciones identificadas"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [
+        {
+          "code": "row_shape",
+          "field": "chain_guide_included_parts"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "cg_an_inverted_declared_capacity_blocks",
+      "template": "chain_guide",
+      "values": {
+        "spec_evidence_source": "https://example.invalid/synthetic",
+        "chain_guide_mount_options": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "option_identity": "ISCG-05",
+                "mount_standard": "ISCG-05",
+                "source_document": "Envase identificado"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "chainring_teeth_min": "36",
+        "chainring_teeth_max": "28"
+      },
+      "expected_blocking": [
+        {
+          "code": "range_order",
+          "field": "chainring_teeth_min"
+        },
+        {
+          "code": "range_order",
+          "field": "chainring_teeth_max"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "expected_sql_blocking": [
+        {
+          "code": "range_order",
+          "field": "chainring_teeth_max"
+        },
+        {
+          "code": "range_order",
+          "field": "chainring_teeth_min"
+        }
+      ]
+    },
+    {
+      "id": "cg_the_adjustment_travel_is_not_a_chainline",
+      "template": "chain_guide",
+      "values": {
+        "spec_evidence_source": "https://example.invalid/synthetic",
+        "chain_guide_mount_options": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "option_identity": "ISCG-05",
+                "mount_standard": "ISCG-05",
+                "source_document": "Envase identificado"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "chain_guide_chainline_adjustment_mm": "7.5"
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [
+        "https://www.oneupcomponents.com/products/bashguide-v2-iscg05"
+      ],
+      "forbidden_issue_fields": [
+        "chainline_mm"
+      ]
+    },
+    {
+      "id": "cg_a_chainline_without_its_datum_is_pending",
+      "template": "chain_guide",
+      "values": {
+        "spec_evidence_source": "https://example.invalid/synthetic",
+        "chain_guide_mount_options": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "option_identity": "ISCG-05",
+                "mount_standard": "ISCG-05",
+                "source_document": "Envase identificado"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "chainline_mm": "52"
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "expected_issue_subset": [
+        {
+          "code": "prerequisite",
+          "field": "chainline_mm",
+          "blocking": false
+        }
+      ],
+      "expected_sql_issue_subset": [
+        {
+          "code": "prerequisite_missing",
+          "field": "chainline_mm",
+          "blocking": false
+        }
+      ]
+    },
+    {
+      "id": "cg_a_chainline_with_its_datum_is_complete",
+      "template": "chain_guide",
+      "values": {
+        "spec_evidence_source": "https://example.invalid/synthetic",
+        "chain_guide_mount_options": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "option_identity": "ISCG-05",
+                "mount_standard": "ISCG-05",
+                "source_document": "Envase identificado"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "chainline_mm": "52",
+        "chain_guide_chainline_datum": "Eje del pedalier al centro del plato"
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "cg_an_exclusion_by_frame_class",
+      "template": "chain_guide",
+      "values": {
+        "spec_evidence_source": "https://example.invalid/synthetic",
+        "chain_guide_mount_options": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "option_identity": "ISCG-05",
+                "mount_standard": "ISCG-05",
+                "source_document": "Envase identificado"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "chain_guide_frame_exclusions": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "claim_identity": "e1",
+                "scope_kind": "Interfaz o estándar documentado",
+                "source_document": "Publicación del fabricante identificada",
+                "declared_interface": "Cuadros de pivote alto",
+                "conditions": "La fuente ofrece otra referencia para esa clase"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [
+        "https://www.oneupcomponents.com/products/bashguide-v2-iscg05"
+      ]
+    },
+    {
+      "id": "cg_an_exclusion_by_model_and_generation",
+      "template": "chain_guide",
+      "values": {
+        "spec_evidence_source": "https://example.invalid/synthetic",
+        "chain_guide_mount_options": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "option_identity": "ISCG-05",
+                "mount_standard": "ISCG-05",
+                "source_document": "Envase identificado"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "chain_guide_frame_exclusions": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "claim_identity": "e1",
+                "scope_kind": "Modelo documentado",
+                "source_document": "Publicación del fabricante identificada",
+                "brand": "Marca sintética",
+                "model": "Modelo sintético",
+                "generation": "Generación 5 y 6"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [
+        "https://www.oneupcomponents.com/products/bashguide-v2-iscg05"
+      ]
+    },
+    {
+      "id": "cg_legacy_mount_and_teeth_are_preserved",
+      "template": "chain_guide",
+      "values": {
+        "spec_evidence_source": "https://example.invalid/synthetic",
+        "chain_guide_mount_options": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "option_identity": "ISCG-05",
+                "mount_standard": "ISCG-05",
+                "source_document": "Envase identificado"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "chain_guide_mount_type": "ISCG 05",
+        "chainring_teeth": "32-38T"
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "pur_a_pair_does_not_share_scalar_speed_claims",
+      "template": "derailleur_pulley",
+      "values": {
+        "pulley_package_kind": "Par de roldanas en el mismo envase",
+        "pulley_unit_count": "2",
+        "pulley_units": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "unit_identity": "A",
+                "teeth": "11",
+                "source_document": "Synthetic"
+              },
+              "sources": []
+            },
+            {
+              "id": "r2",
+              "values": {
+                "unit_identity": "B",
+                "teeth": "11",
+                "source_document": "Synthetic"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "spec_evidence_source": "https://example.invalid/synthetic",
+        "pulley_declared_speeds": [
+          "11",
+          "12"
+        ]
+      },
+      "expected_blocking": [
+        {
+          "code": "field_applicability",
+          "field": "pulley_declared_speeds"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "pur_a_pair_does_not_share_scalar_cage_claims",
+      "template": "derailleur_pulley",
+      "values": {
+        "pulley_package_kind": "Par de roldanas en el mismo envase",
+        "pulley_unit_count": "2",
+        "pulley_units": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "unit_identity": "A",
+                "teeth": "11",
+                "source_document": "Synthetic"
+              },
+              "sources": []
+            },
+            {
+              "id": "r2",
+              "values": {
+                "unit_identity": "B",
+                "teeth": "11",
+                "source_document": "Synthetic"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "spec_evidence_source": "https://example.invalid/synthetic",
+        "derailleur_cage_length": "GS / media"
+      },
+      "expected_blocking": [
+        {
+          "code": "field_applicability",
+          "field": "derailleur_cage_length"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "pur_each_unit_owns_its_speed_declaration",
+      "template": "derailleur_pulley",
+      "values": {
+        "pulley_package_kind": "Par de roldanas en el mismo envase",
+        "pulley_unit_count": "2",
+        "pulley_units": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "unit_identity": "A",
+                "teeth": "11",
+                "source_document": "Synthetic"
+              },
+              "sources": []
+            },
+            {
+              "id": "r2",
+              "values": {
+                "unit_identity": "B",
+                "teeth": "11",
+                "source_document": "Synthetic"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "spec_evidence_source": "https://example.invalid/synthetic",
+        "pulley_unit_fitment_declarations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "claim_identity": "a",
+                "unit_reference": "r1",
+                "scope_kind": "Interfaz o estándar documentado",
+                "declared_interface": "Synthetic interface",
+                "declared_speed": "11",
+                "source_document": "Synthetic"
+              },
+              "sources": []
+            },
+            {
+              "id": "r2",
+              "values": {
+                "claim_identity": "b",
+                "unit_reference": "r2",
+                "scope_kind": "Interfaz o estándar documentado",
+                "declared_interface": "Synthetic interface",
+                "declared_speed": "12",
+                "source_document": "Synthetic"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "pur_a_unit_claim_cannot_reference_a_foreign_piece",
+      "template": "derailleur_pulley",
+      "values": {
+        "pulley_package_kind": "Par de roldanas en el mismo envase",
+        "pulley_unit_count": "2",
+        "pulley_units": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "unit_identity": "A",
+                "teeth": "11",
+                "source_document": "Synthetic"
+              },
+              "sources": []
+            },
+            {
+              "id": "r2",
+              "values": {
+                "unit_identity": "B",
+                "teeth": "11",
+                "source_document": "Synthetic"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "spec_evidence_source": "https://example.invalid/synthetic",
+        "pulley_unit_fitment_declarations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "claim_identity": "a",
+                "unit_reference": "outside",
+                "scope_kind": "Interfaz o estándar documentado",
+                "declared_interface": "Synthetic interface",
+                "declared_speed": "11",
+                "source_document": "Synthetic"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [
+        {
+          "code": "row_reference_unresolved",
+          "field": "pulley_unit_fitment_declarations"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "pur_a_single_unit_cannot_use_package_claims",
+      "template": "derailleur_pulley",
+      "values": {
+        "pulley_package_kind": "Roldana individual",
+        "pulley_unit_fitment_declarations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "claim_identity": "a",
+                "unit_reference": "r1",
+                "scope_kind": "Interfaz o estándar documentado",
+                "declared_interface": "Synthetic interface",
+                "declared_speed": "11",
+                "source_document": "Synthetic"
+              },
+              "sources": []
+            },
+            {
+              "id": "r2",
+              "values": {
+                "claim_identity": "b",
+                "unit_reference": "r2",
+                "scope_kind": "Interfaz o estándar documentado",
+                "declared_interface": "Synthetic interface",
+                "declared_speed": "12",
+                "source_document": "Synthetic"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [
+        {
+          "code": "field_applicability",
+          "field": "pulley_unit_fitment_declarations"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "pur_dimensions_need_their_document",
+      "template": "derailleur_pulley",
+      "values": {
+        "pulley_package_kind": "Roldana individual",
+        "pulley_outer_diameter_mm": "32.4"
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "expected_issue_subset": [
+        {
+          "code": "prerequisite",
+          "field": "pulley_outer_diameter_mm",
+          "blocking": false
+        }
+      ],
+      "expected_sql_issue_subset": [
+        {
+          "code": "prerequisite_missing",
+          "field": "pulley_outer_diameter_mm",
+          "blocking": false
+        }
+      ]
+    },
+    {
+      "id": "cgr_assembly_weight_keeps_its_component_reference",
+      "template": "chain_guide",
+      "values": {
+        "spec_evidence_source": "https://example.invalid/synthetic",
+        "chain_guide_included_parts": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "part_identity": "Plate A",
+                "part_role": "Placa protectora",
+                "installed_from_factory": true,
+                "source_document": "Synthetic"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "chain_guide_assembled_weights": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "configuration_identity": "Complete assembly A",
+                "mounted_part_reference": "r1",
+                "weight_g": "105",
+                "source_document": "Synthetic"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "cgr_an_assembly_cannot_name_a_piece_outside_this_package",
+      "template": "chain_guide",
+      "values": {
+        "spec_evidence_source": "https://example.invalid/synthetic",
+        "chain_guide_included_parts": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "part_identity": "Plate A",
+                "part_role": "Placa protectora",
+                "installed_from_factory": true,
+                "source_document": "Synthetic"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "chain_guide_assembled_weights": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "configuration_identity": "Complete assembly A",
+                "mounted_part_reference": "outside",
+                "weight_g": "105",
+                "source_document": "Synthetic"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [
+        {
+          "code": "row_reference_unresolved",
+          "field": "chain_guide_assembled_weights"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "cgr_a_loose_piece_can_have_its_own_documented_weight",
+      "template": "chain_guide",
+      "values": {
+        "spec_evidence_source": "https://example.invalid/synthetic",
+        "chain_guide_included_parts": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "part_identity": "Plate A",
+                "part_role": "Placa protectora",
+                "installed_from_factory": true,
+                "source_document": "Synthetic",
+                "weight_g": "21"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    }
+  ],
+  "pending_cases": [
+    {
+      "id": "hanger_extender_titles_await_assignment_review",
+      "required_result": "assignment_review_required",
+      "reason": "Three of the 23 titles bound to this family read as hanger extenders and two of them state a sprocket capacity. The derailleur_hanger_extender family already exists; the move needs the assignment queue and product evidence, not a title."
+    },
+    {
+      "id": "hanger_and_pulley_identity_codes_belong_to_the_product",
+      "required_result": "identity_pending",
+      "reason": "Titles carry manufacturer codes while model and manufacturer_sku are empty in all 33 records. Identity is resolved in the product, never in a second store here."
+    },
+    {
+      "id": "full_mount_derailleur_is_not_a_hanger_variant",
+      "required_result": "outside_this_family",
+      "reason": "SRAM documents that a Full Mount derailleur replaces the hanger and mounts to the frame; it is not an option of a hanger sheet."
+    },
+    {
+      "id": "pulley_rotation_and_profile_need_the_exact_manual",
+      "required_result": "unknown_without_model_scoped_manual",
+      "reason": "The Shimano service manual cited in the source notes could not be opened in this round; no orientation, torque or tooth profile is extrapolated to generic inventory."
+    },
+    {
+      "id": "chain_guide_line_wide_interchange_is_not_a_sku_fact",
+      "required_result": "unknown_without_model_scoped_evidence",
+      "reason": "The manufacturer states plates and top guides interchange across its own line; that is a cross-product claim and does not describe the contents of one package."
+    },
+    {
+      "id": "oem_relation_and_editor_validation_pending",
+      "required_result": "unknown_without_model_scoped_evidence",
+      "reason": "Directed OEM relations and the real editor round are not exercised by this packet."
+    }
+  ]
+}

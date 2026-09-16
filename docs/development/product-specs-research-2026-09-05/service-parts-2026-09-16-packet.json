@@ -1,0 +1,5402 @@
+{
+  "schema_version": 2,
+  "scope": "existing_global_metadata_forward_only",
+  "audited_tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+  "catalog_sha256": "a5a8832255288f39fe63a3334f6c4fa6c628a30453441b44b086f40b5a16023c",
+  "cases_sha256": "fc848f37c9ceb70b35144141fe3846e17a6d084b9e6a1fa39f6f4958c4d19fa6",
+  "preimage_sha256": "22248354c235a71ad79cb16424bc95a67fc34c5015dafd0b24bf9535c8c2bfdc",
+  "families": [
+    "derailleur_hanger",
+    "derailleur_pulley",
+    "chain_guide"
+  ],
+  "reused_definitions": [
+    {
+      "allowed_values": [
+        "ISCG 05",
+        "BB mount",
+        "Seat tube",
+        "Direct mount",
+        "Otro",
+        "Desconocido / sin confirmar"
+      ],
+      "created_at": "2026-04-26T17:27:29.520986+00:00",
+      "data_type": "single_select",
+      "description": "Tipo de montaje de guía de cadena.",
+      "group_name": "Guía cadena",
+      "id": "c5e7c370-7a77-474f-87d2-a30c861994c4",
+      "is_compatibility_relevant": true,
+      "is_customer_visible": true,
+      "is_filterable": true,
+      "is_mechanic_visible": true,
+      "is_required_by_default": false,
+      "key": "chain_guide_mount_type",
+      "label": "Montaje guía cadena",
+      "options": [
+        {
+          "code": "bb_mount",
+          "created_at": "2026-08-21T17:58:02.773721+00:00",
+          "id": "3cdade67-a810-4800-8ddc-511cea486959",
+          "is_active": true,
+          "label": "BB mount",
+          "sort_order": 2,
+          "spec_definition_id": "c5e7c370-7a77-474f-87d2-a30c861994c4",
+          "tenant_id": null,
+          "updated_at": "2026-08-21T17:58:02.773721+00:00"
+        },
+        {
+          "code": "desconocido_sin_confirmar",
+          "created_at": "2026-08-21T17:58:02.773721+00:00",
+          "id": "3f6d23a4-5e6d-4de5-92c6-6ca2f8bfc000",
+          "is_active": true,
+          "label": "Desconocido / sin confirmar",
+          "sort_order": 6,
+          "spec_definition_id": "c5e7c370-7a77-474f-87d2-a30c861994c4",
+          "tenant_id": null,
+          "updated_at": "2026-08-21T17:58:02.773721+00:00"
+        },
+        {
+          "code": "otro",
+          "created_at": "2026-08-21T17:58:02.773721+00:00",
+          "id": "43f8af0c-06c5-465e-b74c-a786d76fe800",
+          "is_active": true,
+          "label": "Otro",
+          "sort_order": 5,
+          "spec_definition_id": "c5e7c370-7a77-474f-87d2-a30c861994c4",
+          "tenant_id": null,
+          "updated_at": "2026-08-21T17:58:02.773721+00:00"
+        },
+        {
+          "code": "direct_mount",
+          "created_at": "2026-08-21T17:58:02.773721+00:00",
+          "id": "4e495f0d-11e8-4275-945d-2f44603aaaa6",
+          "is_active": true,
+          "label": "Direct mount",
+          "sort_order": 4,
+          "spec_definition_id": "c5e7c370-7a77-474f-87d2-a30c861994c4",
+          "tenant_id": null,
+          "updated_at": "2026-08-21T17:58:02.773721+00:00"
+        },
+        {
+          "code": "iscg_05",
+          "created_at": "2026-08-21T17:58:02.773721+00:00",
+          "id": "54c6ea1c-4fc0-4021-b3e1-58ed348e2a0f",
+          "is_active": true,
+          "label": "ISCG 05",
+          "sort_order": 1,
+          "spec_definition_id": "c5e7c370-7a77-474f-87d2-a30c861994c4",
+          "tenant_id": null,
+          "updated_at": "2026-08-21T17:58:02.773721+00:00"
+        },
+        {
+          "code": "seat_tube",
+          "created_at": "2026-08-21T17:58:02.773721+00:00",
+          "id": "c4c6e2de-e8a7-4f6d-9626-82cca5789870",
+          "is_active": true,
+          "label": "Seat tube",
+          "sort_order": 3,
+          "spec_definition_id": "c5e7c370-7a77-474f-87d2-a30c861994c4",
+          "tenant_id": null,
+          "updated_at": "2026-08-21T17:58:02.773721+00:00"
+        }
+      ],
+      "sort_order": 83,
+      "tenant_id": null,
+      "unit": null,
+      "updated_at": "2026-04-26T17:30:29.032543+00:00",
+      "validation_rules": {}
+    },
+    {
+      "allowed_values": [],
+      "created_at": "2026-04-26T17:27:29.520986+00:00",
+      "data_type": "number",
+      "description": "Línea de cadena nominal del volante/corona.",
+      "group_name": "Compatibilidad",
+      "id": "28854686-ee6c-440a-ac42-9aa1da65e718",
+      "is_compatibility_relevant": true,
+      "is_customer_visible": true,
+      "is_filterable": false,
+      "is_mechanic_visible": true,
+      "is_required_by_default": false,
+      "key": "chainline_mm",
+      "label": "Línea de cadena",
+      "options": [],
+      "sort_order": 53,
+      "tenant_id": null,
+      "unit": "mm",
+      "updated_at": "2026-04-26T17:30:29.032543+00:00",
+      "validation_rules": {
+        "positive": true
+      }
+    },
+    {
+      "allowed_values": [],
+      "created_at": "2026-04-26T17:27:29.520986+00:00",
+      "data_type": "text",
+      "description": "Dientes del plato o corona; puede ser un valor simple o una combinación como 42/34/24.",
+      "group_name": "Transmisión delantera",
+      "id": "7547914f-7bb0-4a45-b088-1a3b50c3aa22",
+      "is_compatibility_relevant": true,
+      "is_customer_visible": true,
+      "is_filterable": true,
+      "is_mechanic_visible": true,
+      "is_required_by_default": false,
+      "key": "chainring_teeth",
+      "label": "Dientes plato/corona",
+      "options": [],
+      "sort_order": 41,
+      "tenant_id": null,
+      "unit": "T",
+      "updated_at": "2026-04-26T17:30:29.032543+00:00",
+      "validation_rules": {}
+    },
+    {
+      "allowed_values": [],
+      "created_at": "2026-04-26T17:27:29.520986+00:00",
+      "data_type": "text",
+      "description": "Marca/modelo de cuadro compatible cuando aplica.",
+      "group_name": "Postiza",
+      "id": "bc2fb22d-bde5-4f05-b440-f1c4466db15d",
+      "is_compatibility_relevant": true,
+      "is_customer_visible": true,
+      "is_filterable": true,
+      "is_mechanic_visible": true,
+      "is_required_by_default": false,
+      "key": "compatible_frame_hint",
+      "label": "Compatibilidad cuadro",
+      "options": [],
+      "sort_order": 82,
+      "tenant_id": null,
+      "unit": null,
+      "updated_at": "2026-04-26T17:30:29.032543+00:00",
+      "validation_rules": {}
+    },
+    {
+      "allowed_values": [
+        "SS / corta",
+        "GS / media",
+        "SGS / larga",
+        "Otro",
+        "Desconocido / sin confirmar"
+      ],
+      "created_at": "2026-04-26T17:27:29.520986+00:00",
+      "data_type": "single_select",
+      "description": "Largo de caja/pata del cambio trasero.",
+      "group_name": "Cambios",
+      "id": "be66f64e-3ceb-4688-89e8-012549a8a2e4",
+      "is_compatibility_relevant": true,
+      "is_customer_visible": true,
+      "is_filterable": true,
+      "is_mechanic_visible": true,
+      "is_required_by_default": false,
+      "key": "derailleur_cage_length",
+      "label": "Largo caja cambio",
+      "options": [
+        {
+          "code": "desconocido_sin_confirmar",
+          "created_at": "2026-08-21T17:58:02.773721+00:00",
+          "id": "10454978-a008-4e6d-bff0-9942d2454277",
+          "is_active": true,
+          "label": "Desconocido / sin confirmar",
+          "sort_order": 5,
+          "spec_definition_id": "be66f64e-3ceb-4688-89e8-012549a8a2e4",
+          "tenant_id": null,
+          "updated_at": "2026-08-21T17:58:02.773721+00:00"
+        },
+        {
+          "code": "otro",
+          "created_at": "2026-08-21T17:58:02.773721+00:00",
+          "id": "a129f486-5f62-4385-9bdd-f01641594713",
+          "is_active": true,
+          "label": "Otro",
+          "sort_order": 4,
+          "spec_definition_id": "be66f64e-3ceb-4688-89e8-012549a8a2e4",
+          "tenant_id": null,
+          "updated_at": "2026-08-21T17:58:02.773721+00:00"
+        },
+        {
+          "code": "ss_corta",
+          "created_at": "2026-08-21T17:58:02.773721+00:00",
+          "id": "b7a56826-acfd-420a-91f5-fce29e9049bc",
+          "is_active": true,
+          "label": "SS / corta",
+          "sort_order": 1,
+          "spec_definition_id": "be66f64e-3ceb-4688-89e8-012549a8a2e4",
+          "tenant_id": null,
+          "updated_at": "2026-08-21T17:58:02.773721+00:00"
+        },
+        {
+          "code": "sgs_larga",
+          "created_at": "2026-08-21T17:58:02.773721+00:00",
+          "id": "e819ef94-77e9-46da-b213-87d3fd98c451",
+          "is_active": true,
+          "label": "SGS / larga",
+          "sort_order": 3,
+          "spec_definition_id": "be66f64e-3ceb-4688-89e8-012549a8a2e4",
+          "tenant_id": null,
+          "updated_at": "2026-08-21T17:58:02.773721+00:00"
+        },
+        {
+          "code": "gs_media",
+          "created_at": "2026-08-21T17:58:02.773721+00:00",
+          "id": "f1c94c17-f8a7-4b0b-9d7d-08d0ea639031",
+          "is_active": true,
+          "label": "GS / media",
+          "sort_order": 2,
+          "spec_definition_id": "be66f64e-3ceb-4688-89e8-012549a8a2e4",
+          "tenant_id": null,
+          "updated_at": "2026-08-21T17:58:02.773721+00:00"
+        }
+      ],
+      "sort_order": 74,
+      "tenant_id": null,
+      "unit": null,
+      "updated_at": "2026-04-26T17:30:29.032543+00:00",
+      "validation_rules": {}
+    },
+    {
+      "allowed_values": [
+        "Patilla estándar (M10x1)",
+        "UDH",
+        "Direct mount (Shimano)",
+        "Con uña / claw",
+        "Desconocido / sin confirmar",
+        "Direct mount"
+      ],
+      "created_at": "2026-09-08T02:04:45.424549+00:00",
+      "data_type": "single_select",
+      "description": null,
+      "group_name": null,
+      "id": "3b2eee3d-fdc9-5f71-ac21-af83ed242977",
+      "is_compatibility_relevant": false,
+      "is_customer_visible": false,
+      "is_filterable": false,
+      "is_mechanic_visible": true,
+      "is_required_by_default": false,
+      "key": "hanger_interface",
+      "label": "Interfaz de la patilla",
+      "options": [
+        {
+          "code": "catalog_034a7887d98ab7b48c1c32a8c28d607e",
+          "created_at": "2026-09-08T02:04:45.424549+00:00",
+          "id": "0954e815-be84-5ffc-9155-b912ad41b68b",
+          "is_active": true,
+          "label": "Direct mount",
+          "sort_order": 5,
+          "spec_definition_id": "3b2eee3d-fdc9-5f71-ac21-af83ed242977",
+          "tenant_id": null,
+          "updated_at": "2026-09-08T02:04:45.424549+00:00"
+        },
+        {
+          "code": "catalog_6b594a6b481a52a0d124f8857d0d7aea",
+          "created_at": "2026-09-08T02:04:45.424549+00:00",
+          "id": "478192a4-1a7b-51ba-8648-8fbb4eb4f6df",
+          "is_active": true,
+          "label": "Patilla estándar (M10x1)",
+          "sort_order": 0,
+          "spec_definition_id": "3b2eee3d-fdc9-5f71-ac21-af83ed242977",
+          "tenant_id": null,
+          "updated_at": "2026-09-08T02:04:45.424549+00:00"
+        },
+        {
+          "code": "catalog_dbd9458cc4af75093d92860913063bcc",
+          "created_at": "2026-09-08T02:04:45.424549+00:00",
+          "id": "55a647d5-20ca-54f5-8d2f-92f89cc8c035",
+          "is_active": true,
+          "label": "Direct mount (Shimano)",
+          "sort_order": 2,
+          "spec_definition_id": "3b2eee3d-fdc9-5f71-ac21-af83ed242977",
+          "tenant_id": null,
+          "updated_at": "2026-09-08T02:04:45.424549+00:00"
+        },
+        {
+          "code": "catalog_965417368cc86a1d088f5a9f606b0464",
+          "created_at": "2026-09-08T02:04:45.424549+00:00",
+          "id": "59b24ec3-dd63-558e-948d-44708045fe17",
+          "is_active": true,
+          "label": "Con uña / claw",
+          "sort_order": 3,
+          "spec_definition_id": "3b2eee3d-fdc9-5f71-ac21-af83ed242977",
+          "tenant_id": null,
+          "updated_at": "2026-09-08T02:04:45.424549+00:00"
+        },
+        {
+          "code": "catalog_de6e897b1c6ced32e6762f3ceaebffd6",
+          "created_at": "2026-09-08T02:04:45.424549+00:00",
+          "id": "77b4bb72-db70-5ea3-b000-8b366ddf3cf5",
+          "is_active": true,
+          "label": "Desconocido / sin confirmar",
+          "sort_order": 4,
+          "spec_definition_id": "3b2eee3d-fdc9-5f71-ac21-af83ed242977",
+          "tenant_id": null,
+          "updated_at": "2026-09-08T02:04:45.424549+00:00"
+        },
+        {
+          "code": "catalog_4fc3473fb35df5ef81e2280791548d18",
+          "created_at": "2026-09-08T02:04:45.424549+00:00",
+          "id": "8a93c9ec-9f6d-50ce-bbc7-04122fc056d3",
+          "is_active": true,
+          "label": "UDH",
+          "sort_order": 1,
+          "spec_definition_id": "3b2eee3d-fdc9-5f71-ac21-af83ed242977",
+          "tenant_id": null,
+          "updated_at": "2026-09-08T02:04:45.424549+00:00"
+        }
+      ],
+      "sort_order": 0,
+      "tenant_id": null,
+      "unit": null,
+      "updated_at": "2026-09-08T02:04:45.424549+00:00",
+      "validation_rules": {}
+    },
+    {
+      "allowed_values": [],
+      "created_at": "2026-04-26T17:27:29.520986+00:00",
+      "data_type": "text",
+      "description": "Código de modelo de la postiza o fusible de cambio.",
+      "group_name": "Postiza",
+      "id": "61dfef30-5231-49c8-aea8-234e9030fe14",
+      "is_compatibility_relevant": true,
+      "is_customer_visible": true,
+      "is_filterable": true,
+      "is_mechanic_visible": true,
+      "is_required_by_default": false,
+      "key": "hanger_model_code",
+      "label": "Código postiza / pata",
+      "options": [],
+      "sort_order": 81,
+      "tenant_id": null,
+      "unit": null,
+      "updated_at": "2026-04-26T17:30:29.032543+00:00",
+      "validation_rules": {}
+    },
+    {
+      "allowed_values": [],
+      "created_at": "2026-04-26T17:27:29.520986+00:00",
+      "data_type": "number",
+      "description": "Cantidad de dientes de la roldana/polea de cambio.",
+      "group_name": "Roldanas",
+      "id": "0138d251-2413-47d7-ad9a-390814a33763",
+      "is_compatibility_relevant": true,
+      "is_customer_visible": true,
+      "is_filterable": true,
+      "is_mechanic_visible": true,
+      "is_required_by_default": false,
+      "key": "pulley_teeth",
+      "label": "Dientes roldana",
+      "options": [],
+      "sort_order": 80,
+      "tenant_id": null,
+      "unit": "T",
+      "updated_at": "2026-04-26T17:30:29.032543+00:00",
+      "validation_rules": {
+        "integer": true,
+        "positive": true
+      }
+    },
+    {
+      "allowed_values": [
+        "Pata/postiza estándar",
+        "Direct mount",
+        "Con uña / claw",
+        "Extensor de pata",
+        "Otro",
+        "Desconocido / sin confirmar"
+      ],
+      "created_at": "2026-04-26T17:27:29.520986+00:00",
+      "data_type": "single_select",
+      "description": "Tipo de montaje del cambio trasero.",
+      "group_name": "Cambios",
+      "id": "4d2dc06e-0eec-41b4-923a-3fb69bb534a5",
+      "is_compatibility_relevant": true,
+      "is_customer_visible": true,
+      "is_filterable": true,
+      "is_mechanic_visible": true,
+      "is_required_by_default": false,
+      "key": "rear_derailleur_mount_type",
+      "label": "Montaje cambio trasero",
+      "options": [
+        {
+          "code": "con_una_claw",
+          "created_at": "2026-08-21T17:58:02.773721+00:00",
+          "id": "1c904f20-29ef-4768-9c27-2b2b8182bb63",
+          "is_active": true,
+          "label": "Con uña / claw",
+          "sort_order": 3,
+          "spec_definition_id": "4d2dc06e-0eec-41b4-923a-3fb69bb534a5",
+          "tenant_id": null,
+          "updated_at": "2026-08-21T17:58:02.773721+00:00"
+        },
+        {
+          "code": "pata_postiza_estandar",
+          "created_at": "2026-08-21T17:58:02.773721+00:00",
+          "id": "1fc5f0bf-1982-42cf-bb81-64521194da24",
+          "is_active": true,
+          "label": "Pata/postiza estándar",
+          "sort_order": 1,
+          "spec_definition_id": "4d2dc06e-0eec-41b4-923a-3fb69bb534a5",
+          "tenant_id": null,
+          "updated_at": "2026-08-21T17:58:02.773721+00:00"
+        },
+        {
+          "code": "direct_mount",
+          "created_at": "2026-08-21T17:58:02.773721+00:00",
+          "id": "4e7f3b31-c76d-407b-b2fa-96ffd666a9e0",
+          "is_active": true,
+          "label": "Direct mount",
+          "sort_order": 2,
+          "spec_definition_id": "4d2dc06e-0eec-41b4-923a-3fb69bb534a5",
+          "tenant_id": null,
+          "updated_at": "2026-08-21T17:58:02.773721+00:00"
+        },
+        {
+          "code": "desconocido_sin_confirmar",
+          "created_at": "2026-08-21T17:58:02.773721+00:00",
+          "id": "94ca6609-7b46-4b0b-8d2f-697860a04f0d",
+          "is_active": true,
+          "label": "Desconocido / sin confirmar",
+          "sort_order": 6,
+          "spec_definition_id": "4d2dc06e-0eec-41b4-923a-3fb69bb534a5",
+          "tenant_id": null,
+          "updated_at": "2026-08-21T17:58:02.773721+00:00"
+        },
+        {
+          "code": "extensor_de_pata",
+          "created_at": "2026-08-21T17:58:02.773721+00:00",
+          "id": "9e5c4609-9d14-42a0-ae05-38bdb18ad639",
+          "is_active": true,
+          "label": "Extensor de pata",
+          "sort_order": 4,
+          "spec_definition_id": "4d2dc06e-0eec-41b4-923a-3fb69bb534a5",
+          "tenant_id": null,
+          "updated_at": "2026-08-21T17:58:02.773721+00:00"
+        },
+        {
+          "code": "otro",
+          "created_at": "2026-08-21T17:58:02.773721+00:00",
+          "id": "cd554054-093c-4667-9eb8-3a6a61d2c0e7",
+          "is_active": true,
+          "label": "Otro",
+          "sort_order": 5,
+          "spec_definition_id": "4d2dc06e-0eec-41b4-923a-3fb69bb534a5",
+          "tenant_id": null,
+          "updated_at": "2026-08-21T17:58:02.773721+00:00"
+        }
+      ],
+      "sort_order": 72,
+      "tenant_id": null,
+      "unit": null,
+      "updated_at": "2026-04-26T17:30:29.032543+00:00",
+      "validation_rules": {}
+    },
+    {
+      "allowed_values": [],
+      "created_at": "2026-09-06T06:58:57.745728+00:00",
+      "data_type": "text",
+      "description": "URL del fabricante, manual o identificación del envase que respalda la declaración.",
+      "group_name": null,
+      "id": "4f055961-6c16-430b-a4e2-e6b09dc1cccc",
+      "is_compatibility_relevant": false,
+      "is_customer_visible": false,
+      "is_filterable": false,
+      "is_mechanic_visible": true,
+      "is_required_by_default": false,
+      "key": "spec_evidence_source",
+      "label": "Fuente de la declaración",
+      "options": [],
+      "sort_order": 900,
+      "tenant_id": null,
+      "unit": null,
+      "updated_at": "2026-09-06T06:58:57.745728+00:00",
+      "validation_rules": {}
+    }
+  ],
+  "records": {
+    "spec_definitions": [
+      {
+        "id": "ec30b053-d2c6-50e5-a536-e4c83af8d48c",
+        "key": "bolt_pattern",
+        "label": "Patrón de pernos",
+        "data_type": "text",
+        "unit": null,
+        "allowed_values": [],
+        "validation_rules": {},
+        "tenant_id": null,
+        "is_customer_visible": false,
+        "is_compatibility_relevant": false,
+        "description": null,
+        "is_filterable": false,
+        "is_required_by_default": false,
+        "is_mechanic_visible": true,
+        "group_name": null,
+        "sort_order": 0
+      },
+      {
+        "id": "c1d2402b-0f78-5934-bb17-6144cbe657d6",
+        "key": "chain_guide_assembled_weights",
+        "label": "Peso del conjunto por configuración",
+        "data_type": "json",
+        "unit": null,
+        "allowed_values": [],
+        "validation_rules": {
+          "rows_schema": {
+            "version": 1,
+            "unique_by": [
+              [
+                "configuration_identity"
+              ]
+            ],
+            "columns": [
+              {
+                "key": "configuration_identity",
+                "label": "Configuración del conjunto",
+                "type": "text",
+                "required": true
+              },
+              {
+                "key": "mounted_part_reference",
+                "label": "Pieza montada de este envase",
+                "type": "text",
+                "required": true
+              },
+              {
+                "key": "weight_g",
+                "label": "Peso del conjunto montado",
+                "type": "decimal",
+                "required": true,
+                "unit": "g",
+                "validation": {
+                  "positive": true
+                }
+              },
+              {
+                "key": "source_document",
+                "label": "Documento del peso y su alcance",
+                "type": "text",
+                "required": true
+              },
+              {
+                "key": "source_url",
+                "label": "URL del documento, si existe",
+                "type": "url"
+              }
+            ]
+          }
+        },
+        "tenant_id": null,
+        "is_customer_visible": false,
+        "is_compatibility_relevant": false,
+        "description": null,
+        "is_filterable": false,
+        "is_required_by_default": false,
+        "is_mechanic_visible": true,
+        "group_name": null,
+        "sort_order": 0
+      },
+      {
+        "id": "f349fc4b-2f5b-5c0b-a2cb-d153828a73ac",
+        "key": "chain_guide_chainline_adjustment_mm",
+        "label": "Recorrido de ajuste de línea de cadena",
+        "data_type": "number",
+        "unit": "mm",
+        "allowed_values": [],
+        "validation_rules": {
+          "positive": true
+        },
+        "tenant_id": null,
+        "is_customer_visible": true,
+        "is_compatibility_relevant": false,
+        "description": null,
+        "is_filterable": true,
+        "is_required_by_default": false,
+        "is_mechanic_visible": true,
+        "group_name": null,
+        "sort_order": 0
+      },
+      {
+        "id": "eb9d9be1-8607-55d3-8f2e-6ed3677c742d",
+        "key": "chain_guide_chainline_datum",
+        "label": "Datum de la línea de cadena declarada",
+        "data_type": "text",
+        "unit": null,
+        "allowed_values": [],
+        "validation_rules": {},
+        "tenant_id": null,
+        "is_customer_visible": false,
+        "is_compatibility_relevant": false,
+        "description": null,
+        "is_filterable": false,
+        "is_required_by_default": false,
+        "is_mechanic_visible": true,
+        "group_name": null,
+        "sort_order": 0
+      },
+      {
+        "id": "90d4410d-ff54-5476-a20b-585ce8f68b25",
+        "key": "chain_guide_frame_exclusions",
+        "label": "Exclusiones documentadas de cuadro",
+        "data_type": "json",
+        "unit": null,
+        "allowed_values": [],
+        "validation_rules": {
+          "rows_schema": {
+            "version": 1,
+            "unique_by": [
+              [
+                "claim_identity"
+              ]
+            ],
+            "columns": [
+              {
+                "key": "claim_identity",
+                "label": "Identificación de esta declaración",
+                "type": "text",
+                "required": true
+              },
+              {
+                "key": "scope_kind",
+                "label": "Alcance de la declaración",
+                "type": "token",
+                "required": true,
+                "allowed_values": [
+                  "Modelo documentado",
+                  "Interfaz o estándar documentado"
+                ]
+              },
+              {
+                "key": "brand",
+                "label": "Marca del cuadro",
+                "type": "text"
+              },
+              {
+                "key": "model",
+                "label": "Modelo del cuadro",
+                "type": "text"
+              },
+              {
+                "key": "generation",
+                "label": "Generación o edición",
+                "type": "text"
+              },
+              {
+                "key": "years",
+                "label": "Años documentados",
+                "type": "text"
+              },
+              {
+                "key": "declared_interface",
+                "label": "Interfaz o estándar declarado",
+                "type": "text"
+              },
+              {
+                "key": "conditions",
+                "label": "Condiciones de la declaración",
+                "type": "text"
+              },
+              {
+                "key": "source_document",
+                "label": "Documento o envase identificado",
+                "type": "text",
+                "required": true
+              },
+              {
+                "key": "source_url",
+                "label": "URL del documento, si existe",
+                "type": "url"
+              }
+            ]
+          }
+        },
+        "tenant_id": null,
+        "is_customer_visible": false,
+        "is_compatibility_relevant": false,
+        "description": null,
+        "is_filterable": false,
+        "is_required_by_default": false,
+        "is_mechanic_visible": true,
+        "group_name": null,
+        "sort_order": 0
+      },
+      {
+        "id": "13f7156b-990e-5dcf-ab9c-4af649e61ee5",
+        "key": "chain_guide_included_parts",
+        "label": "Piezas incluidas en este envase",
+        "data_type": "json",
+        "unit": null,
+        "allowed_values": [],
+        "validation_rules": {
+          "rows_schema": {
+            "version": 1,
+            "unique_by": [
+              [
+                "part_identity"
+              ]
+            ],
+            "ordered_pairs": [
+              [
+                "chainring_teeth_min",
+                "chainring_teeth_max"
+              ]
+            ],
+            "columns": [
+              {
+                "key": "part_identity",
+                "label": "Identidad de esta pieza",
+                "type": "text",
+                "required": true
+              },
+              {
+                "key": "part_role",
+                "label": "Función de esta pieza",
+                "type": "token",
+                "required": true,
+                "allowed_values": [
+                  "Placa protectora",
+                  "Guía superior",
+                  "Guía o rodillo inferior",
+                  "Herrajes y separadores",
+                  "Otra pieza OEM"
+                ]
+              },
+              {
+                "key": "chainring_teeth_min",
+                "label": "Plato mínimo de esta pieza",
+                "type": "integer",
+                "unit": "T",
+                "validation": {
+                  "positive": true
+                }
+              },
+              {
+                "key": "chainring_teeth_max",
+                "label": "Plato máximo de esta pieza",
+                "type": "integer",
+                "unit": "T",
+                "validation": {
+                  "positive": true
+                }
+              },
+              {
+                "key": "installed_from_factory",
+                "label": "Viene instalada de fábrica",
+                "type": "boolean",
+                "required": true
+              },
+              {
+                "key": "weight_g",
+                "label": "Peso de esta pieza suelta",
+                "type": "decimal",
+                "unit": "g",
+                "validation": {
+                  "positive": true
+                }
+              },
+              {
+                "key": "source_document",
+                "label": "Documento o envase identificado",
+                "type": "text",
+                "required": true
+              },
+              {
+                "key": "source_url",
+                "label": "URL del documento, si existe",
+                "type": "url"
+              }
+            ]
+          }
+        },
+        "tenant_id": null,
+        "is_customer_visible": false,
+        "is_compatibility_relevant": false,
+        "description": null,
+        "is_filterable": false,
+        "is_required_by_default": false,
+        "is_mechanic_visible": true,
+        "group_name": null,
+        "sort_order": 0
+      },
+      {
+        "id": "8129501b-d1b0-5eea-9992-11371dddf51e",
+        "key": "chain_guide_mount_options",
+        "label": "Montajes documentados de esta guía",
+        "data_type": "json",
+        "unit": null,
+        "allowed_values": [],
+        "validation_rules": {
+          "rows_schema": {
+            "version": 1,
+            "unique_by": [
+              [
+                "option_identity"
+              ]
+            ],
+            "columns": [
+              {
+                "key": "option_identity",
+                "label": "Identificación de este montaje",
+                "type": "text",
+                "required": true
+              },
+              {
+                "key": "mount_standard",
+                "label": "Estándar de montaje declarado",
+                "type": "text",
+                "required": true
+              },
+              {
+                "key": "hardware_included",
+                "label": "Trae su herrajería",
+                "type": "boolean"
+              },
+              {
+                "key": "source_document",
+                "label": "Documento o envase identificado",
+                "type": "text",
+                "required": true
+              },
+              {
+                "key": "source_url",
+                "label": "URL del documento, si existe",
+                "type": "url"
+              }
+            ]
+          }
+        },
+        "tenant_id": null,
+        "is_customer_visible": false,
+        "is_compatibility_relevant": false,
+        "description": null,
+        "is_filterable": false,
+        "is_required_by_default": false,
+        "is_mechanic_visible": true,
+        "group_name": null,
+        "sort_order": 0
+      },
+      {
+        "id": "0450d9a2-f938-56d4-8747-ba63ba55f2fd",
+        "key": "chainring_teeth_max",
+        "label": "Máximo de dientes del plato",
+        "data_type": "number",
+        "unit": "T",
+        "allowed_values": [],
+        "validation_rules": {
+          "positive": true,
+          "integer": true
+        },
+        "tenant_id": null,
+        "is_customer_visible": true,
+        "is_compatibility_relevant": false,
+        "description": null,
+        "is_filterable": true,
+        "is_required_by_default": false,
+        "is_mechanic_visible": true,
+        "group_name": null,
+        "sort_order": 0
+      },
+      {
+        "id": "0fbc357a-a25b-5128-b68b-5dd484bf7b2e",
+        "key": "chainring_teeth_min",
+        "label": "Mínimo de dientes del plato",
+        "data_type": "number",
+        "unit": "T",
+        "allowed_values": [],
+        "validation_rules": {
+          "positive": true,
+          "integer": true
+        },
+        "tenant_id": null,
+        "is_customer_visible": true,
+        "is_compatibility_relevant": false,
+        "description": null,
+        "is_filterable": true,
+        "is_required_by_default": false,
+        "is_mechanic_visible": true,
+        "group_name": null,
+        "sort_order": 0
+      },
+      {
+        "id": "a27bda44-6b0c-531a-8a4a-f4bf409f19a9",
+        "key": "compatible_derailleur_models",
+        "label": "Cambios o interfaces declarados",
+        "data_type": "json",
+        "unit": null,
+        "allowed_values": [],
+        "validation_rules": {
+          "rows_schema": {
+            "version": 1,
+            "unique_by": [
+              [
+                "claim_identity"
+              ]
+            ],
+            "columns": [
+              {
+                "key": "claim_identity",
+                "label": "Identificación de esta declaración",
+                "type": "text",
+                "required": true
+              },
+              {
+                "key": "scope_kind",
+                "label": "Alcance de la declaración",
+                "type": "token",
+                "required": true,
+                "allowed_values": [
+                  "Modelo documentado",
+                  "Interfaz o estándar documentado"
+                ]
+              },
+              {
+                "key": "brand",
+                "label": "Marca del cambio",
+                "type": "text"
+              },
+              {
+                "key": "model",
+                "label": "Modelo del cambio",
+                "type": "text"
+              },
+              {
+                "key": "generation",
+                "label": "Generación o edición",
+                "type": "text"
+              },
+              {
+                "key": "years",
+                "label": "Años documentados",
+                "type": "text"
+              },
+              {
+                "key": "declared_interface",
+                "label": "Interfaz o estándar declarado",
+                "type": "text"
+              },
+              {
+                "key": "conditions",
+                "label": "Condiciones de la declaración",
+                "type": "text"
+              },
+              {
+                "key": "source_document",
+                "label": "Documento o envase identificado",
+                "type": "text",
+                "required": true
+              },
+              {
+                "key": "source_url",
+                "label": "URL del documento, si existe",
+                "type": "url"
+              }
+            ]
+          }
+        },
+        "tenant_id": null,
+        "is_customer_visible": false,
+        "is_compatibility_relevant": false,
+        "description": null,
+        "is_filterable": false,
+        "is_required_by_default": false,
+        "is_mechanic_visible": true,
+        "group_name": null,
+        "sort_order": 0
+      },
+      {
+        "id": "a34e0baf-2cc8-592a-84cf-6f7482cf2f0b",
+        "key": "compatible_frames",
+        "label": "Cuadros o interfaces declarados",
+        "data_type": "json",
+        "unit": null,
+        "allowed_values": [],
+        "validation_rules": {
+          "rows_schema": {
+            "version": 1,
+            "unique_by": [
+              [
+                "claim_identity"
+              ]
+            ],
+            "columns": [
+              {
+                "key": "claim_identity",
+                "label": "Identificación de esta declaración",
+                "type": "text",
+                "required": true
+              },
+              {
+                "key": "scope_kind",
+                "label": "Alcance de la declaración",
+                "type": "token",
+                "required": true,
+                "allowed_values": [
+                  "Modelo documentado",
+                  "Interfaz o estándar documentado"
+                ]
+              },
+              {
+                "key": "brand",
+                "label": "Marca del cuadro",
+                "type": "text"
+              },
+              {
+                "key": "model",
+                "label": "Modelo del cuadro",
+                "type": "text"
+              },
+              {
+                "key": "generation",
+                "label": "Generación o edición",
+                "type": "text"
+              },
+              {
+                "key": "years",
+                "label": "Años documentados",
+                "type": "text"
+              },
+              {
+                "key": "declared_interface",
+                "label": "Interfaz o estándar declarado",
+                "type": "text"
+              },
+              {
+                "key": "conditions",
+                "label": "Condiciones de la declaración",
+                "type": "text"
+              },
+              {
+                "key": "source_document",
+                "label": "Documento o envase identificado",
+                "type": "text",
+                "required": true
+              },
+              {
+                "key": "source_url",
+                "label": "URL del documento, si existe",
+                "type": "url"
+              }
+            ]
+          }
+        },
+        "tenant_id": null,
+        "is_customer_visible": false,
+        "is_compatibility_relevant": false,
+        "description": null,
+        "is_filterable": false,
+        "is_required_by_default": false,
+        "is_mechanic_visible": true,
+        "group_name": null,
+        "sort_order": 0
+      },
+      {
+        "id": "4d0bf51b-a758-509e-befe-ecabd054773f",
+        "key": "hanger_derailleur_interface",
+        "label": "Interfaz de este lado del cambio",
+        "data_type": "single_select",
+        "unit": null,
+        "allowed_values": [
+          "Rosca M10 x 1",
+          "Enlace direct mount",
+          "Otra interfaz OEM documentada"
+        ],
+        "validation_rules": {},
+        "tenant_id": null,
+        "is_customer_visible": true,
+        "is_compatibility_relevant": false,
+        "description": null,
+        "is_filterable": true,
+        "is_required_by_default": false,
+        "is_mechanic_visible": true,
+        "group_name": null,
+        "sort_order": 0
+      },
+      {
+        "id": "e8ff6119-357d-5c7e-bc15-fd9e5cc2e7a8",
+        "key": "hanger_frame_interface",
+        "label": "Interfaz de este lado del cuadro",
+        "data_type": "single_select",
+        "unit": null,
+        "allowed_values": [
+          "Interfaz UDH del cuadro",
+          "Puntera con anclaje propio del cuadro",
+          "Con uña / claw sobre el eje",
+          "Otra interfaz OEM documentada"
+        ],
+        "validation_rules": {},
+        "tenant_id": null,
+        "is_customer_visible": true,
+        "is_compatibility_relevant": false,
+        "description": null,
+        "is_filterable": true,
+        "is_required_by_default": false,
+        "is_mechanic_visible": true,
+        "group_name": null,
+        "sort_order": 0
+      },
+      {
+        "id": "99e537b6-d8ea-532a-b5c8-568b7d951790",
+        "key": "pulley_bearing_construction",
+        "label": "Construcción del apoyo",
+        "data_type": "single_select",
+        "unit": null,
+        "allowed_values": [
+          "Buje",
+          "Rodamiento de bolas",
+          "Otra construcción OEM"
+        ],
+        "validation_rules": {},
+        "tenant_id": null,
+        "is_customer_visible": true,
+        "is_compatibility_relevant": false,
+        "description": null,
+        "is_filterable": true,
+        "is_required_by_default": false,
+        "is_mechanic_visible": true,
+        "group_name": null,
+        "sort_order": 0
+      },
+      {
+        "id": "ef5b0c6b-cccd-50e4-b0be-caf3f751928a",
+        "key": "pulley_bearing_element_material",
+        "label": "Material de los elementos",
+        "data_type": "single_select",
+        "unit": null,
+        "allowed_values": [
+          "Acero",
+          "Cerámico",
+          "Otro material OEM"
+        ],
+        "validation_rules": {},
+        "tenant_id": null,
+        "is_customer_visible": true,
+        "is_compatibility_relevant": false,
+        "description": null,
+        "is_filterable": true,
+        "is_required_by_default": false,
+        "is_mechanic_visible": true,
+        "group_name": null,
+        "sort_order": 0
+      },
+      {
+        "id": "2cdbe3cb-057d-575c-b2bf-8bacb9012ebd",
+        "key": "pulley_bore_diameter_mm",
+        "label": "Diámetro del alojamiento",
+        "data_type": "number",
+        "unit": "mm",
+        "allowed_values": [],
+        "validation_rules": {
+          "positive": true
+        },
+        "tenant_id": null,
+        "is_customer_visible": true,
+        "is_compatibility_relevant": false,
+        "description": null,
+        "is_filterable": true,
+        "is_required_by_default": false,
+        "is_mechanic_visible": true,
+        "group_name": null,
+        "sort_order": 0
+      },
+      {
+        "id": "45237794-a4cf-58ab-be3d-a75a9eb12ce2",
+        "key": "pulley_declared_position",
+        "label": "Posición declarada por la fuente",
+        "data_type": "single_select",
+        "unit": null,
+        "allowed_values": [
+          "Guía (superior)",
+          "Tensión (inferior)",
+          "La fuente no declara la posición"
+        ],
+        "validation_rules": {},
+        "tenant_id": null,
+        "is_customer_visible": true,
+        "is_compatibility_relevant": false,
+        "description": null,
+        "is_filterable": true,
+        "is_required_by_default": false,
+        "is_mechanic_visible": true,
+        "group_name": null,
+        "sort_order": 0
+      },
+      {
+        "id": "34457337-892e-55a1-b7ff-a412caf98346",
+        "key": "pulley_declared_speeds",
+        "label": "Velocidades declaradas por la fuente",
+        "data_type": "multi_select",
+        "unit": null,
+        "allowed_values": [
+          "1",
+          "5",
+          "6",
+          "7",
+          "8",
+          "9",
+          "10",
+          "11",
+          "12",
+          "13"
+        ],
+        "validation_rules": {},
+        "tenant_id": null,
+        "is_customer_visible": true,
+        "is_compatibility_relevant": false,
+        "description": null,
+        "is_filterable": true,
+        "is_required_by_default": false,
+        "is_mechanic_visible": true,
+        "group_name": null,
+        "sort_order": 0
+      },
+      {
+        "id": "5b827f3f-61f2-5e7a-871c-7eb50fc366bf",
+        "key": "pulley_outer_diameter_mm",
+        "label": "Diámetro exterior",
+        "data_type": "number",
+        "unit": "mm",
+        "allowed_values": [],
+        "validation_rules": {
+          "positive": true
+        },
+        "tenant_id": null,
+        "is_customer_visible": true,
+        "is_compatibility_relevant": false,
+        "description": null,
+        "is_filterable": true,
+        "is_required_by_default": false,
+        "is_mechanic_visible": true,
+        "group_name": null,
+        "sort_order": 0
+      },
+      {
+        "id": "8cfc97b6-c36c-5aff-8ea7-76027b0c7379",
+        "key": "pulley_package_kind",
+        "label": "Qué trae este envase",
+        "data_type": "single_select",
+        "unit": null,
+        "allowed_values": [
+          "Roldana individual",
+          "Par de roldanas en el mismo envase"
+        ],
+        "validation_rules": {},
+        "tenant_id": null,
+        "is_customer_visible": true,
+        "is_compatibility_relevant": false,
+        "description": null,
+        "is_filterable": true,
+        "is_required_by_default": false,
+        "is_mechanic_visible": true,
+        "group_name": null,
+        "sort_order": 0
+      },
+      {
+        "id": "713ee0c0-559f-5dd0-a26f-872a7b09e8bd",
+        "key": "pulley_tooth_profile",
+        "label": "Perfil de dentado declarado",
+        "data_type": "single_select",
+        "unit": null,
+        "allowed_values": [
+          "Dentado convencional",
+          "Narrow-wide",
+          "Otro perfil OEM"
+        ],
+        "validation_rules": {},
+        "tenant_id": null,
+        "is_customer_visible": true,
+        "is_compatibility_relevant": false,
+        "description": null,
+        "is_filterable": true,
+        "is_required_by_default": false,
+        "is_mechanic_visible": true,
+        "group_name": null,
+        "sort_order": 0
+      },
+      {
+        "id": "9aceae0e-086a-536b-a251-bd46a1b22ed1",
+        "key": "pulley_unit_count",
+        "label": "Roldanas documentadas en este envase",
+        "data_type": "number",
+        "unit": null,
+        "allowed_values": [],
+        "validation_rules": {
+          "integer": true,
+          "min": "2",
+          "max": "2"
+        },
+        "tenant_id": null,
+        "is_customer_visible": true,
+        "is_compatibility_relevant": false,
+        "description": null,
+        "is_filterable": true,
+        "is_required_by_default": false,
+        "is_mechanic_visible": true,
+        "group_name": null,
+        "sort_order": 0
+      },
+      {
+        "id": "fb42c233-70f0-5c5b-bd7b-aeb9665d118b",
+        "key": "pulley_unit_fitment_declarations",
+        "label": "Declaraciones por roldana del envase",
+        "data_type": "json",
+        "unit": null,
+        "allowed_values": [],
+        "validation_rules": {
+          "rows_schema": {
+            "version": 1,
+            "unique_by": [
+              [
+                "claim_identity"
+              ]
+            ],
+            "columns": [
+              {
+                "key": "unit_reference",
+                "label": "Roldana de esta declaración",
+                "type": "text",
+                "required": true
+              },
+              {
+                "key": "claim_identity",
+                "label": "Identificación de esta declaración",
+                "type": "text",
+                "required": true
+              },
+              {
+                "key": "scope_kind",
+                "label": "Alcance de la declaración",
+                "type": "token",
+                "required": true,
+                "allowed_values": [
+                  "Modelo documentado",
+                  "Interfaz o estándar documentado"
+                ]
+              },
+              {
+                "key": "brand",
+                "label": "Marca del cambio",
+                "type": "text"
+              },
+              {
+                "key": "model",
+                "label": "Modelo del cambio",
+                "type": "text"
+              },
+              {
+                "key": "generation",
+                "label": "Generación o edición",
+                "type": "text"
+              },
+              {
+                "key": "years",
+                "label": "Años documentados",
+                "type": "text"
+              },
+              {
+                "key": "declared_interface",
+                "label": "Interfaz o estándar declarado",
+                "type": "text"
+              },
+              {
+                "key": "declared_speed",
+                "label": "Velocidades de esta declaración",
+                "type": "token",
+                "allowed_values": [
+                  "1",
+                  "5",
+                  "6",
+                  "7",
+                  "8",
+                  "9",
+                  "10",
+                  "11",
+                  "12",
+                  "13"
+                ]
+              },
+              {
+                "key": "cage_length_declaration",
+                "label": "Jaula declarada",
+                "type": "token",
+                "allowed_values": [
+                  "SS / corta",
+                  "GS / media",
+                  "SGS / larga",
+                  "Otro",
+                  "Desconocido / sin confirmar"
+                ]
+              },
+              {
+                "key": "conditions",
+                "label": "Condiciones de la declaración",
+                "type": "text"
+              },
+              {
+                "key": "source_document",
+                "label": "Documento o envase identificado",
+                "type": "text",
+                "required": true
+              },
+              {
+                "key": "source_url",
+                "label": "URL del documento, si existe",
+                "type": "url"
+              }
+            ]
+          }
+        },
+        "tenant_id": null,
+        "is_customer_visible": false,
+        "is_compatibility_relevant": false,
+        "description": null,
+        "is_filterable": false,
+        "is_required_by_default": false,
+        "is_mechanic_visible": true,
+        "group_name": null,
+        "sort_order": 0
+      },
+      {
+        "id": "b24dedcb-71fb-5b62-bde4-c1dddf086059",
+        "key": "pulley_units",
+        "label": "Roldanas incluidas en este envase",
+        "data_type": "json",
+        "unit": null,
+        "allowed_values": [],
+        "validation_rules": {
+          "rows_schema": {
+            "version": 1,
+            "unique_by": [
+              [
+                "unit_identity"
+              ]
+            ],
+            "columns": [
+              {
+                "key": "unit_identity",
+                "label": "Identidad de esta roldana",
+                "type": "text",
+                "required": true
+              },
+              {
+                "key": "declared_position",
+                "label": "Posición declarada",
+                "type": "token",
+                "allowed_values": [
+                  "Guía (superior)",
+                  "Tensión (inferior)",
+                  "La fuente no declara la posición"
+                ]
+              },
+              {
+                "key": "teeth",
+                "label": "Dientes de esta roldana",
+                "type": "integer",
+                "required": true,
+                "validation": {
+                  "positive": true
+                }
+              },
+              {
+                "key": "bearing_construction",
+                "label": "Construcción del apoyo",
+                "type": "token",
+                "allowed_values": [
+                  "Buje",
+                  "Rodamiento de bolas",
+                  "Otra construcción OEM"
+                ]
+              },
+              {
+                "key": "bearing_element_material",
+                "label": "Material de los elementos",
+                "type": "token",
+                "allowed_values": [
+                  "Acero",
+                  "Cerámico",
+                  "Otro material OEM"
+                ]
+              },
+              {
+                "key": "tooth_profile",
+                "label": "Perfil de dentado",
+                "type": "token",
+                "allowed_values": [
+                  "Dentado convencional",
+                  "Narrow-wide",
+                  "Otro perfil OEM"
+                ]
+              },
+              {
+                "key": "outer_diameter_mm",
+                "label": "Diámetro exterior",
+                "type": "decimal",
+                "unit": "mm",
+                "validation": {
+                  "positive": true
+                }
+              },
+              {
+                "key": "width_mm",
+                "label": "Ancho",
+                "type": "decimal",
+                "unit": "mm",
+                "validation": {
+                  "positive": true
+                }
+              },
+              {
+                "key": "bore_diameter_mm",
+                "label": "Diámetro del alojamiento",
+                "type": "decimal",
+                "unit": "mm",
+                "validation": {
+                  "positive": true
+                }
+              },
+              {
+                "key": "source_document",
+                "label": "Documento o envase identificado",
+                "type": "text",
+                "required": true
+              },
+              {
+                "key": "source_url",
+                "label": "URL del documento, si existe",
+                "type": "url"
+              }
+            ]
+          }
+        },
+        "tenant_id": null,
+        "is_customer_visible": false,
+        "is_compatibility_relevant": false,
+        "description": null,
+        "is_filterable": false,
+        "is_required_by_default": false,
+        "is_mechanic_visible": true,
+        "group_name": null,
+        "sort_order": 0
+      },
+      {
+        "id": "f412e2bc-6391-57dc-b548-08489fd68cb9",
+        "key": "pulley_width_mm",
+        "label": "Ancho de la roldana",
+        "data_type": "number",
+        "unit": "mm",
+        "allowed_values": [],
+        "validation_rules": {
+          "positive": true
+        },
+        "tenant_id": null,
+        "is_customer_visible": true,
+        "is_compatibility_relevant": false,
+        "description": null,
+        "is_filterable": true,
+        "is_required_by_default": false,
+        "is_mechanic_visible": true,
+        "group_name": null,
+        "sort_order": 0
+      }
+    ],
+    "spec_definition_values": [
+      {
+        "id": "6e122bf1-4887-5d1e-a514-1baaea411bdb",
+        "tenant_id": null,
+        "spec_definition_id": "4d0bf51b-a758-509e-befe-ecabd054773f",
+        "code": "catalog_1c84f3d246f91c231f2ae6faf73795f7",
+        "label": "Rosca M10 x 1",
+        "sort_order": 0,
+        "is_active": true
+      },
+      {
+        "id": "81d5c385-31f3-55ef-b711-11509310cb07",
+        "tenant_id": null,
+        "spec_definition_id": "4d0bf51b-a758-509e-befe-ecabd054773f",
+        "code": "catalog_2f063da92f562e74a64129921828ff86",
+        "label": "Enlace direct mount",
+        "sort_order": 1,
+        "is_active": true
+      },
+      {
+        "id": "0150dab7-e75f-545f-a733-3e5038d4f5c8",
+        "tenant_id": null,
+        "spec_definition_id": "4d0bf51b-a758-509e-befe-ecabd054773f",
+        "code": "catalog_46bfaa1ce7d330013323731aa764716c",
+        "label": "Otra interfaz OEM documentada",
+        "sort_order": 2,
+        "is_active": true
+      },
+      {
+        "id": "87c58d6c-1667-5c7e-88ea-898cb3088e15",
+        "tenant_id": null,
+        "spec_definition_id": "e8ff6119-357d-5c7e-bc15-fd9e5cc2e7a8",
+        "code": "catalog_aef1beeec4053f52ed7fe2800edf349e",
+        "label": "Interfaz UDH del cuadro",
+        "sort_order": 0,
+        "is_active": true
+      },
+      {
+        "id": "c3dd515c-9ac9-55bf-bc7a-b84a90429075",
+        "tenant_id": null,
+        "spec_definition_id": "e8ff6119-357d-5c7e-bc15-fd9e5cc2e7a8",
+        "code": "catalog_58f7b619457493b4d51a713892474cc6",
+        "label": "Puntera con anclaje propio del cuadro",
+        "sort_order": 1,
+        "is_active": true
+      },
+      {
+        "id": "fd9ab1ae-1c0d-52c9-9ee4-f53d78f4977c",
+        "tenant_id": null,
+        "spec_definition_id": "e8ff6119-357d-5c7e-bc15-fd9e5cc2e7a8",
+        "code": "catalog_8033ad6486175a493caf6b9b61dc50a7",
+        "label": "Con uña / claw sobre el eje",
+        "sort_order": 2,
+        "is_active": true
+      },
+      {
+        "id": "263a6bb2-7197-54fd-98bd-611f74f446b7",
+        "tenant_id": null,
+        "spec_definition_id": "e8ff6119-357d-5c7e-bc15-fd9e5cc2e7a8",
+        "code": "catalog_46bfaa1ce7d330013323731aa764716c",
+        "label": "Otra interfaz OEM documentada",
+        "sort_order": 3,
+        "is_active": true
+      },
+      {
+        "id": "501d4549-ce8b-5081-99de-f4688b4786e4",
+        "tenant_id": null,
+        "spec_definition_id": "99e537b6-d8ea-532a-b5c8-568b7d951790",
+        "code": "catalog_c51cd2db72b80ce0c6ac030b018952b9",
+        "label": "Buje",
+        "sort_order": 0,
+        "is_active": true
+      },
+      {
+        "id": "02e16a6d-8715-500b-8716-640d5d8bd673",
+        "tenant_id": null,
+        "spec_definition_id": "99e537b6-d8ea-532a-b5c8-568b7d951790",
+        "code": "catalog_0d8515bbc2314b30d975e1996aab5428",
+        "label": "Rodamiento de bolas",
+        "sort_order": 1,
+        "is_active": true
+      },
+      {
+        "id": "d158e998-8449-50d1-a3a2-939f5066fb7b",
+        "tenant_id": null,
+        "spec_definition_id": "99e537b6-d8ea-532a-b5c8-568b7d951790",
+        "code": "catalog_55a78bd901e4ea61bec46cb726ab8e1d",
+        "label": "Otra construcción OEM",
+        "sort_order": 2,
+        "is_active": true
+      },
+      {
+        "id": "faf484b4-9ccb-5dd2-a91b-fda2a14e0af6",
+        "tenant_id": null,
+        "spec_definition_id": "ef5b0c6b-cccd-50e4-b0be-caf3f751928a",
+        "code": "catalog_8265ca77f1ed28b82afd09bc72da0884",
+        "label": "Acero",
+        "sort_order": 0,
+        "is_active": true
+      },
+      {
+        "id": "716b6f12-ff52-5b2c-9b4e-1cfa46bedaf4",
+        "tenant_id": null,
+        "spec_definition_id": "ef5b0c6b-cccd-50e4-b0be-caf3f751928a",
+        "code": "catalog_6573fcf795155374ffbf7016df006e48",
+        "label": "Cerámico",
+        "sort_order": 1,
+        "is_active": true
+      },
+      {
+        "id": "289af4cb-020d-50b9-a998-da70ed99f236",
+        "tenant_id": null,
+        "spec_definition_id": "ef5b0c6b-cccd-50e4-b0be-caf3f751928a",
+        "code": "catalog_2595409ad2f30c7234f7ebe82bed14bd",
+        "label": "Otro material OEM",
+        "sort_order": 2,
+        "is_active": true
+      },
+      {
+        "id": "4a7fdd82-8580-5164-b8a0-2adf8416605c",
+        "tenant_id": null,
+        "spec_definition_id": "45237794-a4cf-58ab-be3d-a75a9eb12ce2",
+        "code": "catalog_cc86be8fc2595c25ae14c5c217b9208e",
+        "label": "Guía (superior)",
+        "sort_order": 0,
+        "is_active": true
+      },
+      {
+        "id": "8805f983-69f2-55e5-9108-3e234e36b339",
+        "tenant_id": null,
+        "spec_definition_id": "45237794-a4cf-58ab-be3d-a75a9eb12ce2",
+        "code": "catalog_1c3d036d8ce846f076e6e39d8f40d488",
+        "label": "Tensión (inferior)",
+        "sort_order": 1,
+        "is_active": true
+      },
+      {
+        "id": "4df21c54-9956-561b-a15b-61a26e9760a3",
+        "tenant_id": null,
+        "spec_definition_id": "45237794-a4cf-58ab-be3d-a75a9eb12ce2",
+        "code": "catalog_c57d8eab548a26769d414e7cbe566a1c",
+        "label": "La fuente no declara la posición",
+        "sort_order": 2,
+        "is_active": true
+      },
+      {
+        "id": "5620b622-48d7-576a-ae43-b45a988ebc5e",
+        "tenant_id": null,
+        "spec_definition_id": "34457337-892e-55a1-b7ff-a412caf98346",
+        "code": "catalog_c4ca4238a0b923820dcc509a6f75849b",
+        "label": "1",
+        "sort_order": 0,
+        "is_active": true
+      },
+      {
+        "id": "62e3456d-41be-5917-80a5-ddabcf0c7d09",
+        "tenant_id": null,
+        "spec_definition_id": "34457337-892e-55a1-b7ff-a412caf98346",
+        "code": "catalog_e4da3b7fbbce2345d7772b0674a318d5",
+        "label": "5",
+        "sort_order": 1,
+        "is_active": true
+      },
+      {
+        "id": "008e7e2d-6b9a-5176-a0b0-7118ad0704e6",
+        "tenant_id": null,
+        "spec_definition_id": "34457337-892e-55a1-b7ff-a412caf98346",
+        "code": "catalog_1679091c5a880faf6fb5e6087eb1b2dc",
+        "label": "6",
+        "sort_order": 2,
+        "is_active": true
+      },
+      {
+        "id": "370c6ea4-8853-5394-98d7-8ad52b042aa7",
+        "tenant_id": null,
+        "spec_definition_id": "34457337-892e-55a1-b7ff-a412caf98346",
+        "code": "catalog_8f14e45fceea167a5a36dedd4bea2543",
+        "label": "7",
+        "sort_order": 3,
+        "is_active": true
+      },
+      {
+        "id": "b28d5794-2003-5110-8889-160fe110d1d2",
+        "tenant_id": null,
+        "spec_definition_id": "34457337-892e-55a1-b7ff-a412caf98346",
+        "code": "catalog_c9f0f895fb98ab9159f51fd0297e236d",
+        "label": "8",
+        "sort_order": 4,
+        "is_active": true
+      },
+      {
+        "id": "a77328b3-11bd-54e8-b5d1-3f35b0f55ceb",
+        "tenant_id": null,
+        "spec_definition_id": "34457337-892e-55a1-b7ff-a412caf98346",
+        "code": "catalog_45c48cce2e2d7fbdea1afc51c7c6ad26",
+        "label": "9",
+        "sort_order": 5,
+        "is_active": true
+      },
+      {
+        "id": "3ae26191-9b21-5a2d-b7aa-a1476e61dbd7",
+        "tenant_id": null,
+        "spec_definition_id": "34457337-892e-55a1-b7ff-a412caf98346",
+        "code": "catalog_d3d9446802a44259755d38e6d163e820",
+        "label": "10",
+        "sort_order": 6,
+        "is_active": true
+      },
+      {
+        "id": "69d956ba-b5bf-53a9-b512-b6f2ff202761",
+        "tenant_id": null,
+        "spec_definition_id": "34457337-892e-55a1-b7ff-a412caf98346",
+        "code": "catalog_6512bd43d9caa6e02c990b0a82652dca",
+        "label": "11",
+        "sort_order": 7,
+        "is_active": true
+      },
+      {
+        "id": "b9a6b28e-58ee-5be2-97cb-7b0fc010425e",
+        "tenant_id": null,
+        "spec_definition_id": "34457337-892e-55a1-b7ff-a412caf98346",
+        "code": "catalog_c20ad4d76fe97759aa27a0c99bff6710",
+        "label": "12",
+        "sort_order": 8,
+        "is_active": true
+      },
+      {
+        "id": "35d9b098-624d-51bb-a479-f92ba688678a",
+        "tenant_id": null,
+        "spec_definition_id": "34457337-892e-55a1-b7ff-a412caf98346",
+        "code": "catalog_c51ce410c124a10e0db5e4b97fc2af39",
+        "label": "13",
+        "sort_order": 9,
+        "is_active": true
+      },
+      {
+        "id": "787b0678-5d92-5185-b526-cc8aa805b6a4",
+        "tenant_id": null,
+        "spec_definition_id": "8cfc97b6-c36c-5aff-8ea7-76027b0c7379",
+        "code": "catalog_b63a82b7812c03ffbf6436861599d8ad",
+        "label": "Roldana individual",
+        "sort_order": 0,
+        "is_active": true
+      },
+      {
+        "id": "a1a52b1a-3618-5dbf-9edf-9f8d43e060fd",
+        "tenant_id": null,
+        "spec_definition_id": "8cfc97b6-c36c-5aff-8ea7-76027b0c7379",
+        "code": "catalog_90a6148afdd564ea3da67efd5c1b5d3c",
+        "label": "Par de roldanas en el mismo envase",
+        "sort_order": 1,
+        "is_active": true
+      },
+      {
+        "id": "aec72f97-2e40-5033-ba09-c670e0a0567c",
+        "tenant_id": null,
+        "spec_definition_id": "713ee0c0-559f-5dd0-a26f-872a7b09e8bd",
+        "code": "catalog_943c10c70407f5c013efd14a20c2475e",
+        "label": "Dentado convencional",
+        "sort_order": 0,
+        "is_active": true
+      },
+      {
+        "id": "db477473-26c9-5079-b4dd-4a673d2c65da",
+        "tenant_id": null,
+        "spec_definition_id": "713ee0c0-559f-5dd0-a26f-872a7b09e8bd",
+        "code": "catalog_b3011e51c272b91457bec47062e1bd09",
+        "label": "Narrow-wide",
+        "sort_order": 1,
+        "is_active": true
+      },
+      {
+        "id": "bcfb56e1-9d57-5bb2-b805-88ec9a09bcdd",
+        "tenant_id": null,
+        "spec_definition_id": "713ee0c0-559f-5dd0-a26f-872a7b09e8bd",
+        "code": "catalog_1ac41a7a32183b07d8e233ddac34e383",
+        "label": "Otro perfil OEM",
+        "sort_order": 2,
+        "is_active": true
+      }
+    ],
+    "spec_templates": [
+      {
+        "contract_version": 12,
+        "created_at": "2026-04-26T17:27:33.100573+00:00",
+        "default_tags": [
+          "drivetrain",
+          "hanger"
+        ],
+        "description": "Postiza o fusible de cambio; compatibilidad por cuadro/modelo y montaje.",
+        "form_contract": {
+          "rules_version": 2,
+          "roles": {
+            "hanger_model_code": "declaration",
+            "compatible_frames": "measurement",
+            "compatible_frame_hint": "legacy",
+            "hanger_interface": "legacy",
+            "rear_derailleur_mount_type": "legacy",
+            "bolt_pattern": "measurement",
+            "spec_evidence_source": "declaration",
+            "hanger_frame_interface": "primary",
+            "hanger_derailleur_interface": "primary"
+          },
+          "semantic_roles": {
+            "hanger_model_code": "declaration",
+            "compatible_frames": "compatibility",
+            "compatible_frame_hint": "legacy",
+            "hanger_interface": "legacy",
+            "rear_derailleur_mount_type": "legacy",
+            "bolt_pattern": "measurement",
+            "spec_evidence_source": "evidence",
+            "hanger_frame_interface": "compatibility",
+            "hanger_derailleur_interface": "compatibility"
+          },
+          "labels": {},
+          "allowed_when": {
+            "hanger_model_code": {
+              "kind": "always"
+            },
+            "compatible_frames": {
+              "kind": "always"
+            },
+            "compatible_frame_hint": {
+              "kind": "always"
+            },
+            "hanger_interface": {
+              "kind": "never"
+            },
+            "rear_derailleur_mount_type": {
+              "kind": "always"
+            },
+            "bolt_pattern": {
+              "kind": "always"
+            },
+            "spec_evidence_source": {
+              "kind": "always"
+            },
+            "hanger_frame_interface": {
+              "kind": "always"
+            },
+            "hanger_derailleur_interface": {
+              "kind": "always"
+            }
+          },
+          "required_when": {
+            "hanger_model_code": {
+              "kind": "never"
+            },
+            "compatible_frames": {
+              "kind": "never"
+            },
+            "compatible_frame_hint": {
+              "kind": "never"
+            },
+            "hanger_interface": {
+              "kind": "never"
+            },
+            "rear_derailleur_mount_type": {
+              "kind": "never"
+            },
+            "bolt_pattern": {
+              "kind": "never"
+            },
+            "spec_evidence_source": {
+              "kind": "never"
+            },
+            "hanger_frame_interface": {
+              "kind": "always"
+            },
+            "hanger_derailleur_interface": {
+              "kind": "always"
+            }
+          },
+          "allowed_options": {},
+          "prerequisites": {
+            "hanger_frame_interface": [
+              "spec_evidence_source"
+            ],
+            "hanger_derailleur_interface": [
+              "spec_evidence_source"
+            ],
+            "hanger_model_code": [
+              "spec_evidence_source"
+            ],
+            "bolt_pattern": [
+              "spec_evidence_source"
+            ]
+          },
+          "helpers": {
+            "hanger_frame_interface": "Cómo se une esta pieza al cuadro. UDH es una patilla física sobre una interfaz estandarizada; un cambio Full Mount sustituye la patilla y por eso no es una opción de esta ficha.",
+            "hanger_derailleur_interface": "Qué recibe el cambio en esta pieza. No se deduce de la interfaz del cuadro ni del perno de sujeción.",
+            "hanger_model_code": "Código de intercambio publicado por el fabricante para esta pieza. El modelo y el MPN del producto pertenecen a su ficha de identidad, no a este campo.",
+            "bolt_pattern": "Sujeción publicada, por ejemplo un perno M8. Dos patillas distintas comparten perno sin compartir código ni calce: no identifica la pieza.",
+            "compatible_frames": "Declaraciones documentadas. Cuando la fuente no enumera modelos se declara la interfaz; no se inventa un nombre de cuadro para llenar una celda, y un año ausente en la fuente se deja ausente."
+          },
+          "evidence_requirements": {
+            "hanger_model_code": "oem_or_package",
+            "compatible_frames": "oem_spec",
+            "compatible_frame_hint": "name_reading_hint_only",
+            "hanger_interface": "oem_spec",
+            "rear_derailleur_mount_type": "name_reading_hint_only",
+            "bolt_pattern": "oem_or_package",
+            "spec_evidence_source": "oem_or_package",
+            "hanger_frame_interface": "oem_or_package",
+            "hanger_derailleur_interface": "oem_or_package"
+          },
+          "row_conditions": {
+            "version": 1,
+            "fields": {
+              "compatible_frames": {
+                "allowed_when": {
+                  "brand": {
+                    "kind": "when",
+                    "rows": [
+                      [
+                        {
+                          "field": "scope_kind",
+                          "operator": "eq",
+                          "value_type": "token",
+                          "value": "Modelo documentado"
+                        }
+                      ]
+                    ]
+                  },
+                  "model": {
+                    "kind": "when",
+                    "rows": [
+                      [
+                        {
+                          "field": "scope_kind",
+                          "operator": "eq",
+                          "value_type": "token",
+                          "value": "Modelo documentado"
+                        }
+                      ]
+                    ]
+                  },
+                  "declared_interface": {
+                    "kind": "when",
+                    "rows": [
+                      [
+                        {
+                          "field": "scope_kind",
+                          "operator": "eq",
+                          "value_type": "token",
+                          "value": "Interfaz o estándar documentado"
+                        }
+                      ]
+                    ]
+                  }
+                },
+                "required_when": {
+                  "brand": {
+                    "kind": "when",
+                    "rows": [
+                      [
+                        {
+                          "field": "scope_kind",
+                          "operator": "eq",
+                          "value_type": "token",
+                          "value": "Modelo documentado"
+                        }
+                      ]
+                    ]
+                  },
+                  "model": {
+                    "kind": "when",
+                    "rows": [
+                      [
+                        {
+                          "field": "scope_kind",
+                          "operator": "eq",
+                          "value_type": "token",
+                          "value": "Modelo documentado"
+                        }
+                      ]
+                    ]
+                  },
+                  "declared_interface": {
+                    "kind": "when",
+                    "rows": [
+                      [
+                        {
+                          "field": "scope_kind",
+                          "operator": "eq",
+                          "value_type": "token",
+                          "value": "Interfaz o estándar documentado"
+                        }
+                      ]
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        },
+        "id": "a505c7c6-ef02-4706-900b-25d927886669",
+        "is_active": true,
+        "key": "derailleur_hanger",
+        "name": "Postiza / Pata Cambio",
+        "technical_family": "derailleur_hanger",
+        "tenant_id": null
+      },
+      {
+        "contract_version": 20,
+        "created_at": "2026-04-26T17:27:33.100573+00:00",
+        "default_tags": [
+          "drivetrain",
+          "derailleur"
+        ],
+        "description": "Roldana/polea de cambio trasero.",
+        "form_contract": {
+          "rules_version": 2,
+          "roles": {
+            "pulley_teeth": "primary",
+            "compatible_derailleur_models": "measurement",
+            "derailleur_cage_length": "declaration",
+            "spec_evidence_source": "declaration",
+            "pulley_package_kind": "primary",
+            "pulley_declared_position": "primary",
+            "pulley_bearing_construction": "primary",
+            "pulley_bearing_element_material": "primary",
+            "pulley_tooth_profile": "primary",
+            "pulley_outer_diameter_mm": "measurement",
+            "pulley_width_mm": "measurement",
+            "pulley_bore_diameter_mm": "measurement",
+            "pulley_declared_speeds": "declaration",
+            "pulley_units": "contents",
+            "pulley_unit_count": "contents",
+            "pulley_unit_fitment_declarations": "declaration"
+          },
+          "semantic_roles": {
+            "pulley_teeth": "intrinsic",
+            "compatible_derailleur_models": "compatibility",
+            "derailleur_cage_length": "declaration",
+            "spec_evidence_source": "evidence",
+            "pulley_package_kind": "intrinsic",
+            "pulley_declared_position": "intrinsic",
+            "pulley_bearing_construction": "intrinsic",
+            "pulley_bearing_element_material": "intrinsic",
+            "pulley_tooth_profile": "intrinsic",
+            "pulley_outer_diameter_mm": "compatibility",
+            "pulley_width_mm": "compatibility",
+            "pulley_bore_diameter_mm": "compatibility",
+            "pulley_declared_speeds": "declaration",
+            "pulley_units": "contents",
+            "pulley_unit_count": "contents",
+            "pulley_unit_fitment_declarations": "declaration"
+          },
+          "labels": {},
+          "allowed_when": {
+            "pulley_teeth": {
+              "kind": "when",
+              "rows": [
+                [
+                  {
+                    "field": "pulley_package_kind",
+                    "operator": "eq",
+                    "value_type": "token",
+                    "value": "Roldana individual"
+                  }
+                ]
+              ]
+            },
+            "compatible_derailleur_models": {
+              "kind": "when",
+              "rows": [
+                [
+                  {
+                    "field": "pulley_package_kind",
+                    "operator": "eq",
+                    "value_type": "token",
+                    "value": "Roldana individual"
+                  }
+                ]
+              ]
+            },
+            "derailleur_cage_length": {
+              "kind": "when",
+              "rows": [
+                [
+                  {
+                    "field": "pulley_package_kind",
+                    "operator": "eq",
+                    "value_type": "token",
+                    "value": "Roldana individual"
+                  }
+                ]
+              ]
+            },
+            "spec_evidence_source": {
+              "kind": "always"
+            },
+            "pulley_package_kind": {
+              "kind": "always"
+            },
+            "pulley_declared_position": {
+              "kind": "when",
+              "rows": [
+                [
+                  {
+                    "field": "pulley_package_kind",
+                    "operator": "eq",
+                    "value_type": "token",
+                    "value": "Roldana individual"
+                  }
+                ]
+              ]
+            },
+            "pulley_bearing_construction": {
+              "kind": "when",
+              "rows": [
+                [
+                  {
+                    "field": "pulley_package_kind",
+                    "operator": "eq",
+                    "value_type": "token",
+                    "value": "Roldana individual"
+                  }
+                ]
+              ]
+            },
+            "pulley_bearing_element_material": {
+              "kind": "when",
+              "rows": [
+                [
+                  {
+                    "field": "pulley_package_kind",
+                    "operator": "eq",
+                    "value_type": "token",
+                    "value": "Roldana individual"
+                  },
+                  {
+                    "field": "pulley_bearing_construction",
+                    "operator": "in",
+                    "value_type": "token",
+                    "value": [
+                      "Rodamiento de bolas",
+                      "Otra construcción OEM"
+                    ]
+                  }
+                ]
+              ]
+            },
+            "pulley_tooth_profile": {
+              "kind": "when",
+              "rows": [
+                [
+                  {
+                    "field": "pulley_package_kind",
+                    "operator": "eq",
+                    "value_type": "token",
+                    "value": "Roldana individual"
+                  }
+                ]
+              ]
+            },
+            "pulley_outer_diameter_mm": {
+              "kind": "when",
+              "rows": [
+                [
+                  {
+                    "field": "pulley_package_kind",
+                    "operator": "eq",
+                    "value_type": "token",
+                    "value": "Roldana individual"
+                  }
+                ]
+              ]
+            },
+            "pulley_width_mm": {
+              "kind": "when",
+              "rows": [
+                [
+                  {
+                    "field": "pulley_package_kind",
+                    "operator": "eq",
+                    "value_type": "token",
+                    "value": "Roldana individual"
+                  }
+                ]
+              ]
+            },
+            "pulley_bore_diameter_mm": {
+              "kind": "when",
+              "rows": [
+                [
+                  {
+                    "field": "pulley_package_kind",
+                    "operator": "eq",
+                    "value_type": "token",
+                    "value": "Roldana individual"
+                  }
+                ]
+              ]
+            },
+            "pulley_declared_speeds": {
+              "kind": "when",
+              "rows": [
+                [
+                  {
+                    "field": "pulley_package_kind",
+                    "operator": "eq",
+                    "value_type": "token",
+                    "value": "Roldana individual"
+                  }
+                ]
+              ]
+            },
+            "pulley_units": {
+              "kind": "when",
+              "rows": [
+                [
+                  {
+                    "field": "pulley_package_kind",
+                    "operator": "eq",
+                    "value_type": "token",
+                    "value": "Par de roldanas en el mismo envase"
+                  }
+                ]
+              ]
+            },
+            "pulley_unit_count": {
+              "kind": "when",
+              "rows": [
+                [
+                  {
+                    "field": "pulley_package_kind",
+                    "operator": "eq",
+                    "value_type": "token",
+                    "value": "Par de roldanas en el mismo envase"
+                  }
+                ]
+              ]
+            },
+            "pulley_unit_fitment_declarations": {
+              "kind": "when",
+              "rows": [
+                [
+                  {
+                    "field": "pulley_package_kind",
+                    "operator": "eq",
+                    "value_type": "token",
+                    "value": "Par de roldanas en el mismo envase"
+                  }
+                ]
+              ]
+            }
+          },
+          "required_when": {
+            "pulley_teeth": {
+              "kind": "when",
+              "rows": [
+                [
+                  {
+                    "field": "pulley_package_kind",
+                    "operator": "eq",
+                    "value_type": "token",
+                    "value": "Roldana individual"
+                  }
+                ]
+              ]
+            },
+            "compatible_derailleur_models": {
+              "kind": "never"
+            },
+            "derailleur_cage_length": {
+              "kind": "never"
+            },
+            "spec_evidence_source": {
+              "kind": "never"
+            },
+            "pulley_package_kind": {
+              "kind": "always"
+            },
+            "pulley_declared_position": {
+              "kind": "never"
+            },
+            "pulley_bearing_construction": {
+              "kind": "never"
+            },
+            "pulley_bearing_element_material": {
+              "kind": "never"
+            },
+            "pulley_tooth_profile": {
+              "kind": "never"
+            },
+            "pulley_outer_diameter_mm": {
+              "kind": "never"
+            },
+            "pulley_width_mm": {
+              "kind": "never"
+            },
+            "pulley_bore_diameter_mm": {
+              "kind": "never"
+            },
+            "pulley_declared_speeds": {
+              "kind": "never"
+            },
+            "pulley_units": {
+              "kind": "when",
+              "rows": [
+                [
+                  {
+                    "field": "pulley_package_kind",
+                    "operator": "eq",
+                    "value_type": "token",
+                    "value": "Par de roldanas en el mismo envase"
+                  }
+                ]
+              ]
+            },
+            "pulley_unit_count": {
+              "kind": "when",
+              "rows": [
+                [
+                  {
+                    "field": "pulley_package_kind",
+                    "operator": "eq",
+                    "value_type": "token",
+                    "value": "Par de roldanas en el mismo envase"
+                  }
+                ]
+              ]
+            },
+            "pulley_unit_fitment_declarations": {
+              "kind": "never"
+            }
+          },
+          "allowed_options": {},
+          "prerequisites": {
+            "derailleur_cage_length": [
+              "spec_evidence_source"
+            ],
+            "pulley_declared_speeds": [
+              "spec_evidence_source"
+            ],
+            "pulley_declared_position": [
+              "spec_evidence_source"
+            ],
+            "pulley_tooth_profile": [
+              "spec_evidence_source"
+            ],
+            "pulley_teeth": [
+              "spec_evidence_source"
+            ],
+            "pulley_bearing_construction": [
+              "spec_evidence_source"
+            ],
+            "pulley_bearing_element_material": [
+              "spec_evidence_source"
+            ],
+            "pulley_outer_diameter_mm": [
+              "spec_evidence_source"
+            ],
+            "pulley_width_mm": [
+              "spec_evidence_source"
+            ],
+            "pulley_bore_diameter_mm": [
+              "spec_evidence_source"
+            ]
+          },
+          "helpers": {
+            "pulley_package_kind": "Un par en el mismo envase puede ser dos piezas iguales o dos repuestos. No se deduce de él una guía superior y una tensión.",
+            "pulley_declared_position": "Park distingue la roldana guía superior de la de tensión inferior. Si la fuente no lo dice, se declara así y no se supone.",
+            "pulley_bearing_construction": "Cómo gira la roldana. El material de los elementos es otro campo: cerámico no es una construcción alternativa a un rodamiento.",
+            "pulley_bearing_element_material": "Sólo cuando hay elementos rodantes documentados.",
+            "pulley_tooth_profile": "Perfil publicado del dentado. No se deriva del número de velocidades ni del ancho.",
+            "pulley_outer_diameter_mm": "Cota publicada de esta pieza. El ancho no se deriva del número de velocidades.",
+            "pulley_width_mm": "Cota publicada de esta pieza. El ancho no se deriva del número de velocidades.",
+            "pulley_bore_diameter_mm": "Cota publicada de esta pieza. El ancho no se deriva del número de velocidades.",
+            "pulley_declared_speeds": "Rango que declara la fuente. No determina ancho, perfil ni compatibilidad con un cambio concreto.",
+            "pulley_units": "Cada ocurrencia física con su identidad y su fuente. Dos piezas iguales son dos filas; ninguna posición se supone.",
+            "pulley_unit_fitment_declarations": "Cada declaración pertenece a una roldana identificada. No extiende velocidades, modelos o jaulas a las otras piezas del envase."
+          },
+          "evidence_requirements": {
+            "pulley_teeth": "oem_or_package",
+            "compatible_derailleur_models": "oem_spec",
+            "derailleur_cage_length": "oem_or_package",
+            "spec_evidence_source": "oem_or_package",
+            "pulley_package_kind": "oem_or_package",
+            "pulley_declared_position": "oem_or_package",
+            "pulley_bearing_construction": "oem_or_package",
+            "pulley_bearing_element_material": "oem_or_package",
+            "pulley_tooth_profile": "oem_or_package",
+            "pulley_outer_diameter_mm": "oem_or_package",
+            "pulley_width_mm": "oem_or_package",
+            "pulley_bore_diameter_mm": "oem_or_package",
+            "pulley_declared_speeds": "oem_or_package",
+            "pulley_units": "oem_or_package",
+            "pulley_unit_count": "oem_or_package",
+            "pulley_unit_fitment_declarations": "oem_or_package"
+          },
+          "row_conditions": {
+            "version": 1,
+            "fields": {
+              "pulley_units": {
+                "allowed_when": {
+                  "bearing_element_material": {
+                    "kind": "when",
+                    "rows": [
+                      [
+                        {
+                          "field": "bearing_construction",
+                          "operator": "in",
+                          "value_type": "token",
+                          "value": [
+                            "Rodamiento de bolas",
+                            "Otra construcción OEM"
+                          ]
+                        }
+                      ]
+                    ]
+                  }
+                }
+              },
+              "compatible_derailleur_models": {
+                "allowed_when": {
+                  "brand": {
+                    "kind": "when",
+                    "rows": [
+                      [
+                        {
+                          "field": "scope_kind",
+                          "operator": "eq",
+                          "value_type": "token",
+                          "value": "Modelo documentado"
+                        }
+                      ]
+                    ]
+                  },
+                  "model": {
+                    "kind": "when",
+                    "rows": [
+                      [
+                        {
+                          "field": "scope_kind",
+                          "operator": "eq",
+                          "value_type": "token",
+                          "value": "Modelo documentado"
+                        }
+                      ]
+                    ]
+                  },
+                  "declared_interface": {
+                    "kind": "when",
+                    "rows": [
+                      [
+                        {
+                          "field": "scope_kind",
+                          "operator": "eq",
+                          "value_type": "token",
+                          "value": "Interfaz o estándar documentado"
+                        }
+                      ]
+                    ]
+                  }
+                },
+                "required_when": {
+                  "brand": {
+                    "kind": "when",
+                    "rows": [
+                      [
+                        {
+                          "field": "scope_kind",
+                          "operator": "eq",
+                          "value_type": "token",
+                          "value": "Modelo documentado"
+                        }
+                      ]
+                    ]
+                  },
+                  "model": {
+                    "kind": "when",
+                    "rows": [
+                      [
+                        {
+                          "field": "scope_kind",
+                          "operator": "eq",
+                          "value_type": "token",
+                          "value": "Modelo documentado"
+                        }
+                      ]
+                    ]
+                  },
+                  "declared_interface": {
+                    "kind": "when",
+                    "rows": [
+                      [
+                        {
+                          "field": "scope_kind",
+                          "operator": "eq",
+                          "value_type": "token",
+                          "value": "Interfaz o estándar documentado"
+                        }
+                      ]
+                    ]
+                  }
+                }
+              },
+              "pulley_unit_fitment_declarations": {
+                "allowed_when": {
+                  "brand": {
+                    "kind": "when",
+                    "rows": [
+                      [
+                        {
+                          "field": "scope_kind",
+                          "operator": "eq",
+                          "value_type": "token",
+                          "value": "Modelo documentado"
+                        }
+                      ]
+                    ]
+                  },
+                  "model": {
+                    "kind": "when",
+                    "rows": [
+                      [
+                        {
+                          "field": "scope_kind",
+                          "operator": "eq",
+                          "value_type": "token",
+                          "value": "Modelo documentado"
+                        }
+                      ]
+                    ]
+                  },
+                  "declared_interface": {
+                    "kind": "when",
+                    "rows": [
+                      [
+                        {
+                          "field": "scope_kind",
+                          "operator": "eq",
+                          "value_type": "token",
+                          "value": "Interfaz o estándar documentado"
+                        }
+                      ]
+                    ]
+                  }
+                },
+                "required_when": {
+                  "brand": {
+                    "kind": "when",
+                    "rows": [
+                      [
+                        {
+                          "field": "scope_kind",
+                          "operator": "eq",
+                          "value_type": "token",
+                          "value": "Modelo documentado"
+                        }
+                      ]
+                    ]
+                  },
+                  "model": {
+                    "kind": "when",
+                    "rows": [
+                      [
+                        {
+                          "field": "scope_kind",
+                          "operator": "eq",
+                          "value_type": "token",
+                          "value": "Modelo documentado"
+                        }
+                      ]
+                    ]
+                  },
+                  "declared_interface": {
+                    "kind": "when",
+                    "rows": [
+                      [
+                        {
+                          "field": "scope_kind",
+                          "operator": "eq",
+                          "value_type": "token",
+                          "value": "Interfaz o estándar documentado"
+                        }
+                      ]
+                    ]
+                  }
+                }
+              }
+            }
+          },
+          "row_coherence": {
+            "version": 2,
+            "links": [
+              {
+                "id": "pulley_claim_owns_its_unit",
+                "field": "pulley_unit_fitment_declarations",
+                "column": "unit_reference",
+                "target_field": "pulley_units",
+                "label_columns": [
+                  "unit_identity"
+                ]
+              }
+            ],
+            "cardinalities": [
+              {
+                "id": "documented_pulleys_in_the_package",
+                "field": "pulley_units",
+                "total_field": "pulley_unit_count"
+              }
+            ]
+          }
+        },
+        "id": "e009fd36-b385-4224-b4be-d448543be7bd",
+        "is_active": true,
+        "key": "derailleur_pulley",
+        "name": "Roldana Cambio",
+        "technical_family": "derailleur_pulley",
+        "tenant_id": null
+      },
+      {
+        "contract_version": 16,
+        "created_at": "2026-04-26T17:27:33.100573+00:00",
+        "default_tags": [
+          "drivetrain",
+          "chain_guide"
+        ],
+        "description": "Guía de cadena; compatibilidad por montaje, plato y línea de cadena.",
+        "form_contract": {
+          "rules_version": 2,
+          "roles": {
+            "chain_guide_mount_type": "legacy",
+            "chainring_teeth_min": "measurement",
+            "chainring_teeth_max": "measurement",
+            "chainring_teeth": "legacy",
+            "chainline_mm": "measurement",
+            "spec_evidence_source": "declaration",
+            "chain_guide_mount_options": "primary",
+            "chain_guide_included_parts": "contents",
+            "chain_guide_frame_exclusions": "declaration",
+            "chain_guide_chainline_adjustment_mm": "measurement",
+            "chain_guide_chainline_datum": "measurement",
+            "chain_guide_assembled_weights": "measurement"
+          },
+          "semantic_roles": {
+            "chain_guide_mount_type": "legacy",
+            "chainring_teeth_min": "compatibility",
+            "chainring_teeth_max": "compatibility",
+            "chainring_teeth": "legacy",
+            "chainline_mm": "measurement",
+            "spec_evidence_source": "evidence",
+            "chain_guide_mount_options": "compatibility",
+            "chain_guide_included_parts": "contents",
+            "chain_guide_frame_exclusions": "declaration",
+            "chain_guide_chainline_adjustment_mm": "compatibility",
+            "chain_guide_chainline_datum": "compatibility",
+            "chain_guide_assembled_weights": "compatibility"
+          },
+          "labels": {},
+          "allowed_when": {
+            "chain_guide_mount_type": {
+              "kind": "never"
+            },
+            "chainring_teeth_min": {
+              "kind": "always"
+            },
+            "chainring_teeth_max": {
+              "kind": "always"
+            },
+            "chainring_teeth": {
+              "kind": "always"
+            },
+            "chainline_mm": {
+              "kind": "always"
+            },
+            "spec_evidence_source": {
+              "kind": "always"
+            },
+            "chain_guide_mount_options": {
+              "kind": "always"
+            },
+            "chain_guide_included_parts": {
+              "kind": "always"
+            },
+            "chain_guide_frame_exclusions": {
+              "kind": "always"
+            },
+            "chain_guide_chainline_adjustment_mm": {
+              "kind": "always"
+            },
+            "chain_guide_chainline_datum": {
+              "kind": "always"
+            },
+            "chain_guide_assembled_weights": {
+              "kind": "always"
+            }
+          },
+          "required_when": {
+            "chain_guide_mount_type": {
+              "kind": "never"
+            },
+            "chainring_teeth_min": {
+              "kind": "never"
+            },
+            "chainring_teeth_max": {
+              "kind": "never"
+            },
+            "chainring_teeth": {
+              "kind": "never"
+            },
+            "chainline_mm": {
+              "kind": "never"
+            },
+            "spec_evidence_source": {
+              "kind": "never"
+            },
+            "chain_guide_mount_options": {
+              "kind": "always"
+            },
+            "chain_guide_included_parts": {
+              "kind": "never"
+            },
+            "chain_guide_frame_exclusions": {
+              "kind": "never"
+            },
+            "chain_guide_chainline_adjustment_mm": {
+              "kind": "never"
+            },
+            "chain_guide_chainline_datum": {
+              "kind": "never"
+            },
+            "chain_guide_assembled_weights": {
+              "kind": "never"
+            }
+          },
+          "allowed_options": {},
+          "prerequisites": {
+            "chainline_mm": [
+              "chain_guide_chainline_datum",
+              "spec_evidence_source"
+            ],
+            "chain_guide_chainline_adjustment_mm": [
+              "spec_evidence_source"
+            ],
+            "chain_guide_chainline_datum": [
+              "spec_evidence_source"
+            ],
+            "chainring_teeth_min": [
+              "spec_evidence_source"
+            ],
+            "chainring_teeth_max": [
+              "spec_evidence_source"
+            ]
+          },
+          "helpers": {
+            "chain_guide_mount_options": "Un SKU puede documentar más de un estándar. Tener los anclajes no certifica un cuadro: las exclusiones van aparte.",
+            "chain_guide_included_parts": "Componentes realmente incluidos y cuál viene montado. Un rango total de platos no vuelve intercambiables sus placas. El peso aquí corresponde a la pieza suelta; un peso del conjunto montado pertenece a su configuración completa.",
+            "chain_guide_frame_exclusions": "Incompatibilidades que publica la fuente, por modelo y generación o por clase de cuadro.",
+            "chain_guide_chainline_adjustment_mm": "Recorrido que permite el ajuste, no una línea de cadena. Una ficha que rotula «Chainline: 7,5 mm de ajuste» declara recorrido.",
+            "chain_guide_chainline_datum": "Desde qué referencia mide la fuente la línea de cadena instalada. Sin datum, la cifra no se compara con otra ficha.",
+            "chainline_mm": "Línea de cadena instalada según la fuente y su datum. No recibe el recorrido de ajuste, que tiene su propio campo.",
+            "chainring_teeth_min": "Capacidad publicada para esta variante y las configuraciones que documenta su fabricante. No se calcula uniendo rangos de piezas.",
+            "chainring_teeth_max": "Capacidad publicada para esta variante y las configuraciones que documenta su fabricante. No se calcula uniendo rangos de piezas.",
+            "chain_guide_assembled_weights": "Peso publicado del conjunto completo con una pieza concreta montada. No es el peso de esa pieza ni del envase con sus repuestos."
+          },
+          "evidence_requirements": {
+            "chain_guide_mount_type": "oem_spec",
+            "chainring_teeth_min": "oem_spec",
+            "chainring_teeth_max": "oem_spec",
+            "chainring_teeth": "name_reading_hint_only",
+            "chainline_mm": "oem_spec",
+            "spec_evidence_source": "oem_or_package",
+            "chain_guide_mount_options": "oem_or_package",
+            "chain_guide_included_parts": "oem_or_package",
+            "chain_guide_frame_exclusions": "oem_or_package",
+            "chain_guide_chainline_adjustment_mm": "oem_or_package",
+            "chain_guide_chainline_datum": "oem_or_package",
+            "chain_guide_assembled_weights": "oem_or_package"
+          },
+          "scalar_ordered_pairs": [
+            [
+              "chainring_teeth_min",
+              "chainring_teeth_max"
+            ]
+          ],
+          "row_conditions": {
+            "version": 1,
+            "fields": {
+              "chain_guide_frame_exclusions": {
+                "allowed_when": {
+                  "brand": {
+                    "kind": "when",
+                    "rows": [
+                      [
+                        {
+                          "field": "scope_kind",
+                          "operator": "eq",
+                          "value_type": "token",
+                          "value": "Modelo documentado"
+                        }
+                      ]
+                    ]
+                  },
+                  "model": {
+                    "kind": "when",
+                    "rows": [
+                      [
+                        {
+                          "field": "scope_kind",
+                          "operator": "eq",
+                          "value_type": "token",
+                          "value": "Modelo documentado"
+                        }
+                      ]
+                    ]
+                  },
+                  "declared_interface": {
+                    "kind": "when",
+                    "rows": [
+                      [
+                        {
+                          "field": "scope_kind",
+                          "operator": "eq",
+                          "value_type": "token",
+                          "value": "Interfaz o estándar documentado"
+                        }
+                      ]
+                    ]
+                  }
+                },
+                "required_when": {
+                  "brand": {
+                    "kind": "when",
+                    "rows": [
+                      [
+                        {
+                          "field": "scope_kind",
+                          "operator": "eq",
+                          "value_type": "token",
+                          "value": "Modelo documentado"
+                        }
+                      ]
+                    ]
+                  },
+                  "model": {
+                    "kind": "when",
+                    "rows": [
+                      [
+                        {
+                          "field": "scope_kind",
+                          "operator": "eq",
+                          "value_type": "token",
+                          "value": "Modelo documentado"
+                        }
+                      ]
+                    ]
+                  },
+                  "declared_interface": {
+                    "kind": "when",
+                    "rows": [
+                      [
+                        {
+                          "field": "scope_kind",
+                          "operator": "eq",
+                          "value_type": "token",
+                          "value": "Interfaz o estándar documentado"
+                        }
+                      ]
+                    ]
+                  }
+                }
+              }
+            }
+          },
+          "row_coherence": {
+            "version": 1,
+            "links": [
+              {
+                "id": "assembled_weight_names_its_mounted_piece",
+                "field": "chain_guide_assembled_weights",
+                "column": "mounted_part_reference",
+                "target_field": "chain_guide_included_parts",
+                "label_columns": [
+                  "part_identity"
+                ]
+              }
+            ]
+          }
+        },
+        "id": "0aaec6de-c69d-4e1e-9b03-995805a30a9c",
+        "is_active": true,
+        "key": "chain_guide",
+        "name": "Guía de Cadena",
+        "technical_family": "chain_guide",
+        "tenant_id": null
+      }
+    ],
+    "spec_template_fields": [
+      {
+        "constraint_rules": [],
+        "created_at": "2026-04-26T17:27:53.621862+00:00",
+        "default_value_json": null,
+        "helper_text": null,
+        "id": "bdd483c1-6586-40ac-abc4-eaad104f8920",
+        "is_required": false,
+        "option_rules": [],
+        "section_key": "primary",
+        "sort_order": 0,
+        "spec_definition_id": "61dfef30-5231-49c8-aea8-234e9030fe14",
+        "template_id": "a505c7c6-ef02-4706-900b-25d927886669",
+        "tenant_id": null,
+        "visibility_rules": []
+      },
+      {
+        "section_key": "measurement",
+        "sort_order": 10,
+        "is_required": false,
+        "visibility_rules": [],
+        "option_rules": [],
+        "constraint_rules": [],
+        "id": "17322768-1e2c-5d28-9a27-726842957604",
+        "tenant_id": null,
+        "template_id": "a505c7c6-ef02-4706-900b-25d927886669",
+        "spec_definition_id": "a34e0baf-2cc8-592a-84cf-6f7482cf2f0b",
+        "default_value_json": null,
+        "helper_text": null
+      },
+      {
+        "constraint_rules": [],
+        "created_at": "2026-04-26T17:27:53.621862+00:00",
+        "default_value_json": null,
+        "helper_text": null,
+        "id": "797b8df6-1dd3-406f-b7ee-bc9bbf5225a9",
+        "is_required": false,
+        "option_rules": [],
+        "section_key": "legacy",
+        "sort_order": 20,
+        "spec_definition_id": "bc2fb22d-bde5-4f05-b440-f1c4466db15d",
+        "template_id": "a505c7c6-ef02-4706-900b-25d927886669",
+        "tenant_id": null,
+        "visibility_rules": []
+      },
+      {
+        "section_key": "legacy",
+        "sort_order": 30,
+        "is_required": false,
+        "visibility_rules": [],
+        "option_rules": [],
+        "constraint_rules": [],
+        "id": "e431cc41-bfe3-5460-ab3b-f6c9d009d3fc",
+        "tenant_id": null,
+        "template_id": "a505c7c6-ef02-4706-900b-25d927886669",
+        "spec_definition_id": "3b2eee3d-fdc9-5f71-ac21-af83ed242977",
+        "default_value_json": null,
+        "helper_text": null
+      },
+      {
+        "constraint_rules": [],
+        "created_at": "2026-04-26T17:27:53.621862+00:00",
+        "default_value_json": null,
+        "helper_text": null,
+        "id": "e03a5a61-cd4c-428e-a291-fa8256192209",
+        "is_required": false,
+        "option_rules": [],
+        "section_key": "legacy",
+        "sort_order": 40,
+        "spec_definition_id": "4d2dc06e-0eec-41b4-923a-3fb69bb534a5",
+        "template_id": "a505c7c6-ef02-4706-900b-25d927886669",
+        "tenant_id": null,
+        "visibility_rules": []
+      },
+      {
+        "section_key": "measurement",
+        "sort_order": 50,
+        "is_required": false,
+        "visibility_rules": [],
+        "option_rules": [],
+        "constraint_rules": [],
+        "id": "05329cf0-a106-5d67-901d-38302cbdb611",
+        "tenant_id": null,
+        "template_id": "a505c7c6-ef02-4706-900b-25d927886669",
+        "spec_definition_id": "ec30b053-d2c6-50e5-a536-e4c83af8d48c",
+        "default_value_json": null,
+        "helper_text": null
+      },
+      {
+        "constraint_rules": [],
+        "created_at": "2026-09-06T06:58:57.745728+00:00",
+        "default_value_json": null,
+        "helper_text": null,
+        "id": "c8c0a204-b5d3-4442-a8bd-af7ae24e1b99",
+        "is_required": false,
+        "option_rules": [],
+        "section_key": "declaration",
+        "sort_order": 60,
+        "spec_definition_id": "4f055961-6c16-430b-a4e2-e6b09dc1cccc",
+        "template_id": "a505c7c6-ef02-4706-900b-25d927886669",
+        "tenant_id": null,
+        "visibility_rules": []
+      },
+      {
+        "section_key": "primary",
+        "sort_order": 70,
+        "is_required": false,
+        "visibility_rules": [],
+        "option_rules": [],
+        "constraint_rules": [],
+        "id": "c154e975-79da-5d2c-98e6-4cc26ede2f7b",
+        "tenant_id": null,
+        "template_id": "a505c7c6-ef02-4706-900b-25d927886669",
+        "spec_definition_id": "e8ff6119-357d-5c7e-bc15-fd9e5cc2e7a8",
+        "default_value_json": null,
+        "helper_text": null
+      },
+      {
+        "section_key": "primary",
+        "sort_order": 80,
+        "is_required": false,
+        "visibility_rules": [],
+        "option_rules": [],
+        "constraint_rules": [],
+        "id": "c331f9ad-a92b-57da-bedb-dc5e76306157",
+        "tenant_id": null,
+        "template_id": "a505c7c6-ef02-4706-900b-25d927886669",
+        "spec_definition_id": "4d0bf51b-a758-509e-befe-ecabd054773f",
+        "default_value_json": null,
+        "helper_text": null
+      },
+      {
+        "constraint_rules": [],
+        "created_at": "2026-04-26T17:27:53.621862+00:00",
+        "default_value_json": null,
+        "helper_text": null,
+        "id": "5fe62a11-e97c-4662-9497-0f75a6ef4e3a",
+        "is_required": false,
+        "option_rules": [],
+        "section_key": "primary",
+        "sort_order": 0,
+        "spec_definition_id": "0138d251-2413-47d7-ad9a-390814a33763",
+        "template_id": "e009fd36-b385-4224-b4be-d448543be7bd",
+        "tenant_id": null,
+        "visibility_rules": []
+      },
+      {
+        "section_key": "measurement",
+        "sort_order": 40,
+        "is_required": false,
+        "visibility_rules": [],
+        "option_rules": [],
+        "constraint_rules": [],
+        "id": "c52bf9f9-16aa-5ad4-9f38-33ab61f832f0",
+        "tenant_id": null,
+        "template_id": "e009fd36-b385-4224-b4be-d448543be7bd",
+        "spec_definition_id": "a27bda44-6b0c-531a-8a4a-f4bf409f19a9",
+        "default_value_json": null,
+        "helper_text": null
+      },
+      {
+        "constraint_rules": [],
+        "created_at": "2026-04-26T17:27:53.621862+00:00",
+        "default_value_json": null,
+        "helper_text": null,
+        "id": "4d805329-f988-404b-b152-7f0f79d2175c",
+        "is_required": false,
+        "option_rules": [],
+        "section_key": "declaration",
+        "sort_order": 50,
+        "spec_definition_id": "be66f64e-3ceb-4688-89e8-012549a8a2e4",
+        "template_id": "e009fd36-b385-4224-b4be-d448543be7bd",
+        "tenant_id": null,
+        "visibility_rules": []
+      },
+      {
+        "constraint_rules": [],
+        "created_at": "2026-09-06T06:58:57.745728+00:00",
+        "default_value_json": null,
+        "helper_text": null,
+        "id": "76f69927-2569-412f-bd81-a4de33291510",
+        "is_required": false,
+        "option_rules": [],
+        "section_key": "declaration",
+        "sort_order": 60,
+        "spec_definition_id": "4f055961-6c16-430b-a4e2-e6b09dc1cccc",
+        "template_id": "e009fd36-b385-4224-b4be-d448543be7bd",
+        "tenant_id": null,
+        "visibility_rules": []
+      },
+      {
+        "section_key": "primary",
+        "sort_order": 70,
+        "is_required": false,
+        "visibility_rules": [],
+        "option_rules": [],
+        "constraint_rules": [],
+        "id": "a69464e1-c697-5863-9dd3-faaecf1fe0d0",
+        "tenant_id": null,
+        "template_id": "e009fd36-b385-4224-b4be-d448543be7bd",
+        "spec_definition_id": "8cfc97b6-c36c-5aff-8ea7-76027b0c7379",
+        "default_value_json": null,
+        "helper_text": null
+      },
+      {
+        "section_key": "primary",
+        "sort_order": 80,
+        "is_required": false,
+        "visibility_rules": [],
+        "option_rules": [],
+        "constraint_rules": [],
+        "id": "75ec1f11-d77b-566e-b1c7-4b0a8185644c",
+        "tenant_id": null,
+        "template_id": "e009fd36-b385-4224-b4be-d448543be7bd",
+        "spec_definition_id": "45237794-a4cf-58ab-be3d-a75a9eb12ce2",
+        "default_value_json": null,
+        "helper_text": null
+      },
+      {
+        "section_key": "primary",
+        "sort_order": 90,
+        "is_required": false,
+        "visibility_rules": [],
+        "option_rules": [],
+        "constraint_rules": [],
+        "id": "2daed25d-b7be-59fe-82d0-cf6c2b2c2fdf",
+        "tenant_id": null,
+        "template_id": "e009fd36-b385-4224-b4be-d448543be7bd",
+        "spec_definition_id": "99e537b6-d8ea-532a-b5c8-568b7d951790",
+        "default_value_json": null,
+        "helper_text": null
+      },
+      {
+        "section_key": "primary",
+        "sort_order": 100,
+        "is_required": false,
+        "visibility_rules": [],
+        "option_rules": [],
+        "constraint_rules": [],
+        "id": "4876e64d-fcfd-56a8-b399-7c2d4c02b651",
+        "tenant_id": null,
+        "template_id": "e009fd36-b385-4224-b4be-d448543be7bd",
+        "spec_definition_id": "ef5b0c6b-cccd-50e4-b0be-caf3f751928a",
+        "default_value_json": null,
+        "helper_text": null
+      },
+      {
+        "section_key": "primary",
+        "sort_order": 110,
+        "is_required": false,
+        "visibility_rules": [],
+        "option_rules": [],
+        "constraint_rules": [],
+        "id": "d598cbe0-58a9-5aa7-a9c1-b53076f0c867",
+        "tenant_id": null,
+        "template_id": "e009fd36-b385-4224-b4be-d448543be7bd",
+        "spec_definition_id": "713ee0c0-559f-5dd0-a26f-872a7b09e8bd",
+        "default_value_json": null,
+        "helper_text": null
+      },
+      {
+        "section_key": "measurement",
+        "sort_order": 120,
+        "is_required": false,
+        "visibility_rules": [],
+        "option_rules": [],
+        "constraint_rules": [],
+        "id": "7b6c9202-420a-568b-84b3-a2966913fad5",
+        "tenant_id": null,
+        "template_id": "e009fd36-b385-4224-b4be-d448543be7bd",
+        "spec_definition_id": "5b827f3f-61f2-5e7a-871c-7eb50fc366bf",
+        "default_value_json": null,
+        "helper_text": null
+      },
+      {
+        "section_key": "measurement",
+        "sort_order": 130,
+        "is_required": false,
+        "visibility_rules": [],
+        "option_rules": [],
+        "constraint_rules": [],
+        "id": "1634947f-329a-5e0f-9924-6e1b0a322ae1",
+        "tenant_id": null,
+        "template_id": "e009fd36-b385-4224-b4be-d448543be7bd",
+        "spec_definition_id": "f412e2bc-6391-57dc-b548-08489fd68cb9",
+        "default_value_json": null,
+        "helper_text": null
+      },
+      {
+        "section_key": "measurement",
+        "sort_order": 140,
+        "is_required": false,
+        "visibility_rules": [],
+        "option_rules": [],
+        "constraint_rules": [],
+        "id": "5a260223-503f-5165-a0c2-2ae5b0b1cc70",
+        "tenant_id": null,
+        "template_id": "e009fd36-b385-4224-b4be-d448543be7bd",
+        "spec_definition_id": "2cdbe3cb-057d-575c-b2bf-8bacb9012ebd",
+        "default_value_json": null,
+        "helper_text": null
+      },
+      {
+        "section_key": "declaration",
+        "sort_order": 150,
+        "is_required": false,
+        "visibility_rules": [],
+        "option_rules": [],
+        "constraint_rules": [],
+        "id": "c61ab87b-78a4-531e-a46c-a463dfbee8ea",
+        "tenant_id": null,
+        "template_id": "e009fd36-b385-4224-b4be-d448543be7bd",
+        "spec_definition_id": "34457337-892e-55a1-b7ff-a412caf98346",
+        "default_value_json": null,
+        "helper_text": null
+      },
+      {
+        "section_key": "contents",
+        "sort_order": 160,
+        "is_required": false,
+        "visibility_rules": [],
+        "option_rules": [],
+        "constraint_rules": [],
+        "id": "da5f534e-3e45-551e-8036-bda6b34c56d2",
+        "tenant_id": null,
+        "template_id": "e009fd36-b385-4224-b4be-d448543be7bd",
+        "spec_definition_id": "b24dedcb-71fb-5b62-bde4-c1dddf086059",
+        "default_value_json": null,
+        "helper_text": null
+      },
+      {
+        "section_key": "contents",
+        "sort_order": 170,
+        "is_required": false,
+        "visibility_rules": [],
+        "option_rules": [],
+        "constraint_rules": [],
+        "id": "4543206f-f658-51b5-b7d2-3986d9cf4b75",
+        "tenant_id": null,
+        "template_id": "e009fd36-b385-4224-b4be-d448543be7bd",
+        "spec_definition_id": "9aceae0e-086a-536b-a251-bd46a1b22ed1",
+        "default_value_json": null,
+        "helper_text": null
+      },
+      {
+        "section_key": "declaration",
+        "sort_order": 180,
+        "is_required": false,
+        "visibility_rules": [],
+        "option_rules": [],
+        "constraint_rules": [],
+        "id": "eb1f720b-451a-59c1-8164-6ec8292ff986",
+        "tenant_id": null,
+        "template_id": "e009fd36-b385-4224-b4be-d448543be7bd",
+        "spec_definition_id": "fb42c233-70f0-5c5b-bd7b-aeb9665d118b",
+        "default_value_json": null,
+        "helper_text": null
+      },
+      {
+        "constraint_rules": [],
+        "created_at": "2026-04-26T17:27:53.621862+00:00",
+        "default_value_json": null,
+        "helper_text": null,
+        "id": "0973814f-0532-4174-937c-209baf2a2c00",
+        "is_required": false,
+        "option_rules": [],
+        "section_key": "legacy",
+        "sort_order": 0,
+        "spec_definition_id": "c5e7c370-7a77-474f-87d2-a30c861994c4",
+        "template_id": "0aaec6de-c69d-4e1e-9b03-995805a30a9c",
+        "tenant_id": null,
+        "visibility_rules": []
+      },
+      {
+        "section_key": "measurement",
+        "sort_order": 10,
+        "is_required": false,
+        "visibility_rules": [],
+        "option_rules": [],
+        "constraint_rules": [],
+        "id": "d18218a1-4180-57b8-adee-4a49b30273e9",
+        "tenant_id": null,
+        "template_id": "0aaec6de-c69d-4e1e-9b03-995805a30a9c",
+        "spec_definition_id": "0fbc357a-a25b-5128-b68b-5dd484bf7b2e",
+        "default_value_json": null,
+        "helper_text": null
+      },
+      {
+        "section_key": "measurement",
+        "sort_order": 20,
+        "is_required": false,
+        "visibility_rules": [],
+        "option_rules": [],
+        "constraint_rules": [],
+        "id": "9c5e8bd6-51c5-56c6-9779-1706a0f7e994",
+        "tenant_id": null,
+        "template_id": "0aaec6de-c69d-4e1e-9b03-995805a30a9c",
+        "spec_definition_id": "0450d9a2-f938-56d4-8747-ba63ba55f2fd",
+        "default_value_json": null,
+        "helper_text": null
+      },
+      {
+        "constraint_rules": [],
+        "created_at": "2026-04-26T17:27:53.621862+00:00",
+        "default_value_json": null,
+        "helper_text": null,
+        "id": "d842380c-e785-434f-88d0-061bc31e64db",
+        "is_required": false,
+        "option_rules": [],
+        "section_key": "legacy",
+        "sort_order": 30,
+        "spec_definition_id": "7547914f-7bb0-4a45-b088-1a3b50c3aa22",
+        "template_id": "0aaec6de-c69d-4e1e-9b03-995805a30a9c",
+        "tenant_id": null,
+        "visibility_rules": []
+      },
+      {
+        "constraint_rules": [],
+        "created_at": "2026-04-26T17:27:53.621862+00:00",
+        "default_value_json": null,
+        "helper_text": null,
+        "id": "5a1fb5b5-452b-4811-ae34-8a485ada6eb0",
+        "is_required": false,
+        "option_rules": [],
+        "section_key": "measurement",
+        "sort_order": 40,
+        "spec_definition_id": "28854686-ee6c-440a-ac42-9aa1da65e718",
+        "template_id": "0aaec6de-c69d-4e1e-9b03-995805a30a9c",
+        "tenant_id": null,
+        "visibility_rules": []
+      },
+      {
+        "constraint_rules": [],
+        "created_at": "2026-09-06T06:58:57.745728+00:00",
+        "default_value_json": null,
+        "helper_text": null,
+        "id": "f43bfd94-c438-43a6-b36c-6253f97f1fcc",
+        "is_required": false,
+        "option_rules": [],
+        "section_key": "declaration",
+        "sort_order": 60,
+        "spec_definition_id": "4f055961-6c16-430b-a4e2-e6b09dc1cccc",
+        "template_id": "0aaec6de-c69d-4e1e-9b03-995805a30a9c",
+        "tenant_id": null,
+        "visibility_rules": []
+      },
+      {
+        "section_key": "primary",
+        "sort_order": 70,
+        "is_required": false,
+        "visibility_rules": [],
+        "option_rules": [],
+        "constraint_rules": [],
+        "id": "570fe769-2ebc-5d69-bb02-051f5de746c2",
+        "tenant_id": null,
+        "template_id": "0aaec6de-c69d-4e1e-9b03-995805a30a9c",
+        "spec_definition_id": "8129501b-d1b0-5eea-9992-11371dddf51e",
+        "default_value_json": null,
+        "helper_text": null
+      },
+      {
+        "section_key": "contents",
+        "sort_order": 80,
+        "is_required": false,
+        "visibility_rules": [],
+        "option_rules": [],
+        "constraint_rules": [],
+        "id": "115b756a-9918-542b-b774-b2d48f059c8e",
+        "tenant_id": null,
+        "template_id": "0aaec6de-c69d-4e1e-9b03-995805a30a9c",
+        "spec_definition_id": "13f7156b-990e-5dcf-ab9c-4af649e61ee5",
+        "default_value_json": null,
+        "helper_text": null
+      },
+      {
+        "section_key": "declaration",
+        "sort_order": 90,
+        "is_required": false,
+        "visibility_rules": [],
+        "option_rules": [],
+        "constraint_rules": [],
+        "id": "c091622f-1d0f-5d06-aedf-0d3de33dd4cd",
+        "tenant_id": null,
+        "template_id": "0aaec6de-c69d-4e1e-9b03-995805a30a9c",
+        "spec_definition_id": "90d4410d-ff54-5476-a20b-585ce8f68b25",
+        "default_value_json": null,
+        "helper_text": null
+      },
+      {
+        "section_key": "measurement",
+        "sort_order": 100,
+        "is_required": false,
+        "visibility_rules": [],
+        "option_rules": [],
+        "constraint_rules": [],
+        "id": "35616c25-0446-5c92-bf66-7ecece7d4887",
+        "tenant_id": null,
+        "template_id": "0aaec6de-c69d-4e1e-9b03-995805a30a9c",
+        "spec_definition_id": "f349fc4b-2f5b-5c0b-a2cb-d153828a73ac",
+        "default_value_json": null,
+        "helper_text": null
+      },
+      {
+        "section_key": "measurement",
+        "sort_order": 110,
+        "is_required": false,
+        "visibility_rules": [],
+        "option_rules": [],
+        "constraint_rules": [],
+        "id": "250aa577-f323-5c48-855b-f831809b0d76",
+        "tenant_id": null,
+        "template_id": "0aaec6de-c69d-4e1e-9b03-995805a30a9c",
+        "spec_definition_id": "eb9d9be1-8607-55d3-8f2e-6ed3677c742d",
+        "default_value_json": null,
+        "helper_text": null
+      },
+      {
+        "section_key": "measurement",
+        "sort_order": 120,
+        "is_required": false,
+        "visibility_rules": [],
+        "option_rules": [],
+        "constraint_rules": [],
+        "id": "66c6da8c-ee4d-55d9-ab0a-a1db6ff741e7",
+        "tenant_id": null,
+        "template_id": "0aaec6de-c69d-4e1e-9b03-995805a30a9c",
+        "spec_definition_id": "c1d2402b-0f78-5934-bb17-6144cbe657d6",
+        "default_value_json": null,
+        "helper_text": null
+      }
+    ]
+  },
+  "before": {
+    "spec_templates": [
+      {
+        "contract_version": 3,
+        "created_at": "2026-04-26T17:27:33.100573+00:00",
+        "default_tags": [
+          "drivetrain",
+          "chain_guide"
+        ],
+        "description": "Guía de cadena; compatibilidad por montaje, plato y línea de cadena.",
+        "form_contract": {
+          "coverage": "template",
+          "helpers": {},
+          "labels": {},
+          "prerequisites": {},
+          "roles": {
+            "chain_guide_mount_type": "primary",
+            "chainline_mm": "measurement",
+            "chainring_teeth": "primary",
+            "spec_evidence_source": "declaration"
+          },
+          "version": 1
+        },
+        "id": "0aaec6de-c69d-4e1e-9b03-995805a30a9c",
+        "is_active": true,
+        "key": "chain_guide",
+        "name": "Guía de Cadena",
+        "technical_family": "chain_guide",
+        "tenant_id": null,
+        "updated_at": "2026-04-26T17:27:33.100573+00:00"
+      },
+      {
+        "contract_version": 2,
+        "created_at": "2026-04-26T17:27:33.100573+00:00",
+        "default_tags": [
+          "drivetrain",
+          "hanger"
+        ],
+        "description": "Postiza o fusible de cambio; compatibilidad por cuadro/modelo y montaje.",
+        "form_contract": {
+          "coverage": "template",
+          "helpers": {},
+          "labels": {},
+          "prerequisites": {},
+          "roles": {
+            "compatible_frame_hint": "declaration",
+            "hanger_model_code": "primary",
+            "rear_derailleur_mount_type": "primary",
+            "spec_evidence_source": "declaration"
+          },
+          "version": 1
+        },
+        "id": "a505c7c6-ef02-4706-900b-25d927886669",
+        "is_active": true,
+        "key": "derailleur_hanger",
+        "name": "Postiza / Pata Cambio",
+        "technical_family": "derailleur_hanger",
+        "tenant_id": null,
+        "updated_at": "2026-04-26T17:27:33.100573+00:00"
+      },
+      {
+        "contract_version": 3,
+        "created_at": "2026-04-26T17:27:33.100573+00:00",
+        "default_tags": [
+          "drivetrain",
+          "derailleur"
+        ],
+        "description": "Roldana/polea de cambio trasero.",
+        "form_contract": {
+          "coverage": "template",
+          "helpers": {},
+          "labels": {},
+          "prerequisites": {},
+          "roles": {
+            "derailleur_cage_length": "primary",
+            "pulley_teeth": "measurement",
+            "spec_evidence_source": "declaration"
+          },
+          "version": 1
+        },
+        "id": "e009fd36-b385-4224-b4be-d448543be7bd",
+        "is_active": true,
+        "key": "derailleur_pulley",
+        "name": "Roldana Cambio",
+        "technical_family": "derailleur_pulley",
+        "tenant_id": null,
+        "updated_at": "2026-04-26T17:27:33.100573+00:00"
+      }
+    ],
+    "spec_template_fields": [
+      {
+        "constraint_rules": [],
+        "created_at": "2026-04-26T17:27:53.621862+00:00",
+        "default_value_json": null,
+        "helper_text": null,
+        "id": "0973814f-0532-4174-937c-209baf2a2c00",
+        "is_required": false,
+        "option_rules": [],
+        "section_key": "mounting",
+        "sort_order": 10,
+        "spec_definition_id": "c5e7c370-7a77-474f-87d2-a30c861994c4",
+        "template_id": "0aaec6de-c69d-4e1e-9b03-995805a30a9c",
+        "tenant_id": null,
+        "updated_at": "2026-04-26T17:27:53.621862+00:00",
+        "visibility_rules": []
+      },
+      {
+        "constraint_rules": [],
+        "created_at": "2026-04-26T17:27:53.621862+00:00",
+        "default_value_json": null,
+        "helper_text": null,
+        "id": "4d805329-f988-404b-b152-7f0f79d2175c",
+        "is_required": false,
+        "option_rules": [],
+        "section_key": "compatibility",
+        "sort_order": 20,
+        "spec_definition_id": "be66f64e-3ceb-4688-89e8-012549a8a2e4",
+        "template_id": "e009fd36-b385-4224-b4be-d448543be7bd",
+        "tenant_id": null,
+        "updated_at": "2026-04-26T17:27:53.621862+00:00",
+        "visibility_rules": []
+      },
+      {
+        "constraint_rules": [],
+        "created_at": "2026-04-26T17:27:53.621862+00:00",
+        "default_value_json": null,
+        "helper_text": null,
+        "id": "5a1fb5b5-452b-4811-ae34-8a485ada6eb0",
+        "is_required": false,
+        "option_rules": [],
+        "section_key": "compatibility",
+        "sort_order": 20,
+        "spec_definition_id": "28854686-ee6c-440a-ac42-9aa1da65e718",
+        "template_id": "0aaec6de-c69d-4e1e-9b03-995805a30a9c",
+        "tenant_id": null,
+        "updated_at": "2026-04-26T17:27:53.621862+00:00",
+        "visibility_rules": []
+      },
+      {
+        "constraint_rules": [],
+        "created_at": "2026-04-26T17:27:53.621862+00:00",
+        "default_value_json": null,
+        "helper_text": null,
+        "id": "5fe62a11-e97c-4662-9497-0f75a6ef4e3a",
+        "is_required": true,
+        "option_rules": [],
+        "section_key": "compatibility",
+        "sort_order": 10,
+        "spec_definition_id": "0138d251-2413-47d7-ad9a-390814a33763",
+        "template_id": "e009fd36-b385-4224-b4be-d448543be7bd",
+        "tenant_id": null,
+        "updated_at": "2026-04-26T17:27:53.621862+00:00",
+        "visibility_rules": []
+      },
+      {
+        "constraint_rules": [],
+        "created_at": "2026-09-06T06:58:57.745728+00:00",
+        "default_value_json": null,
+        "helper_text": null,
+        "id": "76f69927-2569-412f-bd81-a4de33291510",
+        "is_required": false,
+        "option_rules": [],
+        "section_key": "declaration",
+        "sort_order": 5,
+        "spec_definition_id": "4f055961-6c16-430b-a4e2-e6b09dc1cccc",
+        "template_id": "e009fd36-b385-4224-b4be-d448543be7bd",
+        "tenant_id": null,
+        "updated_at": "2026-09-06T06:58:57.745728+00:00",
+        "visibility_rules": []
+      },
+      {
+        "constraint_rules": [],
+        "created_at": "2026-04-26T17:27:53.621862+00:00",
+        "default_value_json": null,
+        "helper_text": "Marca/modelo de cuadro compatible.",
+        "id": "797b8df6-1dd3-406f-b7ee-bc9bbf5225a9",
+        "is_required": false,
+        "option_rules": [],
+        "section_key": "compatibility",
+        "sort_order": 10,
+        "spec_definition_id": "bc2fb22d-bde5-4f05-b440-f1c4466db15d",
+        "template_id": "a505c7c6-ef02-4706-900b-25d927886669",
+        "tenant_id": null,
+        "updated_at": "2026-04-26T17:27:53.621862+00:00",
+        "visibility_rules": []
+      },
+      {
+        "constraint_rules": [],
+        "created_at": "2026-04-26T17:27:53.621862+00:00",
+        "default_value_json": null,
+        "helper_text": "Codigo A-HG, AE, marca/modelo, etc.",
+        "id": "bdd483c1-6586-40ac-abc4-eaad104f8920",
+        "is_required": false,
+        "option_rules": [],
+        "section_key": "identification",
+        "sort_order": 10,
+        "spec_definition_id": "61dfef30-5231-49c8-aea8-234e9030fe14",
+        "template_id": "a505c7c6-ef02-4706-900b-25d927886669",
+        "tenant_id": null,
+        "updated_at": "2026-04-26T17:27:53.621862+00:00",
+        "visibility_rules": []
+      },
+      {
+        "constraint_rules": [],
+        "created_at": "2026-09-06T06:58:57.745728+00:00",
+        "default_value_json": null,
+        "helper_text": null,
+        "id": "c8c0a204-b5d3-4442-a8bd-af7ae24e1b99",
+        "is_required": false,
+        "option_rules": [],
+        "section_key": "declaration",
+        "sort_order": 5,
+        "spec_definition_id": "4f055961-6c16-430b-a4e2-e6b09dc1cccc",
+        "template_id": "a505c7c6-ef02-4706-900b-25d927886669",
+        "tenant_id": null,
+        "updated_at": "2026-09-06T06:58:57.745728+00:00",
+        "visibility_rules": []
+      },
+      {
+        "constraint_rules": [],
+        "created_at": "2026-04-26T17:27:53.621862+00:00",
+        "default_value_json": null,
+        "helper_text": null,
+        "id": "d842380c-e785-434f-88d0-061bc31e64db",
+        "is_required": false,
+        "option_rules": [],
+        "section_key": "compatibility",
+        "sort_order": 10,
+        "spec_definition_id": "7547914f-7bb0-4a45-b088-1a3b50c3aa22",
+        "template_id": "0aaec6de-c69d-4e1e-9b03-995805a30a9c",
+        "tenant_id": null,
+        "updated_at": "2026-04-26T17:27:53.621862+00:00",
+        "visibility_rules": []
+      },
+      {
+        "constraint_rules": [],
+        "created_at": "2026-04-26T17:27:53.621862+00:00",
+        "default_value_json": null,
+        "helper_text": null,
+        "id": "e03a5a61-cd4c-428e-a291-fa8256192209",
+        "is_required": false,
+        "option_rules": [],
+        "section_key": "mounting",
+        "sort_order": 10,
+        "spec_definition_id": "4d2dc06e-0eec-41b4-923a-3fb69bb534a5",
+        "template_id": "a505c7c6-ef02-4706-900b-25d927886669",
+        "tenant_id": null,
+        "updated_at": "2026-04-26T17:27:53.621862+00:00",
+        "visibility_rules": []
+      },
+      {
+        "constraint_rules": [],
+        "created_at": "2026-09-06T06:58:57.745728+00:00",
+        "default_value_json": null,
+        "helper_text": null,
+        "id": "f43bfd94-c438-43a6-b36c-6253f97f1fcc",
+        "is_required": false,
+        "option_rules": [],
+        "section_key": "declaration",
+        "sort_order": 5,
+        "spec_definition_id": "4f055961-6c16-430b-a4e2-e6b09dc1cccc",
+        "template_id": "0aaec6de-c69d-4e1e-9b03-995805a30a9c",
+        "tenant_id": null,
+        "updated_at": "2026-09-06T06:58:57.745728+00:00",
+        "visibility_rules": []
+      }
+    ]
+  },
+  "patches": [
+    {
+      "table": "spec_template_fields",
+      "before": {
+        "constraint_rules": [],
+        "created_at": "2026-04-26T17:27:53.621862+00:00",
+        "default_value_json": null,
+        "helper_text": "Codigo A-HG, AE, marca/modelo, etc.",
+        "id": "bdd483c1-6586-40ac-abc4-eaad104f8920",
+        "is_required": false,
+        "option_rules": [],
+        "section_key": "identification",
+        "sort_order": 10,
+        "spec_definition_id": "61dfef30-5231-49c8-aea8-234e9030fe14",
+        "template_id": "a505c7c6-ef02-4706-900b-25d927886669",
+        "tenant_id": null,
+        "updated_at": "2026-04-26T17:27:53.621862+00:00",
+        "visibility_rules": []
+      },
+      "after": {
+        "constraint_rules": [],
+        "created_at": "2026-04-26T17:27:53.621862+00:00",
+        "default_value_json": null,
+        "helper_text": null,
+        "id": "bdd483c1-6586-40ac-abc4-eaad104f8920",
+        "is_required": false,
+        "option_rules": [],
+        "section_key": "primary",
+        "sort_order": 0,
+        "spec_definition_id": "61dfef30-5231-49c8-aea8-234e9030fe14",
+        "template_id": "a505c7c6-ef02-4706-900b-25d927886669",
+        "tenant_id": null,
+        "visibility_rules": []
+      }
+    },
+    {
+      "table": "spec_template_fields",
+      "before": {
+        "constraint_rules": [],
+        "created_at": "2026-04-26T17:27:53.621862+00:00",
+        "default_value_json": null,
+        "helper_text": "Marca/modelo de cuadro compatible.",
+        "id": "797b8df6-1dd3-406f-b7ee-bc9bbf5225a9",
+        "is_required": false,
+        "option_rules": [],
+        "section_key": "compatibility",
+        "sort_order": 10,
+        "spec_definition_id": "bc2fb22d-bde5-4f05-b440-f1c4466db15d",
+        "template_id": "a505c7c6-ef02-4706-900b-25d927886669",
+        "tenant_id": null,
+        "updated_at": "2026-04-26T17:27:53.621862+00:00",
+        "visibility_rules": []
+      },
+      "after": {
+        "constraint_rules": [],
+        "created_at": "2026-04-26T17:27:53.621862+00:00",
+        "default_value_json": null,
+        "helper_text": null,
+        "id": "797b8df6-1dd3-406f-b7ee-bc9bbf5225a9",
+        "is_required": false,
+        "option_rules": [],
+        "section_key": "legacy",
+        "sort_order": 20,
+        "spec_definition_id": "bc2fb22d-bde5-4f05-b440-f1c4466db15d",
+        "template_id": "a505c7c6-ef02-4706-900b-25d927886669",
+        "tenant_id": null,
+        "visibility_rules": []
+      }
+    },
+    {
+      "table": "spec_template_fields",
+      "before": {
+        "constraint_rules": [],
+        "created_at": "2026-04-26T17:27:53.621862+00:00",
+        "default_value_json": null,
+        "helper_text": null,
+        "id": "e03a5a61-cd4c-428e-a291-fa8256192209",
+        "is_required": false,
+        "option_rules": [],
+        "section_key": "mounting",
+        "sort_order": 10,
+        "spec_definition_id": "4d2dc06e-0eec-41b4-923a-3fb69bb534a5",
+        "template_id": "a505c7c6-ef02-4706-900b-25d927886669",
+        "tenant_id": null,
+        "updated_at": "2026-04-26T17:27:53.621862+00:00",
+        "visibility_rules": []
+      },
+      "after": {
+        "constraint_rules": [],
+        "created_at": "2026-04-26T17:27:53.621862+00:00",
+        "default_value_json": null,
+        "helper_text": null,
+        "id": "e03a5a61-cd4c-428e-a291-fa8256192209",
+        "is_required": false,
+        "option_rules": [],
+        "section_key": "legacy",
+        "sort_order": 40,
+        "spec_definition_id": "4d2dc06e-0eec-41b4-923a-3fb69bb534a5",
+        "template_id": "a505c7c6-ef02-4706-900b-25d927886669",
+        "tenant_id": null,
+        "visibility_rules": []
+      }
+    },
+    {
+      "table": "spec_template_fields",
+      "before": {
+        "constraint_rules": [],
+        "created_at": "2026-09-06T06:58:57.745728+00:00",
+        "default_value_json": null,
+        "helper_text": null,
+        "id": "c8c0a204-b5d3-4442-a8bd-af7ae24e1b99",
+        "is_required": false,
+        "option_rules": [],
+        "section_key": "declaration",
+        "sort_order": 5,
+        "spec_definition_id": "4f055961-6c16-430b-a4e2-e6b09dc1cccc",
+        "template_id": "a505c7c6-ef02-4706-900b-25d927886669",
+        "tenant_id": null,
+        "updated_at": "2026-09-06T06:58:57.745728+00:00",
+        "visibility_rules": []
+      },
+      "after": {
+        "constraint_rules": [],
+        "created_at": "2026-09-06T06:58:57.745728+00:00",
+        "default_value_json": null,
+        "helper_text": null,
+        "id": "c8c0a204-b5d3-4442-a8bd-af7ae24e1b99",
+        "is_required": false,
+        "option_rules": [],
+        "section_key": "declaration",
+        "sort_order": 60,
+        "spec_definition_id": "4f055961-6c16-430b-a4e2-e6b09dc1cccc",
+        "template_id": "a505c7c6-ef02-4706-900b-25d927886669",
+        "tenant_id": null,
+        "visibility_rules": []
+      }
+    },
+    {
+      "table": "spec_template_fields",
+      "before": {
+        "constraint_rules": [],
+        "created_at": "2026-04-26T17:27:53.621862+00:00",
+        "default_value_json": null,
+        "helper_text": null,
+        "id": "5fe62a11-e97c-4662-9497-0f75a6ef4e3a",
+        "is_required": true,
+        "option_rules": [],
+        "section_key": "compatibility",
+        "sort_order": 10,
+        "spec_definition_id": "0138d251-2413-47d7-ad9a-390814a33763",
+        "template_id": "e009fd36-b385-4224-b4be-d448543be7bd",
+        "tenant_id": null,
+        "updated_at": "2026-04-26T17:27:53.621862+00:00",
+        "visibility_rules": []
+      },
+      "after": {
+        "constraint_rules": [],
+        "created_at": "2026-04-26T17:27:53.621862+00:00",
+        "default_value_json": null,
+        "helper_text": null,
+        "id": "5fe62a11-e97c-4662-9497-0f75a6ef4e3a",
+        "is_required": false,
+        "option_rules": [],
+        "section_key": "primary",
+        "sort_order": 0,
+        "spec_definition_id": "0138d251-2413-47d7-ad9a-390814a33763",
+        "template_id": "e009fd36-b385-4224-b4be-d448543be7bd",
+        "tenant_id": null,
+        "visibility_rules": []
+      }
+    },
+    {
+      "table": "spec_template_fields",
+      "before": {
+        "constraint_rules": [],
+        "created_at": "2026-04-26T17:27:53.621862+00:00",
+        "default_value_json": null,
+        "helper_text": null,
+        "id": "4d805329-f988-404b-b152-7f0f79d2175c",
+        "is_required": false,
+        "option_rules": [],
+        "section_key": "compatibility",
+        "sort_order": 20,
+        "spec_definition_id": "be66f64e-3ceb-4688-89e8-012549a8a2e4",
+        "template_id": "e009fd36-b385-4224-b4be-d448543be7bd",
+        "tenant_id": null,
+        "updated_at": "2026-04-26T17:27:53.621862+00:00",
+        "visibility_rules": []
+      },
+      "after": {
+        "constraint_rules": [],
+        "created_at": "2026-04-26T17:27:53.621862+00:00",
+        "default_value_json": null,
+        "helper_text": null,
+        "id": "4d805329-f988-404b-b152-7f0f79d2175c",
+        "is_required": false,
+        "option_rules": [],
+        "section_key": "declaration",
+        "sort_order": 50,
+        "spec_definition_id": "be66f64e-3ceb-4688-89e8-012549a8a2e4",
+        "template_id": "e009fd36-b385-4224-b4be-d448543be7bd",
+        "tenant_id": null,
+        "visibility_rules": []
+      }
+    },
+    {
+      "table": "spec_template_fields",
+      "before": {
+        "constraint_rules": [],
+        "created_at": "2026-09-06T06:58:57.745728+00:00",
+        "default_value_json": null,
+        "helper_text": null,
+        "id": "76f69927-2569-412f-bd81-a4de33291510",
+        "is_required": false,
+        "option_rules": [],
+        "section_key": "declaration",
+        "sort_order": 5,
+        "spec_definition_id": "4f055961-6c16-430b-a4e2-e6b09dc1cccc",
+        "template_id": "e009fd36-b385-4224-b4be-d448543be7bd",
+        "tenant_id": null,
+        "updated_at": "2026-09-06T06:58:57.745728+00:00",
+        "visibility_rules": []
+      },
+      "after": {
+        "constraint_rules": [],
+        "created_at": "2026-09-06T06:58:57.745728+00:00",
+        "default_value_json": null,
+        "helper_text": null,
+        "id": "76f69927-2569-412f-bd81-a4de33291510",
+        "is_required": false,
+        "option_rules": [],
+        "section_key": "declaration",
+        "sort_order": 60,
+        "spec_definition_id": "4f055961-6c16-430b-a4e2-e6b09dc1cccc",
+        "template_id": "e009fd36-b385-4224-b4be-d448543be7bd",
+        "tenant_id": null,
+        "visibility_rules": []
+      }
+    },
+    {
+      "table": "spec_template_fields",
+      "before": {
+        "constraint_rules": [],
+        "created_at": "2026-04-26T17:27:53.621862+00:00",
+        "default_value_json": null,
+        "helper_text": null,
+        "id": "0973814f-0532-4174-937c-209baf2a2c00",
+        "is_required": false,
+        "option_rules": [],
+        "section_key": "mounting",
+        "sort_order": 10,
+        "spec_definition_id": "c5e7c370-7a77-474f-87d2-a30c861994c4",
+        "template_id": "0aaec6de-c69d-4e1e-9b03-995805a30a9c",
+        "tenant_id": null,
+        "updated_at": "2026-04-26T17:27:53.621862+00:00",
+        "visibility_rules": []
+      },
+      "after": {
+        "constraint_rules": [],
+        "created_at": "2026-04-26T17:27:53.621862+00:00",
+        "default_value_json": null,
+        "helper_text": null,
+        "id": "0973814f-0532-4174-937c-209baf2a2c00",
+        "is_required": false,
+        "option_rules": [],
+        "section_key": "legacy",
+        "sort_order": 0,
+        "spec_definition_id": "c5e7c370-7a77-474f-87d2-a30c861994c4",
+        "template_id": "0aaec6de-c69d-4e1e-9b03-995805a30a9c",
+        "tenant_id": null,
+        "visibility_rules": []
+      }
+    },
+    {
+      "table": "spec_template_fields",
+      "before": {
+        "constraint_rules": [],
+        "created_at": "2026-04-26T17:27:53.621862+00:00",
+        "default_value_json": null,
+        "helper_text": null,
+        "id": "d842380c-e785-434f-88d0-061bc31e64db",
+        "is_required": false,
+        "option_rules": [],
+        "section_key": "compatibility",
+        "sort_order": 10,
+        "spec_definition_id": "7547914f-7bb0-4a45-b088-1a3b50c3aa22",
+        "template_id": "0aaec6de-c69d-4e1e-9b03-995805a30a9c",
+        "tenant_id": null,
+        "updated_at": "2026-04-26T17:27:53.621862+00:00",
+        "visibility_rules": []
+      },
+      "after": {
+        "constraint_rules": [],
+        "created_at": "2026-04-26T17:27:53.621862+00:00",
+        "default_value_json": null,
+        "helper_text": null,
+        "id": "d842380c-e785-434f-88d0-061bc31e64db",
+        "is_required": false,
+        "option_rules": [],
+        "section_key": "legacy",
+        "sort_order": 30,
+        "spec_definition_id": "7547914f-7bb0-4a45-b088-1a3b50c3aa22",
+        "template_id": "0aaec6de-c69d-4e1e-9b03-995805a30a9c",
+        "tenant_id": null,
+        "visibility_rules": []
+      }
+    },
+    {
+      "table": "spec_template_fields",
+      "before": {
+        "constraint_rules": [],
+        "created_at": "2026-04-26T17:27:53.621862+00:00",
+        "default_value_json": null,
+        "helper_text": null,
+        "id": "5a1fb5b5-452b-4811-ae34-8a485ada6eb0",
+        "is_required": false,
+        "option_rules": [],
+        "section_key": "compatibility",
+        "sort_order": 20,
+        "spec_definition_id": "28854686-ee6c-440a-ac42-9aa1da65e718",
+        "template_id": "0aaec6de-c69d-4e1e-9b03-995805a30a9c",
+        "tenant_id": null,
+        "updated_at": "2026-04-26T17:27:53.621862+00:00",
+        "visibility_rules": []
+      },
+      "after": {
+        "constraint_rules": [],
+        "created_at": "2026-04-26T17:27:53.621862+00:00",
+        "default_value_json": null,
+        "helper_text": null,
+        "id": "5a1fb5b5-452b-4811-ae34-8a485ada6eb0",
+        "is_required": false,
+        "option_rules": [],
+        "section_key": "measurement",
+        "sort_order": 40,
+        "spec_definition_id": "28854686-ee6c-440a-ac42-9aa1da65e718",
+        "template_id": "0aaec6de-c69d-4e1e-9b03-995805a30a9c",
+        "tenant_id": null,
+        "visibility_rules": []
+      }
+    },
+    {
+      "table": "spec_template_fields",
+      "before": {
+        "constraint_rules": [],
+        "created_at": "2026-09-06T06:58:57.745728+00:00",
+        "default_value_json": null,
+        "helper_text": null,
+        "id": "f43bfd94-c438-43a6-b36c-6253f97f1fcc",
+        "is_required": false,
+        "option_rules": [],
+        "section_key": "declaration",
+        "sort_order": 5,
+        "spec_definition_id": "4f055961-6c16-430b-a4e2-e6b09dc1cccc",
+        "template_id": "0aaec6de-c69d-4e1e-9b03-995805a30a9c",
+        "tenant_id": null,
+        "updated_at": "2026-09-06T06:58:57.745728+00:00",
+        "visibility_rules": []
+      },
+      "after": {
+        "constraint_rules": [],
+        "created_at": "2026-09-06T06:58:57.745728+00:00",
+        "default_value_json": null,
+        "helper_text": null,
+        "id": "f43bfd94-c438-43a6-b36c-6253f97f1fcc",
+        "is_required": false,
+        "option_rules": [],
+        "section_key": "declaration",
+        "sort_order": 60,
+        "spec_definition_id": "4f055961-6c16-430b-a4e2-e6b09dc1cccc",
+        "template_id": "0aaec6de-c69d-4e1e-9b03-995805a30a9c",
+        "tenant_id": null,
+        "visibility_rules": []
+      }
+    },
+    {
+      "table": "spec_templates",
+      "before": {
+        "contract_version": 2,
+        "created_at": "2026-04-26T17:27:33.100573+00:00",
+        "default_tags": [
+          "drivetrain",
+          "hanger"
+        ],
+        "description": "Postiza o fusible de cambio; compatibilidad por cuadro/modelo y montaje.",
+        "form_contract": {
+          "coverage": "template",
+          "helpers": {},
+          "labels": {},
+          "prerequisites": {},
+          "roles": {
+            "compatible_frame_hint": "declaration",
+            "hanger_model_code": "primary",
+            "rear_derailleur_mount_type": "primary",
+            "spec_evidence_source": "declaration"
+          },
+          "version": 1
+        },
+        "id": "a505c7c6-ef02-4706-900b-25d927886669",
+        "is_active": true,
+        "key": "derailleur_hanger",
+        "name": "Postiza / Pata Cambio",
+        "technical_family": "derailleur_hanger",
+        "tenant_id": null,
+        "updated_at": "2026-04-26T17:27:33.100573+00:00"
+      },
+      "after": {
+        "contract_version": 12,
+        "created_at": "2026-04-26T17:27:33.100573+00:00",
+        "default_tags": [
+          "drivetrain",
+          "hanger"
+        ],
+        "description": "Postiza o fusible de cambio; compatibilidad por cuadro/modelo y montaje.",
+        "form_contract": {
+          "rules_version": 2,
+          "roles": {
+            "hanger_model_code": "declaration",
+            "compatible_frames": "measurement",
+            "compatible_frame_hint": "legacy",
+            "hanger_interface": "legacy",
+            "rear_derailleur_mount_type": "legacy",
+            "bolt_pattern": "measurement",
+            "spec_evidence_source": "declaration",
+            "hanger_frame_interface": "primary",
+            "hanger_derailleur_interface": "primary"
+          },
+          "semantic_roles": {
+            "hanger_model_code": "declaration",
+            "compatible_frames": "compatibility",
+            "compatible_frame_hint": "legacy",
+            "hanger_interface": "legacy",
+            "rear_derailleur_mount_type": "legacy",
+            "bolt_pattern": "measurement",
+            "spec_evidence_source": "evidence",
+            "hanger_frame_interface": "compatibility",
+            "hanger_derailleur_interface": "compatibility"
+          },
+          "labels": {},
+          "allowed_when": {
+            "hanger_model_code": {
+              "kind": "always"
+            },
+            "compatible_frames": {
+              "kind": "always"
+            },
+            "compatible_frame_hint": {
+              "kind": "always"
+            },
+            "hanger_interface": {
+              "kind": "never"
+            },
+            "rear_derailleur_mount_type": {
+              "kind": "always"
+            },
+            "bolt_pattern": {
+              "kind": "always"
+            },
+            "spec_evidence_source": {
+              "kind": "always"
+            },
+            "hanger_frame_interface": {
+              "kind": "always"
+            },
+            "hanger_derailleur_interface": {
+              "kind": "always"
+            }
+          },
+          "required_when": {
+            "hanger_model_code": {
+              "kind": "never"
+            },
+            "compatible_frames": {
+              "kind": "never"
+            },
+            "compatible_frame_hint": {
+              "kind": "never"
+            },
+            "hanger_interface": {
+              "kind": "never"
+            },
+            "rear_derailleur_mount_type": {
+              "kind": "never"
+            },
+            "bolt_pattern": {
+              "kind": "never"
+            },
+            "spec_evidence_source": {
+              "kind": "never"
+            },
+            "hanger_frame_interface": {
+              "kind": "always"
+            },
+            "hanger_derailleur_interface": {
+              "kind": "always"
+            }
+          },
+          "allowed_options": {},
+          "prerequisites": {
+            "hanger_frame_interface": [
+              "spec_evidence_source"
+            ],
+            "hanger_derailleur_interface": [
+              "spec_evidence_source"
+            ],
+            "hanger_model_code": [
+              "spec_evidence_source"
+            ],
+            "bolt_pattern": [
+              "spec_evidence_source"
+            ]
+          },
+          "helpers": {
+            "hanger_frame_interface": "Cómo se une esta pieza al cuadro. UDH es una patilla física sobre una interfaz estandarizada; un cambio Full Mount sustituye la patilla y por eso no es una opción de esta ficha.",
+            "hanger_derailleur_interface": "Qué recibe el cambio en esta pieza. No se deduce de la interfaz del cuadro ni del perno de sujeción.",
+            "hanger_model_code": "Código de intercambio publicado por el fabricante para esta pieza. El modelo y el MPN del producto pertenecen a su ficha de identidad, no a este campo.",
+            "bolt_pattern": "Sujeción publicada, por ejemplo un perno M8. Dos patillas distintas comparten perno sin compartir código ni calce: no identifica la pieza.",
+            "compatible_frames": "Declaraciones documentadas. Cuando la fuente no enumera modelos se declara la interfaz; no se inventa un nombre de cuadro para llenar una celda, y un año ausente en la fuente se deja ausente."
+          },
+          "evidence_requirements": {
+            "hanger_model_code": "oem_or_package",
+            "compatible_frames": "oem_spec",
+            "compatible_frame_hint": "name_reading_hint_only",
+            "hanger_interface": "oem_spec",
+            "rear_derailleur_mount_type": "name_reading_hint_only",
+            "bolt_pattern": "oem_or_package",
+            "spec_evidence_source": "oem_or_package",
+            "hanger_frame_interface": "oem_or_package",
+            "hanger_derailleur_interface": "oem_or_package"
+          },
+          "row_conditions": {
+            "version": 1,
+            "fields": {
+              "compatible_frames": {
+                "allowed_when": {
+                  "brand": {
+                    "kind": "when",
+                    "rows": [
+                      [
+                        {
+                          "field": "scope_kind",
+                          "operator": "eq",
+                          "value_type": "token",
+                          "value": "Modelo documentado"
+                        }
+                      ]
+                    ]
+                  },
+                  "model": {
+                    "kind": "when",
+                    "rows": [
+                      [
+                        {
+                          "field": "scope_kind",
+                          "operator": "eq",
+                          "value_type": "token",
+                          "value": "Modelo documentado"
+                        }
+                      ]
+                    ]
+                  },
+                  "declared_interface": {
+                    "kind": "when",
+                    "rows": [
+                      [
+                        {
+                          "field": "scope_kind",
+                          "operator": "eq",
+                          "value_type": "token",
+                          "value": "Interfaz o estándar documentado"
+                        }
+                      ]
+                    ]
+                  }
+                },
+                "required_when": {
+                  "brand": {
+                    "kind": "when",
+                    "rows": [
+                      [
+                        {
+                          "field": "scope_kind",
+                          "operator": "eq",
+                          "value_type": "token",
+                          "value": "Modelo documentado"
+                        }
+                      ]
+                    ]
+                  },
+                  "model": {
+                    "kind": "when",
+                    "rows": [
+                      [
+                        {
+                          "field": "scope_kind",
+                          "operator": "eq",
+                          "value_type": "token",
+                          "value": "Modelo documentado"
+                        }
+                      ]
+                    ]
+                  },
+                  "declared_interface": {
+                    "kind": "when",
+                    "rows": [
+                      [
+                        {
+                          "field": "scope_kind",
+                          "operator": "eq",
+                          "value_type": "token",
+                          "value": "Interfaz o estándar documentado"
+                        }
+                      ]
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        },
+        "id": "a505c7c6-ef02-4706-900b-25d927886669",
+        "is_active": true,
+        "key": "derailleur_hanger",
+        "name": "Postiza / Pata Cambio",
+        "technical_family": "derailleur_hanger",
+        "tenant_id": null
+      }
+    },
+    {
+      "table": "spec_templates",
+      "before": {
+        "contract_version": 3,
+        "created_at": "2026-04-26T17:27:33.100573+00:00",
+        "default_tags": [
+          "drivetrain",
+          "derailleur"
+        ],
+        "description": "Roldana/polea de cambio trasero.",
+        "form_contract": {
+          "coverage": "template",
+          "helpers": {},
+          "labels": {},
+          "prerequisites": {},
+          "roles": {
+            "derailleur_cage_length": "primary",
+            "pulley_teeth": "measurement",
+            "spec_evidence_source": "declaration"
+          },
+          "version": 1
+        },
+        "id": "e009fd36-b385-4224-b4be-d448543be7bd",
+        "is_active": true,
+        "key": "derailleur_pulley",
+        "name": "Roldana Cambio",
+        "technical_family": "derailleur_pulley",
+        "tenant_id": null,
+        "updated_at": "2026-04-26T17:27:33.100573+00:00"
+      },
+      "after": {
+        "contract_version": 20,
+        "created_at": "2026-04-26T17:27:33.100573+00:00",
+        "default_tags": [
+          "drivetrain",
+          "derailleur"
+        ],
+        "description": "Roldana/polea de cambio trasero.",
+        "form_contract": {
+          "rules_version": 2,
+          "roles": {
+            "pulley_teeth": "primary",
+            "compatible_derailleur_models": "measurement",
+            "derailleur_cage_length": "declaration",
+            "spec_evidence_source": "declaration",
+            "pulley_package_kind": "primary",
+            "pulley_declared_position": "primary",
+            "pulley_bearing_construction": "primary",
+            "pulley_bearing_element_material": "primary",
+            "pulley_tooth_profile": "primary",
+            "pulley_outer_diameter_mm": "measurement",
+            "pulley_width_mm": "measurement",
+            "pulley_bore_diameter_mm": "measurement",
+            "pulley_declared_speeds": "declaration",
+            "pulley_units": "contents",
+            "pulley_unit_count": "contents",
+            "pulley_unit_fitment_declarations": "declaration"
+          },
+          "semantic_roles": {
+            "pulley_teeth": "intrinsic",
+            "compatible_derailleur_models": "compatibility",
+            "derailleur_cage_length": "declaration",
+            "spec_evidence_source": "evidence",
+            "pulley_package_kind": "intrinsic",
+            "pulley_declared_position": "intrinsic",
+            "pulley_bearing_construction": "intrinsic",
+            "pulley_bearing_element_material": "intrinsic",
+            "pulley_tooth_profile": "intrinsic",
+            "pulley_outer_diameter_mm": "compatibility",
+            "pulley_width_mm": "compatibility",
+            "pulley_bore_diameter_mm": "compatibility",
+            "pulley_declared_speeds": "declaration",
+            "pulley_units": "contents",
+            "pulley_unit_count": "contents",
+            "pulley_unit_fitment_declarations": "declaration"
+          },
+          "labels": {},
+          "allowed_when": {
+            "pulley_teeth": {
+              "kind": "when",
+              "rows": [
+                [
+                  {
+                    "field": "pulley_package_kind",
+                    "operator": "eq",
+                    "value_type": "token",
+                    "value": "Roldana individual"
+                  }
+                ]
+              ]
+            },
+            "compatible_derailleur_models": {
+              "kind": "when",
+              "rows": [
+                [
+                  {
+                    "field": "pulley_package_kind",
+                    "operator": "eq",
+                    "value_type": "token",
+                    "value": "Roldana individual"
+                  }
+                ]
+              ]
+            },
+            "derailleur_cage_length": {
+              "kind": "when",
+              "rows": [
+                [
+                  {
+                    "field": "pulley_package_kind",
+                    "operator": "eq",
+                    "value_type": "token",
+                    "value": "Roldana individual"
+                  }
+                ]
+              ]
+            },
+            "spec_evidence_source": {
+              "kind": "always"
+            },
+            "pulley_package_kind": {
+              "kind": "always"
+            },
+            "pulley_declared_position": {
+              "kind": "when",
+              "rows": [
+                [
+                  {
+                    "field": "pulley_package_kind",
+                    "operator": "eq",
+                    "value_type": "token",
+                    "value": "Roldana individual"
+                  }
+                ]
+              ]
+            },
+            "pulley_bearing_construction": {
+              "kind": "when",
+              "rows": [
+                [
+                  {
+                    "field": "pulley_package_kind",
+                    "operator": "eq",
+                    "value_type": "token",
+                    "value": "Roldana individual"
+                  }
+                ]
+              ]
+            },
+            "pulley_bearing_element_material": {
+              "kind": "when",
+              "rows": [
+                [
+                  {
+                    "field": "pulley_package_kind",
+                    "operator": "eq",
+                    "value_type": "token",
+                    "value": "Roldana individual"
+                  },
+                  {
+                    "field": "pulley_bearing_construction",
+                    "operator": "in",
+                    "value_type": "token",
+                    "value": [
+                      "Rodamiento de bolas",
+                      "Otra construcción OEM"
+                    ]
+                  }
+                ]
+              ]
+            },
+            "pulley_tooth_profile": {
+              "kind": "when",
+              "rows": [
+                [
+                  {
+                    "field": "pulley_package_kind",
+                    "operator": "eq",
+                    "value_type": "token",
+                    "value": "Roldana individual"
+                  }
+                ]
+              ]
+            },
+            "pulley_outer_diameter_mm": {
+              "kind": "when",
+              "rows": [
+                [
+                  {
+                    "field": "pulley_package_kind",
+                    "operator": "eq",
+                    "value_type": "token",
+                    "value": "Roldana individual"
+                  }
+                ]
+              ]
+            },
+            "pulley_width_mm": {
+              "kind": "when",
+              "rows": [
+                [
+                  {
+                    "field": "pulley_package_kind",
+                    "operator": "eq",
+                    "value_type": "token",
+                    "value": "Roldana individual"
+                  }
+                ]
+              ]
+            },
+            "pulley_bore_diameter_mm": {
+              "kind": "when",
+              "rows": [
+                [
+                  {
+                    "field": "pulley_package_kind",
+                    "operator": "eq",
+                    "value_type": "token",
+                    "value": "Roldana individual"
+                  }
+                ]
+              ]
+            },
+            "pulley_declared_speeds": {
+              "kind": "when",
+              "rows": [
+                [
+                  {
+                    "field": "pulley_package_kind",
+                    "operator": "eq",
+                    "value_type": "token",
+                    "value": "Roldana individual"
+                  }
+                ]
+              ]
+            },
+            "pulley_units": {
+              "kind": "when",
+              "rows": [
+                [
+                  {
+                    "field": "pulley_package_kind",
+                    "operator": "eq",
+                    "value_type": "token",
+                    "value": "Par de roldanas en el mismo envase"
+                  }
+                ]
+              ]
+            },
+            "pulley_unit_count": {
+              "kind": "when",
+              "rows": [
+                [
+                  {
+                    "field": "pulley_package_kind",
+                    "operator": "eq",
+                    "value_type": "token",
+                    "value": "Par de roldanas en el mismo envase"
+                  }
+                ]
+              ]
+            },
+            "pulley_unit_fitment_declarations": {
+              "kind": "when",
+              "rows": [
+                [
+                  {
+                    "field": "pulley_package_kind",
+                    "operator": "eq",
+                    "value_type": "token",
+                    "value": "Par de roldanas en el mismo envase"
+                  }
+                ]
+              ]
+            }
+          },
+          "required_when": {
+            "pulley_teeth": {
+              "kind": "when",
+              "rows": [
+                [
+                  {
+                    "field": "pulley_package_kind",
+                    "operator": "eq",
+                    "value_type": "token",
+                    "value": "Roldana individual"
+                  }
+                ]
+              ]
+            },
+            "compatible_derailleur_models": {
+              "kind": "never"
+            },
+            "derailleur_cage_length": {
+              "kind": "never"
+            },
+            "spec_evidence_source": {
+              "kind": "never"
+            },
+            "pulley_package_kind": {
+              "kind": "always"
+            },
+            "pulley_declared_position": {
+              "kind": "never"
+            },
+            "pulley_bearing_construction": {
+              "kind": "never"
+            },
+            "pulley_bearing_element_material": {
+              "kind": "never"
+            },
+            "pulley_tooth_profile": {
+              "kind": "never"
+            },
+            "pulley_outer_diameter_mm": {
+              "kind": "never"
+            },
+            "pulley_width_mm": {
+              "kind": "never"
+            },
+            "pulley_bore_diameter_mm": {
+              "kind": "never"
+            },
+            "pulley_declared_speeds": {
+              "kind": "never"
+            },
+            "pulley_units": {
+              "kind": "when",
+              "rows": [
+                [
+                  {
+                    "field": "pulley_package_kind",
+                    "operator": "eq",
+                    "value_type": "token",
+                    "value": "Par de roldanas en el mismo envase"
+                  }
+                ]
+              ]
+            },
+            "pulley_unit_count": {
+              "kind": "when",
+              "rows": [
+                [
+                  {
+                    "field": "pulley_package_kind",
+                    "operator": "eq",
+                    "value_type": "token",
+                    "value": "Par de roldanas en el mismo envase"
+                  }
+                ]
+              ]
+            },
+            "pulley_unit_fitment_declarations": {
+              "kind": "never"
+            }
+          },
+          "allowed_options": {},
+          "prerequisites": {
+            "derailleur_cage_length": [
+              "spec_evidence_source"
+            ],
+            "pulley_declared_speeds": [
+              "spec_evidence_source"
+            ],
+            "pulley_declared_position": [
+              "spec_evidence_source"
+            ],
+            "pulley_tooth_profile": [
+              "spec_evidence_source"
+            ],
+            "pulley_teeth": [
+              "spec_evidence_source"
+            ],
+            "pulley_bearing_construction": [
+              "spec_evidence_source"
+            ],
+            "pulley_bearing_element_material": [
+              "spec_evidence_source"
+            ],
+            "pulley_outer_diameter_mm": [
+              "spec_evidence_source"
+            ],
+            "pulley_width_mm": [
+              "spec_evidence_source"
+            ],
+            "pulley_bore_diameter_mm": [
+              "spec_evidence_source"
+            ]
+          },
+          "helpers": {
+            "pulley_package_kind": "Un par en el mismo envase puede ser dos piezas iguales o dos repuestos. No se deduce de él una guía superior y una tensión.",
+            "pulley_declared_position": "Park distingue la roldana guía superior de la de tensión inferior. Si la fuente no lo dice, se declara así y no se supone.",
+            "pulley_bearing_construction": "Cómo gira la roldana. El material de los elementos es otro campo: cerámico no es una construcción alternativa a un rodamiento.",
+            "pulley_bearing_element_material": "Sólo cuando hay elementos rodantes documentados.",
+            "pulley_tooth_profile": "Perfil publicado del dentado. No se deriva del número de velocidades ni del ancho.",
+            "pulley_outer_diameter_mm": "Cota publicada de esta pieza. El ancho no se deriva del número de velocidades.",
+            "pulley_width_mm": "Cota publicada de esta pieza. El ancho no se deriva del número de velocidades.",
+            "pulley_bore_diameter_mm": "Cota publicada de esta pieza. El ancho no se deriva del número de velocidades.",
+            "pulley_declared_speeds": "Rango que declara la fuente. No determina ancho, perfil ni compatibilidad con un cambio concreto.",
+            "pulley_units": "Cada ocurrencia física con su identidad y su fuente. Dos piezas iguales son dos filas; ninguna posición se supone.",
+            "pulley_unit_fitment_declarations": "Cada declaración pertenece a una roldana identificada. No extiende velocidades, modelos o jaulas a las otras piezas del envase."
+          },
+          "evidence_requirements": {
+            "pulley_teeth": "oem_or_package",
+            "compatible_derailleur_models": "oem_spec",
+            "derailleur_cage_length": "oem_or_package",
+            "spec_evidence_source": "oem_or_package",
+            "pulley_package_kind": "oem_or_package",
+            "pulley_declared_position": "oem_or_package",
+            "pulley_bearing_construction": "oem_or_package",
+            "pulley_bearing_element_material": "oem_or_package",
+            "pulley_tooth_profile": "oem_or_package",
+            "pulley_outer_diameter_mm": "oem_or_package",
+            "pulley_width_mm": "oem_or_package",
+            "pulley_bore_diameter_mm": "oem_or_package",
+            "pulley_declared_speeds": "oem_or_package",
+            "pulley_units": "oem_or_package",
+            "pulley_unit_count": "oem_or_package",
+            "pulley_unit_fitment_declarations": "oem_or_package"
+          },
+          "row_conditions": {
+            "version": 1,
+            "fields": {
+              "pulley_units": {
+                "allowed_when": {
+                  "bearing_element_material": {
+                    "kind": "when",
+                    "rows": [
+                      [
+                        {
+                          "field": "bearing_construction",
+                          "operator": "in",
+                          "value_type": "token",
+                          "value": [
+                            "Rodamiento de bolas",
+                            "Otra construcción OEM"
+                          ]
+                        }
+                      ]
+                    ]
+                  }
+                }
+              },
+              "compatible_derailleur_models": {
+                "allowed_when": {
+                  "brand": {
+                    "kind": "when",
+                    "rows": [
+                      [
+                        {
+                          "field": "scope_kind",
+                          "operator": "eq",
+                          "value_type": "token",
+                          "value": "Modelo documentado"
+                        }
+                      ]
+                    ]
+                  },
+                  "model": {
+                    "kind": "when",
+                    "rows": [
+                      [
+                        {
+                          "field": "scope_kind",
+                          "operator": "eq",
+                          "value_type": "token",
+                          "value": "Modelo documentado"
+                        }
+                      ]
+                    ]
+                  },
+                  "declared_interface": {
+                    "kind": "when",
+                    "rows": [
+                      [
+                        {
+                          "field": "scope_kind",
+                          "operator": "eq",
+                          "value_type": "token",
+                          "value": "Interfaz o estándar documentado"
+                        }
+                      ]
+                    ]
+                  }
+                },
+                "required_when": {
+                  "brand": {
+                    "kind": "when",
+                    "rows": [
+                      [
+                        {
+                          "field": "scope_kind",
+                          "operator": "eq",
+                          "value_type": "token",
+                          "value": "Modelo documentado"
+                        }
+                      ]
+                    ]
+                  },
+                  "model": {
+                    "kind": "when",
+                    "rows": [
+                      [
+                        {
+                          "field": "scope_kind",
+                          "operator": "eq",
+                          "value_type": "token",
+                          "value": "Modelo documentado"
+                        }
+                      ]
+                    ]
+                  },
+                  "declared_interface": {
+                    "kind": "when",
+                    "rows": [
+                      [
+                        {
+                          "field": "scope_kind",
+                          "operator": "eq",
+                          "value_type": "token",
+                          "value": "Interfaz o estándar documentado"
+                        }
+                      ]
+                    ]
+                  }
+                }
+              },
+              "pulley_unit_fitment_declarations": {
+                "allowed_when": {
+                  "brand": {
+                    "kind": "when",
+                    "rows": [
+                      [
+                        {
+                          "field": "scope_kind",
+                          "operator": "eq",
+                          "value_type": "token",
+                          "value": "Modelo documentado"
+                        }
+                      ]
+                    ]
+                  },
+                  "model": {
+                    "kind": "when",
+                    "rows": [
+                      [
+                        {
+                          "field": "scope_kind",
+                          "operator": "eq",
+                          "value_type": "token",
+                          "value": "Modelo documentado"
+                        }
+                      ]
+                    ]
+                  },
+                  "declared_interface": {
+                    "kind": "when",
+                    "rows": [
+                      [
+                        {
+                          "field": "scope_kind",
+                          "operator": "eq",
+                          "value_type": "token",
+                          "value": "Interfaz o estándar documentado"
+                        }
+                      ]
+                    ]
+                  }
+                },
+                "required_when": {
+                  "brand": {
+                    "kind": "when",
+                    "rows": [
+                      [
+                        {
+                          "field": "scope_kind",
+                          "operator": "eq",
+                          "value_type": "token",
+                          "value": "Modelo documentado"
+                        }
+                      ]
+                    ]
+                  },
+                  "model": {
+                    "kind": "when",
+                    "rows": [
+                      [
+                        {
+                          "field": "scope_kind",
+                          "operator": "eq",
+                          "value_type": "token",
+                          "value": "Modelo documentado"
+                        }
+                      ]
+                    ]
+                  },
+                  "declared_interface": {
+                    "kind": "when",
+                    "rows": [
+                      [
+                        {
+                          "field": "scope_kind",
+                          "operator": "eq",
+                          "value_type": "token",
+                          "value": "Interfaz o estándar documentado"
+                        }
+                      ]
+                    ]
+                  }
+                }
+              }
+            }
+          },
+          "row_coherence": {
+            "version": 2,
+            "links": [
+              {
+                "id": "pulley_claim_owns_its_unit",
+                "field": "pulley_unit_fitment_declarations",
+                "column": "unit_reference",
+                "target_field": "pulley_units",
+                "label_columns": [
+                  "unit_identity"
+                ]
+              }
+            ],
+            "cardinalities": [
+              {
+                "id": "documented_pulleys_in_the_package",
+                "field": "pulley_units",
+                "total_field": "pulley_unit_count"
+              }
+            ]
+          }
+        },
+        "id": "e009fd36-b385-4224-b4be-d448543be7bd",
+        "is_active": true,
+        "key": "derailleur_pulley",
+        "name": "Roldana Cambio",
+        "technical_family": "derailleur_pulley",
+        "tenant_id": null
+      }
+    },
+    {
+      "table": "spec_templates",
+      "before": {
+        "contract_version": 3,
+        "created_at": "2026-04-26T17:27:33.100573+00:00",
+        "default_tags": [
+          "drivetrain",
+          "chain_guide"
+        ],
+        "description": "Guía de cadena; compatibilidad por montaje, plato y línea de cadena.",
+        "form_contract": {
+          "coverage": "template",
+          "helpers": {},
+          "labels": {},
+          "prerequisites": {},
+          "roles": {
+            "chain_guide_mount_type": "primary",
+            "chainline_mm": "measurement",
+            "chainring_teeth": "primary",
+            "spec_evidence_source": "declaration"
+          },
+          "version": 1
+        },
+        "id": "0aaec6de-c69d-4e1e-9b03-995805a30a9c",
+        "is_active": true,
+        "key": "chain_guide",
+        "name": "Guía de Cadena",
+        "technical_family": "chain_guide",
+        "tenant_id": null,
+        "updated_at": "2026-04-26T17:27:33.100573+00:00"
+      },
+      "after": {
+        "contract_version": 16,
+        "created_at": "2026-04-26T17:27:33.100573+00:00",
+        "default_tags": [
+          "drivetrain",
+          "chain_guide"
+        ],
+        "description": "Guía de cadena; compatibilidad por montaje, plato y línea de cadena.",
+        "form_contract": {
+          "rules_version": 2,
+          "roles": {
+            "chain_guide_mount_type": "legacy",
+            "chainring_teeth_min": "measurement",
+            "chainring_teeth_max": "measurement",
+            "chainring_teeth": "legacy",
+            "chainline_mm": "measurement",
+            "spec_evidence_source": "declaration",
+            "chain_guide_mount_options": "primary",
+            "chain_guide_included_parts": "contents",
+            "chain_guide_frame_exclusions": "declaration",
+            "chain_guide_chainline_adjustment_mm": "measurement",
+            "chain_guide_chainline_datum": "measurement",
+            "chain_guide_assembled_weights": "measurement"
+          },
+          "semantic_roles": {
+            "chain_guide_mount_type": "legacy",
+            "chainring_teeth_min": "compatibility",
+            "chainring_teeth_max": "compatibility",
+            "chainring_teeth": "legacy",
+            "chainline_mm": "measurement",
+            "spec_evidence_source": "evidence",
+            "chain_guide_mount_options": "compatibility",
+            "chain_guide_included_parts": "contents",
+            "chain_guide_frame_exclusions": "declaration",
+            "chain_guide_chainline_adjustment_mm": "compatibility",
+            "chain_guide_chainline_datum": "compatibility",
+            "chain_guide_assembled_weights": "compatibility"
+          },
+          "labels": {},
+          "allowed_when": {
+            "chain_guide_mount_type": {
+              "kind": "never"
+            },
+            "chainring_teeth_min": {
+              "kind": "always"
+            },
+            "chainring_teeth_max": {
+              "kind": "always"
+            },
+            "chainring_teeth": {
+              "kind": "always"
+            },
+            "chainline_mm": {
+              "kind": "always"
+            },
+            "spec_evidence_source": {
+              "kind": "always"
+            },
+            "chain_guide_mount_options": {
+              "kind": "always"
+            },
+            "chain_guide_included_parts": {
+              "kind": "always"
+            },
+            "chain_guide_frame_exclusions": {
+              "kind": "always"
+            },
+            "chain_guide_chainline_adjustment_mm": {
+              "kind": "always"
+            },
+            "chain_guide_chainline_datum": {
+              "kind": "always"
+            },
+            "chain_guide_assembled_weights": {
+              "kind": "always"
+            }
+          },
+          "required_when": {
+            "chain_guide_mount_type": {
+              "kind": "never"
+            },
+            "chainring_teeth_min": {
+              "kind": "never"
+            },
+            "chainring_teeth_max": {
+              "kind": "never"
+            },
+            "chainring_teeth": {
+              "kind": "never"
+            },
+            "chainline_mm": {
+              "kind": "never"
+            },
+            "spec_evidence_source": {
+              "kind": "never"
+            },
+            "chain_guide_mount_options": {
+              "kind": "always"
+            },
+            "chain_guide_included_parts": {
+              "kind": "never"
+            },
+            "chain_guide_frame_exclusions": {
+              "kind": "never"
+            },
+            "chain_guide_chainline_adjustment_mm": {
+              "kind": "never"
+            },
+            "chain_guide_chainline_datum": {
+              "kind": "never"
+            },
+            "chain_guide_assembled_weights": {
+              "kind": "never"
+            }
+          },
+          "allowed_options": {},
+          "prerequisites": {
+            "chainline_mm": [
+              "chain_guide_chainline_datum",
+              "spec_evidence_source"
+            ],
+            "chain_guide_chainline_adjustment_mm": [
+              "spec_evidence_source"
+            ],
+            "chain_guide_chainline_datum": [
+              "spec_evidence_source"
+            ],
+            "chainring_teeth_min": [
+              "spec_evidence_source"
+            ],
+            "chainring_teeth_max": [
+              "spec_evidence_source"
+            ]
+          },
+          "helpers": {
+            "chain_guide_mount_options": "Un SKU puede documentar más de un estándar. Tener los anclajes no certifica un cuadro: las exclusiones van aparte.",
+            "chain_guide_included_parts": "Componentes realmente incluidos y cuál viene montado. Un rango total de platos no vuelve intercambiables sus placas. El peso aquí corresponde a la pieza suelta; un peso del conjunto montado pertenece a su configuración completa.",
+            "chain_guide_frame_exclusions": "Incompatibilidades que publica la fuente, por modelo y generación o por clase de cuadro.",
+            "chain_guide_chainline_adjustment_mm": "Recorrido que permite el ajuste, no una línea de cadena. Una ficha que rotula «Chainline: 7,5 mm de ajuste» declara recorrido.",
+            "chain_guide_chainline_datum": "Desde qué referencia mide la fuente la línea de cadena instalada. Sin datum, la cifra no se compara con otra ficha.",
+            "chainline_mm": "Línea de cadena instalada según la fuente y su datum. No recibe el recorrido de ajuste, que tiene su propio campo.",
+            "chainring_teeth_min": "Capacidad publicada para esta variante y las configuraciones que documenta su fabricante. No se calcula uniendo rangos de piezas.",
+            "chainring_teeth_max": "Capacidad publicada para esta variante y las configuraciones que documenta su fabricante. No se calcula uniendo rangos de piezas.",
+            "chain_guide_assembled_weights": "Peso publicado del conjunto completo con una pieza concreta montada. No es el peso de esa pieza ni del envase con sus repuestos."
+          },
+          "evidence_requirements": {
+            "chain_guide_mount_type": "oem_spec",
+            "chainring_teeth_min": "oem_spec",
+            "chainring_teeth_max": "oem_spec",
+            "chainring_teeth": "name_reading_hint_only",
+            "chainline_mm": "oem_spec",
+            "spec_evidence_source": "oem_or_package",
+            "chain_guide_mount_options": "oem_or_package",
+            "chain_guide_included_parts": "oem_or_package",
+            "chain_guide_frame_exclusions": "oem_or_package",
+            "chain_guide_chainline_adjustment_mm": "oem_or_package",
+            "chain_guide_chainline_datum": "oem_or_package",
+            "chain_guide_assembled_weights": "oem_or_package"
+          },
+          "scalar_ordered_pairs": [
+            [
+              "chainring_teeth_min",
+              "chainring_teeth_max"
+            ]
+          ],
+          "row_conditions": {
+            "version": 1,
+            "fields": {
+              "chain_guide_frame_exclusions": {
+                "allowed_when": {
+                  "brand": {
+                    "kind": "when",
+                    "rows": [
+                      [
+                        {
+                          "field": "scope_kind",
+                          "operator": "eq",
+                          "value_type": "token",
+                          "value": "Modelo documentado"
+                        }
+                      ]
+                    ]
+                  },
+                  "model": {
+                    "kind": "when",
+                    "rows": [
+                      [
+                        {
+                          "field": "scope_kind",
+                          "operator": "eq",
+                          "value_type": "token",
+                          "value": "Modelo documentado"
+                        }
+                      ]
+                    ]
+                  },
+                  "declared_interface": {
+                    "kind": "when",
+                    "rows": [
+                      [
+                        {
+                          "field": "scope_kind",
+                          "operator": "eq",
+                          "value_type": "token",
+                          "value": "Interfaz o estándar documentado"
+                        }
+                      ]
+                    ]
+                  }
+                },
+                "required_when": {
+                  "brand": {
+                    "kind": "when",
+                    "rows": [
+                      [
+                        {
+                          "field": "scope_kind",
+                          "operator": "eq",
+                          "value_type": "token",
+                          "value": "Modelo documentado"
+                        }
+                      ]
+                    ]
+                  },
+                  "model": {
+                    "kind": "when",
+                    "rows": [
+                      [
+                        {
+                          "field": "scope_kind",
+                          "operator": "eq",
+                          "value_type": "token",
+                          "value": "Modelo documentado"
+                        }
+                      ]
+                    ]
+                  },
+                  "declared_interface": {
+                    "kind": "when",
+                    "rows": [
+                      [
+                        {
+                          "field": "scope_kind",
+                          "operator": "eq",
+                          "value_type": "token",
+                          "value": "Interfaz o estándar documentado"
+                        }
+                      ]
+                    ]
+                  }
+                }
+              }
+            }
+          },
+          "row_coherence": {
+            "version": 1,
+            "links": [
+              {
+                "id": "assembled_weight_names_its_mounted_piece",
+                "field": "chain_guide_assembled_weights",
+                "column": "mounted_part_reference",
+                "target_field": "chain_guide_included_parts",
+                "label_columns": [
+                  "part_identity"
+                ]
+              }
+            ]
+          }
+        },
+        "id": "0aaec6de-c69d-4e1e-9b03-995805a30a9c",
+        "is_active": true,
+        "key": "chain_guide",
+        "name": "Guía de Cadena",
+        "technical_family": "chain_guide",
+        "tenant_id": null
+      }
+    }
+  ],
+  "adjudication": {
+    "status": "candidate_under_sole_owner_review",
+    "scope": "Hanger, pulley and chain guide owners; extenders, full-mount derailleurs, identity and fill stay outside.",
+    "preimage": "Fresh 2026-09-16 production capture equals the 2026-09-08 final preimage in templates, fields and shared definitions; effective bindings 23+7+3 -> 28+7+3.",
+    "hanger": "Frame and derailleur interfaces are declarations of this hanger; a title never resolves them.",
+    "pulley": "Position, speeds, profile and dimensions are per declared unit; rotation and torque need the exact manual.",
+    "chain_guide": "Line-wide interchange is a cross-product claim, not a fact of one SKU.",
+    "legacy": "Published frame hint, hanger interface, mount type and teeth readings are retained without becoming active compatibility.",
+    "reviews": "Root decisions and the row-order delta review (2026-09-08) left no open blocker; adoption then 33/0, now repeated on 38.",
+    "released_client": "f51f3777 decodes row_conditions, row_coherence and two-element scalar pairs; one two-element pair here, no strict order.",
+    "compatibility_and_fill_not_approved": true,
+    "new_scalar_surfaces": [
+      "chain_guide_chainline_adjustment_mm",
+      "chainring_teeth_max",
+      "chainring_teeth_min",
+      "hanger_derailleur_interface",
+      "hanger_frame_interface",
+      "pulley_bearing_construction",
+      "pulley_bearing_element_material",
+      "pulley_bore_diameter_mm",
+      "pulley_declared_position",
+      "pulley_declared_speeds",
+      "pulley_outer_diameter_mm",
+      "pulley_package_kind",
+      "pulley_tooth_profile",
+      "pulley_unit_count",
+      "pulley_width_mm"
+    ]
+  },
+  "product_writes": false,
+  "fill_allowed": false,
+  "mechanical_approval": false
+}
