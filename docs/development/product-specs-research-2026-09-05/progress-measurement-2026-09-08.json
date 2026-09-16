@@ -452,7 +452,7 @@
  },
  "assignment_resolved_types_2026_09_15": {
   "verified_at": "2026-09-15T02:44:02.057169+00:00",
-  "authenticated_actor": "7bb76d88-5455-462e-a838-5f78af922914",
+  "actor_id": "7bb76d88-5455-462e-a838-5f78af922914",
   "project": "xzdvtzdqjeyqxnkqprtf",
   "assignments_applied_and_read_back": 3,
   "by_family": {
@@ -515,7 +515,7 @@
  ],
  "assignment_component_sets_2026_09_15": {
   "verified_at": "2026-09-15T03:47:25.195380+00:00",
-  "authenticated_actor": "7bb76d88-5455-462e-a838-5f78af922914",
+  "actor_id": "7bb76d88-5455-462e-a838-5f78af922914",
   "project": "xzdvtzdqjeyqxnkqprtf",
   "assignments_applied_and_read_back": 2,
   "by_family": {
@@ -666,7 +666,7 @@
  },
  "assignment_remaining_2026_09_16": {
   "verified_at": "2026-09-16T02:05:28.163095+00:00",
-  "authenticated_actor": "7bb76d88-5455-462e-a838-5f78af922914",
+  "actor_id": "7bb76d88-5455-462e-a838-5f78af922914",
   "project": "xzdvtzdqjeyqxnkqprtf",
   "assignments_applied_and_read_back": 4,
   "by_family": {
