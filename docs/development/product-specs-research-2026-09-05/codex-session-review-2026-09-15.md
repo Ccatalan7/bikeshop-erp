@@ -41,10 +41,11 @@ quedaron en el diario de `query.sh`.
    `f091e753-d9f4-5b85-9f1b-2556821054ec` en producción, no
    `f091e753-d9f4-5b7d-bbd3-e270e77023cb`. Los otros dos IDs son correctos.
    Todo trabajo usa los IDs leídos de producción, nunca los del documento.
-3. **Cobertura: 27, no 26.** Producción hoy: 1.674 productos, 59 servicios,
-   1.588 con plantilla efectiva (explícita o por categoría), 27 sin ella. El
-   registro nuevo es `TES-NEU-03153` (sin categoría), posterior a la lectura
-   de las 04:02Z del handoff. La lista de 26 sigue válida; se suma uno.
+3. **Cobertura: 26, como dice el handoff.** Viñabike hoy: 1.673 productos, 59
+   servicios, 1.588 con plantilla efectiva (explícita o por categoría), 26 sin
+   ella. Mi primera lectura dio 27 y 1.674 porque no filtraba tenant: el
+   registro extra (`TES-NEU-03153`) pertenece al tenant de pruebas `testbike`
+   y queda fuera del alcance. Corregido el 2026-09-16.
 4. **Uso real de la rama heredada de `seatpost`.** 14 productos explícitos,
    0 hechos en ellos, 0 hechos/referencias sobre `shim_inner_diameter_mm`,
    `shim_outer_diameter_mm` y `seatpost_shim_length_mm`, 0 usos de la opción

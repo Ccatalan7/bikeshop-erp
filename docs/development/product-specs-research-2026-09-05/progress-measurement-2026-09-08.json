@@ -348,13 +348,14 @@
     "unresolved_after_nonmaterial_review": 17
   },
   "assignment_coverage_live": {
-    "observed_at": "2026-09-15T19:45:00Z",
-    "all_products": 1674,
+    "observed_at": "2026-09-16T00:20:00Z",
+    "tenant": "vinabike",
+    "all_products": 1673,
     "service_products": 59,
     "nonservice_with_template": 1588,
-    "nonservice_without_template": 27,
+    "nonservice_without_template": 26,
     "explicit_bindings": 720,
-    "count_definition": "Database product_type/is_service flags; effective template = explicit binding or active category mapping; includes unresolved non-material records. TES-NEU-03153 appeared after the 04:02Z reading."
+    "count_definition": "Tenant vinabike only. Database product_type/is_service flags; effective template = explicit binding or active category mapping; includes unresolved non-material records. A 2026-09-15 reading of 27/1674 mixed in one product of the test tenant testbike and was withdrawn."
   },
   "assignment_original_parts_2026_09_15": {
     "assignments_applied": 108,

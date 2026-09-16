@@ -21,8 +21,9 @@ cierre), las tres migraciones con sus verificadores, `progress-measurement-2026-
 ## Contadores
 
 - Plantillas globales: 107 (105 planificadas + `component_set` + `seatpost_shim`).
-- Cobertura viva 19:45Z: 1.674 productos, 59 servicios, 1.588 con plantilla
-  efectiva, 27 sin ella, 720 vinculaciones explícitas.
+- Cobertura viva 19:45Z (tenant Viñabike): 1.673 productos, 59 servicios, 1.588
+  con plantilla efectiva, 26 sin ella, 720 vinculaciones explícitas. (Corregido
+  el 2026-09-16: un 27.º registro era del tenant de pruebas `testbike`.)
 - Llenado técnico persistido: **0**. Perfiles persistidos: 0. Hechos escritos
   por este bloque: 0. Asignaciones de este bloque: 0.
 
@@ -104,7 +105,7 @@ con siembra (`prepare`). Pendiente hasta que termine la migración a `main`.
 ## Punto de parada
 
 Trabajo detenido aquí por decisión del dueño hasta cerrar la migración a `main`.
-Al reanudar: (1) restaurar la base local; (2) 27 registros sin plantilla;
+Al reanudar: (1) restaurar la base local; (2) 26 registros sin plantilla;
 (3) reemplazos originales; (4) release del cliente y asignación de AE0266/AE0274;
 (5) gates del llenado.
 
