@@ -126,3 +126,14 @@ están en HEAD idénticos (129) o como evolución local posterior de la misma fo
 del 07-09 (23; el único con hunks exclusivos del clon, `copilot-instructions.md`,
 ya los contiene). Worktrees inventariados: tres de Codex, todos detached.
 
+
+## Continuación en `main`, 2026-09-16
+
+- Motor local restaurado por replay de migraciones standalone; el procedimiento y
+  sus trampas están en [local-engine-restore-2026-09-16.md](local-engine-restore-2026-09-16.md).
+  Los once hashes (validador, coherencia, RPC de asignación y de ficha) coinciden
+  con producción; el ensayo de asignación pasa 4/4.
+- Publicado el reemplazo de neumáticos y cámaras (`20260916030000`, cinco
+  plantillas, 271 productos, cero bloqueantes, 813 observaciones legacy
+  conservadas): [tire-tube-successors-adjudication-2026-09-16.md](tire-tube-successors-adjudication-2026-09-16.md).
+  Entregas planificadas: 78 de 105; quedan 27 reemplazos originales.

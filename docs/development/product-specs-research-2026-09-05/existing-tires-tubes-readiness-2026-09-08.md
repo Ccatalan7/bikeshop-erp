@@ -1,5 +1,11 @@
 # Sucesor de las cinco familias de neumático y cámara — ronda 3
 
+**Publicado el 2026-09-16** como `20260916030000_tire_tube_successors.sql` sobre 271
+productos, con preimagen fresca idéntica a la de esta ronda; la compuerta de
+`tire_tubeless_ready` quedó adjudicada. Ver
+[tire-tube-successors-adjudication-2026-09-16.md](tire-tube-successors-adjudication-2026-09-16.md).
+Lo que sigue abajo es el estado del candidato al 2026-09-08.
+
 ## Estado vigente integrado por Root, 2026-09-08
 
 **Candidato sin activar.** 55 pruebas Dart del formulario, 50 casos SQL con

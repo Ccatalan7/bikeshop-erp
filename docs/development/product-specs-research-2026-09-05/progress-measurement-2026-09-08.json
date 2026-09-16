@@ -1,686 +1,734 @@
 {
-  "new_active": 68,
-  "captured_at": "2026-09-14T19:12:44.384968+00:00",
-  "original_active": 37,
-  "planned_deliveries": 105,
-  "present_global_templates": 107,
-  "stage": "template_deliveries",
-  "new_published_deliveries": 68,
-  "delivered_stage_percent": 69.52380952380952,
-  "original_successor_candidates": 37,
-  "original_successors_activated": 5,
-  "task_product_fills": 0,
-  "task_new_assignments": 720,
-  "overall_percent": null,
-  "limitations": [
-    "Stage percentage is not overall project completion.",
-    "32 original family replacements remain unactivated. Adapted drivetrain_kit, brake_caliper, brake_pad, rotor and brake_lever replacements are live; the frozen 37-family catalogue remains a historical candidate, not the production catalogue.",
-    "Candidate coverage is not family closure or completed product research.",
-    "Member framework and 11 template opt-ins deployed, authenticated read-backs verified, root desktop/compact editor exercised. Embedded editor, OEM relations, consumers, client distribution, remaining original replacements and global sanitation remain open. Template-delivery percentage is not overall completion."
-  ],
-  "plan_sha256": "16459826fee4c589cce37243afe4e159317212ddf1d47d6d6f1d76f9b3fadf15",
-  "candidate_status_updated_at": "2026-09-16T02:12:00Z",
-  "original_candidates_with_root_local_sql_and_adoption": 37,
-  "original_candidates_under_root_adjudication": 0,
-  "shared_engine_migration_verified": "20260908185800",
-  "integrated_dart_tests": 599,
-  "integrated_sql_representation_cases": 562,
-  "integrated_pending_cases": 40,
-  "integrated_catalog_sha256": "e0cccea8cdea5835e47301d11060bc735454334a9bdf6e0666b9bb5b5d87b28d",
-  "effective_original_products": 868,
-  "adoption_refresh_status": "Historical 868-product authenticated adoption predates 720 assignment repairs and the adapted kit replacement. Refresh each remaining original-family cohort against its exact replacement before publication.",
-  "adoption": {
-    "products_evaluated": 868,
-    "products_with_blocking_issues": 0,
-    "products_with_pending_issues": 863,
-    "legacy_observations": 1056,
-    "unprojected_active_observations": 0
+ "new_active": 68,
+ "captured_at": "2026-09-14T19:12:44.384968+00:00",
+ "original_active": 37,
+ "planned_deliveries": 105,
+ "present_global_templates": 107,
+ "stage": "template_deliveries",
+ "new_published_deliveries": 68,
+ "delivered_stage_percent": 74.29,
+ "original_successor_candidates": 37,
+ "original_successors_activated": 10,
+ "task_product_fills": 0,
+ "task_new_assignments": 720,
+ "overall_percent": null,
+ "limitations": [
+  "Stage percentage is not overall project completion.",
+  "32 original family replacements remain unactivated. Adapted drivetrain_kit, brake_caliper, brake_pad, rotor and brake_lever replacements are live; the frozen 37-family catalogue remains a historical candidate, not the production catalogue.",
+  "Candidate coverage is not family closure or completed product research.",
+  "Member framework and 11 template opt-ins deployed, authenticated read-backs verified, root desktop/compact editor exercised. Embedded editor, OEM relations, consumers, client distribution, remaining original replacements and global sanitation remain open. Template-delivery percentage is not overall completion."
+ ],
+ "plan_sha256": "16459826fee4c589cce37243afe4e159317212ddf1d47d6d6f1d76f9b3fadf15",
+ "candidate_status_updated_at": "2026-09-16T02:12:00Z",
+ "original_candidates_with_root_local_sql_and_adoption": 37,
+ "original_candidates_under_root_adjudication": 0,
+ "shared_engine_migration_verified": "20260908185800",
+ "integrated_dart_tests": 599,
+ "integrated_sql_representation_cases": 562,
+ "integrated_pending_cases": 40,
+ "integrated_catalog_sha256": "e0cccea8cdea5835e47301d11060bc735454334a9bdf6e0666b9bb5b5d87b28d",
+ "effective_original_products": 868,
+ "adoption_refresh_status": "Historical 868-product authenticated adoption predates 720 assignment repairs and the adapted kit replacement. Refresh each remaining original-family cohort against its exact replacement before publication.",
+ "adoption": {
+  "products_evaluated": 868,
+  "products_with_blocking_issues": 0,
+  "products_with_pending_issues": 863,
+  "legacy_observations": 1056,
+  "unprojected_active_observations": 0
+ },
+ "adoption_summary": "original-successors-adoption-summary-2026-09-14.json",
+ "shared_member_framework": {
+  "migration": "20260914213000",
+  "production_status": "APPLIED",
+  "verified_at": "2026-09-14T21:43:18Z",
+  "migration_sha256": "dbe9b55bd31b9eee2c083a0c008393d896a4be57b74c1590f4f28e3c0253f406",
+  "authenticated_reads_verified": true,
+  "templates_opted_in": 11,
+  "editor_status": "Core suite 95 passed previously. Family labels: 26 focused tests; tenant names preserve technical keys and allowed choices, missing names remain selectable and optional name fetch cannot block editor. Real AE0317 desktop and compact 430x940 drafts discarded with authenticated unchanged read-back. Final fixes hot reloaded (138 libraries, 8.438 s); AE0244 kit opened a bearing member profile in desktop and was discarded; 2026-09-15T02:29:55Z authenticated read-back preserved all returned data and zero profiles. Embedded member interaction and other excluded family ownership remain pending.",
+  "backup_format_2": "/Users/Claudio/Vinabike Backups/Product Specs Legacy/20260914T220049Z-pre-fill",
+  "legacy_typed_writer": {
+   "migration": "20260914222500",
+   "production_status": "APPLIED",
+   "verified_at": "2026-09-14T22:40:31Z",
+   "migration_sha256": "a4c15f5273edb961dcf84d8112458bf9453ee325d036b1ad9b6d7969ae77ca44",
+   "rollback_assertions": 14
   },
-  "adoption_summary": "original-successors-adoption-summary-2026-09-14.json",
-  "shared_member_framework": {
-    "migration": "20260914213000",
-    "production_status": "APPLIED",
-    "verified_at": "2026-09-14T21:43:18Z",
-    "migration_sha256": "dbe9b55bd31b9eee2c083a0c008393d896a4be57b74c1590f4f28e3c0253f406",
-    "authenticated_reads_verified": true,
-    "templates_opted_in": 11,
-    "editor_status": "Core suite 95 passed previously. Family labels: 26 focused tests; tenant names preserve technical keys and allowed choices, missing names remain selectable and optional name fetch cannot block editor. Real AE0317 desktop and compact 430x940 drafts discarded with authenticated unchanged read-back. Final fixes hot reloaded (138 libraries, 8.438 s); AE0244 kit opened a bearing member profile in desktop and was discarded; 2026-09-15T02:29:55Z authenticated read-back preserved all returned data and zero profiles. Embedded member interaction and other excluded family ownership remain pending.",
-    "backup_format_2": "/Users/Claudio/Vinabike Backups/Product Specs Legacy/20260914T220049Z-pre-fill",
-    "legacy_typed_writer": {
-      "migration": "20260914222500",
-      "production_status": "APPLIED",
-      "verified_at": "2026-09-14T22:40:31Z",
-      "migration_sha256": "a4c15f5273edb961dcf84d8112458bf9453ee325d036b1ad9b6d7969ae77ca44",
-      "rollback_assertions": 14
-    },
-    "member_issue_details": {
-      "migration": "20260914225500",
-      "production_status": "APPLIED",
-      "verified_at": "2026-09-14T22:52:36Z",
-      "migration_sha256": "93b9f3c3228e03a2957b6f5196ddf864500791ce53f6c737f27f961d96fb25e3",
-      "rollback_assertions": 4
-    },
-    "enablement_candidate": {
-      "templates": 9,
-      "templates_applied": 9,
-      "dart_checks": 29,
-      "sql_cases": 18,
-      "forward_replay_rollback": true,
-      "final_independent_review": "approved_round_215_exact_metadata_delta",
-      "packet_sha256": "a91972be905e0e37e9acdb6abd2e6153f07fbc2f889b52e1f7cae7f140cb29b3",
-      "production_status": "APPLIED",
-      "migration": "20260915004000",
-      "migration_sha256": "0d22876b2490781d2ccb781c56f121b4f96f6f57c550bbeca743d59bdbd8e766",
-      "verified_at": "2026-09-15T00:37:56Z",
-      "authenticated_products_read_back": 68,
-      "authenticated_readback_at": "2026-09-15T00:42:16.104602+00:00",
-      "all_product_data_preserved": true,
-      "real_desktop_member_draft_discard_verified_at": "2026-09-15T01:10:38.294668+00:00",
-      "profiles_created": 0,
-      "products_filled": 0
-    }
+  "member_issue_details": {
+   "migration": "20260914225500",
+   "production_status": "APPLIED",
+   "verified_at": "2026-09-14T22:52:36Z",
+   "migration_sha256": "93b9f3c3228e03a2957b6f5196ddf864500791ce53f6c737f27f961d96fb25e3",
+   "rollback_assertions": 4
   },
-  "assignment_preparation_2026_09_14": {
-    "authenticated_products": 54,
-    "families": {
-      "lock": 31,
-      "light": 16,
-      "handlebar_covering": 7
-    },
-    "existing_rpc_contract_checks": 73,
-    "generated_sql_rehearsal_cases": 4,
-    "preparer_tests": 8,
-    "assignments_applied": 54,
-    "products_filled": 0,
-    "status": "applied_and_authenticated_readback_verified",
-    "record": "assignment-slice-readiness-2026-09-14.md",
-    "verified_at": "2026-09-14T23:51:40.183856+00:00",
-    "receipt_count": 54,
-    "independent_review": "not_completed; existing RPC reviewed by Root for assignment-only operation; new member enablement remains withheld",
-    "application_sha256": "8bcc68bec35e866c25071854138cf6d375a9d7007ea9084659a90cdc0effd37d",
-    "all_non_assignment_data_preserved": true
-  },
-  "assignment_coverage": {
-    "observed_at": "2026-09-15T00:32:29.726892+00:00",
-    "physical_products": 1614,
-    "physical_with_template": 1464,
-    "physical_without_template": 150,
-    "semantic_audit_complete": false,
-    "physical_count_definition": "Database product_type/is_service flags only; known non-material records await classification sanitation."
-  },
-  "assignment_accessories_2026_09_14": {
-    "assignments_applied": 149,
-    "authenticated_readbacks": 149,
-    "receipts": 149,
-    "verified_at": "2026-09-15T00:01:11.785762+00:00",
-    "families": {
-      "helmet": 13,
-      "rider_glove": 32,
-      "bottle": 4,
-      "accessory_mount": 8,
-      "grip": 23,
-      "saddle": 18,
-      "pump": 14,
-      "rack_basket": 4,
-      "eyewear": 3,
-      "audible_signal": 6,
-      "bottle_cage": 7,
-      "consumer_electronics": 1,
-      "saddle_cover": 4,
-      "fender": 4,
-      "training_wheel": 2,
-      "rider_apparel": 2,
-      "cycle_computer": 1,
-      "bike_bag": 2,
-      "rider_bag": 1
-    },
-    "all_non_assignment_data_preserved": true,
-    "products_filled": 0,
-    "proposal_sha256": "abdeab10c2abe60022158e702212bdd1bb5ad9ef376970cc8862454ecd7de021",
-    "applications": [
-      {
-        "file": "reviewed-application-01.sql",
-        "products": 50,
-        "sha256": "7cb0417bbc5885da4922641aed881212678a392d2351d0489119e03c91bef261"
-      },
-      {
-        "file": "reviewed-application-02.sql",
-        "products": 50,
-        "sha256": "7833ee2f56c0cecfbf1d316d18fce225949289171cc10da524f7e229d5247087"
-      },
-      {
-        "file": "reviewed-application-03.sql",
-        "products": 49,
-        "sha256": "4c92a8ee51d08ecc25d0ef09c0efe800634cdbfc27c7edbe6ad30a1743a52421"
-      }
-    ],
-    "review": "Root individual class review; Claude session quota, no independent approval claimed",
-    "record": "assignment-accessories-result-2026-09-14.md"
-  },
-  "assignment_components_2026_09_14": {
-    "assignments_applied": 140,
-    "authenticated_readbacks": 140,
-    "persisted_receipts": 140,
-    "verified_at": "2026-09-15T00:09:32.820198+00:00",
-    "families": {
-      "control_small_part": 4,
-      "hydraulic_fitting": 8,
-      "wheel_retention": 11,
-      "seat_clamp": 11,
-      "spoke_nipple": 2,
-      "pedal": 30,
-      "stem": 15,
-      "handlebar": 11,
-      "seatpost": 13,
-      "hub_small_part": 7,
-      "spacer": 8,
-      "rotor_mount_adapter": 1,
-      "pedal_peg": 1,
-      "fork": 11,
-      "brake_mount_adapter": 3,
-      "headset_small_part": 3,
-      "rear_shock": 1
-    },
-    "all_non_assignment_data_preserved": true,
-    "products_filled": 0,
-    "proposal_sha256": "c9f92db81f711d8dcdd34c4457f9044fbb39e546f6d337e5555c827fa0230c46",
-    "applications": [
-      {
-        "file": "reviewed-application-01.sql",
-        "products": 50,
-        "sha256": "80e111d5014393ffdc4d5040ebd638ff50570cb78cf0f7ecedd763dfdac0686a"
-      },
-      {
-        "file": "reviewed-application-02.sql",
-        "products": 50,
-        "sha256": "dacf8f0fc340eec7eb331546eb926fb7b3b1a66037a75ba29c003a7264eb6aaf"
-      },
-      {
-        "file": "reviewed-application-03.sql",
-        "products": 40,
-        "sha256": "dc11d0a5a2a365257973a464d5046b5768bb14959db468c153773fab22df4309"
-      }
-    ],
-    "review": "Root; no Claude review claimed",
-    "record": "assignment-sanitation-checkpoint-2026-09-14.md"
-  },
-  "assignment_consumables_2026_09_14": {
-    "assignments_applied": 79,
-    "authenticated_readbacks": 79,
-    "persisted_receipts": 79,
-    "verified_at": "2026-09-15T00:11:25.477584+00:00",
-    "families": {
-      "workshop_chemical": 23,
-      "control_housing": 11,
-      "control_cable": 14,
-      "tubeless_tape": 10,
-      "control_small_part": 12,
-      "brake_fluid": 1,
-      "bike_protection": 3,
-      "chainring_guard": 1,
-      "valve_small_part": 1,
-      "hydraulic_hose": 2,
-      "tire_liner": 1
-    },
-    "all_non_assignment_data_preserved": true,
-    "products_filled": 0,
-    "proposal_sha256": "6b344aa643b7ac2c32c443267fd6787463770f18538a5995f2c4c20ef2a5351f",
-    "applications": [
-      {
-        "file": "reviewed-application-01.sql",
-        "products": 50,
-        "sha256": "e4e75bfce7334126a5aa1f6d437dd3478683d684d4030ceef4504327760ca3ed"
-      },
-      {
-        "file": "reviewed-application-02.sql",
-        "products": 29,
-        "sha256": "9adaae16109c261e15d8e9a620c7b48a7d199db81c615dbe1dd7bf24dc9cfe0d"
-      }
-    ],
-    "review": "Root; no Claude review claimed",
-    "record": "assignment-sanitation-checkpoint-2026-09-14.md"
-  },
-  "assignment_uncategorized_2026_09_14": {
-    "assignments_applied": 91,
-    "authenticated_readbacks": 91,
-    "persisted_receipts": 91,
-    "verified_at": "2026-09-15T00:23:59.978368+00:00",
-    "families": {
-      "light": 4,
-      "workshop_tool": 17,
-      "grip": 5,
-      "wheel_retention": 2,
-      "valve_small_part": 3,
-      "control_cable": 4,
-      "control_housing": 2,
-      "consumer_electronics": 2,
-      "rack_basket": 1,
-      "bottle": 3,
-      "saddle": 2,
-      "pedal": 4,
-      "stem": 1,
-      "kickstand": 2,
-      "bottle_cage": 3,
-      "rider_apparel": 2,
-      "rider_bag": 1,
-      "bike_bag": 1,
-      "rider_protection": 1,
-      "workshop_chemical": 4,
-      "handlebar": 3,
-      "seatpost": 1,
-      "seat_clamp": 1,
-      "brake_mount_adapter": 1,
-      "brake_shift_combined_control": 1,
-      "souvenir": 1,
-      "food_beverage": 19
-    },
-    "all_non_assignment_data_preserved": true,
-    "products_filled": 0,
-    "proposal_sha256": "6f94893ebdcf952c2c307f4d4bb49a71d904d201f9b882b1dad25b11a23fb8d2",
-    "applications": [
-      {
-        "file": "reviewed-application-01.sql",
-        "products": 50,
-        "sha256": "b302a503d99053e3694f2c2ac392da1cf9b3fef977934533e85b6640d1075f44"
-      },
-      {
-        "file": "reviewed-application-02.sql",
-        "products": 41,
-        "sha256": "5a102271762ce87153f3899afb47c9070914c45cc526f5f4fcda2def1e12901c"
-      }
-    ],
-    "review": "Root; no Claude review claimed",
-    "held_after_class_review": 1,
-    "record": "assignment-sanitation-checkpoint-2026-09-14.md"
-  },
-  "assignment_tools_parts_2026_09_14": {
-    "assignments_applied": 83,
-    "authenticated_readbacks": 83,
-    "persisted_receipts": 83,
-    "verified_at": "2026-09-15T00:32:44.886063+00:00",
-    "families": {
-      "workshop_tool": 26,
-      "fastener": 22,
-      "bike_bag": 2,
-      "brake_small_part": 1,
-      "souvenir": 6,
-      "hydraulic_fitting": 2,
-      "control_small_part": 4,
-      "consumer_electronics": 1,
-      "valve_small_part": 2,
-      "saddle": 2,
-      "reflector": 1,
-      "pump": 1,
-      "brake_fluid": 2,
-      "workshop_chemical": 2,
-      "audible_signal": 1,
-      "accessory_mount": 1,
-      "derailleur_hanger_extender": 1,
-      "spoke_nipple": 1,
-      "derailleur_hanger": 5
-    },
-    "all_non_assignment_data_preserved": true,
-    "products_filled": 0,
-    "proposal_sha256": "8a852e9984c3e7993fda846e0a8fd6018ef7249d46dda65deb0a3d41a69e6cc2",
-    "applications": [
-      {
-        "file": "reviewed-application-01.sql",
-        "products": 50,
-        "sha256": "8f9bba4253d9405cc0229be988561e23ff5d2b813088cddc25ef1091eaf32440"
-      },
-      {
-        "file": "reviewed-application-02.sql",
-        "products": 33,
-        "sha256": "fa55811d5809a46e5c02c94aff5aef81c69aaf17f1beec962d1b9bc53d7df458"
-      }
-    ],
-    "review": "Root; no Claude review claimed",
-    "record": "assignment-sanitation-checkpoint-2026-09-14.md"
-  },
-  "delivery_status_updated_at": "2026-09-15T05:53:53.666444+00:00",
-  "assignment_repair_progress": {
-    "initial_missing": 746,
-    "repaired": 724,
-    "remaining": 22,
-    "stage_percent": 97.05,
-    "scope": "Only repairs in the initial missing-template cohort; not overall completion or confirmed physical-product count.",
-    "non_material_dispositions": 10,
-    "awaiting_client_distribution": 2,
-    "identity_needed": 10
-  },
-  "assignment_coverage_live": {
-    "observed_at": "2026-09-16T02:05:28.163095+00:00",
-    "tenant": "vinabike",
-    "all_products": 1673,
-    "service_products": 59,
-    "nonservice_with_template": 1592,
-    "nonservice_without_template": 22,
-    "explicit_bindings": 724,
-    "count_definition": "Tenant vinabike only. Database product_type/is_service flags; effective template = explicit binding or active category mapping; includes unresolved non-material records."
-  },
-  "assignment_original_parts_2026_09_15": {
-    "assignments_applied": 108,
-    "authenticated_readbacks": 108,
-    "persisted_receipts": 108,
-    "verified_at": "2026-09-15T01:33:39.112388+00:00",
-    "families": {
-      "cassette_lockring": 1,
-      "drivetrain_kit": 5,
-      "hub_axle": 19,
-      "tubeless_repair": 1,
-      "tube_repair": 9,
-      "stem": 2,
-      "bottom_bracket": 4,
-      "rider_bag": 2,
-      "rim_strip": 1,
-      "crank_arm": 1,
-      "bearing": 7,
-      "chain": 3,
-      "rear_derailleur": 4,
-      "cassette": 1,
-      "chainring": 1,
-      "bottom_bracket_cup": 1,
-      "front_derailleur": 3,
-      "bottom_bracket_axle": 1,
-      "rim_brake": 4,
-      "headset": 1,
-      "brake_lever": 3,
-      "mechanical_disc_brake": 1,
-      "rim": 3,
-      "shifter": 4,
-      "hub": 4,
-      "tire": 4,
-      "freewheel": 1,
-      "spoke": 10,
-      "bottom_bracket_bearing": 2,
-      "bmx_cable_detangler": 1,
-      "training_wheel": 1,
-      "crankset": 3
-    },
-    "all_non_assignment_data_preserved": true,
-    "products_filled": 0,
-    "proposal_sha256": "9d4f4dcf340180a6e4f6999b84f460403b9be61e2c7e49265dde8134fea20536",
-    "applications": [
-      {
-        "file": "reviewed-application-01.sql",
-        "products": 50,
-        "sha256": "89a110119b5bcce1f2d53567268f3cc11cf293f9bf1e8b0d63760ff2d3509eea"
-      },
-      {
-        "file": "reviewed-application-02.sql",
-        "products": 50,
-        "sha256": "af57265d334e52ee738b2f35cf17fac4aef159081ed67c28bc58dac58c3e96f8"
-      },
-      {
-        "file": "reviewed-application-03.sql",
-        "products": 8,
-        "sha256": "5f3227dda418cf986d7a3debf7672d3ff74a38816b559da84a24c06af1b5f2c7"
-      }
-    ],
-    "review": "Root class review; no Claude review of this cohort claimed",
-    "record": "assignment-sanitation-checkpoint-2026-09-14.md",
-    "reference_choices_are_family_catalog_not_product_bindings": true
-  },
-  "original_successor_delivery_definition": "Five adapted replacements deployed and read back: drivetrain_kit, brake_caliper, brake_pad, rotor, brake_lever. Frozen prototypes were not activated unchanged; 32 originals await replacement. This counts delivered template architecture, not complete compatibility research or product filling.",
-  "assignment_image_reviewed_2026_09_15": {
-    "assignments_applied": 10,
-    "authenticated_readbacks": 10,
-    "persisted_receipts": 10,
-    "verified_at": "2026-09-15T02:21:39.372054+00:00",
-    "all_non_assignment_data_preserved": true,
-    "products_filled": 0,
-    "proposal_sha256": "53bf24dd95ae57e7dcc3af510a621f0fc3c98e9349e74418158ff8e2987f54ac",
-    "application_sha256": "dba3480b08ef72cce6f3c6aef18fc13c16f5c2ee1473b0b5c1fd3ec91d14265b",
-    "review": "Root individual class and catalogue-image review; no Claude review claimed",
-    "record": "assignment-sanitation-checkpoint-2026-09-14.md"
-  },
-  "drivetrain_kit_replacement": {
-    "status": "applied_and_verified",
-    "migration": "20260915023000",
-    "sha256": "6de5a28f0a6123220222045895857a3b150ccb52c5aabdcbf536fce58fd03419",
-    "old_version": 3,
-    "new_version": 16,
-    "authenticated_products": 6,
-    "all_product_data_preserved": true,
-    "member_profiles_persisted": 0,
-    "dart_cases": 12,
-    "sql_representation_cases": 11,
-    "atomic_save_assertions": 13,
-    "independent_review": "Claude 220 exact delta approved",
-    "real_editor_readback": "2026-09-15T02:29:55.743897+00:00",
-    "record": "drivetrain-kit-members-adjudication-2026-09-15.md"
-  },
-  "assignment_resolved_types_2026_09_15": {
-    "verified_at": "2026-09-15T02:44:02.057169+00:00",
-    "authenticated_actor": "7bb76d88-5455-462e-a838-5f78af922914",
-    "project": "xzdvtzdqjeyqxnkqprtf",
-    "assignments_applied_and_read_back": 3,
-    "by_family": {
-      "rider_glove": 1,
-      "tire": 1,
-      "crankset": 1
-    },
-    "technical_facts_filled": 0,
-    "all_non_assignment_data_preserved": true,
-    "reference_choices_are_family_lookup_not_product_bindings": true,
-    "proposal_sha256": "8b93db9a6f30a0c61b2fbeb02f28f2cd537890ba4ac99a5b1c9b384210feda5f",
-    "persisted_receipts": 3,
-    "record": "remaining-assignment-adjudication-2026-09-15.json"
-  },
-  "assignment_existing_tube_2026_09_15": {
-    "verified_at": "2026-09-15T03:30:13.084106+00:00",
-    "product_id": "6eb1ae4d-81a2-42ba-b971-14f2c9fe48a0",
-    "sku": "6927116185398",
-    "assignment_applied_and_read_back": 1,
-    "all_seven_observations_unchanged": true,
-    "commercial_data_unchanged": true,
-    "profile_data_unchanged": true,
-    "bound_reference_unchanged": true,
-    "public_rows": 5,
-    "pending_inferences_not_public": true,
-    "technical_facts_filled": 0,
-    "before_snapshot_sha256": "956bf01556bf5699fba7f0c4e637616ba2345c5b5cee69a929ce51c9378c9ff3",
-    "after_snapshot_sha256": "18ac4d0a0ac81589c0f898cda758ec6e98800b680cf717459cbf56502d04772e",
-    "persisted_receipts": 1,
-    "public_guard_migration": "20260915034000",
-    "consumer_test": "14 cases using real before/after contexts, synthetic bikes; no positive compatibility verdict",
-    "record": "assignment-sanitation-checkpoint-2026-09-14.md"
-  },
-  "public_inference_guard_2026_09_15": {
-    "migration": "20260915034000",
-    "verified_at": "2026-09-15T03:26:03.678296+00:00",
-    "facts_modified": 0,
-    "anonymous_before_after_reads": 2,
-    "record": "public-pending-inference-guard-2026-09-15.md"
-  },
-  "component_set_delivery_2026_09_15": {
-    "migration": "20260915035000",
-    "metadata_authenticated": true,
-    "member_families_resolved_authenticated": 8,
-    "new_templates_outside_initial_plan": 1,
-    "record": "component-set-adjudication-2026-09-15.md",
-    "status": "applied_and_verified",
-    "migration_sha256": "a95602280314cc98ff2fe4de110c15215fa94eacd4db206d66baa47b3c142207",
-    "dart_checks": 15,
-    "sql_cases": 14,
-    "profile_writer_checks": 11,
-    "assignments_applied_and_read_back": 2,
-    "persisted_receipts": 2,
-    "desktop_draft_discard_verified_at": "2026-09-15T04:02:35.192264+00:00",
-    "technical_facts_filled": 0,
-    "profiles_persisted": 0
-  },
-  "additional_deliveries_outside_initial_plan": [
-    "component_set"
-  ],
-  "assignment_component_sets_2026_09_15": {
-    "verified_at": "2026-09-15T03:47:25.195380+00:00",
-    "authenticated_actor": "7bb76d88-5455-462e-a838-5f78af922914",
-    "project": "xzdvtzdqjeyqxnkqprtf",
-    "assignments_applied_and_read_back": 2,
-    "by_family": {
-      "component_set": 2
-    },
-    "technical_facts_filled": 0,
-    "all_non_assignment_data_preserved": true,
-    "reference_choices_are_family_lookup_not_product_bindings": true,
-    "proposal_sha256": "0c4bfdc2e46b4ae8695a4a297bb511f11319ea97290c8e4293f06252bdbadb34",
-    "applications": [
-      {
-        "file": "reviewed-application-01.sql",
-        "products": 2,
-        "sha256": "535b11dd8319990c6eee2fe3e1a351f8ba2b28e307d07613d0ba27e82395a49f"
-      }
-    ],
-    "persisted_receipts": 2,
-    "record": "component-set-adjudication-2026-09-15.md"
-  },
-  "brake_piece_replacements": {
-    "migration": "20260915043000",
-    "migration_sha256": "440d1cbbe0c0418d54fde6493d7e189a9db422a30ddac1c3ae975c5e04e37f3a",
-    "status": "applied_and_verified",
-    "verified_at": "2026-09-15T04:35:06Z",
-    "versions": {
-      "brake_caliper": 30,
-      "brake_pad": 23,
-      "rotor": 17
-    },
-    "authenticated_products": 82,
-    "observations_preserved": 33,
-    "all_product_data_preserved": true,
-    "anonymous_products": 14,
-    "retired_public_rows_removed": 17,
-    "other_public_values_preserved": 7,
-    "dart_checks": 61,
-    "sql_representation_cases": 58,
-    "profile_writer_assertions": 20,
-    "consumer_tests": 106,
-    "independent_review": "Claude 227 exact SHA approved",
-    "desktop_drafts_discard_verified_at": "2026-09-15T04:43:03.996848+00:00",
-    "technical_facts_filled": 0,
-    "member_profiles_persisted": 0,
-    "record": "brake-pieces-adjudication-2026-09-15.md",
-    "limits": [
-      "Phone and embedded behavior not verified for these three routes.",
-      "Consumer Dart fixes hot reloaded in debug, not distributed.",
-      "NNV55 and 1062 existing caliper bindings require class adjudication; snapshot preservation is not physical class approval."
-    ]
-  },
-  "brake_lever_replacement": {
-    "migration": "20260915054000",
-    "migration_sha256": "ded86efb78dbdbdf5a4b470af9f4adb18f6c809d4fbb455142ffb86bc6ea7ce1",
-    "status": "applied_and_verified",
-    "verified_at": "2026-09-15T05:41:48Z",
-    "version": 28,
-    "authenticated_products": 18,
-    "observations_preserved": 0,
-    "all_product_data_preserved": true,
-    "anonymous_products": 18,
-    "public_values_before_and_after": 0,
-    "dart_checks": 39,
-    "sql_representation_cases": 38,
-    "profile_writer_assertions": 13,
-    "independent_review": "Claude 229 exact SHA approved; evidence condition satisfied in v4 logs",
-    "desktop_drafts_discard_verified_at": "2026-09-15T05:53:53.666444+00:00",
-    "technical_facts_filled": 0,
-    "member_profiles_persisted": 0,
-    "record": "brake-lever-adjudication-2026-09-15.md",
-    "limits": [
-      "32 original replacements remain. This is a template-delivery count, not overall completion.",
-      "Paired lever presentations require product-class adjudication; AE0319 image shows two levers.",
-      "Phone and embedded routes, next client distribution and existing shared field surface flags remain open."
-    ]
-  },
-  "published_planned_deliveries": 73,
-  "new_templates_outside_initial_plan": 2,
-  "strict_scalar_extension_2026_09_15": {
-    "migration": "20260915200000",
-    "migration_sha256": "e25ce520e2085537c0f31a419d2e846b1a0447067c1ff089b81b97f799a65dcc",
-    "verification_sha256": "704a0b8043cedd9fb1ae075e83c57d6cad7edf6ca812c0867b8093e3d36d2b5a",
-    "status": "applied_and_verified",
-    "verified_at": "2026-09-15T19:50:00Z",
-    "functions_replaced": 4,
-    "existing_template_contracts_validated": 106,
-    "behavior_cases": 11,
-    "fingerprint_unchanged": true,
-    "grants_changed": 0,
-    "independent_review": "Claude 230 approved exact SHA e25ce520…; deployed by Claude in solo ownership",
-    "record": "seatpost-shim-and-scalar-review-2026-09-15.md"
-  },
-  "seatpost_shim_delivery_2026_09_15": {
-    "migration": "20260915203000",
-    "migration_sha256": "30b3937e23230b4a73173f8efe55ae2c7215deacccfc6732658bf3c40f859d96",
-    "verification_sha256": "3120a487990f5af704f5d6eb53a0389b6c7d3f1dd818df5b37ad2956b01b2a45",
-    "status": "applied_and_verified",
-    "verified_at": "2026-09-15T19:51:00Z",
-    "template_key": "seatpost_shim",
-    "template_id": "bdd99089-75c5-5370-919c-38a6cdefd892",
-    "contract_version": 11,
-    "fields": 10,
-    "new_definitions": 4,
-    "reused_definitions": 6,
-    "reused_interfaces_from_seatpost_branch": [
-      "shim_inner_diameter_mm",
-      "shim_outer_diameter_mm",
-      "seatpost_shim_length_mm"
-    ],
-    "sql_representation_cases": 25,
-    "dart_checks": 26,
-    "profile_writer_assertions": 9,
-    "products_assigned": 0,
-    "technical_facts_filled": 0,
-    "legacy_seatpost_branch_sanitised": true,
-    "client_release_required_before_assignment": true,
-    "record": "seatpost-shim-architecture-evidence-2026-09-15.md"
-  },
-  "git_safeguard_status_2026_09_15": {
-    "local_head": "71926a11",
-    "origin_smartpegas1_0": "f51f3777",
-    "applied_migrations_not_in_any_remote": 25,
-    "applied_migrations_in_origin": 17,
-    "note": "23 spec migrations (20260907222000…20260915203000) plus two of 2026-09-10 exist only in the local working tree; owner decision pending, no commit made by Claude."
-  },
-  "seatpost_legacy_branch_2026_09_15": {
-    "migration": "20260915210000",
-    "migration_sha256": "0a3e8f99828a9335fd1db279a3053445f83173dbc4c4df119d5fe8899e04e0c3",
-    "verification_sha256": "79af2a9df32dc1cae0a3aca7eb4ca7a612a9fa5b3a85c622d8731e88b9c54009",
-    "status": "applied_and_verified",
-    "verified_at": "2026-09-15T20:02:00Z",
-    "template_key": "seatpost",
-    "old_version": 23,
-    "new_version": 27,
-    "retired_fields": [
-      "shim_inner_diameter_mm",
-      "shim_outer_diameter_mm",
-      "seatpost_shim_length_mm"
-    ],
-    "option_removed_from_template_allowed_options": "Suplemento (shim)",
-    "definitions_changed": 0,
-    "option_vocabulary_changed": 0,
-    "explicit_products_preserved": 14,
-    "facts_on_products": 0,
-    "sql_representation_cases": 7,
-    "dart_checks": 9,
-    "technical_facts_filled": 0,
-    "record": "checkpoint-2026-09-15-claude-solo.md"
-  },
-  "assignment_remaining_2026_09_16": {
-    "verified_at": "2026-09-16T02:05:28.163095+00:00",
-    "authenticated_actor": "7bb76d88-5455-462e-a838-5f78af922914",
-    "project": "xzdvtzdqjeyqxnkqprtf",
-    "assignments_applied_and_read_back": 4,
-    "by_family": {
-      "brake_fluid": 1,
-      "hub_small_part": 1,
-      "rack_basket": 1,
-      "wheel_retention": 1
-    },
-    "technical_facts_filled": 0,
-    "all_non_assignment_data_preserved": true,
-    "proposal_sha256": "fb3f32cf81a698dc919d3befe8c4fb904f7dadcee34615dfe4f4998df42d78aa",
-    "application_sha256": "7eb50771396a3fd4ddca2a21fac09dec516719c4fd6eab0e8c820d1d982829c3",
-    "persisted_receipts": 4,
-    "review": "Claude solo review; identity-only assignments, no compatibility claim",
-    "record": "assignment-remaining-2026-09-16.md"
+  "enablement_candidate": {
+   "templates": 9,
+   "templates_applied": 9,
+   "dart_checks": 29,
+   "sql_cases": 18,
+   "forward_replay_rollback": true,
+   "final_independent_review": "approved_round_215_exact_metadata_delta",
+   "packet_sha256": "a91972be905e0e37e9acdb6abd2e6153f07fbc2f889b52e1f7cae7f140cb29b3",
+   "production_status": "APPLIED",
+   "migration": "20260915004000",
+   "migration_sha256": "0d22876b2490781d2ccb781c56f121b4f96f6f57c550bbeca743d59bdbd8e766",
+   "verified_at": "2026-09-15T00:37:56Z",
+   "authenticated_products_read_back": 68,
+   "authenticated_readback_at": "2026-09-15T00:42:16.104602+00:00",
+   "all_product_data_preserved": true,
+   "real_desktop_member_draft_discard_verified_at": "2026-09-15T01:10:38.294668+00:00",
+   "profiles_created": 0,
+   "products_filled": 0
   }
+ },
+ "assignment_preparation_2026_09_14": {
+  "authenticated_products": 54,
+  "families": {
+   "lock": 31,
+   "light": 16,
+   "handlebar_covering": 7
+  },
+  "existing_rpc_contract_checks": 73,
+  "generated_sql_rehearsal_cases": 4,
+  "preparer_tests": 8,
+  "assignments_applied": 54,
+  "products_filled": 0,
+  "status": "applied_and_authenticated_readback_verified",
+  "record": "assignment-slice-readiness-2026-09-14.md",
+  "verified_at": "2026-09-14T23:51:40.183856+00:00",
+  "receipt_count": 54,
+  "independent_review": "not_completed; existing RPC reviewed by Root for assignment-only operation; new member enablement remains withheld",
+  "application_sha256": "8bcc68bec35e866c25071854138cf6d375a9d7007ea9084659a90cdc0effd37d",
+  "all_non_assignment_data_preserved": true
+ },
+ "assignment_coverage": {
+  "observed_at": "2026-09-15T00:32:29.726892+00:00",
+  "physical_products": 1614,
+  "physical_with_template": 1464,
+  "physical_without_template": 150,
+  "semantic_audit_complete": false,
+  "physical_count_definition": "Database product_type/is_service flags only; known non-material records await classification sanitation."
+ },
+ "assignment_accessories_2026_09_14": {
+  "assignments_applied": 149,
+  "authenticated_readbacks": 149,
+  "receipts": 149,
+  "verified_at": "2026-09-15T00:01:11.785762+00:00",
+  "families": {
+   "helmet": 13,
+   "rider_glove": 32,
+   "bottle": 4,
+   "accessory_mount": 8,
+   "grip": 23,
+   "saddle": 18,
+   "pump": 14,
+   "rack_basket": 4,
+   "eyewear": 3,
+   "audible_signal": 6,
+   "bottle_cage": 7,
+   "consumer_electronics": 1,
+   "saddle_cover": 4,
+   "fender": 4,
+   "training_wheel": 2,
+   "rider_apparel": 2,
+   "cycle_computer": 1,
+   "bike_bag": 2,
+   "rider_bag": 1
+  },
+  "all_non_assignment_data_preserved": true,
+  "products_filled": 0,
+  "proposal_sha256": "abdeab10c2abe60022158e702212bdd1bb5ad9ef376970cc8862454ecd7de021",
+  "applications": [
+   {
+    "file": "reviewed-application-01.sql",
+    "products": 50,
+    "sha256": "7cb0417bbc5885da4922641aed881212678a392d2351d0489119e03c91bef261"
+   },
+   {
+    "file": "reviewed-application-02.sql",
+    "products": 50,
+    "sha256": "7833ee2f56c0cecfbf1d316d18fce225949289171cc10da524f7e229d5247087"
+   },
+   {
+    "file": "reviewed-application-03.sql",
+    "products": 49,
+    "sha256": "4c92a8ee51d08ecc25d0ef09c0efe800634cdbfc27c7edbe6ad30a1743a52421"
+   }
+  ],
+  "review": "Root individual class review; Claude session quota, no independent approval claimed",
+  "record": "assignment-accessories-result-2026-09-14.md"
+ },
+ "assignment_components_2026_09_14": {
+  "assignments_applied": 140,
+  "authenticated_readbacks": 140,
+  "persisted_receipts": 140,
+  "verified_at": "2026-09-15T00:09:32.820198+00:00",
+  "families": {
+   "control_small_part": 4,
+   "hydraulic_fitting": 8,
+   "wheel_retention": 11,
+   "seat_clamp": 11,
+   "spoke_nipple": 2,
+   "pedal": 30,
+   "stem": 15,
+   "handlebar": 11,
+   "seatpost": 13,
+   "hub_small_part": 7,
+   "spacer": 8,
+   "rotor_mount_adapter": 1,
+   "pedal_peg": 1,
+   "fork": 11,
+   "brake_mount_adapter": 3,
+   "headset_small_part": 3,
+   "rear_shock": 1
+  },
+  "all_non_assignment_data_preserved": true,
+  "products_filled": 0,
+  "proposal_sha256": "c9f92db81f711d8dcdd34c4457f9044fbb39e546f6d337e5555c827fa0230c46",
+  "applications": [
+   {
+    "file": "reviewed-application-01.sql",
+    "products": 50,
+    "sha256": "80e111d5014393ffdc4d5040ebd638ff50570cb78cf0f7ecedd763dfdac0686a"
+   },
+   {
+    "file": "reviewed-application-02.sql",
+    "products": 50,
+    "sha256": "dacf8f0fc340eec7eb331546eb926fb7b3b1a66037a75ba29c003a7264eb6aaf"
+   },
+   {
+    "file": "reviewed-application-03.sql",
+    "products": 40,
+    "sha256": "dc11d0a5a2a365257973a464d5046b5768bb14959db468c153773fab22df4309"
+   }
+  ],
+  "review": "Root; no Claude review claimed",
+  "record": "assignment-sanitation-checkpoint-2026-09-14.md"
+ },
+ "assignment_consumables_2026_09_14": {
+  "assignments_applied": 79,
+  "authenticated_readbacks": 79,
+  "persisted_receipts": 79,
+  "verified_at": "2026-09-15T00:11:25.477584+00:00",
+  "families": {
+   "workshop_chemical": 23,
+   "control_housing": 11,
+   "control_cable": 14,
+   "tubeless_tape": 10,
+   "control_small_part": 12,
+   "brake_fluid": 1,
+   "bike_protection": 3,
+   "chainring_guard": 1,
+   "valve_small_part": 1,
+   "hydraulic_hose": 2,
+   "tire_liner": 1
+  },
+  "all_non_assignment_data_preserved": true,
+  "products_filled": 0,
+  "proposal_sha256": "6b344aa643b7ac2c32c443267fd6787463770f18538a5995f2c4c20ef2a5351f",
+  "applications": [
+   {
+    "file": "reviewed-application-01.sql",
+    "products": 50,
+    "sha256": "e4e75bfce7334126a5aa1f6d437dd3478683d684d4030ceef4504327760ca3ed"
+   },
+   {
+    "file": "reviewed-application-02.sql",
+    "products": 29,
+    "sha256": "9adaae16109c261e15d8e9a620c7b48a7d199db81c615dbe1dd7bf24dc9cfe0d"
+   }
+  ],
+  "review": "Root; no Claude review claimed",
+  "record": "assignment-sanitation-checkpoint-2026-09-14.md"
+ },
+ "assignment_uncategorized_2026_09_14": {
+  "assignments_applied": 91,
+  "authenticated_readbacks": 91,
+  "persisted_receipts": 91,
+  "verified_at": "2026-09-15T00:23:59.978368+00:00",
+  "families": {
+   "light": 4,
+   "workshop_tool": 17,
+   "grip": 5,
+   "wheel_retention": 2,
+   "valve_small_part": 3,
+   "control_cable": 4,
+   "control_housing": 2,
+   "consumer_electronics": 2,
+   "rack_basket": 1,
+   "bottle": 3,
+   "saddle": 2,
+   "pedal": 4,
+   "stem": 1,
+   "kickstand": 2,
+   "bottle_cage": 3,
+   "rider_apparel": 2,
+   "rider_bag": 1,
+   "bike_bag": 1,
+   "rider_protection": 1,
+   "workshop_chemical": 4,
+   "handlebar": 3,
+   "seatpost": 1,
+   "seat_clamp": 1,
+   "brake_mount_adapter": 1,
+   "brake_shift_combined_control": 1,
+   "souvenir": 1,
+   "food_beverage": 19
+  },
+  "all_non_assignment_data_preserved": true,
+  "products_filled": 0,
+  "proposal_sha256": "6f94893ebdcf952c2c307f4d4bb49a71d904d201f9b882b1dad25b11a23fb8d2",
+  "applications": [
+   {
+    "file": "reviewed-application-01.sql",
+    "products": 50,
+    "sha256": "b302a503d99053e3694f2c2ac392da1cf9b3fef977934533e85b6640d1075f44"
+   },
+   {
+    "file": "reviewed-application-02.sql",
+    "products": 41,
+    "sha256": "5a102271762ce87153f3899afb47c9070914c45cc526f5f4fcda2def1e12901c"
+   }
+  ],
+  "review": "Root; no Claude review claimed",
+  "held_after_class_review": 1,
+  "record": "assignment-sanitation-checkpoint-2026-09-14.md"
+ },
+ "assignment_tools_parts_2026_09_14": {
+  "assignments_applied": 83,
+  "authenticated_readbacks": 83,
+  "persisted_receipts": 83,
+  "verified_at": "2026-09-15T00:32:44.886063+00:00",
+  "families": {
+   "workshop_tool": 26,
+   "fastener": 22,
+   "bike_bag": 2,
+   "brake_small_part": 1,
+   "souvenir": 6,
+   "hydraulic_fitting": 2,
+   "control_small_part": 4,
+   "consumer_electronics": 1,
+   "valve_small_part": 2,
+   "saddle": 2,
+   "reflector": 1,
+   "pump": 1,
+   "brake_fluid": 2,
+   "workshop_chemical": 2,
+   "audible_signal": 1,
+   "accessory_mount": 1,
+   "derailleur_hanger_extender": 1,
+   "spoke_nipple": 1,
+   "derailleur_hanger": 5
+  },
+  "all_non_assignment_data_preserved": true,
+  "products_filled": 0,
+  "proposal_sha256": "8a852e9984c3e7993fda846e0a8fd6018ef7249d46dda65deb0a3d41a69e6cc2",
+  "applications": [
+   {
+    "file": "reviewed-application-01.sql",
+    "products": 50,
+    "sha256": "8f9bba4253d9405cc0229be988561e23ff5d2b813088cddc25ef1091eaf32440"
+   },
+   {
+    "file": "reviewed-application-02.sql",
+    "products": 33,
+    "sha256": "fa55811d5809a46e5c02c94aff5aef81c69aaf17f1beec962d1b9bc53d7df458"
+   }
+  ],
+  "review": "Root; no Claude review claimed",
+  "record": "assignment-sanitation-checkpoint-2026-09-14.md"
+ },
+ "delivery_status_updated_at": "2026-09-16T02:35:00Z",
+ "assignment_repair_progress": {
+  "initial_missing": 746,
+  "repaired": 724,
+  "remaining": 22,
+  "stage_percent": 97.05,
+  "scope": "Only repairs in the initial missing-template cohort; not overall completion or confirmed physical-product count.",
+  "non_material_dispositions": 10,
+  "awaiting_client_distribution": 2,
+  "identity_needed": 10
+ },
+ "assignment_coverage_live": {
+  "observed_at": "2026-09-16T02:05:28.163095+00:00",
+  "tenant": "vinabike",
+  "all_products": 1673,
+  "service_products": 59,
+  "nonservice_with_template": 1592,
+  "nonservice_without_template": 22,
+  "explicit_bindings": 724,
+  "count_definition": "Tenant vinabike only. Database product_type/is_service flags; effective template = explicit binding or active category mapping; includes unresolved non-material records."
+ },
+ "assignment_original_parts_2026_09_15": {
+  "assignments_applied": 108,
+  "authenticated_readbacks": 108,
+  "persisted_receipts": 108,
+  "verified_at": "2026-09-15T01:33:39.112388+00:00",
+  "families": {
+   "cassette_lockring": 1,
+   "drivetrain_kit": 5,
+   "hub_axle": 19,
+   "tubeless_repair": 1,
+   "tube_repair": 9,
+   "stem": 2,
+   "bottom_bracket": 4,
+   "rider_bag": 2,
+   "rim_strip": 1,
+   "crank_arm": 1,
+   "bearing": 7,
+   "chain": 3,
+   "rear_derailleur": 4,
+   "cassette": 1,
+   "chainring": 1,
+   "bottom_bracket_cup": 1,
+   "front_derailleur": 3,
+   "bottom_bracket_axle": 1,
+   "rim_brake": 4,
+   "headset": 1,
+   "brake_lever": 3,
+   "mechanical_disc_brake": 1,
+   "rim": 3,
+   "shifter": 4,
+   "hub": 4,
+   "tire": 4,
+   "freewheel": 1,
+   "spoke": 10,
+   "bottom_bracket_bearing": 2,
+   "bmx_cable_detangler": 1,
+   "training_wheel": 1,
+   "crankset": 3
+  },
+  "all_non_assignment_data_preserved": true,
+  "products_filled": 0,
+  "proposal_sha256": "9d4f4dcf340180a6e4f6999b84f460403b9be61e2c7e49265dde8134fea20536",
+  "applications": [
+   {
+    "file": "reviewed-application-01.sql",
+    "products": 50,
+    "sha256": "89a110119b5bcce1f2d53567268f3cc11cf293f9bf1e8b0d63760ff2d3509eea"
+   },
+   {
+    "file": "reviewed-application-02.sql",
+    "products": 50,
+    "sha256": "af57265d334e52ee738b2f35cf17fac4aef159081ed67c28bc58dac58c3e96f8"
+   },
+   {
+    "file": "reviewed-application-03.sql",
+    "products": 8,
+    "sha256": "5f3227dda418cf986d7a3debf7672d3ff74a38816b559da84a24c06af1b5f2c7"
+   }
+  ],
+  "review": "Root class review; no Claude review of this cohort claimed",
+  "record": "assignment-sanitation-checkpoint-2026-09-14.md",
+  "reference_choices_are_family_catalog_not_product_bindings": true
+ },
+ "original_successor_delivery_definition": "Five adapted replacements deployed and read back: drivetrain_kit, brake_caliper, brake_pad, rotor, brake_lever. Frozen prototypes were not activated unchanged; 32 originals await replacement. This counts delivered template architecture, not complete compatibility research or product filling.",
+ "assignment_image_reviewed_2026_09_15": {
+  "assignments_applied": 10,
+  "authenticated_readbacks": 10,
+  "persisted_receipts": 10,
+  "verified_at": "2026-09-15T02:21:39.372054+00:00",
+  "all_non_assignment_data_preserved": true,
+  "products_filled": 0,
+  "proposal_sha256": "53bf24dd95ae57e7dcc3af510a621f0fc3c98e9349e74418158ff8e2987f54ac",
+  "application_sha256": "dba3480b08ef72cce6f3c6aef18fc13c16f5c2ee1473b0b5c1fd3ec91d14265b",
+  "review": "Root individual class and catalogue-image review; no Claude review claimed",
+  "record": "assignment-sanitation-checkpoint-2026-09-14.md"
+ },
+ "drivetrain_kit_replacement": {
+  "status": "applied_and_verified",
+  "migration": "20260915023000",
+  "sha256": "6de5a28f0a6123220222045895857a3b150ccb52c5aabdcbf536fce58fd03419",
+  "old_version": 3,
+  "new_version": 16,
+  "authenticated_products": 6,
+  "all_product_data_preserved": true,
+  "member_profiles_persisted": 0,
+  "dart_cases": 12,
+  "sql_representation_cases": 11,
+  "atomic_save_assertions": 13,
+  "independent_review": "Claude 220 exact delta approved",
+  "real_editor_readback": "2026-09-15T02:29:55.743897+00:00",
+  "record": "drivetrain-kit-members-adjudication-2026-09-15.md"
+ },
+ "assignment_resolved_types_2026_09_15": {
+  "verified_at": "2026-09-15T02:44:02.057169+00:00",
+  "authenticated_actor": "7bb76d88-5455-462e-a838-5f78af922914",
+  "project": "xzdvtzdqjeyqxnkqprtf",
+  "assignments_applied_and_read_back": 3,
+  "by_family": {
+   "rider_glove": 1,
+   "tire": 1,
+   "crankset": 1
+  },
+  "technical_facts_filled": 0,
+  "all_non_assignment_data_preserved": true,
+  "reference_choices_are_family_lookup_not_product_bindings": true,
+  "proposal_sha256": "8b93db9a6f30a0c61b2fbeb02f28f2cd537890ba4ac99a5b1c9b384210feda5f",
+  "persisted_receipts": 3,
+  "record": "remaining-assignment-adjudication-2026-09-15.json"
+ },
+ "assignment_existing_tube_2026_09_15": {
+  "verified_at": "2026-09-15T03:30:13.084106+00:00",
+  "product_id": "6eb1ae4d-81a2-42ba-b971-14f2c9fe48a0",
+  "sku": "6927116185398",
+  "assignment_applied_and_read_back": 1,
+  "all_seven_observations_unchanged": true,
+  "commercial_data_unchanged": true,
+  "profile_data_unchanged": true,
+  "bound_reference_unchanged": true,
+  "public_rows": 5,
+  "pending_inferences_not_public": true,
+  "technical_facts_filled": 0,
+  "before_snapshot_sha256": "956bf01556bf5699fba7f0c4e637616ba2345c5b5cee69a929ce51c9378c9ff3",
+  "after_snapshot_sha256": "18ac4d0a0ac81589c0f898cda758ec6e98800b680cf717459cbf56502d04772e",
+  "persisted_receipts": 1,
+  "public_guard_migration": "20260915034000",
+  "consumer_test": "14 cases using real before/after contexts, synthetic bikes; no positive compatibility verdict",
+  "record": "assignment-sanitation-checkpoint-2026-09-14.md"
+ },
+ "public_inference_guard_2026_09_15": {
+  "migration": "20260915034000",
+  "verified_at": "2026-09-15T03:26:03.678296+00:00",
+  "facts_modified": 0,
+  "anonymous_before_after_reads": 2,
+  "record": "public-pending-inference-guard-2026-09-15.md"
+ },
+ "component_set_delivery_2026_09_15": {
+  "migration": "20260915035000",
+  "metadata_authenticated": true,
+  "member_families_resolved_authenticated": 8,
+  "new_templates_outside_initial_plan": 1,
+  "record": "component-set-adjudication-2026-09-15.md",
+  "status": "applied_and_verified",
+  "migration_sha256": "a95602280314cc98ff2fe4de110c15215fa94eacd4db206d66baa47b3c142207",
+  "dart_checks": 15,
+  "sql_cases": 14,
+  "profile_writer_checks": 11,
+  "assignments_applied_and_read_back": 2,
+  "persisted_receipts": 2,
+  "desktop_draft_discard_verified_at": "2026-09-15T04:02:35.192264+00:00",
+  "technical_facts_filled": 0,
+  "profiles_persisted": 0
+ },
+ "additional_deliveries_outside_initial_plan": [
+  "component_set"
+ ],
+ "assignment_component_sets_2026_09_15": {
+  "verified_at": "2026-09-15T03:47:25.195380+00:00",
+  "authenticated_actor": "7bb76d88-5455-462e-a838-5f78af922914",
+  "project": "xzdvtzdqjeyqxnkqprtf",
+  "assignments_applied_and_read_back": 2,
+  "by_family": {
+   "component_set": 2
+  },
+  "technical_facts_filled": 0,
+  "all_non_assignment_data_preserved": true,
+  "reference_choices_are_family_lookup_not_product_bindings": true,
+  "proposal_sha256": "0c4bfdc2e46b4ae8695a4a297bb511f11319ea97290c8e4293f06252bdbadb34",
+  "applications": [
+   {
+    "file": "reviewed-application-01.sql",
+    "products": 2,
+    "sha256": "535b11dd8319990c6eee2fe3e1a351f8ba2b28e307d07613d0ba27e82395a49f"
+   }
+  ],
+  "persisted_receipts": 2,
+  "record": "component-set-adjudication-2026-09-15.md"
+ },
+ "brake_piece_replacements": {
+  "migration": "20260915043000",
+  "migration_sha256": "440d1cbbe0c0418d54fde6493d7e189a9db422a30ddac1c3ae975c5e04e37f3a",
+  "status": "applied_and_verified",
+  "verified_at": "2026-09-15T04:35:06Z",
+  "versions": {
+   "brake_caliper": 30,
+   "brake_pad": 23,
+   "rotor": 17
+  },
+  "authenticated_products": 82,
+  "observations_preserved": 33,
+  "all_product_data_preserved": true,
+  "anonymous_products": 14,
+  "retired_public_rows_removed": 17,
+  "other_public_values_preserved": 7,
+  "dart_checks": 61,
+  "sql_representation_cases": 58,
+  "profile_writer_assertions": 20,
+  "consumer_tests": 106,
+  "independent_review": "Claude 227 exact SHA approved",
+  "desktop_drafts_discard_verified_at": "2026-09-15T04:43:03.996848+00:00",
+  "technical_facts_filled": 0,
+  "member_profiles_persisted": 0,
+  "record": "brake-pieces-adjudication-2026-09-15.md",
+  "limits": [
+   "Phone and embedded behavior not verified for these three routes.",
+   "Consumer Dart fixes hot reloaded in debug, not distributed.",
+   "NNV55 and 1062 existing caliper bindings require class adjudication; snapshot preservation is not physical class approval."
+  ]
+ },
+ "brake_lever_replacement": {
+  "migration": "20260915054000",
+  "migration_sha256": "ded86efb78dbdbdf5a4b470af9f4adb18f6c809d4fbb455142ffb86bc6ea7ce1",
+  "status": "applied_and_verified",
+  "verified_at": "2026-09-15T05:41:48Z",
+  "version": 28,
+  "authenticated_products": 18,
+  "observations_preserved": 0,
+  "all_product_data_preserved": true,
+  "anonymous_products": 18,
+  "public_values_before_and_after": 0,
+  "dart_checks": 39,
+  "sql_representation_cases": 38,
+  "profile_writer_assertions": 13,
+  "independent_review": "Claude 229 exact SHA approved; evidence condition satisfied in v4 logs",
+  "desktop_drafts_discard_verified_at": "2026-09-15T05:53:53.666444+00:00",
+  "technical_facts_filled": 0,
+  "member_profiles_persisted": 0,
+  "record": "brake-lever-adjudication-2026-09-15.md",
+  "limits": [
+   "32 original replacements remain. This is a template-delivery count, not overall completion.",
+   "Paired lever presentations require product-class adjudication; AE0319 image shows two levers.",
+   "Phone and embedded routes, next client distribution and existing shared field surface flags remain open."
+  ]
+ },
+ "published_planned_deliveries": 78,
+ "new_templates_outside_initial_plan": 2,
+ "strict_scalar_extension_2026_09_15": {
+  "migration": "20260915200000",
+  "migration_sha256": "e25ce520e2085537c0f31a419d2e846b1a0447067c1ff089b81b97f799a65dcc",
+  "verification_sha256": "704a0b8043cedd9fb1ae075e83c57d6cad7edf6ca812c0867b8093e3d36d2b5a",
+  "status": "applied_and_verified",
+  "verified_at": "2026-09-15T19:50:00Z",
+  "functions_replaced": 4,
+  "existing_template_contracts_validated": 106,
+  "behavior_cases": 11,
+  "fingerprint_unchanged": true,
+  "grants_changed": 0,
+  "independent_review": "Claude 230 approved exact SHA e25ce520…; deployed by Claude in solo ownership",
+  "record": "seatpost-shim-and-scalar-review-2026-09-15.md"
+ },
+ "seatpost_shim_delivery_2026_09_15": {
+  "migration": "20260915203000",
+  "migration_sha256": "30b3937e23230b4a73173f8efe55ae2c7215deacccfc6732658bf3c40f859d96",
+  "verification_sha256": "3120a487990f5af704f5d6eb53a0389b6c7d3f1dd818df5b37ad2956b01b2a45",
+  "status": "applied_and_verified",
+  "verified_at": "2026-09-15T19:51:00Z",
+  "template_key": "seatpost_shim",
+  "template_id": "bdd99089-75c5-5370-919c-38a6cdefd892",
+  "contract_version": 11,
+  "fields": 10,
+  "new_definitions": 4,
+  "reused_definitions": 6,
+  "reused_interfaces_from_seatpost_branch": [
+   "shim_inner_diameter_mm",
+   "shim_outer_diameter_mm",
+   "seatpost_shim_length_mm"
+  ],
+  "sql_representation_cases": 25,
+  "dart_checks": 26,
+  "profile_writer_assertions": 9,
+  "products_assigned": 0,
+  "technical_facts_filled": 0,
+  "legacy_seatpost_branch_sanitised": true,
+  "client_release_required_before_assignment": true,
+  "record": "seatpost-shim-architecture-evidence-2026-09-15.md"
+ },
+ "git_safeguard_status_2026_09_15": {
+  "local_head": "71926a11",
+  "origin_smartpegas1_0": "f51f3777",
+  "applied_migrations_not_in_any_remote": 25,
+  "applied_migrations_in_origin": 17,
+  "note": "23 spec migrations (20260907222000…20260915203000) plus two of 2026-09-10 exist only in the local working tree; owner decision pending, no commit made by Claude."
+ },
+ "seatpost_legacy_branch_2026_09_15": {
+  "migration": "20260915210000",
+  "migration_sha256": "0a3e8f99828a9335fd1db279a3053445f83173dbc4c4df119d5fe8899e04e0c3",
+  "verification_sha256": "79af2a9df32dc1cae0a3aca7eb4ca7a612a9fa5b3a85c622d8731e88b9c54009",
+  "status": "applied_and_verified",
+  "verified_at": "2026-09-15T20:02:00Z",
+  "template_key": "seatpost",
+  "old_version": 23,
+  "new_version": 27,
+  "retired_fields": [
+   "shim_inner_diameter_mm",
+   "shim_outer_diameter_mm",
+   "seatpost_shim_length_mm"
+  ],
+  "option_removed_from_template_allowed_options": "Suplemento (shim)",
+  "definitions_changed": 0,
+  "option_vocabulary_changed": 0,
+  "explicit_products_preserved": 14,
+  "facts_on_products": 0,
+  "sql_representation_cases": 7,
+  "dart_checks": 9,
+  "technical_facts_filled": 0,
+  "record": "checkpoint-2026-09-15-claude-solo.md"
+ },
+ "assignment_remaining_2026_09_16": {
+  "verified_at": "2026-09-16T02:05:28.163095+00:00",
+  "authenticated_actor": "7bb76d88-5455-462e-a838-5f78af922914",
+  "project": "xzdvtzdqjeyqxnkqprtf",
+  "assignments_applied_and_read_back": 4,
+  "by_family": {
+   "brake_fluid": 1,
+   "hub_small_part": 1,
+   "rack_basket": 1,
+   "wheel_retention": 1
+  },
+  "technical_facts_filled": 0,
+  "all_non_assignment_data_preserved": true,
+  "proposal_sha256": "fb3f32cf81a698dc919d3befe8c4fb904f7dadcee34615dfe4f4998df42d78aa",
+  "application_sha256": "7eb50771396a3fd4ddca2a21fac09dec516719c4fd6eab0e8c820d1d982829c3",
+  "persisted_receipts": 4,
+  "review": "Claude solo review; identity-only assignments, no compatibility claim",
+  "record": "assignment-remaining-2026-09-16.md"
+ },
+ "tire_tube_replacements_2026_09_16": {
+  "migration": "supabase/migrations/20260916030000_tire_tube_successors.sql",
+  "migration_sha256": "93355d963197c72005204ba07d2decdc61a32a54430c8f1acff8a85227e812ca",
+  "verification_sha256": "8a844a0cc4c0a0f367039b840d41175c2169f0cf6966039712b83bdae3af4d3e",
+  "status": "APPLIED",
+  "verified_at": "2026-09-16T02:27:18Z",
+  "versions": {
+   "tire": [
+    4,
+    19
+   ],
+   "tube": [
+    6,
+    21
+   ],
+   "rim_strip": [
+    2,
+    12
+   ],
+   "tubeless_consumable": [
+    3,
+    11
+   ],
+   "tubeless_valve": [
+    2,
+    12
+   ]
+  },
+  "authenticated_products": 271,
+  "product_revisions_unchanged": 271,
+  "facts_before_after": [
+   1138,
+   1138
+  ],
+  "new_definitions": 20,
+  "surface_definitions": 14,
+  "sql_cases_local_rollback": 53,
+  "dart_form_tests": 58,
+  "adoption": {
+   "products_evaluated": 271,
+   "products_with_blocking_issues": 0,
+   "products_with_pending_issues": 271,
+   "legacy_observations": 813,
+   "unprojected_active_observations": 0
+  },
+  "record": "tire-tube-successors-adjudication-2026-09-16.md",
+  "technical_fill_persisted": 0
+ }
 }

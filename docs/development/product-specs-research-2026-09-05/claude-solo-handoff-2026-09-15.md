@@ -21,7 +21,7 @@ estos indicadores separados:
 
 | Frente | Estado verificable | Porcentaje | Qué significa |
 |---|---:|---:|---|
-| Entregas planificadas de arquitectura de plantillas | 73 de 105 | **69,52%** | 68 plantillas nuevas y cinco reemplazos originales adaptados ya publicados; quedan 32 reemplazos originales. No mide compatibilidad completa ni llenado. |
+| Entregas planificadas de arquitectura de plantillas | 78 de 105 (actualizado 2026-09-16; era 73) | **74,29%** | 68 plantillas nuevas y diez reemplazos originales adaptados ya publicados (los cinco de neumático y cámara el 2026-09-16); quedan 27 reemplazos originales. No mide compatibilidad completa ni llenado. |
 | Saneamiento del lote inicial sin ficha | 720 de 746 | **96,51%** | Asignaciones aplicadas con recibo y lectura autenticada; quedan 26 registros del lote (9 no materiales y 17 por resolver). No equivale a que todos los productos sean piezas físicas bien clasificados. |
 | Cobertura de plantillas globales | 1.588 de 1.614 registros marcados producto/no servicio tienen plantilla efectiva en la última lectura | **98,39% nominal** | El denominador todavía incluye registros no materiales mal clasificados; la auditoría semántica no está cerrada. No es una certificación de familias. |
 | Llenado técnico de productos | 0 productos | **0%** | No se ha persistido ningún perfil ni hecho técnico investigado como llenado de catálogo. |
@@ -308,6 +308,14 @@ producción demostrada.
 El catálogo congelado de 37 reemplazos originales sigue siendo histórico. Sólo
 cinco están activos como reemplazos adaptados: `drivetrain_kit`,
 `brake_caliper`, `brake_pad`, `rotor` y `brake_lever`. **Quedan 32.**
+
+**Actualización 2026-09-16:** publicado el reemplazo de `tire`, `tube`, `rim_strip`,
+`tubeless_consumable` y `tubeless_valve` (`20260916030000`, 271 productos, cero
+bloqueantes); ver [su adjudicación](tire-tube-successors-adjudication-2026-09-16.md).
+**Quedan 27.** El molde para los siguientes es `scripts/inventory/compile_tire_tube_successors.py`:
+preimagen fresca comparada con la congelada, delta de IDs, captura de fichas por
+RPC con los IDs resueltos antes de cambiar de rol, ensayo local, arnés Dart,
+adopción, verificador que falla antes, despliegue con `--verify` y lectura posterior.
 
 Continúa por familia desde:
 

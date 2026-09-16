@@ -1,0 +1,2856 @@
+{
+  "schema_version": 1,
+  "catalogue_sha256": "ce9bb503e4647d045b049f9f90c53b6e908f91e2b4068ed56dc4fd464a3f318c",
+  "cases": [
+    {
+      "id": "ttx_a_tire_ficha_with_its_iso_number_is_clean",
+      "template": "tire",
+      "values": {
+        "bead_seat_diameter_mm": "622",
+        "tire_width_mm": "28",
+        "tire_bead_type": "Talón plegable",
+        "tire_etrto": "28-622",
+        "spec_evidence_source": "Ficha sintética",
+        "tire_rim_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "scope_kind": "Modelo y edición de llanta",
+                "scope_identity": "Rim X (ed. 2026)",
+                "claim_basis": "Especificación del fabricante del neumático",
+                "rim_bead_profile": "Con gancho (hooked)",
+                "mounting_method": "Con cámara",
+                "source_url": "https://example.invalid/synthetic",
+                "pressure_unit": "psi",
+                "max_pressure": "85"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [
+        "https://www.sheldonbrown.com/tire-sizing.html"
+      ],
+      "expected_sql_blocking": [],
+      "forbidden_issue_fields": [
+        "tire_rim_configurations",
+        "tire_etrto"
+      ]
+    },
+    {
+      "id": "ttx_a_tire_without_its_iso_number_is_incomplete",
+      "template": "tire",
+      "values": {
+        "bead_seat_diameter_mm": "622",
+        "tire_width_mm": "28",
+        "tire_bead_type": "Talón plegable",
+        "spec_evidence_source": "Ficha sintética",
+        "tire_rim_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "scope_kind": "Modelo y edición de llanta",
+                "scope_identity": "Rim X (ed. 2026)",
+                "claim_basis": "Especificación del fabricante del neumático",
+                "rim_bead_profile": "Con gancho (hooked)",
+                "mounting_method": "Con cámara",
+                "source_url": "https://example.invalid/synthetic",
+                "pressure_unit": "psi",
+                "max_pressure": "85"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [
+        "https://www.sheldonbrown.com/tire-sizing.html"
+      ],
+      "expected_issue_subset": [
+        {
+          "code": "required_missing",
+          "field": "tire_etrto",
+          "blocking": false
+        }
+      ],
+      "expected_sql_issue_subset": [
+        {
+          "code": "required_missing",
+          "field": "tire_etrto",
+          "blocking": false
+        }
+      ],
+      "expected_sql_blocking": []
+    },
+    {
+      "id": "ttx_two_rim_models_sharing_profile_and_method_are_two_rows",
+      "template": "tire",
+      "values": {
+        "bead_seat_diameter_mm": "622",
+        "tire_width_mm": "28",
+        "tire_bead_type": "Talón plegable",
+        "tire_etrto": "28-622",
+        "spec_evidence_source": "Ficha sintética",
+        "tire_rim_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "scope_kind": "Modelo y edición de llanta",
+                "scope_identity": "Rim A (ed. 2026)",
+                "claim_basis": "Especificación del fabricante del neumático",
+                "rim_bead_profile": "Sin gancho (hookless)",
+                "mounting_method": "Tubeless",
+                "source_url": "https://example.invalid/synthetic",
+                "pressure_unit": "psi",
+                "max_pressure": "85",
+                "rim_internal_width_min_mm": "21",
+                "rim_internal_width_max_mm": "25",
+                "rim_maker_lists_this_tire": "La llanta lista este neumático"
+              },
+              "sources": []
+            },
+            {
+              "id": "r2",
+              "values": {
+                "scope_kind": "Modelo y edición de llanta",
+                "scope_identity": "Rim B (ed. 2025)",
+                "claim_basis": "Especificación del fabricante del neumático",
+                "rim_bead_profile": "Sin gancho (hookless)",
+                "mounting_method": "Tubeless",
+                "source_url": "https://example.invalid/synthetic",
+                "pressure_unit": "psi",
+                "max_pressure": "85",
+                "rim_internal_width_min_mm": "23",
+                "rim_internal_width_max_mm": "30",
+                "rim_maker_lists_this_tire": "La llanta lista este neumático"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [
+        "https://www.sram.com/en/zipp/campaigns/hookless-tire-compatibility"
+      ],
+      "expected_sql_blocking": [],
+      "forbidden_issue_fields": [
+        "tire_rim_configurations"
+      ]
+    },
+    {
+      "id": "ttx_the_same_scope_twice_blocks",
+      "template": "tire",
+      "values": {
+        "bead_seat_diameter_mm": "622",
+        "tire_width_mm": "28",
+        "tire_bead_type": "Talón plegable",
+        "tire_etrto": "28-622",
+        "spec_evidence_source": "Ficha sintética",
+        "tire_rim_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "scope_kind": "Modelo y edición de llanta",
+                "scope_identity": "Rim X (ed. 2026)",
+                "claim_basis": "Especificación del fabricante del neumático",
+                "rim_bead_profile": "Con gancho (hooked)",
+                "mounting_method": "Con cámara",
+                "source_url": "https://example.invalid/synthetic",
+                "pressure_unit": "psi",
+                "max_pressure": "85"
+              },
+              "sources": []
+            },
+            {
+              "id": "r2",
+              "values": {
+                "scope_kind": "Modelo y edición de llanta",
+                "scope_identity": "Rim X (ed. 2026)",
+                "claim_basis": "Especificación del fabricante del neumático",
+                "rim_bead_profile": "Con gancho (hooked)",
+                "mounting_method": "Tubeless",
+                "source_url": "https://example.invalid/synthetic",
+                "pressure_unit": "psi",
+                "max_pressure": "85"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [
+        {
+          "code": "row_shape",
+          "field": "tire_rim_configurations"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "expected_sql_blocking": [
+        {
+          "code": "row_shape",
+          "field": "tire_rim_configurations"
+        }
+      ]
+    },
+    {
+      "id": "ttx_another_url_for_the_same_scope_is_still_one_scope",
+      "template": "tire",
+      "values": {
+        "bead_seat_diameter_mm": "622",
+        "tire_width_mm": "28",
+        "tire_bead_type": "Talón plegable",
+        "tire_etrto": "28-622",
+        "spec_evidence_source": "Ficha sintética",
+        "tire_rim_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "scope_kind": "Modelo y edición de llanta",
+                "scope_identity": "Rim X (ed. 2026)",
+                "claim_basis": "Especificación del fabricante del neumático",
+                "rim_bead_profile": "Con gancho (hooked)",
+                "mounting_method": "Con cámara",
+                "source_url": "https://example.invalid/synthetic",
+                "pressure_unit": "psi",
+                "max_pressure": "85"
+              },
+              "sources": []
+            },
+            {
+              "id": "r2",
+              "values": {
+                "scope_kind": "Modelo y edición de llanta",
+                "scope_identity": "Rim X (ed. 2026)",
+                "claim_basis": "Especificación del fabricante del neumático",
+                "rim_bead_profile": "Con gancho (hooked)",
+                "mounting_method": "Con cámara",
+                "source_url": "https://example.invalid/synthetic/2",
+                "pressure_unit": "psi",
+                "max_pressure": "85"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [
+        {
+          "code": "row_shape",
+          "field": "tire_rim_configurations"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "expected_sql_blocking": [
+        {
+          "code": "row_shape",
+          "field": "tire_rim_configurations"
+        }
+      ]
+    },
+    {
+      "id": "ttx_a_configuration_without_its_source_is_incomplete",
+      "template": "tire",
+      "values": {
+        "bead_seat_diameter_mm": "622",
+        "tire_width_mm": "28",
+        "tire_bead_type": "Talón plegable",
+        "tire_etrto": "28-622",
+        "spec_evidence_source": "Ficha sintética",
+        "tire_rim_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "scope_kind": "Modelo y edición de llanta",
+                "scope_identity": "Rim X (ed. 2026)",
+                "claim_basis": "Especificación del fabricante del neumático",
+                "rim_bead_profile": "Con gancho (hooked)",
+                "mounting_method": "Con cámara",
+                "pressure_unit": "psi",
+                "max_pressure": "85"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "expected_issue_subset": [
+        {
+          "code": "row_incomplete",
+          "field": "tire_rim_configurations",
+          "blocking": false
+        }
+      ],
+      "expected_sql_issue_subset": [
+        {
+          "code": "row_incomplete",
+          "field": "tire_rim_configurations",
+          "blocking": false
+        }
+      ],
+      "expected_sql_blocking": []
+    },
+    {
+      "id": "ttx_a_configuration_without_its_scope_identity_is_incomplete",
+      "template": "tire",
+      "values": {
+        "bead_seat_diameter_mm": "622",
+        "tire_width_mm": "28",
+        "tire_bead_type": "Talón plegable",
+        "tire_etrto": "28-622",
+        "spec_evidence_source": "Ficha sintética",
+        "tire_rim_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "scope_kind": "Modelo y edición de llanta",
+                "claim_basis": "Especificación del fabricante del neumático",
+                "rim_bead_profile": "Con gancho (hooked)",
+                "mounting_method": "Con cámara",
+                "source_url": "https://example.invalid/synthetic",
+                "pressure_unit": "psi",
+                "max_pressure": "85"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "expected_issue_subset": [
+        {
+          "code": "row_incomplete",
+          "field": "tire_rim_configurations",
+          "blocking": false
+        }
+      ],
+      "expected_sql_issue_subset": [
+        {
+          "code": "row_incomplete",
+          "field": "tire_rim_configurations",
+          "blocking": false
+        }
+      ],
+      "expected_sql_blocking": []
+    },
+    {
+      "id": "ttx_a_hooked_row_may_carry_a_rim_maker_listing",
+      "template": "tire",
+      "values": {
+        "bead_seat_diameter_mm": "622",
+        "tire_width_mm": "28",
+        "tire_bead_type": "Talón plegable",
+        "tire_etrto": "28-622",
+        "spec_evidence_source": "Ficha sintética",
+        "tire_rim_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "scope_kind": "Modelo y edición de llanta",
+                "scope_identity": "Rim X (ed. 2026)",
+                "claim_basis": "Especificación del fabricante del neumático",
+                "rim_bead_profile": "Con gancho (hooked)",
+                "mounting_method": "Con cámara",
+                "source_url": "https://example.invalid/synthetic",
+                "pressure_unit": "psi",
+                "max_pressure": "85",
+                "rim_maker_lists_this_tire": "La llanta lista este neumático"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "expected_sql_blocking": [],
+      "forbidden_issue_fields": [
+        "tire_rim_configurations"
+      ]
+    },
+    {
+      "id": "ttx_a_hookless_row_owes_the_rim_maker_listing",
+      "template": "tire",
+      "values": {
+        "bead_seat_diameter_mm": "622",
+        "tire_width_mm": "28",
+        "tire_bead_type": "Talón plegable",
+        "tire_etrto": "28-622",
+        "spec_evidence_source": "Ficha sintética",
+        "tire_rim_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "scope_kind": "Modelo y edición de llanta",
+                "scope_identity": "Rim X (ed. 2026)",
+                "claim_basis": "Especificación del fabricante del neumático",
+                "rim_bead_profile": "Sin gancho (hookless)",
+                "mounting_method": "Tubeless",
+                "source_url": "https://example.invalid/synthetic",
+                "pressure_unit": "psi",
+                "max_pressure": "85",
+                "rim_internal_width_min_mm": "21",
+                "rim_internal_width_max_mm": "25"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [
+        "https://enve.com/blogs/journal/hookless-rim-technology-101"
+      ],
+      "expected_issue_subset": [
+        {
+          "code": "row_required_missing",
+          "field": "tire_rim_configurations",
+          "blocking": false
+        }
+      ],
+      "expected_sql_issue_subset": [
+        {
+          "code": "row_required_missing",
+          "field": "tire_rim_configurations",
+          "blocking": false
+        }
+      ],
+      "expected_sql_blocking": []
+    },
+    {
+      "id": "ttx_a_hookless_row_owes_its_internal_width",
+      "template": "tire",
+      "values": {
+        "bead_seat_diameter_mm": "622",
+        "tire_width_mm": "28",
+        "tire_bead_type": "Talón plegable",
+        "tire_etrto": "28-622",
+        "spec_evidence_source": "Ficha sintética",
+        "tire_rim_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "scope_kind": "Modelo y edición de llanta",
+                "scope_identity": "Rim X (ed. 2026)",
+                "claim_basis": "Especificación del fabricante del neumático",
+                "rim_bead_profile": "Sin gancho (hookless)",
+                "mounting_method": "Tubeless",
+                "source_url": "https://example.invalid/synthetic",
+                "pressure_unit": "psi",
+                "max_pressure": "85",
+                "rim_maker_lists_this_tire": "La llanta lista este neumático"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [
+        "https://enve.com/blogs/journal/hookless-rim-technology-101"
+      ],
+      "expected_issue_subset": [
+        {
+          "code": "row_required_missing",
+          "field": "tire_rim_configurations",
+          "blocking": false
+        }
+      ],
+      "expected_sql_issue_subset": [
+        {
+          "code": "row_required_missing",
+          "field": "tire_rim_configurations",
+          "blocking": false
+        }
+      ],
+      "expected_sql_blocking": []
+    },
+    {
+      "id": "ttx_a_hooked_row_owes_no_internal_width",
+      "template": "tire",
+      "values": {
+        "bead_seat_diameter_mm": "622",
+        "tire_width_mm": "28",
+        "tire_bead_type": "Talón plegable",
+        "tire_etrto": "28-622",
+        "spec_evidence_source": "Ficha sintética",
+        "tire_rim_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "scope_kind": "Modelo y edición de llanta",
+                "scope_identity": "Rim X (ed. 2026)",
+                "claim_basis": "Especificación del fabricante del neumático",
+                "rim_bead_profile": "Con gancho (hooked)",
+                "mounting_method": "Con cámara",
+                "source_url": "https://example.invalid/synthetic",
+                "pressure_unit": "psi",
+                "max_pressure": "85"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [
+        "https://www.sheldonbrown.com/tire-sizing.html"
+      ],
+      "expected_sql_blocking": [],
+      "forbidden_issue_fields": [
+        "tire_rim_configurations"
+      ]
+    },
+    {
+      "id": "ttx_a_hookless_row_that_is_not_listed_is_representable",
+      "template": "tire",
+      "values": {
+        "bead_seat_diameter_mm": "622",
+        "tire_width_mm": "28",
+        "tire_bead_type": "Talón plegable",
+        "tire_etrto": "28-622",
+        "spec_evidence_source": "Ficha sintética",
+        "tire_rim_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "scope_kind": "Modelo y edición de llanta",
+                "scope_identity": "Rim X (ed. 2026)",
+                "claim_basis": "Especificación del fabricante del neumático",
+                "rim_bead_profile": "Sin gancho (hookless)",
+                "mounting_method": "Tubeless",
+                "source_url": "https://example.invalid/synthetic",
+                "pressure_unit": "psi",
+                "max_pressure": "85",
+                "rim_internal_width_min_mm": "21",
+                "rim_internal_width_max_mm": "25",
+                "rim_maker_lists_this_tire": "La llanta no lo lista"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [
+        "https://www.sram.com/en/zipp/campaigns/hookless-tire-compatibility"
+      ],
+      "expected_sql_blocking": [],
+      "forbidden_issue_fields": [
+        "tire_rim_configurations"
+      ]
+    },
+    {
+      "id": "ttx_a_tire_max_and_a_system_limit_are_two_objects",
+      "template": "tire",
+      "values": {
+        "bead_seat_diameter_mm": "622",
+        "tire_width_mm": "28",
+        "tire_bead_type": "Talón plegable",
+        "tire_etrto": "28-622",
+        "spec_evidence_source": "Ficha sintética",
+        "tire_rim_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "scope_kind": "Modelo y edición de llanta",
+                "scope_identity": "Zipp 303 Firecrest (TSS)",
+                "claim_basis": "Especificación del fabricante del neumático",
+                "rim_bead_profile": "Sin gancho (hookless)",
+                "mounting_method": "Tubeless",
+                "source_url": "https://example.invalid/synthetic",
+                "pressure_unit": "psi",
+                "max_pressure": "72",
+                "rim_internal_width_min_mm": "21",
+                "rim_internal_width_max_mm": "25",
+                "rim_maker_lists_this_tire": "La llanta lista este neumático"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "tire_general_max_pressures": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "pressure_unit": "psi",
+                "max_pressure_value": "100",
+                "declared_scope": "Sin condición de llanta en el documento",
+                "source_document": "Flanco del neumático",
+                "source_url": "https://example.invalid/synthetic"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [
+        "https://www.sram.com/en/zipp/campaigns/hookless-tire-compatibility"
+      ],
+      "expected_sql_blocking": [],
+      "forbidden_issue_fields": [
+        "tire_rim_configurations",
+        "tire_general_max_pressures"
+      ]
+    },
+    {
+      "id": "ttx_a_tire_may_declare_the_minimum_pressure_it_requires",
+      "template": "tire",
+      "values": {
+        "bead_seat_diameter_mm": "622",
+        "tire_width_mm": "28",
+        "tire_bead_type": "Talón plegable",
+        "tire_etrto": "28-622",
+        "spec_evidence_source": "Ficha sintética",
+        "tire_rim_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "scope_kind": "Modelo y edición de llanta",
+                "scope_identity": "Rim X (ed. 2026)",
+                "claim_basis": "Especificación del fabricante del neumático",
+                "rim_bead_profile": "Con gancho (hooked)",
+                "mounting_method": "Con cámara",
+                "source_url": "https://example.invalid/synthetic",
+                "pressure_unit": "psi",
+                "max_pressure": "85"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "tire_general_max_pressures": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "pressure_unit": "psi",
+                "max_pressure_value": "100",
+                "min_pressure_value": "80",
+                "declared_scope": "Sin condición de llanta en el documento",
+                "source_document": "Flanco del neumático",
+                "source_url": "https://example.invalid/synthetic"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [
+        "https://www.sram.com/en/zipp/campaigns/hookless-tire-compatibility"
+      ],
+      "expected_sql_blocking": [],
+      "forbidden_issue_fields": [
+        "tire_general_max_pressures"
+      ]
+    },
+    {
+      "id": "ttx_an_inverted_internal_width_blocks",
+      "template": "tire",
+      "values": {
+        "bead_seat_diameter_mm": "622",
+        "tire_width_mm": "28",
+        "tire_bead_type": "Talón plegable",
+        "tire_etrto": "28-622",
+        "spec_evidence_source": "Ficha sintética",
+        "tire_rim_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "scope_kind": "Modelo y edición de llanta",
+                "scope_identity": "Rim X (ed. 2026)",
+                "claim_basis": "Especificación del fabricante del neumático",
+                "rim_bead_profile": "Con gancho (hooked)",
+                "mounting_method": "Con cámara",
+                "source_url": "https://example.invalid/synthetic",
+                "pressure_unit": "psi",
+                "max_pressure": "85",
+                "rim_internal_width_min_mm": "25",
+                "rim_internal_width_max_mm": "19"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [
+        {
+          "code": "row_shape",
+          "field": "tire_rim_configurations"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "expected_sql_blocking": [
+        {
+          "code": "row_shape",
+          "field": "tire_rim_configurations"
+        }
+      ]
+    },
+    {
+      "id": "ttx_a_tubular_tire_declares_no_tubeless_ready",
+      "template": "tire",
+      "values": {
+        "bead_seat_diameter_mm": "622",
+        "tire_width_mm": "28",
+        "tire_bead_type": "Tubular",
+        "tire_etrto": "28-622",
+        "spec_evidence_source": "Ficha sintética",
+        "tire_rim_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "scope_kind": "Modelo y edición de llanta",
+                "scope_identity": "Rim X (ed. 2026)",
+                "claim_basis": "Especificación del fabricante del neumático",
+                "rim_bead_profile": "Con gancho (hooked)",
+                "mounting_method": "Con cámara",
+                "source_url": "https://example.invalid/synthetic",
+                "pressure_unit": "psi",
+                "max_pressure": "85"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "tire_tubeless_ready": true
+      },
+      "expected_blocking": [
+        {
+          "code": "field_applicability",
+          "field": "tire_tubeless_ready"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "expected_sql_blocking": [
+        {
+          "code": "field_applicability",
+          "field": "tire_tubeless_ready"
+        }
+      ]
+    },
+    {
+      "id": "ttx_the_same_bead_seat_twice_blocks",
+      "template": "tube",
+      "values": {
+        "valve_standard": "Presta (francesa)",
+        "valve_length_mm_value": "48",
+        "tube_fit_rows": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "bead_seat_diameter_mm": "622",
+                "width_min_mm": "18",
+                "width_max_mm": "25"
+              },
+              "sources": []
+            },
+            {
+              "id": "r2",
+              "values": {
+                "bead_seat_diameter_mm": "622",
+                "width_min_mm": "28",
+                "width_max_mm": "32"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [
+        {
+          "code": "row_shape",
+          "field": "tube_fit_rows"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [
+        "https://www.sheldonbrown.com/tire-sizing.html"
+      ],
+      "expected_sql_blocking": [
+        {
+          "code": "field_constraint",
+          "field": "tube_fit_rows"
+        }
+      ]
+    },
+    {
+      "id": "ttx_two_bead_seats_are_two_fits",
+      "template": "tube",
+      "values": {
+        "valve_standard": "Presta (francesa)",
+        "valve_length_mm_value": "48",
+        "tube_fit_rows": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "bead_seat_diameter_mm": "622",
+                "width_min_mm": "18",
+                "width_max_mm": "25"
+              },
+              "sources": []
+            },
+            {
+              "id": "r2",
+              "values": {
+                "bead_seat_diameter_mm": "584",
+                "width_min_mm": "40",
+                "width_max_mm": "55"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [
+        "https://www.sheldonbrown.com/tire-sizing.html"
+      ],
+      "expected_sql_blocking": [],
+      "forbidden_issue_fields": [
+        "tube_fit_rows"
+      ]
+    },
+    {
+      "id": "ttx_an_inverted_tube_width_blocks",
+      "template": "tube",
+      "values": {
+        "valve_standard": "Presta (francesa)",
+        "valve_length_mm_value": "48",
+        "tube_fit_rows": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "bead_seat_diameter_mm": "622",
+                "width_min_mm": "32",
+                "width_max_mm": "25"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [
+        {
+          "code": "row_shape",
+          "field": "tube_fit_rows"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "expected_sql_blocking": [
+        {
+          "code": "field_constraint",
+          "field": "tube_fit_rows"
+        }
+      ]
+    },
+    {
+      "id": "ttx_an_unusual_valve_is_other_not_unknown",
+      "template": "tube",
+      "values": {
+        "valve_standard": "Otra",
+        "valve_length_mm_value": "40",
+        "tube_fit_rows": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "bead_seat_diameter_mm": "622",
+                "width_min_mm": "18",
+                "width_max_mm": "25"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "expected_sql_blocking": [],
+      "forbidden_issue_fields": [
+        "valve_standard",
+        "valve_length_mm_value"
+      ]
+    },
+    {
+      "id": "ttx_an_unknown_valve_standard_still_owes_its_length",
+      "template": "tube",
+      "values": {
+        "valve_standard": "Desconocido / sin confirmar",
+        "tube_fit_rows": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "bead_seat_diameter_mm": "622",
+                "width_min_mm": "18",
+                "width_max_mm": "25"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "expected_issue_subset": [
+        {
+          "code": "required_missing",
+          "field": "valve_length_mm_value",
+          "blocking": false
+        }
+      ],
+      "expected_sql_issue_subset": [
+        {
+          "code": "required_missing",
+          "field": "valve_length_mm_value",
+          "blocking": false
+        }
+      ],
+      "expected_sql_blocking": []
+    },
+    {
+      "id": "ttx_an_unknown_valve_standard_does_not_forbid_its_length",
+      "template": "tube",
+      "values": {
+        "valve_standard": "Desconocido / sin confirmar",
+        "valve_length_mm_value": "48",
+        "tube_fit_rows": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "bead_seat_diameter_mm": "622",
+                "width_min_mm": "18",
+                "width_max_mm": "25"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "expected_sql_blocking": [],
+      "forbidden_issue_fields": [
+        "valve_length_mm_value"
+      ]
+    },
+    {
+      "id": "ttx_a_tube_owes_its_valve_length",
+      "template": "tube",
+      "values": {
+        "valve_standard": "Presta (francesa)",
+        "tube_fit_rows": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "bead_seat_diameter_mm": "622",
+                "width_min_mm": "18",
+                "width_max_mm": "25"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "expected_issue_subset": [
+        {
+          "code": "required_missing",
+          "field": "valve_length_mm_value",
+          "blocking": false
+        }
+      ],
+      "expected_sql_issue_subset": [
+        {
+          "code": "required_missing",
+          "field": "valve_length_mm_value",
+          "blocking": false
+        }
+      ],
+      "expected_sql_blocking": []
+    },
+    {
+      "id": "ttx_a_presta_tube_may_declare_a_removable_core",
+      "template": "tube",
+      "values": {
+        "valve_standard": "Presta (francesa)",
+        "valve_length_mm_value": "48",
+        "valve_core_removable": true,
+        "spec_evidence_source": "Ficha sintética",
+        "tube_fit_rows": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "bead_seat_diameter_mm": "622",
+                "width_min_mm": "18",
+                "width_max_mm": "25"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [
+        "https://www.parktool.com/en-us/product/valve-core-tool-vc-1"
+      ],
+      "expected_sql_blocking": [],
+      "forbidden_issue_fields": [
+        "valve_core_removable"
+      ]
+    },
+    {
+      "id": "ttx_a_presta_tube_may_declare_a_fixed_core",
+      "template": "tube",
+      "values": {
+        "valve_standard": "Presta (francesa)",
+        "valve_length_mm_value": "48",
+        "valve_core_removable": false,
+        "spec_evidence_source": "Ficha sintética",
+        "tube_fit_rows": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "bead_seat_diameter_mm": "622",
+                "width_min_mm": "18",
+                "width_max_mm": "25"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [
+        "https://www.parktool.com/en-us/product/valve-core-tool-vc-1"
+      ],
+      "expected_sql_blocking": [],
+      "forbidden_issue_fields": [
+        "valve_core_removable"
+      ]
+    },
+    {
+      "id": "ttx_a_schrader_tube_may_declare_a_removable_core",
+      "template": "tube",
+      "values": {
+        "valve_standard": "Schrader (americana / auto)",
+        "valve_length_mm_value": "35",
+        "valve_core_removable": true,
+        "spec_evidence_source": "Ficha sintética",
+        "tube_fit_rows": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "bead_seat_diameter_mm": "622",
+                "width_min_mm": "18",
+                "width_max_mm": "25"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [
+        "https://www.parktool.com/en-us/product/valve-core-tool-vc-1"
+      ],
+      "expected_sql_blocking": [],
+      "forbidden_issue_fields": [
+        "valve_core_removable"
+      ]
+    },
+    {
+      "id": "ttx_a_dunlop_core_is_not_decided_by_its_standard",
+      "template": "tube",
+      "values": {
+        "valve_standard": "Dunlop (inglesa)",
+        "valve_length_mm_value": "40",
+        "valve_core_removable": true,
+        "spec_evidence_source": "Ficha sintética",
+        "tube_fit_rows": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "bead_seat_diameter_mm": "622",
+                "width_min_mm": "18",
+                "width_max_mm": "25"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "expected_sql_blocking": [],
+      "forbidden_issue_fields": [
+        "valve_core_removable"
+      ]
+    },
+    {
+      "id": "ttx_a_core_claim_owes_its_document",
+      "template": "tube",
+      "values": {
+        "valve_standard": "Presta (francesa)",
+        "valve_length_mm_value": "48",
+        "valve_core_removable": true,
+        "tube_fit_rows": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "bead_seat_diameter_mm": "622",
+                "width_min_mm": "18",
+                "width_max_mm": "25"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [
+        "https://www.parktool.com/en-us/product/valve-core-tool-vc-1"
+      ],
+      "expected_issue_subset": [
+        {
+          "code": "prerequisite",
+          "field": "valve_core_removable",
+          "blocking": false
+        }
+      ],
+      "expected_sql_issue_subset": [
+        {
+          "code": "prerequisite_missing",
+          "field": "valve_core_removable",
+          "blocking": false
+        }
+      ],
+      "expected_sql_blocking": []
+    },
+    {
+      "id": "ttx_a_strip_fit_range_is_ordered",
+      "template": "rim_strip",
+      "values": {
+        "bead_seat_diameter_mm": "622",
+        "strip_material": "Goma",
+        "strip_width_mm": "20",
+        "strip_fit_internal_width_min_mm": "17",
+        "strip_fit_internal_width_max_mm": "25",
+        "rim_hole_diameter_mm": "6.5"
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [
+        "https://www.parktool.com/en-us/blog/repair-help/tubeless-tire-conversion"
+      ],
+      "expected_sql_blocking": [],
+      "forbidden_issue_fields": [
+        "strip_fit_internal_width_min_mm",
+        "strip_fit_internal_width_max_mm",
+        "rim_hole_diameter_mm"
+      ]
+    },
+    {
+      "id": "ttx_an_inverted_strip_fit_blocks",
+      "template": "rim_strip",
+      "values": {
+        "bead_seat_diameter_mm": "622",
+        "strip_material": "Goma",
+        "strip_width_mm": "20",
+        "strip_fit_internal_width_min_mm": "25",
+        "strip_fit_internal_width_max_mm": "17"
+      },
+      "expected_blocking": [
+        {
+          "code": "range_order",
+          "field": "strip_fit_internal_width_min_mm"
+        },
+        {
+          "code": "range_order",
+          "field": "strip_fit_internal_width_max_mm"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "expected_sql_blocking": [
+        {
+          "code": "range_order",
+          "field": "strip_fit_internal_width_max_mm"
+        },
+        {
+          "code": "range_order",
+          "field": "strip_fit_internal_width_min_mm"
+        }
+      ]
+    },
+    {
+      "id": "ttx_a_strip_owes_its_width",
+      "template": "rim_strip",
+      "values": {
+        "bead_seat_diameter_mm": "622",
+        "strip_material": "Goma"
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "expected_issue_subset": [
+        {
+          "code": "required_missing",
+          "field": "strip_width_mm",
+          "blocking": false
+        }
+      ],
+      "expected_sql_issue_subset": [
+        {
+          "code": "required_missing",
+          "field": "strip_width_mm",
+          "blocking": false
+        }
+      ],
+      "expected_sql_blocking": []
+    },
+    {
+      "id": "ttx_an_unknown_strip_material_still_owes_its_width",
+      "template": "rim_strip",
+      "values": {
+        "bead_seat_diameter_mm": "622",
+        "strip_material": "Desconocido / sin confirmar"
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "expected_issue_subset": [
+        {
+          "code": "required_missing",
+          "field": "strip_width_mm",
+          "blocking": false
+        }
+      ],
+      "expected_sql_issue_subset": [
+        {
+          "code": "required_missing",
+          "field": "strip_width_mm",
+          "blocking": false
+        }
+      ],
+      "expected_sql_blocking": []
+    },
+    {
+      "id": "ttx_a_dose_larger_than_the_bottle_is_legitimate",
+      "template": "tubeless_consumable",
+      "values": {
+        "consumable_kind": "Sellante",
+        "sealant_volume_ml": "60",
+        "sealant_dose_recommendations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "application_scope": "MTB tubeless",
+                "application_identity": "Aplicación sintética A",
+                "dose_ml": "120",
+                "source_document": "Manual sintético ed. 2026",
+                "source_url": "https://example.invalid/synthetic"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "spec_evidence_source": "Ficha sintética"
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "expected_sql_blocking": [],
+      "forbidden_issue_fields": [
+        "sealant_volume_ml",
+        "sealant_dose_recommendations"
+      ]
+    },
+    {
+      "id": "ttx_the_same_application_dosed_twice_blocks",
+      "template": "tubeless_consumable",
+      "values": {
+        "consumable_kind": "Sellante",
+        "sealant_volume_ml": "500",
+        "sealant_dose_recommendations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "application_scope": "MTB tubeless",
+                "application_identity": "Aplicación sintética A",
+                "dose_ml": "120",
+                "source_document": "Manual sintético ed. 2026",
+                "source_url": "https://example.invalid/synthetic"
+              },
+              "sources": []
+            },
+            {
+              "id": "r2",
+              "values": {
+                "application_scope": "MTB tubeless",
+                "application_identity": "Aplicación sintética A",
+                "dose_ml": "90",
+                "source_document": "Manual sintético ed. 2026",
+                "source_url": "https://example.invalid/synthetic"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [
+        {
+          "code": "row_shape",
+          "field": "sealant_dose_recommendations"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "expected_sql_blocking": [
+        {
+          "code": "field_constraint",
+          "field": "sealant_dose_recommendations"
+        }
+      ]
+    },
+    {
+      "id": "ttx_two_applications_are_two_doses",
+      "template": "tubeless_consumable",
+      "values": {
+        "consumable_kind": "Sellante",
+        "sealant_volume_ml": "500",
+        "sealant_dose_recommendations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "application_scope": "MTB tubeless",
+                "application_identity": "Aplicación sintética A",
+                "dose_ml": "120",
+                "source_document": "Manual sintético ed. 2026",
+                "source_url": "https://example.invalid/synthetic"
+              },
+              "sources": []
+            },
+            {
+              "id": "r2",
+              "values": {
+                "application_scope": "Ruta o gravel tubeless",
+                "application_identity": "Aplicación sintética A",
+                "dose_ml": "60",
+                "source_document": "Manual sintético ed. 2026",
+                "source_url": "https://example.invalid/synthetic"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "expected_sql_blocking": [],
+      "forbidden_issue_fields": [
+        "sealant_dose_recommendations"
+      ]
+    },
+    {
+      "id": "ttr_two_mtb_tire_sizes_keep_different_doses",
+      "template": "tubeless_consumable",
+      "values": {
+        "consumable_kind": "Sellante",
+        "sealant_volume_ml": "500",
+        "sealant_dose_recommendations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "application_scope": "MTB tubeless",
+                "application_identity": "29 x 2.3",
+                "dose_ml": "118",
+                "source_document": "Manual sintético ed. 2026",
+                "source_url": "https://stans.com/pages/sealant-refresh-reminder"
+              },
+              "sources": []
+            },
+            {
+              "id": "r2",
+              "values": {
+                "application_scope": "MTB tubeless",
+                "application_identity": "29 x 2.5",
+                "dose_ml": "148",
+                "source_document": "Manual sintético ed. 2026",
+                "source_url": "https://stans.com/pages/sealant-refresh-reminder"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [
+        "https://stans.com/pages/sealant-refresh-reminder"
+      ],
+      "expected_sql_blocking": [],
+      "forbidden_issue_fields": [
+        "sealant_dose_recommendations"
+      ]
+    },
+    {
+      "id": "ttr_tyres_minimum_cannot_exceed_its_own_maximum",
+      "template": "tire",
+      "values": {
+        "bead_seat_diameter_mm": "622",
+        "tire_width_mm": "28",
+        "tire_bead_type": "Talón plegable",
+        "tire_etrto": "28-622",
+        "spec_evidence_source": "Ficha sintética",
+        "tire_rim_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "scope_kind": "Modelo y edición de llanta",
+                "scope_identity": "Rim X (ed. 2026)",
+                "claim_basis": "Especificación del fabricante del neumático",
+                "rim_bead_profile": "Con gancho (hooked)",
+                "mounting_method": "Con cámara",
+                "source_url": "https://example.invalid/synthetic",
+                "pressure_unit": "psi",
+                "max_pressure": "85"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "tire_general_max_pressures": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "pressure_unit": "psi",
+                "min_pressure_value": "80",
+                "max_pressure_value": "72",
+                "declared_scope": "Sin condición de llanta en el documento",
+                "source_document": "Same synthetic tyre declaration",
+                "source_url": "https://example.invalid/synthetic"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [
+        {
+          "code": "row_shape",
+          "field": "tire_general_max_pressures"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "expected_sql_blocking": [
+        {
+          "code": "row_shape",
+          "field": "tire_general_max_pressures"
+        }
+      ]
+    },
+    {
+      "id": "ttx_a_plain_sealant_has_no_kit_members",
+      "template": "tubeless_consumable",
+      "values": {
+        "consumable_kind": "Sellante",
+        "sealant_volume_ml": "500",
+        "tubeless_kit_members": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "member_role": "Sellante",
+                "member_identity": "Sellante A",
+                "quantity": "1",
+                "source_url": "https://example.invalid/synthetic"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [
+        {
+          "code": "field_applicability",
+          "field": "tubeless_kit_members"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "expected_sql_blocking": [
+        {
+          "code": "field_applicability",
+          "field": "tubeless_kit_members"
+        }
+      ]
+    },
+    {
+      "id": "ttx_a_conversion_kit_may_list_its_members",
+      "template": "tubeless_consumable",
+      "values": {
+        "consumable_kind": "Kit conversión (cinta+válvulas+sellante)",
+        "sealant_volume_ml": "500",
+        "tubeless_kit_members": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "member_role": "Sellante",
+                "member_identity": "Sellante A",
+                "quantity": "1",
+                "source_url": "https://example.invalid/synthetic"
+              },
+              "sources": []
+            },
+            {
+              "id": "r2",
+              "values": {
+                "member_role": "Válvula tubeless",
+                "member_identity": "Válvula 44 mm",
+                "quantity": "2",
+                "source_url": "https://example.invalid/synthetic"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "expected_sql_blocking": [],
+      "forbidden_issue_fields": [
+        "tubeless_kit_members"
+      ]
+    },
+    {
+      "id": "ttx_the_same_documented_member_twice_blocks",
+      "template": "tubeless_consumable",
+      "values": {
+        "consumable_kind": "Kit conversión (cinta+válvulas+sellante)",
+        "sealant_volume_ml": "500",
+        "tubeless_kit_members": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "member_role": "Sellante",
+                "member_identity": "Sellante A",
+                "quantity": "1",
+                "source_url": "https://example.invalid/synthetic"
+              },
+              "sources": []
+            },
+            {
+              "id": "r2",
+              "values": {
+                "member_role": "Sellante",
+                "member_identity": "Sellante A",
+                "quantity": "1",
+                "source_url": "https://example.invalid/synthetic"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [
+        {
+          "code": "row_shape",
+          "field": "tubeless_kit_members"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "expected_sql_blocking": [
+        {
+          "code": "field_constraint",
+          "field": "tubeless_kit_members"
+        }
+      ]
+    },
+    {
+      "id": "ttr_another_role_does_not_create_another_physical_member",
+      "template": "tubeless_consumable",
+      "values": {
+        "consumable_kind": "Kit conversión (cinta+válvulas+sellante)",
+        "tubeless_kit_members": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "member_role": "Sellante",
+                "member_identity": "Sellante A",
+                "quantity": "1",
+                "source_url": "https://example.invalid/synthetic"
+              },
+              "sources": []
+            },
+            {
+              "id": "r2",
+              "values": {
+                "member_role": "Otro",
+                "member_identity": "Sellante A",
+                "quantity": "1",
+                "source_url": "https://example.invalid/synthetic"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [
+        {
+          "code": "row_shape",
+          "field": "tubeless_kit_members"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "expected_sql_blocking": [
+        {
+          "code": "field_constraint",
+          "field": "tubeless_kit_members"
+        }
+      ]
+    },
+    {
+      "id": "ttx_two_models_of_the_same_role_are_two_members",
+      "template": "tubeless_consumable",
+      "values": {
+        "consumable_kind": "Kit conversión (cinta+válvulas+sellante)",
+        "sealant_volume_ml": "500",
+        "tubeless_kit_members": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "member_role": "Sellante",
+                "member_identity": "Sellante A",
+                "quantity": "1",
+                "source_url": "https://example.invalid/synthetic"
+              },
+              "sources": []
+            },
+            {
+              "id": "r2",
+              "values": {
+                "member_role": "Sellante",
+                "member_identity": "Sellante B",
+                "quantity": "1",
+                "source_url": "https://example.invalid/synthetic"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "expected_sql_blocking": [],
+      "forbidden_issue_fields": [
+        "tubeless_kit_members"
+      ]
+    },
+    {
+      "id": "ttx_an_unknown_consumable_kind_flags_itself_not_the_volume",
+      "template": "tubeless_consumable",
+      "values": {
+        "consumable_kind": "Desconocido / sin confirmar",
+        "sealant_volume_ml": "500"
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "expected_issue_subset": [
+        {
+          "code": "required_missing",
+          "field": "consumable_kind",
+          "blocking": false
+        }
+      ],
+      "expected_sql_issue_subset": [
+        {
+          "code": "required_missing",
+          "field": "consumable_kind",
+          "blocking": false
+        }
+      ],
+      "expected_sql_blocking": [],
+      "forbidden_issue_fields": [
+        "sealant_volume_ml"
+      ]
+    },
+    {
+      "id": "ttx_an_unknown_consumable_kind_does_not_demand_a_volume",
+      "template": "tubeless_consumable",
+      "values": {
+        "consumable_kind": "Desconocido / sin confirmar"
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "expected_sql_blocking": [],
+      "forbidden_issue_fields": [
+        "sealant_volume_ml"
+      ]
+    },
+    {
+      "id": "ttx_a_declared_valve_standard_opens_its_shape",
+      "template": "tubeless_valve",
+      "values": {
+        "valve_standard": "Presta (francesa)",
+        "valve_length_mm_value": "60",
+        "valve_base_shape": "Cónica"
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "expected_sql_blocking": [],
+      "forbidden_issue_fields": [
+        "valve_base_shape"
+      ]
+    },
+    {
+      "id": "ttx_a_valve_owes_its_base_shape",
+      "template": "tubeless_valve",
+      "values": {
+        "valve_standard": "Presta (francesa)",
+        "valve_length_mm_value": "60"
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "expected_issue_subset": [
+        {
+          "code": "required_missing",
+          "field": "valve_base_shape",
+          "blocking": false
+        }
+      ],
+      "expected_sql_issue_subset": [
+        {
+          "code": "required_missing",
+          "field": "valve_base_shape",
+          "blocking": false
+        }
+      ],
+      "expected_sql_blocking": []
+    },
+    {
+      "id": "ttx_an_unknown_valve_standard_still_owes_its_shape",
+      "template": "tubeless_valve",
+      "values": {
+        "valve_standard": "Desconocido / sin confirmar",
+        "valve_length_mm_value": "60"
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "expected_issue_subset": [
+        {
+          "code": "required_missing",
+          "field": "valve_base_shape",
+          "blocking": false
+        }
+      ],
+      "expected_sql_issue_subset": [
+        {
+          "code": "required_missing",
+          "field": "valve_base_shape",
+          "blocking": false
+        }
+      ],
+      "expected_sql_blocking": []
+    },
+    {
+      "id": "ttx_an_unknown_valve_standard_does_not_forbid_its_shape",
+      "template": "tubeless_valve",
+      "values": {
+        "valve_standard": "Desconocido / sin confirmar",
+        "valve_length_mm_value": "60",
+        "valve_base_shape": "Cónica"
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "expected_sql_blocking": [],
+      "forbidden_issue_fields": [
+        "valve_base_shape"
+      ]
+    },
+    {
+      "id": "ttx_a_rim_hole_without_its_source_is_pending",
+      "template": "tubeless_valve",
+      "values": {
+        "valve_standard": "Presta (francesa)",
+        "valve_length_mm_value": "60",
+        "valve_base_shape": "Cónica",
+        "rim_hole_diameter_mm": "6.5"
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [
+        "https://www.parktool.com/en-us/blog/repair-help/tubeless-tire-conversion"
+      ],
+      "expected_issue_subset": [
+        {
+          "code": "prerequisite",
+          "field": "rim_hole_diameter_mm",
+          "blocking": false
+        }
+      ],
+      "expected_sql_issue_subset": [
+        {
+          "code": "prerequisite_missing",
+          "field": "rim_hole_diameter_mm",
+          "blocking": false
+        }
+      ],
+      "expected_sql_blocking": []
+    },
+    {
+      "id": "ttx_a_valve_pack_counts_its_units",
+      "template": "tubeless_valve",
+      "values": {
+        "valve_standard": "Presta (francesa)",
+        "valve_length_mm_value": "60",
+        "valve_base_shape": "Cónica",
+        "pack_quantity": "2"
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "expected_sql_blocking": [],
+      "forbidden_issue_fields": [
+        "pack_quantity"
+      ]
+    },
+    {
+      "id": "tire_tube_a_solid_tire_declares_no_tubeless_ready",
+      "template": "tire",
+      "values": {
+        "bead_seat_diameter_mm": "622",
+        "tire_width_mm": "28",
+        "tire_bead_type": "Sólido / sin aire",
+        "tire_etrto": "28-622",
+        "spec_evidence_source": "Ficha sintética",
+        "tire_rim_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "scope_kind": "Modelo y edición de llanta",
+                "scope_identity": "Rim X (ed. 2026)",
+                "claim_basis": "Especificación del fabricante del neumático",
+                "rim_bead_profile": "Con gancho (hooked)",
+                "mounting_method": "Con cámara",
+                "source_url": "https://example.invalid/synthetic",
+                "pressure_unit": "psi",
+                "max_pressure": "85"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "tire_tubeless_ready": true
+      },
+      "expected_blocking": [
+        {
+          "code": "field_applicability",
+          "field": "tire_tubeless_ready"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_boundary",
+      "source_urls": [
+        "https://www.tufo.com/en/tubular/"
+      ],
+      "expected_sql_blocking": [
+        {
+          "code": "field_applicability",
+          "field": "tire_tubeless_ready"
+        }
+      ],
+      "expected_issue_subset": [],
+      "expected_sql_issue_subset": [],
+      "forbidden_issue_fields": []
+    },
+    {
+      "id": "tire_tube_a_wire_bead_may_declare_tubeless_ready",
+      "template": "tire",
+      "values": {
+        "bead_seat_diameter_mm": "622",
+        "tire_width_mm": "28",
+        "tire_bead_type": "Talón de alambre",
+        "tire_etrto": "28-622",
+        "spec_evidence_source": "Ficha sintética",
+        "tire_rim_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "scope_kind": "Modelo y edición de llanta",
+                "scope_identity": "Rim X (ed. 2026)",
+                "claim_basis": "Especificación del fabricante del neumático",
+                "rim_bead_profile": "Con gancho (hooked)",
+                "mounting_method": "Con cámara",
+                "source_url": "https://example.invalid/synthetic",
+                "pressure_unit": "psi",
+                "max_pressure": "85"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "tire_tubeless_ready": true
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_boundary",
+      "source_urls": [],
+      "expected_sql_blocking": [],
+      "expected_issue_subset": [],
+      "expected_sql_issue_subset": [],
+      "forbidden_issue_fields": [
+        "tire_tubeless_ready"
+      ]
+    },
+    {
+      "id": "tire_tube_an_unconfirmed_bead_leaves_tubeless_ready_pending",
+      "template": "tire",
+      "values": {
+        "bead_seat_diameter_mm": "622",
+        "tire_width_mm": "28",
+        "tire_bead_type": "Desconocido / sin confirmar",
+        "tire_etrto": "28-622",
+        "spec_evidence_source": "Ficha sintética",
+        "tire_rim_configurations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "scope_kind": "Modelo y edición de llanta",
+                "scope_identity": "Rim X (ed. 2026)",
+                "claim_basis": "Especificación del fabricante del neumático",
+                "rim_bead_profile": "Con gancho (hooked)",
+                "mounting_method": "Con cámara",
+                "source_url": "https://example.invalid/synthetic",
+                "pressure_unit": "psi",
+                "max_pressure": "85"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "tire_tubeless_ready": true
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_boundary",
+      "source_urls": [],
+      "expected_sql_blocking": [],
+      "expected_issue_subset": [
+        {
+          "code": "prerequisite",
+          "field": "tire_tubeless_ready",
+          "blocking": false
+        },
+        {
+          "code": "required_missing",
+          "field": "tire_bead_type",
+          "blocking": false
+        }
+      ],
+      "expected_sql_issue_subset": [
+        {
+          "code": "field_applicability",
+          "field": "tire_tubeless_ready",
+          "blocking": false
+        },
+        {
+          "code": "required_missing",
+          "field": "tire_bead_type",
+          "blocking": false
+        }
+      ],
+      "forbidden_issue_fields": []
+    }
+  ],
+  "pending_cases": [
+    {
+      "template": "tire",
+      "kind": "relation_integration_pending",
+      "relation_claim": {
+        "schema_version": 2,
+        "interface": "rim_bead_profile",
+        "label": "Llantas declaradas para este neumático",
+        "alternatives": [
+          {
+            "id": "tss_listed",
+            "label": "Llanta TSS que lista este neumático",
+            "conditions": [
+              {
+                "field": "rim_documented_system",
+                "operator": "eq",
+                "value_type": "token",
+                "value": "Zipp TSS reference scope"
+              },
+              {
+                "field": "rim_bead_profile",
+                "operator": "eq",
+                "value_type": "token",
+                "value": "Sin gancho (hookless)"
+              },
+              {
+                "field": "rim_maker_lists_this_tire",
+                "operator": "eq",
+                "value_type": "token",
+                "value": "La llanta lista este neumático"
+              }
+            ],
+            "sources": [
+              "https://www.sram.com/en/zipp/campaigns/hookless-tire-compatibility"
+            ]
+          }
+        ],
+        "exclusions": [
+          {
+            "id": "tss_min_pressure_over_ceiling",
+            "label": "Llanta TSS con un neumático que exige más de 72 psi",
+            "conditions": [
+              {
+                "field": "rim_documented_system",
+                "operator": "eq",
+                "value_type": "token",
+                "value": "Zipp TSS reference scope"
+              },
+              {
+                "field": "rim_bead_profile",
+                "operator": "eq",
+                "value_type": "token",
+                "value": "Sin gancho (hookless)"
+              },
+              {
+                "field": "tire_min_pressure_psi",
+                "operator": "gt",
+                "value_type": "decimal",
+                "value": "72"
+              }
+            ],
+            "sources": [
+              "https://www.sram.com/en/zipp/campaigns/hookless-tire-compatibility"
+            ]
+          }
+        ]
+      },
+      "runnable_against_templates": false,
+      "evaluator": "ProductSpecRelation.evaluate / spec_relation_assess_internal_v1",
+      "id": "ttp_a_listed_tss_rim_is_supported",
+      "configuration": {
+        "rim_bead_profile": "Sin gancho (hookless)",
+        "rim_maker_lists_this_tire": "La llanta lista este neumático",
+        "tire_min_pressure_psi": "40",
+        "rim_documented_system": "Zipp TSS reference scope"
+      },
+      "required_verdict": "supported",
+      "required_matched": [
+        "tss_listed"
+      ],
+      "reason": "La alternativa coincide entera y ninguna exclusión aplica.",
+      "source_urls": [
+        "https://www.sram.com/en/zipp/campaigns/hookless-tire-compatibility"
+      ]
+    },
+    {
+      "template": "tire",
+      "kind": "relation_integration_pending",
+      "relation_claim": {
+        "schema_version": 2,
+        "interface": "rim_bead_profile",
+        "label": "Llantas declaradas para este neumático",
+        "alternatives": [
+          {
+            "id": "tss_listed",
+            "label": "Llanta TSS que lista este neumático",
+            "conditions": [
+              {
+                "field": "rim_documented_system",
+                "operator": "eq",
+                "value_type": "token",
+                "value": "Zipp TSS reference scope"
+              },
+              {
+                "field": "rim_bead_profile",
+                "operator": "eq",
+                "value_type": "token",
+                "value": "Sin gancho (hookless)"
+              },
+              {
+                "field": "rim_maker_lists_this_tire",
+                "operator": "eq",
+                "value_type": "token",
+                "value": "La llanta lista este neumático"
+              }
+            ],
+            "sources": [
+              "https://www.sram.com/en/zipp/campaigns/hookless-tire-compatibility"
+            ]
+          }
+        ],
+        "exclusions": [
+          {
+            "id": "tss_min_pressure_over_ceiling",
+            "label": "Llanta TSS con un neumático que exige más de 72 psi",
+            "conditions": [
+              {
+                "field": "rim_documented_system",
+                "operator": "eq",
+                "value_type": "token",
+                "value": "Zipp TSS reference scope"
+              },
+              {
+                "field": "rim_bead_profile",
+                "operator": "eq",
+                "value_type": "token",
+                "value": "Sin gancho (hookless)"
+              },
+              {
+                "field": "tire_min_pressure_psi",
+                "operator": "gt",
+                "value_type": "decimal",
+                "value": "72"
+              }
+            ],
+            "sources": [
+              "https://www.sram.com/en/zipp/campaigns/hookless-tire-compatibility"
+            ]
+          }
+        ]
+      },
+      "runnable_against_templates": false,
+      "evaluator": "ProductSpecRelation.evaluate / spec_relation_assess_internal_v1",
+      "id": "ttp_an_unlisted_tss_rim_is_outside_the_declaration",
+      "configuration": {
+        "rim_bead_profile": "Sin gancho (hookless)",
+        "rim_maker_lists_this_tire": "La llanta no lo lista",
+        "tire_min_pressure_psi": "40",
+        "rim_documented_system": "Zipp TSS reference scope"
+      },
+      "required_verdict": "outsideDeclaredScope",
+      "must_not_be": [
+        "excluded",
+        "supported"
+      ],
+      "reason": "No aparecer en una lista que la propia fuente declara no exhaustiva no prohíbe nada, y tampoco aprueba: la fuente manda consultar al fabricante. Mi ronda anterior lo declaraba `excluded`, y era falso.",
+      "source_urls": [
+        "https://www.sram.com/en/zipp/campaigns/hookless-tire-compatibility"
+      ]
+    },
+    {
+      "template": "tire",
+      "kind": "relation_integration_pending",
+      "relation_claim": {
+        "schema_version": 2,
+        "interface": "rim_bead_profile",
+        "label": "Llantas declaradas para este neumático",
+        "alternatives": [
+          {
+            "id": "tss_listed",
+            "label": "Llanta TSS que lista este neumático",
+            "conditions": [
+              {
+                "field": "rim_documented_system",
+                "operator": "eq",
+                "value_type": "token",
+                "value": "Zipp TSS reference scope"
+              },
+              {
+                "field": "rim_bead_profile",
+                "operator": "eq",
+                "value_type": "token",
+                "value": "Sin gancho (hookless)"
+              },
+              {
+                "field": "rim_maker_lists_this_tire",
+                "operator": "eq",
+                "value_type": "token",
+                "value": "La llanta lista este neumático"
+              }
+            ],
+            "sources": [
+              "https://www.sram.com/en/zipp/campaigns/hookless-tire-compatibility"
+            ]
+          }
+        ],
+        "exclusions": [
+          {
+            "id": "tss_min_pressure_over_ceiling",
+            "label": "Llanta TSS con un neumático que exige más de 72 psi",
+            "conditions": [
+              {
+                "field": "rim_documented_system",
+                "operator": "eq",
+                "value_type": "token",
+                "value": "Zipp TSS reference scope"
+              },
+              {
+                "field": "rim_bead_profile",
+                "operator": "eq",
+                "value_type": "token",
+                "value": "Sin gancho (hookless)"
+              },
+              {
+                "field": "tire_min_pressure_psi",
+                "operator": "gt",
+                "value_type": "decimal",
+                "value": "72"
+              }
+            ],
+            "sources": [
+              "https://www.sram.com/en/zipp/campaigns/hookless-tire-compatibility"
+            ]
+          }
+        ]
+      },
+      "runnable_against_templates": false,
+      "evaluator": "ProductSpecRelation.evaluate / spec_relation_assess_internal_v1",
+      "id": "ttp_a_tire_needing_more_than_the_ceiling_is_excluded",
+      "configuration": {
+        "rim_bead_profile": "Sin gancho (hookless)",
+        "rim_maker_lists_this_tire": "La llanta lista este neumático",
+        "tire_min_pressure_psi": "80",
+        "rim_documented_system": "Zipp TSS reference scope"
+      },
+      "required_verdict": "excluded",
+      "reason": "Prohibición **expresa** y con parámetro, no una ausencia: «Zipp TSS rims are NOT compatible with tires that require a minimum pressure higher than 5 bar (72 psi)». Estrecha incluso cuando la alternativa positiva también coincide.",
+      "source_urls": [
+        "https://www.sram.com/en/zipp/campaigns/hookless-tire-compatibility"
+      ]
+    },
+    {
+      "template": "tire",
+      "kind": "relation_integration_pending",
+      "relation_claim": {
+        "schema_version": 2,
+        "interface": "rim_bead_profile",
+        "label": "Llantas declaradas para este neumático",
+        "alternatives": [
+          {
+            "id": "tss_listed",
+            "label": "Llanta TSS que lista este neumático",
+            "conditions": [
+              {
+                "field": "rim_documented_system",
+                "operator": "eq",
+                "value_type": "token",
+                "value": "Zipp TSS reference scope"
+              },
+              {
+                "field": "rim_bead_profile",
+                "operator": "eq",
+                "value_type": "token",
+                "value": "Sin gancho (hookless)"
+              },
+              {
+                "field": "rim_maker_lists_this_tire",
+                "operator": "eq",
+                "value_type": "token",
+                "value": "La llanta lista este neumático"
+              }
+            ],
+            "sources": [
+              "https://www.sram.com/en/zipp/campaigns/hookless-tire-compatibility"
+            ]
+          }
+        ],
+        "exclusions": [
+          {
+            "id": "tss_min_pressure_over_ceiling",
+            "label": "Llanta TSS con un neumático que exige más de 72 psi",
+            "conditions": [
+              {
+                "field": "rim_documented_system",
+                "operator": "eq",
+                "value_type": "token",
+                "value": "Zipp TSS reference scope"
+              },
+              {
+                "field": "rim_bead_profile",
+                "operator": "eq",
+                "value_type": "token",
+                "value": "Sin gancho (hookless)"
+              },
+              {
+                "field": "tire_min_pressure_psi",
+                "operator": "gt",
+                "value_type": "decimal",
+                "value": "72"
+              }
+            ],
+            "sources": [
+              "https://www.sram.com/en/zipp/campaigns/hookless-tire-compatibility"
+            ]
+          }
+        ]
+      },
+      "runnable_against_templates": false,
+      "evaluator": "ProductSpecRelation.evaluate / spec_relation_assess_internal_v1",
+      "id": "ttp_an_unanswered_minimum_pressure_stays_unknown",
+      "configuration": {
+        "rim_bead_profile": "Sin gancho (hookless)",
+        "rim_maker_lists_this_tire": "La llanta lista este neumático",
+        "rim_documented_system": "Zipp TSS reference scope"
+      },
+      "required_verdict": "unknown",
+      "required_unresolved": [
+        "tire_min_pressure_psi"
+      ],
+      "reason": "Sin la presión mínima no se puede descartar la exclusión, y una exclusión indeterminada no se resuelve como compatible.",
+      "source_urls": [
+        "https://www.sram.com/en/zipp/campaigns/hookless-tire-compatibility"
+      ]
+    },
+    {
+      "template": "tire",
+      "kind": "relation_integration_pending",
+      "relation_claim": {
+        "schema_version": 2,
+        "interface": "rim_bead_profile",
+        "label": "Llantas declaradas para este neumático",
+        "alternatives": [
+          {
+            "id": "tss_listed",
+            "label": "Llanta TSS que lista este neumático",
+            "conditions": [
+              {
+                "field": "rim_documented_system",
+                "operator": "eq",
+                "value_type": "token",
+                "value": "Zipp TSS reference scope"
+              },
+              {
+                "field": "rim_bead_profile",
+                "operator": "eq",
+                "value_type": "token",
+                "value": "Sin gancho (hookless)"
+              },
+              {
+                "field": "rim_maker_lists_this_tire",
+                "operator": "eq",
+                "value_type": "token",
+                "value": "La llanta lista este neumático"
+              }
+            ],
+            "sources": [
+              "https://www.sram.com/en/zipp/campaigns/hookless-tire-compatibility"
+            ]
+          }
+        ],
+        "exclusions": [
+          {
+            "id": "tss_min_pressure_over_ceiling",
+            "label": "Llanta TSS con un neumático que exige más de 72 psi",
+            "conditions": [
+              {
+                "field": "rim_documented_system",
+                "operator": "eq",
+                "value_type": "token",
+                "value": "Zipp TSS reference scope"
+              },
+              {
+                "field": "rim_bead_profile",
+                "operator": "eq",
+                "value_type": "token",
+                "value": "Sin gancho (hookless)"
+              },
+              {
+                "field": "tire_min_pressure_psi",
+                "operator": "gt",
+                "value_type": "decimal",
+                "value": "72"
+              }
+            ],
+            "sources": [
+              "https://www.sram.com/en/zipp/campaigns/hookless-tire-compatibility"
+            ]
+          }
+        ]
+      },
+      "runnable_against_templates": false,
+      "evaluator": "ProductSpecRelation.evaluate / spec_relation_assess_internal_v1",
+      "id": "ttp_a_tubular_rim_is_outside_the_declaration",
+      "configuration": {
+        "rim_bead_profile": "Tubular / de pegar",
+        "tire_min_pressure_psi": "40",
+        "rim_documented_system": "Zipp TSS reference scope"
+      },
+      "required_verdict": "outsideDeclaredScope",
+      "reason": "No coincidir con una alternativa **no exhaustiva** no prueba incompatibilidad física.",
+      "source_urls": [
+        "https://www.parktool.com/en-us/blog/repair-help/tubeless-tire-compatibility"
+      ]
+    },
+    {
+      "template": "tire",
+      "kind": "relation_integration_pending",
+      "relation_claim": {
+        "schema_version": 2,
+        "interface": "rim_bead_profile",
+        "label": "Llantas declaradas para este neumático",
+        "alternatives": [
+          {
+            "id": "tss_listed",
+            "label": "Llanta TSS que lista este neumático",
+            "conditions": [
+              {
+                "field": "rim_documented_system",
+                "operator": "eq",
+                "value_type": "token",
+                "value": "Zipp TSS reference scope"
+              },
+              {
+                "field": "rim_bead_profile",
+                "operator": "eq",
+                "value_type": "token",
+                "value": "Sin gancho (hookless)"
+              },
+              {
+                "field": "rim_maker_lists_this_tire",
+                "operator": "eq",
+                "value_type": "token",
+                "value": "La llanta lista este neumático"
+              }
+            ],
+            "sources": [
+              "https://www.sram.com/en/zipp/campaigns/hookless-tire-compatibility"
+            ]
+          }
+        ],
+        "exclusions": [
+          {
+            "id": "tss_min_pressure_over_ceiling",
+            "label": "Llanta TSS con un neumático que exige más de 72 psi",
+            "conditions": [
+              {
+                "field": "rim_documented_system",
+                "operator": "eq",
+                "value_type": "token",
+                "value": "Zipp TSS reference scope"
+              },
+              {
+                "field": "rim_bead_profile",
+                "operator": "eq",
+                "value_type": "token",
+                "value": "Sin gancho (hookless)"
+              },
+              {
+                "field": "tire_min_pressure_psi",
+                "operator": "gt",
+                "value_type": "decimal",
+                "value": "72"
+              }
+            ],
+            "sources": [
+              "https://www.sram.com/en/zipp/campaigns/hookless-tire-compatibility"
+            ]
+          }
+        ]
+      },
+      "runnable_against_templates": false,
+      "evaluator": "ProductSpecRelation.evaluate / spec_relation_assess_internal_v1",
+      "id": "ttr_zipp_ceiling_does_not_exclude_another_system",
+      "configuration": {
+        "rim_documented_system": "Different OEM scope",
+        "rim_bead_profile": "Sin gancho (hookless)",
+        "rim_maker_lists_this_tire": "La llanta lista este neumático",
+        "tire_min_pressure_psi": "80"
+      },
+      "required_verdict": "outsideDeclaredScope",
+      "must_not_be": [
+        "excluded",
+        "supported"
+      ]
+    },
+    {
+      "template": "tire",
+      "kind": "relation_integration_pending",
+      "relation_claim": {
+        "schema_version": 2,
+        "interface": "rim_bead_profile",
+        "label": "Llantas declaradas para este neumático",
+        "alternatives": [
+          {
+            "id": "tss_listed",
+            "label": "Llanta TSS que lista este neumático",
+            "conditions": [
+              {
+                "field": "rim_documented_system",
+                "operator": "eq",
+                "value_type": "token",
+                "value": "Zipp TSS reference scope"
+              },
+              {
+                "field": "rim_bead_profile",
+                "operator": "eq",
+                "value_type": "token",
+                "value": "Sin gancho (hookless)"
+              },
+              {
+                "field": "rim_maker_lists_this_tire",
+                "operator": "eq",
+                "value_type": "token",
+                "value": "La llanta lista este neumático"
+              }
+            ],
+            "sources": [
+              "https://www.sram.com/en/zipp/campaigns/hookless-tire-compatibility"
+            ]
+          }
+        ],
+        "exclusions": [
+          {
+            "id": "tss_min_pressure_over_ceiling",
+            "label": "Llanta TSS con un neumático que exige más de 72 psi",
+            "conditions": [
+              {
+                "field": "rim_documented_system",
+                "operator": "eq",
+                "value_type": "token",
+                "value": "Zipp TSS reference scope"
+              },
+              {
+                "field": "rim_bead_profile",
+                "operator": "eq",
+                "value_type": "token",
+                "value": "Sin gancho (hookless)"
+              },
+              {
+                "field": "tire_min_pressure_psi",
+                "operator": "gt",
+                "value_type": "decimal",
+                "value": "72"
+              }
+            ],
+            "sources": [
+              "https://www.sram.com/en/zipp/campaigns/hookless-tire-compatibility"
+            ]
+          }
+        ]
+      },
+      "runnable_against_templates": false,
+      "evaluator": "ProductSpecRelation.evaluate / spec_relation_assess_internal_v1",
+      "id": "ttr_unknown_system_cannot_be_approved",
+      "configuration": {
+        "rim_bead_profile": "Sin gancho (hookless)",
+        "rim_maker_lists_this_tire": "La llanta lista este neumático",
+        "tire_min_pressure_psi": "40"
+      },
+      "required_verdict": "unknown",
+      "required_unresolved": [
+        "rim_documented_system"
+      ]
+    },
+    {
+      "template": "tire",
+      "kind": "relation_integration_pending",
+      "relation_claim": {
+        "schema_version": 2,
+        "interface": "rim_bead_profile",
+        "label": "Llantas declaradas para este neumático",
+        "alternatives": [
+          {
+            "id": "tss_listed",
+            "label": "Llanta TSS que lista este neumático",
+            "conditions": [
+              {
+                "field": "rim_documented_system",
+                "operator": "eq",
+                "value_type": "token",
+                "value": "Zipp TSS reference scope"
+              },
+              {
+                "field": "rim_bead_profile",
+                "operator": "eq",
+                "value_type": "token",
+                "value": "Sin gancho (hookless)"
+              },
+              {
+                "field": "rim_maker_lists_this_tire",
+                "operator": "eq",
+                "value_type": "token",
+                "value": "La llanta lista este neumático"
+              }
+            ],
+            "sources": [
+              "https://www.sram.com/en/zipp/campaigns/hookless-tire-compatibility"
+            ]
+          }
+        ],
+        "exclusions": [
+          {
+            "id": "tss_min_pressure_over_ceiling",
+            "label": "Llanta TSS con un neumático que exige más de 72 psi",
+            "conditions": [
+              {
+                "field": "rim_documented_system",
+                "operator": "eq",
+                "value_type": "token",
+                "value": "Zipp TSS reference scope"
+              },
+              {
+                "field": "rim_bead_profile",
+                "operator": "eq",
+                "value_type": "token",
+                "value": "Sin gancho (hookless)"
+              },
+              {
+                "field": "tire_min_pressure_psi",
+                "operator": "gt",
+                "value_type": "decimal",
+                "value": "72"
+              }
+            ],
+            "sources": [
+              "https://www.sram.com/en/zipp/campaigns/hookless-tire-compatibility"
+            ]
+          }
+        ]
+      },
+      "runnable_against_templates": false,
+      "evaluator": "ProductSpecRelation.evaluate / spec_relation_assess_internal_v1",
+      "id": "ttr_hooked_alone_is_not_a_tire_approval",
+      "configuration": {
+        "rim_documented_system": "Different OEM scope",
+        "rim_bead_profile": "Con gancho (hooked)",
+        "tire_min_pressure_psi": "40"
+      },
+      "required_verdict": "outsideDeclaredScope",
+      "must_not_be": [
+        "supported"
+      ]
+    }
+  ]
+}
