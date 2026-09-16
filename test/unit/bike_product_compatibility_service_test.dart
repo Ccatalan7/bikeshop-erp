@@ -1,3 +1,5 @@
+import 'dart:convert' show jsonEncode;
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:vinabike_erp/modules/bikeshop/models/bikeshop_models.dart';
 import 'package:vinabike_erp/modules/bikeshop/services/bike_product_compatibility_service.dart';
@@ -1413,7 +1415,807 @@ void main() {
       expect(assessment.detail, contains('Válvula Presta'));
     });
   });
+
+  group('drivetrain, bottom bracket and brake successor keys (2026-09)', () {
+    test('cassette speed read from sprocket_count refutes the bicycle speed',
+        () async {
+      final assessment = await _assessProduct(
+        technicalFamily: 'cassette',
+        bikeTechnicalValues: {'drivetrainConfig': '1x11'},
+        productSpecs: {'sprocket_count': 12},
+      );
+      expect(assessment.level, ProductCompatibilityLevel.incompatible);
+      expect(assessment.detail, contains('12v'));
+      expect(assessment.detail, contains('11v'));
+    });
+
+    test('cassette spline M is the HG body and names its range', () async {
+      final assessment = await _assessProduct(
+        technicalFamily: 'cassette',
+        bikeTechnicalValues: {
+          'drivetrainConfig': '1x11',
+          'freehubType': 'Shimano HG',
+        },
+        productSpecs: {
+          'sprocket_count': 11,
+          'cassette_spline_standard':
+              'Shimano HG spline M (8/9/10v y MTB 11v; ROAD 11v y 7v sólo según filas C-731; LINKGLIDE según C-649)',
+          'smallest_cog_teeth': 11,
+          'largest_cog_teeth': 42,
+        },
+      );
+      expect(assessment.level, ProductCompatibilityLevel.caution);
+      expect(assessment.detail, contains('11v'));
+      expect(assessment.detail, contains('Shimano HG'));
+      expect(assessment.detail, contains('11-42T'));
+      expect(assessment.detail, isNot(contains('no coincide')));
+    });
+
+    test('cassette spline M refutes a Micro Spline bicycle', () async {
+      final assessment = await _assessProduct(
+        technicalFamily: 'cassette',
+        bikeTechnicalValues: {'freehubType': 'Micro Spline'},
+        productSpecs: {
+          'cassette_spline_standard':
+              'Shimano HG spline M (8/9/10v y MTB 11v; ROAD 11v y 7v sólo según filas C-731; LINKGLIDE según C-649)',
+        },
+      );
+      expect(assessment.level, ProductCompatibilityLevel.incompatible);
+      expect(assessment.detail, contains('Micro Spline'));
+    });
+
+    test('accepted freehub body rows are read from the stored JSON text',
+        () async {
+      final rows = _rows([
+        {
+          'rear_drive_interface': 'Shimano MICRO SPLINE (MTB 12v)',
+          'spacer_requirement': 'Sin separador',
+          'status': 'Compatible declarado',
+          'source_scope': 'Manual OEM',
+          'source_url': 'https://example.test',
+        },
+        {
+          'rear_drive_interface': 'SRAM XD',
+          'spacer_requirement': 'No publicado',
+          'status': 'Incompatible declarado',
+          'source_scope': 'Manual OEM',
+          'source_url': 'https://example.test',
+        },
+      ]);
+      final accepted = await _assessProduct(
+        technicalFamily: 'cassette',
+        bikeTechnicalValues: {
+          'drivetrainConfig': '1x12',
+          'freehubType': 'Micro Spline',
+        },
+        productSpecs: {'sprocket_count': 12, 'freehub_bodies_accepted': rows},
+      );
+      expect(accepted.level, ProductCompatibilityLevel.caution);
+      expect(accepted.detail, contains('Micro Spline'));
+      expect(accepted.detail, isNot(contains('no coincide')));
+
+      final refused = await _assessProduct(
+        technicalFamily: 'cassette',
+        bikeTechnicalValues: {
+          'drivetrainConfig': '1x12',
+          'freehubType': 'SRAM XD',
+        },
+        productSpecs: {'sprocket_count': 12, 'freehub_bodies_accepted': rows},
+      );
+      expect(refused.level, ProductCompatibilityLevel.incompatible);
+      expect(refused.detail, contains('declarado incompatible'));
+    });
+
+    test('bare HYPERGLIDE is the HG/SIS platform and HYPERGLIDE+ is not',
+        () async {
+      final classic = await _assessProduct(
+        technicalFamily: 'cassette',
+        bikeTechnicalValues: {
+          'drivetrainConfig': '1x11',
+          'drivetrainPlatform': 'Shimano HG / SIS',
+        },
+        productSpecs: {'sprocket_count': 11, 'shift_technology': 'HYPERGLIDE'},
+      );
+      expect(classic.detail, isNot(contains('revisar plataforma')));
+
+      final plus = await _assessProduct(
+        technicalFamily: 'cassette',
+        bikeTechnicalValues: {
+          'drivetrainConfig': '1x11',
+          'drivetrainPlatform': 'Shimano HG / SIS',
+        },
+        productSpecs: {'sprocket_count': 11, 'shift_technology': 'HYPERGLIDE+'},
+      );
+      expect(plus.level, ProductCompatibilityLevel.caution);
+      expect(plus.detail, contains('revisar plataforma'));
+      expect(plus.detail, contains('Shimano HG+'));
+    });
+
+    test('cog_sequence rows give the sprocket count and the range', () async {
+      const teeth = [10, 12, 14, 16, 18, 21, 24, 28, 33, 39, 45, 51];
+      final assessment = await _assessProduct(
+        technicalFamily: 'cassette',
+        bikeTechnicalValues: {'drivetrainConfig': '1x12', 'largestCogTeeth': 51},
+        productSpecs: {
+          'cog_sequence': _rows([
+            for (var i = 0; i < teeth.length; i++)
+              {'position': i + 1, 'teeth': teeth[i]},
+          ]),
+        },
+      );
+      expect(assessment.level, ProductCompatibilityLevel.caution);
+      expect(assessment.detail, contains('12v'));
+      expect(assessment.detail, contains('10-51T'));
+    });
+
+    test('freewheel thread standard reads as a threaded freewheel', () async {
+      final threaded = await _assessProduct(
+        technicalFamily: 'freewheel',
+        bikeTechnicalValues: {
+          'drivetrainConfig': '1x7',
+          'freehubType': 'Roscada / rueda libre',
+        },
+        productSpecs: {
+          'sprocket_count': 7,
+          'freewheel_thread_standard': '1.37" x 24 tpi (ISO)',
+        },
+      );
+      expect(threaded.level, ProductCompatibilityLevel.caution);
+      expect(threaded.detail, contains('7v'));
+      expect(threaded.detail, contains('roscada'));
+
+      final cassetteBike = await _assessProduct(
+        technicalFamily: 'freewheel',
+        bikeTechnicalValues: {'freehubType': 'Shimano HG'},
+        productSpecs: {'freewheel_thread_standard': '1.37" x 24 tpi (ISO)'},
+      );
+      expect(cassetteBike.level, ProductCompatibilityLevel.incompatible);
+    });
+
+    test('rear derailleur configuration rows: fit, too small, wrong speed',
+        () async {
+      final rows = _rows([
+        {
+          'configuration_identity': '1x12',
+          'front_chainring_count': 1,
+          'rear_sprocket_count': 12,
+          'largest_sprocket_min_teeth': 42,
+          'largest_sprocket_max_teeth': 51,
+          'total_capacity_teeth': 41,
+          'source_document': 'manual',
+        },
+      ]);
+      final fits = await _assessProduct(
+        technicalFamily: 'rear_derailleur',
+        bikeTechnicalValues: {'drivetrainConfig': '1x12', 'largestCogTeeth': 51},
+        productSpecs: {'rear_derailleur_application_configurations': rows},
+      );
+      expect(fits.level, ProductCompatibilityLevel.caution);
+      expect(fits.detail, contains('12v'));
+      expect(fits.detail, contains('max 51T'));
+      expect(fits.detail, contains('1x'));
+      expect(fits.detail, contains('capacidad real (41T)'));
+
+      final tooSmall = await _assessProduct(
+        technicalFamily: 'rear_derailleur',
+        bikeTechnicalValues: {'drivetrainConfig': '1x12', 'largestCogTeeth': 52},
+        productSpecs: {'rear_derailleur_application_configurations': rows},
+      );
+      expect(tooSmall.level, ProductCompatibilityLevel.incompatible);
+      expect(tooSmall.detail, contains('52T'));
+
+      final wrongSpeed = await _assessProduct(
+        technicalFamily: 'rear_derailleur',
+        bikeTechnicalValues: {'drivetrainConfig': '1x11'},
+        productSpecs: {'rear_derailleur_application_configurations': rows},
+      );
+      expect(wrongSpeed.level, ProductCompatibilityLevel.incompatible);
+
+      final noFit = await _assessProduct(
+        technicalFamily: 'rear_derailleur',
+        bikeTechnicalValues: {'drivetrainConfig': '2x12', 'largestCogTeeth': 46},
+        productSpecs: {'rear_derailleur_application_configurations': rows},
+      );
+      expect(noFit.level, ProductCompatibilityLevel.caution);
+      expect(noFit.detail, contains('ninguna configuración documentada'));
+      expect(noFit.detail, contains('1x12'));
+    });
+
+    test('rear derailleur actuation from the ratio text and a refusing claim',
+        () async {
+      final ratio = await _assessProduct(
+        technicalFamily: 'rear_derailleur',
+        bikeTechnicalValues: {
+          'drivetrainConfig': '1x12',
+          'shiftActuationFamily': 'SRAM Eagle',
+        },
+        productSpecs: {
+          'rear_derailleur_actuation_ratio_declaration': 'Shimano Dynasys 11/12v',
+        },
+      );
+      expect(ratio.level, ProductCompatibilityLevel.incompatible);
+      expect(ratio.detail, contains('Shimano Dynasys 11/12v'));
+
+      final refused = await _assessProduct(
+        technicalFamily: 'rear_derailleur',
+        bikeTechnicalValues: {
+          'drivetrainConfig': '1x12',
+          'shiftActuationFamily': 'SRAM Eagle',
+        },
+        productSpecs: {
+          'rear_derailleur_compatibility_claims': _rows([
+            {
+              'claim_identity': 'eagle',
+              'scope_kind': 'Interfaz o estándar documentado',
+              'target_component': 'Mando',
+              'declared_interface': 'SRAM X-Actuation / Eagle',
+              'declaration_result': 'No compatible declarado',
+              'source_document': 'manual',
+            },
+          ]),
+        },
+      );
+      expect(refused.level, ProductCompatibilityLevel.incompatible);
+      expect(refused.detail, contains('declarado no compatible'));
+    });
+
+    test('front derailleur configuration rows and its successor pull and mount',
+        () async {
+      final assessment = await _assessProduct(
+        technicalFamily: 'front_derailleur',
+        bikeTechnicalValues: {'drivetrainConfig': '2x10'},
+        productSpecs: {
+          'front_derailleur_application_configurations': _rows([
+            {
+              'configuration_identity': '2x10',
+              'front_chainring_count': 2,
+              'rear_sprocket_count': 10,
+              'top_chainring_max_teeth': 36,
+              'source_document': 'manual',
+            },
+          ]),
+          'front_derailleur_cable_pull': 'Tiro arriba (top pull)',
+          'front_derailleur_mount_type': 'Abrazadera',
+          'front_derailleur_clamp_options': _rows([
+            {
+              'option_identity': '34.9',
+              'attachment_method': 'Abrazadera directa',
+              'direct_tube_diameter_mm': 34.9,
+              'source_document': 'manual',
+            },
+          ]),
+        },
+      );
+      expect(assessment.level, ProductCompatibilityLevel.caution);
+      expect(assessment.detail, contains('2x'));
+      expect(assessment.detail, contains('10v'));
+      expect(assessment.detail, contains('tiro arriba (top pull)'));
+      expect(assessment.detail, contains('abrazadera 34.9 mm'));
+      expect(assessment.detail, contains('plato grande hasta 36T'));
+
+      final otherSpeed = await _assessProduct(
+        technicalFamily: 'front_derailleur',
+        bikeTechnicalValues: {'drivetrainConfig': '2x9'},
+        productSpecs: {
+          'front_derailleur_application_configurations': _rows([
+            {
+              'configuration_identity': '2x11',
+              'front_chainring_count': 2,
+              'rear_sprocket_count': 11,
+              'source_document': 'manual',
+            },
+          ]),
+        },
+      );
+      expect(otherSpeed.level, ProductCompatibilityLevel.caution);
+      expect(otherSpeed.detail, contains('documentado para 11v'));
+    });
+
+    test('shifter indexed positions are read by side', () async {
+      final rightMismatch = await _assessProduct(
+        technicalFamily: 'shifter',
+        bikeTechnicalValues: {'drivetrainConfig': '1x11'},
+        productSpecs: {
+          'shifter_position': 'Derecho / trasero',
+          'shifter_indexed_positions': 12,
+        },
+      );
+      expect(rightMismatch.level, ProductCompatibilityLevel.incompatible);
+      expect(rightMismatch.detail, contains('12v'));
+
+      final left = await _assessProduct(
+        technicalFamily: 'shifter',
+        bikeTechnicalValues: {'drivetrainConfig': '2x10'},
+        productSpecs: {
+          'shifter_position': 'Izquierdo / delantero',
+          'shifter_indexed_positions': 2,
+          'shifter_control_style': 'Gatillo (trigger)',
+        },
+      );
+      expect(left.level, ProductCompatibilityLevel.caution);
+      expect(left.detail, contains('2x'));
+      expect(left.detail, contains('gatillo (trigger)'));
+
+      final right = await _assessProduct(
+        technicalFamily: 'shifter',
+        bikeTechnicalValues: {'drivetrainConfig': '1x11'},
+        productSpecs: {
+          'shifter_position': 'Derecho / trasero',
+          'shifter_indexed_positions': 11,
+        },
+      );
+      expect(right.level, ProductCompatibilityLevel.caution);
+      expect(right.detail, contains('coincide 11v'));
+    });
+
+    test('shifter unit rows make a pair without a package position', () async {
+      final assessment = await _assessProduct(
+        technicalFamily: 'shifter',
+        bikeTechnicalValues: {'drivetrainConfig': '2x10'},
+        productSpecs: {
+          'shifter_units': _rows([
+            {
+              'unit_identity': 'L',
+              'unit_side': 'Izquierdo / delantero',
+              'indexed_positions': 2,
+              'source_document': 'manual',
+            },
+            {
+              'unit_identity': 'R',
+              'unit_side': 'Derecho / trasero',
+              'indexed_positions': 10,
+              'source_document': 'manual',
+            },
+          ]),
+        },
+      );
+      expect(assessment.level, ProductCompatibilityLevel.caution);
+      expect(assessment.detail, contains('10v'));
+      expect(assessment.detail, contains('2x'));
+      expect(assessment.detail, contains('tiro/indexado delantero'));
+    });
+
+    test('a friction shifter accepts any actuation family', () async {
+      final assessment = await _assessProduct(
+        technicalFamily: 'shifter',
+        bikeTechnicalValues: {
+          'drivetrainConfig': '1x12',
+          'shiftActuationFamily': 'SRAM Eagle',
+        },
+        productSpecs: {
+          'shifter_position': 'Derecho / trasero',
+          'shifter_actuation_mode': 'Fricción',
+        },
+      );
+      expect(assessment.level, ProductCompatibilityLevel.caution);
+      expect(assessment.detail, contains('friccion/universal'));
+    });
+
+    test('crankset spindle from the junction rows and its required bottom bracket',
+        () async {
+      final specs = <String, dynamic>{
+        'crank_axle_interface_declarations': _rows([
+          {
+            'interface_identity': 'ht2',
+            'junction_role': 'Eje ofrecido por esta pieza',
+            'designation': 'Hollowtech II 24 mm',
+            'interface_geometry': 'Estriado',
+            'source_document': 'manual',
+          },
+        ]),
+        'bottom_bracket_required': _rows([
+          {
+            'requirement_identity': 'bsa68',
+            'bb_shell_interface': 'BSA roscado',
+            'bb_shell_width_mm': 68,
+            'source_document': 'manual',
+          },
+        ]),
+        'crank_arm_length_mm': 175,
+        'included_chainring_count': 1,
+      };
+      final matches = await _assessProduct(
+        technicalFamily: 'crankset',
+        bikeTechnicalValues: {
+          'drivetrainConfig': '1x12',
+          'spindleInterface': 'Hollowtech / 24mm',
+          'bottomBracketFamily': 'BSA roscado',
+          'bbShellWidthMm': 68,
+        },
+        productSpecs: specs,
+      );
+      expect(matches.level, ProductCompatibilityLevel.caution);
+      expect(matches.detail, contains('Hollowtech / 24 mm'));
+      expect(matches.detail, contains('1x'));
+      expect(matches.detail, contains('pedalier BSA roscado 68 mm'));
+      expect(matches.detail, contains('biela 175 mm'));
+
+      final otherSpindle = await _assessProduct(
+        technicalFamily: 'crankset',
+        bikeTechnicalValues: {
+          'drivetrainConfig': '1x12',
+          'spindleInterface': 'SRAM DUB 28.99mm',
+        },
+        productSpecs: specs,
+      );
+      expect(otherSpindle.level, ProductCompatibilityLevel.caution);
+      expect(otherSpindle.detail, contains('interfaz del eje difiere'));
+
+      final otherShell = await _assessProduct(
+        technicalFamily: 'crankset',
+        bikeTechnicalValues: {
+          'drivetrainConfig': '1x12',
+          'bottomBracketFamily': 'Pressfit',
+        },
+        productSpecs: specs,
+      );
+      expect(otherShell.level, ProductCompatibilityLevel.caution);
+      expect(otherShell.detail, contains('requiere pedalier BSA roscado'));
+    });
+
+    test('chainring successor facts are named in the caution', () async {
+      final single = await _assessProduct(
+        technicalFamily: 'chainring',
+        bikeTechnicalValues: {
+          'drivetrainConfig': '1x11',
+          'chainWidthFamily': '11/128',
+        },
+        productSpecs: {
+          'teeth_count': 32,
+          'chainring_bcd_mm': 104,
+          'chainring_mount_type': 'BCD 4 pernos',
+          'narrow_wide': true,
+          'chain_width_family': '11/128',
+        },
+      );
+      expect(single.level, ProductCompatibilityLevel.caution);
+      expect(single.detail, contains('32T'));
+      expect(single.detail, contains('BCD 104 mm'));
+      expect(single.detail, contains('bcd 4 pernos'));
+      expect(single.detail, contains('narrow-wide'));
+
+      final set = await _assessProduct(
+        technicalFamily: 'chainring',
+        bikeTechnicalValues: {'drivetrainConfig': '2x10'},
+        productSpecs: {
+          'chainring_package_kind': 'Juego de platos',
+          'chainring_set_members': _rows([
+            {
+              'member_identity': 'outer',
+              'position': 'Exterior',
+              'teeth': 36,
+              'source_document': 'manual',
+            },
+            {
+              'member_identity': 'inner',
+              'position': 'Interior',
+              'teeth': 22,
+              'source_document': 'manual',
+            },
+          ]),
+        },
+      );
+      expect(set.level, ProductCompatibilityLevel.caution);
+      expect(set.detail, contains('Juego de 2 platos'));
+      expect(set.detail, contains('platos 36-22T'));
+    });
+
+    test('bottom bracket installation claim rows drive the shell verdict',
+        () async {
+      final rows = _rows([
+        {
+          'configuration': '68/73',
+          'shell_designation': 'BSA 68/73',
+          'width_kind': 'Intervalo publicado',
+          'width_min_mm': 68,
+          'width_max_mm': 73,
+          'status': 'Compatible declarado',
+          'source_scope': 'Manual OEM',
+          'source_url': 'https://example.test',
+        },
+      ]);
+      final matches = await _assessProduct(
+        technicalFamily: 'bottom_bracket',
+        bikeTechnicalValues: {
+          'bottomBracketFamily': 'BSA roscado',
+          'bbShellWidthMm': 68,
+          'spindleInterface': 'Hollowtech / 24mm',
+        },
+        productSpecs: {
+          'bb_installation_claims': rows,
+          'spindle_interface': 'Hollowtech / 24mm',
+        },
+      );
+      expect(matches.level, ProductCompatibilityLevel.caution);
+      expect(matches.detail, contains('BSA roscado'));
+      expect(matches.detail, contains('68 mm'));
+      expect(matches.detail, contains('Hollowtech / 24 mm'));
+
+      final pressfitBike = await _assessProduct(
+        technicalFamily: 'bottom_bracket',
+        bikeTechnicalValues: {
+          'bottomBracketFamily': 'Pressfit',
+          'bbShellWidthMm': 92,
+        },
+        productSpecs: {'bb_installation_claims': rows},
+      );
+      expect(pressfitBike.level, ProductCompatibilityLevel.incompatible);
+      expect(pressfitBike.detail, contains('montaje directo'));
+
+      final refused = await _assessProduct(
+        technicalFamily: 'bottom_bracket',
+        bikeTechnicalValues: {'bottomBracketFamily': 'BSA roscado'},
+        productSpecs: {
+          'bb_installation_claims': _rows([
+            {
+              'configuration': 'bsa',
+              'shell_designation': 'BSA 68/73',
+              'width_kind': 'Sin cifra publicada',
+              'status': 'Incompatible declarado',
+              'source_scope': 'Manual OEM',
+              'source_url': 'https://example.test',
+            },
+          ]),
+        },
+      );
+      expect(refused.level, ProductCompatibilityLevel.incompatible);
+      expect(refused.detail, contains('declarado incompatible'));
+    });
+
+    test('a measured thread port names the shell family', () async {
+      final ports = _rows([
+        {
+          'port': 'drive',
+          'side': 'Lado motriz',
+          'mates_with': 'Caja del cuadro',
+          'form': 'Rosca medida',
+          'diameter': 1.37,
+          'diameter_unit': 'in',
+          'pitch': 24,
+          'pitch_unit': 'tpi',
+          'source_scope': 'Medición propia',
+          'source_url': 'https://example.test',
+        },
+      ]);
+      final bsa = await _assessProduct(
+        technicalFamily: 'bottom_bracket',
+        bikeTechnicalValues: {'bottomBracketFamily': 'BSA roscado'},
+        productSpecs: {'bb_shell_ports': ports},
+      );
+      expect(bsa.level, ProductCompatibilityLevel.caution);
+      expect(bsa.detail, contains('BSA roscado'));
+
+      final mid = await _assessProduct(
+        technicalFamily: 'bottom_bracket',
+        bikeTechnicalValues: {'bottomBracketFamily': 'Mid / BMX'},
+        productSpecs: {'bb_shell_ports': ports},
+      );
+      expect(mid.level, ProductCompatibilityLevel.incompatible);
+    });
+
+    test('accepted spindle rows keep the coverage check', () async {
+      final gxpOnly = await _assessProduct(
+        technicalFamily: 'bottom_bracket',
+        bikeTechnicalValues: {'spindleInterface': 'Hollowtech / 24mm'},
+        productSpecs: {
+          'bb_accepted_spindles': _rows([
+            {
+              'target_kind': 'Estándar declarado',
+              'configuration': 'std',
+              'interface': 'SRAM GXP 24/22',
+              'status': 'Compatible declarado',
+              'source_scope': 'Manual OEM',
+              'source_url': 'https://example.test',
+            },
+          ]),
+        },
+      );
+      expect(gxpOnly.level, ProductCompatibilityLevel.caution);
+      expect(gxpOnly.detail, contains('fuera de la cobertura'));
+
+      final both = await _assessProduct(
+        technicalFamily: 'bottom_bracket',
+        bikeTechnicalValues: {'spindleInterface': 'Hollowtech / 24mm'},
+        productSpecs: {
+          'bb_accepted_spindles': _rows([
+            {
+              'target_kind': 'Estándar declarado',
+              'configuration': 'std',
+              'interface': 'Hollowtech / 24mm',
+              'status': 'Compatible declarado',
+              'source_scope': 'Manual OEM',
+              'source_url': 'https://example.test',
+            },
+          ]),
+          'spindle_length_mm': 118,
+        },
+      );
+      expect(both.level, ProductCompatibilityLevel.caution);
+      expect(both.detail, contains('Hollowtech / 24 mm'));
+      expect(both.detail, contains('combinación completa'));
+      expect(both.detail, contains('Eje de 118 mm'));
+    });
+
+    test('caliper rotor recipe rows against the bicycle rotors', () async {
+      final specs = <String, dynamic>{
+        'braking_surface': 'Disco',
+        'brake_actuation': 'Hidráulico',
+        'caliper_mount_interface': 'Post Mount',
+        'piston_count_value': 2,
+        'rotor_size_recipe': _rows([
+          {
+            'configuration': 'f160',
+            'position': 'Delantero',
+            'rotor_diameter_mm': 160,
+            'frame_mount': 'Post Mount',
+            'adapter_required': false,
+            'source_url': 'https://example.test',
+          },
+        ]),
+      };
+      final matches = await _assessProduct(
+        technicalFamily: 'brake_caliper',
+        bikeTechnicalValues: {'brakeType': 'hydraulic_disc', 'frontRotorSizeMm': 160},
+        productSpecs: specs,
+      );
+      expect(matches.level, ProductCompatibilityLevel.caution);
+      expect(matches.detail, contains('Coincide el diámetro'));
+      expect(matches.detail, contains('160 mm en Post Mount sin adaptador'));
+      expect(matches.detail, contains('hidráulico'));
+      expect(matches.detail, contains('2 pistones'));
+
+      final other = await _assessProduct(
+        technicalFamily: 'brake_caliper',
+        bikeTechnicalValues: {'brakeType': 'hydraulic_disc', 'frontRotorSizeMm': 180},
+        productSpecs: specs,
+      );
+      expect(other.level, ProductCompatibilityLevel.caution);
+      expect(other.detail, contains('Documenta rotor 160 mm'));
+      expect(other.detail, contains('delantero 180 mm'));
+    });
+
+    test('fluid approval rows keep the fluid caution', () async {
+      final assessment = await _assessProduct(
+        technicalFamily: 'brake_caliper',
+        bikeTechnicalValues: {'brakeType': 'hydraulic_disc'},
+        productSpecs: {
+          'brake_model_fluid_approvals': _rows([
+            {
+              'system_brand': 'Shimano',
+              'system_model': 'BR-MT200',
+              'generation': '2020',
+              'fluid_class': 'Aceite Mineral',
+              'source_url': 'https://example.test',
+            },
+          ]),
+        },
+      );
+      expect(assessment.level, ProductCompatibilityLevel.caution);
+      expect(assessment.detail, contains('Aceite Mineral'));
+      expect(assessment.detail, contains('no determina'));
+    });
+
+    test('brake pad successor facts are named in the caution', () async {
+      final assessment = await _assessProduct(
+        technicalFamily: 'brake_pad',
+        bikeTechnicalValues: {'brakeType': 'hydraulic_disc'},
+        productSpecs: {
+          'braking_surface': 'Disco',
+          'compound_type': 'Orgánico (resina)',
+          'pad_retention': 'Pin roscado',
+          'compatible_caliper_models': _rows([
+            {
+              'brand': 'Shimano',
+              'model': 'BR-MT200',
+              'generation': '2020',
+              'variant': 'std',
+              'source_url': 'https://example.test',
+            },
+          ]),
+        },
+      );
+      expect(assessment.level, ProductCompatibilityLevel.caution);
+      expect(assessment.detail, contains('compuesto orgánico (resina)'));
+      expect(assessment.detail, contains('sujeción pin roscado'));
+      expect(assessment.detail, contains('para Shimano BR-MT200'));
+    });
+
+    test('rotor mount type joins the rotor verdict', () async {
+      final assessment = await _assessProduct(
+        technicalFamily: 'rotor',
+        bikeTechnicalValues: {'frontRotorSizeMm': 160},
+        productSpecs: {
+          'rotor_diameter_mm_value': 160,
+          'rotor_mount_type': 'Centerlock',
+          'brake_position': 'Delantero',
+        },
+      );
+      expect(assessment.level, ProductCompatibilityLevel.caution);
+      expect(assessment.detail, contains('160 mm Centerlock'));
+    });
+
+    test('chain application rows: an excluded platform refutes', () async {
+      final excluded = await _assessProduct(
+        technicalFamily: 'chain',
+        bikeTechnicalValues: {
+          'drivetrainConfig': '1x12',
+          'drivetrainPlatform': 'SRAM T-Type Transmission',
+        },
+        productSpecs: {
+          'chain_speeds': ['12'],
+          'chain_application_declarations': _rows([
+            {
+              'claim_identity': 'ttype',
+              'scope_kind': 'Sistema documentado',
+              'target_system': 'SRAM T-Type Transmission',
+              'verdict': 'Excluido por la fuente',
+              'drive_kind': 'Desviador externo',
+              'source_document': 'manual',
+            },
+          ]),
+        },
+      );
+      expect(excluded.level, ProductCompatibilityLevel.incompatible);
+      expect(excluded.detail, contains('excluye'));
+
+      final admitted = await _assessProduct(
+        technicalFamily: 'chain',
+        bikeTechnicalValues: {'drivetrainConfig': '1x12'},
+        productSpecs: {
+          'chain_application_declarations': _rows([
+            {
+              'claim_identity': 'hg12',
+              'scope_kind': 'Sistema documentado',
+              'target_system': 'Shimano HG+',
+              'verdict': 'Admitido por la fuente',
+              'drive_kind': 'Desviador externo',
+              'rear_sprockets': 12,
+              'source_document': 'manual',
+            },
+          ]),
+        },
+      );
+      expect(admitted.level, ProductCompatibilityLevel.caution);
+      expect(admitted.detail, contains('Coinciden 12v'));
+    });
+
+    test('connector declaration rows name admitted and excluded chains',
+        () async {
+      final assessment = await _assessProduct(
+        technicalFamily: 'chain_link',
+        bikeTechnicalValues: {'drivetrainConfig': '1x12'},
+        productSpecs: {
+          'connector_target_declarations': _rows([
+            {
+              'claim_identity': 'm8100',
+              'scope_kind': 'Modelo documentado',
+              'target_brand': 'Shimano',
+              'target_model': 'CN-M8100',
+              'verdict': 'Admitido por la fuente',
+              'source_document': 'manual',
+            },
+            {
+              'claim_identity': 'ttype',
+              'scope_kind': 'Sistema documentado',
+              'target_system': 'SRAM T-Type',
+              'verdict': 'Excluido por la fuente',
+              'source_document': 'manual',
+            },
+          ]),
+          'connector_reuse_limit': 3,
+        },
+      );
+      expect(assessment.level, ProductCompatibilityLevel.caution);
+      expect(assessment.detail, contains('Shimano CN-M8100'));
+      expect(assessment.detail, contains('excluye: SRAM T-Type'));
+      expect(assessment.detail, contains('Admite 3 usos'));
+    });
+  });
 }
+
+/// A row-shaped fact as the reader hands it: the stored JSON text.
+String _rows(List<Map<String, Object?>> rows) =>
+    jsonEncode({'schema_version': 1, 'rows': rows});
 
 Future<ProductCompatibilityAssessment> _assessProduct({
   required String technicalFamily,

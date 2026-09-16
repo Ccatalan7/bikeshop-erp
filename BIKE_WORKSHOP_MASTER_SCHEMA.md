@@ -4448,6 +4448,32 @@ maza delantera. 100 pruebas del servicio (9 nuevas) en
 878 lecturas de nombre en esos sucesores. Evidencia y lo que sigue
 (transmisión, pedalier y freno, 30 claves `legacy` con cambio de forma) en
 `docs/development/product-specs-research-2026-09-05/workshop-compatibility-wheel-successors-2026-09-16.md`.
+
+**2026-09-16 — transmisión, pedalier y freno leen los sucesores.** Las 44
+claves `legacy` restantes del consumidor de productos (`drivetrain_speeds`,
+`freehub_type`, `rear_derailleur_max_teeth`, `shift_actuation_family`,
+`front_chainring_count`, `spindle_interface`, `bb_shell_standard`,
+`bb_shell_width_mm`, `spindle_interface_accepted`, `fluid_type`,
+`rotor_diameter_mm`…) quedan de respaldo detrás de sus sucesores. Muchos
+sucesores son **filas** (`json`) y el lector los entrega como texto JSON: el
+servicio los decodifica (`_specRows`) y lee el veredicto de cada fila
+(`status` / `declaration_result` / `verdict`); una negación del fabricante
+(«Incompatible declarado», «No compatible declarado», «Excluido por la fuente»)
+refuta aunque lo demás calce. Semánticas nuevas: `sprocket_count` y las filas de
+`cog_sequence` son la velocidad de cassettes y ruedas libres; el spline S/M es el
+cuerpo HG y L/L2 el ruta 11/12, y `HYPERGLIDE` a secas es HG/SIS; una
+configuración documentada del cambio trasero que no calza con la bici (platos,
+coronas, piñón mayor mín/máx) es cautela enumerada; «Velocidades» del mando vale
+por lado (2–3 platos, 5–13 coronas) y dos filas de lados distintos hacen un par;
+el pedalier requerido por la biela y los montajes de caja declarados del
+pedalier se comparan por configuración (conflicto sólo si todas conflictúan; el
+ancho calza si alguna lo cubre, intervalo incluido); una rosca o asiento medidos
+en `bb_shell_ports` nombran la caja (1.37" × 24 tpi = BSA, 41 mm a presión =
+BB86/92…); la receta de rotor del cáliper se compara con el rotor de esa rueda
+y la cautela de freno describe la pieza con sus propios campos. La dirección no
+cambia: la bici no registra dirección ni tubo. 124 pruebas del servicio (24
+nuevas). Evidencia y lo que queda (los hechos `legacy` no migran solos) en
+`docs/development/product-specs-research-2026-09-05/workshop-compatibility-drivetrain-bb-brake-successors-2026-09-16.md`.
 Evidencia: `docs/development/product-specs-research-2026-09-05/spoke-wheel-consumer-integration-2026-09-07.md`.
 # Corrección del consumidor de compatibilidad — 2026-09-07
 

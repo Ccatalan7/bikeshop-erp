@@ -62,3 +62,5 @@ Transmisión (`drivetrain_*`, `chain_*`, `freehub_type` → `freehub_bodies_acce
 `spindle_interface_accepted`) y freno (`brake_type`, `caliper_hydraulic`, `piston_count`,
 `mount_standard`, `hose_*`): 30 claves `legacy` más, muchas con cambio de forma (filas y
 alternativas tipadas), que se migran con el mapa de cada adjudicación, no renombrando.
+Hecho el mismo día:
+[workshop-compatibility-drivetrain-bb-brake-successors-2026-09-16.md](workshop-compatibility-drivetrain-bb-brake-successors-2026-09-16.md).

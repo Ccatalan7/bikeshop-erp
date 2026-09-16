@@ -1547,5 +1547,39 @@
   "visible_definitions": 570,
   "left_as_is": "shifter_position options (distributed Dart client compares the exact texts); Delantera/Trasera/Universal/Otro/Desconocido; literal measures",
   "record": "customer-facing-labels-2026-09-16.md"
+ },
+ "workshop_compatibility_successors_2026_09_16": {
+  "wheel_block": "workshop-compatibility-wheel-successors-2026-09-16.md",
+  "drivetrain_bb_brake_block": "workshop-compatibility-drivetrain-bb-brake-successors-2026-09-16.md",
+  "service": "lib/modules/bikeshop/services/bike_product_compatibility_service.dart",
+  "legacy_keys_now_fallback": 44,
+  "families": [
+   "cassette",
+   "freewheel",
+   "fixed_cog",
+   "chain",
+   "chain_link",
+   "chainring",
+   "crankset",
+   "bottom_bracket",
+   "bottom_bracket_cup",
+   "bottom_bracket_axle",
+   "rear_derailleur",
+   "front_derailleur",
+   "shifter",
+   "brake_caliper",
+   "brake_pad",
+   "brake_lever",
+   "rotor",
+   "hydraulic_disc_brake",
+   "mechanical_disc_brake",
+   "rim_brake"
+  ],
+  "not_migrated": {
+   "headset": "the bicycle profile has no headset or steerer keys; family-level caution stays"
+  },
+  "service_tests": 124,
+  "new_tests": 24,
+  "left": "legacy facts do not migrate by themselves: 34 bottom brackets carry bb_shell_standard and 0 carry bb_installation_claims"
  }
 }

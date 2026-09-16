@@ -1,3 +1,5 @@
+import 'dart:convert' show jsonDecode;
+
 import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -35,6 +37,8 @@ class BikeProductCompatibilityService {
     'brake_housing',
   };
 
+  // Retired keys first, then the successors of the 2026-09 brake templates
+  // (piece, lever, rotor, pad and the three complete presentations).
   static const Set<String> _brakeRelevantSpecKeys = {
     'bleed_port',
     'brake_position',
@@ -61,6 +65,29 @@ class BikeProductCompatibilityService {
     'rotor_mount_type',
     'rotor_thickness_mm',
     'tool_size_mm',
+    'brake_circuits',
+    'brake_conversion_location',
+    'brake_external_hose_connection',
+    'brake_model_fluid_approvals',
+    'brake_presentation',
+    'cable_pull_required',
+    'caliper_mount_interface',
+    'compatible_caliper_models',
+    'kit_members',
+    'lever_cable_interface',
+    'lever_cable_pull',
+    'lever_hydraulic_role',
+    'lever_mount_method',
+    'lever_side',
+    'pad_compound_restriction',
+    'pad_retention',
+    'piston_count_value',
+    'rim_pad_construction',
+    'rim_pad_length_mm',
+    'rim_pad_stud_type',
+    'rotor_nominal_thickness_mm',
+    'rotor_size_recipe',
+    'rotor_wear_limit_mm',
   };
 
   // Successor keys of the 2026-09 wheel templates sit next to the retired
@@ -103,6 +130,183 @@ class BikeProductCompatibilityService {
       return value;
     }
     return null;
+  }
+
+  /// Rows of a row-shaped successor field. The reader hands the stored JSON
+  /// text (`{"schema_version":1,"rows":[…]}`); a decoded map or a bare list
+  /// is accepted too.
+  List<Map<String, dynamic>> _specRows(
+      Map<String, dynamic> specValues, String key) {
+    dynamic decoded = specValues[key];
+    if (decoded is String) {
+      final text = decoded.trim();
+      if (text.isEmpty) return const [];
+      try {
+        decoded = jsonDecode(text);
+      } on FormatException {
+        return const [];
+      }
+    }
+    if (decoded is Map) decoded = decoded['rows'];
+    if (decoded is! List) return const [];
+    return [
+      for (final row in decoded)
+        if (row is Map) Map<String, dynamic>.from(row),
+    ];
+  }
+
+  /// A declaration row that its source marks as incompatible or excluded.
+  bool _rowDeclaresAgainst(Map<String, dynamic> row) {
+    final status = _normalizeText(
+        (row['status'] ?? row['declaration_result'] ?? row['verdict'] ?? '')
+            .toString());
+    return status.contains('incompatible') ||
+        status.contains('no compatible') ||
+        status.contains('excluido');
+  }
+
+  Iterable<Map<String, dynamic>> _affirmativeRows(
+          Map<String, dynamic> specValues, String key) =>
+      _specRows(specValues, key).where((row) => !_rowDeclaresAgainst(row));
+
+  /// A confirmed scalar: present and not the «unknown» option.
+  bool _hasConfirmedValue(dynamic raw) {
+    if (raw == null) return false;
+    final normalized = _normalizeText(raw.toString());
+    return normalized.isNotEmpty &&
+        normalized != 'unknown' &&
+        !normalized.contains('desconoc');
+  }
+
+  String? _confirmedText(dynamic raw) =>
+      _hasConfirmedValue(raw) ? raw.toString().trim() : null;
+
+  int? _extremeIntInRows(
+    Iterable<Map<String, dynamic>> rows,
+    String column, {
+    required bool largest,
+  }) {
+    int? result;
+    for (final row in rows) {
+      final value = _parseIntValue(row[column]);
+      if (value == null) continue;
+      if (result == null || (largest ? value > result : value < result)) {
+        result = value;
+      }
+    }
+    return result;
+  }
+
+  /// A declared control interface belongs to a claim aimed at the shifter,
+  /// derailleur or its control interface, never at the chain or the cogs.
+  bool _isControlClaim(Map<String, dynamic> row) {
+    final target = _normalizeText((row['target_component'] ?? '').toString());
+    return target.isEmpty ||
+        target.contains('mando') ||
+        target.contains('cambio') ||
+        target.contains('desviador') ||
+        target.contains('interfaz');
+  }
+
+  Set<String> _shiftActuationsFromSpecs(
+    Map<String, dynamic> specValues, {
+    required List<String> claimKeys,
+    String? ratioKey,
+  }) {
+    final actuations = <String>{};
+    void add(dynamic raw) {
+      final canonical = _canonicalShiftActuationFamily(raw);
+      if (canonical != null) actuations.add(canonical);
+    }
+
+    add(specValues['shift_actuation_family'] ??
+        specValues['drivetrain_platform']);
+    if (ratioKey != null) add(specValues[ratioKey]);
+    for (final key in claimKeys) {
+      for (final row in _affirmativeRows(specValues, key)) {
+        if (_isControlClaim(row)) add(row['declared_interface']);
+      }
+    }
+    return actuations;
+  }
+
+  Set<String> _refusedShiftActuationsFromSpecs(
+    Map<String, dynamic> specValues, {
+    required List<String> claimKeys,
+  }) {
+    return {
+      for (final key in claimKeys)
+        for (final row in _specRows(specValues, key))
+          if (_rowDeclaresAgainst(row) &&
+              _isControlClaim(row) &&
+              _canonicalShiftActuationFamily(row['declared_interface']) != null)
+            _canonicalShiftActuationFamily(row['declared_interface'])!,
+    };
+  }
+
+  String _formatShiftActuationSet(Set<String> actuations) {
+    final sorted = actuations.map(_shiftActuationFamilyLabel).toList()..sort();
+    return sorted.join('/');
+  }
+
+  String _formatFreehubSet(Set<String> freehubs) {
+    final sorted = freehubs.map(_freehubTypeLabel).toList()..sort();
+    return sorted.join('/');
+  }
+
+  /// `shift_technology` names the cog profile, which is the platform of a
+  /// cassette: bare HYPERGLIDE is the classic HG/SIS platform, never HG+.
+  String? _platformFromShiftTechnology(dynamic raw) {
+    if (raw == null) return null;
+    final normalized = _normalizeText(raw.toString());
+    if (normalized.isEmpty) return null;
+    if (normalized.contains('hyperglide+') || normalized.contains('hg+')) {
+      return 'shimano_hg_plus';
+    }
+    if (normalized.contains('hyperglide')) return 'shimano_hg_sis';
+    if (normalized.contains('linkglide') || normalized.contains('cues')) {
+      return 'shimano_linkglide';
+    }
+    if (normalized.contains('t-type') ||
+        normalized.contains('t type') ||
+        normalized.contains('transmission')) {
+      return 'sram_t_type';
+    }
+    if (normalized.contains('eagle')) return 'sram_eagle';
+    return null;
+  }
+
+  /// Platforms a piece names in its declaration rows (`declared_interface`
+  /// or `target_system`), affirmative rows only.
+  Set<String> _declaredPlatformsFromRows(
+    Map<String, dynamic> specValues,
+    List<String> keys,
+  ) {
+    return {
+      for (final key in keys)
+        for (final row in _affirmativeRows(specValues, key))
+          if (_canonicalDrivetrainPlatform(
+                  row['declared_interface'] ?? row['target_system']) !=
+              null)
+            _canonicalDrivetrainPlatform(
+                row['declared_interface'] ?? row['target_system'])!,
+    };
+  }
+
+  Set<String> _refusedPlatformsFromRows(
+    Map<String, dynamic> specValues,
+    List<String> keys,
+  ) {
+    return {
+      for (final key in keys)
+        for (final row in _specRows(specValues, key))
+          if (_rowDeclaresAgainst(row) &&
+              _canonicalDrivetrainPlatform(
+                      row['declared_interface'] ?? row['target_system']) !=
+                  null)
+            _canonicalDrivetrainPlatform(
+                row['declared_interface'] ?? row['target_system'])!,
+    };
   }
 
   /// Bead seat diameter implied by a bicycle's wheel-size label, only where the
@@ -219,10 +423,54 @@ class BikeProductCompatibilityService {
     'spindle_interface_accepted',
     'compatible_chainring_counts',
     'spindle_length_mm',
+    // Successors of the 2026-09 drivetrain and bottom bracket templates.
+    'bb_accepted_spindles',
+    'bb_declared_systems',
+    'bb_installation_claims',
+    'bb_shell_ports',
+    'bottom_bracket_required',
+    'cassette_spline_standard',
+    'chain_application_declarations',
+    'chainring_compatibility_claims',
+    'chainring_package_kind',
+    'chainring_position',
+    'chainring_set_member_count',
+    'chainring_set_members',
+    'chainring_teeth_rows',
+    'cog_sequence',
+    'cog_thread_standard',
+    'connector_target_declarations',
+    'connector_reuse_limit',
+    'crank_axle_interface_declarations',
+    'crankset_bottom_bracket_supplied',
+    'crankset_construction',
+    'freehub_bodies_accepted',
+    'freewheel_thread_standard',
+    'front_derailleur_application_configurations',
+    'front_derailleur_cable_pull',
+    'front_derailleur_clamp_options',
+    'front_derailleur_compatibility_claims',
+    'front_derailleur_swing',
+    'included_chainring_count',
+    'rear_derailleur_actuation_ratio_declaration',
+    'rear_derailleur_application_configurations',
+    'rear_derailleur_compatibility_claims',
+    'shift_technology',
+    'shifter_actuation_mode',
+    'shifter_compatibility_claims',
+    'shifter_control_style',
+    'shifter_indexed_positions',
+    'shifter_unit_compatibility_claims',
+    'shifter_unit_count',
+    'shifter_units',
+    'smallest_cog_teeth',
+    'sprocket_count',
+    'teeth_count',
   };
 
   static const Set<String> _drivetrainSpeedSpecKeys = {
     'chain_speed',
+    'sprocket_count',
     'chain_speeds',
     'drivetrain_speed',
     'drivetrain_speeds',
@@ -700,16 +948,31 @@ class BikeProductCompatibilityService {
           sortPriority: 36);
     }
     final expectedSpeed = _chainSpeedFromContext(compatibilityContext);
-    final productSpeeds = _chainSpeedsFromSpecs(specValues);
+    // Successor rows: the applications the source documents for this chain,
+    // each with its rear sprocket count and a verdict.
+    const declarationKeys = ['chain_application_declarations'];
+    final productSpeeds = <int>{
+      ..._chainSpeedsFromSpecs(specValues),
+      for (final row in _affirmativeRows(specValues, declarationKeys.first))
+        if (_isPlausibleChainSpeed(_parseIntValue(row['rear_sprockets'])))
+          _parseIntValue(row['rear_sprockets'])!,
+    };
     final bikePlatform = _canonicalDrivetrainPlatform(
         compatibilityContext.drivetrainPlatform ??
             compatibilityContext.shiftActuationFamily);
     final claims =
         (specValues['__reference_claims'] as List? ?? []).whereType<Map>();
+    final refusedPlatforms =
+        _refusedPlatformsFromRows(specValues, declarationKeys);
     if (expectedSpeed == null) {
       return const ProductCompatibilityAssessment.caution(
           detail: 'Cadena; falta confirmar velocidad de transmisión de la bici',
           sortPriority: 34);
+    }
+    if (bikePlatform != null && refusedPlatforms.contains(bikePlatform)) {
+      return ProductCompatibilityAssessment.incompatible(
+          detail:
+              'La ficha excluye ${_drivetrainPlatformLabel(bikePlatform)} por declaración del fabricante; la bici declara ese sistema.');
     }
     for (final claim in claims) {
       final platform = _canonicalDrivetrainPlatform(claim['platform']);
@@ -777,17 +1040,42 @@ class BikeProductCompatibilityService {
         .expand(
             (claim) => (claim['targets'] as List? ?? []).whereType<String>())
         .toSet();
-    final target = documentedTargets.isNotEmpty
-        ? documentedTargets.join(', ')
+    // Successor rows: chains the source admits or excludes for this connector.
+    final declarations = _specRows(specValues, 'connector_target_declarations');
+    String describeTarget(Map<String, dynamic> row) => <String>[
+          for (final column in const [
+            'target_brand',
+            'target_model',
+            'target_generation',
+            'target_system',
+            'chain_class',
+          ])
+            if (_confirmedText(row[column]) != null) _confirmedText(row[column])!,
+        ].join(' ');
+    final declaredTargets = <String>{
+      for (final row in declarations)
+        if (!_rowDeclaresAgainst(row) && describeTarget(row).isNotEmpty)
+          describeTarget(row),
+    };
+    final target = documentedTargets.isNotEmpty || declaredTargets.isNotEmpty
+        ? {...documentedTargets, ...declaredTargets}.join(', ')
         : specValues['chain_connector_target']?.toString().trim();
-    final reuse =
-        specValues['chain_link_reusable'] == false ? ' Es de un solo uso.' : '';
-    final exclusions = (specValues['__reference_claims'] as List? ?? [])
-        .whereType<Map>()
-        .where((claim) => claim['interface'] == 'connector_chain')
-        .expand(
-            (claim) => (claim['excludes'] as List? ?? []).whereType<String>())
-        .toSet();
+    final reuseLimit = _parseIntValue(specValues['connector_reuse_limit']);
+    final reuse = specValues['chain_link_reusable'] == false
+        ? ' Es de un solo uso.'
+        : reuseLimit != null
+            ? ' Admite $reuseLimit usos según el fabricante.'
+            : '';
+    final exclusions = <String>{
+      ...(specValues['__reference_claims'] as List? ?? [])
+          .whereType<Map>()
+          .where((claim) => claim['interface'] == 'connector_chain')
+          .expand((claim) =>
+              (claim['excludes'] as List? ?? []).whereType<String>()),
+      for (final row in declarations)
+        if (_rowDeclaresAgainst(row) && describeTarget(row).isNotEmpty)
+          describeTarget(row),
+    };
     final excluded = exclusions.isEmpty
         ? ''
         : ' El fabricante excluye: ${exclusions.join(', ')}.';
@@ -975,10 +1263,15 @@ class BikeProductCompatibilityService {
     required String familyLabel,
   }) {
     final expectedSpeed = _chainSpeedFromContext(compatibilityContext);
-    final productSpeeds = _drivetrainSpeedsFromSpecs(specValues);
+    final productSpeeds = _rearCogSpeedsFromSpecs(specValues);
     final expectedFreehub =
         _canonicalFreehubType(compatibilityContext.freehubType);
-    final productFreehub = _canonicalFreehubType(specValues['freehub_type']);
+    // Successors: the spline standard, the accepted-bodies rows and the
+    // thread standards of freewheels and fixed cogs. The retired
+    // `freehub_type` is the fallback.
+    final productFreehubs = _rearCogDriveInterfacesFromSpecs(specValues);
+    final refusedFreehubs =
+        _rearCogRefusedDriveInterfacesFromSpecs(specValues);
 
     if (expectedSpeed != null &&
         productSpeeds.isNotEmpty &&
@@ -990,11 +1283,23 @@ class BikeProductCompatibilityService {
     }
 
     if (expectedFreehub != null &&
-        productFreehub != null &&
-        !_areFreehubTypesCompatible(expectedFreehub, productFreehub)) {
+        refusedFreehubs.any((refused) =>
+            _areFreehubTypesCompatible(expectedFreehub, refused))) {
       return ProductCompatibilityAssessment.incompatible(
         detail:
-            '$familyLabel para ${_freehubTypeLabel(productFreehub)} no coincide con la bici (${_freehubTypeLabel(expectedFreehub)})',
+            '$familyLabel declarado incompatible por el fabricante con ${_freehubTypeLabel(expectedFreehub)}',
+      );
+    }
+
+    final freehubMatches = expectedFreehub != null &&
+        productFreehubs.any((productFreehub) =>
+            _areFreehubTypesCompatible(expectedFreehub, productFreehub));
+    if (expectedFreehub != null &&
+        productFreehubs.isNotEmpty &&
+        !freehubMatches) {
+      return ProductCompatibilityAssessment.incompatible(
+        detail:
+            '$familyLabel para ${_formatFreehubSet(productFreehubs)} no coincide con la bici (${_freehubTypeLabel(expectedFreehub)})',
       );
     }
 
@@ -1005,7 +1310,14 @@ class BikeProductCompatibilityService {
     final productFamilies =
         _drivetrainCompatibilityFamiliesFromSpecs(specValues);
     final productPlatforms = _drivetrainPlatformsFromSpecs(specValues);
-    final productLargestCog = _parseIntValue(specValues['largest_cog_teeth']);
+    final productLargestCog = _largestCogFromSpecs(specValues);
+    final productSmallestCog = _smallestCogFromSpecs(specValues);
+    final rangeLabel =
+        productSmallestCog != null && productLargestCog != null
+            ? '$productSmallestCog-${productLargestCog}T'
+            : productLargestCog != null
+                ? 'mayor ${productLargestCog}T'
+                : null;
     final hasFamilyConflict = bikePlatform != null &&
         productFamilies.isNotEmpty &&
         hasExplicitDrivetrainFamilyConflict(
@@ -1033,13 +1345,12 @@ class BikeProductCompatibilityService {
     }
 
     if (expectedFreehub != null) {
-      if (productFreehub != null &&
-          _areFreehubTypesCompatible(expectedFreehub, productFreehub)) {
+      if (freehubMatches) {
         matchedParts.add(_freehubTypeLabel(expectedFreehub));
       } else {
         unresolvedParts.add('driver/freehub del producto');
       }
-    } else if (productFreehub != null) {
+    } else if (productFreehubs.isNotEmpty) {
       unresolvedParts.add('driver/freehub de la bici');
     }
 
@@ -1053,10 +1364,13 @@ class BikeProductCompatibilityService {
       unresolvedParts.add('rango/piñón mayor');
     }
 
+    final matched = matchedParts.join(' · ');
+    final range = rangeLabel == null ? '' : ' ($rangeLabel)';
+
     if (hasFamilyConflict) {
       return ProductCompatibilityAssessment.caution(
         detail:
-            '$familyLabel coincide en base (${matchedParts.join(' · ')}), pero revisar ecosistema ${_formatDrivetrainCompatibilityFamilySet(productFamilies)} vs ${_drivetrainPlatformLabel(bikePlatform)}',
+            '$familyLabel coincide en base ($matched)$range, pero revisar ecosistema ${_formatDrivetrainCompatibilityFamilySet(productFamilies)} vs ${_drivetrainPlatformLabel(bikePlatform)}',
         sortPriority: 22,
       );
     }
@@ -1064,7 +1378,7 @@ class BikeProductCompatibilityService {
     if (hasPlatformMismatch) {
       return ProductCompatibilityAssessment.caution(
         detail:
-            '$familyLabel coincide en base (${matchedParts.join(' · ')}), pero revisar plataforma ${_formatDrivetrainPlatformSet(productPlatforms)} vs ${_drivetrainPlatformLabel(bikePlatform)}',
+            '$familyLabel coincide en base ($matched)$range, pero revisar plataforma ${_formatDrivetrainPlatformSet(productPlatforms)} vs ${_drivetrainPlatformLabel(bikePlatform)}',
         sortPriority: 22,
       );
     }
@@ -1072,7 +1386,7 @@ class BikeProductCompatibilityService {
     if (matchedParts.length >= 2 && unresolvedParts.length == 1) {
       return ProductCompatibilityAssessment.caution(
         detail:
-            '$familyLabel coincide ${matchedParts.join(' · ')}; falta confirmar ${unresolvedParts.join(', ')} y excepciones de cuerpo/espaciadores',
+            '$familyLabel coincide $matched$range; falta confirmar ${unresolvedParts.join(', ')} y excepciones de cuerpo/espaciadores',
         sortPriority: 18,
       );
     }
@@ -1080,16 +1394,69 @@ class BikeProductCompatibilityService {
     if (matchedParts.length >= 2 && unresolvedParts.isEmpty) {
       return ProductCompatibilityAssessment.caution(
         detail:
-            '$familyLabel coincide ${matchedParts.join(' · ')}; revisar rango real, cuerpo exacto y posibles separadores/excepciones del sistema',
+            '$familyLabel coincide $matched$range; revisar rango real, cuerpo exacto y posibles separadores/excepciones del sistema',
         sortPriority: 16,
       );
     }
 
     return ProductCompatibilityAssessment.caution(
       detail:
-          '$familyLabel; ${matchedParts.isNotEmpty ? 'coincide ${matchedParts.join(' · ')}; ' : ''}falta confirmar ${unresolvedParts.isEmpty ? 'ficha completa' : unresolvedParts.join(', ')}',
+          '$familyLabel$range; ${matchedParts.isNotEmpty ? 'coincide $matched; ' : ''}falta confirmar ${unresolvedParts.isEmpty ? 'ficha completa' : unresolvedParts.join(', ')}',
       sortPriority: 28,
     );
+  }
+
+  Set<int> _rearCogSpeedsFromSpecs(Map<String, dynamic> specValues) {
+    final speeds = _drivetrainSpeedsFromSpecs(specValues);
+    if (speeds.isEmpty) {
+      // One row per cog: the row count is the sprocket count.
+      final rows = _specRows(specValues, 'cog_sequence');
+      if (_isPlausibleChainSpeed(rows.length)) speeds.add(rows.length);
+    }
+    return speeds;
+  }
+
+  int? _largestCogFromSpecs(Map<String, dynamic> specValues) =>
+      _parseIntValue(specValues['largest_cog_teeth']) ??
+      _extremeIntInRows(_specRows(specValues, 'cog_sequence'), 'teeth',
+          largest: true);
+
+  int? _smallestCogFromSpecs(Map<String, dynamic> specValues) =>
+      _parseIntValue(specValues['smallest_cog_teeth']) ??
+      _extremeIntInRows(_specRows(specValues, 'cog_sequence'), 'teeth',
+          largest: false);
+
+  Set<String> _rearCogDriveInterfacesFromSpecs(
+      Map<String, dynamic> specValues) {
+    final interfaces = <String>{};
+    void add(dynamic raw) {
+      final canonical = _canonicalFreehubType(raw);
+      if (canonical != null) interfaces.add(canonical);
+    }
+
+    add(specValues['cassette_spline_standard']);
+    for (final row in _affirmativeRows(specValues, 'freehub_bodies_accepted')) {
+      add(row['rear_drive_interface']);
+    }
+    // A thread standard names the receiver as a thread, whatever its pitch.
+    if (_hasConfirmedValue(specValues['freewheel_thread_standard'])) {
+      interfaces.add('threaded_freewheel');
+    }
+    if (_hasConfirmedValue(specValues['cog_thread_standard'])) {
+      interfaces.add('fixed_threaded');
+    }
+    if (interfaces.isEmpty) add(specValues['freehub_type']);
+    return interfaces;
+  }
+
+  Set<String> _rearCogRefusedDriveInterfacesFromSpecs(
+      Map<String, dynamic> specValues) {
+    return {
+      for (final row in _specRows(specValues, 'freehub_bodies_accepted'))
+        if (_rowDeclaresAgainst(row) &&
+            _canonicalFreehubType(row['rear_drive_interface']) != null)
+          _canonicalFreehubType(row['rear_drive_interface'])!,
+    };
   }
 
   ProductCompatibilityAssessment? _assessDetailedRearDerailleurCompatibility({
@@ -1097,21 +1464,44 @@ class BikeProductCompatibilityService {
     required Map<String, dynamic> specValues,
   }) {
     final expectedSpeed = _chainSpeedFromContext(compatibilityContext);
-    final productSpeeds = _drivetrainSpeedsFromSpecs(specValues);
     final expectedLargestCog = compatibilityContext.largestCogTeeth;
+    final expectedFrontCount =
+        _frontChainringCountFromContext(compatibilityContext);
+    // Successor: one row per documented configuration (speeds, cog range,
+    // chainrings). The retired scalars stay as the fallback.
+    final configurations = _affirmativeRows(
+            specValues, 'rear_derailleur_application_configurations')
+        .toList(growable: false);
+    final productSpeeds = <int>{
+      ..._drivetrainSpeedsFromSpecs(specValues),
+      for (final row in configurations)
+        if (_isPlausibleChainSpeed(_parseIntValue(row['rear_sprocket_count'])))
+          _parseIntValue(row['rear_sprocket_count'])!,
+    };
     final productMaxCog =
-        _parseIntValue(specValues['rear_derailleur_max_teeth']);
+        _parseIntValue(specValues['rear_derailleur_max_teeth']) ??
+            _extremeIntInRows(configurations, 'largest_sprocket_max_teeth',
+                largest: true);
+    final productTotalCapacity =
+        _parseIntValue(specValues['rear_derailleur_total_capacity_teeth']) ??
+            _extremeIntInRows(configurations, 'total_capacity_teeth',
+                largest: true);
     final bikeActuation = _canonicalShiftActuationFamily(
       compatibilityContext.shiftActuationFamily ??
           compatibilityContext.drivetrainPlatform,
     );
-    final productActuation = _canonicalShiftActuationFamily(
-      specValues['shift_actuation_family'] ?? specValues['drivetrain_platform'],
+    const claimKeys = ['rear_derailleur_compatibility_claims'];
+    final productActuations = _shiftActuationsFromSpecs(
+      specValues,
+      claimKeys: claimKeys,
+      ratioKey: 'rear_derailleur_actuation_ratio_declaration',
     );
+    final refusedActuations =
+        _refusedShiftActuationsFromSpecs(specValues, claimKeys: claimKeys);
     final productCageLength =
         _normalizeCompatibilityValue(specValues['derailleur_cage_length']);
-    final productTotalCapacity =
-        _parseIntValue(specValues['rear_derailleur_total_capacity_teeth']);
+    final productMount =
+        _confirmedText(specValues['rear_derailleur_mount_type']);
 
     if (expectedSpeed != null &&
         productSpeeds.isNotEmpty &&
@@ -1131,13 +1521,47 @@ class BikeProductCompatibilityService {
       );
     }
 
-    if (bikeActuation != null &&
-        productActuation != null &&
-        !_areShiftActuationFamiliesCompatible(
-            bikeActuation, productActuation)) {
+    if (bikeActuation != null && refusedActuations.contains(bikeActuation)) {
       return ProductCompatibilityAssessment.incompatible(
         detail:
-            'Cambio trasero ${_shiftActuationFamilyLabel(productActuation)} no coincide con la bici (${_shiftActuationFamilyLabel(bikeActuation)})',
+            'Cambio trasero declarado no compatible por el fabricante con ${_shiftActuationFamilyLabel(bikeActuation)}',
+      );
+    }
+
+    final actuationMatches = bikeActuation != null &&
+        productActuations.any((actuation) =>
+            _areShiftActuationFamiliesCompatible(bikeActuation, actuation));
+    if (bikeActuation != null &&
+        productActuations.isNotEmpty &&
+        !actuationMatches) {
+      return ProductCompatibilityAssessment.incompatible(
+        detail:
+            'Cambio trasero ${_formatShiftActuationSet(productActuations)} no coincide con la bici (${_shiftActuationFamilyLabel(bikeActuation)})',
+      );
+    }
+
+    Map<String, dynamic>? fittingConfiguration;
+    for (final row in configurations) {
+      if (_rearDerailleurConfigurationFits(
+        row,
+        expectedSpeed: expectedSpeed,
+        expectedLargestCog: expectedLargestCog,
+        expectedFrontCount: expectedFrontCount,
+      )) {
+        fittingConfiguration = row;
+        break;
+      }
+    }
+    final bikeHasDrivetrainFacts = expectedSpeed != null ||
+        expectedLargestCog != null ||
+        expectedFrontCount != null;
+    if (configurations.isNotEmpty &&
+        fittingConfiguration == null &&
+        bikeHasDrivetrainFacts) {
+      return ProductCompatibilityAssessment.caution(
+        detail:
+            'Cambio trasero: ninguna configuración documentada calza con la bici (${_describeBikeDrivetrain(compatibilityContext)}); documenta ${_describeRearDerailleurConfigurations(configurations)}. Confirma con el fabricante antes de instalarlo.',
+        sortPriority: 30,
       );
     }
 
@@ -1148,14 +1572,22 @@ class BikeProductCompatibilityService {
           productMaxCog != null &&
           productMaxCog >= expectedLargestCog)
         'max ${productMaxCog}T',
-      if (bikeActuation != null &&
-          productActuation != null &&
-          _areShiftActuationFamiliesCompatible(bikeActuation, productActuation))
-        _shiftActuationFamilyLabel(productActuation),
+      if (actuationMatches)
+        _formatShiftActuationSet(productActuations
+            .where((actuation) =>
+                _areShiftActuationFamiliesCompatible(bikeActuation, actuation))
+            .toSet()),
+      if (fittingConfiguration != null &&
+          expectedFrontCount != null &&
+          _parseIntValue(fittingConfiguration['front_chainring_count']) ==
+              expectedFrontCount)
+        '${expectedFrontCount}x',
     ];
     final reviewParts = <String>[
       if (productCageLength != null)
-        'montaje y caja ${productCageLength.replaceAll('_', ' ')}'
+        'montaje${productMount == null ? '' : ' ${productMount.toLowerCase()}'} y caja ${productCageLength.replaceAll('_', ' ')}'
+      else if (productMount != null)
+        'caja y montaje ${productMount.toLowerCase()}'
       else
         'caja y montaje',
       if (productTotalCapacity != null)
@@ -1179,6 +1611,61 @@ class BikeProductCompatibilityService {
     );
   }
 
+  bool _rearDerailleurConfigurationFits(
+    Map<String, dynamic> row, {
+    required int? expectedSpeed,
+    required int? expectedLargestCog,
+    required int? expectedFrontCount,
+  }) {
+    final rowSpeed = _parseIntValue(row['rear_sprocket_count']);
+    if (expectedSpeed != null && rowSpeed != null && rowSpeed != expectedSpeed) {
+      return false;
+    }
+    final rowFront = _parseIntValue(row['front_chainring_count']);
+    if (expectedFrontCount != null &&
+        rowFront != null &&
+        rowFront != expectedFrontCount) {
+      return false;
+    }
+    if (expectedLargestCog != null) {
+      final maxLargest = _parseIntValue(row['largest_sprocket_max_teeth']);
+      if (maxLargest != null && expectedLargestCog > maxLargest) return false;
+      final minLargest = _parseIntValue(row['largest_sprocket_min_teeth']);
+      if (minLargest != null && expectedLargestCog < minLargest) return false;
+    }
+    return true;
+  }
+
+  String _describeBikeDrivetrain(_BikeCompatibilityContext context) {
+    final speed = _chainSpeedFromContext(context);
+    final front = _frontChainringCountFromContext(context);
+    final parts = <String>[
+      if (front != null || speed != null)
+        '${front ?? '?'}x${speed ?? '?'}',
+      if (context.largestCogTeeth != null)
+        'piñón mayor ${context.largestCogTeeth}T',
+    ];
+    return parts.isEmpty ? 'sin datos' : parts.join(', ');
+  }
+
+  String _describeRearDerailleurConfigurations(
+      List<Map<String, dynamic>> configurations) {
+    final descriptions = <String>{};
+    for (final row in configurations) {
+      final front = _parseIntValue(row['front_chainring_count']);
+      final rear = _parseIntValue(row['rear_sprocket_count']);
+      final minLargest = _parseIntValue(row['largest_sprocket_min_teeth']);
+      final maxLargest = _parseIntValue(row['largest_sprocket_max_teeth']);
+      final range = minLargest != null && maxLargest != null
+          ? ' (mayor $minLargest-${maxLargest}T)'
+          : maxLargest != null
+              ? ' (mayor hasta ${maxLargest}T)'
+              : '';
+      descriptions.add('${front ?? '?'}x${rear ?? '?'}$range');
+    }
+    return descriptions.join(' · ');
+  }
+
   ProductCompatibilityAssessment? _assessDetailedFrontDerailleurCompatibility({
     required _BikeCompatibilityContext compatibilityContext,
     required Map<String, dynamic> specValues,
@@ -1193,7 +1680,17 @@ class BikeProductCompatibilityService {
       );
     }
 
+    final expectedSpeed = _chainSpeedFromContext(compatibilityContext);
+    // Successor rows: one per documented chainring configuration.
+    final configurations = _affirmativeRows(
+            specValues, 'front_derailleur_application_configurations')
+        .toList(growable: false);
     final productFrontCounts = _frontChainringCountsFromSpecs(specValues);
+    final productSpeeds = <int>{
+      for (final row in configurations)
+        if (_isPlausibleChainSpeed(_parseIntValue(row['rear_sprocket_count'])))
+          _parseIntValue(row['rear_sprocket_count'])!,
+    };
     if (expectedFrontCount != null &&
         productFrontCounts.isNotEmpty &&
         !productFrontCounts.contains(expectedFrontCount)) {
@@ -1204,11 +1701,30 @@ class BikeProductCompatibilityService {
       );
     }
 
-    if (expectedFrontCount != null &&
-        productFrontCounts.contains(expectedFrontCount)) {
+    if (expectedSpeed != null &&
+        productSpeeds.isNotEmpty &&
+        !productSpeeds.contains(expectedSpeed)) {
       return ProductCompatibilityAssessment.caution(
         detail:
-            'Desviador delantero coincide ${expectedFrontCount}x; falta confirmar abrazadera/montaje, tiro y tamaño del plato grande',
+            'Desviador delantero documentado para ${_formatSpeedSet(productSpeeds)}; la bici es ${expectedSpeed}v. Confirma la cobertura con el fabricante.',
+        sortPriority: 26,
+      );
+    }
+
+    if (expectedFrontCount != null &&
+        productFrontCounts.contains(expectedFrontCount)) {
+      final knownParts = _frontDerailleurKnownParts(
+        specValues,
+        configurations,
+        expectedFrontCount: expectedFrontCount,
+      );
+      final speedMatch =
+          expectedSpeed != null && productSpeeds.contains(expectedSpeed)
+              ? ' · ${expectedSpeed}v'
+              : '';
+      return ProductCompatibilityAssessment.caution(
+        detail:
+            'Desviador delantero coincide ${expectedFrontCount}x$speedMatch; ${knownParts.isEmpty ? '' : 'ficha: ${knownParts.join(', ')}; '}falta confirmar abrazadera/montaje, tiro y tamaño del plato grande en la bici',
         sortPriority: 22,
       );
     }
@@ -1220,11 +1736,50 @@ class BikeProductCompatibilityService {
     );
   }
 
+  List<String> _frontDerailleurKnownParts(
+    Map<String, dynamic> specValues,
+    List<Map<String, dynamic>> configurations, {
+    required int expectedFrontCount,
+  }) {
+    final pull = _confirmedText(specValues['front_derailleur_cable_pull']);
+    final mount = _confirmedText(specValues['front_derailleur_mount_type']);
+    final clampDiameters = <String>{
+      for (final row in _specRows(specValues, 'front_derailleur_clamp_options'))
+        if (_parseDoubleValue(row['direct_tube_diameter_mm']) != null)
+          _formatMeasurement(_parseDoubleValue(row['direct_tube_diameter_mm'])!),
+    };
+    final topMaxTeeth = _extremeIntInRows(
+      configurations.where((row) =>
+          _parseIntValue(row['front_chainring_count']) == expectedFrontCount),
+      'top_chainring_max_teeth',
+      largest: true,
+    );
+    return <String>[
+      if (pull != null) pull.toLowerCase(),
+      if (mount != null) mount.toLowerCase(),
+      if (clampDiameters.isNotEmpty)
+        'abrazadera ${(clampDiameters.toList()..sort()).join('/')} mm',
+      if (topMaxTeeth != null) 'plato grande hasta ${topMaxTeeth}T',
+    ];
+  }
+
   ProductCompatibilityAssessment? _assessDetailedShifterCompatibility({
     required _BikeCompatibilityContext compatibilityContext,
     required Map<String, dynamic> specValues,
   }) {
-    final position = _canonicalShifterPosition(specValues['shifter_position']);
+    // Successor rows: one per shifter in the package, with its own side.
+    final units = _specRows(specValues, 'shifter_units');
+    final unitSides = <String>{
+      for (final unit in units)
+        if (_canonicalShifterPosition(unit['unit_side']) != null)
+          _canonicalShifterPosition(unit['unit_side'])!,
+    };
+    var position = _canonicalShifterPosition(specValues['shifter_position']);
+    if (unitSides.contains('left') && unitSides.contains('right')) {
+      position = 'pair';
+    } else if (position == null && unitSides.length == 1) {
+      position = unitSides.first;
+    }
     if (position == null || position == 'universal') {
       return const ProductCompatibilityAssessment.caution(
         detail:
@@ -1237,26 +1792,51 @@ class BikeProductCompatibilityService {
     final expectedRearSpeed = _chainSpeedFromContext(compatibilityContext);
     final expectedFrontCount =
         _frontChainringCountFromContext(compatibilityContext);
-    final productSpeeds = _drivetrainSpeedsFromSpecs(specValues);
-    final productFrontCounts = _frontChainringCountsFromSpecs(specValues);
+    final productSpeeds = <int>{
+      ..._drivetrainSpeedsFromSpecs(specValues),
+      ..._shifterRearSpeedsFromSpecs(specValues, units),
+    };
+    final productFrontCounts = <int>{
+      ..._frontChainringCountsFromSpecs(specValues),
+      ..._shifterFrontCountsFromSpecs(specValues, units),
+    };
     final bikeActuation = _canonicalShiftActuationFamily(
       compatibilityContext.shiftActuationFamily ??
           compatibilityContext.drivetrainPlatform,
     );
-    final productActuation = _canonicalShiftActuationFamily(
-      specValues['shift_actuation_family'] ?? specValues['drivetrain_platform'],
-    );
+    const claimKeys = [
+      'shifter_compatibility_claims',
+      'shifter_unit_compatibility_claims',
+    ];
+    final productActuations = <String>{
+      ..._shiftActuationsFromSpecs(specValues, claimKeys: claimKeys),
+      // A friction (or switchable) shifter pulls any ratio.
+      if (_isFrictionShifter(specValues, units)) 'friction_universal',
+    };
+    final refusedActuations =
+        _refusedShiftActuationsFromSpecs(specValues, claimKeys: claimKeys);
+    final actuationMatches = bikeActuation != null &&
+        productActuations.any((actuation) =>
+            _areShiftActuationFamiliesCompatible(bikeActuation, actuation));
 
     final checks = <ProductCompatibilityAssessment>[];
 
     if (checksRearSide &&
         bikeActuation != null &&
-        productActuation != null &&
-        !_areShiftActuationFamiliesCompatible(
-            bikeActuation, productActuation)) {
+        refusedActuations.contains(bikeActuation)) {
       return ProductCompatibilityAssessment.incompatible(
         detail:
-            'Shifter ${_shiftActuationFamilyLabel(productActuation)} no coincide con la bici (${_shiftActuationFamilyLabel(bikeActuation)})',
+            'Shifter declarado no compatible por el fabricante con ${_shiftActuationFamilyLabel(bikeActuation)}',
+      );
+    }
+
+    if (checksRearSide &&
+        bikeActuation != null &&
+        productActuations.isNotEmpty &&
+        !actuationMatches) {
+      return ProductCompatibilityAssessment.incompatible(
+        detail:
+            'Shifter ${_formatShiftActuationSet(productActuations)} no coincide con la bici (${_shiftActuationFamilyLabel(bikeActuation)})',
       );
     }
 
@@ -1289,51 +1869,108 @@ class BikeProductCompatibilityService {
       ));
     }
 
-    if (checksRearSide &&
-        bikeActuation != null &&
-        productActuation != null &&
-        _areShiftActuationFamiliesCompatible(bikeActuation, productActuation)) {
+    if (checksRearSide && actuationMatches) {
       checks.add(ProductCompatibilityAssessment.compatible(
-        detail: _shiftActuationFamilyLabel(productActuation),
+        detail: _formatShiftActuationSet(productActuations
+            .where((actuation) =>
+                _areShiftActuationFamiliesCompatible(bikeActuation, actuation))
+            .toSet()),
       ));
     }
+
+    final style = _confirmedText(specValues['shifter_control_style']);
+    final styleSuffix = style == null ? '' : ' Manilla: ${style.toLowerCase()}.';
 
     if (checks.isNotEmpty) {
       final matchedDetails = checks.map((check) => check.detail).join(' · ');
       final exactRearMatch = position == 'right' &&
           expectedRearSpeed != null &&
           productSpeeds.contains(expectedRearSpeed) &&
-          bikeActuation != null &&
-          productActuation != null &&
-          _areShiftActuationFamiliesCompatible(bikeActuation, productActuation);
+          actuationMatches;
 
       if (exactRearMatch) {
         return ProductCompatibilityAssessment.caution(
           detail:
-              'Shifter coincide en $matchedDetails; confirma modelo y generación del cambio y su interfaz de control.',
+              'Shifter coincide en $matchedDetails; confirma modelo y generación del cambio y su interfaz de control.$styleSuffix',
           sortPriority: 14,
         );
       }
 
       final reviewParts = <String>[
         if (position == 'right' &&
-            (bikeActuation == null || productActuation == null))
+            (bikeActuation == null || productActuations.isEmpty))
           'familia de indexado exacta',
         if (position == 'left' || position == 'pair') 'tiro/indexado delantero',
       ];
 
       return ProductCompatibilityAssessment.caution(
         detail:
-            'Shifter coincide $matchedDetails; falta confirmar ${reviewParts.isEmpty ? 'ficha completa' : reviewParts.join(', ')}',
+            'Shifter coincide $matchedDetails; falta confirmar ${reviewParts.isEmpty ? 'ficha completa' : reviewParts.join(', ')}$styleSuffix',
         sortPriority: 22,
       );
     }
 
-    return const ProductCompatibilityAssessment.caution(
+    return ProductCompatibilityAssessment.caution(
       detail:
-          'Shifter; falta ficha de lado/velocidades o configuracion de la bici',
+          'Shifter; falta ficha de lado/velocidades o configuracion de la bici$styleSuffix',
       sortPriority: 30,
     );
+  }
+
+  /// `shifter_indexed_positions` is «Velocidades» for either side: 2 or 3
+  /// on a front shifter, 5 to 13 on a rear one. The two ranges never meet,
+  /// so the number tells which comparison it belongs to.
+  Set<int> _shifterRearSpeedsFromSpecs(
+    Map<String, dynamic> specValues,
+    List<Map<String, dynamic>> units,
+  ) {
+    final speeds = <int>{};
+    void add(dynamic raw) {
+      final value = _parseIntValue(raw);
+      if (value != null && value >= 5 && _isPlausibleChainSpeed(value)) {
+        speeds.add(value);
+      }
+    }
+
+    add(specValues['shifter_indexed_positions']);
+    for (final unit in units) {
+      if (_canonicalShifterPosition(unit['unit_side']) != 'right') continue;
+      add(unit['indexed_positions']);
+      speeds.addAll(_parseChainSpeedValues(unit['declared_speeds']));
+    }
+    return speeds;
+  }
+
+  Set<int> _shifterFrontCountsFromSpecs(
+    Map<String, dynamic> specValues,
+    List<Map<String, dynamic>> units,
+  ) {
+    final counts = <int>{};
+    void add(dynamic raw) {
+      final value = _parseIntValue(raw);
+      if (value != null && value >= 2 && value <= 3) counts.add(value);
+    }
+
+    add(specValues['shifter_indexed_positions']);
+    for (final unit in units) {
+      if (_canonicalShifterPosition(unit['unit_side']) != 'left') continue;
+      add(unit['indexed_positions']);
+    }
+    return counts;
+  }
+
+  bool _isFrictionShifter(
+    Map<String, dynamic> specValues,
+    List<Map<String, dynamic>> units,
+  ) {
+    bool friction(dynamic raw) {
+      if (raw == null) return false;
+      final normalized = _normalizeText(raw.toString());
+      return normalized.contains('friccion') || normalized.contains('friction');
+    }
+
+    return friction(specValues['shifter_actuation_mode']) ||
+        units.any((unit) => friction(unit['actuation_mode']));
   }
 
   ProductCompatibilityAssessment? _assessDetailedBottomBracketCompatibility({
@@ -1341,25 +1978,39 @@ class BikeProductCompatibilityService {
     required Map<String, dynamic> specValues,
     required String familyLabel,
   }) {
+    final reading = _readBottomBracket(specValues);
     final expectedFamily =
         _canonicalBottomBracketShell(compatibilityContext.bottomBracketFamily);
-    final productFamily = _canonicalBottomBracketShell(
-      specValues['bb_shell_standard'] ?? specValues['bottom_bracket_family'],
-    );
     final expectedShellWidth = compatibilityContext.bbShellWidthMm;
-    final productShellWidth =
-        _parseDoubleValue(specValues['bb_shell_width_mm']);
     final expectedShellDiameter = compatibilityContext.bbShellDiameterMm;
-    final productShellDiameter =
-        _parseDoubleValue(specValues['bb_shell_diameter_mm']);
     final expectedSpindleInterface =
         _canonicalSpindleInterface(compatibilityContext.spindleInterface);
-    final productSpindleInterfaces = _acceptedSpindleInterfaces(specValues);
 
-    if (_bottomBracketShellsConflict(expectedFamily, productFamily)) {
+    if (expectedFamily != null &&
+        reading.shells.isNotEmpty &&
+        reading.shells.every(
+            (shell) => _bottomBracketShellsConflict(expectedFamily, shell))) {
       return ProductCompatibilityAssessment.incompatible(
         detail:
-            '$familyLabel ${_bottomBracketFamilyLabel(productFamily!)} no permite montaje directo en la caja ${_bottomBracketFamilyLabel(expectedFamily!)}',
+            '$familyLabel ${_bottomBracketFamilyLabel(reading.shells.first)} no permite montaje directo en la caja ${_bottomBracketFamilyLabel(expectedFamily)}',
+      );
+    }
+
+    if (expectedFamily != null &&
+        reading.refusedShells.contains(expectedFamily) &&
+        !reading.shells.contains(expectedFamily)) {
+      return ProductCompatibilityAssessment.incompatible(
+        detail:
+            '$familyLabel declarado incompatible por el fabricante con la caja ${_bottomBracketFamilyLabel(expectedFamily)}',
+      );
+    }
+
+    if (expectedSpindleInterface != null &&
+        reading.refusedSpindles.contains(expectedSpindleInterface) &&
+        !reading.spindles.contains(expectedSpindleInterface)) {
+      return ProductCompatibilityAssessment.incompatible(
+        detail:
+            '$familyLabel declarado incompatible por el fabricante con eje ${_spindleInterfaceLabel(expectedSpindleInterface)}',
       );
     }
 
@@ -1367,16 +2018,16 @@ class BikeProductCompatibilityService {
     // Shimano MAFC002 has 68/73 AND press-fit 89.5/92 spacer configurations.
     final differences = <String>[
       if (expectedShellDiameter != null &&
-          productShellDiameter != null &&
-          expectedShellDiameter != productShellDiameter)
-        'diámetro de caja ${_formatMeasurement(productShellDiameter)} frente a ${_formatMeasurement(expectedShellDiameter)} mm',
+          reading.diameters.isNotEmpty &&
+          !reading.diameters.contains(expectedShellDiameter))
+        'diámetro de caja ${reading.diameters.map(_formatMeasurement).join('/')} frente a ${_formatMeasurement(expectedShellDiameter)} mm',
       if (expectedShellWidth != null &&
-          productShellWidth != null &&
-          expectedShellWidth != productShellWidth)
-        'ancho de caja ${_formatMeasurement(productShellWidth)} frente a ${_formatMeasurement(expectedShellWidth)} mm',
+          reading.hasWidths &&
+          !reading.coversWidth(expectedShellWidth))
+        'ancho de caja ${reading.describeWidths()} frente a ${_formatMeasurement(expectedShellWidth)} mm',
       if (expectedSpindleInterface != null &&
-          productSpindleInterfaces.isNotEmpty &&
-          !productSpindleInterfaces.contains(expectedSpindleInterface))
+          reading.spindles.isNotEmpty &&
+          !reading.spindles.contains(expectedSpindleInterface))
         'interfaz del eje fuera de la cobertura registrada',
     ];
     if (differences.isNotEmpty) {
@@ -1389,20 +2040,23 @@ class BikeProductCompatibilityService {
 
     final matchedParts = _matchedBottomBracketParts(
       compatibilityContext: compatibilityContext,
-      specValues: specValues,
+      reading: reading,
     );
+    final spindleLength = reading.spindleLengthMm == null
+        ? ''
+        : ' Eje de ${_formatMeasurement(reading.spindleLengthMm!)} mm.';
 
     if (matchedParts.isNotEmpty) {
       return ProductCompatibilityAssessment.caution(
         detail:
-            '$familyLabel coincide ${matchedParts.join(' · ')}; falta confirmar estándar real del shell, montaje y combinación completa del sistema',
+            '$familyLabel coincide ${matchedParts.join(' · ')}; falta confirmar estándar real del shell, montaje y combinación completa del sistema.$spindleLength',
         sortPriority: matchedParts.length >= 2 ? 18 : 22,
       );
     }
 
     return ProductCompatibilityAssessment.caution(
       detail:
-          '$familyLabel; falta familia de pedalier estructurada del producto o de la bici',
+          '$familyLabel; falta familia de pedalier estructurada del producto o de la bici.$spindleLength',
       sortPriority: 32,
     );
   }
@@ -1414,13 +2068,17 @@ class BikeProductCompatibilityService {
   }) {
     final expectedSpindle =
         _canonicalSpindleInterface(compatibilityContext.spindleInterface);
-    final productSpindle =
-        _canonicalSpindleInterface(specValues['spindle_interface']);
+    final productSpindles = _crankSpindleInterfacesFromSpecs(specValues);
     final expectedShell =
         _canonicalBottomBracketShell(compatibilityContext.bottomBracketFamily);
+    final expectedShellWidth = compatibilityContext.bbShellWidthMm;
     final expectedFrontCount =
         _frontChainringCountFromContext(compatibilityContext);
     final productFrontCounts = _frontChainringCountsFromSpecs(specValues);
+    // Successor rows: the bottom bracket this crank needs, combination by
+    // combination, and the one it ships with.
+    final requiredShells = _affirmativeRows(specValues, 'bottom_bracket_required')
+        .toList(growable: false);
     if (expectedFrontCount != null &&
         productFrontCounts.isNotEmpty &&
         !productFrontCounts.contains(expectedFrontCount)) {
@@ -1432,8 +2090,8 @@ class BikeProductCompatibilityService {
     }
 
     if (expectedSpindle != null &&
-        productSpindle != null &&
-        expectedSpindle != productSpindle) {
+        productSpindles.isNotEmpty &&
+        !productSpindles.contains(expectedSpindle)) {
       return const ProductCompatibilityAssessment.caution(
         detail:
             'La interfaz del eje difiere del sistema instalado; confirma el pedalier requerido, el cuadro y la configuración exacta del crankset.',
@@ -1441,63 +2099,275 @@ class BikeProductCompatibilityService {
       );
     }
 
+    Map<String, dynamic>? fittingRequirement;
+    var requirementConflicts = false;
+    if (expectedShell != null && requiredShells.isNotEmpty) {
+      for (final row in requiredShells) {
+        final shell = _canonicalBottomBracketShell(row['bb_shell_interface']);
+        if (shell == null) continue;
+        if (_bottomBracketShellsConflict(expectedShell, shell)) continue;
+        final width = _parseDoubleValue(row['bb_shell_width_mm']);
+        if (expectedShellWidth != null &&
+            width != null &&
+            !_sameNumericValue(width, expectedShellWidth)) {
+          continue;
+        }
+        fittingRequirement = row;
+        break;
+      }
+      requirementConflicts = fittingRequirement == null &&
+          requiredShells.every((row) {
+            final shell =
+                _canonicalBottomBracketShell(row['bb_shell_interface']);
+            return shell != null &&
+                _bottomBracketShellsConflict(expectedShell, shell);
+          });
+    }
+    if (requirementConflicts) {
+      return ProductCompatibilityAssessment.caution(
+        detail:
+            '$familyLabel requiere pedalier ${_describeShellRequirements(requiredShells)}; la bici tiene caja ${_bottomBracketFamilyLabel(expectedShell!)}. Confirma el pedalier y el cuadro antes de elegirlo.',
+        sortPriority: 34,
+      );
+    }
+
     final matchedParts = <String>[
-      if (expectedSpindle != null && productSpindle == expectedSpindle)
-        _spindleInterfaceLabel(productSpindle!),
+      if (expectedSpindle != null && productSpindles.contains(expectedSpindle))
+        _spindleInterfaceLabel(expectedSpindle),
       if (expectedFrontCount != null &&
           productFrontCounts.contains(expectedFrontCount))
         '${expectedFrontCount}x',
+      if (fittingRequirement != null)
+        'pedalier ${_describeShellRequirements([fittingRequirement])}',
     ];
+    final knownParts = _crankKnownParts(specValues);
+    final known = knownParts.isEmpty ? '' : ' Ficha: ${knownParts.join(', ')}.';
 
     if (matchedParts.isNotEmpty) {
       return ProductCompatibilityAssessment.caution(
         detail:
-            '$familyLabel coincide ${matchedParts.join(' · ')}; ${expectedShell == null ? '' : 'cuadro ${_bottomBracketFamilyLabel(expectedShell)}. '}Falta confirmar línea de cadena, largo, montaje y estándar real del crankset',
+            '$familyLabel coincide ${matchedParts.join(' · ')}; ${expectedShell == null ? '' : 'cuadro ${_bottomBracketFamilyLabel(expectedShell)}. '}Falta confirmar línea de cadena, largo, montaje y estándar real del crankset.$known',
         sortPriority: 20,
       );
     }
 
     return ProductCompatibilityAssessment.caution(
       detail:
-          '$familyLabel; falta ficha de platos/pedalier o datos upstream de la bici',
+          '$familyLabel; falta ficha de platos/pedalier o datos upstream de la bici.$known',
       sortPriority: 32,
     );
   }
 
+  /// The crank's spindle: the retired scalar, then the declared junction rows
+  /// (designation, taper standard or geometry), then its construction.
+  Set<String> _crankSpindleInterfacesFromSpecs(Map<String, dynamic> specValues) {
+    final interfaces = <String>{};
+    void add(dynamic raw) {
+      final canonical = _canonicalSpindleInterface(raw);
+      if (canonical != null) interfaces.add(canonical);
+    }
+
+    add(specValues['spindle_interface']);
+    for (final row
+        in _affirmativeRows(specValues, 'crank_axle_interface_declarations')) {
+      final before = interfaces.length;
+      add(row['designation']);
+      if (interfaces.length == before) add(row['taper_standard']);
+      if (interfaces.length == before &&
+          _normalizeText((row['interface_geometry'] ?? '').toString())
+              .contains('cuadrad')) {
+        interfaces.add('square_taper');
+      }
+    }
+    if (interfaces.isEmpty) {
+      final construction =
+          _normalizeText((specValues['crankset_construction'] ?? '').toString());
+      if (construction.contains('una pieza')) interfaces.add('one_piece');
+    }
+    return interfaces;
+  }
+
+  String _describeShellRequirements(List<Map<String, dynamic>> rows) {
+    final descriptions = <String>{};
+    for (final row in rows) {
+      final shell = _canonicalBottomBracketShell(row['bb_shell_interface']);
+      final width = _parseDoubleValue(row['bb_shell_width_mm']);
+      if (shell == null) continue;
+      descriptions.add(
+          '${_bottomBracketFamilyLabel(shell)}${width == null ? '' : ' ${_formatMeasurement(width)} mm'}');
+    }
+    return descriptions.isEmpty ? 'documentado' : descriptions.join('/');
+  }
+
+  List<String> _crankKnownParts(Map<String, dynamic> specValues) {
+    final armLength = _parseDoubleValue(specValues['crank_arm_length_mm']);
+    final rings = _specRows(specValues, 'chainring_teeth_rows');
+    final teeth = <int>[
+      for (final row in rings)
+        if (_parseIntValue(row['teeth']) != null) _parseIntValue(row['teeth'])!,
+    ]..sort((a, b) => b.compareTo(a));
+    final supplied = _affirmativeRows(specValues, 'crankset_bottom_bracket_supplied')
+        .toList(growable: false);
+    final construction = _confirmedText(specValues['crankset_construction']);
+    return <String>[
+      if (armLength != null) 'biela ${_formatMeasurement(armLength)} mm',
+      if (teeth.isNotEmpty) 'platos ${teeth.join('-')}T',
+      if (supplied.isNotEmpty)
+        'trae pedalier ${_describeSuppliedBottomBrackets(supplied)}',
+      if (construction != null) construction.toLowerCase(),
+    ];
+  }
+
+  String _describeSuppliedBottomBrackets(List<Map<String, dynamic>> rows) {
+    final descriptions = <String>{};
+    for (final row in rows) {
+      final shell = _canonicalBottomBracketShell(row['shell_interface']);
+      final width = _parseDoubleValue(row['shell_width_mm']);
+      final model = _confirmedText(row['bb_model_code']);
+      final parts = <String>[
+        if (shell != null) _bottomBracketFamilyLabel(shell),
+        if (width != null) '${_formatMeasurement(width)} mm',
+        if (model != null) model,
+      ];
+      if (parts.isNotEmpty) descriptions.add(parts.join(' '));
+    }
+    return descriptions.isEmpty ? 'incluido' : descriptions.join('/');
+  }
+
   List<String> _matchedBottomBracketParts({
     required _BikeCompatibilityContext compatibilityContext,
-    required Map<String, dynamic> specValues,
+    required _BottomBracketReading reading,
   }) {
     final expectedFamily =
         _canonicalBottomBracketShell(compatibilityContext.bottomBracketFamily);
-    final productFamily = _canonicalBottomBracketShell(
-      specValues['bb_shell_standard'] ?? specValues['bottom_bracket_family'],
-    );
     final expectedShellWidth = compatibilityContext.bbShellWidthMm;
-    final productShellWidth =
-        _parseDoubleValue(specValues['bb_shell_width_mm']);
     final expectedShellDiameter = compatibilityContext.bbShellDiameterMm;
-    final productShellDiameter =
-        _parseDoubleValue(specValues['bb_shell_diameter_mm']);
     final expectedSpindleInterface =
         _canonicalSpindleInterface(compatibilityContext.spindleInterface);
-    final productSpindleInterfaces = _acceptedSpindleInterfaces(specValues);
 
     return <String>[
-      if (expectedFamily != null && productFamily == expectedFamily)
+      if (expectedFamily != null && reading.shells.contains(expectedFamily))
         _bottomBracketFamilyLabel(expectedFamily),
       if (expectedShellWidth != null &&
-          productShellWidth != null &&
-          expectedShellWidth == productShellWidth)
-        '${_formatMeasurement(productShellWidth)} mm',
+          reading.hasWidths &&
+          reading.coversWidth(expectedShellWidth))
+        '${_formatMeasurement(expectedShellWidth)} mm',
       if (expectedShellDiameter != null &&
-          productShellDiameter != null &&
-          expectedShellDiameter == productShellDiameter)
-        'diam ${_formatMeasurement(productShellDiameter)} mm',
+          reading.diameters.contains(expectedShellDiameter))
+        'diam ${_formatMeasurement(expectedShellDiameter)} mm',
       if (expectedSpindleInterface != null &&
-          productSpindleInterfaces.contains(expectedSpindleInterface))
+          reading.spindles.contains(expectedSpindleInterface))
         _spindleInterfaceLabel(expectedSpindleInterface),
     ];
+  }
+
+  /// Everything a bottom bracket piece says about the shell and the spindle,
+  /// successors first: `bb_installation_claims` (shell + width per
+  /// configuration), `bb_shell_ports` (measured thread or press seat),
+  /// `bb_accepted_spindles`, the piece's own `spindle_interface`; then the
+  /// retired `bb_shell_standard`, `bottom_bracket_family`, `bb_shell_width_mm`,
+  /// `bb_shell_diameter_mm` and `spindle_interface_accepted`.
+  _BottomBracketReading _readBottomBracket(Map<String, dynamic> specValues) {
+    final shells = <String>{};
+    final refusedShells = <String>{};
+    final widths = <_WidthRange>[];
+    for (final row in _specRows(specValues, 'bb_installation_claims')) {
+      final shell = _canonicalBottomBracketShell(row['shell_designation']);
+      if (_rowDeclaresAgainst(row)) {
+        if (shell != null) refusedShells.add(shell);
+        continue;
+      }
+      if (shell != null) shells.add(shell);
+      final exact = _parseDoubleValue(row['width_mm']);
+      final min = _parseDoubleValue(row['width_min_mm']);
+      final max = _parseDoubleValue(row['width_max_mm']);
+      if (exact != null) {
+        widths.add(_WidthRange(exact, exact));
+      } else if (min != null || max != null) {
+        widths.add(_WidthRange(min ?? max!, max ?? min!));
+      }
+    }
+    if (shells.isEmpty) {
+      final fromPorts =
+          _shellFromPorts(_specRows(specValues, 'bb_shell_ports'));
+      if (fromPorts != null) shells.add(fromPorts);
+    }
+    if (shells.isEmpty) {
+      final legacy = _canonicalBottomBracketShell(
+          specValues['bb_shell_standard'] ?? specValues['bottom_bracket_family']);
+      if (legacy != null) shells.add(legacy);
+    }
+    if (widths.isEmpty) {
+      final legacy = _parseDoubleValue(specValues['bb_shell_width_mm']);
+      if (legacy != null) widths.add(_WidthRange(legacy, legacy));
+    }
+
+    final spindles = <String>{};
+    final refusedSpindles = <String>{};
+    for (final row in _specRows(specValues, 'bb_accepted_spindles')) {
+      final spindle = _canonicalSpindleInterface(row['interface']) ??
+          _canonicalSpindleInterface(row['standard']);
+      if (spindle == null) continue;
+      (_rowDeclaresAgainst(row) ? refusedSpindles : spindles).add(spindle);
+    }
+    final own = _canonicalSpindleInterface(specValues['spindle_interface']);
+    if (own != null) spindles.add(own);
+    if (spindles.isEmpty) {
+      spindles.addAll(_acceptedSpindleInterfaces(specValues));
+    }
+
+    final diameter = _parseDoubleValue(specValues['bb_shell_diameter_mm']);
+    return _BottomBracketReading(
+      shells: shells,
+      refusedShells: refusedShells,
+      widths: widths,
+      diameters: {if (diameter != null) diameter},
+      spindles: spindles,
+      refusedSpindles: refusedSpindles,
+      spindleLengthMm: _parseDoubleValue(specValues['spindle_length_mm']),
+    );
+  }
+
+  /// The shell family a measured port implies: a 1.37" x 24 tpi thread is
+  /// BSA, 36 mm x 24 is Italian, 47 mm is T47; a press seat of 41 mm is
+  /// BB86/BB92, 42 mm is BB30, 46 mm is PF30/BB386, 51.5 mm is American.
+  String? _shellFromPorts(List<Map<String, dynamic>> rows) {
+    for (final row in rows) {
+      if (_normalizeText((row['mates_with'] ?? '').toString())
+          .contains('otra copa')) {
+        continue;
+      }
+      final designated = _canonicalBottomBracketShell(row['designation']);
+      if (designated != null) return designated;
+      final form = _normalizeText((row['form'] ?? '').toString());
+      var diameter = _parseDoubleValue(row['diameter']);
+      if (diameter == null) continue;
+      if (_normalizeText((row['diameter_unit'] ?? 'mm').toString()) == 'in') {
+        diameter *= 25.4;
+      }
+      final pitch = _parseDoubleValue(row['pitch']);
+      final pitchUnit = _normalizeText((row['pitch_unit'] ?? '').toString());
+      if (form.contains('rosca')) {
+        if (diameter >= 34.5 && diameter <= 35.0) {
+          if (pitch == null || pitchUnit == 'tpi' && pitch == 24) {
+            return 'bsa_threaded';
+          }
+          continue;
+        }
+        if (diameter > 35.0 && diameter < 35.5) continue; // French or Swiss
+        if (diameter >= 35.8 && diameter <= 36.2) return 'italian_threaded';
+        if (diameter >= 46.8 && diameter <= 47.2) return 't47_threaded';
+        continue;
+      }
+      if (form.contains('presion')) {
+        if (diameter >= 40.8 && diameter <= 41.4) return 'pressfit';
+        if (diameter >= 41.8 && diameter <= 42.2) return 'bb30_pf30';
+        if (diameter >= 45.8 && diameter <= 46.2) return 'pressfit';
+        if (diameter >= 51.0 && diameter <= 52.0) return 'one_piece';
+        if (diameter >= 36.8 && diameter <= 37.2) return 'spanish_bmx';
+      }
+    }
+    return null;
   }
 
   ProductCompatibilityAssessment _assessDrivetrainKitCompatibility() {
@@ -1525,14 +2395,20 @@ class BikeProductCompatibilityService {
     );
     final productFamilies =
         _drivetrainCompatibilityFamiliesFromSpecs(specValues);
-    final productPlatforms = _drivetrainPlatformsFromSpecs(specValues);
+    const claimKeys = ['chainring_compatibility_claims'];
+    final productPlatforms = <String>{
+      ..._drivetrainPlatformsFromSpecs(specValues),
+      ..._declaredPlatformsFromRows(specValues, claimKeys),
+    };
+    final refusedPlatforms = _refusedPlatformsFromRows(specValues, claimKeys);
+    final label = _chainringPieceLabel(specValues);
 
     if (expectedSpeed != null &&
         productSpeeds.isNotEmpty &&
         !productSpeeds.contains(expectedSpeed)) {
       return ProductCompatibilityAssessment.incompatible(
         detail:
-            'Corona/plato ${_formatSpeedSet(productSpeeds)} no coincide con la bici (${expectedSpeed}v)',
+            '$label ${_formatSpeedSet(productSpeeds)} no coincide con la bici (${expectedSpeed}v)',
       );
     }
 
@@ -1541,7 +2417,14 @@ class BikeProductCompatibilityService {
         expectedWidths.intersection(productWidths).isEmpty) {
       return ProductCompatibilityAssessment.incompatible(
         detail:
-            'Corona/plato ${_formatChainWidthSet(productWidths)} no coincide con la bici (${_formatChainWidthSet(expectedWidths)})',
+            '$label ${_formatChainWidthSet(productWidths)} no coincide con la bici (${_formatChainWidthSet(expectedWidths)})',
+      );
+    }
+
+    if (bikePlatform != null && refusedPlatforms.contains(bikePlatform)) {
+      return ProductCompatibilityAssessment.incompatible(
+        detail:
+            '$label declarado no intercambiable por el fabricante con ${_drivetrainPlatformLabel(bikePlatform)}',
       );
     }
 
@@ -1553,7 +2436,7 @@ class BikeProductCompatibilityService {
         )) {
       return ProductCompatibilityAssessment.caution(
         detail:
-            'Corona/plato coincide en base, pero revisar ecosistema ${_formatDrivetrainCompatibilityFamilySet(productFamilies)} vs ${_drivetrainPlatformLabel(bikePlatform)}',
+            '$label coincide en base, pero revisar ecosistema ${_formatDrivetrainCompatibilityFamilySet(productFamilies)} vs ${_drivetrainPlatformLabel(bikePlatform)}',
         sortPriority: 22,
       );
     }
@@ -1566,7 +2449,7 @@ class BikeProductCompatibilityService {
         )) {
       return ProductCompatibilityAssessment.caution(
         detail:
-            'Corona/plato coincide en base, pero revisar plataforma ${_formatDrivetrainPlatformSet(productPlatforms)} vs ${_drivetrainPlatformLabel(bikePlatform)}',
+            '$label coincide en base, pero revisar plataforma ${_formatDrivetrainPlatformSet(productPlatforms)} vs ${_drivetrainPlatformLabel(bikePlatform)}',
         sortPriority: 22,
       );
     }
@@ -1586,20 +2469,64 @@ class BikeProductCompatibilityService {
           ))
         _formatDrivetrainPlatformSet(productPlatforms),
     ];
+    final knownParts = _chainringKnownParts(specValues);
+    final known = knownParts.isEmpty ? '' : 'ficha: ${knownParts.join(', ')}; ';
 
     if (matchedParts.isNotEmpty) {
       return ProductCompatibilityAssessment.caution(
         detail:
-            'Corona/plato coincide ${matchedParts.join(' · ')}; falta confirmar BCD/montaje y offset',
+            '$label coincide ${matchedParts.join(' · ')}; ${known}falta confirmar BCD/montaje de la biela instalada y offset',
         sortPriority: matchedParts.length >= 2 ? 20 : 24,
       );
     }
 
-    return const ProductCompatibilityAssessment.caution(
+    if (knownParts.isNotEmpty) {
+      return ProductCompatibilityAssessment.caution(
+        detail:
+            '$label; ${known}falta confirmar BCD/montaje de la biela instalada, velocidades y offset',
+        sortPriority: 30,
+      );
+    }
+
+    return ProductCompatibilityAssessment.caution(
       detail:
-          'Corona/plato; falta velocidad o datos de montaje estructurados para confirmar compatibilidad',
+          '$label; falta velocidad o datos de montaje estructurados para confirmar compatibilidad',
       sortPriority: 32,
     );
+  }
+
+  String _chainringPieceLabel(Map<String, dynamic> specValues) {
+    final kind = _normalizeText((specValues['chainring_package_kind'] ?? '').toString());
+    if (kind.contains('juego')) {
+      final count = _parseIntValue(specValues['chainring_set_member_count']) ??
+          _specRows(specValues, 'chainring_set_members').length;
+      return count > 0 ? 'Juego de $count platos' : 'Juego de platos';
+    }
+    return 'Corona/plato';
+  }
+
+  List<String> _chainringKnownParts(Map<String, dynamic> specValues) {
+    final members = _specRows(specValues, 'chainring_set_members');
+    final memberTeeth = <int>[
+      for (final row in members)
+        if (_parseIntValue(row['teeth']) != null) _parseIntValue(row['teeth'])!,
+    ]..sort((a, b) => b.compareTo(a));
+    final teeth = _parseIntValue(specValues['teeth_count']);
+    final bcd = _parseDoubleValue(specValues['chainring_bcd_mm']) ??
+        (members.isEmpty ? null : _parseDoubleValue(members.first['bcd_mm']));
+    final mount = _confirmedText(specValues['chainring_mount_type']);
+    final position = _confirmedText(specValues['chainring_position']);
+    final narrowWide = specValues['narrow_wide'] == true;
+    return <String>[
+      if (memberTeeth.isNotEmpty)
+        'platos ${memberTeeth.join('-')}T'
+      else if (teeth != null)
+        '${teeth}T',
+      if (bcd != null) 'BCD ${_formatMeasurement(bcd)} mm',
+      if (mount != null) mount.toLowerCase(),
+      if (position != null && memberTeeth.isEmpty) 'posición ${position.toLowerCase()}',
+      if (narrowWide) 'narrow-wide',
+    ];
   }
 
   ProductCompatibilityAssessment? _assessDetailedHubCompatibility({
@@ -2339,10 +3266,11 @@ class BikeProductCompatibilityService {
     // Only the piece's numeric successor is a nominal rotor diameter.
     final productRotorSize =
         _parseProductRotorDiameter(specValues['rotor_diameter_mm_value']);
-    final productWheel =
-        canonicalBrakeWheelValue(specValues['brake_position']?.toString());
-    final productFluidType =
-        canonicalBrakeFluidTypeValue(specValues['fluid_type']?.toString());
+    final productWheel = _brakeWheel(specValues['brake_position']);
+    final productFluids = _brakeFluidsFromSpecs(specValues);
+    final rotorRecipe = _affirmativeRows(specValues, 'rotor_size_recipe')
+        .toList(growable: false);
+    final piece = _brakePieceDescription(specValues);
     // BikeProfile has no confirmed per-wheel type or replacement/conversion
     // scope. Its aggregate brakeType cannot refute a front brake on a bike
     // with a rear coaster brake, or identify the installed lever/caliper.
@@ -2351,23 +3279,179 @@ class BikeProductCompatibilityService {
         compatibilityContext: compatibilityContext,
         rotorSizeMm: productRotorSize,
         wheel: productWheel,
+        mountLabel: _confirmedText(specValues['rotor_mount_type']),
       );
     }
-    if (productFluidType != null) {
-      return const ProductCompatibilityAssessment.caution(
-        detail: 'Confirma el fluido y los componentes admitidos por el modelo '
+    if (rotorRecipe.isNotEmpty) {
+      return _assessCaliperRotorRecipeCompatibility(
+        compatibilityContext: compatibilityContext,
+        recipe: rotorRecipe,
+        piece: piece,
+      );
+    }
+    if (productFluids.isNotEmpty) {
+      return ProductCompatibilityAssessment.caution(
+        detail: '${piece == null ? '' : '$piece. '}'
+            'Confirma el fluido (${productFluids.join('/')}) y los componentes admitidos por el modelo '
             'instalado; el fluido declarado no determina el accionamiento ni '
             'la superficie de frenado.',
         sortPriority: 30,
       );
     }
-    final surface = specValues['braking_surface'];
     return ProductCompatibilityAssessment.caution(
-      detail:
-          '${surface is String && surface.trim().isNotEmpty ? 'Superficie declarada: $surface. ' : ''}'
+      detail: '${piece == null ? '' : '$piece. '}'
           'Confirma rueda, sistema instalado y alcance del trabajo; el tipo de freno general de la bici no describe ambos extremos. '
           'Falta validar montaje, superficie y accionamiento del conjunto.',
       sortPriority: 32,
+    );
+  }
+
+  /// The wheel a brake piece or a recipe row names, whatever the spelling:
+  /// `front`, `Delantero`, `trasero`, `Universal`.
+  String? _brakeWheel(dynamic raw) {
+    final position = _canonicalWheelPosition(raw);
+    if (position == 'front' || position == 'rear' || position == 'both') {
+      return position;
+    }
+    return canonicalBrakeWheelValue(raw?.toString());
+  }
+
+  /// Fluids a piece names: the retired `fluid_type`, the approvals table of
+  /// a caliper or lever, and the fluid a complete brake ships with.
+  List<String> _brakeFluidsFromSpecs(Map<String, dynamic> specValues) {
+    final fluids = <String>{};
+    void add(dynamic raw) {
+      final text = _confirmedText(raw);
+      if (text != null) fluids.add(text);
+    }
+
+    add(specValues['fluid_type']);
+    for (final row in _specRows(specValues, 'brake_model_fluid_approvals')) {
+      add(row['fluid_class']);
+    }
+    for (final row in _specRows(specValues, 'brake_circuits')) {
+      add(row['fluid_as_shipped']);
+    }
+    return fluids.toList()..sort();
+  }
+
+  /// What the piece says about itself, in the words of its own fields, so the
+  /// mechanic sees the successor facts even while the verdict stays a caution.
+  String? _brakePieceDescription(Map<String, dynamic> specValues) {
+    String? lower(dynamic raw) => _confirmedText(raw)?.toLowerCase();
+    final surface = lower(specValues['braking_surface']);
+    final actuation = lower(specValues['brake_actuation']);
+    final position = lower(specValues['brake_position']);
+    final pistons = _parseIntValue(specValues['piston_count_value']);
+    final caliperMount = _confirmedText(specValues['caliper_mount_interface']);
+    final cablePull = lower(specValues['cable_pull_required']) ??
+        lower(specValues['lever_cable_pull']);
+    final compound = lower(specValues['compound_type']);
+    final retention = lower(specValues['pad_retention']);
+    final padConstruction = lower(specValues['rim_pad_construction']);
+    final studType = lower(specValues['rim_pad_stud_type']);
+    final padLength = _parseDoubleValue(specValues['rim_pad_length_mm']);
+    final leverSide = lower(specValues['lever_side']);
+    final leverMount = lower(specValues['lever_mount_method']);
+    final clamp = _parseDoubleValue(specValues['handlebar_clamp_mm']);
+    final presentation = _confirmedText(specValues['brake_presentation']);
+    final circuits = _specRows(specValues, 'brake_circuits');
+    final caliperModels = <String>{
+      for (final row in _specRows(specValues, 'compatible_caliper_models'))
+        [row['brand'], row['model']]
+            .where((value) => _confirmedText(value) != null)
+            .join(' '),
+    }..removeWhere((value) => value.isEmpty);
+
+    final parts = <String>[
+      if (presentation != null) presentation,
+      if (surface != null) 'freno de $surface',
+      if (actuation != null) actuation,
+      if (caliperMount != null) caliperMount,
+      if (pistons != null) '$pistons pistones',
+      if (cablePull != null) cablePull,
+      if (compound != null) 'compuesto $compound',
+      if (retention != null) 'sujeción $retention',
+      if (padConstruction != null) padConstruction,
+      if (studType != null) studType,
+      if (padLength != null) 'patín ${_formatMeasurement(padLength)} mm',
+      if (leverSide != null) 'lado $leverSide',
+      if (leverMount != null) leverMount,
+      if (clamp != null) 'abrazadera ${_formatMeasurement(clamp)} mm',
+      if (position != null) position,
+      for (final row in circuits)
+        'circuito ${lower(row['position']) ?? ''} ${lower(row['actuation']) ?? ''}${lower(row['fluid_as_shipped']) == null ? '' : ' (${lower(row['fluid_as_shipped'])})'}'
+            .replaceAll(RegExp(r'\s+'), ' ')
+            .trim(),
+      if (caliperModels.isNotEmpty) 'para ${caliperModels.join(', ')}',
+    ];
+    if (parts.isEmpty) return null;
+    final text = parts.join(', ');
+    return 'Pieza declarada: ${text[0].toUpperCase()}${text.substring(1)}';
+  }
+
+  /// A caliper documents rotor diameter and mount per wheel. The bicycle's
+  /// rotor on that wheel either appears in the recipe or it does not; either
+  /// way the mount and the adapter stay for the mechanic to confirm.
+  ProductCompatibilityAssessment _assessCaliperRotorRecipeCompatibility({
+    required _BikeCompatibilityContext compatibilityContext,
+    required List<Map<String, dynamic>> recipe,
+    required String? piece,
+  }) {
+    final prefix = piece == null ? '' : '$piece. ';
+    String describe(Map<String, dynamic> row) {
+      final diameter = _parseDoubleValue(row['rotor_diameter_mm']);
+      final mount = _confirmedText(row['frame_mount']);
+      final adapter = row['adapter_required'] == true
+          ? ' con adaptador${_confirmedText(row['adapter_model']) == null ? '' : ' ${_confirmedText(row['adapter_model'])}'}'
+          : row['adapter_required'] == false
+              ? ' sin adaptador'
+              : '';
+      return '${diameter == null ? '?' : _formatMeasurement(diameter)} mm${mount == null ? '' : ' en $mount'}$adapter';
+    }
+
+    final expectedByWheel = <String, int>{
+      if (compatibilityContext.frontRotorSizeMm != null)
+        'front': compatibilityContext.frontRotorSizeMm!,
+      if (compatibilityContext.rearRotorSizeMm != null)
+        'rear': compatibilityContext.rearRotorSizeMm!,
+    };
+    if (expectedByWheel.isEmpty) {
+      return ProductCompatibilityAssessment.caution(
+        detail:
+            '${prefix}Documenta rotor ${recipe.map(describe).toSet().join(' · ')}; falta el diámetro de rotor de la bici',
+        sortPriority: 30,
+      );
+    }
+
+    final fitting = <String>{};
+    for (final row in recipe) {
+      final wheel = _brakeWheel(row['position']);
+      final diameter = _parseProductRotorDiameter(row['rotor_diameter_mm']);
+      if (diameter == null) continue;
+      final expected = wheel == null ? null : expectedByWheel[wheel];
+      if (expected == null) continue;
+      if (expected == diameter) {
+        fitting.add(
+            '${wheel == 'front' ? 'delantero' : 'trasero'} ${describe(row)}');
+      }
+    }
+    if (fitting.isNotEmpty) {
+      return ProductCompatibilityAssessment.caution(
+        detail:
+            '${prefix}Coincide el diámetro del rotor de la bici: ${fitting.join(' · ')}; confirma el montaje del cuadro u horquilla, el adaptador y el modelo instalado.',
+        sortPriority: 16,
+      );
+    }
+
+    final expectedLabel = expectedByWheel.entries
+        .map((entry) =>
+            '${entry.key == 'front' ? 'delantero' : 'trasero'} ${entry.value} mm')
+        .join(' · ');
+    return ProductCompatibilityAssessment.caution(
+      detail:
+          '${prefix}Documenta rotor ${recipe.map(describe).toSet().join(' · ')}; la bici lleva $expectedLabel. Confirma adaptador y diámetros admitidos por cuadro u horquilla.',
+      sortPriority: 28,
     );
   }
 
@@ -2375,8 +3459,10 @@ class BikeProductCompatibilityService {
     required _BikeCompatibilityContext compatibilityContext,
     required int rotorSizeMm,
     required String? wheel,
+    String? mountLabel,
   }) {
     final expectedSizes = <int>{};
+    final mount = mountLabel == null ? '' : ' $mountLabel';
 
     switch (wheel) {
       case 'front':
@@ -2402,7 +3488,8 @@ class BikeProductCompatibilityService {
 
     if (expectedSizes.isEmpty) {
       return ProductCompatibilityAssessment.caution(
-        detail: 'Rotor $rotorSizeMm mm; falta confirmar el diametro de la bici',
+        detail:
+            'Rotor $rotorSizeMm mm$mount; falta confirmar el diametro de la bici',
         sortPriority: 30,
       );
     }
@@ -2410,14 +3497,14 @@ class BikeProductCompatibilityService {
     if (expectedSizes.contains(rotorSizeMm)) {
       return ProductCompatibilityAssessment.caution(
         detail:
-            'Coincide el diámetro del rotor ($rotorSizeMm mm); confirma montaje, espesor, pista, adaptador y límites del cuadro u horquilla.',
+            'Coincide el diámetro del rotor ($rotorSizeMm mm$mount); confirma montaje, espesor, pista, adaptador y límites del cuadro u horquilla.',
       );
     }
 
     final sortedExpectedSizes = expectedSizes.toList()..sort();
     return ProductCompatibilityAssessment.caution(
       detail:
-          'Rotor $rotorSizeMm mm frente a ${sortedExpectedSizes.join('/')} mm actuales: el cambio exige verificar cáliper, adaptador y diámetros admitidos por cuadro u horquilla.',
+          'Rotor $rotorSizeMm mm$mount frente a ${sortedExpectedSizes.join('/')} mm actuales: el cambio exige verificar cáliper, adaptador y diámetros admitidos por cuadro u horquilla.',
     );
   }
 
@@ -2660,13 +3747,25 @@ class BikeProductCompatibilityService {
     final raw = specValues['compatible_chainring_counts'] ??
         specValues['front_chainring_count'];
     final values = raw is List ? raw : [raw];
-    return {
+    final counts = <int>{
       for (final value in values)
         if (value is int && _isPlausibleFrontChainringCount(value))
           value
         else if (value is String && RegExp(r'^[123]$').hasMatch(value.trim()))
           int.parse(value.trim()),
     };
+    // Successors: the derailleur's documented configurations, the rings a
+    // crankset ships with.
+    for (final row in _affirmativeRows(
+        specValues, 'front_derailleur_application_configurations')) {
+      final count = _parseIntValue(row['front_chainring_count']);
+      if (_isPlausibleFrontChainringCount(count)) counts.add(count!);
+    }
+    final included = _parseIntValue(specValues['included_chainring_count']);
+    if (_isPlausibleFrontChainringCount(included)) counts.add(included!);
+    final rings = _specRows(specValues, 'chainring_teeth_rows').length;
+    if (rings > 0 && _isPlausibleFrontChainringCount(rings)) counts.add(rings);
+    return counts;
   }
 
   Set<int> _parseChainSpeedValues(dynamic rawValue) {
@@ -2755,7 +3854,12 @@ class BikeProductCompatibilityService {
   Set<String> _drivetrainPlatformsFromSpecs(
     Map<String, dynamic> specValues,
   ) {
-    return drivetrainPlatformsFromCompatibilitySpecs(specValues);
+    final technology =
+        _platformFromShiftTechnology(specValues['shift_technology']);
+    return {
+      ...drivetrainPlatformsFromCompatibilitySpecs(specValues),
+      if (technology != null) technology,
+    };
   }
 
   Set<String> _drivetrainCompatibilityFamiliesFromSpecs(
@@ -3073,6 +4177,14 @@ class BikeProductCompatibilityService {
         normalized == 'unknown' ||
         normalized.contains('desconoc')) {
       return null;
+    }
+    // `cassette_spline_standard` names the body by its spline: S and M are
+    // the MTB/all-round HG body, L and L2 the road 11/12 body. Its help text
+    // in parentheses mentions other speeds and must not be matched.
+    if (normalized.contains('spline')) {
+      if (normalized.contains('micro')) return 'microspline';
+      if (normalized.contains('spline l')) return 'shimano_hg_road_11';
+      if (normalized.contains('hg')) return 'shimano_hg';
     }
     if (normalized.contains('shimano') && normalized.contains('hg')) {
       if (normalized.contains('road') || normalized.contains('11')) {
@@ -3661,6 +4773,52 @@ class BikeProductCompatibilityService {
         .replaceAll('í', 'i')
         .replaceAll('ó', 'o')
         .replaceAll('ú', 'u');
+  }
+}
+
+class _WidthRange {
+  final double min;
+  final double max;
+
+  const _WidthRange(this.min, this.max);
+
+  bool covers(double width) => width >= min - 0.6 && width <= max + 0.6;
+}
+
+class _BottomBracketReading {
+  final Set<String> shells;
+  final Set<String> refusedShells;
+  final List<_WidthRange> widths;
+  final Set<double> diameters;
+  final Set<String> spindles;
+  final Set<String> refusedSpindles;
+  final double? spindleLengthMm;
+
+  const _BottomBracketReading({
+    required this.shells,
+    required this.refusedShells,
+    required this.widths,
+    required this.diameters,
+    required this.spindles,
+    required this.refusedSpindles,
+    required this.spindleLengthMm,
+  });
+
+  bool get hasWidths => widths.isNotEmpty;
+
+  bool coversWidth(double width) => widths.any((range) => range.covers(width));
+
+  String describeWidths() {
+    String format(double value) => value == value.roundToDouble()
+        ? value.round().toString()
+        : value.toStringAsFixed(1);
+    final labels = <String>{
+      for (final range in widths)
+        range.min == range.max
+            ? format(range.min)
+            : '${format(range.min)}-${format(range.max)}',
+    };
+    return labels.join('/');
   }
 }
 

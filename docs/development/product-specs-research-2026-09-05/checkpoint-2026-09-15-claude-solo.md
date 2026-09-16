@@ -256,3 +256,11 @@ ya los contiene). Worktrees inventariados: tres de Codex, todos detached.
   transacción verificada. Se queda `shifter_position` porque el cliente Dart distribuido compara
   sus textos exactos: requiere distribución. Sin hechos fuera de opciones tras el cambio; ficha
   pública leída como anónimo con los rótulos nuevos.
+- **Compatibilidad de taller, transmisión, pedalier y freno, migrada a los sucesores.** Las 44
+  claves `legacy` que el servicio seguía leyendo (velocidades, cuerpo de maza, piñón máximo,
+  familia de indexado, platos, eje, caja, ancho, fluido, rotor…) quedan de respaldo detrás de sus
+  sucesores; los sucesores de filas llegan como texto JSON y se decodifican, y una negación del
+  fabricante en una fila refuta. 124 pruebas verdes (24 nuevas). La dirección no cambia porque la
+  bici no registra dirección ni tubo. Los hechos `legacy` no migran solos (34 pedalieres con caja
+  vieja y 0 con montajes declarados):
+  [workshop-compatibility-drivetrain-bb-brake-successors-2026-09-16.md](workshop-compatibility-drivetrain-bb-brake-successors-2026-09-16.md).
