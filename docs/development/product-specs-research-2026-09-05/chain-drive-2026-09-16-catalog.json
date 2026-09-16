@@ -1,0 +1,3321 @@
+{
+  "schema_version": 1,
+  "title": "Chain applications, exact connector targets and kit members",
+  "source_sha256": "785cd11a39011b643e4bcb1422ab805c242f8a7aae0108b399c6aff0c0d78175",
+  "accepted_claude_patch_ids": [
+    "MC-01-shar0",
+    "MC-01-defi1",
+    "MC-01-defi2",
+    "MC-01-defi3",
+    "MC-02-4",
+    "MC-02-5",
+    "MC-02-6",
+    "MC-02-7",
+    "MC-13-22",
+    "MC-13-23",
+    "MC-13-fixtures-192-product-lever_pull_required",
+    "MC-13-fixtures-192-counterpart-lever_cable_pull",
+    "MC-13-fixtures-193-product-lever_pull_required",
+    "MC-13-fixtures-194-product-lever_pull_required",
+    "MC-15a",
+    "MC-15b",
+    "MC-23"
+  ],
+  "input_sha256": {
+    "catalog": "16459826fee4c589cce37243afe4e159317212ddf1d47d6d6f1d76f9b3fadf15",
+    "cases": "329ad3e5543048121775fd7fc3d5c5b4acd90d7446cd3deacc999b4dce3716d7",
+    "preimage": "4b19e6c99f7099b9f030db6bd834ad032eaf8cdb2fc625964fc9204f79feeddc"
+  },
+  "codex_corrections": [
+    {
+      "id": "C01",
+      "change": "Un par de ángulos conserva 36×45 y 45×45 como configuraciones distintas; ninguno aprueba el rodamiento completo.",
+      "source_refs": [
+        "W04"
+      ]
+    },
+    {
+      "id": "C02",
+      "change": "Neumático y cámara incluidos son dos observaciones independientes del contenido.",
+      "source_refs": []
+    },
+    {
+      "id": "C03",
+      "change": "Registrar presencia declarada y nombre exacto del sistema; no crear una clase de equivalencia entre marcas.",
+      "source_refs": []
+    },
+    {
+      "id": "C04",
+      "change": "Una cámara describe cada BSD y rango de ancho en la misma fila; se elimina el escalar que impedía varios BSD.",
+      "source_refs": [
+        "W01",
+        "S01"
+      ]
+    },
+    {
+      "id": "C05",
+      "change": "Ángulos y elevaciones admiten signo; cantidades de elementos opcionales admiten cero. Los límites no se inventan a partir de tamaños frecuentes.",
+      "source_refs": []
+    },
+    {
+      "id": "C06",
+      "change": "Puntos de portabidón se cuentan individualmente; lentes adicionales no confunden cero accesorios con ausencia de lente principal.",
+      "source_refs": []
+    },
+    {
+      "id": "C07",
+      "change": "Se incluyen pasos de rosca reales que faltaban; diámetro, longitud del eje y OLD siguen separados.",
+      "source_refs": [
+        "W09"
+      ]
+    },
+    {
+      "id": "C08",
+      "change": "Una dirección superior, inferior o completa solicita únicamente sus códigos SHIS correspondientes. El código no impone un diámetro medido literal.",
+      "source_refs": [
+        "W05",
+        "W06"
+      ]
+    },
+    {
+      "id": "C09",
+      "change": "Un juego de ruedas almacena filas por posición y no comparte ficticiamente OLD, diámetro o interfaz de transmisión entre ambas ruedas.",
+      "source_refs": []
+    },
+    {
+      "id": "C10",
+      "change": "Las relaciones por modelo conservan generación y condiciones de la fuente; ausencia de fila permanece desconocida.",
+      "source_refs": [
+        "A05",
+        "A21",
+        "A22"
+      ]
+    },
+    {
+      "id": "C11",
+      "change": "Una bicicleta puede llevar tamaños distintos por posición; el cuadro describe la rueda trasera y no impone un tamaño al tren delantero.",
+      "source_refs": [
+        "https://www.trekbikes.com/us/en_US/FAQ/Slash-Gen6/"
+      ]
+    },
+    {
+      "id": "C13",
+      "change": "Los pines no dependen de ser plataforma; apoyos de distinta construcción permanecen en filas independientes y las calas incluidas requieren una observación del contenido.",
+      "source_refs": [
+        "ND01",
+        "ND02",
+        "https://www.crankbrothers.com/products/mallet-e"
+      ]
+    },
+    {
+      "id": "C14",
+      "change": "La potencia ahead describe el diámetro exterior en su zona de abrazadera. La espiga quill conserva su diámetro de inserción y el adaptador tiene una salida independiente, sin abrazadera de manubrio ficticia.",
+      "source_refs": [
+        "ND05",
+        "https://www.parktool.com/en-us/blog/repair-help/stem-removal-installation-threadless",
+        "https://www.parktool.com/en-us/blog/repair-help/stem-removal-installation-quill-stems"
+      ]
+    },
+    {
+      "id": "C15",
+      "change": "La geometría del riel no implica material ni piezas incluidas. La cobertura 7x9/7x9.6/7x10 se registra por configuración y kit documentado; un suplemento no tiene anclaje de sillín ni offset de tija.",
+      "source_refs": [
+        "ND06",
+        "ND07",
+        "https://ritcheylogic.com/bike/seatposts/wcs-carbon-1-bolt-seatpost-complete-clampset"
+      ]
+    },
+    {
+      "id": "C16",
+      "change": "El kit U más cable permite las dimensiones de ambos componentes. La longitud de cadena ya no se registra como cable; la clasificación de seguridad sigue siendo una declaración pendiente de alcance.",
+      "source_refs": [
+        "ND11",
+        "https://www.kryptonitelock.com/en/products/product-information/current-key/002079.html?type=bicycle"
+      ]
+    },
+    {
+      "id": "C17",
+      "change": "Fotocromía, polarización y recubrimiento pueden coexistir; cada lente conserva sus propiedades y estado de contenido en la misma fila, sin mezclarlas entre variantes.",
+      "source_refs": [
+        "ND19",
+        "https://www.julbo.com/en_gb/sunglasses/photochromic-2-4-polarized-sunglasses"
+      ]
+    },
+    {
+      "id": "C18",
+      "change": "Las chaquetas pueden declarar manga. Vestuario y protección conservan la talla OEM exacta y su guía sin equiparar rótulos de distintas marcas.",
+      "source_refs": [
+        "ND18",
+        "ND20"
+      ]
+    },
+    {
+      "id": "C12",
+      "change": "Se conservan también los campos anteriores omitidos del borrador: hydraulic_disc_brake/piston_count, brake_caliper/piston_count",
+      "source_refs": []
+    }
+  ],
+  "definitions": {
+    "chain_application_declarations": {
+      "key": "chain_application_declarations",
+      "id": "8e22a93d-5faf-5621-836e-cb8bf48b9ddd",
+      "origin": "new",
+      "label": "Aplicaciones documentadas de esta cadena",
+      "data_type": "json",
+      "unit": null,
+      "allowed_values": [],
+      "validation_rules": {
+        "rows_schema": {
+          "version": 1,
+          "columns": [
+            {
+              "key": "claim_identity",
+              "label": "Identificación de esta declaración",
+              "type": "text",
+              "required": true
+            },
+            {
+              "key": "scope_kind",
+              "label": "Alcance",
+              "type": "token",
+              "required": true,
+              "allowed_values": [
+                "Modelo documentado",
+                "Sistema documentado"
+              ]
+            },
+            {
+              "key": "target_brand",
+              "label": "Marca del modelo de destino",
+              "type": "text"
+            },
+            {
+              "key": "target_model",
+              "label": "Modelo de destino",
+              "type": "text"
+            },
+            {
+              "key": "target_generation",
+              "label": "Generación del destino",
+              "type": "text"
+            },
+            {
+              "key": "target_system",
+              "label": "Sistema y generación declarados",
+              "type": "text"
+            },
+            {
+              "key": "verdict",
+              "label": "Declaración de la fuente",
+              "type": "token",
+              "required": true,
+              "allowed_values": [
+                "Admitido por la fuente",
+                "Excluido por la fuente",
+                "Condicionado por la fuente"
+              ]
+            },
+            {
+              "key": "conditions",
+              "label": "Condiciones y límites",
+              "type": "text"
+            },
+            {
+              "key": "source_document",
+              "label": "Documento o envase identificado",
+              "type": "text",
+              "required": true
+            },
+            {
+              "key": "source_url",
+              "label": "URL del documento, si existe",
+              "type": "url"
+            },
+            {
+              "key": "drive_kind",
+              "label": "Tipo de transmisión de esta aplicación",
+              "type": "token",
+              "required": true,
+              "allowed_values": [
+                "Desviador externo",
+                "Una relación sin cambio interno",
+                "Cambio interno"
+              ]
+            },
+            {
+              "key": "rear_sprockets",
+              "label": "Piñones de esta aplicación",
+              "type": "integer",
+              "validation": {
+                "positive": true
+              }
+            },
+            {
+              "key": "internal_gears",
+              "label": "Marchas internas declaradas",
+              "type": "integer",
+              "validation": {
+                "positive": true
+              }
+            },
+            {
+              "key": "chain_class",
+              "label": "Clase de cadena citada por la fuente",
+              "type": "text"
+            }
+          ],
+          "unique_by": [
+            [
+              "claim_identity"
+            ]
+          ]
+        }
+      },
+      "used_by": [
+        "chain"
+      ]
+    },
+    "chain_connector_directional": {
+      "id": "0ce76410-2ca6-4357-beac-9663ff2328d3",
+      "key": "chain_connector_directional",
+      "label": "Conector con sentido de montaje",
+      "data_type": "boolean",
+      "unit": null,
+      "allowed_values": [],
+      "validation_rules": {},
+      "origin": "existing",
+      "used_by": [
+        "chain_link"
+      ]
+    },
+    "chain_connector_target": {
+      "id": "b767efea-c5e1-41d0-8d7e-5a6127fec1e4",
+      "key": "chain_connector_target",
+      "label": "Cadenas admitidas por el fabricante",
+      "data_type": "text",
+      "unit": null,
+      "allowed_values": [],
+      "validation_rules": {},
+      "origin": "existing",
+      "used_by": [
+        "chain_link"
+      ]
+    },
+    "chain_connector_type": {
+      "id": "adb0b9ea-2f0b-49de-8b43-fb3bad96a7d0",
+      "key": "chain_connector_type",
+      "label": "Tipo conector cadena",
+      "data_type": "single_select",
+      "unit": null,
+      "allowed_values": [
+        "Missing link",
+        "Pin",
+        "Half link",
+        "Otro",
+        "Eslabón con clip"
+      ],
+      "validation_rules": {},
+      "origin": "existing",
+      "used_by": [
+        "chain_link"
+      ]
+    },
+    "chain_directional": {
+      "id": "621a2ce0-7b30-4780-821f-b3c5ba3684bb",
+      "key": "chain_directional",
+      "label": "Cadena direccional",
+      "data_type": "boolean",
+      "unit": null,
+      "allowed_values": [],
+      "validation_rules": {},
+      "origin": "existing",
+      "used_by": [
+        "chain"
+      ]
+    },
+    "chain_ebike_rated": {
+      "id": "9d2ee4a7-faa1-41d6-b353-9484d1455089",
+      "key": "chain_ebike_rated",
+      "label": "Apta e-bike",
+      "data_type": "boolean",
+      "unit": null,
+      "allowed_values": [],
+      "validation_rules": {},
+      "origin": "existing",
+      "used_by": [
+        "chain",
+        "drivetrain_kit"
+      ]
+    },
+    "chain_link_pack_qty": {
+      "id": "e4a41092-27d9-41a9-a4ff-1d417c4e5265",
+      "key": "chain_link_pack_qty",
+      "label": "Cantidad conectores",
+      "data_type": "number",
+      "unit": "unidades",
+      "allowed_values": [],
+      "validation_rules": {
+        "integer": true,
+        "positive": true
+      },
+      "origin": "existing",
+      "used_by": [
+        "chain_link"
+      ]
+    },
+    "chain_link_reusable": {
+      "id": "c3411f9b-9824-46b9-b893-914d8baf601f",
+      "key": "chain_link_reusable",
+      "label": "Missing link reutilizable",
+      "data_type": "boolean",
+      "unit": null,
+      "allowed_values": [],
+      "validation_rules": {},
+      "origin": "existing",
+      "used_by": [
+        "chain_link"
+      ]
+    },
+    "chain_mass_declarations": {
+      "key": "chain_mass_declarations",
+      "id": "dd83661f-1eb0-57a0-a293-2f4ab459d247",
+      "origin": "new",
+      "label": "Peso y base declarada",
+      "data_type": "json",
+      "unit": null,
+      "allowed_values": [],
+      "validation_rules": {
+        "rows_schema": {
+          "version": 1,
+          "columns": [
+            {
+              "key": "weighing_identity",
+              "label": "Configuración pesada",
+              "type": "text",
+              "required": true
+            },
+            {
+              "key": "weight_g",
+              "label": "Peso",
+              "type": "decimal",
+              "required": true,
+              "unit": "g",
+              "validation": {
+                "positive": true
+              }
+            },
+            {
+              "key": "basis_links",
+              "label": "Eslabones usados para declarar este peso",
+              "type": "integer",
+              "validation": {
+                "positive": true
+              }
+            },
+            {
+              "key": "basis_description",
+              "label": "Qué incluye la medición",
+              "type": "text",
+              "required": true
+            },
+            {
+              "key": "source_document",
+              "label": "Documento o envase identificado",
+              "type": "text",
+              "required": true
+            },
+            {
+              "key": "source_url",
+              "label": "URL del documento, si existe",
+              "type": "url"
+            }
+          ],
+          "unique_by": [
+            [
+              "weighing_identity"
+            ]
+          ]
+        }
+      },
+      "used_by": [
+        "chain"
+      ]
+    },
+    "chain_other_width_designation": {
+      "key": "chain_other_width_designation",
+      "id": "b44c1cda-04dd-595b-9be7-d82a7a0c43d3",
+      "origin": "new",
+      "label": "Otra denominación de ancho",
+      "data_type": "text",
+      "unit": null,
+      "allowed_values": [],
+      "validation_rules": {},
+      "used_by": [
+        "chain"
+      ]
+    },
+    "chain_outer_width_mm": {
+      "id": "db11ebac-d3e6-4b8e-a2f0-7d22a971498a",
+      "key": "chain_outer_width_mm",
+      "label": "Ancho externo cadena",
+      "data_type": "number",
+      "unit": "mm",
+      "allowed_values": [
+        "5.25",
+        "5.3",
+        "5.62",
+        "5.88",
+        "5.95",
+        "6.6",
+        "6.7",
+        "7.1",
+        "7.3",
+        "7.8"
+      ],
+      "validation_rules": {
+        "positive": true
+      },
+      "origin": "existing",
+      "used_by": [
+        "chain",
+        "chain_link"
+      ]
+    },
+    "chain_pitch_mm": {
+      "key": "chain_pitch_mm",
+      "id": "774aa9da-db40-5985-a865-2591429a3e0a",
+      "origin": "new",
+      "label": "Paso nominal entre pasadores",
+      "data_type": "number",
+      "unit": "mm",
+      "allowed_values": [],
+      "validation_rules": {
+        "positive": true
+      },
+      "used_by": [
+        "chain"
+      ]
+    },
+    "chain_profile_family": {
+      "id": "88dd47b6-9ed4-4406-8576-d9f611c2c3f2",
+      "key": "chain_profile_family",
+      "label": "Perfil cadena",
+      "data_type": "multi_select",
+      "unit": null,
+      "allowed_values": [
+        "Universal 5-8v",
+        "Universal 9-11v",
+        "Shimano HG+",
+        "Shimano Linkglide / CUES",
+        "SRAM Eagle",
+        "SRAM FlatTop",
+        "SRAM T-Type",
+        "Campagnolo",
+        "KMC compatible",
+        "Single speed / BMX",
+        "Otro",
+        "Desconocido / sin confirmar"
+      ],
+      "validation_rules": {},
+      "origin": "existing",
+      "used_by": [
+        "chain",
+        "chain_link",
+        "drivetrain_kit"
+      ]
+    },
+    "chain_quick_links_supplied": {
+      "key": "chain_quick_links_supplied",
+      "id": "c45ba44e-88eb-5526-bcb7-b283fae4566b",
+      "origin": "new",
+      "label": "Cierres rápidos incluidos",
+      "data_type": "json",
+      "unit": null,
+      "allowed_values": [],
+      "validation_rules": {
+        "rows_schema": {
+          "version": 1,
+          "columns": [
+            {
+              "key": "connector_identity",
+              "label": "Cierre de este envase",
+              "type": "text",
+              "required": true
+            },
+            {
+              "key": "quantity",
+              "label": "Conectores completos",
+              "type": "integer",
+              "required": true,
+              "validation": {
+                "positive": true
+              }
+            },
+            {
+              "key": "brand",
+              "label": "Marca del conector",
+              "type": "text"
+            },
+            {
+              "key": "model",
+              "label": "Modelo del conector",
+              "type": "text"
+            },
+            {
+              "key": "manufacturer_sku",
+              "label": "Código de la presentación del conector",
+              "type": "text"
+            },
+            {
+              "key": "source_document",
+              "label": "Documento o envase identificado",
+              "type": "text",
+              "required": true
+            },
+            {
+              "key": "source_url",
+              "label": "URL del documento, si existe",
+              "type": "url"
+            }
+          ],
+          "unique_by": [
+            [
+              "connector_identity"
+            ]
+          ]
+        }
+      },
+      "used_by": [
+        "chain"
+      ]
+    },
+    "chain_speeds": {
+      "id": "77c74b4d-5adb-4c9c-848d-ebd6d91771bf",
+      "key": "chain_speeds",
+      "label": "Velocidades cadena",
+      "data_type": "multi_select",
+      "unit": null,
+      "allowed_values": [
+        "1",
+        "5",
+        "6",
+        "7",
+        "8",
+        "9",
+        "10",
+        "11",
+        "12",
+        "13"
+      ],
+      "validation_rules": {},
+      "origin": "existing",
+      "used_by": [
+        "chain",
+        "chain_link"
+      ]
+    },
+    "chain_width_family": {
+      "id": "bb9b622f-9a2d-43f6-abdc-9c1dbd67f29c",
+      "key": "chain_width_family",
+      "label": "Familia ancho cadena",
+      "data_type": "single_select",
+      "unit": null,
+      "allowed_values": [
+        "1/8",
+        "3/32",
+        "11/128",
+        "Otro",
+        "Desconocido / sin confirmar"
+      ],
+      "validation_rules": {},
+      "origin": "existing",
+      "used_by": [
+        "chain",
+        "chain_link"
+      ]
+    },
+    "connector_reuse_limit": {
+      "key": "connector_reuse_limit",
+      "id": "1400c22c-0a9a-5a68-8253-0d22a4ce88b4",
+      "origin": "new",
+      "label": "Máximo de usos declarado",
+      "data_type": "number",
+      "unit": null,
+      "allowed_values": [],
+      "validation_rules": {
+        "positive": true,
+        "integer": true
+      },
+      "used_by": [
+        "chain_link"
+      ]
+    },
+    "connector_target_declarations": {
+      "key": "connector_target_declarations",
+      "id": "514b5991-9f8e-5a3a-95dd-ba7d4968c781",
+      "origin": "new",
+      "label": "Cadenas admitidas o excluidas",
+      "data_type": "json",
+      "unit": null,
+      "allowed_values": [],
+      "validation_rules": {
+        "rows_schema": {
+          "version": 1,
+          "columns": [
+            {
+              "key": "claim_identity",
+              "label": "Identificación de esta declaración",
+              "type": "text",
+              "required": true
+            },
+            {
+              "key": "scope_kind",
+              "label": "Alcance",
+              "type": "token",
+              "required": true,
+              "allowed_values": [
+                "Modelo documentado",
+                "Sistema documentado"
+              ]
+            },
+            {
+              "key": "target_brand",
+              "label": "Marca del modelo de destino",
+              "type": "text"
+            },
+            {
+              "key": "target_model",
+              "label": "Modelo de destino",
+              "type": "text"
+            },
+            {
+              "key": "target_generation",
+              "label": "Generación del destino",
+              "type": "text"
+            },
+            {
+              "key": "target_system",
+              "label": "Sistema y generación declarados",
+              "type": "text"
+            },
+            {
+              "key": "verdict",
+              "label": "Declaración de la fuente",
+              "type": "token",
+              "required": true,
+              "allowed_values": [
+                "Admitido por la fuente",
+                "Excluido por la fuente",
+                "Condicionado por la fuente"
+              ]
+            },
+            {
+              "key": "conditions",
+              "label": "Condiciones y límites",
+              "type": "text"
+            },
+            {
+              "key": "source_document",
+              "label": "Documento o envase identificado",
+              "type": "text",
+              "required": true
+            },
+            {
+              "key": "source_url",
+              "label": "URL del documento, si existe",
+              "type": "url"
+            },
+            {
+              "key": "chain_class",
+              "label": "Clase de cadena de esta declaración",
+              "type": "text"
+            }
+          ],
+          "unique_by": [
+            [
+              "claim_identity"
+            ]
+          ]
+        }
+      },
+      "used_by": [
+        "chain_link"
+      ]
+    },
+    "drivetrain_declared_compatible_ecosystems": {
+      "id": "af56cbe6-307c-4606-acd3-6ee5d7d48735",
+      "key": "drivetrain_declared_compatible_ecosystems",
+      "label": "Ecosistemas compatibles declarados",
+      "data_type": "multi_select",
+      "unit": null,
+      "allowed_values": [
+        "Ecosistema Shimano",
+        "Ecosistema SRAM",
+        "Ecosistema Campagnolo",
+        "Ecosistema Microshift",
+        "Universal / generico",
+        "Single speed / BMX",
+        "Otro",
+        "Desconocido / sin confirmar"
+      ],
+      "validation_rules": {},
+      "origin": "existing",
+      "used_by": [
+        "chain",
+        "chain_link",
+        "drivetrain_kit"
+      ]
+    },
+    "drivetrain_mode": {
+      "id": "69194005-710c-4fc5-8cad-faf6123cf642",
+      "key": "drivetrain_mode",
+      "label": "Modo transmision",
+      "data_type": "single_select",
+      "unit": null,
+      "allowed_values": [
+        "Derailleur",
+        "Single speed / BMX / IGH",
+        "Desconocido / sin confirmar"
+      ],
+      "validation_rules": {},
+      "origin": "existing",
+      "used_by": [
+        "chain",
+        "chain_link"
+      ]
+    },
+    "drivetrain_platform": {
+      "id": "2255c928-f47f-4fab-8f75-2c35e845e995",
+      "key": "drivetrain_platform",
+      "label": "Plataforma transmision",
+      "data_type": "single_select",
+      "unit": null,
+      "allowed_values": [
+        "Shimano HG / SIS",
+        "Shimano Hyperglide+",
+        "Shimano Linkglide / CUES",
+        "SRAM Eagle",
+        "SRAM FlatTop / AXS road",
+        "SRAM T-Type Transmission",
+        "Campagnolo",
+        "Microshift Advent / Acolyte",
+        "Friccion / universal",
+        "Single speed / BMX",
+        "Generico compatible",
+        "Desconocido / sin confirmar"
+      ],
+      "validation_rules": {},
+      "origin": "existing",
+      "used_by": [
+        "chain",
+        "drivetrain_kit"
+      ]
+    },
+    "drivetrain_primary_ecosystem": {
+      "id": "415e6b7f-d427-4e93-8df2-fd73feddbce9",
+      "key": "drivetrain_primary_ecosystem",
+      "label": "Familia tecnica / ecosistema principal",
+      "data_type": "single_select",
+      "unit": null,
+      "allowed_values": [
+        "Ecosistema Shimano",
+        "Ecosistema SRAM",
+        "Ecosistema Campagnolo",
+        "Ecosistema Microshift",
+        "Universal / generico",
+        "Single speed / BMX",
+        "Otro",
+        "Desconocido / sin confirmar"
+      ],
+      "validation_rules": {},
+      "origin": "existing",
+      "used_by": [
+        "chain",
+        "chain_link",
+        "drivetrain_kit"
+      ]
+    },
+    "link_count": {
+      "id": "9f6847a0-dff3-49a8-bdbc-c4f37f08a079",
+      "key": "link_count",
+      "label": "Cantidad de eslabones",
+      "data_type": "number",
+      "unit": "eslabones",
+      "allowed_values": [
+        "72",
+        "76",
+        "80",
+        "82",
+        "84",
+        "86",
+        "88",
+        "90",
+        "92",
+        "94",
+        "96",
+        "98",
+        "100",
+        "102",
+        "104",
+        "106",
+        "108",
+        "110",
+        "112",
+        "114",
+        "116",
+        "118",
+        "120",
+        "122",
+        "124",
+        "126",
+        "128",
+        "130",
+        "132",
+        "134",
+        "136"
+      ],
+      "validation_rules": {
+        "integer": true,
+        "positive": true
+      },
+      "origin": "existing",
+      "used_by": [
+        "chain"
+      ]
+    },
+    "quick_link_included": {
+      "id": "8fe2160f-74a7-46c7-8e5c-90427a91429b",
+      "key": "quick_link_included",
+      "label": "Incluye missing link",
+      "data_type": "boolean",
+      "unit": null,
+      "allowed_values": [],
+      "validation_rules": {},
+      "origin": "existing",
+      "used_by": [
+        "chain"
+      ]
+    },
+    "spec_evidence_source": {
+      "id": "4f055961-6c16-430b-a4e2-e6b09dc1cccc",
+      "key": "spec_evidence_source",
+      "label": "Fuente de la declaración",
+      "data_type": "text",
+      "unit": null,
+      "allowed_values": [],
+      "validation_rules": {},
+      "origin": "existing",
+      "used_by": [
+        "chain",
+        "chain_link",
+        "drivetrain_kit"
+      ]
+    }
+  },
+  "templates": [
+    {
+      "key": "chain",
+      "name": "Cadena",
+      "id": "a9d0494f-08b5-42df-9836-42e302d2d9f5",
+      "technical_family": "chain",
+      "origin": "existing",
+      "form_contract": {
+        "rules_version": 2,
+        "roles": {
+          "chain_speeds": "measurement",
+          "drivetrain_mode": "measurement",
+          "chain_width_family": "measurement",
+          "chain_outer_width_mm": "measurement",
+          "link_count": "contents",
+          "quick_link_included": "contents",
+          "chain_directional": "primary",
+          "chain_ebike_rated": "declaration",
+          "drivetrain_primary_ecosystem": "legacy",
+          "drivetrain_declared_compatible_ecosystems": "legacy",
+          "drivetrain_platform": "legacy",
+          "chain_profile_family": "legacy",
+          "spec_evidence_source": "declaration",
+          "chain_pitch_mm": "measurement",
+          "chain_other_width_designation": "measurement",
+          "chain_application_declarations": "declaration",
+          "chain_mass_declarations": "measurement",
+          "chain_quick_links_supplied": "contents"
+        },
+        "semantic_roles": {
+          "chain_speeds": "compatibility",
+          "drivetrain_mode": "compatibility",
+          "chain_width_family": "measurement",
+          "chain_outer_width_mm": "measurement",
+          "link_count": "contents",
+          "quick_link_included": "contents",
+          "chain_directional": "intrinsic",
+          "chain_ebike_rated": "declaration",
+          "drivetrain_primary_ecosystem": "legacy",
+          "drivetrain_declared_compatible_ecosystems": "legacy",
+          "drivetrain_platform": "legacy",
+          "chain_profile_family": "legacy",
+          "spec_evidence_source": "evidence",
+          "chain_pitch_mm": "compatibility",
+          "chain_other_width_designation": "compatibility",
+          "chain_application_declarations": "declaration",
+          "chain_mass_declarations": "measurement",
+          "chain_quick_links_supplied": "contents"
+        },
+        "labels": {
+          "chain_speeds": "Velocidades declaradas del modelo",
+          "chain_width_family": "Denominación de ancho",
+          "drivetrain_platform": "Sistema declarado",
+          "chain_outer_width_mm": "Ancho sobre el pasador"
+        },
+        "allowed_when": {
+          "chain_speeds": {
+            "kind": "always"
+          },
+          "drivetrain_mode": {
+            "kind": "always"
+          },
+          "chain_width_family": {
+            "kind": "always"
+          },
+          "chain_outer_width_mm": {
+            "kind": "always"
+          },
+          "link_count": {
+            "kind": "always"
+          },
+          "quick_link_included": {
+            "kind": "always"
+          },
+          "chain_directional": {
+            "kind": "always"
+          },
+          "chain_ebike_rated": {
+            "kind": "always"
+          },
+          "drivetrain_primary_ecosystem": {
+            "kind": "never"
+          },
+          "drivetrain_declared_compatible_ecosystems": {
+            "kind": "never"
+          },
+          "drivetrain_platform": {
+            "kind": "never"
+          },
+          "chain_profile_family": {
+            "kind": "never"
+          },
+          "spec_evidence_source": {
+            "kind": "always"
+          },
+          "chain_pitch_mm": {
+            "kind": "always"
+          },
+          "chain_other_width_designation": {
+            "kind": "when",
+            "rows": [
+              [
+                {
+                  "field": "chain_width_family",
+                  "operator": "eq",
+                  "value_type": "token",
+                  "value": "Otro"
+                }
+              ]
+            ]
+          },
+          "chain_application_declarations": {
+            "kind": "always"
+          },
+          "chain_mass_declarations": {
+            "kind": "always"
+          },
+          "chain_quick_links_supplied": {
+            "kind": "when",
+            "rows": [
+              [
+                {
+                  "field": "quick_link_included",
+                  "operator": "eq",
+                  "value_type": "boolean",
+                  "value": true
+                }
+              ]
+            ]
+          }
+        },
+        "required_when": {
+          "chain_speeds": {
+            "kind": "always"
+          },
+          "drivetrain_mode": {
+            "kind": "never"
+          },
+          "chain_width_family": {
+            "kind": "never"
+          },
+          "chain_outer_width_mm": {
+            "kind": "never"
+          },
+          "link_count": {
+            "kind": "never"
+          },
+          "quick_link_included": {
+            "kind": "never"
+          },
+          "chain_directional": {
+            "kind": "never"
+          },
+          "chain_ebike_rated": {
+            "kind": "never"
+          },
+          "drivetrain_primary_ecosystem": {
+            "kind": "never"
+          },
+          "drivetrain_declared_compatible_ecosystems": {
+            "kind": "never"
+          },
+          "drivetrain_platform": {
+            "kind": "never"
+          },
+          "chain_profile_family": {
+            "kind": "never"
+          },
+          "spec_evidence_source": {
+            "kind": "never"
+          },
+          "chain_pitch_mm": {
+            "kind": "never"
+          },
+          "chain_other_width_designation": {
+            "kind": "when",
+            "rows": [
+              [
+                {
+                  "field": "chain_width_family",
+                  "operator": "eq",
+                  "value_type": "token",
+                  "value": "Otro"
+                }
+              ]
+            ]
+          },
+          "chain_application_declarations": {
+            "kind": "always"
+          },
+          "chain_mass_declarations": {
+            "kind": "never"
+          },
+          "chain_quick_links_supplied": {
+            "kind": "when",
+            "rows": [
+              [
+                {
+                  "field": "quick_link_included",
+                  "operator": "eq",
+                  "value_type": "boolean",
+                  "value": true
+                }
+              ]
+            ]
+          }
+        },
+        "allowed_options": {},
+        "prerequisites": {
+          "chain_ebike_rated": [
+            "spec_evidence_source"
+          ],
+          "chain_speeds": [
+            "spec_evidence_source"
+          ],
+          "chain_width_family": [
+            "spec_evidence_source"
+          ],
+          "chain_outer_width_mm": [
+            "spec_evidence_source"
+          ],
+          "chain_directional": [
+            "spec_evidence_source"
+          ],
+          "link_count": [
+            "spec_evidence_source"
+          ],
+          "quick_link_included": [
+            "spec_evidence_source"
+          ],
+          "chain_pitch_mm": [
+            "spec_evidence_source"
+          ]
+        },
+        "helpers": {
+          "chain_speeds": "Velocidades declaradas para este modelo. No se deducen del ancho ni confirman por sí solas un montaje. Las aplicaciones siguientes conservan las condiciones por sistema; esta lista no se cruza con marcas ni plataformas.",
+          "drivetrain_mode": "Tipo de transmisión para el que se declara esta cadena o conector.",
+          "chain_width_family": "Denominación nominal del fabricante. Una cadena 1/8 no corresponde a la cobertura declarada para desviador de 5 o más piñones. Las otras denominaciones no fijan por sí solas las velocidades.",
+          "drivetrain_platform": "Sistema indicado por el fabricante para este modelo. Conserva su fuente y alcance.",
+          "chain_outer_width_mm": "Ancho sobre el pasador. Conserva la medida real; no determina por sí sola las velocidades compatibles.",
+          "drivetrain_declared_compatible_ecosystems": "Declaraciones del fabricante; no crean combinaciones entre componentes.",
+          "chain_application_declarations": "Una fila por modelo o sistema, alcance y número documentado. Las marchas internas no son piñones; una clase HG 11 puede tener otra cobertura LINKGLIDE. La fila es una declaración, no una certificación del montaje.",
+          "chain_mass_declarations": "Los eslabones de pesaje no son la longitud vendida. No se aplica una cifra de un modelo a todas sus presentaciones.",
+          "chain_quick_links_supplied": "Dos mitades forman un cierre. Su presencia no establece reutilización ni compatibilidad con otras cadenas."
+        },
+        "evidence_requirements": {
+          "chain_speeds": "oem_spec",
+          "drivetrain_mode": "oem_or_package",
+          "chain_width_family": "oem_or_package",
+          "chain_outer_width_mm": "oem_spec",
+          "link_count": "package_or_label",
+          "quick_link_included": "package_or_label",
+          "chain_directional": "oem_spec",
+          "chain_ebike_rated": "oem_spec",
+          "drivetrain_primary_ecosystem": "name_reading_hint_only",
+          "drivetrain_declared_compatible_ecosystems": "oem_spec",
+          "drivetrain_platform": "oem_spec",
+          "chain_profile_family": "name_reading_hint_only",
+          "spec_evidence_source": "oem_or_package",
+          "chain_pitch_mm": "oem_or_package",
+          "chain_other_width_designation": "oem_or_package",
+          "chain_application_declarations": "oem_or_package",
+          "chain_mass_declarations": "oem_or_package",
+          "chain_quick_links_supplied": "oem_or_package"
+        },
+        "row_conditions": {
+          "version": 1,
+          "fields": {
+            "chain_application_declarations": {
+              "allowed_when": {
+                "target_brand": {
+                  "kind": "when",
+                  "rows": [
+                    [
+                      {
+                        "field": "scope_kind",
+                        "operator": "eq",
+                        "value_type": "token",
+                        "value": "Modelo documentado"
+                      }
+                    ]
+                  ]
+                },
+                "target_model": {
+                  "kind": "when",
+                  "rows": [
+                    [
+                      {
+                        "field": "scope_kind",
+                        "operator": "eq",
+                        "value_type": "token",
+                        "value": "Modelo documentado"
+                      }
+                    ]
+                  ]
+                },
+                "target_generation": {
+                  "kind": "when",
+                  "rows": [
+                    [
+                      {
+                        "field": "scope_kind",
+                        "operator": "eq",
+                        "value_type": "token",
+                        "value": "Modelo documentado"
+                      }
+                    ]
+                  ]
+                },
+                "target_system": {
+                  "kind": "when",
+                  "rows": [
+                    [
+                      {
+                        "field": "scope_kind",
+                        "operator": "eq",
+                        "value_type": "token",
+                        "value": "Sistema documentado"
+                      }
+                    ]
+                  ]
+                },
+                "rear_sprockets": {
+                  "kind": "when",
+                  "rows": [
+                    [
+                      {
+                        "field": "drive_kind",
+                        "operator": "eq",
+                        "value_type": "token",
+                        "value": "Desviador externo"
+                      }
+                    ]
+                  ]
+                },
+                "internal_gears": {
+                  "kind": "when",
+                  "rows": [
+                    [
+                      {
+                        "field": "drive_kind",
+                        "operator": "eq",
+                        "value_type": "token",
+                        "value": "Cambio interno"
+                      }
+                    ]
+                  ]
+                }
+              },
+              "required_when": {
+                "target_brand": {
+                  "kind": "when",
+                  "rows": [
+                    [
+                      {
+                        "field": "scope_kind",
+                        "operator": "eq",
+                        "value_type": "token",
+                        "value": "Modelo documentado"
+                      }
+                    ]
+                  ]
+                },
+                "target_model": {
+                  "kind": "when",
+                  "rows": [
+                    [
+                      {
+                        "field": "scope_kind",
+                        "operator": "eq",
+                        "value_type": "token",
+                        "value": "Modelo documentado"
+                      }
+                    ]
+                  ]
+                },
+                "target_system": {
+                  "kind": "when",
+                  "rows": [
+                    [
+                      {
+                        "field": "scope_kind",
+                        "operator": "eq",
+                        "value_type": "token",
+                        "value": "Sistema documentado"
+                      }
+                    ]
+                  ]
+                },
+                "conditions": {
+                  "kind": "when",
+                  "rows": [
+                    [
+                      {
+                        "field": "verdict",
+                        "operator": "eq",
+                        "value_type": "token",
+                        "value": "Condicionado por la fuente"
+                      }
+                    ]
+                  ]
+                }
+              }
+            }
+          }
+        }
+      },
+      "fields": [
+        {
+          "key": "chain_speeds",
+          "section_key": "measurement",
+          "sort_order": 0,
+          "is_required": false,
+          "visibility_rules": [],
+          "option_rules": [],
+          "constraint_rules": []
+        },
+        {
+          "key": "drivetrain_mode",
+          "section_key": "measurement",
+          "sort_order": 10,
+          "is_required": false,
+          "visibility_rules": [],
+          "option_rules": [],
+          "constraint_rules": []
+        },
+        {
+          "key": "chain_width_family",
+          "section_key": "measurement",
+          "sort_order": 20,
+          "is_required": false,
+          "visibility_rules": [],
+          "option_rules": [],
+          "constraint_rules": [
+            {
+              "all": [
+                {
+                  "field": "drivetrain_mode",
+                  "value": "Derailleur"
+                },
+                {
+                  "field": "chain_speeds",
+                  "value": [
+                    "5",
+                    "6",
+                    "7",
+                    "8",
+                    "9",
+                    "10",
+                    "11",
+                    "12",
+                    "13"
+                  ],
+                  "operator": "contains_any"
+                }
+              ],
+              "allow": [
+                "3/32",
+                "11/128",
+                "Otro",
+                "Desconocido / sin confirmar"
+              ],
+              "scope": "1/8 wide chains excluded for declared modern derailleur use, not historical 2-3 cogs",
+              "sources": [
+                "https://www.kmcchain.eu/service/glossary",
+                "https://www.sheldonbrown.com/gloss_ch.html"
+              ]
+            }
+          ]
+        },
+        {
+          "key": "chain_outer_width_mm",
+          "section_key": "measurement",
+          "sort_order": 30,
+          "is_required": false,
+          "visibility_rules": [],
+          "option_rules": [],
+          "constraint_rules": []
+        },
+        {
+          "key": "link_count",
+          "section_key": "contents",
+          "sort_order": 40,
+          "is_required": false,
+          "visibility_rules": [],
+          "option_rules": [],
+          "constraint_rules": []
+        },
+        {
+          "key": "quick_link_included",
+          "section_key": "contents",
+          "sort_order": 50,
+          "is_required": false,
+          "visibility_rules": [],
+          "option_rules": [],
+          "constraint_rules": []
+        },
+        {
+          "key": "chain_directional",
+          "section_key": "primary",
+          "sort_order": 60,
+          "is_required": false,
+          "visibility_rules": [],
+          "option_rules": [],
+          "constraint_rules": []
+        },
+        {
+          "key": "chain_ebike_rated",
+          "section_key": "declaration",
+          "sort_order": 70,
+          "is_required": false,
+          "visibility_rules": [],
+          "option_rules": [],
+          "constraint_rules": []
+        },
+        {
+          "key": "drivetrain_primary_ecosystem",
+          "section_key": "legacy",
+          "sort_order": 80,
+          "is_required": false,
+          "visibility_rules": [],
+          "option_rules": [],
+          "constraint_rules": []
+        },
+        {
+          "key": "drivetrain_declared_compatible_ecosystems",
+          "section_key": "legacy",
+          "sort_order": 90,
+          "is_required": false,
+          "visibility_rules": [],
+          "option_rules": [],
+          "constraint_rules": []
+        },
+        {
+          "key": "drivetrain_platform",
+          "section_key": "legacy",
+          "sort_order": 100,
+          "is_required": false,
+          "visibility_rules": [],
+          "option_rules": [],
+          "constraint_rules": []
+        },
+        {
+          "key": "chain_profile_family",
+          "section_key": "legacy",
+          "sort_order": 110,
+          "is_required": false,
+          "visibility_rules": [],
+          "option_rules": [],
+          "constraint_rules": []
+        },
+        {
+          "key": "spec_evidence_source",
+          "section_key": "declaration",
+          "sort_order": 120,
+          "is_required": false,
+          "visibility_rules": [],
+          "option_rules": [],
+          "constraint_rules": []
+        },
+        {
+          "key": "chain_pitch_mm",
+          "section_key": "measurement",
+          "sort_order": 130,
+          "is_required": false,
+          "visibility_rules": [],
+          "option_rules": [],
+          "constraint_rules": []
+        },
+        {
+          "key": "chain_other_width_designation",
+          "section_key": "measurement",
+          "sort_order": 140,
+          "is_required": false,
+          "visibility_rules": [],
+          "option_rules": [],
+          "constraint_rules": []
+        },
+        {
+          "key": "chain_application_declarations",
+          "section_key": "declaration",
+          "sort_order": 150,
+          "is_required": false,
+          "visibility_rules": [],
+          "option_rules": [],
+          "constraint_rules": []
+        },
+        {
+          "key": "chain_mass_declarations",
+          "section_key": "measurement",
+          "sort_order": 160,
+          "is_required": false,
+          "visibility_rules": [],
+          "option_rules": [],
+          "constraint_rules": []
+        },
+        {
+          "key": "chain_quick_links_supplied",
+          "section_key": "contents",
+          "sort_order": 170,
+          "is_required": false,
+          "visibility_rules": [],
+          "option_rules": [],
+          "constraint_rules": []
+        }
+      ]
+    },
+    {
+      "key": "chain_link",
+      "name": "Missing Link / Conector Cadena",
+      "id": "9c93c819-cd05-4615-9e57-091af95cf1f0",
+      "technical_family": "chain_link",
+      "origin": "existing",
+      "form_contract": {
+        "rules_version": 2,
+        "roles": {
+          "chain_connector_type": "primary",
+          "chain_speeds": "measurement",
+          "chain_connector_target": "legacy",
+          "chain_connector_directional": "declaration",
+          "chain_link_reusable": "declaration",
+          "chain_link_pack_qty": "contents",
+          "chain_width_family": "measurement",
+          "chain_outer_width_mm": "measurement",
+          "drivetrain_primary_ecosystem": "legacy",
+          "drivetrain_declared_compatible_ecosystems": "legacy",
+          "chain_profile_family": "legacy",
+          "drivetrain_mode": "legacy",
+          "spec_evidence_source": "declaration",
+          "connector_reuse_limit": "declaration",
+          "connector_target_declarations": "declaration"
+        },
+        "semantic_roles": {
+          "chain_connector_type": "intrinsic",
+          "chain_speeds": "compatibility",
+          "chain_connector_target": "legacy",
+          "chain_connector_directional": "declaration",
+          "chain_link_reusable": "declaration",
+          "chain_link_pack_qty": "contents",
+          "chain_width_family": "measurement",
+          "chain_outer_width_mm": "measurement",
+          "drivetrain_primary_ecosystem": "legacy",
+          "drivetrain_declared_compatible_ecosystems": "legacy",
+          "chain_profile_family": "legacy",
+          "drivetrain_mode": "legacy",
+          "spec_evidence_source": "evidence",
+          "connector_reuse_limit": "declaration",
+          "connector_target_declarations": "declaration"
+        },
+        "labels": {
+          "chain_speeds": "Clase de cadena declarada",
+          "chain_width_family": "Denominación de ancho",
+          "chain_link_pack_qty": "Conectores completos por envase",
+          "chain_link_reusable": "Reutilizable según el fabricante",
+          "chain_connector_type": "Tipo de conector",
+          "chain_outer_width_mm": "Ancho del conector montado sobre el pasador"
+        },
+        "allowed_when": {
+          "chain_connector_type": {
+            "kind": "always"
+          },
+          "chain_speeds": {
+            "kind": "always"
+          },
+          "chain_connector_target": {
+            "kind": "never"
+          },
+          "chain_connector_directional": {
+            "kind": "always"
+          },
+          "chain_link_reusable": {
+            "kind": "always"
+          },
+          "chain_link_pack_qty": {
+            "kind": "always"
+          },
+          "chain_width_family": {
+            "kind": "always"
+          },
+          "chain_outer_width_mm": {
+            "kind": "always"
+          },
+          "drivetrain_primary_ecosystem": {
+            "kind": "never"
+          },
+          "drivetrain_declared_compatible_ecosystems": {
+            "kind": "never"
+          },
+          "chain_profile_family": {
+            "kind": "never"
+          },
+          "drivetrain_mode": {
+            "kind": "never"
+          },
+          "spec_evidence_source": {
+            "kind": "always"
+          },
+          "connector_reuse_limit": {
+            "kind": "when",
+            "rows": [
+              [
+                {
+                  "field": "chain_link_reusable",
+                  "operator": "eq",
+                  "value_type": "boolean",
+                  "value": true
+                }
+              ]
+            ]
+          },
+          "connector_target_declarations": {
+            "kind": "always"
+          }
+        },
+        "required_when": {
+          "chain_connector_type": {
+            "kind": "always"
+          },
+          "chain_speeds": {
+            "kind": "always"
+          },
+          "chain_connector_target": {
+            "kind": "never"
+          },
+          "chain_connector_directional": {
+            "kind": "never"
+          },
+          "chain_link_reusable": {
+            "kind": "never"
+          },
+          "chain_link_pack_qty": {
+            "kind": "never"
+          },
+          "chain_width_family": {
+            "kind": "never"
+          },
+          "chain_outer_width_mm": {
+            "kind": "never"
+          },
+          "drivetrain_primary_ecosystem": {
+            "kind": "never"
+          },
+          "drivetrain_declared_compatible_ecosystems": {
+            "kind": "never"
+          },
+          "chain_profile_family": {
+            "kind": "never"
+          },
+          "drivetrain_mode": {
+            "kind": "never"
+          },
+          "spec_evidence_source": {
+            "kind": "never"
+          },
+          "connector_reuse_limit": {
+            "kind": "never"
+          },
+          "connector_target_declarations": {
+            "kind": "always"
+          }
+        },
+        "allowed_options": {},
+        "prerequisites": {
+          "chain_connector_directional": [
+            "chain_connector_type",
+            "spec_evidence_source"
+          ],
+          "chain_link_reusable": [
+            "chain_connector_type",
+            "spec_evidence_source"
+          ],
+          "chain_speeds": [
+            "chain_connector_type",
+            "spec_evidence_source"
+          ],
+          "chain_width_family": [
+            "chain_connector_type",
+            "spec_evidence_source"
+          ],
+          "chain_outer_width_mm": [
+            "chain_connector_type",
+            "spec_evidence_source"
+          ],
+          "chain_link_pack_qty": [
+            "chain_connector_type",
+            "spec_evidence_source"
+          ],
+          "connector_reuse_limit": [
+            "spec_evidence_source"
+          ],
+          "connector_target_declarations": [
+            "chain_connector_type"
+          ]
+        },
+        "helpers": {
+          "chain_speeds": "Clase indicada para las cadenas que admite este conector. No es el número de piñones de la bicicleta y no confirma por sí sola compatibilidad.",
+          "drivetrain_mode": "Tipo de transmisión para el que se declara esta cadena o conector.",
+          "chain_width_family": "Denominación nominal del fabricante. No es una medición del ancho exterior.",
+          "chain_link_pack_qty": "Cuenta cierres completos: dos mitades de un eslabón rápido forman un conector, no dos.",
+          "chain_link_reusable": "Registra lo indicado para este modelo. Sin dato no autoriza reutilizarlo; un pasador de unión nuevo se utiliza una sola vez.",
+          "chain_connector_type": "Missing link: cierre rápido de dos placas. Pin: pasador de unión. Half link: medio eslabón. El clip es otro tipo de cierre.",
+          "chain_outer_width_mm": "Medida exterior del cierre ya montado. No es la longitud de la punta guía de un pasador de unión.",
+          "spec_evidence_source": "URL o identificación del envase/manual de este modelo. Se necesita antes de declarar sus cadenas admitidas, reutilización o sentido.",
+          "chain_connector_target": "Copia los modelos o series admitidos y sus excepciones. Dos cadenas de la misma marca o velocidad pueden necesitar conectores distintos.",
+          "chain_connector_directional": "Confirma las flechas o instrucciones del conector, independientemente del sentido de la cadena.",
+          "drivetrain_declared_compatible_ecosystems": "Declaraciones del fabricante; no crean combinaciones entre componentes.",
+          "connector_target_declarations": "El destino es la cadena, con modelo/generación o sistema explícito. No es el cambio de la bicicleta. Igual marca, velocidad o silueta no demuestran que el cierre sirva; una exclusión permanece en su propio alcance."
+        },
+        "evidence_requirements": {
+          "chain_connector_type": "package_or_label",
+          "chain_speeds": "oem_spec",
+          "chain_connector_target": "oem_spec",
+          "chain_connector_directional": "oem_spec",
+          "chain_link_reusable": "oem_spec",
+          "chain_link_pack_qty": "package_or_label",
+          "chain_width_family": "oem_or_package",
+          "chain_outer_width_mm": "oem_spec",
+          "drivetrain_primary_ecosystem": "name_reading_hint_only",
+          "drivetrain_declared_compatible_ecosystems": "oem_spec",
+          "chain_profile_family": "name_reading_hint_only",
+          "drivetrain_mode": "name_reading_hint_only",
+          "spec_evidence_source": "oem_or_package",
+          "connector_reuse_limit": "oem_or_package",
+          "connector_target_declarations": "oem_or_package"
+        },
+        "row_conditions": {
+          "version": 1,
+          "fields": {
+            "connector_target_declarations": {
+              "allowed_when": {
+                "target_brand": {
+                  "kind": "when",
+                  "rows": [
+                    [
+                      {
+                        "field": "scope_kind",
+                        "operator": "eq",
+                        "value_type": "token",
+                        "value": "Modelo documentado"
+                      }
+                    ]
+                  ]
+                },
+                "target_model": {
+                  "kind": "when",
+                  "rows": [
+                    [
+                      {
+                        "field": "scope_kind",
+                        "operator": "eq",
+                        "value_type": "token",
+                        "value": "Modelo documentado"
+                      }
+                    ]
+                  ]
+                },
+                "target_generation": {
+                  "kind": "when",
+                  "rows": [
+                    [
+                      {
+                        "field": "scope_kind",
+                        "operator": "eq",
+                        "value_type": "token",
+                        "value": "Modelo documentado"
+                      }
+                    ]
+                  ]
+                },
+                "target_system": {
+                  "kind": "when",
+                  "rows": [
+                    [
+                      {
+                        "field": "scope_kind",
+                        "operator": "eq",
+                        "value_type": "token",
+                        "value": "Sistema documentado"
+                      }
+                    ]
+                  ]
+                }
+              },
+              "required_when": {
+                "target_brand": {
+                  "kind": "when",
+                  "rows": [
+                    [
+                      {
+                        "field": "scope_kind",
+                        "operator": "eq",
+                        "value_type": "token",
+                        "value": "Modelo documentado"
+                      }
+                    ]
+                  ]
+                },
+                "target_model": {
+                  "kind": "when",
+                  "rows": [
+                    [
+                      {
+                        "field": "scope_kind",
+                        "operator": "eq",
+                        "value_type": "token",
+                        "value": "Modelo documentado"
+                      }
+                    ]
+                  ]
+                },
+                "target_system": {
+                  "kind": "when",
+                  "rows": [
+                    [
+                      {
+                        "field": "scope_kind",
+                        "operator": "eq",
+                        "value_type": "token",
+                        "value": "Sistema documentado"
+                      }
+                    ]
+                  ]
+                },
+                "conditions": {
+                  "kind": "when",
+                  "rows": [
+                    [
+                      {
+                        "field": "verdict",
+                        "operator": "eq",
+                        "value_type": "token",
+                        "value": "Condicionado por la fuente"
+                      }
+                    ]
+                  ]
+                }
+              }
+            }
+          }
+        }
+      },
+      "fields": [
+        {
+          "key": "chain_connector_type",
+          "section_key": "primary",
+          "sort_order": 0,
+          "is_required": false,
+          "visibility_rules": [],
+          "option_rules": [],
+          "constraint_rules": []
+        },
+        {
+          "key": "chain_speeds",
+          "section_key": "measurement",
+          "sort_order": 10,
+          "is_required": false,
+          "visibility_rules": [],
+          "option_rules": [],
+          "constraint_rules": []
+        },
+        {
+          "key": "chain_connector_target",
+          "section_key": "legacy",
+          "sort_order": 20,
+          "is_required": false,
+          "visibility_rules": [],
+          "option_rules": [],
+          "constraint_rules": []
+        },
+        {
+          "key": "chain_connector_directional",
+          "section_key": "declaration",
+          "sort_order": 30,
+          "is_required": false,
+          "visibility_rules": [],
+          "option_rules": [],
+          "constraint_rules": []
+        },
+        {
+          "key": "chain_link_reusable",
+          "section_key": "declaration",
+          "sort_order": 40,
+          "is_required": false,
+          "visibility_rules": [],
+          "option_rules": [],
+          "constraint_rules": [
+            {
+              "allow": [
+                false
+              ],
+              "field": "chain_connector_type",
+              "scope": "replacement connecting rivet, not a reusable master link",
+              "value": "Pin",
+              "sources": [
+                "https://www.parktool.com/en-us/blog/repair-help/chain-replacement-derailleur-bikes",
+                "https://www.sheldonbrown.com/chains.html"
+              ]
+            }
+          ]
+        },
+        {
+          "key": "chain_link_pack_qty",
+          "section_key": "contents",
+          "sort_order": 50,
+          "is_required": false,
+          "visibility_rules": [],
+          "option_rules": [],
+          "constraint_rules": []
+        },
+        {
+          "key": "chain_width_family",
+          "section_key": "measurement",
+          "sort_order": 60,
+          "is_required": false,
+          "visibility_rules": [],
+          "option_rules": [],
+          "constraint_rules": []
+        },
+        {
+          "key": "chain_outer_width_mm",
+          "section_key": "measurement",
+          "sort_order": 70,
+          "is_required": false,
+          "visibility_rules": [],
+          "option_rules": [],
+          "constraint_rules": []
+        },
+        {
+          "key": "drivetrain_primary_ecosystem",
+          "section_key": "legacy",
+          "sort_order": 80,
+          "is_required": false,
+          "visibility_rules": [],
+          "option_rules": [],
+          "constraint_rules": []
+        },
+        {
+          "key": "drivetrain_declared_compatible_ecosystems",
+          "section_key": "legacy",
+          "sort_order": 90,
+          "is_required": false,
+          "visibility_rules": [],
+          "option_rules": [],
+          "constraint_rules": []
+        },
+        {
+          "key": "chain_profile_family",
+          "section_key": "legacy",
+          "sort_order": 100,
+          "is_required": false,
+          "visibility_rules": [],
+          "option_rules": [],
+          "constraint_rules": []
+        },
+        {
+          "key": "drivetrain_mode",
+          "section_key": "legacy",
+          "sort_order": 110,
+          "is_required": false,
+          "visibility_rules": [],
+          "option_rules": [],
+          "constraint_rules": []
+        },
+        {
+          "key": "spec_evidence_source",
+          "section_key": "declaration",
+          "sort_order": 120,
+          "is_required": false,
+          "visibility_rules": [],
+          "option_rules": [],
+          "constraint_rules": []
+        },
+        {
+          "key": "connector_reuse_limit",
+          "section_key": "declaration",
+          "sort_order": 130,
+          "is_required": false,
+          "visibility_rules": [],
+          "option_rules": [],
+          "constraint_rules": []
+        },
+        {
+          "key": "connector_target_declarations",
+          "section_key": "declaration",
+          "sort_order": 140,
+          "is_required": false,
+          "visibility_rules": [],
+          "option_rules": [],
+          "constraint_rules": []
+        }
+      ]
+    }
+  ],
+  "publication_gates": {
+    "all_family_domain_review_complete": false,
+    "all_product_assignment_review_complete": false,
+    "compatibility_rules_integrated": false,
+    "fill_allowed": false
+  },
+  "mechanical_rule_policy": "No importar reglas ni verified del borrador. Los dictámenes A01-A29 y W01-W11 requieren cierre por interfaz, evidencia OEM y pruebas del consumidor real.",
+  "unresolved_adjudications": [
+    {
+      "patch_id": "MC-03",
+      "path": "/shared_vocabularies/rear_drive_interface/c731_rows",
+      "proposed_op": "add",
+      "preimage_validation": "absent_key",
+      "decision": "corregir",
+      "finding_id": "A03",
+      "severity_if_applied_as_written": "P1",
+      "bounded_change": "Dar ámbito Shimano/edición a todas las filas. Excluir CS-HG800/700/RS400 de L+ROAD11 sin suplemento; excluir CS-7900/7800/6700/6600/5700/5600 de las filas genéricas 10/9/8 en L y M. Mantener suplementos correlacionados dentro de cada fila. Modelo desconocido no resuelve una excepción. No extrapolar celdas ausentes fuera del ámbito C-731.",
+      "source_ids": [
+        "SH-C731"
+      ]
+    },
+    {
+      "patch_id": "MC-04-9",
+      "path": "/row_schemas/freehub_bodies_accepted/columns/-",
+      "proposed_op": "add",
+      "preimage_validation": "append_parent_exists",
+      "decision": "corregir",
+      "finding_id": "A04",
+      "severity_if_applied_as_written": "P1",
+      "bounded_change": "Traducir a filas por marca+modelo+generación/variante, o a una relación de conjuntos soportada. En 190 las columnas admiten text/token/decimal/integer/boolean/url; no insertar text_list ni metadata desconocida.",
+      "source_ids": [
+        "SH-C731"
+      ]
+    },
+    {
+      "patch_id": "MC-04-10",
+      "path": "/definitions/freehub_bodies_accepted/row_schema/columns/-",
+      "proposed_op": "add",
+      "preimage_validation": "append_parent_exists",
+      "decision": "corregir",
+      "finding_id": "A04",
+      "severity_if_applied_as_written": "P1",
+      "bounded_change": "Traducir a filas por marca+modelo+generación/variante, o a una relación de conjuntos soportada. En 190 las columnas admiten text/token/decimal/integer/boolean/url; no insertar text_list ni metadata desconocida.",
+      "source_ids": [
+        "SH-C731"
+      ]
+    },
+    {
+      "patch_id": "MC-05-cassette",
+      "path": "/templates/8/interfaces/0/rules/0/row_semantics",
+      "proposed_op": "add",
+      "preimage_validation": "absent_key",
+      "decision": "rechazar",
+      "finding_id": "A05",
+      "severity_if_applied_as_written": "P1",
+      "bounded_change": "Mantener unknown/outside_declared_scope para ausencias. Emitir incompatible sólo por una exclusión explícita de la pareja/configuración o una tabla cerrada con ambos sujetos identificados dentro de su ámbito y edición. Separador exigido significa requisito pendiente, nunca permiso de uso sin él.",
+      "source_ids": [
+        "SH-C731",
+        "WT-GOAT11"
+      ]
+    },
+    {
+      "patch_id": "MC-05-hub",
+      "path": "/templates/25/interfaces/1/rules/0/row_semantics",
+      "proposed_op": "add",
+      "preimage_validation": "absent_key",
+      "decision": "rechazar",
+      "finding_id": "A05",
+      "severity_if_applied_as_written": "P1",
+      "bounded_change": "Mantener unknown/outside_declared_scope para ausencias. Emitir incompatible sólo por una exclusión explícita de la pareja/configuración o una tabla cerrada con ambos sujetos identificados dentro de su ámbito y edición. Separador exigido significa requisito pendiente, nunca permiso de uso sin él.",
+      "source_ids": [
+        "SH-C731",
+        "WT-GOAT11"
+      ]
+    },
+    {
+      "patch_id": "MC-05-wheel",
+      "path": "/templates/103/interfaces/2/rules/0/row_semantics",
+      "proposed_op": "add",
+      "preimage_validation": "absent_key",
+      "decision": "rechazar",
+      "finding_id": "A05",
+      "severity_if_applied_as_written": "P1",
+      "bounded_change": "Mantener unknown/outside_declared_scope para ausencias. Emitir incompatible sólo por una exclusión explícita de la pareja/configuración o una tabla cerrada con ambos sujetos identificados dentro de su ámbito y edición. Separador exigido significa requisito pendiente, nunca permiso de uso sin él.",
+      "source_ids": [
+        "SH-C731",
+        "WT-GOAT11"
+      ]
+    },
+    {
+      "patch_id": "MC-06",
+      "path": "/templates/26/interfaces/2/rules/0",
+      "proposed_op": "replace",
+      "preimage_validation": "before_matches",
+      "decision": "corregir",
+      "finding_id": "A06",
+      "severity_if_applied_as_written": "P1",
+      "bounded_change": "Modelar frame_port UDH por separado de hanger_installed. Añadir Full Mount sin T-Type; evaluar plataforma y restricciones de cuadro por modelo. Mantener conversión de bracket sólo para modelos revisados y con la pieza requerida. Pares sin fila quedan unknown; claw necesita puntera/retención confirmadas.",
+      "source_ids": [
+        "SR-FULLMOUNT",
+        "SR-XPLR-CHAIN",
+        "SR-XPLR-FRAME",
+        "SH-RD0004"
+      ]
+    },
+    {
+      "patch_id": "MC-07",
+      "path": "/definitions/rear_derailleur_mount_type/vocabulary/-",
+      "proposed_op": "add",
+      "preimage_validation": "append_parent_exists",
+      "decision": "corregir",
+      "finding_id": "A07",
+      "severity_if_applied_as_written": "P1",
+      "bounded_change": "Usar Full Mount (sin patilla) como código de montaje, conservar T-Type/Eagle Transmission y XPLR 13 como plataformas distintas y fuentes por pareja.",
+      "source_ids": [
+        "SR-FULLMOUNT",
+        "SR-XPLR-CHAIN"
+      ]
+    },
+    {
+      "patch_id": "MC-07b",
+      "path": "/definitions/rear_derailleur_mount_type/option_additions_proposed",
+      "proposed_op": "add",
+      "preimage_validation": "absent_key",
+      "decision": "corregir",
+      "finding_id": "A07",
+      "severity_if_applied_as_written": "P1",
+      "bounded_change": "Usar Full Mount (sin patilla) como código de montaje, conservar T-Type/Eagle Transmission y XPLR 13 como plataformas distintas y fuentes por pareja.",
+      "source_ids": [
+        "SR-FULLMOUNT",
+        "SR-XPLR-CHAIN"
+      ]
+    },
+    {
+      "patch_id": "MC-08",
+      "path": "/templates/23/interfaces/0/rules/0",
+      "proposed_op": "replace",
+      "preimage_validation": "before_matches",
+      "decision": "corregir",
+      "finding_id": "A08",
+      "severity_if_applied_as_written": "P1",
+      "bounded_change": "Separar puerto físico y configuración. Distinguir E-type con/sin placa de pedalier y direct mount por modelo. Aceptar sólo la dirección braze-on a abrazadera respaldada por el adaptador exacto. Unknown para tokens fusionados, otros adaptadores o pares no investigados.",
+      "source_ids": [
+        "SH-FD0003",
+        "SH-AD91"
+      ]
+    },
+    {
+      "patch_id": "MC-09",
+      "path": "/templates/23/interfaces/0/rules/1",
+      "proposed_op": "replace",
+      "preimage_validation": "before_matches",
+      "decision": "corregir",
+      "finding_id": "A09",
+      "severity_if_applied_as_written": "P1",
+      "bounded_change": "Proyectar sólo tokens numéricos conocidos a decimal. Separar diámetro base, diámetro objetivo, adaptador homologado e incluido. Clamp menor que tubo mayor falla encaje directo; clamp mayor sólo tiene ruta condicional si el suplemento exacto está documentado. Otro=unknown y No aplica=not_applicable explícito.",
+      "source_ids": [
+        "SH-FD0003",
+        "SH-AD91"
+      ]
+    },
+    {
+      "patch_id": "MC-10",
+      "path": "/templates/22/interfaces/0/rules/0",
+      "proposed_op": "replace",
+      "preimage_validation": "before_matches",
+      "decision": "corregir",
+      "finding_id": "A10",
+      "severity_if_applied_as_written": "P2",
+      "bounded_change": "Reasignar fuente a Sheldon freewheels. Mantener código de estándar separado de medida y tolerancia; tokens legacy 1.37 ISO deben normalizarse como código confirmado, no como medición exacta. Conservar francés/italiano unknown si falta puerto preciso. Limitar exclusión ISO↔M30 al encaje directo conocido.",
+      "source_ids": [
+        "SB-FREEWHEEL"
+      ]
+    },
+    {
+      "patch_id": "MC-11",
+      "path": "/templates/21/interfaces/0/rules/0",
+      "proposed_op": "replace",
+      "preimage_validation": "before_matches",
+      "decision": "rechazar",
+      "finding_id": "A11",
+      "severity_if_applied_as_written": "P1",
+      "bounded_change": "Separar rosca derecha del piñón, rosca izquierda de maza, estándar y presencia de contratuerca. La pareja puede pasar el subchequeo de rosca del piñón, pero la ausencia confirmada de retención requerida impide aprobar el montaje fijo; desconocido deja requisitos pendientes. No codificar una adaptación histórica como permiso universal.",
+      "source_ids": [
+        "SB-FIXED"
+      ]
+    },
+    {
+      "patch_id": "MC-12",
+      "path": "/templates/28/interfaces/0/rules/0",
+      "proposed_op": "replace",
+      "preimage_validation": "before_matches",
+      "decision": "corregir",
+      "finding_id": "A12",
+      "severity_if_applied_as_written": "P1",
+      "bounded_change": "Resolver un endpoint por posición elegida. Comparar el código exacto del montaje directo; desconocido para vocabulario incompleto. Evaluar alcance de zapata, posición de pivotes, llanta y tiro en interfaces adicionales.",
+      "source_ids": [
+        "SB-BRAZED"
+      ]
+    },
+    {
+      "patch_id": "MC-14-brake_caliper",
+      "path": "/templates/5/interfaces/2/rules/0",
+      "proposed_op": "replace",
+      "preimage_validation": "before_matches",
+      "decision": "corregir",
+      "finding_id": "A14C",
+      "severity_if_applied_as_written": "P1",
+      "bounded_change": "Conservar la proyección como compatibilidad del puerto de accionamiento solamente. Conectar las reglas de tiro para cable y matriz de modelos/latiguillo/fluido para hidráulico. No traducir un par no modelado en exclusión global.",
+      "source_ids": [
+        "TRP-HYRD",
+        "SR-HYDRAULIC-MATRIX"
+      ]
+    },
+    {
+      "patch_id": "MC-14-brake_lever",
+      "path": "/templates/6/interfaces/0/rules/0",
+      "proposed_op": "replace",
+      "preimage_validation": "before_matches",
+      "decision": "rechazar",
+      "finding_id": "A14L",
+      "severity_if_applied_as_written": "P1",
+      "bounded_change": "Invertir endpoints: maneta Mechanical puede satisfacer entrada de cáliper Mechanical o Hybrid, sujeto al tiro/modelo; Hydraulic sólo abre evaluación hidráulica específica. Mantener dirección explícita y pruebas recíprocas.",
+      "source_ids": [
+        "TRP-HYRD"
+      ]
+    },
+    {
+      "patch_id": "MC-16",
+      "path": "/definitions/hanger_interface/vocabulary/5",
+      "proposed_op": "remove",
+      "preimage_validation": "before_matches",
+      "decision": "corregir",
+      "finding_id": "A16",
+      "severity_if_applied_as_written": "P2",
+      "bounded_change": "Retirar el alias ambiguo de opciones nuevas y conservar legacy. Resolver por fuente a Shimano Direct mount o unknown, actualizar allowed_options y fixtures. No equipararlo a Full Mount ni afirmar que todos los extensores sirven para cuadros direct mount.",
+      "source_ids": [
+        "WT-GOAT11",
+        "SH-RD0004",
+        "SR-FULLMOUNT"
+      ]
+    },
+    {
+      "patch_id": "MC-17a",
+      "path": "/templates/60/interfaces/0/rules/0",
+      "proposed_op": "replace",
+      "preimage_validation": "before_matches",
+      "decision": "rechazar",
+      "finding_id": "A17A",
+      "severity_if_applied_as_written": "P1",
+      "bounded_change": "Crear puertos por función en el modelo de producto: brake_cable_input y shift_cable_input, cada uno con cabeza y requisitos. Seleccionar el puerto real; conservar ambas funciones en manetas integradas.",
+      "source_ids": [
+        "SH-ST8000"
+      ]
+    },
+    {
+      "patch_id": "MC-17b",
+      "path": "/templates/60/interfaces/0/rules/1",
+      "proposed_op": "replace",
+      "preimage_validation": "before_matches",
+      "decision": "corregir",
+      "finding_id": "A17B",
+      "severity_if_applied_as_written": "P2",
+      "bounded_change": "Mantener la regla deshabilitada con motivo de campo ausente y resultado unknown. Añadir luego requisito por puerto de freno y de cambio, con cabeza canónica/medidas del modelo. No confundir maneta con sólo freno.",
+      "source_ids": [
+        "SH-ST8000"
+      ]
+    },
+    {
+      "patch_id": "MC-18-brake_caliper",
+      "path": "/templates/5/interfaces/2/rules/1",
+      "proposed_op": "replace",
+      "preimage_validation": "before_matches",
+      "decision": "corregir",
+      "finding_id": "A18",
+      "severity_if_applied_as_written": "P1",
+      "bounded_change": "Eliminar equivalence_classes globales. Guardar accepted_fluids por modelo/generación y fluido exacto; distinguir DOT5 siliconado. Mismatch documentado de fluidos se bloquea, dato insuficiente queda unknown. Comparar maneta/cáliper mediante matriz propia, no sólo fluido.",
+      "source_ids": [
+        "SR-DOT",
+        "SR-MAVEN-OIL",
+        "SR-HYDRAULIC-MATRIX",
+        "SR-MAVEN-MOTIVE"
+      ]
+    },
+    {
+      "patch_id": "MC-18-brake_lever",
+      "path": "/templates/6/interfaces/0/rules/2",
+      "proposed_op": "replace",
+      "preimage_validation": "before_matches",
+      "decision": "corregir",
+      "finding_id": "A18",
+      "severity_if_applied_as_written": "P1",
+      "bounded_change": "Eliminar equivalence_classes globales. Guardar accepted_fluids por modelo/generación y fluido exacto; distinguir DOT5 siliconado. Mismatch documentado de fluidos se bloquea, dato insuficiente queda unknown. Comparar maneta/cáliper mediante matriz propia, no sólo fluido.",
+      "source_ids": [
+        "SR-DOT",
+        "SR-MAVEN-OIL",
+        "SR-HYDRAULIC-MATRIX",
+        "SR-MAVEN-MOTIVE"
+      ]
+    },
+    {
+      "patch_id": "MC-18-brake_fluid",
+      "path": "/templates/65/interfaces/0/rules/0",
+      "proposed_op": "replace",
+      "preimage_validation": "before_matches",
+      "decision": "corregir",
+      "finding_id": "A18",
+      "severity_if_applied_as_written": "P1",
+      "bounded_change": "Eliminar equivalence_classes globales. Guardar accepted_fluids por modelo/generación y fluido exacto; distinguir DOT5 siliconado. Mismatch documentado de fluidos se bloquea, dato insuficiente queda unknown. Comparar maneta/cáliper mediante matriz propia, no sólo fluido.",
+      "source_ids": [
+        "SR-DOT",
+        "SR-MAVEN-OIL",
+        "SR-HYDRAULIC-MATRIX",
+        "SR-MAVEN-MOTIVE"
+      ]
+    },
+    {
+      "patch_id": "MC-19-hub",
+      "path": "/templates/25/interfaces/2/rules/0",
+      "proposed_op": "replace",
+      "preimage_validation": "before_matches",
+      "decision": "corregir",
+      "finding_id": "A19",
+      "severity_if_applied_as_written": "P1",
+      "bounded_change": "Separar direct_fit de adapter_path. Usar SM-RTAD05 sólo para rotor seis pernos→maza Center Lock; mantener max 203 mm y exclusión RT86/RT76. No inventar mínimo 160. En ruta inversa, direct_fit=false y adapter_path=unknown, sin aprobación de ensamblaje. Exigir las demás condiciones del kit.",
+      "source_ids": [
+        "PK-ROTOR",
+        "SH-RTAD05"
+      ]
+    },
+    {
+      "patch_id": "MC-19-rotor",
+      "path": "/templates/30/interfaces/0/rules/0",
+      "proposed_op": "replace",
+      "preimage_validation": "before_matches",
+      "decision": "corregir",
+      "finding_id": "A19",
+      "severity_if_applied_as_written": "P1",
+      "bounded_change": "Separar direct_fit de adapter_path. Usar SM-RTAD05 sólo para rotor seis pernos→maza Center Lock; mantener max 203 mm y exclusión RT86/RT76. No inventar mínimo 160. En ruta inversa, direct_fit=false y adapter_path=unknown, sin aprobación de ensamblaje. Exigir las demás condiciones del kit.",
+      "source_ids": [
+        "PK-ROTOR",
+        "SH-RTAD05"
+      ]
+    },
+    {
+      "patch_id": "MC-19-wheel",
+      "path": "/templates/103/interfaces/3/rules/0",
+      "proposed_op": "replace",
+      "preimage_validation": "before_matches",
+      "decision": "corregir",
+      "finding_id": "A19",
+      "severity_if_applied_as_written": "P1",
+      "bounded_change": "Separar direct_fit de adapter_path. Usar SM-RTAD05 sólo para rotor seis pernos→maza Center Lock; mantener max 203 mm y exclusión RT86/RT76. No inventar mínimo 160. En ruta inversa, direct_fit=false y adapter_path=unknown, sin aprobación de ensamblaje. Exigir las demás condiciones del kit.",
+      "source_ids": [
+        "PK-ROTOR",
+        "SH-RTAD05"
+      ]
+    },
+    {
+      "patch_id": "MC-20-brake_caliper",
+      "path": "/templates/5/interfaces/1/rules/0",
+      "proposed_op": "replace",
+      "preimage_validation": "before_matches",
+      "decision": "corregir",
+      "finding_id": "A20",
+      "severity_if_applied_as_written": "P1",
+      "bounded_change": "Desactivar comparación mecánica por texto libre; usar unknown hasta normalizar familia/modelo de pastilla y relación con cáliper. Si se conserva una comparación textual, que sea sólo estructural y no apruebe ni bloquee. Eliminar referencia a exhaustive=true como cierre global.",
+      "source_ids": [
+        "TRP-HYRD"
+      ]
+    },
+    {
+      "patch_id": "MC-20-brake_pad",
+      "path": "/templates/7/interfaces/0/rules/0",
+      "proposed_op": "replace",
+      "preimage_validation": "before_matches",
+      "decision": "corregir",
+      "finding_id": "A20",
+      "severity_if_applied_as_written": "P1",
+      "bounded_change": "Desactivar comparación mecánica por texto libre; usar unknown hasta normalizar familia/modelo de pastilla y relación con cáliper. Si se conserva una comparación textual, que sea sólo estructural y no apruebe ni bloquee. Eliminar referencia a exhaustive=true como cierre global.",
+      "source_ids": [
+        "TRP-HYRD"
+      ]
+    },
+    {
+      "patch_id": "MC-21-compatible_caliper_models-43",
+      "path": "/row_schemas/compatible_caliper_models/columns/-",
+      "proposed_op": "add",
+      "preimage_validation": "append_parent_exists",
+      "decision": "rechazar",
+      "finding_id": "A21",
+      "severity_if_applied_as_written": "P1",
+      "bounded_change": "No añadir exhaustive como permiso de negación. Si hace falta tabla cerrada, definir coverage_scope a nivel de relación: fabricante, familias/modelos/generaciones, interfaz/posición, edición, condiciones y regla OEM explícita sobre ausencias. Aplicarla sólo cuando ambas identidades estén dentro de ese ámbito; preferir exclusiones explícitas.",
+      "source_ids": [
+        "WT-GOAT11",
+        "SR-HYDRAULIC-MATRIX"
+      ]
+    },
+    {
+      "patch_id": "MC-21-compatible_caliper_models-44",
+      "path": "/definitions/compatible_caliper_models/row_schema/columns/-",
+      "proposed_op": "add",
+      "preimage_validation": "append_parent_exists",
+      "decision": "rechazar",
+      "finding_id": "A21",
+      "severity_if_applied_as_written": "P1",
+      "bounded_change": "No añadir exhaustive como permiso de negación. Si hace falta tabla cerrada, definir coverage_scope a nivel de relación: fabricante, familias/modelos/generaciones, interfaz/posición, edición, condiciones y regla OEM explícita sobre ausencias. Aplicarla sólo cuando ambas identidades estén dentro de ese ámbito; preferir exclusiones explícitas.",
+      "source_ids": [
+        "WT-GOAT11",
+        "SR-HYDRAULIC-MATRIX"
+      ]
+    },
+    {
+      "patch_id": "MC-21-shifter_models_compatible-45",
+      "path": "/row_schemas/shifter_models_compatible/columns/-",
+      "proposed_op": "add",
+      "preimage_validation": "append_parent_exists",
+      "decision": "rechazar",
+      "finding_id": "A21",
+      "severity_if_applied_as_written": "P1",
+      "bounded_change": "No añadir exhaustive como permiso de negación. Si hace falta tabla cerrada, definir coverage_scope a nivel de relación: fabricante, familias/modelos/generaciones, interfaz/posición, edición, condiciones y regla OEM explícita sobre ausencias. Aplicarla sólo cuando ambas identidades estén dentro de ese ámbito; preferir exclusiones explícitas.",
+      "source_ids": [
+        "WT-GOAT11",
+        "SR-HYDRAULIC-MATRIX"
+      ]
+    },
+    {
+      "patch_id": "MC-21-shifter_models_compatible-46",
+      "path": "/definitions/shifter_models_compatible/row_schema/columns/-",
+      "proposed_op": "add",
+      "preimage_validation": "append_parent_exists",
+      "decision": "rechazar",
+      "finding_id": "A21",
+      "severity_if_applied_as_written": "P1",
+      "bounded_change": "No añadir exhaustive como permiso de negación. Si hace falta tabla cerrada, definir coverage_scope a nivel de relación: fabricante, familias/modelos/generaciones, interfaz/posición, edición, condiciones y regla OEM explícita sobre ausencias. Aplicarla sólo cuando ambas identidades estén dentro de ese ámbito; preferir exclusiones explícitas.",
+      "source_ids": [
+        "WT-GOAT11",
+        "SR-HYDRAULIC-MATRIX"
+      ]
+    },
+    {
+      "patch_id": "MC-21-derailleur_models_compatible-47",
+      "path": "/row_schemas/derailleur_models_compatible/columns/-",
+      "proposed_op": "add",
+      "preimage_validation": "append_parent_exists",
+      "decision": "rechazar",
+      "finding_id": "A21",
+      "severity_if_applied_as_written": "P1",
+      "bounded_change": "No añadir exhaustive como permiso de negación. Si hace falta tabla cerrada, definir coverage_scope a nivel de relación: fabricante, familias/modelos/generaciones, interfaz/posición, edición, condiciones y regla OEM explícita sobre ausencias. Aplicarla sólo cuando ambas identidades estén dentro de ese ámbito; preferir exclusiones explícitas.",
+      "source_ids": [
+        "WT-GOAT11",
+        "SR-HYDRAULIC-MATRIX"
+      ]
+    },
+    {
+      "patch_id": "MC-21-derailleur_models_compatible-48",
+      "path": "/definitions/derailleur_models_compatible/row_schema/columns/-",
+      "proposed_op": "add",
+      "preimage_validation": "append_parent_exists",
+      "decision": "rechazar",
+      "finding_id": "A21",
+      "severity_if_applied_as_written": "P1",
+      "bounded_change": "No añadir exhaustive como permiso de negación. Si hace falta tabla cerrada, definir coverage_scope a nivel de relación: fabricante, familias/modelos/generaciones, interfaz/posición, edición, condiciones y regla OEM explícita sobre ausencias. Aplicarla sólo cuando ambas identidades estén dentro de ese ámbito; preferir exclusiones explícitas.",
+      "source_ids": [
+        "WT-GOAT11",
+        "SR-HYDRAULIC-MATRIX"
+      ]
+    },
+    {
+      "patch_id": "MC-21-compatible_brake_models-49",
+      "path": "/row_schemas/compatible_brake_models/columns/-",
+      "proposed_op": "add",
+      "preimage_validation": "append_parent_exists",
+      "decision": "rechazar",
+      "finding_id": "A21",
+      "severity_if_applied_as_written": "P1",
+      "bounded_change": "No añadir exhaustive como permiso de negación. Si hace falta tabla cerrada, definir coverage_scope a nivel de relación: fabricante, familias/modelos/generaciones, interfaz/posición, edición, condiciones y regla OEM explícita sobre ausencias. Aplicarla sólo cuando ambas identidades estén dentro de ese ámbito; preferir exclusiones explícitas.",
+      "source_ids": [
+        "WT-GOAT11",
+        "SR-HYDRAULIC-MATRIX"
+      ]
+    },
+    {
+      "patch_id": "MC-21-compatible_brake_models-50",
+      "path": "/definitions/compatible_brake_models/row_schema/columns/-",
+      "proposed_op": "add",
+      "preimage_validation": "append_parent_exists",
+      "decision": "rechazar",
+      "finding_id": "A21",
+      "severity_if_applied_as_written": "P1",
+      "bounded_change": "No añadir exhaustive como permiso de negación. Si hace falta tabla cerrada, definir coverage_scope a nivel de relación: fabricante, familias/modelos/generaciones, interfaz/posición, edición, condiciones y regla OEM explícita sobre ausencias. Aplicarla sólo cuando ambas identidades estén dentro de ese ámbito; preferir exclusiones explícitas.",
+      "source_ids": [
+        "WT-GOAT11",
+        "SR-HYDRAULIC-MATRIX"
+      ]
+    },
+    {
+      "patch_id": "MC-21-compatible_derailleur_models-51",
+      "path": "/row_schemas/compatible_derailleur_models/columns/-",
+      "proposed_op": "add",
+      "preimage_validation": "append_parent_exists",
+      "decision": "rechazar",
+      "finding_id": "A21",
+      "severity_if_applied_as_written": "P1",
+      "bounded_change": "No añadir exhaustive como permiso de negación. Si hace falta tabla cerrada, definir coverage_scope a nivel de relación: fabricante, familias/modelos/generaciones, interfaz/posición, edición, condiciones y regla OEM explícita sobre ausencias. Aplicarla sólo cuando ambas identidades estén dentro de ese ámbito; preferir exclusiones explícitas.",
+      "source_ids": [
+        "WT-GOAT11",
+        "SR-HYDRAULIC-MATRIX"
+      ]
+    },
+    {
+      "patch_id": "MC-21-compatible_derailleur_models-52",
+      "path": "/definitions/compatible_derailleur_models/row_schema/columns/-",
+      "proposed_op": "add",
+      "preimage_validation": "append_parent_exists",
+      "decision": "rechazar",
+      "finding_id": "A21",
+      "severity_if_applied_as_written": "P1",
+      "bounded_change": "No añadir exhaustive como permiso de negación. Si hace falta tabla cerrada, definir coverage_scope a nivel de relación: fabricante, familias/modelos/generaciones, interfaz/posición, edición, condiciones y regla OEM explícita sobre ausencias. Aplicarla sólo cuando ambas identidades estén dentro de ese ámbito; preferir exclusiones explícitas.",
+      "source_ids": [
+        "WT-GOAT11",
+        "SR-HYDRAULIC-MATRIX"
+      ]
+    },
+    {
+      "patch_id": "MC-21-compatible_frames-53",
+      "path": "/row_schemas/compatible_frames/columns/-",
+      "proposed_op": "add",
+      "preimage_validation": "append_parent_exists",
+      "decision": "rechazar",
+      "finding_id": "A21",
+      "severity_if_applied_as_written": "P1",
+      "bounded_change": "No añadir exhaustive como permiso de negación. Si hace falta tabla cerrada, definir coverage_scope a nivel de relación: fabricante, familias/modelos/generaciones, interfaz/posición, edición, condiciones y regla OEM explícita sobre ausencias. Aplicarla sólo cuando ambas identidades estén dentro de ese ámbito; preferir exclusiones explícitas.",
+      "source_ids": [
+        "WT-GOAT11",
+        "SR-HYDRAULIC-MATRIX"
+      ]
+    },
+    {
+      "patch_id": "MC-21-compatible_frames-54",
+      "path": "/definitions/compatible_frames/row_schema/columns/-",
+      "proposed_op": "add",
+      "preimage_validation": "append_parent_exists",
+      "decision": "rechazar",
+      "finding_id": "A21",
+      "severity_if_applied_as_written": "P1",
+      "bounded_change": "No añadir exhaustive como permiso de negación. Si hace falta tabla cerrada, definir coverage_scope a nivel de relación: fabricante, familias/modelos/generaciones, interfaz/posición, edición, condiciones y regla OEM explícita sobre ausencias. Aplicarla sólo cuando ambas identidades estén dentro de ese ámbito; preferir exclusiones explícitas.",
+      "source_ids": [
+        "WT-GOAT11",
+        "SR-HYDRAULIC-MATRIX"
+      ]
+    },
+    {
+      "patch_id": "MC-22-rear_derailleur",
+      "path": "/templates/26/interfaces/1/rules/0",
+      "proposed_op": "replace",
+      "preimage_validation": "before_matches",
+      "decision": "corregir",
+      "finding_id": "A22",
+      "severity_if_applied_as_written": "P1",
+      "bounded_change": "Aceptar no listado=unknown y quitar la excepción some_row.exhaustive + source_url. Consumir sólo exclusiones expresas o cobertura cerrada validada y acotada a la configuración seleccionada.",
+      "source_ids": [
+        "WT-GOAT11",
+        "SR-HYDRAULIC-MATRIX"
+      ]
+    },
+    {
+      "patch_id": "MC-22-shifter",
+      "path": "/templates/31/interfaces/0/rules/0",
+      "proposed_op": "replace",
+      "preimage_validation": "before_matches",
+      "decision": "corregir",
+      "finding_id": "A22",
+      "severity_if_applied_as_written": "P1",
+      "bounded_change": "Aceptar no listado=unknown y quitar la excepción some_row.exhaustive + source_url. Consumir sólo exclusiones expresas o cobertura cerrada validada y acotada a la configuración seleccionada.",
+      "source_ids": [
+        "WT-GOAT11",
+        "SR-HYDRAULIC-MATRIX"
+      ]
+    },
+    {
+      "patch_id": "MC-22-brake_small_part",
+      "path": "/templates/68/interfaces/0/rules/0",
+      "proposed_op": "replace",
+      "preimage_validation": "before_matches",
+      "decision": "corregir",
+      "finding_id": "A22",
+      "severity_if_applied_as_written": "P1",
+      "bounded_change": "Aceptar no listado=unknown y quitar la excepción some_row.exhaustive + source_url. Consumir sólo exclusiones expresas o cobertura cerrada validada y acotada a la configuración seleccionada.",
+      "source_ids": [
+        "WT-GOAT11",
+        "SR-HYDRAULIC-MATRIX"
+      ]
+    },
+    {
+      "patch_id": "MC-22-derailleur_pulley",
+      "path": "/templates/19/interfaces/0/rules/0",
+      "proposed_op": "replace",
+      "preimage_validation": "before_matches",
+      "decision": "corregir",
+      "finding_id": "A22",
+      "severity_if_applied_as_written": "P1",
+      "bounded_change": "Aceptar no listado=unknown y quitar la excepción some_row.exhaustive + source_url. Consumir sólo exclusiones expresas o cobertura cerrada validada y acotada a la configuración seleccionada.",
+      "source_ids": [
+        "WT-GOAT11",
+        "SR-HYDRAULIC-MATRIX"
+      ]
+    },
+    {
+      "patch_id": "MC-22-derailleur_hanger",
+      "path": "/templates/18/interfaces/0/rules/0",
+      "proposed_op": "replace",
+      "preimage_validation": "before_matches",
+      "decision": "corregir",
+      "finding_id": "A22",
+      "severity_if_applied_as_written": "P1",
+      "bounded_change": "Aceptar no listado=unknown y quitar la excepción some_row.exhaustive + source_url. Consumir sólo exclusiones expresas o cobertura cerrada validada y acotada a la configuración seleccionada.",
+      "source_ids": [
+        "WT-GOAT11",
+        "SR-HYDRAULIC-MATRIX"
+      ]
+    },
+    {
+      "patch_id": "MC-24",
+      "path": "/legacy_value_maps/freehub_type→rear_drive_interface (hub) ~1 cassette_spline_standard (cassette) ~1 freewheel_thread_standard (freewheel)/map",
+      "proposed_op": "replace",
+      "preimage_validation": "before_matches",
+      "decision": "corregir",
+      "finding_id": "A24",
+      "severity_if_applied_as_written": "P1",
+      "bounded_change": "Mapear sólo códigos inequívocos del campo/plantilla original. Dejar rosca fija genérica y HG genérico en unknown; resolver HG Road11 por modelo/fuente y conservar relación de cuerpos aceptados aparte. Emitir tokens válidos con provenance, nunca frases con salvo o un cassette XD también entra.",
+      "source_ids": [
+        "SB-FIXED",
+        "SB-FREEWHEEL",
+        "SH-C731"
+      ]
+    },
+    {
+      "patch_id": "MC-25",
+      "path": "/templates/10/interfaces/0/rules/0",
+      "proposed_op": "replace",
+      "preimage_validation": "before_matches",
+      "decision": "corregir",
+      "finding_id": "A25",
+      "severity_if_applied_as_written": "P1",
+      "bounded_change": "Evaluar bike.rear_speeds ∈ chain.declared_supported_speeds tras proyección exacta. Coincidencia es sólo ese requisito. Si una fuente excluye el modelo/perfil, bloquear por esa exclusión aunque el número coincida; si sólo falta declaración, unknown/outside_declared_scope y sin aprobación global.",
+      "source_ids": [
+        "KMC-X8",
+        "SR-XPLR-CHAIN"
+      ]
+    },
+    {
+      "patch_id": "MC-26",
+      "path": "/templates/12/interfaces/0/rules/1",
+      "proposed_op": "replace",
+      "preimage_validation": "before_matches",
+      "decision": "corregir",
+      "finding_id": "A26",
+      "severity_if_applied_as_written": "P1",
+      "bounded_change": "Usar relación conector→cadena por modelo/perfil y condiciones de reutilización. Velocidad y medidas son filtros parciales; coincidencia de 11/128 o de ancho exterior no basta. Exclusión OEM expresa bloquea; ausencia de evidencia mantiene unknown.",
+      "source_ids": [
+        "KMC-FLATNR",
+        "KMC-78",
+        "PK-CHAIN",
+        "SR-XPLR-CHAIN"
+      ]
+    },
+    {
+      "patch_id": "MC-27",
+      "path": "/assembly_policy/verification_semantics",
+      "proposed_op": "add",
+      "preimage_validation": "absent_key",
+      "decision": "corregir",
+      "finding_id": "A27",
+      "severity_if_applied_as_written": "P1",
+      "bounded_change": "Separar source_registered, contract_validated y domain_assertion_verified por afirmación/pareja/alcance. Incluir manual OEM leído y locator. Un contraste estructural prueba consistencia de datos, no incompatibilidad mecánica universal; política de unknown y adapter_path explícita.",
+      "source_ids": [
+        "SR-HYDRAULIC-MATRIX"
+      ]
+    },
+    {
+      "patch_id": "MC-28",
+      "path": "/fixtures_policy",
+      "proposed_op": "add",
+      "preimage_validation": "absent_key",
+      "decision": "corregir",
+      "finding_id": "A28",
+      "severity_if_applied_as_written": "P2",
+      "bounded_change": "Registrar origin=synthetic_compiled, source_grounded_oem, catalogue_observed y runtime_verified como ejes separados. Un caso OEM documentado puede ser válido sin estar en stock; una fixture que copia la regla no demuestra dominio.",
+      "source_ids": [
+        "TRP-HYRD"
+      ]
+    },
+    {
+      "patch_id": "MC-29",
+      "path": "/stats/verified_rules",
+      "proposed_op": "replace",
+      "preimage_validation": "before_matches",
+      "decision": "corregir",
+      "finding_id": "A29",
+      "severity_if_applied_as_written": "P2",
+      "bounded_change": "Separar conteos de reglas compiladas, fuentes registradas y afirmaciones OEM verificadas. Calcularlos desde los registros después de migrar grading; cero sólo si el conjunto realmente está vacío.",
+      "source_ids": [
+        "SR-HYDRAULIC-MATRIX"
+      ]
+    }
+  ],
+  "stats": {
+    "templates": 3,
+    "definitions": 38,
+    "field_uses": 52
+  },
+  "field_addenda": [
+    {
+      "base_sha256": "7ebf2b5b5e69784e3d146b81ad2bec8b7581113565cef022e8da70ba4c7a66fa",
+      "proposal_sha256": "86c7f7d6b7360d01a771f1aaf63ddba0e63352999d65dc4ea78038da58d25440",
+      "decisions_sha256": "60843956f55eac5f44b971a108cf4528f1c7e9bbc222254a9c846d14aa869b07",
+      "applied": [
+        "AD-ND09-label-thread",
+        "AD-ND09-def-thread",
+        "AD-ND09-def-head_drive",
+        "AD-ND09-fastener-thread",
+        "AD-ND09-fastener-length_mm",
+        "AD-ND09-fastener-thread_pitch_mm",
+        "AD-ND09-fastener-thread_tpi",
+        "AD-ND09-fastener-thread_hand",
+        "AD-ND09-fastener-length_datum",
+        "AD-ND09-fastener-head_drive_size_mm",
+        "AD-ND09-fastener-torx_size",
+        "AD-ND09-fastener-strength_class_claim",
+        "AD-ND09-fastener-fastener_kit_members",
+        "AD-ND09-seat_clamp-clamp_thread_pitch_mm",
+        "AD-ND09-seat_clamp-clamp_bolt_length_mm",
+        "AD-ND09-seat_clamp-length_datum",
+        "AD-ND10-def-tool_kind",
+        "AD-ND10-workshop_tool-chain_tool_speeds",
+        "AD-ND10-workshop_tool-tool_interface",
+        "AD-ND10-workshop_tool-tool_capabilities",
+        "AD-ND10-workshop_tool-tool_bits_included",
+        "AD-ND12-def-power_source",
+        "AD-ND12-light-lumens_claimed",
+        "AD-ND12-light-battery_capacity_mah",
+        "AD-ND12-light-charge_connector",
+        "AD-ND12-light-mount_diameter_min_mm",
+        "AD-ND12-light-mount_diameter_max_mm",
+        "AD-ND12-light-ip_rating",
+        "AD-ND12-light-modes_count",
+        "AD-ND12-light-runtime_claim_h",
+        "AD-ND12-light-light_member_configurations",
+        "AD-ND12-light-light_mode_configurations",
+        "AD-ND13-accessory_mount-bike_attachment_kind",
+        "AD-ND13-accessory_mount-bar_fit_representation",
+        "AD-ND13-accessory_mount-bar_diameter_min_mm",
+        "AD-ND13-accessory_mount-bar_diameter_max_mm",
+        "AD-ND13-accessory_mount-bar_clamp_configurations",
+        "AD-ND13-accessory_mount-device_attachment_kind",
+        "AD-ND13-accessory_mount-device_system",
+        "AD-ND13-accessory_mount-device_width_min_mm",
+        "AD-ND13-accessory_mount-device_width_max_mm",
+        "AD-ND21-cycle_computer-connection",
+        "AD-ND21-cycle_computer-positioning_source",
+        "AD-ND21-cycle_computer-speed_source",
+        "AD-ND21-cycle_computer-phone_link",
+        "AD-ND21-cycle_computer-sensor_support_configurations",
+        "AD-ND21-cycle_computer-wheel_setting",
+        "AD-ND21-cycle_computer-computer_contents",
+        "AD-ND22-label-rated_power_w",
+        "AD-ND22-consumer_electronics-connector_a",
+        "AD-ND22-consumer_electronics-power_port_configurations",
+        "AD-ND22-consumer_electronics-power_budget_configurations",
+        "AD-ND22-consumer_electronics-cable_power_capacity_w",
+        "AD-ND22-consumer_electronics-cable_data_capability",
+        "AD-ND22-consumer_electronics-storage_capacity_label",
+        "AD-ND22-consumer_electronics-card_format",
+        "AD-ND22-consumer_electronics-speed_class_claim",
+        "AD-ND23-def-food_item_kind",
+        "AD-ND23-label-serving_size",
+        "AD-ND23-food_beverage-preparation_kind",
+        "AD-ND23-food_beverage-spec_evidence_source",
+        "AD-ND23-food_beverage-serving_size",
+        "AD-ND23-food_beverage-serving_volume_ml",
+        "AD-ND23-food_beverage-temperature",
+        "AD-ND23-food_beverage-milk",
+        "AD-ND23-food_beverage-allergen_note",
+        "AD-ND23-food_beverage-milk_in_recipe",
+        "AD-ND23-food_beverage-milk_substitution_offered",
+        "AD-ND23-food_beverage-recipe_reference",
+        "AD-ND23-food_beverage-net_mass_g",
+        "AD-ND23-food_beverage-net_volume_ml",
+        "AD-ND23-food_beverage-units_per_pack",
+        "AD-ND23-food_beverage-unit_mass_g",
+        "AD-ND23-food_beverage-nutrition_facts",
+        "AD-ND23-food_beverage-ingredients_text",
+        "AD-ND23-food_beverage-allergen_statement_source",
+        "AD-ND23-food_beverage-caffeine_mg",
+        "AD-ND23-food_beverage-caffeine_basis"
+      ],
+      "rejected": [
+        "AD-ND21-cycle_computer-sensor_link_ant_plus",
+        "AD-ND21-cycle_computer-sensor_link_bluetooth",
+        "AD-ND21-cycle_computer-sensor_link_wired",
+        "AD-ND23-food_beverage-allergens_declared_none"
+      ],
+      "scope": "field_representation"
+    },
+    {
+      "base_sha256": "1b7c6aca8d2219804c6d9052bae95adee674273b7705fd87733bb759ee95b3c0",
+      "proposal_sha256": "b43aa4798dab2be7029660efb08dd3836ecfb350ccfb80b97549f53bf7b56b8d",
+      "decisions_sha256": "16d3e9bf780aa3d52a13e3e21dbcd25817653172a7b2fcfa35b933c21265d3af",
+      "applied": [
+        "AD-ND03-pedal-pedal_thread",
+        "AD-ND03-pedal-pedal_thread_standard",
+        "AD-ND03-pedal-pedal_wrench_interface",
+        "AD-ND04-label-grip_inner_diameter_mm",
+        "AD-ND04-label-grip_length_mm",
+        "AD-ND04-grip-grip_inner_diameter_mm",
+        "AD-ND04-grip-grip_length_mm",
+        "AD-ND04-grip-grip_bar_nominal_diameter_mm",
+        "AD-ND04-grip-grip_length_left_mm",
+        "AD-ND04-grip-grip_length_right_mm",
+        "AD-ND04-grip-grip_straight_length_required_mm",
+        "AD-ND04-grip-grip_clamp_torque_nm",
+        "AD-ND05-label-stem_steerer_clamp_diameter_mm",
+        "AD-ND05-stem-quill_min_insertion_mm",
+        "AD-ND06-rows-seatpost_saddle_configurations",
+        "AD-ND06-label-saddle_mount_model",
+        "AD-ND07-seatpost-dropper_actuation",
+        "AD-ND07-seatpost-dropper_control_kind",
+        "AD-ND07-seatpost-dropper_cable_routing",
+        "AD-ND07-seatpost-dropper_remote_included",
+        "AD-ND07-seatpost-dropper_remote_model",
+        "AD-ND07-seatpost-seatpost_min_insertion_mm",
+        "AD-ND07-seatpost-seatpost_min_exposed_mm",
+        "AD-ND07-seatpost-seatpost_bottom_clearance_mm",
+        "AD-ND07-seatpost-seatpost_dimension_document",
+        "AD-ND07-label-seatpost_length_mm",
+        "AD-ND08-handlebar-bar_construction",
+        "AD-ND08-handlebar-bar_clamp_diameter_mm",
+        "AD-ND08-handlebar-bar_width_mm",
+        "AD-ND08-handlebar-bar_width_reference",
+        "AD-ND08-handlebar-bar_width_hoods_mm",
+        "AD-ND08-handlebar-bar_width_drops_mm",
+        "AD-ND08-handlebar-bar_reach_mm",
+        "AD-ND08-handlebar-bar_drop_mm",
+        "AD-ND08-handlebar-integrated_stem_length_mm",
+        "AD-ND08-handlebar-integrated_stem_angle_deg",
+        "AD-ND08-handlebar-integrated_steerer_clamp_mm",
+        "AD-ND08-handlebar-cable_routing",
+        "AD-ND08-handlebar-accessory_mount_ports_text",
+        "AD-ND08-handlebar-conflicting_claims",
+        "AD-ND11-lock-security_rating_claim",
+        "AD-ND11-lock-security_rating_configurations",
+        "AD-ND11-lock-cable_diameter_mm",
+        "AD-ND14-def-carrier_mount_kind",
+        "AD-ND14-rack_basket-rack_top_interface",
+        "AD-ND14-rack_basket-rack_eyelets_required",
+        "AD-ND14-rack_basket-rack_mount_configurations",
+        "AD-ND14-rack_basket-load_reference",
+        "AD-ND14-def-attachment",
+        "AD-ND14-bike_bag-bag_rack_interface",
+        "AD-ND14-bike_bag-auxiliary_part_requirements",
+        "AD-ND14-bike_bag-bag_member_configurations",
+        "AD-ND14-bike_bag-conflicting_claims",
+        "AD-ND15-kickstand-kickstand_mount_standard",
+        "AD-ND15-kickstand-mount_hole_spacing_mm",
+        "AD-ND15-kickstand-mount_bolt_count",
+        "AD-ND15-kickstand-thread",
+        "AD-ND15-kickstand-kickstand_length_reference",
+        "AD-ND15-kickstand-installed_height_min_mm",
+        "AD-ND15-kickstand-installed_height_max_mm",
+        "AD-ND15-kickstand-max_bike_weight_kg",
+        "AD-ND15-kickstand-frame_requirement_text",
+        "AD-ND15-kickstand-length_min_mm",
+        "AD-ND15-kickstand-length_max_mm",
+        "AD-ND16-bottle-bottle_retention_system",
+        "AD-ND16-bottle-bottle_diameter_mm",
+        "AD-ND16-bottle-base_included",
+        "AD-ND16-bottle-included_base_model",
+        "AD-ND16-def-cage_mount",
+        "AD-ND16-bottle_cage-cage_retention_system",
+        "AD-ND16-bottle_cage-bottle_diameter_mm",
+        "AD-ND16-bottle_cage-frame_tube_width_min_mm",
+        "AD-ND16-bottle_cage-frame_tube_width_max_mm",
+        "AD-ND16-bottle_cage-boss_spacing_mm",
+        "AD-ND16-bottle_cage-boss_count",
+        "AD-ND16-bottle_cage-side_entry_side",
+        "AD-ND17-def-pump_kind",
+        "AD-ND17-pump-co2_cartridge_configurations",
+        "AD-ND17-pump-pack_quantity",
+        "AD-ND17-pump-inflation_target_note",
+        "AD-ND17-pump-valve_heads_supported",
+        "AD-ND18-helmet-certification_claim",
+        "AD-ND18-helmet-label_evidence_state",
+        "AD-ND18-helmet-certification_configurations",
+        "AD-ND18-helmet-helmet_construction",
+        "AD-ND18-helmet-intended_audience",
+        "AD-ND18-rider_protection-certification_configurations",
+        "AD-ND18-rider_protection-intended_audience",
+        "AD-ND19-rows-eyewear_lens_configurations",
+        "AD-ND19-rows-eyewear_lens_configurations-ordered",
+        "AD-ND20-rider_apparel-intended_audience",
+        "AD-ND20-rider_apparel-fit_cut",
+        "AD-ND20-rider_apparel-fabric_composition_text",
+        "AD-ND20-rider_glove-intended_audience",
+        "AD-ND20-rider_glove-fit_cut",
+        "AD-ND20-rider_glove-fabric_composition_text",
+        "AD-ND20-label-gender_fit",
+        "AD-ND24-label-volume_l"
+      ],
+      "rejected": [
+        "AD-ND14-bike_bag-bag_interface_generation",
+        "AD-ND17-pump-co2_cartridge_interface"
+      ],
+      "scope": "field_representation"
+    },
+    {
+      "base_sha256": "381847b47595d841288224021ae38a8d5dc399e53555a60ae1d65dd1889ddff3",
+      "proposal_sha256": "c49d9b24a75536896aaffbf53e7e7ebfe12e3656be426950f3afd72499d528a5",
+      "decisions_sha256": "25f9bb6de66247492b6a42fa0ac0e21bd2675a0f18d7f421ba3ac23d1229ca69",
+      "applied": [
+        "ROOT-grip-sold_as",
+        "ROOT-light-power_source",
+        "ROOT-light-light_mount_kind",
+        "ROOT-consumer_electronics-rated_power_w",
+        "ROOT-head-drive-single-owner",
+        "ROOT-light-row_coherence",
+        "ROOT-consumer_electronics-row_coherence",
+        "ROOT-chain_guide-scalar_ordered_pairs",
+        "ROOT-rear_derailleur-scalar_ordered_pairs",
+        "ROOT-rim_brake-scalar_ordered_pairs",
+        "ROOT-saddle_cover-scalar_ordered_pairs",
+        "ROOT-tire_liner-scalar_ordered_pairs",
+        "ROOT-chainring_guard-scalar_ordered_pairs",
+        "ROOT-light-scalar_ordered_pairs",
+        "ROOT-audible_signal-scalar_ordered_pairs",
+        "ROOT-accessory_mount-scalar_ordered_pairs",
+        "ROOT-bottle_cage-scalar_ordered_pairs",
+        "ROOT-kickstand-scalar_ordered_pairs",
+        "ROOT-rider_bag-scalar_ordered_pairs",
+        "ROOT-helmet-scalar_ordered_pairs",
+        "ROOT-bicycle-scalar_ordered_pairs"
+      ],
+      "rejected": [],
+      "scope": "field_representation"
+    },
+    {
+      "base_sha256": "cf8ebeb1e4e7dd32853b8618657a3f25e3f5428158702ef2e0adeb5b89978577",
+      "proposal_sha256": "3599369a1b1841ff407981b22dbbd5ce533e833d5d490ec0e8961134fefaddee",
+      "decisions_sha256": "8b774b789a98efc78c23d7df46a0c6fa0c2636f60957ca5d113bafb7bcd5c4f5",
+      "applied": [
+        "BP-options-fluid_type",
+        "BP-options-compound_type",
+        "BP-options-rim_brake_style",
+        "BP-options-rim_brake_frame_mount",
+        "BP-add-brake_caliper-brake_external_hose_connection",
+        "BP-add-brake_caliper-brake_fluid_approvals",
+        "BP-add-brake_caliper-brake_hydraulic_connections",
+        "BP-change-brake_caliper-fluid_type",
+        "BP-change-brake_caliper-hose_system_code",
+        "BP-change-brake_caliper-hose_fitting_type",
+        "BP-change-brake_caliper-bleed_port",
+        "BP-add-brake_caliper-brake_bleed_ports",
+        "BP-change-brake_caliper-piston_count_value",
+        "BP-add-brake_caliper-rim_brake_mount_fitments",
+        "BP-add-brake_caliper-caliper_rotor_nominal_thickness_mm",
+        "BP-add-brake_lever-brake_external_hose_connection",
+        "BP-add-brake_lever-brake_fluid_approvals",
+        "BP-add-brake_lever-brake_hydraulic_connections",
+        "BP-change-brake_lever-fluid_type",
+        "BP-change-brake_lever-hose_system_code",
+        "BP-add-hydraulic_disc_brake-brake_assembly_configurations",
+        "BP-add-hydraulic_disc_brake-brake_fluid_approvals",
+        "BP-add-hydraulic_disc_brake-brake_hydraulic_connections",
+        "BP-add-hydraulic_disc_brake-brake_bleed_ports",
+        "BP-change-hydraulic_disc_brake-fluid_type",
+        "BP-change-hydraulic_disc_brake-hose_fitting_type",
+        "BP-change-hydraulic_disc_brake-bleed_port",
+        "BP-add-mechanical_disc_brake-brake_assembly_configurations",
+        "BP-add-rim_brake-brake_assembly_configurations",
+        "BP-add-rim_brake-brake_actuation",
+        "BP-add-rim_brake-brake_external_hose_connection",
+        "BP-add-rim_brake-brake_fluid_approvals",
+        "BP-add-rim_brake-brake_hydraulic_connections",
+        "BP-add-rim_brake-rim_brake_mount_fitments",
+        "BP-change-rim_brake-lever_pull_required",
+        "BP-change-rim_brake-rim_pad_stud_type",
+        "BP-add-rim_brake-rim_pad_interface_model",
+        "BP-add-brake_shift_combined_control-brake_actuation",
+        "BP-change-brake_shift_combined_control-lever_cable_pull",
+        "BP-add-brake_shift_combined_control-brake_external_hose_connection",
+        "BP-add-brake_shift_combined_control-brake_fluid_approvals",
+        "BP-add-brake_shift_combined_control-brake_hydraulic_connections",
+        "BP-add-brake_pad-brake_pad_retainer_model",
+        "BP-add-brake_caliper-brake_pad_retainer_model",
+        "BP-add-hydraulic_disc_brake-brake_pad_retainer_model",
+        "BP-add-mechanical_disc_brake-brake_pad_retainer_model",
+        "BP-add-brake_pad-brake_pad_oem_compound",
+        "BP-add-brake_pad-rim_pad_interface_model",
+        "BP-change-brake_pad-pad_shape_code",
+        "BP-change-brake_pad-pad_retention",
+        "BP-columns-compatible_caliper_models",
+        "BP-columns-compatible_brake_models",
+        "BP-columns-rotor_size_recipe",
+        "BP-change-brake_mount_adapter-caliper_mount",
+        "BP-change-brake_mount_adapter-frame_mount",
+        "BP-change-brake_mount_adapter-position",
+        "BP-change-brake_mount_adapter-rotor_from_mm",
+        "BP-change-brake_mount_adapter-rotor_to_mm",
+        "BP-add-brake_mount_adapter-brake_adapter_fitments",
+        "BP-change-rotor_mount_adapter-hub_interface",
+        "BP-change-rotor_mount_adapter-rotor_mount_out",
+        "BP-add-rotor_mount_adapter-rotor_adapter_fitments",
+        "BP-change-rotor-rotor_thickness_mm",
+        "BP-change-rotor-rotor_min_thickness_mm",
+        "BP-change-rotor-rotor_floating",
+        "BP-add-hydraulic_hose-brake_hydraulic_connections",
+        "BP-change-hydraulic_hose-hose_system_code",
+        "BP-add-hydraulic_fitting-brake_hydraulic_connections",
+        "BP-change-hydraulic_fitting-hose_system_code",
+        "BP-add-hydraulic_fitting-brake_fitting_oem_code",
+        "BP-add-hydraulic_fitting-brake_fitting_insert_length_mm",
+        "BP-add-hydraulic_fitting-compatible_brake_models",
+        "BP-change-brake_fluid-fluid_type",
+        "BP-add-brake_fluid-compatible_brake_models",
+        "BP-change-brake_fluid-oem_brand_specific",
+        "BP-change-control_housing-housing_kind",
+        "BP-add-control_housing-housing_application",
+        "BP-add-control_housing-housing_construction",
+        "BP-add-control_cable-control_cable_end_options",
+        "BP-change-control_cable-cable_head",
+        "BP-add-control_small_part-compatible_brake_models",
+        "BP-add-bmx_cable_detangler-compatible_brake_models",
+        "BP-change-brake_small_part-compatible_brake_models",
+        "BP-change-hub_brake-brake_actuation",
+        "BP-coherence-hydraulic_disc_brake",
+        "BP-coherence-rim_brake"
+      ],
+      "rejected": [
+        "BP-order-rim-brake-reach"
+      ],
+      "scope": "field_representation"
+    },
+    {
+      "base_sha256": "9f2d93b830a5118fbe2757e36d36756389b4b4630cf82d97ca99b7cc55d3feaa",
+      "proposal_sha256": "199366f6a937df6c3886583efbff97acfd47f22a30462b129999228c755c5a5d",
+      "decisions_sha256": "f302e522911e97ebbaa5c2c1b98c0107c59c0690b542239bbebdeea9256f4c20",
+      "applied": [
+        "LPS-L-retire-power_source",
+        "LPS-L-retire-charge_connector",
+        "LPS-L-retire-battery_capacity_mah",
+        "LPS-L-retire-light_mount_kind",
+        "LPS-L-retire-mount_diameter_min_mm",
+        "LPS-L-retire-mount_diameter_max_mm",
+        "LPS-L-retire-ip_rating",
+        "LPS-L-declared-total-modes_count",
+        "LPS-L-label-modes_count",
+        "LPS-C-declared-total-ports_count",
+        "LPS-C-label-ports_count",
+        "LPS-E-storage-label-owner",
+        "LPS-E-storage-label-text",
+        "LPS-L-drop-mount-pair",
+        "LPS-L-members-required",
+        "LPS-L-modes-required",
+        "LPS-L-members-schema",
+        "LPS-L-modes-schema",
+        "LPS-L-link-labels",
+        "LPS-L-kit-roles",
+        "LPS-C-sensor-schema",
+        "LPS-C-retire-sensor_mount",
+        "LPS-E-protocol-scope",
+        "LPS-E-link-labels",
+        "LPS-E-port-profiles",
+        "LPS-E-port-profiles-link"
+      ],
+      "rejected": [],
+      "scope": "field_representation"
+    },
+    {
+      "base_sha256": "f3178bd3c860c421d2365961fe3ff057581d2d038bb999bc59f5f0f959937072",
+      "proposal_sha256": "94faca196c4572e2faeb8cf748dd9b8843c9c63e531c1f021803a4146bb4f5d0",
+      "decisions_sha256": "dba14f68330080b9ddf15551d5f16f79a7516f490fbabcef02be32a77fdfdb7e",
+      "applied": [
+        "RCF-brake_caliper",
+        "RCF-brake_lever",
+        "RCF-hydraulic_disc_brake",
+        "RCF-mechanical_disc_brake",
+        "RCF-rim_brake",
+        "RCF-seatpost",
+        "RCF-rotor_mount_adapter",
+        "RCF-workshop_tool",
+        "RCF-light",
+        "RCF-consumer_electronics",
+        "RCF-accessory_mount",
+        "RCF-food_beverage",
+        "RCF-pump",
+        "RCF-brake_shift_combined_control"
+      ],
+      "rejected": [],
+      "scope": "field_representation"
+    },
+    {
+      "base_sha256": "c12204e42f86423fc3bf3eba345a9f07568b4849d9c8d9b8ace4d44430ddcf9a",
+      "proposal_sha256": "f825e68f72fd84e31506f2eb1cbc97dbcf11d0f5079ec9e9e086be768e1cb8aa",
+      "decisions_sha256": "9afde6ed983b76e0eea953461d71a10c5a8125e2f5b4a5bcc7957b0d3c297799",
+      "applied": [
+        "WSS-W01-rim-rim_bead_profile",
+        "WSS-W01-wheel-rim_bead_profile",
+        "WSS-W01-tire-configurations",
+        "WSS-W01-tire-max_pressure-label",
+        "WSS-W02-shock-ends",
+        "WSS-W02-hardware-label",
+        "WSS-W03-size_code-label",
+        "WSS-W03-dimensional_code",
+        "WSS-W03-internal_construction",
+        "WSS-W03-seal_kind",
+        "WSS-W03-application-label",
+        "WSS-W04-headset-bearings",
+        "WSS-W04-bearing-require-bearing_inner_contact_angle_deg",
+        "WSS-W04-bearing-require-bearing_outer_contact_angle_deg",
+        "WSS-W05-frame-ports",
+        "WSS-W05-frame-upper_shis-optional",
+        "WSS-W05-frame-lower_shis-optional",
+        "WSS-W05-label-headset_upper_shis",
+        "WSS-W05-label-headset_lower_shis",
+        "WSS-W07-fork-clearance",
+        "WSS-W07-fork-axle_to_crown",
+        "WSS-W07-fork-crown_stack_min_mm",
+        "WSS-W07-fork-crown_stack_max_mm",
+        "WSS-W07-fork-stack-pair",
+        "WSS-W07-fork-max_tire_width-label",
+        "WSS-W08-frame-dropout",
+        "WSS-W10-spoke-thread_standard",
+        "WSS-W10-nipple-thread_standard",
+        "WSS-W10-nipple-thread-label",
+        "ROOT-WSS-cartridge-constructions",
+        "ROOT-WSS-cartridge-domain-bearing-bearing_size_code",
+        "ROOT-WSS-cartridge-domain-bearing-bearing_inner_diameter_mm",
+        "ROOT-WSS-cartridge-domain-bearing-bearing_outer_diameter_mm",
+        "ROOT-WSS-cartridge-domain-bearing-bearing_width_mm",
+        "ROOT-WSS-cartridge-domain-bottom_bracket_bearing-bearing_inner_diameter_mm",
+        "ROOT-WSS-cartridge-domain-bottom_bracket_bearing-bearing_outer_diameter_mm",
+        "ROOT-WSS-cartridge-domain-bottom_bracket_bearing-bb_bearing_width_mm",
+        "ROOT-WSS-cartridge-domain-bottom_bracket_bearing-bearing_size_code",
+        "ROOT-WSS-bearing-bearing_seat_geometry",
+        "ROOT-WSS-bearing-bearing_element_retention",
+        "ROOT-WSS-bevel-label-inner",
+        "ROOT-WSS-bevel-domain-inner",
+        "ROOT-WSS-bevel-label-outer",
+        "ROOT-WSS-bevel-domain-outer",
+        "ROOT-WSS-retire-shock-mount-scalar",
+        "ROOT-WSS-fork-fork_crown_layout",
+        "ROOT-WSS-conditions-tire",
+        "ROOT-WSS-conditions-headset"
+      ],
+      "rejected": [
+        "WSS-W10-spoke-thread-label"
+      ],
+      "scope": "field_representation"
+    },
+    {
+      "base_sha256": "6ed9cdf73ae5d9fc0aa2284bb4691f4f1eca958c2762c5ea1e7076c5f9358b18",
+      "proposal_sha256": "f6f48614dcab8411569a19013124f14101c15d3c7983af0930db9ee718567b66",
+      "decisions_sha256": "c24eecffb085c70cb66fd6b79fbffc0db141e55bb9ca34effc33f46534e66ee2",
+      "applied": [
+        "CPC01",
+        "CPC02",
+        "CPC03",
+        "CPC04",
+        "CPC05",
+        "CPC06",
+        "CPC07",
+        "CPC08",
+        "CPC09",
+        "CPC10",
+        "CPC11",
+        "CPC12",
+        "CPC13",
+        "CPC14"
+      ],
+      "rejected": [],
+      "scope": "field_representation"
+    },
+    {
+      "base_sha256": "d7f8510ca112da4430f485720243ddde899daa097f39fb00aec49fe35027b7ca",
+      "proposal_sha256": "96f65c22acd5167216978e0b856944f89c2229f29acf48a2f0fb41fb3bcb5d97",
+      "decisions_sha256": "28576287c068bcd7260a99cf867c231025e455ef2d478d06c16ce0c9eb5e1e7c",
+      "applied": [
+        "RND-ND09-thread_pitch_system",
+        "RND-ND09-thread_pitch_mm-gate",
+        "RND-ND09-thread_tpi-gate",
+        "RND-ND16-bottle_diameter-gate",
+        "RND-ND17-max_pressure-gate",
+        "RND-ND18-helmet_kind-options",
+        "ROOT-RND-label-bottle_diameter_mm",
+        "ROOT-RND-add-bottle_body_dimensions",
+        "ROOT-RND-add-pump_pressure_specifications",
+        "ROOT-RND-conditions-pump",
+        "ROOT-RND-schema-co2_cartridge_configurations",
+        "ROOT-RND-schema-security_rating_configurations",
+        "ROOT-RND-conditions-lock",
+        "ROOT-RND-schema-bar_clamp_configurations",
+        "ROOT-RND-conditions-accessory_mount",
+        "ROOT-RND-label-helmet_kind"
+      ],
+      "rejected": [
+        "RND-ND10-tool_capabilities-unique_by",
+        "RND-ND11-security_rating_configurations-unique_by",
+        "RND-ND13-bar_clamp_configurations-unique_by",
+        "RND-ND14-bag_member_configurations-unique_by",
+        "RND-ND17-co2_cartridge_configurations-unique_by",
+        "RND-ND19-eyewear_lens_configurations-unique_by",
+        "RND-ND23-nutrition_facts-unique_by"
+      ],
+      "scope": "field_representation"
+    },
+    {
+      "base_sha256": "f1826a9a782a200754b21ba6c5420af0f9c39b89482503cab77f96779fc739b1",
+      "proposal_sha256": "d3da2ee618574366e2f515e7fad463e744800d7d753feb7b4f2ee32ad53a7d99",
+      "decisions_sha256": "8b9f1ea969439bffad39772a4b3ca5d0885f1151be02260ae5089833089be73f",
+      "applied": [
+        "RV-seatpost",
+        "RV-accessory_mount"
+      ],
+      "rejected": [],
+      "scope": "field_representation"
+    },
+    {
+      "base_sha256": "58e68f0c4f0d7b8e824a84a3931cf9f7bd03767f8a65aaa55020bc6af7465f03",
+      "proposal_sha256": "8428447ff39b385d29da28faa5d2997bffca34ee252308359b910dc13fcbaac8",
+      "decisions_sha256": "2a988ed6bc65fda4ad0d1c5b59d7313d0eca965b424520cfd9c1533e06950d65",
+      "applied": [
+        "CONT-01",
+        "CONT-02",
+        "CONT-03",
+        "CONT-04",
+        "CONT-05",
+        "CONT-06",
+        "CONT-07"
+      ],
+      "rejected": [],
+      "scope": "field_representation"
+    },
+    {
+      "base_sha256": "20a9c1eabdf84dd5e3e9cb5a4a922a695c6e91deff53bebdb2e0c584b5e8edee",
+      "proposal_sha256": "239ab6607e25f4211f88d5c4998cec25af52d07278d75d983c98f0cfa8b05087",
+      "decisions_sha256": "a6e48a280bc2019237e02fce0e6fbae26a6ca0c0747d933e71cea6e022e35645",
+      "applied": [
+        "WRFP-R2-bearing_seal_kind-open-cartridge",
+        "WRFP-R1-inner-bevel-helper",
+        "WRFP-R1-outer-bevel-helper",
+        "WRFP-R1-race-contact-angle",
+        "WRFP-R1-row-count",
+        "WRFP-R1-regreasable",
+        "WRFP-R3-retire-max-pressure-psi",
+        "WRFP-R6-hookless-pending-completeness"
+      ],
+      "rejected": [
+        "WRFP-R3-max-pressure-unit",
+        "WRFP-R3-max-pressure-value"
+      ],
+      "scope": "field_representation"
+    },
+    {
+      "base_sha256": "00041bb82cbddec1278a4d310d26747601518356abce5af4138da9bab7aa4b06",
+      "proposal_sha256": "29176d32164746a87b2a3178180baca350c24c9e8c18bf22e9827b978ae45f8c",
+      "decisions_sha256": "b7e30ff04b8d1830cafc4c9f03f9efaf543cdda3140c40b118f7e9a52570d5d6",
+      "applied": [
+        "PCB-P01",
+        "PCB-P02",
+        "PCB-P03",
+        "PCB-P04",
+        "TPDU-01-general-max-pressures-table",
+        "TPDU-02-row-conditions-unit-gates-value"
+      ],
+      "rejected": [
+        "TPDU-03-retire-max-pressure-psi"
+      ],
+      "scope": "field_representation"
+    },
+    {
+      "base_sha256": "e709158d0ac49603ab01dfde19326d1f9f2fd0d0ce50723cb5d0076390226d9d",
+      "proposal_sha256": "049060e8daf62c2411980819ff4e568c92b081e13da0612f91916c4b278f5a6f",
+      "decisions_sha256": "262218685caba233ba58cde025160ec7ca8a5bafdcba92fe9acc3914c73b41a1",
+      "applied": [
+        "CARD-01"
+      ],
+      "rejected": [],
+      "scope": "field_representation"
+    },
+    {
+      "base_sha256": "934ce172a6f3eaf8fa8dc616a912d161c965840b97b647fbee23870ccc154562",
+      "proposal_sha256": "0dbc1d2309f75a12cf90e49c5dd893bf4b89f791603cdae1e8865e3b176e2400",
+      "decisions_sha256": "97765fa7fde9bfcf3c684ef4e8f831c7ad55fdd878fd9139ade539fbd0c98b9d",
+      "applied": [
+        "PORT-01",
+        "PORT-02"
+      ],
+      "rejected": [],
+      "scope": "field_representation"
+    }
+  ],
+  "mechanical_coverage_complete": false,
+  "automatic_fill_authorized": false,
+  "source_urls": [
+    "https://www.parktool.com/en-us/blog/repair-help/chain-compatibility",
+    "https://www.sheldonbrown.com/chains.html",
+    "https://www.kmcchain.eu/products/x8-silver",
+    "https://www.kmcchain.com/en/product/connector-missing-link-cl573r-8s-7s-6s-speed",
+    "https://bike.shimano.com/en-AU/products/components/pdp.P-SM-CN900-11.html",
+    "https://support.sram.com/hc/en-us/articles/26180202731931-Can-I-use-an-Eagle-Drivetrain-PowerLock-on-my-Eagle-Transmission-Chain"
+  ],
+  "source_catalog_sha256": "ab1e52a97a73ea1530d48845b7b470871f35ec7898687bbbcda71e4d80dcd1f5",
+  "publication_authorized": false
+}

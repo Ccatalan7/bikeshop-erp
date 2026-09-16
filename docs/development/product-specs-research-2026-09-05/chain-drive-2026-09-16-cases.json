@@ -1,0 +1,1180 @@
+{
+  "schema_version": 1,
+  "catalogue_sha256": "45de821a2b427cc92878470263d39958f321913a9eda52a90b6e615953683b00",
+  "cases": [
+    {
+      "id": "cd_x8_keeps_discrete_applications",
+      "template": "chain",
+      "values": {
+        "spec_evidence_source": "https://www.kmcchain.eu/products/x8-silver",
+        "drivetrain_mode": "Derailleur",
+        "chain_speeds": [
+          "6",
+          "7",
+          "8"
+        ],
+        "chain_width_family": "3/32",
+        "chain_outer_width_mm": "7.3",
+        "chain_application_declarations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "claim_identity": "x8-6",
+                "scope_kind": "Sistema documentado",
+                "target_system": "Todos los sistemas de 6 velocidades",
+                "verdict": "Admitido por la fuente",
+                "drive_kind": "Desviador externo",
+                "rear_sprockets": "6",
+                "source_document": "KMC X8 BX08NP114",
+                "source_url": "https://www.kmcchain.eu/products/x8-silver"
+              },
+              "sources": []
+            },
+            {
+              "id": "r2",
+              "values": {
+                "claim_identity": "x8-7",
+                "scope_kind": "Sistema documentado",
+                "target_system": "Todos los sistemas de 7 velocidades",
+                "verdict": "Admitido por la fuente",
+                "drive_kind": "Desviador externo",
+                "rear_sprockets": "7",
+                "source_document": "KMC X8 BX08NP114",
+                "source_url": "https://www.kmcchain.eu/products/x8-silver"
+              },
+              "sources": []
+            },
+            {
+              "id": "r3",
+              "values": {
+                "claim_identity": "x8-8",
+                "scope_kind": "Sistema documentado",
+                "target_system": "Todos los sistemas de 8 velocidades",
+                "verdict": "Admitido por la fuente",
+                "drive_kind": "Desviador externo",
+                "rear_sprockets": "8",
+                "source_document": "KMC X8 BX08NP114",
+                "source_url": "https://www.kmcchain.eu/products/x8-silver"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [
+        "https://www.kmcchain.eu/products/x8-silver"
+      ]
+    },
+    {
+      "id": "cd_wide_chain_modern_derailleur_still_blocks",
+      "template": "chain",
+      "values": {
+        "spec_evidence_source": "https://www.kmcchain.eu/products/x8-silver",
+        "drivetrain_mode": "Derailleur",
+        "chain_speeds": [
+          "6",
+          "7",
+          "8"
+        ],
+        "chain_width_family": "1/8",
+        "chain_outer_width_mm": "7.3"
+      },
+      "expected_blocking": [
+        {
+          "code": "constraint",
+          "field": "chain_width_family"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [
+        "https://www.parktool.com/en-us/blog/repair-help/chain-compatibility",
+        "https://www.sheldonbrown.com/chains.html"
+      ],
+      "expected_sql_blocking": [
+        {
+          "code": "field_constraint",
+          "field": "chain_width_family"
+        }
+      ]
+    },
+    {
+      "id": "cd_width_is_not_a_speed_limit",
+      "template": "chain",
+      "values": {
+        "spec_evidence_source": "https://example.invalid/synthetic",
+        "chain_outer_width_mm": "10"
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [
+        "https://www.parktool.com/en-us/blog/repair-help/chain-compatibility"
+      ]
+    },
+    {
+      "id": "cd_other_width_needs_designation",
+      "template": "chain",
+      "values": {
+        "spec_evidence_source": "https://www.parktool.com/en-us/blog/repair-help/chain-compatibility",
+        "chain_width_family": "Otro"
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "expected_issue_subset": [
+        {
+          "code": "required_missing",
+          "field": "chain_other_width_designation",
+          "blocking": false
+        }
+      ],
+      "expected_sql_issue_subset": [
+        {
+          "code": "required_missing",
+          "field": "chain_other_width_designation",
+          "blocking": false
+        }
+      ]
+    },
+    {
+      "id": "cd_three_sixteenths_is_representable",
+      "template": "chain",
+      "values": {
+        "spec_evidence_source": "https://www.parktool.com/en-us/blog/repair-help/chain-compatibility",
+        "chain_width_family": "Otro",
+        "chain_other_width_designation": "3/16"
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [
+        "https://www.parktool.com/en-us/blog/repair-help/chain-compatibility"
+      ]
+    },
+    {
+      "id": "cd_width_other_text_does_not_override_known_width",
+      "template": "chain",
+      "values": {
+        "spec_evidence_source": "https://www.kmcchain.eu/products/x8-silver",
+        "chain_width_family": "3/32",
+        "chain_other_width_designation": "1/8"
+      },
+      "expected_blocking": [
+        {
+          "code": "field_applicability",
+          "field": "chain_other_width_designation"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "cd_application_missing_source_pending",
+      "template": "chain",
+      "values": {
+        "chain_application_declarations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "claim_identity": "a",
+                "scope_kind": "Sistema documentado",
+                "target_system": "Sistema explícito",
+                "verdict": "Admitido por la fuente",
+                "drive_kind": "Desviador externo",
+                "rear_sprockets": "8"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "expected_issue_subset": [
+        {
+          "code": "row_incomplete",
+          "field": "chain_application_declarations",
+          "blocking": false
+        }
+      ],
+      "expected_sql_issue_subset": [
+        {
+          "code": "row_incomplete",
+          "field": "chain_application_declarations",
+          "blocking": false
+        }
+      ]
+    },
+    {
+      "id": "cd_internal_gears_are_not_rear_sprockets",
+      "template": "chain",
+      "values": {
+        "chain_application_declarations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "claim_identity": "a",
+                "scope_kind": "Sistema documentado",
+                "target_system": "Sistema explícito",
+                "verdict": "Admitido por la fuente",
+                "drive_kind": "Cambio interno",
+                "rear_sprockets": "8",
+                "source_document": "Documento identificado",
+                "internal_gears": "8"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [
+        {
+          "code": "row_field_applicability",
+          "field": "chain_application_declarations"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "cd_internal_gear_application_retains_its_count",
+      "template": "chain",
+      "values": {
+        "chain_application_declarations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "claim_identity": "a",
+                "scope_kind": "Sistema documentado",
+                "target_system": "Sistema explícito",
+                "verdict": "Admitido por la fuente",
+                "drive_kind": "Cambio interno",
+                "source_document": "Documento identificado",
+                "internal_gears": "8"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [
+        "https://www.parktool.com/en-us/blog/repair-help/chain-compatibility"
+      ]
+    },
+    {
+      "id": "cd_external_application_cannot_borrow_internal_gears",
+      "template": "chain",
+      "values": {
+        "chain_application_declarations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "claim_identity": "a",
+                "scope_kind": "Sistema documentado",
+                "target_system": "Sistema explícito",
+                "verdict": "Admitido por la fuente",
+                "drive_kind": "Desviador externo",
+                "rear_sprockets": "8",
+                "source_document": "Documento identificado",
+                "internal_gears": "8"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [
+        {
+          "code": "row_field_applicability",
+          "field": "chain_application_declarations"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "cd_named_system_does_not_require_invented_cog_count",
+      "template": "chain",
+      "values": {
+        "chain_application_declarations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "claim_identity": "a",
+                "scope_kind": "Sistema documentado",
+                "target_system": "Sistema explícito",
+                "verdict": "Admitido por la fuente",
+                "drive_kind": "Desviador externo",
+                "source_document": "Documento identificado"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "cd_speed_array_in_one_tuple_blocks",
+      "template": "chain",
+      "values": {
+        "chain_application_declarations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "claim_identity": "a",
+                "scope_kind": "Sistema documentado",
+                "target_system": "Sistema explícito",
+                "verdict": "Admitido por la fuente",
+                "drive_kind": "Desviador externo",
+                "rear_sprockets": [
+                  "8",
+                  "9"
+                ],
+                "source_document": "Documento identificado"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [
+        {
+          "code": "row_shape",
+          "field": "chain_application_declarations"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "cd_two_distinct_claims_do_not_merge",
+      "template": "chain",
+      "values": {
+        "chain_application_declarations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "claim_identity": "a",
+                "scope_kind": "Sistema documentado",
+                "target_system": "Sistema explícito",
+                "verdict": "Admitido por la fuente",
+                "drive_kind": "Desviador externo",
+                "rear_sprockets": "8",
+                "source_document": "Documento identificado"
+              },
+              "sources": []
+            },
+            {
+              "id": "r2",
+              "values": {
+                "claim_identity": "b",
+                "scope_kind": "Sistema documentado",
+                "target_system": "Otro sistema",
+                "verdict": "Admitido por la fuente",
+                "drive_kind": "Desviador externo",
+                "rear_sprockets": "11",
+                "source_document": "Documento identificado"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "cd_same_claim_twice_blocks",
+      "template": "chain",
+      "values": {
+        "chain_application_declarations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "claim_identity": "a",
+                "scope_kind": "Sistema documentado",
+                "target_system": "Sistema explícito",
+                "verdict": "Admitido por la fuente",
+                "drive_kind": "Desviador externo",
+                "rear_sprockets": "8",
+                "source_document": "Documento identificado"
+              },
+              "sources": []
+            },
+            {
+              "id": "r2",
+              "values": {
+                "claim_identity": "a",
+                "scope_kind": "Sistema documentado",
+                "target_system": "Sistema explícito",
+                "verdict": "Admitido por la fuente",
+                "drive_kind": "Desviador externo",
+                "rear_sprockets": "8",
+                "source_document": "Documento identificado"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [
+        {
+          "code": "row_shape",
+          "field": "chain_application_declarations"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "cd_conditional_claim_needs_its_condition",
+      "template": "chain",
+      "values": {
+        "chain_application_declarations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "claim_identity": "a",
+                "scope_kind": "Sistema documentado",
+                "target_system": "Sistema explícito",
+                "verdict": "Condicionado por la fuente",
+                "drive_kind": "Desviador externo",
+                "rear_sprockets": "8",
+                "source_document": "Documento identificado"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "expected_issue_subset": [
+        {
+          "code": "row_required_missing",
+          "field": "chain_application_declarations",
+          "blocking": false
+        }
+      ],
+      "expected_sql_issue_subset": [
+        {
+          "code": "row_required_missing",
+          "field": "chain_application_declarations",
+          "blocking": false
+        }
+      ]
+    },
+    {
+      "id": "cd_weight_basis_is_not_sold_length",
+      "template": "chain",
+      "values": {
+        "spec_evidence_source": "https://www.kmcchain.eu/products/x8-silver",
+        "drivetrain_mode": "Derailleur",
+        "chain_speeds": [
+          "6",
+          "7",
+          "8"
+        ],
+        "chain_width_family": "3/32",
+        "chain_outer_width_mm": "7.3",
+        "link_count": "114",
+        "chain_mass_declarations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "weighing_identity": "KMC basis",
+                "weight_g": "316",
+                "basis_links": "110",
+                "basis_description": "Masa publicada por 110 eslabones",
+                "source_document": "KMC X8",
+                "source_url": "https://www.kmcchain.eu/products/x8-silver"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [
+        "https://www.kmcchain.eu/products/x8-silver"
+      ]
+    },
+    {
+      "id": "cd_weight_missing_basis_pending",
+      "template": "chain",
+      "values": {
+        "chain_mass_declarations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "weighing_identity": "a",
+                "weight_g": "316",
+                "source_document": "KMC X8"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "expected_issue_subset": [
+        {
+          "code": "row_incomplete",
+          "field": "chain_mass_declarations",
+          "blocking": false
+        }
+      ],
+      "expected_sql_issue_subset": [
+        {
+          "code": "row_incomplete",
+          "field": "chain_mass_declarations",
+          "blocking": false
+        }
+      ]
+    },
+    {
+      "id": "cd_included_quick_link_needs_contents",
+      "template": "chain",
+      "values": {
+        "spec_evidence_source": "https://www.kmcchain.eu/products/x8-silver",
+        "quick_link_included": true
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "expected_issue_subset": [
+        {
+          "code": "required_missing",
+          "field": "chain_quick_links_supplied",
+          "blocking": false
+        }
+      ],
+      "expected_sql_issue_subset": [
+        {
+          "code": "required_missing",
+          "field": "chain_quick_links_supplied",
+          "blocking": false
+        }
+      ]
+    },
+    {
+      "id": "cd_two_halves_can_be_one_complete_link",
+      "template": "chain",
+      "values": {
+        "spec_evidence_source": "https://www.kmcchain.eu/products/x8-silver",
+        "quick_link_included": true,
+        "chain_quick_links_supplied": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "connector_identity": "a",
+                "quantity": "1",
+                "source_document": "Envase identificado"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "cd_not_included_cannot_have_supplied_links",
+      "template": "chain",
+      "values": {
+        "spec_evidence_source": "https://www.kmcchain.eu/products/x8-silver",
+        "quick_link_included": false,
+        "chain_quick_links_supplied": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "connector_identity": "a",
+                "quantity": "1",
+                "source_document": "Envase identificado"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [
+        {
+          "code": "field_applicability",
+          "field": "chain_quick_links_supplied"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "cd_connector_target_is_chain_model",
+      "template": "chain_link",
+      "values": {
+        "spec_evidence_source": "https://www.kmcchain.com/en/product/connector-missing-link-cl573r-8s-7s-6s-speed",
+        "chain_connector_type": "Missing link",
+        "chain_speeds": [
+          "6",
+          "7",
+          "8"
+        ],
+        "connector_target_declarations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "claim_identity": "x8",
+                "scope_kind": "Modelo documentado",
+                "target_brand": "KMC",
+                "target_model": "X8",
+                "verdict": "Admitido por la fuente",
+                "source_document": "KMC CL573R",
+                "source_url": "https://www.kmcchain.com/en/product/connector-missing-link-cl573r-8s-7s-6s-speed"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [
+        "https://www.kmcchain.com/en/product/connector-missing-link-cl573r-8s-7s-6s-speed"
+      ]
+    },
+    {
+      "id": "cd_connector_model_does_not_accept_system_text",
+      "template": "chain_link",
+      "values": {
+        "spec_evidence_source": "https://www.kmcchain.com/en/product/connector-missing-link-cl573r-8s-7s-6s-speed",
+        "chain_connector_type": "Missing link",
+        "chain_speeds": [
+          "6",
+          "7",
+          "8"
+        ],
+        "connector_target_declarations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "claim_identity": "x8",
+                "scope_kind": "Modelo documentado",
+                "target_brand": "KMC",
+                "target_model": "X8",
+                "verdict": "Admitido por la fuente",
+                "source_document": "KMC CL573R",
+                "source_url": "https://www.kmcchain.com/en/product/connector-missing-link-cl573r-8s-7s-6s-speed",
+                "target_system": "SRAM"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [
+        {
+          "code": "row_field_applicability",
+          "field": "connector_target_declarations"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "cd_connector_model_needs_brand",
+      "template": "chain_link",
+      "values": {
+        "spec_evidence_source": "https://www.kmcchain.com/en/product/connector-missing-link-cl573r-8s-7s-6s-speed",
+        "chain_connector_type": "Missing link",
+        "chain_speeds": [
+          "6",
+          "7",
+          "8"
+        ],
+        "connector_target_declarations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "claim_identity": "x8",
+                "scope_kind": "Modelo documentado",
+                "target_model": "X8",
+                "verdict": "Admitido por la fuente",
+                "source_document": "KMC CL573R",
+                "source_url": "https://www.kmcchain.com/en/product/connector-missing-link-cl573r-8s-7s-6s-speed"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "expected_issue_subset": [
+        {
+          "code": "row_required_missing",
+          "field": "connector_target_declarations",
+          "blocking": false
+        }
+      ],
+      "expected_sql_issue_subset": [
+        {
+          "code": "row_required_missing",
+          "field": "connector_target_declarations",
+          "blocking": false
+        }
+      ]
+    },
+    {
+      "id": "cd_hg11_connector_can_target_linkglide",
+      "template": "chain_link",
+      "values": {
+        "spec_evidence_source": "https://bike.shimano.com/en-AU/products/components/pdp.P-SM-CN900-11.html",
+        "chain_connector_type": "Missing link",
+        "chain_speeds": [
+          "11"
+        ],
+        "connector_target_declarations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "claim_identity": "lg",
+                "scope_kind": "Sistema documentado",
+                "target_system": "LINKGLIDE",
+                "verdict": "Admitido por la fuente",
+                "source_document": "Shimano SM-CN900-11",
+                "source_url": "https://bike.shimano.com/en-AU/products/components/pdp.P-SM-CN900-11.html"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [
+        "https://bike.shimano.com/en-AU/products/components/pdp.P-SM-CN900-11.html"
+      ]
+    },
+    {
+      "id": "cd_pin_not_reusable_guard_preserved",
+      "template": "chain_link",
+      "values": {
+        "spec_evidence_source": "https://www.sheldonbrown.com/chains.html",
+        "chain_connector_type": "Pin",
+        "chain_link_reusable": true
+      },
+      "expected_blocking": [
+        {
+          "code": "constraint",
+          "field": "chain_link_reusable"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "expected_sql_blocking": [
+        {
+          "code": "field_constraint",
+          "field": "chain_link_reusable"
+        }
+      ]
+    },
+    {
+      "id": "cd_non_reusable_cannot_declare_reuse_limit",
+      "template": "chain_link",
+      "values": {
+        "spec_evidence_source": "https://support.sram.com/hc/en-us/articles/26180202731931-Can-I-use-an-Eagle-Drivetrain-PowerLock-on-my-Eagle-Transmission-Chain",
+        "chain_connector_type": "Missing link",
+        "chain_link_reusable": false,
+        "connector_reuse_limit": "5"
+      },
+      "expected_blocking": [
+        {
+          "code": "field_applicability",
+          "field": "connector_reuse_limit"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "cd_reuse_limit_needs_whole_positive_uses",
+      "template": "chain_link",
+      "values": {
+        "spec_evidence_source": "https://example.invalid/synthetic",
+        "chain_connector_type": "Missing link",
+        "chain_link_reusable": true,
+        "connector_reuse_limit": "1.5"
+      },
+      "expected_blocking": [
+        {
+          "code": "integer",
+          "field": "connector_reuse_limit"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "expected_sql_blocking": [
+        {
+          "code": "field_constraint",
+          "field": "connector_reuse_limit"
+        }
+      ]
+    },
+    {
+      "id": "cd_documented_external_and_internal_uses_do_not_require_one_global_mode",
+      "template": "chain",
+      "values": {
+        "spec_evidence_source": "https://example.invalid/synthetic",
+        "chain_speeds": [
+          "8"
+        ],
+        "chain_application_declarations": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "claim_identity": "External",
+                "scope_kind": "Modelo documentado",
+                "target_brand": "Synthetic",
+                "target_model": "Synthetic compatible spindle",
+                "verdict": "Admitido por la fuente",
+                "source_document": "Synthetic document",
+                "source_url": "https://example.invalid/synthetic",
+                "drive_kind": "Desviador externo",
+                "rear_sprockets": "8"
+              },
+              "sources": []
+            },
+            {
+              "id": "r2",
+              "values": {
+                "claim_identity": "Internal",
+                "scope_kind": "Modelo documentado",
+                "target_brand": "Synthetic",
+                "target_model": "Synthetic compatible spindle",
+                "verdict": "Admitido por la fuente",
+                "source_document": "Synthetic document",
+                "source_url": "https://example.invalid/synthetic",
+                "drive_kind": "Cambio interno",
+                "internal_gears": "8"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "forbidden_issue_fields": [
+        "chain_speeds",
+        "drivetrain_mode",
+        "chain_application_declarations"
+      ]
+    }
+  ],
+  "pending_cases": [
+    {
+      "id": "cd_relation_explicit_ttype_exclusion",
+      "template": "chain_link",
+      "kind": "relation_integration_pending",
+      "relation_claim": {
+        "schema_version": 2,
+        "interface": "connector_chain",
+        "label": "Eagle Drivetrain PowerLock frente a cadena Eagle Transmission",
+        "alternatives": [
+          {
+            "id": "eagle",
+            "label": "Cadena Eagle Drivetrain",
+            "conditions": [
+              {
+                "field": "connector_technology",
+                "operator": "eq",
+                "value_type": "token",
+                "value": "Eagle Drivetrain"
+              },
+              {
+                "field": "chain_technology",
+                "operator": "eq",
+                "value_type": "token",
+                "value": "Eagle Drivetrain"
+              }
+            ],
+            "sources": [
+              "https://support.sram.com/hc/en-us/articles/26180202731931-Can-I-use-an-Eagle-Drivetrain-PowerLock-on-my-Eagle-Transmission-Chain"
+            ]
+          }
+        ],
+        "exclusions": [
+          {
+            "id": "ttype",
+            "label": "Este PowerLock no admite cadena T-Type",
+            "conditions": [
+              {
+                "field": "connector_technology",
+                "operator": "eq",
+                "value_type": "token",
+                "value": "Eagle Drivetrain"
+              },
+              {
+                "field": "chain_technology",
+                "operator": "eq",
+                "value_type": "token",
+                "value": "T-Type"
+              }
+            ],
+            "sources": [
+              "https://support.sram.com/hc/en-us/articles/26180202731931-Can-I-use-an-Eagle-Drivetrain-PowerLock-on-my-Eagle-Transmission-Chain"
+            ]
+          }
+        ]
+      },
+      "configuration": {
+        "connector_technology": "Eagle Drivetrain",
+        "chain_technology": "T-Type"
+      },
+      "required_verdict": "excluded",
+      "runnable_against_templates": false,
+      "source_urls": [
+        "https://support.sram.com/hc/en-us/articles/26180202731931-Can-I-use-an-Eagle-Drivetrain-PowerLock-on-my-Eagle-Transmission-Chain"
+      ],
+      "reason": "Requiere cadena instalada y referencia de conector identificadas; no inferidas por marca o 12v."
+    },
+    {
+      "id": "cd_relation_chain_unknown",
+      "template": "chain_link",
+      "kind": "relation_integration_pending",
+      "relation_claim": {
+        "schema_version": 2,
+        "interface": "connector_chain",
+        "label": "Eagle Drivetrain PowerLock frente a cadena Eagle Transmission",
+        "alternatives": [
+          {
+            "id": "eagle",
+            "label": "Cadena Eagle Drivetrain",
+            "conditions": [
+              {
+                "field": "connector_technology",
+                "operator": "eq",
+                "value_type": "token",
+                "value": "Eagle Drivetrain"
+              },
+              {
+                "field": "chain_technology",
+                "operator": "eq",
+                "value_type": "token",
+                "value": "Eagle Drivetrain"
+              }
+            ],
+            "sources": [
+              "https://support.sram.com/hc/en-us/articles/26180202731931-Can-I-use-an-Eagle-Drivetrain-PowerLock-on-my-Eagle-Transmission-Chain"
+            ]
+          }
+        ],
+        "exclusions": [
+          {
+            "id": "ttype",
+            "label": "Este PowerLock no admite cadena T-Type",
+            "conditions": [
+              {
+                "field": "connector_technology",
+                "operator": "eq",
+                "value_type": "token",
+                "value": "Eagle Drivetrain"
+              },
+              {
+                "field": "chain_technology",
+                "operator": "eq",
+                "value_type": "token",
+                "value": "T-Type"
+              }
+            ],
+            "sources": [
+              "https://support.sram.com/hc/en-us/articles/26180202731931-Can-I-use-an-Eagle-Drivetrain-PowerLock-on-my-Eagle-Transmission-Chain"
+            ]
+          }
+        ]
+      },
+      "configuration": {
+        "connector_technology": "Eagle Drivetrain"
+      },
+      "required_verdict": "unknown",
+      "runnable_against_templates": false,
+      "source_urls": [
+        "https://support.sram.com/hc/en-us/articles/26180202731931-Can-I-use-an-Eagle-Drivetrain-PowerLock-on-my-Eagle-Transmission-Chain"
+      ],
+      "reason": "Requiere cadena instalada y referencia de conector identificadas; no inferidas por marca o 12v."
+    },
+    {
+      "id": "cd_relation_same_speed_not_identity",
+      "template": "chain_link",
+      "kind": "relation_integration_pending",
+      "relation_claim": {
+        "schema_version": 2,
+        "interface": "connector_chain",
+        "label": "Eagle Drivetrain PowerLock frente a cadena Eagle Transmission",
+        "alternatives": [
+          {
+            "id": "eagle",
+            "label": "Cadena Eagle Drivetrain",
+            "conditions": [
+              {
+                "field": "connector_technology",
+                "operator": "eq",
+                "value_type": "token",
+                "value": "Eagle Drivetrain"
+              },
+              {
+                "field": "chain_technology",
+                "operator": "eq",
+                "value_type": "token",
+                "value": "Eagle Drivetrain"
+              }
+            ],
+            "sources": [
+              "https://support.sram.com/hc/en-us/articles/26180202731931-Can-I-use-an-Eagle-Drivetrain-PowerLock-on-my-Eagle-Transmission-Chain"
+            ]
+          }
+        ],
+        "exclusions": [
+          {
+            "id": "ttype",
+            "label": "Este PowerLock no admite cadena T-Type",
+            "conditions": [
+              {
+                "field": "connector_technology",
+                "operator": "eq",
+                "value_type": "token",
+                "value": "Eagle Drivetrain"
+              },
+              {
+                "field": "chain_technology",
+                "operator": "eq",
+                "value_type": "token",
+                "value": "T-Type"
+              }
+            ],
+            "sources": [
+              "https://support.sram.com/hc/en-us/articles/26180202731931-Can-I-use-an-Eagle-Drivetrain-PowerLock-on-my-Eagle-Transmission-Chain"
+            ]
+          }
+        ]
+      },
+      "configuration": {
+        "connector_technology": "12",
+        "chain_technology": "12"
+      },
+      "required_verdict": "outsideDeclaredScope",
+      "runnable_against_templates": false,
+      "source_urls": [
+        "https://support.sram.com/hc/en-us/articles/26180202731931-Can-I-use-an-Eagle-Drivetrain-PowerLock-on-my-Eagle-Transmission-Chain"
+      ],
+      "reason": "Requiere cadena instalada y referencia de conector identificadas; no inferidas por marca o 12v."
+    }
+  ]
+}

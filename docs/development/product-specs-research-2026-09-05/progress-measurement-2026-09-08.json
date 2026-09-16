@@ -6,9 +6,9 @@
  "present_global_templates": 107,
  "stage": "template_deliveries",
  "new_published_deliveries": 68,
- "delivered_stage_percent": 80.0,
+ "delivered_stage_percent": 81.9,
  "original_successor_candidates": 37,
- "original_successors_activated": 16,
+ "original_successors_activated": 18,
  "task_product_fills": 0,
  "task_new_assignments": 720,
  "overall_percent": null,
@@ -337,7 +337,7 @@
   "review": "Root; no Claude review claimed",
   "record": "assignment-sanitation-checkpoint-2026-09-14.md"
  },
- "delivery_status_updated_at": "2026-09-16T06:02:00Z",
+ "delivery_status_updated_at": "2026-09-16T06:10:00Z",
  "assignment_repair_progress": {
   "initial_missing": 746,
   "repaired": 724,
@@ -591,7 +591,7 @@
    "Phone and embedded routes, next client distribution and existing shared field surface flags remain open."
   ]
  },
- "published_planned_deliveries": 84,
+ "published_planned_deliveries": 86,
  "new_templates_outside_initial_plan": 2,
  "strict_scalar_extension_2026_09_15": {
   "migration": "20260915200000",
@@ -832,6 +832,40 @@
    "unprojected_active_observations": 0
   },
   "record": "shifting-successors-adjudication-2026-09-16.md",
+  "technical_fill_persisted": 0
+ },
+ "chain_drive_replacements_2026_09_16": {
+  "migration": "supabase/migrations/20260916080000_chain_drive_successors.sql",
+  "status": "APPLIED",
+  "verified_at": "2026-09-16T06:07:55Z",
+  "versions": {
+   "chain": [
+    6,
+    25
+   ],
+   "chain_link": [
+    24,
+    40
+   ]
+  },
+  "authenticated_products": 44,
+  "product_revisions_unchanged": 44,
+  "facts_before_after": [
+   42,
+   42
+  ],
+  "new_definitions": 7,
+  "surface_definitions": 2,
+  "sql_cases_local_rollback": 28,
+  "dart_form_tests": 30,
+  "adoption": {
+   "products_evaluated": 44,
+   "products_with_blocking_issues": 0,
+   "products_with_pending_issues": 44,
+   "legacy_observations": 1,
+   "unprojected_active_observations": 0
+  },
+  "record": "chain-drive-successors-adjudication-2026-09-16.md",
   "technical_fill_persisted": 0
  }
 }

@@ -1,5 +1,7 @@
 # Cadenas, conectores y kits: sucesor local
 
+**Publicados el 2026-09-16** `chain` y `chain_link` como `20260916080000_chain_drive_successors.sql` sobre 44 productos (el kit ya se había publicado el 2026-09-15); ver [chain-drive-successors-adjudication-2026-09-16.md](chain-drive-successors-adjudication-2026-09-16.md).
+
 El compilador `compile_existing_chain_drive_catalog.py` conserva la entrega
 aplicada de cadenas/conectores y las 27 definiciones compartidas. Propone 11
 definiciones nuevas, 52 usos y 41 cambios de metadatos en tres plantillas.
