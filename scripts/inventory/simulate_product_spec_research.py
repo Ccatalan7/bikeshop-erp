@@ -184,9 +184,9 @@ def inspect_proposal(proposal, snapshot, evidence_root=RESEARCH):
         )
         if not valid_type:
             issue('typed_value_required', key)
-        if change['origin'] == 'research':
-            pending.append({'code': 'research_provenance_writer_pending', 'field': key})
-        elif change['origin'] == 'existing_name':
+        # Research provenance is written by the published applier
+        # (20260916140000); only a name reading still needs its own receipt.
+        if change['origin'] == 'existing_name':
             pending.append({'code': 'canonical_name_receipt_required', 'field': key})
     for change in [*facts.values(), *identities.values(), *proposal['conflicts'],
                    *([proposal['reference']] if proposal['reference'] else [])]:
@@ -230,8 +230,8 @@ def inspect_proposal(proposal, snapshot, evidence_root=RESEARCH):
                          and review['date'] is not None)
     if not review_consistent:
         pending.append({'code': 'independent_review_required', 'field': ''})
-    pending.extend([{'code': 'global_sanitation_open', 'field': ''},
-                    {'code': 'authenticated_spec_only_applicator_pending', 'field': ''}])
+    # The applier is published; the readiness closure is the gate that remains.
+    pending.append({'code': 'global_sanitation_open', 'field': ''})
     request = {
         'p_product_id': proposal['product_id'],
         'p_expected_snapshot_sha256': snapshot['snapshot_sha256'],

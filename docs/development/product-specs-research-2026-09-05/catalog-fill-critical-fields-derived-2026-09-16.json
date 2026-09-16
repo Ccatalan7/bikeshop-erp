@@ -1,0 +1,2325 @@
+{
+ "schema_version": 1,
+ "purpose": "Research completeness only. Does not add validation rules or imply fitment.",
+ "derived_at": "2026-09-16T17:57:02.740136+00:00",
+ "snapshot_at": "2026-09-16T09:17:09.03235+00:00",
+ "snapshot_sha256": "adddd7c1c86851a6d80822a4b651b2cf5e7d94eab8b0120392d29e5eaeadad92",
+ "reviewed_source": "catalog-fill-critical-fields.json",
+ "reviewed_source_sha256": "81a35ae6e14d48696ff9e81f51af99508923d9868da4584bddebe4455550b13c",
+ "families": {
+  "accessory_mount": {
+   "identity": [
+    "brand",
+    "model",
+    "device_system"
+   ],
+   "presentation": [
+    "manufacturer_sku"
+   ],
+   "technical": [
+    "device_system",
+    "rotation_360",
+    "device_attachment_kind",
+    "material",
+    "accessory_mount_kind",
+    "bar_fit_representation",
+    "color",
+    "bike_attachment_kind"
+   ],
+   "compatibility_evidence": [
+    "spec_evidence_source"
+   ],
+   "status": "derived_unreviewed",
+   "contract_version": 16,
+   "note": "Derived from the published contract (primary decisions and fields required always). Nominal values do not prove fitment; review before using as a batch closure criterion."
+  },
+  "audible_signal": {
+   "identity": [
+    "brand",
+    "model"
+   ],
+   "presentation": [
+    "manufacturer_sku"
+   ],
+   "technical": [
+    "color",
+    "power_source",
+    "signal_kind"
+   ],
+   "compatibility_evidence": [
+    "spec_evidence_source"
+   ],
+   "status": "derived_unreviewed",
+   "contract_version": 8,
+   "note": "Derived from the published contract (primary decisions and fields required always). Nominal values do not prove fitment; review before using as a batch closure criterion."
+  },
+  "bearing": {
+   "identity": [
+    "brand",
+    "model",
+    "bearing_size_code"
+   ],
+   "presentation": [
+    "manufacturer_sku",
+    "ball_count_per_pack"
+   ],
+   "technical": [
+    "ball_diameter_in",
+    "bearing_supply_form",
+    "bearing_size_code"
+   ],
+   "compatibility_evidence": [
+    "spec_evidence_source"
+   ],
+   "status": "derived_unreviewed",
+   "contract_version": 22,
+   "note": "Derived from the published contract (primary decisions and fields required always). Nominal values do not prove fitment; review before using as a batch closure criterion."
+  },
+  "bicycle": {
+   "identity": [
+    "brand",
+    "model"
+   ],
+   "presentation": [
+    "manufacturer_sku",
+    "kit_members"
+   ],
+   "technical": [
+    "bicycle_size_configurations",
+    "bike_kind",
+    "assembly_variant_identity",
+    "assembly_configurations",
+    "assembly_wheel_members",
+    "color"
+   ],
+   "compatibility_evidence": [
+    "spec_evidence_source"
+   ],
+   "status": "derived_unreviewed",
+   "contract_version": 47,
+   "note": "Derived from the published contract (primary decisions and fields required always). Nominal values do not prove fitment; review before using as a batch closure criterion."
+  },
+  "bike_bag": {
+   "identity": [
+    "brand",
+    "model"
+   ],
+   "presentation": [
+    "manufacturer_sku",
+    "auxiliary_part_requirements",
+    "bag_member_configurations"
+   ],
+   "technical": [
+    "color",
+    "volume_l",
+    "attachment",
+    "bag_position"
+   ],
+   "compatibility_evidence": [
+    "spec_evidence_source"
+   ],
+   "status": "derived_unreviewed",
+   "contract_version": 13,
+   "note": "Derived from the published contract (primary decisions and fields required always). Nominal values do not prove fitment; review before using as a batch closure criterion."
+  },
+  "bike_protection": {
+   "identity": [
+    "brand",
+    "model"
+   ],
+   "presentation": [
+    "manufacturer_sku"
+   ],
+   "technical": [
+    "material",
+    "color",
+    "bike_protection_kind"
+   ],
+   "compatibility_evidence": [
+    "spec_evidence_source"
+   ],
+   "status": "derived_unreviewed",
+   "contract_version": 8,
+   "note": "Derived from the published contract (primary decisions and fields required always). Nominal values do not prove fitment; review before using as a batch closure criterion."
+  },
+  "bmx_cable_detangler": {
+   "identity": [
+    "brand",
+    "model"
+   ],
+   "presentation": [
+    "manufacturer_sku",
+    "kit_members"
+   ],
+   "technical": [
+    "detangler_kind"
+   ],
+   "compatibility_evidence": [
+    "spec_evidence_source"
+   ],
+   "status": "derived_unreviewed",
+   "contract_version": 8,
+   "note": "Derived from the published contract (primary decisions and fields required always). Nominal values do not prove fitment; review before using as a batch closure criterion."
+  },
+  "bottle": {
+   "identity": [
+    "brand",
+    "model"
+   ],
+   "presentation": [
+    "manufacturer_sku",
+    "base_included",
+    "included_base_model"
+   ],
+   "technical": [
+    "color",
+    "insulated",
+    "volume_ml",
+    "bottle_retention_system",
+    "material"
+   ],
+   "compatibility_evidence": [
+    "spec_evidence_source"
+   ],
+   "status": "derived_unreviewed",
+   "contract_version": 12,
+   "note": "Derived from the published contract (primary decisions and fields required always). Nominal values do not prove fitment; review before using as a batch closure criterion."
+  },
+  "bottle_cage": {
+   "identity": [
+    "brand",
+    "model"
+   ],
+   "presentation": [
+    "manufacturer_sku",
+    "bolts_included"
+   ],
+   "technical": [
+    "side_entry_side",
+    "cage_mount",
+    "cage_retention_system",
+    "side_entry",
+    "color",
+    "material"
+   ],
+   "compatibility_evidence": [
+    "spec_evidence_source"
+   ],
+   "status": "derived_unreviewed",
+   "contract_version": 14,
+   "note": "Derived from the published contract (primary decisions and fields required always). Nominal values do not prove fitment; review before using as a batch closure criterion."
+  },
+  "bottom_bracket": {
+   "identity": [
+    "brand",
+    "model"
+   ],
+   "presentation": [
+    "manufacturer_sku",
+    "includes_spindle"
+   ],
+   "technical": [],
+   "compatibility_evidence": [
+    "spec_evidence_source"
+   ],
+   "status": "derived_unreviewed",
+   "contract_version": 31,
+   "note": "Derived from the published contract (primary decisions and fields required always). Nominal values do not prove fitment; review before using as a batch closure criterion."
+  },
+  "bottom_bracket_axle": {
+   "identity": [
+    "brand",
+    "model"
+   ],
+   "presentation": [
+    "manufacturer_sku"
+   ],
+   "technical": [
+    "spindle_length_mm",
+    "crank_bolt_thread",
+    "spindle_interface"
+   ],
+   "compatibility_evidence": [
+    "spec_evidence_source"
+   ],
+   "status": "derived_unreviewed",
+   "contract_version": 13,
+   "note": "Derived from the published contract (primary decisions and fields required always). Nominal values do not prove fitment; review before using as a batch closure criterion."
+  },
+  "bottom_bracket_bearing": {
+   "identity": [
+    "brand",
+    "model",
+    "bearing_size_code"
+   ],
+   "presentation": [
+    "manufacturer_sku",
+    "bb_ball_count_per_side"
+   ],
+   "technical": [
+    "bearing_supply_form",
+    "bearing_size_code",
+    "bb_ball_size_in"
+   ],
+   "compatibility_evidence": [
+    "spec_evidence_source"
+   ],
+   "status": "derived_unreviewed",
+   "contract_version": 19,
+   "note": "Derived from the published contract (primary decisions and fields required always). Nominal values do not prove fitment; review before using as a batch closure criterion."
+  },
+  "bottom_bracket_cup": {
+   "identity": [
+    "brand",
+    "model"
+   ],
+   "presentation": [
+    "manufacturer_sku",
+    "bearing_included"
+   ],
+   "technical": [],
+   "compatibility_evidence": [
+    "spec_evidence_source"
+   ],
+   "status": "derived_unreviewed",
+   "contract_version": 19,
+   "note": "Derived from the published contract (primary decisions and fields required always). Nominal values do not prove fitment; review before using as a batch closure criterion."
+  },
+  "brake_caliper": {
+   "identity": [
+    "brand",
+    "model"
+   ],
+   "presentation": [
+    "manufacturer_sku"
+   ],
+   "technical": [
+    "brake_conversion_location",
+    "brake_position",
+    "brake_actuation",
+    "brake_external_hose_connection",
+    "caliper_mount_interface",
+    "braking_surface",
+    "piston_count_value"
+   ],
+   "compatibility_evidence": [
+    "spec_evidence_source"
+   ],
+   "status": "derived_unreviewed",
+   "contract_version": 32,
+   "note": "Derived from the published contract (primary decisions and fields required always). Nominal values do not prove fitment; review before using as a batch closure criterion."
+  },
+  "brake_fluid": {
+   "identity": [
+    "brand",
+    "model"
+   ],
+   "presentation": [
+    "manufacturer_sku"
+   ],
+   "technical": [
+    "brake_fluid_declarations"
+   ],
+   "compatibility_evidence": [
+    "spec_evidence_source"
+   ],
+   "status": "derived_unreviewed",
+   "contract_version": 9,
+   "note": "Derived from the published contract (primary decisions and fields required always). Nominal values do not prove fitment; review before using as a batch closure criterion."
+  },
+  "brake_lever": {
+   "identity": [
+    "brand",
+    "model"
+   ],
+   "presentation": [
+    "manufacturer_sku"
+   ],
+   "technical": [
+    "lever_cable_interface",
+    "brake_actuation",
+    "lever_mount_method",
+    "reach_adjust",
+    "lever_hydraulic_role",
+    "lever_side"
+   ],
+   "compatibility_evidence": [
+    "spec_evidence_source"
+   ],
+   "status": "derived_unreviewed",
+   "contract_version": 28,
+   "note": "Derived from the published contract (primary decisions and fields required always). Nominal values do not prove fitment; review before using as a batch closure criterion."
+  },
+  "brake_mount_adapter": {
+   "identity": [
+    "brand",
+    "model"
+   ],
+   "presentation": [
+    "manufacturer_sku"
+   ],
+   "technical": [
+    "brake_adapter_fitments"
+   ],
+   "compatibility_evidence": [
+    "spec_evidence_source"
+   ],
+   "status": "derived_unreviewed",
+   "contract_version": 10,
+   "note": "Derived from the published contract (primary decisions and fields required always). Nominal values do not prove fitment; review before using as a batch closure criterion."
+  },
+  "brake_pad": {
+   "identity": [
+    "brand",
+    "model"
+   ],
+   "presentation": [
+    "manufacturer_sku",
+    "pad_spring_included",
+    "pack_quantity"
+   ],
+   "technical": [
+    "rim_pad_construction",
+    "pad_finned",
+    "pad_retention",
+    "compound_type",
+    "brake_position",
+    "braking_surface"
+   ],
+   "compatibility_evidence": [
+    "spec_evidence_source"
+   ],
+   "status": "derived_unreviewed",
+   "contract_version": 23,
+   "note": "Derived from the published contract (primary decisions and fields required always). Nominal values do not prove fitment; review before using as a batch closure criterion."
+  },
+  "brake_shift_combined_control": {
+   "identity": [
+    "brand",
+    "model"
+   ],
+   "presentation": [
+    "manufacturer_sku",
+    "combined_control_declared_units"
+   ],
+   "technical": [
+    "combined_control_units"
+   ],
+   "compatibility_evidence": [
+    "spec_evidence_source"
+   ],
+   "status": "derived_unreviewed",
+   "contract_version": 16,
+   "note": "Derived from the published contract (primary decisions and fields required always). Nominal values do not prove fitment; review before using as a batch closure criterion."
+  },
+  "brake_small_part": {
+   "identity": [
+    "brand",
+    "model"
+   ],
+   "presentation": [
+    "manufacturer_sku",
+    "pack_quantity"
+   ],
+   "technical": [
+    "brake_small_part_components"
+   ],
+   "compatibility_evidence": [
+    "spec_evidence_source"
+   ],
+   "status": "derived_unreviewed",
+   "contract_version": 8,
+   "note": "Derived from the published contract (primary decisions and fields required always). Nominal values do not prove fitment; review before using as a batch closure criterion."
+  },
+  "cassette": {
+   "identity": [
+    "brand",
+    "model"
+   ],
+   "presentation": [
+    "manufacturer_sku",
+    "lockring_included"
+   ],
+   "technical": [
+    "sprocket_count",
+    "cassette_spline_standard",
+    "cog_sequence"
+   ],
+   "compatibility_evidence": [
+    "spec_evidence_source"
+   ],
+   "status": "derived_unreviewed",
+   "contract_version": 18,
+   "note": "Derived from the published contract (primary decisions and fields required always). Nominal values do not prove fitment; review before using as a batch closure criterion."
+  },
+  "cassette_lockring": {
+   "identity": [
+    "brand",
+    "model"
+   ],
+   "presentation": [
+    "manufacturer_sku"
+   ],
+   "technical": [
+    "lockring_thread_interfaces",
+    "material"
+   ],
+   "compatibility_evidence": [
+    "spec_evidence_source"
+   ],
+   "status": "derived_unreviewed",
+   "contract_version": 6,
+   "note": "Derived from the published contract (primary decisions and fields required always). Nominal values do not prove fitment; review before using as a batch closure criterion."
+  },
+  "cassette_spacer": {
+   "identity": [
+    "brand",
+    "model"
+   ],
+   "presentation": [
+    "manufacturer_sku"
+   ],
+   "technical": [
+    "target_rear_drive_interface"
+   ],
+   "compatibility_evidence": [
+    "spec_evidence_source"
+   ],
+   "status": "derived_unreviewed",
+   "contract_version": 8,
+   "note": "Derived from the published contract (primary decisions and fields required always). Nominal values do not prove fitment; review before using as a batch closure criterion."
+  },
+  "chain": {
+   "identity": [
+    "brand",
+    "model"
+   ],
+   "presentation": [
+    "manufacturer_sku",
+    "link_count"
+   ],
+   "technical": [
+    "drivetrain_mode",
+    "chain_speeds",
+    "chain_width_family"
+   ],
+   "compatibility_evidence": [
+    "documented_scope",
+    "sources"
+   ],
+   "note": "Nominal width and speed do not prove fitment. A model-only reference may leave presentation unresolved; record outer width only when documented with method.",
+   "status": "reviewed"
+  },
+  "chain_guide": {
+   "identity": [
+    "brand",
+    "model"
+   ],
+   "presentation": [
+    "manufacturer_sku",
+    "chain_guide_included_parts"
+   ],
+   "technical": [
+    "chain_guide_mount_options"
+   ],
+   "compatibility_evidence": [
+    "spec_evidence_source"
+   ],
+   "status": "derived_unreviewed",
+   "contract_version": 16,
+   "note": "Derived from the published contract (primary decisions and fields required always). Nominal values do not prove fitment; review before using as a batch closure criterion."
+  },
+  "chain_link": {
+   "identity": [
+    "brand",
+    "model"
+   ],
+   "presentation": [
+    "chain_link_pack_qty"
+   ],
+   "technical": [
+    "chain_connector_type",
+    "chain_connector_target",
+    "chain_link_reusable",
+    "chain_connector_directional"
+   ],
+   "compatibility_evidence": [
+    "target_chain_identity",
+    "exclusions",
+    "sources"
+   ],
+   "note": "Chain class is descriptive. Target-chain identity, not bicycle cog count, determines applicability. Unknown direction or reuse remains unknown.",
+   "status": "reviewed"
+  },
+  "chainring": {
+   "identity": [
+    "brand",
+    "model"
+   ],
+   "presentation": [
+    "manufacturer_sku",
+    "chainring_set_member_count",
+    "chainring_set_members"
+   ],
+   "technical": [
+    "teeth_count",
+    "chainring_position",
+    "chainring_direct_mount_generation",
+    "chainring_package_kind",
+    "narrow_wide"
+   ],
+   "compatibility_evidence": [
+    "spec_evidence_source"
+   ],
+   "status": "derived_unreviewed",
+   "contract_version": 30,
+   "note": "Derived from the published contract (primary decisions and fields required always). Nominal values do not prove fitment; review before using as a batch closure criterion."
+  },
+  "chainring_guard": {
+   "identity": [
+    "brand",
+    "model"
+   ],
+   "presentation": [
+    "manufacturer_sku"
+   ],
+   "technical": [
+    "chainring_guard_mounts",
+    "chainring_guard_configurations",
+    "material"
+   ],
+   "compatibility_evidence": [
+    "spec_evidence_source"
+   ],
+   "status": "derived_unreviewed",
+   "contract_version": 9,
+   "note": "Derived from the published contract (primary decisions and fields required always). Nominal values do not prove fitment; review before using as a batch closure criterion."
+  },
+  "component_set": {
+   "identity": [
+    "brand",
+    "model"
+   ],
+   "presentation": [
+    "manufacturer_sku",
+    "kit_members"
+   ],
+   "technical": [],
+   "compatibility_evidence": [
+    "spec_evidence_source"
+   ],
+   "status": "derived_unreviewed",
+   "contract_version": 3,
+   "note": "Derived from the published contract (primary decisions and fields required always). Nominal values do not prove fitment; review before using as a batch closure criterion."
+  },
+  "consumer_electronics": {
+   "identity": [
+    "brand",
+    "model",
+    "storage_capacity_label"
+   ],
+   "presentation": [
+    "manufacturer_sku"
+   ],
+   "technical": [
+    "connector_a",
+    "power_port_configurations",
+    "storage_capacity_gb",
+    "connector_b",
+    "color",
+    "card_format",
+    "wireless",
+    "device_kind",
+    "cable_data_capability"
+   ],
+   "compatibility_evidence": [
+    "spec_evidence_source"
+   ],
+   "status": "derived_unreviewed",
+   "contract_version": 20,
+   "note": "Derived from the published contract (primary decisions and fields required always). Nominal values do not prove fitment; review before using as a batch closure criterion."
+  },
+  "control_cable": {
+   "identity": [
+    "brand",
+    "model"
+   ],
+   "presentation": [
+    "manufacturer_sku",
+    "pack_quantity"
+   ],
+   "technical": [
+    "control_cable_runs",
+    "control_cable_end_options",
+    "material"
+   ],
+   "compatibility_evidence": [
+    "spec_evidence_source"
+   ],
+   "status": "derived_unreviewed",
+   "contract_version": 10,
+   "note": "Derived from the published contract (primary decisions and fields required always). Nominal values do not prove fitment; review before using as a batch closure criterion."
+  },
+  "control_housing": {
+   "identity": [
+    "brand",
+    "model"
+   ],
+   "presentation": [
+    "manufacturer_sku"
+   ],
+   "technical": [
+    "control_housing_configurations",
+    "color"
+   ],
+   "compatibility_evidence": [
+    "spec_evidence_source"
+   ],
+   "status": "derived_unreviewed",
+   "contract_version": 10,
+   "note": "Derived from the published contract (primary decisions and fields required always). Nominal values do not prove fitment; review before using as a batch closure criterion."
+  },
+  "control_small_part": {
+   "identity": [
+    "brand",
+    "model"
+   ],
+   "presentation": [
+    "manufacturer_sku",
+    "pack_quantity"
+   ],
+   "technical": [
+    "color",
+    "material",
+    "control_part_kind"
+   ],
+   "compatibility_evidence": [
+    "spec_evidence_source"
+   ],
+   "status": "derived_unreviewed",
+   "contract_version": 12,
+   "note": "Derived from the published contract (primary decisions and fields required always). Nominal values do not prove fitment; review before using as a batch closure criterion."
+  },
+  "crank_arm": {
+   "identity": [
+    "brand",
+    "model"
+   ],
+   "presentation": [
+    "manufacturer_sku",
+    "crank_arm_units",
+    "crank_arm_unit_count"
+   ],
+   "technical": [
+    "crank_side",
+    "crank_bolt_thread",
+    "crank_arm_carries_chainring_mount",
+    "crank_axle_interface_declarations"
+   ],
+   "compatibility_evidence": [
+    "spec_evidence_source"
+   ],
+   "status": "derived_unreviewed",
+   "contract_version": 20,
+   "note": "Derived from the published contract (primary decisions and fields required always). Nominal values do not prove fitment; review before using as a batch closure criterion."
+  },
+  "crankset": {
+   "identity": [
+    "brand",
+    "model"
+   ],
+   "presentation": [
+    "manufacturer_sku",
+    "crankset_bottom_bracket_supplied",
+    "included_chainring_count",
+    "spindle_included",
+    "crankset_chain_guard_included",
+    "bottom_bracket_included",
+    "chainring_teeth_rows",
+    "crank_fixing_bolt_included"
+   ],
+   "technical": [
+    "crankset_construction",
+    "chainring_mounting",
+    "crank_axle_interface_declarations"
+   ],
+   "compatibility_evidence": [
+    "spec_evidence_source"
+   ],
+   "status": "derived_unreviewed",
+   "contract_version": 34,
+   "note": "Derived from the published contract (primary decisions and fields required always). Nominal values do not prove fitment; review before using as a batch closure criterion."
+  },
+  "cycle_computer": {
+   "identity": [
+    "brand",
+    "model"
+   ],
+   "presentation": [
+    "manufacturer_sku",
+    "computer_contents"
+   ],
+   "technical": [
+    "phone_link",
+    "power_source",
+    "functions_count",
+    "speed_source",
+    "positioning_source"
+   ],
+   "compatibility_evidence": [
+    "spec_evidence_source"
+   ],
+   "status": "derived_unreviewed",
+   "contract_version": 12,
+   "note": "Derived from the published contract (primary decisions and fields required always). Nominal values do not prove fitment; review before using as a batch closure criterion."
+  },
+  "derailleur_hanger": {
+   "identity": [
+    "brand",
+    "model"
+   ],
+   "presentation": [
+    "manufacturer_sku"
+   ],
+   "technical": [
+    "hanger_frame_interface",
+    "hanger_derailleur_interface"
+   ],
+   "compatibility_evidence": [
+    "spec_evidence_source"
+   ],
+   "status": "derived_unreviewed",
+   "contract_version": 12,
+   "note": "Derived from the published contract (primary decisions and fields required always). Nominal values do not prove fitment; review before using as a batch closure criterion."
+  },
+  "derailleur_hanger_extender": {
+   "identity": [
+    "brand",
+    "model"
+   ],
+   "presentation": [
+    "manufacturer_sku",
+    "bolts_included"
+   ],
+   "technical": [
+    "extender_declaration_form",
+    "hanger_interface"
+   ],
+   "compatibility_evidence": [
+    "spec_evidence_source"
+   ],
+   "status": "derived_unreviewed",
+   "contract_version": 9,
+   "note": "Derived from the published contract (primary decisions and fields required always). Nominal values do not prove fitment; review before using as a batch closure criterion."
+  },
+  "derailleur_pulley": {
+   "identity": [
+    "brand",
+    "model"
+   ],
+   "presentation": [
+    "manufacturer_sku",
+    "pulley_unit_count",
+    "pulley_units"
+   ],
+   "technical": [
+    "pulley_bearing_construction",
+    "pulley_bearing_element_material",
+    "pulley_teeth",
+    "pulley_declared_position",
+    "pulley_package_kind",
+    "pulley_tooth_profile"
+   ],
+   "compatibility_evidence": [
+    "spec_evidence_source"
+   ],
+   "status": "derived_unreviewed",
+   "contract_version": 20,
+   "note": "Derived from the published contract (primary decisions and fields required always). Nominal values do not prove fitment; review before using as a batch closure criterion."
+  },
+  "drivetrain_kit": {
+   "identity": [
+    "brand",
+    "model"
+   ],
+   "presentation": [
+    "manufacturer_sku",
+    "kit_members"
+   ],
+   "technical": [],
+   "compatibility_evidence": [
+    "spec_evidence_source"
+   ],
+   "status": "derived_unreviewed",
+   "contract_version": 16,
+   "note": "Derived from the published contract (primary decisions and fields required always). Nominal values do not prove fitment; review before using as a batch closure criterion."
+  },
+  "eyewear": {
+   "identity": [
+    "brand",
+    "model"
+   ],
+   "presentation": [
+    "manufacturer_sku",
+    "interchangeable_lenses"
+   ],
+   "technical": [
+    "eyewear_lens_configurations",
+    "color"
+   ],
+   "compatibility_evidence": [
+    "spec_evidence_source"
+   ],
+   "status": "derived_unreviewed",
+   "contract_version": 6,
+   "note": "Derived from the published contract (primary decisions and fields required always). Nominal values do not prove fitment; review before using as a batch closure criterion."
+  },
+  "fastener": {
+   "identity": [
+    "brand",
+    "model"
+   ],
+   "presentation": [
+    "manufacturer_sku",
+    "pack_quantity"
+   ],
+   "technical": [
+    "fastener_kind",
+    "material",
+    "head_drive"
+   ],
+   "compatibility_evidence": [
+    "spec_evidence_source"
+   ],
+   "status": "derived_unreviewed",
+   "contract_version": 21,
+   "note": "Derived from the published contract (primary decisions and fields required always). Nominal values do not prove fitment; review before using as a batch closure criterion."
+  },
+  "fender": {
+   "identity": [
+    "brand",
+    "model"
+   ],
+   "presentation": [
+    "manufacturer_sku",
+    "kit_members"
+   ],
+   "technical": [
+    "material",
+    "color",
+    "fender_position"
+   ],
+   "compatibility_evidence": [
+    "spec_evidence_source"
+   ],
+   "status": "derived_unreviewed",
+   "contract_version": 10,
+   "note": "Derived from the published contract (primary decisions and fields required always). Nominal values do not prove fitment; review before using as a batch closure criterion."
+  },
+  "fixed_cog": {
+   "identity": [
+    "brand",
+    "model"
+   ],
+   "presentation": [
+    "manufacturer_sku"
+   ],
+   "technical": [
+    "single_cog_teeth",
+    "cog_thread_standard",
+    "chain_width_family"
+   ],
+   "compatibility_evidence": [
+    "spec_evidence_source"
+   ],
+   "status": "derived_unreviewed",
+   "contract_version": 11,
+   "note": "Derived from the published contract (primary decisions and fields required always). Nominal values do not prove fitment; review before using as a batch closure criterion."
+  },
+  "food_beverage": {
+   "identity": [
+    "brand",
+    "model"
+   ],
+   "presentation": [
+    "manufacturer_sku",
+    "units_per_pack"
+   ],
+   "technical": [
+    "temperature",
+    "milk_substitution_offered",
+    "food_item_kind",
+    "serving_size",
+    "preparation_kind",
+    "milk_in_recipe",
+    "flavor",
+    "serving_volume_ml"
+   ],
+   "compatibility_evidence": [
+    "allergen_statement_source",
+    "recipe_reference",
+    "spec_evidence_source"
+   ],
+   "status": "derived_unreviewed",
+   "contract_version": 22,
+   "note": "Derived from the published contract (primary decisions and fields required always). Nominal values do not prove fitment; review before using as a batch closure criterion."
+  },
+  "fork": {
+   "identity": [
+    "brand",
+    "model"
+   ],
+   "presentation": [
+    "manufacturer_sku"
+   ],
+   "technical": [
+    "lockout",
+    "color",
+    "steerer_threaded",
+    "fork_kind",
+    "hub_old_mm",
+    "material",
+    "fork_tire_clearance_configurations",
+    "axle_type",
+    "brake_mount",
+    "steerer_fit"
+   ],
+   "compatibility_evidence": [
+    "spec_evidence_source"
+   ],
+   "status": "derived_unreviewed",
+   "contract_version": 26,
+   "note": "Derived from the published contract (primary decisions and fields required always). Nominal values do not prove fitment; review before using as a batch closure criterion."
+  },
+  "frame": {
+   "identity": [
+    "brand",
+    "model"
+   ],
+   "presentation": [
+    "manufacturer_sku"
+   ],
+   "technical": [
+    "assembly_variant_identity",
+    "color",
+    "assembly_configurations",
+    "material"
+   ],
+   "compatibility_evidence": [
+    "spec_evidence_source"
+   ],
+   "status": "derived_unreviewed",
+   "contract_version": 34,
+   "note": "Derived from the published contract (primary decisions and fields required always). Nominal values do not prove fitment; review before using as a batch closure criterion."
+  },
+  "freewheel": {
+   "identity": [
+    "brand",
+    "model"
+   ],
+   "presentation": [
+    "manufacturer_sku"
+   ],
+   "technical": [
+    "sprocket_count",
+    "freewheel_thread_standard",
+    "cog_sequence"
+   ],
+   "compatibility_evidence": [
+    "spec_evidence_source"
+   ],
+   "status": "derived_unreviewed",
+   "contract_version": 17,
+   "note": "Derived from the published contract (primary decisions and fields required always). Nominal values do not prove fitment; review before using as a batch closure criterion."
+  },
+  "front_derailleur": {
+   "identity": [
+    "brand",
+    "model"
+   ],
+   "presentation": [
+    "manufacturer_sku",
+    "front_derailleur_clamp_options"
+   ],
+   "technical": [
+    "front_derailleur_mount_type",
+    "front_derailleur_application_configurations"
+   ],
+   "compatibility_evidence": [
+    "spec_evidence_source"
+   ],
+   "status": "derived_unreviewed",
+   "contract_version": 19,
+   "note": "Derived from the published contract (primary decisions and fields required always). Nominal values do not prove fitment; review before using as a batch closure criterion."
+  },
+  "grip": {
+   "identity": [
+    "brand",
+    "model"
+   ],
+   "presentation": [
+    "manufacturer_sku",
+    "sold_as",
+    "grip_end_plugs_included"
+   ],
+   "technical": [
+    "grip_bar_nominal_diameter_mm",
+    "grip_flange",
+    "grip_attachment",
+    "color"
+   ],
+   "compatibility_evidence": [
+    "spec_evidence_source"
+   ],
+   "status": "derived_unreviewed",
+   "contract_version": 19,
+   "note": "Derived from the published contract (primary decisions and fields required always). Nominal values do not prove fitment; review before using as a batch closure criterion."
+  },
+  "handlebar": {
+   "identity": [
+    "brand",
+    "model"
+   ],
+   "presentation": [
+    "manufacturer_sku"
+   ],
+   "technical": [
+    "bar_style",
+    "material",
+    "bar_width_mm",
+    "color",
+    "bar_construction",
+    "cable_routing"
+   ],
+   "compatibility_evidence": [
+    "spec_evidence_source"
+   ],
+   "status": "derived_unreviewed",
+   "contract_version": 23,
+   "note": "Derived from the published contract (primary decisions and fields required always). Nominal values do not prove fitment; review before using as a batch closure criterion."
+  },
+  "handlebar_covering": {
+   "identity": [
+    "brand",
+    "model"
+   ],
+   "presentation": [
+    "manufacturer_sku",
+    "pack_quantity",
+    "end_plugs_included",
+    "kit_members"
+   ],
+   "technical": [
+    "material",
+    "color",
+    "covering_kind"
+   ],
+   "compatibility_evidence": [
+    "spec_evidence_source"
+   ],
+   "status": "derived_unreviewed",
+   "contract_version": 12,
+   "note": "Derived from the published contract (primary decisions and fields required always). Nominal values do not prove fitment; review before using as a batch closure criterion."
+  },
+  "headset": {
+   "identity": [
+    "brand",
+    "model"
+   ],
+   "presentation": [
+    "manufacturer_sku",
+    "crown_race_included",
+    "headset_supplied_crown_race_reference"
+   ],
+   "technical": [
+    "headset_part_scope"
+   ],
+   "compatibility_evidence": [
+    "spec_evidence_source"
+   ],
+   "status": "derived_unreviewed",
+   "contract_version": 16,
+   "note": "Derived from the published contract (primary decisions and fields required always). Nominal values do not prove fitment; review before using as a batch closure criterion."
+  },
+  "headset_small_part": {
+   "identity": [
+    "brand",
+    "model"
+   ],
+   "presentation": [
+    "manufacturer_sku",
+    "kit_members"
+   ],
+   "technical": [
+    "headset_part_kind",
+    "material",
+    "headset_part_interfaces"
+   ],
+   "compatibility_evidence": [
+    "spec_evidence_source"
+   ],
+   "status": "derived_unreviewed",
+   "contract_version": 12,
+   "note": "Derived from the published contract (primary decisions and fields required always). Nominal values do not prove fitment; review before using as a batch closure criterion."
+  },
+  "helmet": {
+   "identity": [
+    "brand",
+    "model"
+   ],
+   "presentation": [
+    "manufacturer_sku"
+   ],
+   "technical": [
+    "head_circumference_min_cm",
+    "visor",
+    "intended_audience",
+    "helmet_construction",
+    "color",
+    "head_circumference_max_cm",
+    "helmet_kind",
+    "oem_size_label",
+    "adjustable_fit"
+   ],
+   "compatibility_evidence": [
+    "label_evidence_state",
+    "spec_evidence_source"
+   ],
+   "status": "derived_unreviewed",
+   "contract_version": 18,
+   "note": "Derived from the published contract (primary decisions and fields required always). Nominal values do not prove fitment; review before using as a batch closure criterion."
+  },
+  "hub": {
+   "identity": [
+    "brand",
+    "model"
+   ],
+   "presentation": [
+    "manufacturer_sku",
+    "hub_package_pieces",
+    "hub_thru_axle_supplied",
+    "hub_package_piece_count",
+    "hub_supplied_thru_axle_reference"
+   ],
+   "technical": [
+    "hub_drive_receiver_kind",
+    "bearing_system",
+    "hub_package_position",
+    "hub_drive_receiver_present",
+    "hub_rotor_mount_present",
+    "hub_spoke_head_interface",
+    "hub_axle_mount_kind"
+   ],
+   "compatibility_evidence": [
+    "spec_evidence_source"
+   ],
+   "status": "derived_unreviewed",
+   "contract_version": 34,
+   "note": "Derived from the published contract (primary decisions and fields required always). Nominal values do not prove fitment; review before using as a batch closure criterion."
+  },
+  "hub_axle": {
+   "identity": [
+    "brand",
+    "model"
+   ],
+   "presentation": [
+    "manufacturer_sku",
+    "pack_quantity",
+    "cones_and_locknuts_included"
+   ],
+   "technical": [
+    "wheel_position",
+    "axle_length_mm",
+    "wheel_part_interfaces",
+    "axle_hollow"
+   ],
+   "compatibility_evidence": [
+    "spec_evidence_source"
+   ],
+   "status": "derived_unreviewed",
+   "contract_version": 11,
+   "note": "Derived from the published contract (primary decisions and fields required always). Nominal values do not prove fitment; review before using as a batch closure criterion."
+  },
+  "hub_brake": {
+   "identity": [
+    "brand",
+    "model"
+   ],
+   "presentation": [
+    "manufacturer_sku"
+   ],
+   "technical": [
+    "hub_brake_configurations"
+   ],
+   "compatibility_evidence": [
+    "spec_evidence_source"
+   ],
+   "status": "derived_unreviewed",
+   "contract_version": 9,
+   "note": "Derived from the published contract (primary decisions and fields required always). Nominal values do not prove fitment; review before using as a batch closure criterion."
+  },
+  "hub_small_part": {
+   "identity": [
+    "brand",
+    "model"
+   ],
+   "presentation": [
+    "manufacturer_sku",
+    "pack_quantity",
+    "dust_cap_included"
+   ],
+   "technical": [
+    "hub_part_kind",
+    "wheel_position",
+    "wheel_part_interfaces"
+   ],
+   "compatibility_evidence": [
+    "spec_evidence_source"
+   ],
+   "status": "derived_unreviewed",
+   "contract_version": 11,
+   "note": "Derived from the published contract (primary decisions and fields required always). Nominal values do not prove fitment; review before using as a batch closure criterion."
+  },
+  "hydraulic_disc_brake": {
+   "identity": [
+    "brand",
+    "model"
+   ],
+   "presentation": [
+    "manufacturer_sku",
+    "kit_members",
+    "brake_presentation"
+   ],
+   "technical": [],
+   "compatibility_evidence": [
+    "spec_evidence_source"
+   ],
+   "status": "derived_unreviewed",
+   "contract_version": 18,
+   "note": "Derived from the published contract (primary decisions and fields required always). Nominal values do not prove fitment; review before using as a batch closure criterion."
+  },
+  "hydraulic_fitting": {
+   "identity": [
+    "brand",
+    "model"
+   ],
+   "presentation": [
+    "manufacturer_sku",
+    "pack_quantity"
+   ],
+   "technical": [
+    "hydraulic_fitting_components"
+   ],
+   "compatibility_evidence": [
+    "spec_evidence_source"
+   ],
+   "status": "derived_unreviewed",
+   "contract_version": 13,
+   "note": "Derived from the published contract (primary decisions and fields required always). Nominal values do not prove fitment; review before using as a batch closure criterion."
+  },
+  "hydraulic_hose": {
+   "identity": [
+    "brand",
+    "model"
+   ],
+   "presentation": [
+    "manufacturer_sku"
+   ],
+   "technical": [
+    "hydraulic_hose_members",
+    "hydraulic_hose_end_configurations",
+    "color"
+   ],
+   "compatibility_evidence": [
+    "spec_evidence_source"
+   ],
+   "status": "derived_unreviewed",
+   "contract_version": 12,
+   "note": "Derived from the published contract (primary decisions and fields required always). Nominal values do not prove fitment; review before using as a batch closure criterion."
+  },
+  "kickstand": {
+   "identity": [
+    "brand",
+    "model"
+   ],
+   "presentation": [
+    "manufacturer_sku"
+   ],
+   "technical": [
+    "kickstand_mount_standard",
+    "kickstand_mount_kind",
+    "adjustable_length",
+    "material"
+   ],
+   "compatibility_evidence": [
+    "spec_evidence_source"
+   ],
+   "status": "derived_unreviewed",
+   "contract_version": 17,
+   "note": "Derived from the published contract (primary decisions and fields required always). Nominal values do not prove fitment; review before using as a batch closure criterion."
+  },
+  "light": {
+   "identity": [
+    "brand",
+    "model"
+   ],
+   "presentation": [
+    "manufacturer_sku",
+    "light_member_configurations",
+    "kit_members"
+   ],
+   "technical": [
+    "light_position",
+    "color",
+    "light_mode_configurations"
+   ],
+   "compatibility_evidence": [
+    "spec_evidence_source"
+   ],
+   "status": "derived_unreviewed",
+   "contract_version": 18,
+   "note": "Derived from the published contract (primary decisions and fields required always). Nominal values do not prove fitment; review before using as a batch closure criterion."
+  },
+  "lock": {
+   "identity": [
+    "brand",
+    "model"
+   ],
+   "presentation": [
+    "manufacturer_sku",
+    "kit_members",
+    "keys_included",
+    "mount_bracket_included"
+   ],
+   "technical": [
+    "color",
+    "locking_mechanism",
+    "lock_kind"
+   ],
+   "compatibility_evidence": [
+    "spec_evidence_source"
+   ],
+   "status": "derived_unreviewed",
+   "contract_version": 17,
+   "note": "Derived from the published contract (primary decisions and fields required always). Nominal values do not prove fitment; review before using as a batch closure criterion."
+  },
+  "mechanical_disc_brake": {
+   "identity": [
+    "brand",
+    "model"
+   ],
+   "presentation": [
+    "manufacturer_sku",
+    "kit_members",
+    "brake_presentation"
+   ],
+   "technical": [],
+   "compatibility_evidence": [
+    "spec_evidence_source"
+   ],
+   "status": "derived_unreviewed",
+   "contract_version": 13,
+   "note": "Derived from the published contract (primary decisions and fields required always). Nominal values do not prove fitment; review before using as a batch closure criterion."
+  },
+  "pedal": {
+   "identity": [
+    "brand",
+    "model"
+   ],
+   "presentation": [
+    "manufacturer_sku",
+    "sold_as",
+    "included_cleat_model",
+    "reflectors_included",
+    "cleats_included"
+   ],
+   "technical": [
+    "replaceable_pins",
+    "pedal_wrench_interface",
+    "pedal_type",
+    "body_material",
+    "pedal_bearing_configurations",
+    "pedal_thread_standard"
+   ],
+   "compatibility_evidence": [
+    "spec_evidence_source"
+   ],
+   "status": "derived_unreviewed",
+   "contract_version": 18,
+   "note": "Derived from the published contract (primary decisions and fields required always). Nominal values do not prove fitment; review before using as a batch closure criterion."
+  },
+  "pedal_peg": {
+   "identity": [
+    "brand",
+    "model"
+   ],
+   "presentation": [
+    "manufacturer_sku",
+    "pack_quantity"
+   ],
+   "technical": [
+    "peg_axle_fit",
+    "material"
+   ],
+   "compatibility_evidence": [
+    "spec_evidence_source"
+   ],
+   "status": "derived_unreviewed",
+   "contract_version": 7,
+   "note": "Derived from the published contract (primary decisions and fields required always). Nominal values do not prove fitment; review before using as a batch closure criterion."
+  },
+  "pump": {
+   "identity": [
+    "brand",
+    "model"
+   ],
+   "presentation": [
+    "manufacturer_sku",
+    "frame_mount_included",
+    "pack_quantity"
+   ],
+   "technical": [
+    "hose",
+    "gauge",
+    "barrel_material",
+    "co2_inflation_capable",
+    "color",
+    "pump_kind"
+   ],
+   "compatibility_evidence": [
+    "spec_evidence_source"
+   ],
+   "status": "derived_unreviewed",
+   "contract_version": 15,
+   "note": "Derived from the published contract (primary decisions and fields required always). Nominal values do not prove fitment; review before using as a batch closure criterion."
+  },
+  "rack_basket": {
+   "identity": [
+    "brand",
+    "model"
+   ],
+   "presentation": [
+    "manufacturer_sku"
+   ],
+   "technical": [
+    "material",
+    "color",
+    "carrier_kind"
+   ],
+   "compatibility_evidence": [
+    "spec_evidence_source"
+   ],
+   "status": "derived_unreviewed",
+   "contract_version": 13,
+   "note": "Derived from the published contract (primary decisions and fields required always). Nominal values do not prove fitment; review before using as a batch closure criterion."
+  },
+  "rear_derailleur": {
+   "identity": [
+    "brand",
+    "model"
+   ],
+   "presentation": [
+    "manufacturer_sku",
+    "rear_derailleur_supplied_adapter_reference",
+    "rear_derailleur_supplied_mount_adapter"
+   ],
+   "technical": [
+    "rear_derailleur_mount_type",
+    "rear_derailleur_spring_return",
+    "derailleur_cage_length",
+    "derailleur_clutch",
+    "rear_derailleur_application_configurations"
+   ],
+   "compatibility_evidence": [
+    "spec_evidence_source"
+   ],
+   "status": "derived_unreviewed",
+   "contract_version": 24,
+   "note": "Derived from the published contract (primary decisions and fields required always). Nominal values do not prove fitment; review before using as a batch closure criterion."
+  },
+  "rear_shock": {
+   "identity": [
+    "brand",
+    "model"
+   ],
+   "presentation": [
+    "manufacturer_sku",
+    "mounting_hardware_included"
+   ],
+   "technical": [
+    "spring_kind",
+    "shock_size_declarations",
+    "lockout"
+   ],
+   "compatibility_evidence": [
+    "spec_evidence_source"
+   ],
+   "status": "derived_unreviewed",
+   "contract_version": 10,
+   "note": "Derived from the published contract (primary decisions and fields required always). Nominal values do not prove fitment; review before using as a batch closure criterion."
+  },
+  "reflector": {
+   "identity": [
+    "brand",
+    "model"
+   ],
+   "presentation": [
+    "manufacturer_sku",
+    "length_m"
+   ],
+   "technical": [
+    "color"
+   ],
+   "compatibility_evidence": [
+    "spec_evidence_source"
+   ],
+   "status": "derived_unreviewed",
+   "contract_version": 5,
+   "note": "Derived from the published contract (primary decisions and fields required always). Nominal values do not prove fitment; review before using as a batch closure criterion."
+  },
+  "rider_apparel": {
+   "identity": [
+    "brand",
+    "model"
+   ],
+   "presentation": [
+    "manufacturer_sku"
+   ],
+   "technical": [
+    "color",
+    "sleeve",
+    "material",
+    "intended_audience",
+    "garment_kind",
+    "fit_cut",
+    "gender_fit",
+    "oem_size_label"
+   ],
+   "compatibility_evidence": [
+    "spec_evidence_source"
+   ],
+   "status": "derived_unreviewed",
+   "contract_version": 12,
+   "note": "Derived from the published contract (primary decisions and fields required always). Nominal values do not prove fitment; review before using as a batch closure criterion."
+  },
+  "rider_bag": {
+   "identity": [
+    "brand",
+    "model"
+   ],
+   "presentation": [
+    "manufacturer_sku",
+    "reservoir_included",
+    "reservoir_l"
+   ],
+   "technical": [
+    "volume_l",
+    "color",
+    "bag_kind"
+   ],
+   "compatibility_evidence": [
+    "spec_evidence_source"
+   ],
+   "status": "derived_unreviewed",
+   "contract_version": 12,
+   "note": "Derived from the published contract (primary decisions and fields required always). Nominal values do not prove fitment; review before using as a batch closure criterion."
+  },
+  "rider_glove": {
+   "identity": [
+    "brand",
+    "model"
+   ],
+   "presentation": [
+    "manufacturer_sku"
+   ],
+   "technical": [
+    "fit_cut",
+    "finger_length",
+    "oem_size_label",
+    "gender_fit",
+    "intended_audience",
+    "touchscreen",
+    "padding",
+    "color"
+   ],
+   "compatibility_evidence": [
+    "spec_evidence_source"
+   ],
+   "status": "derived_unreviewed",
+   "contract_version": 13,
+   "note": "Derived from the published contract (primary decisions and fields required always). Nominal values do not prove fitment; review before using as a batch closure criterion."
+  },
+  "rider_protection": {
+   "identity": [
+    "brand",
+    "model"
+   ],
+   "presentation": [
+    "manufacturer_sku",
+    "kit_members"
+   ],
+   "technical": [
+    "rider_protection_kind",
+    "oem_size_label",
+    "color",
+    "intended_audience"
+   ],
+   "compatibility_evidence": [
+    "spec_evidence_source"
+   ],
+   "status": "derived_unreviewed",
+   "contract_version": 11,
+   "note": "Derived from the published contract (primary decisions and fields required always). Nominal values do not prove fitment; review before using as a batch closure criterion."
+  },
+  "rim": {
+   "identity": [
+    "brand",
+    "model"
+   ],
+   "presentation": [
+    "manufacturer_sku"
+   ],
+   "technical": [
+    "rim_wall_type",
+    "rim_tubeless_ready",
+    "rim_material",
+    "spoke_hole_count",
+    "rim_symmetry",
+    "rim_bead_profile",
+    "rim_eyelet_type"
+   ],
+   "compatibility_evidence": [
+    "spec_evidence_source"
+   ],
+   "status": "derived_unreviewed",
+   "contract_version": 35,
+   "note": "Derived from the published contract (primary decisions and fields required always). Nominal values do not prove fitment; review before using as a batch closure criterion."
+  },
+  "rim_brake": {
+   "identity": [
+    "brand",
+    "model"
+   ],
+   "presentation": [
+    "manufacturer_sku",
+    "kit_members",
+    "brake_presentation"
+   ],
+   "technical": [],
+   "compatibility_evidence": [
+    "spec_evidence_source"
+   ],
+   "status": "derived_unreviewed",
+   "contract_version": 10,
+   "note": "Derived from the published contract (primary decisions and fields required always). Nominal values do not prove fitment; review before using as a batch closure criterion."
+  },
+  "rim_strip": {
+   "identity": [
+    "brand",
+    "model"
+   ],
+   "presentation": [
+    "manufacturer_sku"
+   ],
+   "technical": [
+    "strip_material",
+    "strip_width_mm",
+    "bead_seat_diameter_mm"
+   ],
+   "compatibility_evidence": [
+    "spec_evidence_source"
+   ],
+   "status": "derived_unreviewed",
+   "contract_version": 12,
+   "note": "Derived from the published contract (primary decisions and fields required always). Nominal values do not prove fitment; review before using as a batch closure criterion."
+  },
+  "rotor": {
+   "identity": [
+    "brand",
+    "model"
+   ],
+   "presentation": [
+    "manufacturer_sku"
+   ],
+   "technical": [
+    "rotor_diameter_mm_value",
+    "rotor_material",
+    "rotor_mount_type",
+    "brake_position",
+    "rotor_floating"
+   ],
+   "compatibility_evidence": [
+    "spec_evidence_source"
+   ],
+   "status": "derived_unreviewed",
+   "contract_version": 17,
+   "note": "Derived from the published contract (primary decisions and fields required always). Nominal values do not prove fitment; review before using as a batch closure criterion."
+  },
+  "rotor_mount_adapter": {
+   "identity": [
+    "brand",
+    "model"
+   ],
+   "presentation": [
+    "manufacturer_sku"
+   ],
+   "technical": [
+    "rotor_adapter_fitments"
+   ],
+   "compatibility_evidence": [
+    "spec_evidence_source"
+   ],
+   "status": "derived_unreviewed",
+   "contract_version": 5,
+   "note": "Derived from the published contract (primary decisions and fields required always). Nominal values do not prove fitment; review before using as a batch closure criterion."
+  },
+  "saddle": {
+   "identity": [
+    "brand",
+    "model"
+   ],
+   "presentation": [
+    "manufacturer_sku"
+   ],
+   "technical": [
+    "saddle_rail_material",
+    "color",
+    "cover_material",
+    "saddle_cutout",
+    "saddle_rail_geometry"
+   ],
+   "compatibility_evidence": [
+    "spec_evidence_source"
+   ],
+   "status": "derived_unreviewed",
+   "contract_version": 12,
+   "note": "Derived from the published contract (primary decisions and fields required always). Nominal values do not prove fitment; review before using as a batch closure criterion."
+  },
+  "saddle_cover": {
+   "identity": [
+    "brand",
+    "model"
+   ],
+   "presentation": [
+    "manufacturer_sku"
+   ],
+   "technical": [
+    "padding",
+    "color"
+   ],
+   "compatibility_evidence": [
+    "spec_evidence_source"
+   ],
+   "status": "derived_unreviewed",
+   "contract_version": 7,
+   "note": "Derived from the published contract (primary decisions and fields required always). Nominal values do not prove fitment; review before using as a batch closure criterion."
+  },
+  "seat_clamp": {
+   "identity": [
+    "brand",
+    "model"
+   ],
+   "presentation": [
+    "manufacturer_sku"
+   ],
+   "technical": [
+    "color",
+    "material",
+    "clamp_kind"
+   ],
+   "compatibility_evidence": [
+    "spec_evidence_source"
+   ],
+   "status": "derived_unreviewed",
+   "contract_version": 10,
+   "note": "Derived from the published contract (primary decisions and fields required always). Nominal values do not prove fitment; review before using as a batch closure criterion."
+  },
+  "seatpost": {
+   "identity": [
+    "brand",
+    "model"
+   ],
+   "presentation": [
+    "manufacturer_sku",
+    "dropper_remote_model",
+    "dropper_remote_included"
+   ],
+   "technical": [
+    "dropper_cable_routing",
+    "dropper_control_kind",
+    "material",
+    "seatpost_kind",
+    "color"
+   ],
+   "compatibility_evidence": [
+    "spec_evidence_source",
+    "seatpost_dimension_document"
+   ],
+   "status": "derived_unreviewed",
+   "contract_version": 27,
+   "note": "Derived from the published contract (primary decisions and fields required always). Nominal values do not prove fitment; review before using as a batch closure criterion."
+  },
+  "seatpost_shim": {
+   "identity": [
+    "brand",
+    "model"
+   ],
+   "presentation": [
+    "manufacturer_sku"
+   ],
+   "technical": [
+    "seatpost_shim_shape"
+   ],
+   "compatibility_evidence": [
+    "seatpost_shim_mount_instructions",
+    "spec_evidence_source"
+   ],
+   "status": "derived_unreviewed",
+   "contract_version": 11,
+   "note": "Derived from the published contract (primary decisions and fields required always). Nominal values do not prove fitment; review before using as a batch closure criterion."
+  },
+  "shifter": {
+   "identity": [
+    "brand",
+    "model"
+   ],
+   "presentation": [
+    "manufacturer_sku",
+    "shifter_unit_count",
+    "shifter_units"
+   ],
+   "technical": [
+    "shifter_actuation_mode",
+    "shifter_indexed_positions",
+    "shifter_position",
+    "shifter_control_style"
+   ],
+   "compatibility_evidence": [
+    "spec_evidence_source"
+   ],
+   "status": "derived_unreviewed",
+   "contract_version": 21,
+   "note": "Derived from the published contract (primary decisions and fields required always). Nominal values do not prove fitment; review before using as a batch closure criterion."
+  },
+  "souvenir": {
+   "identity": [
+    "brand",
+    "model"
+   ],
+   "presentation": [
+    "manufacturer_sku",
+    "sheet_or_piece_count"
+   ],
+   "technical": [
+    "souvenir_kind",
+    "theme"
+   ],
+   "compatibility_evidence": [
+    "spec_evidence_source"
+   ],
+   "status": "derived_unreviewed",
+   "contract_version": 5,
+   "note": "Derived from the published contract (primary decisions and fields required always). Nominal values do not prove fitment; review before using as a batch closure criterion."
+  },
+  "spacer": {
+   "identity": [
+    "brand",
+    "model"
+   ],
+   "presentation": [
+    "manufacturer_sku",
+    "pack_quantity"
+   ],
+   "technical": [
+    "color",
+    "spacer_components",
+    "material"
+   ],
+   "compatibility_evidence": [
+    "spec_evidence_source"
+   ],
+   "status": "derived_unreviewed",
+   "contract_version": 10,
+   "note": "Derived from the published contract (primary decisions and fields required always). Nominal values do not prove fitment; review before using as a batch closure criterion."
+  },
+  "spoke": {
+   "identity": [
+    "brand",
+    "model"
+   ],
+   "presentation": [
+    "manufacturer_sku",
+    "spoke_supplied_nipples",
+    "nipples_included",
+    "pack_quantity"
+   ],
+   "technical": [
+    "spoke_nipple_thread_present",
+    "spoke_finish_declared",
+    "spoke_material_declared",
+    "spoke_length_mm",
+    "spoke_head_interface",
+    "spoke_wire_sections"
+   ],
+   "compatibility_evidence": [
+    "spec_evidence_source"
+   ],
+   "status": "derived_unreviewed",
+   "contract_version": 24,
+   "note": "Derived from the published contract (primary decisions and fields required always). Nominal values do not prove fitment; review before using as a batch closure criterion."
+  },
+  "spoke_nipple": {
+   "identity": [
+    "brand",
+    "model"
+   ],
+   "presentation": [
+    "manufacturer_sku",
+    "pack_quantity"
+   ],
+   "technical": [
+    "material",
+    "nipple_thread",
+    "nipple_length_mm",
+    "color"
+   ],
+   "compatibility_evidence": [
+    "spec_evidence_source"
+   ],
+   "status": "derived_unreviewed",
+   "contract_version": 10,
+   "note": "Derived from the published contract (primary decisions and fields required always). Nominal values do not prove fitment; review before using as a batch closure criterion."
+  },
+  "stem": {
+   "identity": [
+    "brand",
+    "model"
+   ],
+   "presentation": [
+    "manufacturer_sku"
+   ],
+   "technical": [
+    "material",
+    "color",
+    "stem_kind"
+   ],
+   "compatibility_evidence": [
+    "spec_evidence_source"
+   ],
+   "status": "derived_unreviewed",
+   "contract_version": 13,
+   "note": "Derived from the published contract (primary decisions and fields required always). Nominal values do not prove fitment; review before using as a batch closure criterion."
+  },
+  "tire": {
+   "identity": [
+    "brand",
+    "model"
+   ],
+   "presentation": [
+    "manufacturer_sku"
+   ],
+   "technical": [
+    "tire_tubeless_ready",
+    "tire_tpi",
+    "bead_seat_diameter_mm",
+    "tire_bead_type",
+    "tire_etrto",
+    "tire_width_mm"
+   ],
+   "compatibility_evidence": [
+    "spec_evidence_source"
+   ],
+   "status": "derived_unreviewed",
+   "contract_version": 19,
+   "note": "Derived from the published contract (primary decisions and fields required always). Nominal values do not prove fitment; review before using as a batch closure criterion."
+  },
+  "tire_liner": {
+   "identity": [
+    "brand",
+    "model"
+   ],
+   "presentation": [
+    "manufacturer_sku",
+    "pack_quantity"
+   ],
+   "technical": [
+    "tire_liner_fitments"
+   ],
+   "compatibility_evidence": [
+    "spec_evidence_source"
+   ],
+   "status": "derived_unreviewed",
+   "contract_version": 7,
+   "note": "Derived from the published contract (primary decisions and fields required always). Nominal values do not prove fitment; review before using as a batch closure criterion."
+  },
+  "training_wheel": {
+   "identity": [
+    "brand",
+    "model"
+   ],
+   "presentation": [
+    "manufacturer_sku",
+    "kit_members"
+   ],
+   "technical": [
+    "wheel_size_declarations"
+   ],
+   "compatibility_evidence": [
+    "spec_evidence_source"
+   ],
+   "status": "derived_unreviewed",
+   "contract_version": 7,
+   "note": "Derived from the published contract (primary decisions and fields required always). Nominal values do not prove fitment; review before using as a batch closure criterion."
+  },
+  "tube": {
+   "identity": [
+    "brand",
+    "model"
+   ],
+   "presentation": [
+    "manufacturer_sku"
+   ],
+   "technical": [
+    "tube_fit_rows",
+    "valve_core_removable",
+    "valve_standard",
+    "valve_length_mm_value",
+    "tube_has_sealant",
+    "tube_material"
+   ],
+   "compatibility_evidence": [
+    "spec_evidence_source"
+   ],
+   "status": "derived_unreviewed",
+   "contract_version": 21,
+   "note": "Derived from the published contract (primary decisions and fields required always). Nominal values do not prove fitment; review before using as a batch closure criterion."
+  },
+  "tube_repair": {
+   "identity": [
+    "brand",
+    "model"
+   ],
+   "presentation": [
+    "manufacturer_sku",
+    "glue_volume_ml",
+    "kit_members",
+    "patch_count"
+   ],
+   "technical": [
+    "repair_kind",
+    "repair_target_declarations"
+   ],
+   "compatibility_evidence": [
+    "spec_evidence_source"
+   ],
+   "status": "derived_unreviewed",
+   "contract_version": 10,
+   "note": "Derived from the published contract (primary decisions and fields required always). Nominal values do not prove fitment; review before using as a batch closure criterion."
+  },
+  "tubeless_consumable": {
+   "identity": [
+    "brand",
+    "model"
+   ],
+   "presentation": [
+    "manufacturer_sku",
+    "tubeless_kit_members",
+    "sealant_volume_ml"
+   ],
+   "technical": [
+    "sealant_base",
+    "consumable_kind"
+   ],
+   "compatibility_evidence": [
+    "spec_evidence_source"
+   ],
+   "status": "derived_unreviewed",
+   "contract_version": 11,
+   "note": "Derived from the published contract (primary decisions and fields required always). Nominal values do not prove fitment; review before using as a batch closure criterion."
+  },
+  "tubeless_repair": {
+   "identity": [
+    "brand",
+    "model"
+   ],
+   "presentation": [
+    "manufacturer_sku",
+    "kit_members",
+    "plug_count",
+    "tool_included"
+   ],
+   "technical": [
+    "repair_target_declarations"
+   ],
+   "compatibility_evidence": [
+    "spec_evidence_source"
+   ],
+   "status": "derived_unreviewed",
+   "contract_version": 9,
+   "note": "Derived from the published contract (primary decisions and fields required always). Nominal values do not prove fitment; review before using as a batch closure criterion."
+  },
+  "tubeless_tape": {
+   "identity": [
+    "brand",
+    "model"
+   ],
+   "presentation": [
+    "manufacturer_sku",
+    "roll_length_m"
+   ],
+   "technical": [
+    "material",
+    "tape_width_mm"
+   ],
+   "compatibility_evidence": [
+    "spec_evidence_source"
+   ],
+   "status": "derived_unreviewed",
+   "contract_version": 7,
+   "note": "Derived from the published contract (primary decisions and fields required always). Nominal values do not prove fitment; review before using as a batch closure criterion."
+  },
+  "tubeless_valve": {
+   "identity": [
+    "brand",
+    "model"
+   ],
+   "presentation": [
+    "manufacturer_sku",
+    "pack_quantity"
+   ],
+   "technical": [
+    "valve_length_mm_value",
+    "valve_core_removable",
+    "valve_standard",
+    "valve_base_shape"
+   ],
+   "compatibility_evidence": [
+    "spec_evidence_source"
+   ],
+   "status": "derived_unreviewed",
+   "contract_version": 12,
+   "note": "Derived from the published contract (primary decisions and fields required always). Nominal values do not prove fitment; review before using as a batch closure criterion."
+  },
+  "valve_small_part": {
+   "identity": [
+    "brand",
+    "model"
+   ],
+   "presentation": [
+    "manufacturer_sku",
+    "pack_quantity"
+   ],
+   "technical": [
+    "valve_part_configurations",
+    "color"
+   ],
+   "compatibility_evidence": [
+    "spec_evidence_source"
+   ],
+   "status": "derived_unreviewed",
+   "contract_version": 5,
+   "note": "Derived from the published contract (primary decisions and fields required always). Nominal values do not prove fitment; review before using as a batch closure criterion."
+  },
+  "wheel": {
+   "identity": [
+    "brand",
+    "model"
+   ],
+   "presentation": [
+    "manufacturer_sku",
+    "kit_members"
+   ],
+   "technical": [
+    "assembly_configurations",
+    "assembly_variant_identity",
+    "assembly_wheel_members"
+   ],
+   "compatibility_evidence": [
+    "spec_evidence_source"
+   ],
+   "status": "derived_unreviewed",
+   "contract_version": 23,
+   "note": "Derived from the published contract (primary decisions and fields required always). Nominal values do not prove fitment; review before using as a batch closure criterion."
+  },
+  "wheel_retention": {
+   "identity": [
+    "brand",
+    "model"
+   ],
+   "presentation": [
+    "manufacturer_sku",
+    "pack_quantity"
+   ],
+   "technical": [
+    "material",
+    "wheel_retention_configurations"
+   ],
+   "compatibility_evidence": [
+    "spec_evidence_source"
+   ],
+   "status": "derived_unreviewed",
+   "contract_version": 15,
+   "note": "Derived from the published contract (primary decisions and fields required always). Nominal values do not prove fitment; review before using as a batch closure criterion."
+  },
+  "workshop_chemical": {
+   "identity": [
+    "brand",
+    "model"
+   ],
+   "presentation": [
+    "manufacturer_sku",
+    "weight_g",
+    "volume_ml"
+   ],
+   "technical": [
+    "chemical_kind",
+    "container"
+   ],
+   "compatibility_evidence": [
+    "spec_evidence_source"
+   ],
+   "status": "derived_unreviewed",
+   "contract_version": 9,
+   "note": "Derived from the published contract (primary decisions and fields required always). Nominal values do not prove fitment; review before using as a batch closure criterion."
+  },
+  "workshop_tool": {
+   "identity": [
+    "brand",
+    "model"
+   ],
+   "presentation": [
+    "manufacturer_sku",
+    "volume_ml",
+    "tool_bits_included",
+    "pack_quantity"
+   ],
+   "technical": [
+    "tool_kind",
+    "color",
+    "size_label"
+   ],
+   "compatibility_evidence": [
+    "spec_evidence_source"
+   ],
+   "status": "derived_unreviewed",
+   "contract_version": 13,
+   "note": "Derived from the published contract (primary decisions and fields required always). Nominal values do not prove fitment; review before using as a batch closure criterion."
+  }
+ },
+ "summary": {
+  "families": 107,
+  "reviewed": 2,
+  "derived_unreviewed": 105,
+  "derived_without_technical_fields": [
+   "bottom_bracket",
+   "bottom_bracket_cup",
+   "component_set",
+   "drivetrain_kit",
+   "hydraulic_disc_brake",
+   "mechanical_disc_brake",
+   "rim_brake"
+  ],
+  "derived_without_evidence_fields": []
+ },
+ "writes": 0
+}

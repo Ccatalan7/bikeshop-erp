@@ -24,8 +24,9 @@ from simulate_product_spec_research import (
 )
 
 NAMESPACE = uuid.UUID('208ecdb4-880a-4e5d-a5b8-e8e2777e444e')
-PREPARATION_GATES = {'global_sanitation_open', 'authenticated_spec_only_applicator_pending',
-                     'research_provenance_writer_pending'}
+# The authenticated applier and the research provenance are published
+# (20260916140000); the closed readiness receipt is the only gate left.
+PREPARATION_GATES = {'global_sanitation_open'}
 
 
 def digest(value):

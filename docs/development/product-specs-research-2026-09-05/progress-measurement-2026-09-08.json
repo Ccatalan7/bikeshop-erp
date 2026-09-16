@@ -337,7 +337,7 @@
   "review": "Root; no Claude review claimed",
   "record": "assignment-sanitation-checkpoint-2026-09-14.md"
  },
- "delivery_status_updated_at": "2026-09-16T08:01:26Z",
+ "delivery_status_updated_at": "2026-09-16T18:30:00Z",
  "assignment_repair_progress": {
   "initial_missing": 746,
   "repaired": 726,
@@ -1244,6 +1244,163 @@
   },
   "deployment_note": "first run verified functions but not table ACL (codex_test_runner default privilege); migration made rerunnable with an explicit revoke and completed by the same command",
   "record": "research-applier-publication-2026-09-16.md",
+  "technical_fill_persisted": 0
+ },
+ "definition_consumer_audit_2026_09_16": {
+  "audited_at": "2026-09-16T17:41:53.806717+00:00",
+  "snapshot_at": "2026-09-16T09:17:09.03235+00:00",
+  "file": "definition-consumer-audit-2026-09-16.json",
+  "file_sha256": "1550d8c246f9933a517a9901d182a4938da7aadf61a973a92011b869341843f0",
+  "runner": "scripts/inventory/audit_definition_consumers.py",
+  "writes": 0,
+  "live_global_definitions": 901,
+  "definitions_read_by_key": 123,
+  "read_keys_active": 66,
+  "read_keys_legacy_everywhere": 53,
+  "read_keys_without_active_template": 4,
+  "consumer_sources": 209,
+  "findings_by_code": {
+   "read_but_legacy_in_every_template": 53,
+   "read_but_in_no_active_template": 4,
+   "matcher_reads_non_filterable_key": 1
+  },
+  "workshop_compatibility_service": {
+   "keys": 99,
+   "active": 54,
+   "legacy_everywhere": 44,
+   "no_active_template": 1
+  },
+  "supplier_portal_search": {
+   "keys": 15,
+   "legacy_everywhere": 9,
+   "non_filterable_matcher_key": "seatpost_diameter_mm"
+  },
+  "public_store_product_detail": {
+   "keys": 17,
+   "legacy_everywhere": 11
+  },
+  "sql_functions_reading_legacy_keys": [
+   "validate_product_spec_value_exact_drivetrain_fields"
+  ],
+  "edge_functions_reading_definition_keys": 0,
+  "fill_gate_2_definitions_with_consumers": "structural_done",
+  "fill_gate_4_consumer_contract": "open; workshop compatibility must be migrated family by family",
+  "record": "definition-consumer-audit-2026-09-16.md",
+  "technical_fill_persisted": 0
+ },
+ "family_contract_matrix_2026_09_16": {
+  "audited_at": "2026-09-16T17:54:50.882588+00:00",
+  "snapshot_at": "2026-09-16T09:17:09.03235+00:00",
+  "file": "family-contract-matrix-2026-09-16.json",
+  "file_sha256": "589043f67586615d5c407f5f4b6c7230847118d878dcc74db3aa1412de933b10",
+  "runner": "scripts/inventory/audit_family_contract_matrix.py",
+  "writes": 0,
+  "active_templates": 107,
+  "templates_with_products": 102,
+  "templates_with_facts": 19,
+  "findings_by_code": {
+   "no_visible_active_field": 68,
+   "no_filterable_active_field": 68,
+   "no_critical_fields_defined": 105,
+   "no_products": 5,
+   "no_initial_decision": 8,
+   "required_without_evidence": 3
+  },
+  "blind_templates": {
+   "count": 68,
+   "products": 620,
+   "active_fields_without_visibility_or_filter": 609
+  },
+  "seen_templates": {
+   "count": 39,
+   "products": 974
+  },
+  "structural_candidates_for_first_batch": 32,
+  "no_initial_decision": [
+   "bottom_bracket",
+   "bottom_bracket_cup",
+   "cassette_spacer",
+   "tire_liner",
+   "tubeless_repair",
+   "drivetrain_kit",
+   "component_set",
+   "brake_shift_combined_control"
+  ],
+  "required_without_evidence": {
+   "brake_presentation": [
+    "hydraulic_disc_brake",
+    "mechanical_disc_brake",
+    "rim_brake"
+   ]
+  },
+  "families_with_critical_fields": [
+   "chain",
+   "chain_link"
+  ],
+  "fill_gate_3_family_matrix": "structural_done",
+  "record": "family-contract-matrix-2026-09-16.md",
+  "technical_fill_persisted": 0
+ },
+ "critical_fields_derived_2026_09_16": {
+  "file": "catalog-fill-critical-fields-derived-2026-09-16.json",
+  "file_sha256": "75006daf7a9e4c5bf35ba8452fe5ee6e2081339b026bc03e8309f358c83860e6",
+  "runner": "scripts/inventory/derive_critical_fields.py",
+  "writes": 0,
+  "families": 107,
+  "reviewed": 2,
+  "derived_unreviewed": 105,
+  "derived_without_technical_fields": [
+   "bottom_bracket",
+   "bottom_bracket_cup",
+   "component_set",
+   "drivetrain_kit",
+   "hydraulic_disc_brake",
+   "mechanical_disc_brake",
+   "rim_brake"
+  ],
+  "status": "draft; not a batch closure criterion until reviewed per family",
+  "technical_fill_persisted": 0
+ },
+ "registrar_review_2026_09_16": {
+  "record": "registrar-independent-review-2026-09-16.md",
+  "reviewer": "claude (sole owner; no second reviewer available)",
+  "files": [
+   "scripts/inventory/prepare_product_spec_registration.py",
+   "scripts/inventory/prepare_product_spec_application.py",
+   "scripts/inventory/simulate_product_spec_research.py"
+  ],
+  "changes": [
+   "registration CLI requires --audit and --review artifacts and recomputes the readiness sha256s",
+   "stale pending codes removed: authenticated_spec_only_applicator_pending, research_provenance_writer_pending"
+  ],
+  "preparation_gates_remaining": [
+   "global_sanitation_open"
+  ],
+  "python_unit_tests": 58,
+  "roundtrip_local": "PASS",
+  "open": [
+   "no revocation tool or receipt",
+   "no audit reader for receipts beyond the actor RPC",
+   "readiness closure is a decision with two artifact hashes"
+  ],
+  "writes": 0,
+  "technical_fill_persisted": 0
+ },
+ "definition_flags_proposal_2026_09_16": {
+  "file": "definition-flags-proposal-2026-09-16.json",
+  "file_sha256": "4ae211ac93aa7faca4165d18772d954fb786006a3dfcc91797dff6b5f28237d2",
+  "runner": "scripts/inventory/propose_definition_flags.py",
+  "writes": 0,
+  "published": false,
+  "decision": "owner: publish as is, trim to compatibility/intrinsic/measurement, or defer per family",
+  "definitions_with_active_use": 725,
+  "proposed_changes": 371,
+  "to_visible": 362,
+  "to_filterable": 305,
+  "downgrades_proposed": 0,
+  "review_only_outside_rule": 8,
+  "templates_touched": 90,
+  "record": "definition-flags-proposal-2026-09-16.md",
   "technical_fill_persisted": 0
  }
 }

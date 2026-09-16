@@ -169,3 +169,32 @@ ya los contiene). Worktrees inventariados: tres de Codex, todos detached.
   `codex_test_runner`); la migración se rehizo reejecutable y el mismo comando la selló:
   [research-applier-publication-2026-09-16.md](research-applier-publication-2026-09-16.md).
   Llenado técnico persistido: 0.
+- Segunda compuerta, parte estructural: auditoría de definiciones con consumidores
+  (`audit_definition_consumers.py`): 901 definiciones vivas, 123 leídas por clave, 53 ya
+  `legacy` en todas sus plantillas y 4 sin plantilla activa. La compatibilidad de taller lee 44
+  claves `legacy` (degrada a cautela, no a veredicto falso); el portal de proveedores 9 y la ficha
+  pública de la tienda 11. Ninguna función SQL ni edge con fuga:
+  [definition-consumer-audit-2026-09-16.md](definition-consumer-audit-2026-09-16.md).
+  Siguiente bloque: migrar el consumidor de taller familia por familia. Llenado técnico
+  persistido: 0.
+- Tercera compuerta, parte estructural: matriz de las 107 plantillas contra el contrato de
+  familia (`audit_family_contract_matrix.py`). 68 plantillas ciegas (sin campo visible ni
+  filtrable; 620 productos, 609 campos), 8 sin decisión inicial, `brake_presentation` obligatorio
+  sin fuente exigida en las tres presentaciones, campos críticos sólo en cadena y conector, 32
+  plantillas candidatas estructurales para un primer lote:
+  [family-contract-matrix-2026-09-16.md](family-contract-matrix-2026-09-16.md). Llenado técnico
+  persistido: 0.
+- Campos críticos por familia derivados del contrato como borrador para las 105 familias que no
+  los tenían (`derive_critical_fields.py`, `catalog-fill-critical-fields-derived-2026-09-16.json`);
+  cadena y conector siguen siendo los únicos revisados. Llenado técnico persistido: 0.
+- Registrador revisado (sin segundo revisor disponible): la CLI ahora exige los archivos de
+  auditoría y de revisión que la readiness hashea y recalcula sus sha256; los pendientes
+  `authenticated_spec_only_applicator_pending` y `research_provenance_writer_pending` se
+  retiraron porque el aplicador existe; queda `global_sanitation_open`. 58 pruebas unitarias e
+  ida y vuelta local verdes:
+  [registrar-independent-review-2026-09-16.md](registrar-independent-review-2026-09-16.md).
+- Propuesta de flags de visibilidad y filtro para los campos ciegos, no publicada: 371
+  definiciones (362 visibles, 305 filtrables, cero apagados) en 90 plantillas, con regla escrita
+  y ocho campos fuera de la regla listados sin cambio:
+  [definition-flags-proposal-2026-09-16.md](definition-flags-proposal-2026-09-16.md). Es
+  decisión del dueño publicarla, recortarla o diferirla. Llenado técnico persistido: 0.

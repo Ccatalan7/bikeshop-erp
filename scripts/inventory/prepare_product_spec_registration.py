@@ -7,10 +7,13 @@
 
 This emits SQL for scripts/db/query.sh's guarded write path; it does not run
 SQL, enable readiness, apply facts or create a new approval. The input readiness
-receipt must come from the separately reviewed global sanitation closure.
+receipt must come from the separately reviewed global sanitation closure, and
+the audit and independent-review artifacts it hashes must be present: their
+sha256 are recomputed here, so an opaque receipt cannot register anything.
 """
 import argparse
 from datetime import datetime
+import hashlib
 import os
 from pathlib import Path
 import re
@@ -111,9 +114,18 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--bundle', required=True, type=Path)
     parser.add_argument('--readiness', required=True, type=Path)
+    parser.add_argument('--audit', required=True, type=Path,
+                        help='global audit artifact whose sha256 the readiness receipt names')
+    parser.add_argument('--review', required=True, type=Path,
+                        help='independent review artifact whose sha256 the readiness receipt names')
     parser.add_argument('--output', required=True, type=Path)
     args = parser.parse_args()
     bundle, readiness = load_json(args.bundle), load_json(args.readiness)
+    for path, key in ((args.audit, 'audit_sha256'), (args.review, 'review_sha256')):
+        if not path.is_file():
+            raise ValueError('Readiness artifact is missing: ' + str(path))
+        if hashlib.sha256(path.read_bytes()).hexdigest() != readiness.get(key):
+            raise ValueError('Readiness ' + key + ' does not match ' + path.name)
     command = verify_bundle(bundle)
     client = ProductSpecSession(ROOT)
     if client.project != bundle['project'] or client.actor_id != command['actor_id']:
@@ -123,6 +135,7 @@ def main():
     with os.fdopen(fd, 'w') as output:
         output.write(prepared_sql)
     print(canonical({'application_id': bundle['operation_id'], 'project': client.project,
+                     'readiness_id': readiness['id'], 'audit': args.audit.name, 'review': args.review.name,
                      'product_writes': 0, 'registrations': 0, 'output': str(args.output)}).decode())
 
 

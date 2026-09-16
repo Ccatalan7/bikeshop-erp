@@ -76,8 +76,10 @@ persistido: 0.**
 
 - Cerrar el saneamiento con una readiness cuyos hashes apunten a una auditoría global y a una
   revisión independiente concretas; es una decisión, no un script.
-- Revisión independiente del registrador, tan crítica como el RPC (el RPC confía en él para el
-  esquema completo de la propuesta y la evidencia).
+- Revisión del registrador: hecha el mismo día por el único propietario
+  ([registrar-independent-review-2026-09-16.md](registrar-independent-review-2026-09-16.md)),
+  con dos endurecimientos (artefactos de la readiness verificados por sha256 en la CLI;
+  pendientes obsoletos retirados). Sigue sin un segundo revisor.
 - Las compuertas 2 a 5 del handoff: definiciones con consumidores, matriz por familia,
   consumidores que resuelven la misma identidad y estado, y la marca por hallazgo.
 - Identidad resuelta por producto antes que sus medidas; primer lote pequeño con fuentes fuertes.

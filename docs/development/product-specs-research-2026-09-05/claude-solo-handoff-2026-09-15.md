@@ -360,14 +360,38 @@ consumidores y un aplicador autenticado.
 2. Audita **todos** los productos con ficha y sin ficha, y cada definición que
    tiene consumidores. Cuenta clase real, plantilla efectiva, hechos dentro y
    fuera de plantilla, conflictos, observaciones no confirmadas y referencias.
+   **Parte estructural hecha el 2026-09-16:** productos en la auditoría global
+   releída; definiciones con consumidores en
+   [definition-consumer-audit-2026-09-16.md](definition-consumer-audit-2026-09-16.md)
+   (123 claves leídas por código, 53 de ellas ya `legacy` en todas sus
+   plantillas; la compatibilidad de taller lee 44 de esas 53). Conflictos y
+   observaciones no confirmadas siguen por adjudicar por producto.
 3. Revisa cada familia de la matriz: decisión inicial, campos dependientes,
    interfaz, variante, fuente necesaria y qué combinación no debe existir.
+   **Parte estructural hecha el 2026-09-16:**
+   [family-contract-matrix-2026-09-16.md](family-contract-matrix-2026-09-16.md).
+   Lo que pesa: 68 plantillas (620 productos, 609 campos activos) no tienen
+   ningún campo visible al cliente ni filtrable, así que llenarlas hoy no se
+   vería en la web ni serviría al asistente; ocho no declaran decisión
+   inicial; sólo cadena y conector tienen campos críticos definidos.
 4. Revisa los consumidores: editor, criterios de compras, taller,
    duplicados/matching, catálogo público, Merchant, OCR/importación, API y
    perfiles de miembros. Todos deben resolver la misma identidad y el mismo
-   estado de compatibilidad.
+   estado de compatibilidad. **Entrada lista (2026-09-16):** la auditoría de
+   definiciones dice qué lee cada uno; el bloque abierto es migrar la
+   compatibilidad de taller a los sucesores, familia por familia, con el mapa
+   de cada adjudicación, y dar flags de visibilidad y filtro a los sucesores
+   que el lote vaya a llenar.
 5. Marca cada hallazgo como resuelto, pendiente, conflicto o no aplicable.
    No conviertas un campo vacío en “el producto no lo tiene”.
+   **Estado 2026-09-16:** compuertas 1, 2 y 3 hechas en su parte estructural
+   (auditoría global releída, definiciones con consumidores, matriz por
+   familia); campos críticos derivados como borrador; aplicador publicado y
+   registrador revisado. Decisiones que quedan para el dueño, cada una con su
+   lista concreta: los flags de visibilidad y filtro
+   ([definition-flags-proposal-2026-09-16.md](definition-flags-proposal-2026-09-16.md)),
+   la readiness que cierra el saneamiento (dos hashes), y el orden de
+   migración de la compatibilidad de taller a los sucesores.
 
 ### Investigación por producto y campo
 

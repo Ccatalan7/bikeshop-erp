@@ -1,0 +1,8138 @@
+{
+ "format_version": 1,
+ "scope": "definition_flag_proposal_not_published",
+ "proposed_at": "2026-09-16T18:02:41.869132+00:00",
+ "snapshot_at": "2026-09-16T09:17:09.03235+00:00",
+ "snapshot_sha256": "adddd7c1c86851a6d80822a4b651b2cf5e7d94eab8b0120392d29e5eaeadad92",
+ "rule": {
+  "customer_visible": "scalar data type and semantic role other than evidence, on an active non-legacy field",
+  "filterable": "customer_visible and data type in single_select/multi_select/number/boolean",
+  "internal": "evidence fields and json rows",
+  "never": "no flag that a family adjudication already enabled is proposed for removal"
+ },
+ "summary": {
+  "definitions_with_active_use": 725,
+  "proposed_changes": 371,
+  "to_visible": 362,
+  "to_filterable": 305,
+  "downgrades_proposed": 0,
+  "review_only_outside_rule": 8,
+  "by_data_type": {
+   "single_select": 108,
+   "text": 66,
+   "boolean": 44,
+   "number": 146,
+   "multi_select": 7
+  },
+  "by_semantic_role": {
+   "intrinsic": 106,
+   "declaration": 47,
+   "measurement": 69,
+   "compatibility": 115,
+   "contents": 37,
+   "primary": 1,
+   "identity": 2
+  },
+  "templates_touched": 90
+ },
+ "proposals": [
+  {
+   "definition_id": "55b60d9b-9a40-5b7e-a920-d1027d725028",
+   "key": "accessory_mount_kind",
+   "label": "Fijación del accesorio",
+   "data_type": "single_select",
+   "semantic_roles": [
+    "intrinsic"
+   ],
+   "templates": [
+    "accessory_mount"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "3193900f-dc8e-543c-b569-1ee618d34b4e",
+   "key": "accessory_mount_ports_text",
+   "label": "Puertos / soportes OEM para accesorios",
+   "data_type": "text",
+   "semantic_roles": [
+    "declaration"
+   ],
+   "templates": [
+    "handlebar"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": false
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible"
+  },
+  {
+   "definition_id": "88ab58c9-13f9-5baa-b569-e0f5c1700ab0",
+   "key": "adjustable_fit",
+   "label": "Ajuste regulable",
+   "data_type": "boolean",
+   "semantic_roles": [
+    "intrinsic"
+   ],
+   "templates": [
+    "helmet"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "106c7fa6-3865-51c4-bf88-2bb72cc8e47c",
+   "key": "adjustable_length",
+   "label": "Largo ajustable",
+   "data_type": "boolean",
+   "semantic_roles": [
+    "intrinsic"
+   ],
+   "templates": [
+    "kickstand"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "f84100a6-c9a6-5ea4-9a36-9439484fa300",
+   "key": "allergen_note",
+   "label": "Información de alérgenos",
+   "data_type": "text",
+   "semantic_roles": [
+    "declaration"
+   ],
+   "templates": [
+    "food_beverage"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": false
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible"
+  },
+  {
+   "definition_id": "109aad84-a3a5-5be5-8c8c-9a6274b3ec9e",
+   "key": "attachment",
+   "label": "Fijación",
+   "data_type": "single_select",
+   "semantic_roles": [
+    "intrinsic"
+   ],
+   "templates": [
+    "bike_bag"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "0d3dd5b2-ff9b-5b4a-bf82-ccbf648c55f4",
+   "key": "axle_hollow",
+   "label": "Eje hueco",
+   "data_type": "boolean",
+   "semantic_roles": [
+    "intrinsic"
+   ],
+   "templates": [
+    "hub_axle"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "b0bc1f2b-73e7-549d-8299-7a97d064b233",
+   "key": "axle_length_mm",
+   "label": "Largo del eje",
+   "data_type": "number",
+   "semantic_roles": [
+    "measurement"
+   ],
+   "templates": [
+    "hub_axle"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "128be05c-536d-544e-a5ab-1db9abf7bbdf",
+   "key": "axle_nut_thread",
+   "label": "Rosca de la tuerca de eje",
+   "data_type": "single_select",
+   "semantic_roles": [
+    "compatibility"
+   ],
+   "templates": [
+    "training_wheel"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "f6d8a2dd-854a-5a1b-98db-d56d379b0c43",
+   "key": "axle_to_crown_mm",
+   "label": "Longitud eje-corona",
+   "data_type": "number",
+   "semantic_roles": [
+    "compatibility"
+   ],
+   "templates": [
+    "fork"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "526273d7-cd71-590e-b20d-0e3d9fd69638",
+   "key": "axle_type",
+   "label": "Tipo de eje",
+   "data_type": "single_select",
+   "semantic_roles": [
+    "compatibility"
+   ],
+   "templates": [
+    "fork"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "045ce0f8-f7ac-574d-93b9-67f5e2df5c10",
+   "key": "bag_kind",
+   "label": "Tipo de bolso",
+   "data_type": "single_select",
+   "semantic_roles": [
+    "intrinsic"
+   ],
+   "templates": [
+    "rider_bag"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "9b5a7a92-8172-5456-be3f-74089eb8a6dc",
+   "key": "bag_position",
+   "label": "Posición del bolso",
+   "data_type": "single_select",
+   "semantic_roles": [
+    "intrinsic"
+   ],
+   "templates": [
+    "bike_bag"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "61de9305-1284-53aa-b4bf-b3441b87dac6",
+   "key": "ball_diameter_in",
+   "label": "Diámetro de las bolas",
+   "data_type": "single_select",
+   "semantic_roles": [
+    "compatibility",
+    "intrinsic"
+   ],
+   "templates": [
+    "bearing",
+    "hub_small_part"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "9da13b91-94fc-5199-bc44-6db45805d272",
+   "key": "bar_backsweep_deg",
+   "label": "Ángulo de retroceso del manubrio",
+   "data_type": "number",
+   "semantic_roles": [
+    "measurement"
+   ],
+   "templates": [
+    "handlebar"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "60b73730-c514-583f-aadd-1d13550cfd5b",
+   "key": "bar_clamp_diameter_mm",
+   "label": "Diámetro de sujeción del manubrio",
+   "data_type": "number",
+   "semantic_roles": [
+    "compatibility"
+   ],
+   "templates": [
+    "handlebar",
+    "stem"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "52f1b782-257c-5338-b814-94d57e779759",
+   "key": "bar_construction",
+   "label": "Construcción del manubrio",
+   "data_type": "single_select",
+   "semantic_roles": [
+    "intrinsic"
+   ],
+   "templates": [
+    "handlebar"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "6b8c5700-baec-57b4-b31f-8116a7221d01",
+   "key": "bar_diameter_max_mm",
+   "label": "Diámetro máximo de manubrio",
+   "data_type": "number",
+   "semantic_roles": [
+    "compatibility"
+   ],
+   "templates": [
+    "accessory_mount"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "a58b6fb5-d77d-573d-8086-6349bb5dcb01",
+   "key": "bar_diameter_min_mm",
+   "label": "Diámetro mínimo de manubrio",
+   "data_type": "number",
+   "semantic_roles": [
+    "compatibility"
+   ],
+   "templates": [
+    "accessory_mount"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "9c855e8d-b515-5948-ab14-0a63f1d262ac",
+   "key": "bar_drop_mm",
+   "label": "Drop del manubrio",
+   "data_type": "number",
+   "semantic_roles": [
+    "measurement"
+   ],
+   "templates": [
+    "handlebar"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "cfa7d721-5003-53eb-a4a5-7cbc17f17430",
+   "key": "bar_fit_representation",
+   "label": "Cómo declara el OEM el ajuste al manubrio",
+   "data_type": "single_select",
+   "semantic_roles": [
+    "compatibility"
+   ],
+   "templates": [
+    "accessory_mount"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "d1a8443c-c264-51ed-9af5-a9f807b84ccf",
+   "key": "bar_reach_mm",
+   "label": "Reach del manubrio",
+   "data_type": "number",
+   "semantic_roles": [
+    "measurement"
+   ],
+   "templates": [
+    "handlebar"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "ca73ca97-4433-54b5-81a8-db31180f73fe",
+   "key": "bar_rise_mm",
+   "label": "Elevación del manubrio",
+   "data_type": "number",
+   "semantic_roles": [
+    "measurement"
+   ],
+   "templates": [
+    "handlebar"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "6f4a37bc-3bce-5a80-8bf4-dfbae093aa4a",
+   "key": "bar_style",
+   "label": "Tipo de manubrio",
+   "data_type": "single_select",
+   "semantic_roles": [
+    "intrinsic"
+   ],
+   "templates": [
+    "handlebar"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "853b720c-118b-5a43-a772-7b0e1f029a58",
+   "key": "bar_upsweep_deg",
+   "label": "Ángulo de elevación de los extremos",
+   "data_type": "number",
+   "semantic_roles": [
+    "measurement"
+   ],
+   "templates": [
+    "handlebar"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "67c3818f-b743-589b-99d1-50a1bbb7f798",
+   "key": "bar_width_drops_mm",
+   "label": "Ancho en drops (centro a centro)",
+   "data_type": "number",
+   "semantic_roles": [
+    "measurement"
+   ],
+   "templates": [
+    "handlebar"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "47118c22-3707-5ba2-a338-53b819e110e6",
+   "key": "bar_width_hoods_mm",
+   "label": "Ancho en manetas (centro a centro)",
+   "data_type": "number",
+   "semantic_roles": [
+    "measurement"
+   ],
+   "templates": [
+    "handlebar"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "b68f19e4-6175-5501-9662-f30f9398cec1",
+   "key": "bar_width_mm",
+   "label": "Ancho del manubrio",
+   "data_type": "number",
+   "semantic_roles": [
+    "measurement"
+   ],
+   "templates": [
+    "handlebar"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "d8a733a3-bf1f-50e8-a0c0-17672bd709d8",
+   "key": "bar_width_reference",
+   "label": "Referencia de medición del ancho",
+   "data_type": "single_select",
+   "semantic_roles": [
+    "measurement"
+   ],
+   "templates": [
+    "handlebar"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "7878f827-f4bd-5bf9-a096-df407d06ce8b",
+   "key": "barrel_material",
+   "label": "Material del cuerpo del bombín",
+   "data_type": "single_select",
+   "semantic_roles": [
+    "intrinsic"
+   ],
+   "templates": [
+    "pump"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "791517f7-5a60-5e20-b68b-b2828f019a33",
+   "key": "base_included",
+   "label": "Base / soporte incluido",
+   "data_type": "boolean",
+   "semantic_roles": [
+    "contents"
+   ],
+   "templates": [
+    "bottle"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "ee4e8a1b-f363-5bff-a22a-4101533ab113",
+   "key": "bead_seat_diameter_mm",
+   "label": "Diámetro nominal del asiento del talón (BSD)",
+   "data_type": "number",
+   "semantic_roles": [
+    "compatibility"
+   ],
+   "templates": [
+    "rim",
+    "rim_strip",
+    "tire"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "f080bae3-3ca2-5ea3-8e6b-af2762ba0e7e",
+   "key": "bearing_seal_designation",
+   "label": "Designación literal del sello",
+   "data_type": "text",
+   "semantic_roles": [
+    "measurement"
+   ],
+   "templates": [
+    "bearing"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": false
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible"
+  },
+  {
+   "definition_id": "dce53451-1cbe-5919-8b26-112261be359b",
+   "key": "bike_attachment_kind",
+   "label": "Anclaje a la bicicleta",
+   "data_type": "single_select",
+   "semantic_roles": [
+    "compatibility"
+   ],
+   "templates": [
+    "accessory_mount"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "74a373a3-e2ac-50a9-9a0d-2556d12fd283",
+   "key": "bike_kind",
+   "label": "Tipo de bicicleta",
+   "data_type": "single_select",
+   "semantic_roles": [
+    "intrinsic"
+   ],
+   "templates": [
+    "bicycle"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "d8582afd-c59f-5be6-86d0-dabf148e2230",
+   "key": "bike_protection_kind",
+   "label": "Tipo de protección para la bicicleta",
+   "data_type": "single_select",
+   "semantic_roles": [
+    "intrinsic"
+   ],
+   "templates": [
+    "bike_protection"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "218745d7-86e1-5996-8bae-e415809037be",
+   "key": "biodegradable_claim",
+   "label": "Biodegradabilidad declarada",
+   "data_type": "boolean",
+   "semantic_roles": [
+    "declaration"
+   ],
+   "templates": [
+    "workshop_chemical"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "064618f1-b9c3-54d4-b790-8da8d0fbb22a",
+   "key": "body_material",
+   "label": "Material del cuerpo",
+   "data_type": "single_select",
+   "semantic_roles": [
+    "intrinsic"
+   ],
+   "templates": [
+    "pedal"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "ec30b053-d2c6-50e5-a536-e4c83af8d48c",
+   "key": "bolt_pattern",
+   "label": "Patrón de pernos",
+   "data_type": "text",
+   "semantic_roles": [
+    "measurement"
+   ],
+   "templates": [
+    "derailleur_hanger"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": false
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible"
+  },
+  {
+   "definition_id": "92497d9e-8383-5db9-9306-937adec10fb3",
+   "key": "bolts_included",
+   "label": "Incluye pernos",
+   "data_type": "boolean",
+   "semantic_roles": [
+    "contents"
+   ],
+   "templates": [
+    "bottle_cage",
+    "derailleur_hanger_extender"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "a951b6b0-f7d8-51da-a70a-8fe2ad49b353",
+   "key": "boss_count",
+   "label": "Cantidad de insertos usados",
+   "data_type": "number",
+   "semantic_roles": [
+    "compatibility"
+   ],
+   "templates": [
+    "bottle_cage"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "8d251349-0696-553f-bffe-c20d6b3f80f0",
+   "key": "boss_spacing_mm",
+   "label": "Separación de insertos declarada",
+   "data_type": "number",
+   "semantic_roles": [
+    "compatibility"
+   ],
+   "templates": [
+    "bottle_cage"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "6b4e15fa-0925-55a8-aa71-16678338c20a",
+   "key": "bottle_diameter_mm",
+   "label": "Diámetro de acople con portabidón de aro",
+   "data_type": "number",
+   "semantic_roles": [
+    "compatibility",
+    "measurement"
+   ],
+   "templates": [
+    "bottle",
+    "bottle_cage"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "96f50333-36de-5b11-8c15-d299eeaeb30b",
+   "key": "bottle_retention_system",
+   "label": "Sistema de retención de la botella",
+   "data_type": "single_select",
+   "semantic_roles": [
+    "compatibility"
+   ],
+   "templates": [
+    "bottle"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "f0544f2b-81aa-57da-9d09-ae284185318c",
+   "key": "bpa_free_claim",
+   "label": "Ausencia de BPA declarada",
+   "data_type": "boolean",
+   "semantic_roles": [
+    "declaration"
+   ],
+   "templates": [
+    "bottle"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "4eb570b4-b098-59be-96f2-9c1e0bcd7b65",
+   "key": "brake_actuation",
+   "label": "Accionamiento del freno",
+   "data_type": "single_select",
+   "semantic_roles": [
+    "intrinsic"
+   ],
+   "templates": [
+    "brake_caliper",
+    "brake_lever"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "4148ee40-a54c-5bad-827e-bde6108fae3b",
+   "key": "brake_conversion_location",
+   "label": "Dónde ocurre la conversión declarada",
+   "data_type": "single_select",
+   "semantic_roles": [
+    "primary"
+   ],
+   "templates": [
+    "brake_caliper"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "ef01b60f-ea74-5f5b-8e36-22af1ce4fe0b",
+   "key": "brake_external_hose_connection",
+   "label": "Este componente tiene conexión de manguera externa",
+   "data_type": "boolean",
+   "semantic_roles": [
+    "intrinsic"
+   ],
+   "templates": [
+    "brake_caliper"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "766c4910-b85e-5b7f-a463-557b87617864",
+   "key": "brake_mount",
+   "label": "Fijación del freno",
+   "data_type": "single_select",
+   "semantic_roles": [
+    "compatibility"
+   ],
+   "templates": [
+    "fork"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "1e4add42-ed0d-58b3-aa87-3f09fd94b2ea",
+   "key": "brake_pad_oem_compound",
+   "label": "Denominación de compuesto del fabricante",
+   "data_type": "text",
+   "semantic_roles": [
+    "compatibility"
+   ],
+   "templates": [
+    "brake_pad"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": false
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible"
+  },
+  {
+   "definition_id": "6640d7a1-8f65-58a9-8699-8672e03ba319",
+   "key": "brake_pad_retainer_model",
+   "label": "Modelo de pasador / retención de pastilla",
+   "data_type": "text",
+   "semantic_roles": [
+    "compatibility"
+   ],
+   "templates": [
+    "brake_caliper",
+    "brake_pad"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": false
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible"
+  },
+  {
+   "definition_id": "07130a38-860b-5d54-8922-b2b03caed2f0",
+   "key": "brake_track",
+   "label": "Dispone de pista de frenado",
+   "data_type": "boolean",
+   "semantic_roles": [
+    "compatibility"
+   ],
+   "templates": [
+    "rim"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "54dd4970-56b9-593c-b6b4-0c1463092dc2",
+   "key": "cable_data_capability",
+   "label": "Declaración de datos del cable (estándar y velocidad)",
+   "data_type": "text",
+   "semantic_roles": [
+    "intrinsic"
+   ],
+   "templates": [
+    "consumer_electronics"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": false
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible"
+  },
+  {
+   "definition_id": "894d238e-9caf-5341-8698-0832479b5540",
+   "key": "cable_diameter_mm",
+   "label": "Diámetro del cable",
+   "data_type": "number",
+   "semantic_roles": [
+    "measurement"
+   ],
+   "templates": [
+    "lock"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "c07ec915-d235-5f71-8180-5424fe734066",
+   "key": "cable_length_m",
+   "label": "Largo del cable",
+   "data_type": "number",
+   "semantic_roles": [
+    "measurement"
+   ],
+   "templates": [
+    "consumer_electronics"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "7d26c250-92b5-5b04-b981-b5985b976603",
+   "key": "cable_length_mm",
+   "label": "Largo del cable",
+   "data_type": "number",
+   "semantic_roles": [
+    "measurement"
+   ],
+   "templates": [
+    "lock"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "d41ad060-d22e-5078-a707-eb84449c1e07",
+   "key": "cable_power_capacity_w",
+   "label": "Capacidad de carga del cable",
+   "data_type": "number",
+   "semantic_roles": [
+    "declaration"
+   ],
+   "templates": [
+    "consumer_electronics"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "488452c5-19ff-5e64-b601-0e19acd892a1",
+   "key": "cable_routing",
+   "label": "Guiado de cables",
+   "data_type": "single_select",
+   "semantic_roles": [
+    "compatibility"
+   ],
+   "templates": [
+    "handlebar"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "34764a63-262f-532e-9c2e-6a1423fcc4d7",
+   "key": "caffeine_basis",
+   "label": "Base de la cafeína",
+   "data_type": "single_select",
+   "semantic_roles": [
+    "declaration"
+   ],
+   "templates": [
+    "food_beverage"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "aa2713be-27ee-503e-be23-08f6b4fcaf2f",
+   "key": "caffeine_mg",
+   "label": "Cafeína declarada",
+   "data_type": "number",
+   "semantic_roles": [
+    "declaration"
+   ],
+   "templates": [
+    "food_beverage"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "208575dc-9eaa-5c01-b8a8-81c587f9c37d",
+   "key": "cage_mount",
+   "label": "Fijación del portacaramagiola",
+   "data_type": "single_select",
+   "semantic_roles": [
+    "compatibility"
+   ],
+   "templates": [
+    "bottle_cage"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "7ee85eef-1dad-5596-8039-ecae88c531ce",
+   "key": "cage_retention_system",
+   "label": "Sistema de retención del portabidón",
+   "data_type": "single_select",
+   "semantic_roles": [
+    "compatibility"
+   ],
+   "templates": [
+    "bottle_cage"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "ec0528ea-0011-5e1c-ab7f-7e6d462ae2ad",
+   "key": "card_format",
+   "label": "Formato de tarjeta",
+   "data_type": "single_select",
+   "semantic_roles": [
+    "compatibility"
+   ],
+   "templates": [
+    "consumer_electronics"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "5c9c3b82-ad06-508c-8a6e-b2a678c0b1e0",
+   "key": "carrier_kind",
+   "label": "Tipo de portaequipaje",
+   "data_type": "single_select",
+   "semantic_roles": [
+    "intrinsic"
+   ],
+   "templates": [
+    "rack_basket"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "96d48389-4b02-5228-a911-120836efd7a5",
+   "key": "carrier_mount_kind",
+   "label": "Fijación del portaequipaje",
+   "data_type": "single_select",
+   "semantic_roles": [
+    "compatibility"
+   ],
+   "templates": [
+    "rack_basket"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "cf6187e3-7c53-5d95-b666-97f89ab0c5d4",
+   "key": "certification_claim_text",
+   "label": "Certificación declarada",
+   "data_type": "text",
+   "semantic_roles": [
+    "declaration"
+   ],
+   "templates": [
+    "rider_protection"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": false
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible"
+  },
+  {
+   "definition_id": "0ce76410-2ca6-4357-beac-9663ff2328d3",
+   "key": "chain_connector_directional",
+   "label": "Conector con sentido de montaje",
+   "data_type": "boolean",
+   "semantic_roles": [
+    "declaration"
+   ],
+   "templates": [
+    "chain_link"
+   ],
+   "current": {
+    "is_customer_visible": true,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "eb9d9be1-8607-55d3-8f2e-6ed3677c742d",
+   "key": "chain_guide_chainline_datum",
+   "label": "Datum de la línea de cadena declarada",
+   "data_type": "text",
+   "semantic_roles": [
+    "compatibility"
+   ],
+   "templates": [
+    "chain_guide"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": false
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible"
+  },
+  {
+   "definition_id": "e4a41092-27d9-41a9-a4ff-1d417c4e5265",
+   "key": "chain_link_pack_qty",
+   "label": "Cantidad conectores",
+   "data_type": "number",
+   "semantic_roles": [
+    "contents"
+   ],
+   "templates": [
+    "chain_link"
+   ],
+   "current": {
+    "is_customer_visible": true,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "b44c1cda-04dd-595b-9be7-d82a7a0c43d3",
+   "key": "chain_other_width_designation",
+   "label": "Otra denominación de ancho",
+   "data_type": "text",
+   "semantic_roles": [
+    "compatibility"
+   ],
+   "templates": [
+    "chain"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": false
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible"
+  },
+  {
+   "definition_id": "59d23cf9-7905-5a47-be55-d832777b53c7",
+   "key": "chain_tool_speeds",
+   "label": "Velocidades de cadena admitidas por la herramienta",
+   "data_type": "multi_select",
+   "semantic_roles": [
+    "declaration"
+   ],
+   "templates": [
+    "workshop_tool"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "28854686-ee6c-440a-ac42-9aa1da65e718",
+   "key": "chainline_mm",
+   "label": "Línea de cadena",
+   "data_type": "number",
+   "semantic_roles": [
+    "measurement"
+   ],
+   "templates": [
+    "chain_guide",
+    "crankset"
+   ],
+   "current": {
+    "is_customer_visible": true,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "a7f70a60-38c9-5df2-9a27-78bdaf03ecea",
+   "key": "chainring_direct_mount_generation",
+   "label": "Direct mount documentado",
+   "data_type": "text",
+   "semantic_roles": [
+    "compatibility"
+   ],
+   "templates": [
+    "chainring"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": false
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible"
+  },
+  {
+   "definition_id": "2cb60178-7736-5bc8-869a-c33d07b6e897",
+   "key": "charging_protocol_claim",
+   "label": "Protocolo de carga declarado",
+   "data_type": "text",
+   "semantic_roles": [
+    "declaration"
+   ],
+   "templates": [
+    "consumer_electronics"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": false
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible"
+  },
+  {
+   "definition_id": "cff6d4bb-ae24-586c-9ff1-0f918d8163f9",
+   "key": "chemical_kind",
+   "label": "Tipo de producto químico",
+   "data_type": "single_select",
+   "semantic_roles": [
+    "intrinsic"
+   ],
+   "templates": [
+    "workshop_chemical"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "fa82a33a-b9cd-56c4-a511-f2a6d8c9c0ca",
+   "key": "clamp_bolt_length_mm",
+   "label": "Largo del perno / aguja",
+   "data_type": "number",
+   "semantic_roles": [
+    "compatibility"
+   ],
+   "templates": [
+    "seat_clamp"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "161dacfa-2e80-59af-92ea-db96f656d585",
+   "key": "clamp_kind",
+   "label": "Tipo de abrazadera",
+   "data_type": "single_select",
+   "semantic_roles": [
+    "intrinsic"
+   ],
+   "templates": [
+    "seat_clamp"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "c3903215-7745-56b2-b776-75251b57b6b3",
+   "key": "clamp_thread",
+   "label": "Rosca de la abrazadera",
+   "data_type": "single_select",
+   "semantic_roles": [
+    "compatibility"
+   ],
+   "templates": [
+    "seat_clamp"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "42d33fdc-80c3-59b0-9904-c6015be93e97",
+   "key": "clamp_thread_pitch_mm",
+   "label": "Paso de la rosca de la abrazadera",
+   "data_type": "number",
+   "semantic_roles": [
+    "compatibility"
+   ],
+   "templates": [
+    "seat_clamp"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "2d295cf8-293c-5316-978b-2a86b32f862f",
+   "key": "cleat_system",
+   "label": "Sistema de cala",
+   "data_type": "single_select",
+   "semantic_roles": [
+    "compatibility"
+   ],
+   "templates": [
+    "pedal"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "a6493b7d-fc93-5afe-becf-f541017cf7aa",
+   "key": "cleats_included",
+   "label": "Incluye calas",
+   "data_type": "boolean",
+   "semantic_roles": [
+    "contents"
+   ],
+   "templates": [
+    "pedal"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "7aae777a-a54f-5903-8308-87c7ced26017",
+   "key": "co2_inflation_capable",
+   "label": "También permite inflar con CO₂",
+   "data_type": "boolean",
+   "semantic_roles": [
+    "intrinsic"
+   ],
+   "templates": [
+    "pump"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "54647fc6-888d-5352-8325-8259b926bd92",
+   "key": "color",
+   "label": "Color",
+   "data_type": "text",
+   "semantic_roles": [
+    "intrinsic"
+   ],
+   "templates": [
+    "accessory_mount",
+    "audible_signal",
+    "bicycle",
+    "bike_bag",
+    "bike_protection",
+    "bottle",
+    "bottle_cage",
+    "consumer_electronics",
+    "control_housing",
+    "control_small_part",
+    "eyewear",
+    "fender",
+    "fork",
+    "frame",
+    "grip",
+    "handlebar",
+    "handlebar_covering",
+    "helmet",
+    "hydraulic_hose",
+    "light",
+    "lock",
+    "pump",
+    "rack_basket",
+    "reflector",
+    "rider_apparel",
+    "rider_bag",
+    "rider_glove",
+    "rider_protection",
+    "saddle",
+    "saddle_cover",
+    "seat_clamp",
+    "seatpost",
+    "spacer",
+    "spoke_nipple",
+    "stem",
+    "valve_small_part",
+    "workshop_tool"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": false
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible"
+  },
+  {
+   "definition_id": "e23e54ca-ff45-5a54-ad18-f70b2db28cba",
+   "key": "combined_control_declared_units",
+   "label": "Cantidad de mandos declarada en el envase",
+   "data_type": "number",
+   "semantic_roles": [
+    "measurement"
+   ],
+   "templates": [
+    "brake_shift_combined_control"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "3449c287-37b2-5a62-a5bb-3ee6ceaf969a",
+   "key": "cones_and_locknuts_included",
+   "label": "Incluye conos y contratuercas",
+   "data_type": "boolean",
+   "semantic_roles": [
+    "contents"
+   ],
+   "templates": [
+    "hub_axle"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "bf8d2898-0612-53f6-be9d-351b16cbad49",
+   "key": "connector_a",
+   "label": "Conector de origen",
+   "data_type": "single_select",
+   "semantic_roles": [
+    "intrinsic"
+   ],
+   "templates": [
+    "consumer_electronics"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "31e318c9-8e4e-5532-9458-88f183118bd2",
+   "key": "connector_b",
+   "label": "Conector de destino",
+   "data_type": "single_select",
+   "semantic_roles": [
+    "intrinsic"
+   ],
+   "templates": [
+    "consumer_electronics"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "0f392624-c49a-54d5-bfc8-0e4db1e7906c",
+   "key": "container",
+   "label": "Tipo de envase",
+   "data_type": "single_select",
+   "semantic_roles": [
+    "intrinsic"
+   ],
+   "templates": [
+    "workshop_chemical"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "1f1b4635-3035-51e3-9c2d-ff2d9e6b7bc7",
+   "key": "control_part_kind",
+   "label": "Tipo de pieza de cableado",
+   "data_type": "single_select",
+   "semantic_roles": [
+    "intrinsic"
+   ],
+   "templates": [
+    "control_small_part"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "8ac73ddf-4268-54dd-8795-074dd05077c1",
+   "key": "cover_material",
+   "label": "Material de la cubierta",
+   "data_type": "single_select",
+   "semantic_roles": [
+    "intrinsic"
+   ],
+   "templates": [
+    "saddle"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "c16263ab-31d0-5b51-bb7d-62cf30393461",
+   "key": "covering_kind",
+   "label": "Tipo de recubrimiento",
+   "data_type": "single_select",
+   "semantic_roles": [
+    "intrinsic"
+   ],
+   "templates": [
+    "handlebar_covering"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "258e351c-c846-5954-8df3-627c07f1a141",
+   "key": "crank_arm_spindle_designation",
+   "label": "Designación del eje según el documento",
+   "data_type": "text",
+   "semantic_roles": [
+    "declaration"
+   ],
+   "templates": [
+    "crank_arm"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": false
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible"
+  },
+  {
+   "definition_id": "d05230ac-73f4-5e01-8815-16165c01ec8d",
+   "key": "crown_race_diameter_mm",
+   "label": "Diámetro del asiento de pista de corona",
+   "data_type": "number",
+   "semantic_roles": [
+    "compatibility"
+   ],
+   "templates": [
+    "fork"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "7e53d991-52de-5235-9219-0a77e24973b9",
+   "key": "crown_stack_max_mm",
+   "label": "Altura total máxima de montaje entre coronas",
+   "data_type": "number",
+   "semantic_roles": [
+    "compatibility"
+   ],
+   "templates": [
+    "fork"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "a8c06945-f377-5cba-a84e-fc23055d4b02",
+   "key": "crown_stack_min_mm",
+   "label": "Altura total mínima de montaje entre coronas",
+   "data_type": "number",
+   "semantic_roles": [
+    "compatibility"
+   ],
+   "templates": [
+    "fork"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "10cb17c1-fa3d-52a6-84c2-0737da6d6764",
+   "key": "declared_applications",
+   "label": "Aplicaciones declaradas",
+   "data_type": "multi_select",
+   "semantic_roles": [
+    "declaration"
+   ],
+   "templates": [
+    "workshop_chemical"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "b95773ce-e414-5784-aa92-4f002d6e4b60",
+   "key": "declared_purpose",
+   "label": "Uso declarado",
+   "data_type": "single_select",
+   "semantic_roles": [
+    "declaration"
+   ],
+   "templates": [
+    "fastener"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "71cf576c-ff7a-55ca-b55e-2d2a81dd4401",
+   "key": "detangler_kind",
+   "label": "Tipo de sistema antienredos BMX",
+   "data_type": "single_select",
+   "semantic_roles": [
+    "intrinsic"
+   ],
+   "templates": [
+    "bmx_cable_detangler"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "5a3e0712-112c-5a8b-b3e2-8d0a96fbf372",
+   "key": "device_attachment_kind",
+   "label": "Unión al dispositivo",
+   "data_type": "single_select",
+   "semantic_roles": [
+    "compatibility"
+   ],
+   "templates": [
+    "accessory_mount"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "729c3c3d-e015-5dc6-814e-73a41de91bf0",
+   "key": "device_kind",
+   "label": "Tipo de dispositivo",
+   "data_type": "single_select",
+   "semantic_roles": [
+    "intrinsic"
+   ],
+   "templates": [
+    "consumer_electronics"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "9cbb65e0-800d-5028-b1bf-be59da6e01c5",
+   "key": "device_system",
+   "label": "Sistema de unión (nombre OEM)",
+   "data_type": "text",
+   "semantic_roles": [
+    "identity"
+   ],
+   "templates": [
+    "accessory_mount"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": false
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible"
+  },
+  {
+   "definition_id": "44cff980-eac8-561a-a7d5-084540cc8b1e",
+   "key": "device_width_max_mm",
+   "label": "Ancho máximo del dispositivo",
+   "data_type": "number",
+   "semantic_roles": [
+    "compatibility"
+   ],
+   "templates": [
+    "accessory_mount"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "7bb705f7-a364-593c-bcc2-6fdf76cee938",
+   "key": "device_width_min_mm",
+   "label": "Ancho mínimo del dispositivo",
+   "data_type": "number",
+   "semantic_roles": [
+    "compatibility"
+   ],
+   "templates": [
+    "accessory_mount"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "50a8e0ac-e382-522a-b6e0-244bf07fb92e",
+   "key": "dropper_cable_routing",
+   "label": "Ruta del cable o latiguillo de la telescópica",
+   "data_type": "single_select",
+   "semantic_roles": [
+    "compatibility"
+   ],
+   "templates": [
+    "seatpost"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "df9675be-9288-5966-9d46-b02110725257",
+   "key": "dropper_control_kind",
+   "label": "Accionamiento de la telescópica",
+   "data_type": "single_select",
+   "semantic_roles": [
+    "intrinsic"
+   ],
+   "templates": [
+    "seatpost"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "3dca4fdd-c725-58c9-b22f-deabe2c09429",
+   "key": "dropper_remote_included",
+   "label": "Mando incluido",
+   "data_type": "boolean",
+   "semantic_roles": [
+    "contents"
+   ],
+   "templates": [
+    "seatpost"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "1168a06b-a78e-51a8-beb8-b7af9e1e620b",
+   "key": "dropper_remote_model",
+   "label": "Modelo del mando incluido",
+   "data_type": "text",
+   "semantic_roles": [
+    "contents"
+   ],
+   "templates": [
+    "seatpost"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": false
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible"
+  },
+  {
+   "definition_id": "263d3fdd-37e5-5a66-9f8b-e4e4709cb6b5",
+   "key": "dropper_travel_mm",
+   "label": "Recorrido de la tija telescópica",
+   "data_type": "number",
+   "semantic_roles": [
+    "measurement"
+   ],
+   "templates": [
+    "seatpost"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "e79785e7-cc86-5b89-add6-c5dc28b3db51",
+   "key": "dust_cap_included",
+   "label": "Incluye guardapolvo",
+   "data_type": "boolean",
+   "semantic_roles": [
+    "contents"
+   ],
+   "templates": [
+    "hub_small_part"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "7f7eaaca-6b4e-5278-ae09-f90849fb3fb2",
+   "key": "end_plugs_included",
+   "label": "Incluye tapones de extremo",
+   "data_type": "boolean",
+   "semantic_roles": [
+    "contents"
+   ],
+   "templates": [
+    "handlebar_covering"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "885ec2bf-624d-574f-a87a-6604f7f0405f",
+   "key": "extender_declaration_form",
+   "label": "Alcance documentado del extensor",
+   "data_type": "single_select",
+   "semantic_roles": [
+    "intrinsic"
+   ],
+   "templates": [
+    "derailleur_hanger_extender"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "63617388-11a1-5acb-a19a-67b25ab7ae29",
+   "key": "extension_mm",
+   "label": "Extensión",
+   "data_type": "number",
+   "semantic_roles": [
+    "measurement"
+   ],
+   "templates": [
+    "derailleur_hanger_extender"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "f49e1a5f-eef4-5523-b28f-599f173b9926",
+   "key": "fabric_composition_text",
+   "label": "Composición declarada",
+   "data_type": "text",
+   "semantic_roles": [
+    "declaration"
+   ],
+   "templates": [
+    "rider_apparel",
+    "rider_glove"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": false
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible"
+  },
+  {
+   "definition_id": "1b0aaaed-b75a-5bb6-b882-267d3df5a38f",
+   "key": "fastener_kind",
+   "label": "Tipo de fijación",
+   "data_type": "single_select",
+   "semantic_roles": [
+    "intrinsic"
+   ],
+   "templates": [
+    "fastener"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "1d6238bb-1494-5452-8d37-a737909ef39a",
+   "key": "fender_mount_kind",
+   "label": "Fijación del tapabarros",
+   "data_type": "single_select",
+   "semantic_roles": [
+    "compatibility"
+   ],
+   "templates": [
+    "fender"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "98a3a498-87a3-5c9d-8a8b-9149e1974d35",
+   "key": "fender_position",
+   "label": "Posición del tapabarros",
+   "data_type": "single_select",
+   "semantic_roles": [
+    "intrinsic"
+   ],
+   "templates": [
+    "fender"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "65597dc1-8224-550b-9bd5-83a990e50908",
+   "key": "finger_length",
+   "label": "Cobertura de dedos",
+   "data_type": "single_select",
+   "semantic_roles": [
+    "intrinsic"
+   ],
+   "templates": [
+    "rider_glove"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "6fb7e1c4-cc6e-5ae9-b7ee-36f8853294e2",
+   "key": "fit_cut",
+   "label": "Corte declarado por el OEM (texto literal)",
+   "data_type": "text",
+   "semantic_roles": [
+    "intrinsic"
+   ],
+   "templates": [
+    "rider_apparel",
+    "rider_glove"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": false
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible"
+  },
+  {
+   "definition_id": "87d88f0f-1bfe-5965-b38d-ca0032a82895",
+   "key": "fits_bike_size",
+   "label": "Tamaño de bicicleta admitido",
+   "data_type": "text",
+   "semantic_roles": [
+    "compatibility"
+   ],
+   "templates": [
+    "bike_protection"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": false
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible"
+  },
+  {
+   "definition_id": "7375cde5-9387-50df-8a5a-12fbed818f10",
+   "key": "fits_cable_diameter_mm",
+   "label": "Diámetro de cable admitido",
+   "data_type": "number",
+   "semantic_roles": [
+    "compatibility"
+   ],
+   "templates": [
+    "control_small_part"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "3bbb351f-2590-5406-9ed0-01fc4862342e",
+   "key": "fits_housing_diameter_mm",
+   "label": "Diámetro de funda admitido",
+   "data_type": "number",
+   "semantic_roles": [
+    "compatibility"
+   ],
+   "templates": [
+    "control_small_part"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "216718e6-c6e9-5489-886f-189a5c4a9700",
+   "key": "fits_saddle_length_max_mm",
+   "label": "Largo máximo de sillín admitido",
+   "data_type": "number",
+   "semantic_roles": [
+    "compatibility"
+   ],
+   "templates": [
+    "saddle_cover"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "4fb5756b-a536-5aad-84a1-5bc45598b2e3",
+   "key": "fits_saddle_length_min_mm",
+   "label": "Largo mínimo de sillín admitido",
+   "data_type": "number",
+   "semantic_roles": [
+    "compatibility"
+   ],
+   "templates": [
+    "saddle_cover"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "bc8ea0e0-5e4c-56c2-88a5-8dfb49ccf0be",
+   "key": "fits_saddle_width_max_mm",
+   "label": "Ancho máximo de sillín admitido",
+   "data_type": "number",
+   "semantic_roles": [
+    "compatibility"
+   ],
+   "templates": [
+    "saddle_cover"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "5bee5ba7-ee06-5a95-aed9-44880bf111ee",
+   "key": "fits_volume_max_l",
+   "label": "Capacidad máxima cubierta",
+   "data_type": "number",
+   "semantic_roles": [
+    "compatibility"
+   ],
+   "templates": [
+    "rider_bag"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "bf95af1c-9a86-5277-bd17-5d9242443659",
+   "key": "fits_volume_min_l",
+   "label": "Capacidad mínima cubierta",
+   "data_type": "number",
+   "semantic_roles": [
+    "compatibility"
+   ],
+   "templates": [
+    "rider_bag"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "468f7244-3598-50a5-a692-48285bd4a9d9",
+   "key": "flavor",
+   "label": "Sabor",
+   "data_type": "text",
+   "semantic_roles": [
+    "intrinsic"
+   ],
+   "templates": [
+    "food_beverage"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": false
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible"
+  },
+  {
+   "definition_id": "d2ff4c3c-98cc-54a8-b033-74a52288847a",
+   "key": "food_item_kind",
+   "label": "Tipo de alimento o bebida",
+   "data_type": "single_select",
+   "semantic_roles": [
+    "intrinsic"
+   ],
+   "templates": [
+    "food_beverage"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "8490bd6a-141e-57c8-a35a-efd05757539b",
+   "key": "fork_crown_layout",
+   "label": "Construcción de coronas de la horquilla",
+   "data_type": "single_select",
+   "semantic_roles": [
+    "compatibility"
+   ],
+   "templates": [
+    "fork"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "3b09789f-f279-5f79-98f0-d2ba9a6151d3",
+   "key": "fork_kind",
+   "label": "Tipo de horquilla",
+   "data_type": "single_select",
+   "semantic_roles": [
+    "intrinsic"
+   ],
+   "templates": [
+    "fork"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "4ef20ad2-e65f-54ae-8b8e-b95ee11d6363",
+   "key": "fork_offset_mm",
+   "label": "Avance de la horquilla",
+   "data_type": "number",
+   "semantic_roles": [
+    "measurement"
+   ],
+   "templates": [
+    "fork"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "ad95212d-ad18-57d2-884b-bcd2d0a27bc2",
+   "key": "frame_mount_included",
+   "label": "Incluye soporte para cuadro",
+   "data_type": "boolean",
+   "semantic_roles": [
+    "contents"
+   ],
+   "templates": [
+    "pump"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "7889248a-eb34-5256-a217-5cc16b36da72",
+   "key": "frame_requirement_text",
+   "label": "Requisito de cuadro declarado por el OEM",
+   "data_type": "text",
+   "semantic_roles": [
+    "declaration"
+   ],
+   "templates": [
+    "kickstand"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": false
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible"
+  },
+  {
+   "definition_id": "75ac64ee-2f4e-58c0-91a7-00ee22424351",
+   "key": "frame_tube_width_max_mm",
+   "label": "Ancho de tubo de cuadro máximo admitido",
+   "data_type": "number",
+   "semantic_roles": [
+    "compatibility"
+   ],
+   "templates": [
+    "bottle_cage"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "8bb762b9-bc5e-5e0e-a608-8a150b61f143",
+   "key": "frame_tube_width_min_mm",
+   "label": "Ancho de tubo de cuadro mínimo admitido",
+   "data_type": "number",
+   "semantic_roles": [
+    "compatibility"
+   ],
+   "templates": [
+    "bottle_cage"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "52dbb6e3-f56f-5db2-966c-9d8ccd49cbc8",
+   "key": "functions_count",
+   "label": "Cantidad de funciones",
+   "data_type": "number",
+   "semantic_roles": [
+    "intrinsic"
+   ],
+   "templates": [
+    "cycle_computer"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "075cadb7-e8d6-5927-a68b-5dc8024ce729",
+   "key": "garment_kind",
+   "label": "Tipo de prenda",
+   "data_type": "single_select",
+   "semantic_roles": [
+    "intrinsic"
+   ],
+   "templates": [
+    "rider_apparel"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "22ab0b9d-76e5-5dcc-9bae-d0bee5131d73",
+   "key": "gauge",
+   "label": "Incluye manómetro",
+   "data_type": "boolean",
+   "semantic_roles": [
+    "intrinsic"
+   ],
+   "templates": [
+    "pump"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "859a5167-d447-5e9f-b24e-dd80437af752",
+   "key": "gender_fit",
+   "label": "Corte / género de la prenda",
+   "data_type": "single_select",
+   "semantic_roles": [
+    "intrinsic"
+   ],
+   "templates": [
+    "rider_apparel",
+    "rider_glove"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "72781ff5-cca5-5896-a8e7-0b68e6003791",
+   "key": "glove_intended_use",
+   "label": "Uso declarado del guante",
+   "data_type": "single_select",
+   "semantic_roles": [
+    "declaration"
+   ],
+   "templates": [
+    "rider_glove"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "673185f9-dd19-58af-bbbc-f017a28993f4",
+   "key": "glue_volume_ml",
+   "label": "Volumen de pegamento",
+   "data_type": "number",
+   "semantic_roles": [
+    "contents"
+   ],
+   "templates": [
+    "tube_repair"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "6cefc15b-4b8d-5a0b-bbaa-e548be8b112a",
+   "key": "grip_area_diameter_mm",
+   "label": "Diámetro en la zona de puños",
+   "data_type": "number",
+   "semantic_roles": [
+    "compatibility"
+   ],
+   "templates": [
+    "handlebar"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "8cbff0fb-79f9-5acd-bfb0-2b969caaaeef",
+   "key": "grip_attachment",
+   "label": "Fijación del puño",
+   "data_type": "single_select",
+   "semantic_roles": [
+    "intrinsic"
+   ],
+   "templates": [
+    "grip"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "222fc1bf-ca3b-5220-83e1-d32201c50200",
+   "key": "grip_bar_nominal_diameter_mm",
+   "label": "Diámetro nominal de manubrio previsto",
+   "data_type": "number",
+   "semantic_roles": [
+    "compatibility"
+   ],
+   "templates": [
+    "grip"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "edf83479-a19c-5eae-8533-0d66bca1b5b1",
+   "key": "grip_end_plugs_included",
+   "label": "Incluye tapones de puño",
+   "data_type": "boolean",
+   "semantic_roles": [
+    "contents"
+   ],
+   "templates": [
+    "grip"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "d5372003-90ed-5c83-a18d-5a746b30a4c6",
+   "key": "grip_flange",
+   "label": "Puño con reborde",
+   "data_type": "boolean",
+   "semantic_roles": [
+    "intrinsic"
+   ],
+   "templates": [
+    "grip"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "8ab547e0-cdbf-5681-8eb2-2a79b01fa9ca",
+   "key": "grip_inner_diameter_mm",
+   "label": "Diámetro interior medido del puño",
+   "data_type": "number",
+   "semantic_roles": [
+    "measurement"
+   ],
+   "templates": [
+    "grip"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "2ad03f0f-fffb-56ef-8a32-f662e39d7fac",
+   "key": "grip_length_left_mm",
+   "label": "Largo del puño izquierdo",
+   "data_type": "number",
+   "semantic_roles": [
+    "measurement"
+   ],
+   "templates": [
+    "grip"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "6c6acf80-53ab-5635-92b2-50d4fc2d16a4",
+   "key": "grip_length_mm",
+   "label": "Largo de la unidad (sin asignación de lado)",
+   "data_type": "number",
+   "semantic_roles": [
+    "measurement"
+   ],
+   "templates": [
+    "grip"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "6bb5a1ee-e81a-5931-8b34-b4479f2e286a",
+   "key": "grip_length_right_mm",
+   "label": "Largo del puño derecho",
+   "data_type": "number",
+   "semantic_roles": [
+    "measurement"
+   ],
+   "templates": [
+    "grip"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "81639c83-9ae7-5ebe-8b74-8c906eb077a0",
+   "key": "grip_measurement_reference",
+   "label": "Zona y condición de la medición interior",
+   "data_type": "text",
+   "semantic_roles": [
+    "measurement"
+   ],
+   "templates": [
+    "grip"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": false
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible"
+  },
+  {
+   "definition_id": "cad7befa-0b9e-5b3b-80ab-684a1adf3048",
+   "key": "grip_straight_length_required_left_mm",
+   "label": "Zona recta de manubrio requerida por el puño izquierdo",
+   "data_type": "number",
+   "semantic_roles": [
+    "compatibility"
+   ],
+   "templates": [
+    "grip"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "6417493e-75bf-5a2b-b2ea-1ced3bf8a524",
+   "key": "grip_straight_length_required_mm",
+   "label": "Zona recta requerida por la unidad (sin asignación de lado)",
+   "data_type": "number",
+   "semantic_roles": [
+    "compatibility"
+   ],
+   "templates": [
+    "grip"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "4b36951b-d360-57f6-b4cf-3a79a5168999",
+   "key": "grip_straight_length_required_right_mm",
+   "label": "Zona recta de manubrio requerida por el puño derecho",
+   "data_type": "number",
+   "semantic_roles": [
+    "compatibility"
+   ],
+   "templates": [
+    "grip"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "8be0553c-6dee-5ab8-97c9-2bffb6cfa631",
+   "key": "handlebar_clamp_mm",
+   "label": "Diámetro de abrazadera al manubrio",
+   "data_type": "number",
+   "semantic_roles": [
+    "compatibility"
+   ],
+   "templates": [
+    "brake_lever",
+    "shifter"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "3b2eee3d-fdc9-5f71-ac21-af83ed242977",
+   "key": "hanger_interface",
+   "label": "Interfaz de la patilla",
+   "data_type": "single_select",
+   "semantic_roles": [
+    "compatibility"
+   ],
+   "templates": [
+    "derailleur_hanger_extender"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "98877285-eae1-5009-9545-aafdafc03470",
+   "key": "head_circumference_max_cm",
+   "label": "Contorno de cabeza máximo",
+   "data_type": "number",
+   "semantic_roles": [
+    "intrinsic"
+   ],
+   "templates": [
+    "helmet"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "3978cad3-b118-5efa-abe8-c6d5719b62fd",
+   "key": "head_circumference_min_cm",
+   "label": "Contorno de cabeza mínimo",
+   "data_type": "number",
+   "semantic_roles": [
+    "intrinsic"
+   ],
+   "templates": [
+    "helmet"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "d8c19e0b-7c25-5e47-ac06-f7395362ac13",
+   "key": "head_drive",
+   "label": "Interfaz de herramienta en la cabeza",
+   "data_type": "single_select",
+   "semantic_roles": [
+    "intrinsic"
+   ],
+   "templates": [
+    "fastener"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "32cc615a-4293-5a85-8c33-968392245c0c",
+   "key": "head_drive_size_mm",
+   "label": "Medida del accionamiento (hex / llave)",
+   "data_type": "number",
+   "semantic_roles": [
+    "intrinsic"
+   ],
+   "templates": [
+    "fastener"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "9454127c-4fb8-5630-94ff-78e5ab8f6dac",
+   "key": "headset_lower_shis",
+   "label": "Código SHIS inferior",
+   "data_type": "text",
+   "semantic_roles": [
+    "compatibility"
+   ],
+   "templates": [
+    "headset"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": false
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible"
+  },
+  {
+   "definition_id": "50dcb1a6-ea7f-5185-b696-a6bf042e0275",
+   "key": "headset_part_kind",
+   "label": "Tipo de pieza de dirección",
+   "data_type": "single_select",
+   "semantic_roles": [
+    "intrinsic"
+   ],
+   "templates": [
+    "headset_small_part"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "2cd52bde-c5d9-5278-8f48-7219d38d221c",
+   "key": "headset_supplied_crown_race_reference",
+   "label": "Pista de corona incluida",
+   "data_type": "text",
+   "semantic_roles": [
+    "contents"
+   ],
+   "templates": [
+    "headset"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": false
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible"
+  },
+  {
+   "definition_id": "8ae147f2-a69a-55f0-b2d9-2ebce8e5f507",
+   "key": "headset_upper_shis",
+   "label": "Código SHIS superior",
+   "data_type": "text",
+   "semantic_roles": [
+    "compatibility"
+   ],
+   "templates": [
+    "headset"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": false
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible"
+  },
+  {
+   "definition_id": "6779dc88-757a-5eab-b1e2-b71cadb58bb9",
+   "key": "helmet_construction",
+   "label": "Construcción declarada por el OEM",
+   "data_type": "text",
+   "semantic_roles": [
+    "intrinsic"
+   ],
+   "templates": [
+    "helmet"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": false
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible"
+  },
+  {
+   "definition_id": "b217410f-40a0-5f28-aa59-f90b7eafbc36",
+   "key": "helmet_kind",
+   "label": "Uso declarado del casco",
+   "data_type": "single_select",
+   "semantic_roles": [
+    "intrinsic"
+   ],
+   "templates": [
+    "helmet"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "7f99987b-fdc4-5792-82e8-aff0a88c9836",
+   "key": "hose",
+   "label": "Incluye manguera",
+   "data_type": "boolean",
+   "semantic_roles": [
+    "intrinsic"
+   ],
+   "templates": [
+    "pump"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "d133853d-ab0c-5b7f-80a6-968b771cfb4e",
+   "key": "hub_axle_diameter_datum",
+   "label": "Zona y datum del diámetro del eje",
+   "data_type": "text",
+   "semantic_roles": [
+    "compatibility"
+   ],
+   "templates": [
+    "hub"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": false
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible"
+  },
+  {
+   "definition_id": "7d7024e1-a190-59fb-a7ae-9ff8717b84d6",
+   "key": "hub_axle_length_datum",
+   "label": "Referencia de medición del largo del eje",
+   "data_type": "text",
+   "semantic_roles": [
+    "measurement"
+   ],
+   "templates": [
+    "hub_axle"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": false
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible"
+  },
+  {
+   "definition_id": "46b9fdaa-0310-504f-b0c6-b3cdafa00b9b",
+   "key": "hub_drive_receiver_reference",
+   "label": "Referencia exacta del receptor de transmisión",
+   "data_type": "text",
+   "semantic_roles": [
+    "compatibility"
+   ],
+   "templates": [
+    "hub"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": false
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible"
+  },
+  {
+   "definition_id": "b7cdbac9-2090-547d-b176-cadd0f597f0b",
+   "key": "hub_old_mm",
+   "label": "Distancia entre contratuercas de la maza (OLD)",
+   "data_type": "number",
+   "semantic_roles": [
+    "compatibility"
+   ],
+   "templates": [
+    "fork",
+    "hub"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "02e2ef88-8ad1-5b71-baa2-61039c4838e5",
+   "key": "hub_part_kind",
+   "label": "Tipo de pieza de maza",
+   "data_type": "single_select",
+   "semantic_roles": [
+    "intrinsic"
+   ],
+   "templates": [
+    "hub_small_part"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "60b769f7-c697-5896-8c7a-c03feb7219c4",
+   "key": "hub_supplied_thru_axle_reference",
+   "label": "Identidad del eje pasante incluido",
+   "data_type": "text",
+   "semantic_roles": [
+    "contents"
+   ],
+   "templates": [
+    "hub"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": false
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible"
+  },
+  {
+   "definition_id": "32cfa2ea-51f3-567f-b4be-a5267a31485d",
+   "key": "included_base_model",
+   "label": "Base incluida (modelo)",
+   "data_type": "text",
+   "semantic_roles": [
+    "contents"
+   ],
+   "templates": [
+    "bottle"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": false
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible"
+  },
+  {
+   "definition_id": "ee41566a-dff4-54b3-a381-43352eebf4c3",
+   "key": "included_cleat_model",
+   "label": "Modelo de las calas incluidas",
+   "data_type": "text",
+   "semantic_roles": [
+    "contents"
+   ],
+   "templates": [
+    "pedal"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": false
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible"
+  },
+  {
+   "definition_id": "4f13f37e-e060-57a2-8264-f7faca5e9790",
+   "key": "inflation_target_note",
+   "label": "Alcance de la presión declarada",
+   "data_type": "text",
+   "semantic_roles": [
+    "declaration"
+   ],
+   "templates": [
+    "pump"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": false
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible"
+  },
+  {
+   "definition_id": "e1f09c26-3da8-577b-9b6f-c58b9a66f214",
+   "key": "ingredients_text",
+   "label": "Ingredientes (texto de la etiqueta o receta)",
+   "data_type": "text",
+   "semantic_roles": [
+    "declaration"
+   ],
+   "templates": [
+    "food_beverage"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": false
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible"
+  },
+  {
+   "definition_id": "99531b39-9401-5244-a855-6e28c2f340a4",
+   "key": "inner_diameter_mm",
+   "label": "Diámetro interior",
+   "data_type": "number",
+   "semantic_roles": [
+    "compatibility"
+   ],
+   "templates": [
+    "handlebar_covering"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "e016f9b4-8cad-564a-b0d7-6dc875ff6f82",
+   "key": "inner_height_mm",
+   "label": "Altura interior",
+   "data_type": "number",
+   "semantic_roles": [
+    "measurement"
+   ],
+   "templates": [
+    "lock"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "e5ec866d-85a3-5089-924c-36a864af3a18",
+   "key": "inner_width_mm",
+   "label": "Ancho interior",
+   "data_type": "number",
+   "semantic_roles": [
+    "measurement"
+   ],
+   "templates": [
+    "lock"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "633c9555-a4d1-5203-8f3b-e8b634a86838",
+   "key": "installed_height_max_mm",
+   "label": "Altura instalada máxima (OEM)",
+   "data_type": "number",
+   "semantic_roles": [
+    "compatibility"
+   ],
+   "templates": [
+    "kickstand"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "47c50c97-a05d-5d4b-a8be-cf2ae29d9f92",
+   "key": "installed_height_min_mm",
+   "label": "Altura instalada mínima (OEM)",
+   "data_type": "number",
+   "semantic_roles": [
+    "compatibility"
+   ],
+   "templates": [
+    "kickstand"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "7878e0e2-0396-5673-9421-bb0578c70ffc",
+   "key": "insulated",
+   "label": "Aislamiento térmico",
+   "data_type": "boolean",
+   "semantic_roles": [
+    "intrinsic"
+   ],
+   "templates": [
+    "bottle"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "626daa81-335b-50d4-ac15-ca28337d76bd",
+   "key": "integrated_steerer_clamp_mm",
+   "label": "Abrazadera de dirección de la unidad integrada",
+   "data_type": "number",
+   "semantic_roles": [
+    "compatibility"
+   ],
+   "templates": [
+    "handlebar"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "887b5428-adaf-5c9b-8214-08f4a96ba084",
+   "key": "integrated_stem_angle_deg",
+   "label": "Ángulo de potencia integrada",
+   "data_type": "number",
+   "semantic_roles": [
+    "measurement"
+   ],
+   "templates": [
+    "handlebar"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "7f2c21ab-22b6-5af8-8906-a5b829cbac2f",
+   "key": "integrated_stem_length_mm",
+   "label": "Largo de potencia integrada",
+   "data_type": "number",
+   "semantic_roles": [
+    "measurement"
+   ],
+   "templates": [
+    "handlebar"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "aebea046-4238-55c9-95d9-03ae69192d9e",
+   "key": "intended_audience",
+   "label": "Público / edad",
+   "data_type": "single_select",
+   "semantic_roles": [
+    "intrinsic"
+   ],
+   "templates": [
+    "helmet",
+    "rider_apparel",
+    "rider_glove",
+    "rider_protection"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "5ff7b601-c37a-5677-badc-5fae14d8c8e5",
+   "key": "intended_rider",
+   "label": "Usuario previsto",
+   "data_type": "single_select",
+   "semantic_roles": [
+    "declaration"
+   ],
+   "templates": [
+    "grip"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "cc789ecc-5854-5559-9dc3-7cab9e23964b",
+   "key": "interchangeable_lenses",
+   "label": "Cantidad de lentes intercambiables adicionales",
+   "data_type": "number",
+   "semantic_roles": [
+    "contents"
+   ],
+   "templates": [
+    "eyewear"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "2c4c3b7c-d958-56b0-84f1-f264fecea685",
+   "key": "keys_included",
+   "label": "Cantidad de llaves incluidas",
+   "data_type": "number",
+   "semantic_roles": [
+    "contents"
+   ],
+   "templates": [
+    "lock"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "e0b85051-d17f-50d8-8f02-d0a956b29a7b",
+   "key": "kickstand_length_reference",
+   "label": "Referencia exacta de longitud / altura (datum OEM)",
+   "data_type": "text",
+   "semantic_roles": [
+    "measurement"
+   ],
+   "templates": [
+    "kickstand"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": false
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible"
+  },
+  {
+   "definition_id": "7a4d8f49-abab-57c4-b804-3e074e10de18",
+   "key": "kickstand_mount_kind",
+   "label": "Fijación de la pata de apoyo",
+   "data_type": "single_select",
+   "semantic_roles": [
+    "compatibility"
+   ],
+   "templates": [
+    "kickstand"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "68d84015-ee1b-51c7-a95c-caf2b1c82e76",
+   "key": "kickstand_mount_standard",
+   "label": "Estándar de montaje de la pata",
+   "data_type": "single_select",
+   "semantic_roles": [
+    "compatibility"
+   ],
+   "templates": [
+    "kickstand"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "227534a5-ee65-5a55-905b-09548c4f2bbe",
+   "key": "length_datum",
+   "label": "Referencia del largo",
+   "data_type": "single_select",
+   "semantic_roles": [
+    "measurement"
+   ],
+   "templates": [
+    "fastener",
+    "seat_clamp"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "7766e4ef-f805-59ec-8678-73b8f69f1d68",
+   "key": "length_m",
+   "label": "Largo",
+   "data_type": "number",
+   "semantic_roles": [
+    "contents"
+   ],
+   "templates": [
+    "reflector"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "ffaacc91-34e0-5107-840f-82b7b7edc2fb",
+   "key": "length_max_mm",
+   "label": "Largo máximo",
+   "data_type": "number",
+   "semantic_roles": [
+    "measurement"
+   ],
+   "templates": [
+    "kickstand"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "e43ef41f-a8ba-5a15-8c1c-733c34a856a6",
+   "key": "length_min_mm",
+   "label": "Largo mínimo",
+   "data_type": "number",
+   "semantic_roles": [
+    "measurement"
+   ],
+   "templates": [
+    "kickstand"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "2c7f43f5-38b0-5a38-8308-cd522d3a52f0",
+   "key": "length_mm",
+   "label": "Largo",
+   "data_type": "number",
+   "semantic_roles": [
+    "measurement"
+   ],
+   "templates": [
+    "bike_protection",
+    "fastener",
+    "handlebar_covering"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "1a7b9335-419d-5791-bfc0-5203d806c7e7",
+   "key": "lever_cable_pull",
+   "label": "Tiro de cable de la maneta",
+   "data_type": "single_select",
+   "semantic_roles": [
+    "compatibility"
+   ],
+   "templates": [
+    "brake_lever"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "336434ba-34df-553c-9bf2-8b6aa4d8e0fd",
+   "key": "light_position",
+   "label": "Posición de la luz",
+   "data_type": "single_select",
+   "semantic_roles": [
+    "intrinsic"
+   ],
+   "templates": [
+    "light"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "9f6847a0-dff3-49a8-bdbc-c4f37f08a079",
+   "key": "link_count",
+   "label": "Cantidad de eslabones",
+   "data_type": "number",
+   "semantic_roles": [
+    "contents"
+   ],
+   "templates": [
+    "chain"
+   ],
+   "current": {
+    "is_customer_visible": true,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "aa9f9e6f-e991-57fd-a705-693fc9e91566",
+   "key": "load_reference",
+   "label": "A qué se refiere la carga máxima",
+   "data_type": "single_select",
+   "semantic_roles": [
+    "declaration"
+   ],
+   "templates": [
+    "rack_basket"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "867c3588-f9a1-5da3-a338-438ef8a403c5",
+   "key": "lock_chain_length_mm",
+   "label": "Longitud de cadena del candado",
+   "data_type": "number",
+   "semantic_roles": [
+    "measurement"
+   ],
+   "templates": [
+    "lock"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "a2d26d7d-836e-5aaa-9ccf-6141d2708697",
+   "key": "lock_kind",
+   "label": "Tipo de candado",
+   "data_type": "single_select",
+   "semantic_roles": [
+    "intrinsic"
+   ],
+   "templates": [
+    "lock"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "1d471dee-0854-5be9-a919-d0b944101562",
+   "key": "locking_mechanism",
+   "label": "Mecanismo de cierre",
+   "data_type": "single_select",
+   "semantic_roles": [
+    "intrinsic"
+   ],
+   "templates": [
+    "lock"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "2e63a4ca-622f-5319-899f-0479d256d649",
+   "key": "lockout",
+   "label": "Dispone de bloqueo",
+   "data_type": "boolean",
+   "semantic_roles": [
+    "intrinsic"
+   ],
+   "templates": [
+    "fork",
+    "rear_shock"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "9008d44e-6993-52ea-bc56-eb3b4f1be38b",
+   "key": "loudness_db_claim",
+   "label": "Nivel sonoro declarado",
+   "data_type": "number",
+   "semantic_roles": [
+    "declaration"
+   ],
+   "templates": [
+    "audible_signal"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "7297bf01-8781-5159-8b6e-034b9bcba684",
+   "key": "lumens_claimed",
+   "label": "Flujo luminoso declarado",
+   "data_type": "number",
+   "semantic_roles": [
+    "declaration"
+   ],
+   "templates": [
+    "light"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "7da3359a-e29f-57d8-901f-355753d1c6b3",
+   "key": "material",
+   "label": "Material",
+   "data_type": "single_select",
+   "semantic_roles": [
+    "compatibility",
+    "intrinsic"
+   ],
+   "templates": [
+    "accessory_mount",
+    "bike_protection",
+    "bottle",
+    "bottle_cage",
+    "cassette_lockring",
+    "chainring_guard",
+    "control_cable",
+    "control_small_part",
+    "fastener",
+    "fender",
+    "fork",
+    "frame",
+    "handlebar",
+    "handlebar_covering",
+    "headset_small_part",
+    "kickstand",
+    "pedal_peg",
+    "rack_basket",
+    "rider_apparel",
+    "seat_clamp",
+    "seatpost",
+    "seatpost_shim",
+    "spacer",
+    "spoke_nipple",
+    "stem",
+    "tubeless_tape",
+    "wheel_retention"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "cdb6a5da-2f17-58c5-85e2-26321860a74d",
+   "key": "max_bike_weight_kg",
+   "label": "Peso máximo de bicicleta declarado",
+   "data_type": "number",
+   "semantic_roles": [
+    "declaration"
+   ],
+   "templates": [
+    "kickstand"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "2e53abbc-b280-5fe0-a1ea-ed465c9729a7",
+   "key": "max_load_kg",
+   "label": "Carga máxima declarada",
+   "data_type": "number",
+   "semantic_roles": [
+    "declaration"
+   ],
+   "templates": [
+    "accessory_mount",
+    "rack_basket",
+    "training_wheel"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "32cee7c9-ec81-5ee3-ab5d-3636baf9c29d",
+   "key": "max_rotor_mm",
+   "label": "Diámetro máximo de rotor declarado",
+   "data_type": "number",
+   "semantic_roles": [
+    "compatibility"
+   ],
+   "templates": [
+    "fork"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "fdaa4fd3-77a6-5827-ae60-a3e9084791c8",
+   "key": "max_tire_width_mm",
+   "label": "Ancho máximo de neumático declarado",
+   "data_type": "number",
+   "semantic_roles": [
+    "compatibility"
+   ],
+   "templates": [
+    "fender"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "10c7332c-86a8-5d1f-981d-f690e602df0a",
+   "key": "milk_in_recipe",
+   "label": "Leche en la receta",
+   "data_type": "single_select",
+   "semantic_roles": [
+    "intrinsic"
+   ],
+   "templates": [
+    "food_beverage"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "1badf487-2818-5cb1-b2d4-7b8ee4516a6c",
+   "key": "milk_substitution_offered",
+   "label": "Admite cambio de leche al vender",
+   "data_type": "boolean",
+   "semantic_roles": [
+    "intrinsic"
+   ],
+   "templates": [
+    "food_beverage"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "eb698806-a7f2-53cd-9bd8-e10b6b0cd529",
+   "key": "modes_count",
+   "label": "Cantidad de modos declarada por el fabricante",
+   "data_type": "number",
+   "semantic_roles": [
+    "declaration"
+   ],
+   "templates": [
+    "light"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "5502dd20-f345-5560-bde5-50081c505092",
+   "key": "mount_bolt_count",
+   "label": "Cantidad de pernos de montaje",
+   "data_type": "number",
+   "semantic_roles": [
+    "compatibility"
+   ],
+   "templates": [
+    "kickstand"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "656b3192-b625-5470-9529-2f6b140aca69",
+   "key": "mount_bracket_included",
+   "label": "Incluye soporte de montaje",
+   "data_type": "boolean",
+   "semantic_roles": [
+    "contents"
+   ],
+   "templates": [
+    "lock"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "744fc64e-4d15-5219-8e63-bc02e206827e",
+   "key": "mount_diameter_max_mm",
+   "label": "Diámetro máximo de montaje",
+   "data_type": "number",
+   "semantic_roles": [
+    "compatibility"
+   ],
+   "templates": [
+    "audible_signal"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "9e6f28b9-b6cc-57de-aa7a-59c46ab220e0",
+   "key": "mount_diameter_min_mm",
+   "label": "Diámetro mínimo de montaje",
+   "data_type": "number",
+   "semantic_roles": [
+    "compatibility"
+   ],
+   "templates": [
+    "audible_signal"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "e6eebaf6-3ff5-58ed-b5cf-74d860a332fe",
+   "key": "mount_hole_spacing_mm",
+   "label": "Separación de agujeros de montaje",
+   "data_type": "number",
+   "semantic_roles": [
+    "compatibility"
+   ],
+   "templates": [
+    "kickstand"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "604e9b85-b05f-55cc-aafb-5486d59c4345",
+   "key": "mounting_hardware_included",
+   "label": "Incluye hardware de montaje (contenido del envase; no afirma que sirva para un cuadro concreto)",
+   "data_type": "boolean",
+   "semantic_roles": [
+    "contents"
+   ],
+   "templates": [
+    "rear_shock"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "bee4085d-b8fd-5c1f-af54-50859ebac2e4",
+   "key": "net_mass_g",
+   "label": "Masa neta",
+   "data_type": "number",
+   "semantic_roles": [
+    "measurement"
+   ],
+   "templates": [
+    "food_beverage"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "c57426a0-55ec-5d45-b405-a891bf4e9fcb",
+   "key": "net_volume_ml",
+   "label": "Volumen neto",
+   "data_type": "number",
+   "semantic_roles": [
+    "measurement"
+   ],
+   "templates": [
+    "food_beverage"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "a90134a7-03ae-52ec-a45d-28032269f72a",
+   "key": "nipple_length_mm",
+   "label": "Largo del niple",
+   "data_type": "number",
+   "semantic_roles": [
+    "measurement"
+   ],
+   "templates": [
+    "spoke_nipple"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "4dcf3147-26cf-50c7-96f3-aa19a15bb1b9",
+   "key": "nipple_thread",
+   "label": "Calibre de radio declarado por el fabricante del niple (designación comercial)",
+   "data_type": "single_select",
+   "semantic_roles": [
+    "compatibility"
+   ],
+   "templates": [
+    "spoke_nipple"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "20547c33-fa67-5036-993c-594e966c8ed1",
+   "key": "nipple_thread_standard",
+   "label": "Designación de la rosca del niple declarada por el fabricante",
+   "data_type": "text",
+   "semantic_roles": [
+    "compatibility"
+   ],
+   "templates": [
+    "spoke_nipple"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": false
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible"
+  },
+  {
+   "definition_id": "2520ca10-af73-5cc2-a024-e88342a90b2a",
+   "key": "noodle_angle_deg",
+   "label": "Ángulo de la guía de cable",
+   "data_type": "number",
+   "semantic_roles": [
+    "measurement"
+   ],
+   "templates": [
+    "control_small_part"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "ebb630c3-d5cc-5e12-8c24-c9de0da98b33",
+   "key": "not_for",
+   "label": "Usos excluidos por el fabricante",
+   "data_type": "multi_select",
+   "semantic_roles": [
+    "declaration"
+   ],
+   "templates": [
+    "workshop_chemical"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "2f133d53-e587-59e1-b547-9bb6ea27c3cb",
+   "key": "oem_size_label",
+   "label": "Talla exacta declarada por el fabricante",
+   "data_type": "text",
+   "semantic_roles": [
+    "intrinsic"
+   ],
+   "templates": [
+    "helmet",
+    "rider_apparel",
+    "rider_glove",
+    "rider_protection"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": false
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible"
+  },
+  {
+   "definition_id": "ce42a5f6-e8f1-5ddf-b916-bc0a7ec4a5d1",
+   "key": "oem_size_system",
+   "label": "Sistema o guía de tallas del fabricante",
+   "data_type": "text",
+   "semantic_roles": [
+    "declaration"
+   ],
+   "templates": [
+    "helmet",
+    "rider_apparel",
+    "rider_glove",
+    "rider_protection"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": false
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible"
+  },
+  {
+   "definition_id": "c8398080-0892-5433-951f-15eaac0feef9",
+   "key": "pack_quantity",
+   "label": "Unidades por envase",
+   "data_type": "number",
+   "semantic_roles": [
+    "contents"
+   ],
+   "templates": [
+    "brake_pad",
+    "brake_small_part",
+    "control_cable",
+    "control_small_part",
+    "fastener",
+    "handlebar_covering",
+    "hub_axle",
+    "hub_small_part",
+    "hydraulic_fitting",
+    "pedal_peg",
+    "pump",
+    "spacer",
+    "spoke",
+    "spoke_nipple",
+    "tire_liner",
+    "tubeless_valve",
+    "valve_small_part",
+    "wheel_retention",
+    "workshop_tool"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "1492096f-8f12-5d87-a68d-f3563658425e",
+   "key": "pad_compound_restriction",
+   "label": "Compuestos de pastilla admitidos",
+   "data_type": "single_select",
+   "semantic_roles": [
+    "declaration"
+   ],
+   "templates": [
+    "rotor"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "8db2518c-fd52-4cc6-8a44-13a1f612152b",
+   "key": "pad_spring_included",
+   "label": "Incluye Resorte",
+   "data_type": "boolean",
+   "semantic_roles": [
+    "contents"
+   ],
+   "templates": [
+    "brake_pad"
+   ],
+   "current": {
+    "is_customer_visible": true,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "f86130db-61bc-5adf-aac9-2c05e47cb5f4",
+   "key": "padding",
+   "label": "Relleno",
+   "data_type": "single_select",
+   "semantic_roles": [
+    "intrinsic"
+   ],
+   "templates": [
+    "rider_glove",
+    "saddle_cover"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "8f845da6-c69f-5f1c-858d-aa93843bc2c4",
+   "key": "patch_count",
+   "label": "Cantidad de parches",
+   "data_type": "number",
+   "semantic_roles": [
+    "contents"
+   ],
+   "templates": [
+    "tube_repair"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "3abba941-d1c6-588a-bbf9-79829c140cda",
+   "key": "patch_size_mm",
+   "label": "Medidas del parche",
+   "data_type": "text",
+   "semantic_roles": [
+    "measurement"
+   ],
+   "templates": [
+    "tube_repair"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": false
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible"
+  },
+  {
+   "definition_id": "349637b0-f411-5937-afc4-88008131b412",
+   "key": "pedal_intended_rider",
+   "label": "Público previsto declarado para el pedal",
+   "data_type": "text",
+   "semantic_roles": [
+    "declaration"
+   ],
+   "templates": [
+    "pedal"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": false
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible"
+  },
+  {
+   "definition_id": "93315514-1b9a-53f7-9cf9-ab3ee86d0eea",
+   "key": "pedal_thread_other_declaration",
+   "label": "Rosca distinta: designación completa declarada",
+   "data_type": "text",
+   "semantic_roles": [
+    "compatibility"
+   ],
+   "templates": [
+    "pedal"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": false
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible"
+  },
+  {
+   "definition_id": "ac312dbb-e483-56a1-b23e-6a670d054115",
+   "key": "pedal_thread_standard",
+   "label": "Estándar de rosca del pedal (diámetro + paso)",
+   "data_type": "single_select",
+   "semantic_roles": [
+    "compatibility"
+   ],
+   "templates": [
+    "pedal"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "4f6d77f5-4a0b-58b7-819d-628c8ed0c103",
+   "key": "pedal_type",
+   "label": "Tipo de pedal",
+   "data_type": "single_select",
+   "semantic_roles": [
+    "intrinsic"
+   ],
+   "templates": [
+    "pedal"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "cd9e026a-c540-5f0c-ba0b-8e1ecfe8555d",
+   "key": "pedal_wrench_interface",
+   "label": "Accionamiento para montar el pedal",
+   "data_type": "multi_select",
+   "semantic_roles": [
+    "intrinsic"
+   ],
+   "templates": [
+    "pedal"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "be80d62c-af22-500c-9690-ebcc82ba6e05",
+   "key": "peg_axle_fit",
+   "label": "Interfaz de eje del pedalín",
+   "data_type": "single_select",
+   "semantic_roles": [
+    "compatibility"
+   ],
+   "templates": [
+    "pedal_peg"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "53aefa12-75e2-5b4f-8fdf-ab20c65cd83b",
+   "key": "peg_diameter_mm",
+   "label": "Diámetro del pedalín",
+   "data_type": "number",
+   "semantic_roles": [
+    "measurement"
+   ],
+   "templates": [
+    "pedal_peg"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "5feb3546-e3fc-51b5-9656-12984fde6cb3",
+   "key": "peg_length_mm",
+   "label": "Largo del pedalín",
+   "data_type": "number",
+   "semantic_roles": [
+    "measurement"
+   ],
+   "templates": [
+    "pedal_peg"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "88e75ff7-b5df-5e7e-9ae1-9b7b49a010f6",
+   "key": "phone_link",
+   "label": "Enlace a teléfono / red",
+   "data_type": "single_select",
+   "semantic_roles": [
+    "intrinsic"
+   ],
+   "templates": [
+    "cycle_computer"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "5caa5505-0a7f-5116-86ee-8b1a2880dd3f",
+   "key": "platform_width_mm",
+   "label": "Ancho de plataforma",
+   "data_type": "number",
+   "semantic_roles": [
+    "measurement"
+   ],
+   "templates": [
+    "pedal"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "c007aaa3-5ccf-54e8-b8fc-71efbaf8a8d9",
+   "key": "plug_count",
+   "label": "Cantidad de mechas",
+   "data_type": "number",
+   "semantic_roles": [
+    "contents"
+   ],
+   "templates": [
+    "tubeless_repair"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "5769f67f-cc1d-5a98-a723-8ddd1edf7414",
+   "key": "ports_count",
+   "label": "Cantidad de puertos declarada por el fabricante",
+   "data_type": "number",
+   "semantic_roles": [
+    "declaration"
+   ],
+   "templates": [
+    "consumer_electronics"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "99a55eb2-3a40-5b9b-9080-41ec5286a4c4",
+   "key": "positioning_source",
+   "label": "Posicionamiento",
+   "data_type": "single_select",
+   "semantic_roles": [
+    "intrinsic"
+   ],
+   "templates": [
+    "cycle_computer"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "ff528b9c-46e8-5a38-a55c-3d908176d29a",
+   "key": "power_source",
+   "label": "Fuente de alimentación",
+   "data_type": "single_select",
+   "semantic_roles": [
+    "intrinsic"
+   ],
+   "templates": [
+    "audible_signal",
+    "cycle_computer"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "c66a32c3-befb-5595-af9f-94ccd4dbe8d3",
+   "key": "preparation_kind",
+   "label": "Preparado o envasado",
+   "data_type": "single_select",
+   "semantic_roles": [
+    "intrinsic"
+   ],
+   "templates": [
+    "food_beverage"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "01166419-f7bd-5626-943f-567f915f30da",
+   "key": "published_variant_label",
+   "label": "Combinación publicada de esta unidad",
+   "data_type": "text",
+   "semantic_roles": [
+    "declaration"
+   ],
+   "templates": [
+    "cassette",
+    "freewheel"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": false
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible"
+  },
+  {
+   "definition_id": "f5e62db1-e46f-5430-a018-6c32c04cd5f1",
+   "key": "pump_kind",
+   "label": "Tipo de bombín",
+   "data_type": "single_select",
+   "semantic_roles": [
+    "intrinsic"
+   ],
+   "templates": [
+    "pump"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "4cf3263f-ca5f-5c43-b0a0-5e106e254610",
+   "key": "quill_adapter_output_diameter_mm",
+   "label": "Diámetro nominal de salida del adaptador quill a ahead",
+   "data_type": "number",
+   "semantic_roles": [
+    "compatibility"
+   ],
+   "templates": [
+    "stem"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "31169348-8953-5342-81bb-45e385e488d5",
+   "key": "quill_diameter_mm",
+   "label": "Diámetro de la espiga de inserción",
+   "data_type": "number",
+   "semantic_roles": [
+    "compatibility"
+   ],
+   "templates": [
+    "stem"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "234704b0-9ae6-5fb6-a4dc-14ce0b520046",
+   "key": "quill_min_insertion_mm",
+   "label": "Inserción mínima de la espiga (marca OEM)",
+   "data_type": "number",
+   "semantic_roles": [
+    "measurement"
+   ],
+   "templates": [
+    "stem"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "a092bc8d-e7c4-514b-8720-8056323cb317",
+   "key": "rack_eyelets_required",
+   "label": "Requiere ojales de parrilla en el cuadro",
+   "data_type": "boolean",
+   "semantic_roles": [
+    "compatibility"
+   ],
+   "templates": [
+    "rack_basket"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "0c3ecd03-ce01-5aee-bebd-4d3d927ea722",
+   "key": "rated_power_w",
+   "label": "Potencia nominal total del cargador",
+   "data_type": "number",
+   "semantic_roles": [
+    "declaration"
+   ],
+   "templates": [
+    "consumer_electronics"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "58b593b8-edb8-47a2-852d-4a40ff247543",
+   "key": "reach_adjust",
+   "label": "Regulación de Alcance",
+   "data_type": "boolean",
+   "semantic_roles": [
+    "intrinsic"
+   ],
+   "templates": [
+    "brake_lever"
+   ],
+   "current": {
+    "is_customer_visible": true,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "746a8fbb-05bb-56dd-a40e-d2616b066fc2",
+   "key": "rear_derailleur_actuation_ratio_declaration",
+   "label": "Relación de accionamiento declarada",
+   "data_type": "text",
+   "semantic_roles": [
+    "declaration"
+   ],
+   "templates": [
+    "rear_derailleur"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": false
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible"
+  },
+  {
+   "definition_id": "ba95c699-ebd9-599a-9580-9d927e7a8b9b",
+   "key": "rear_derailleur_supplied_adapter_reference",
+   "label": "Referencia de la uña o adaptador incluido",
+   "data_type": "text",
+   "semantic_roles": [
+    "contents"
+   ],
+   "templates": [
+    "rear_derailleur"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": false
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible"
+  },
+  {
+   "definition_id": "9a37af7d-1f12-5a1e-84c1-d2c9b7f4c58a",
+   "key": "reflectors_included",
+   "label": "Incluye reflectores",
+   "data_type": "boolean",
+   "semantic_roles": [
+    "contents"
+   ],
+   "templates": [
+    "pedal"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "88a1c29c-f77d-50f9-ad20-51a2d76f55d8",
+   "key": "repair_kind",
+   "label": "Tipo de reparación",
+   "data_type": "single_select",
+   "semantic_roles": [
+    "intrinsic"
+   ],
+   "templates": [
+    "tube_repair"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "ac49844d-0def-55d1-99da-eb6e4424d440",
+   "key": "replaceable_pins",
+   "label": "Pines reemplazables",
+   "data_type": "boolean",
+   "semantic_roles": [
+    "intrinsic"
+   ],
+   "templates": [
+    "pedal"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "1f10108a-e10f-56b5-995d-931a618fdd7a",
+   "key": "reservoir_included",
+   "label": "Incluye depósito de hidratación",
+   "data_type": "boolean",
+   "semantic_roles": [
+    "contents"
+   ],
+   "templates": [
+    "rider_bag"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "29551f8f-2880-543e-8a78-03ba56a1a5c6",
+   "key": "reservoir_l",
+   "label": "Capacidad del depósito",
+   "data_type": "number",
+   "semantic_roles": [
+    "contents"
+   ],
+   "templates": [
+    "rider_bag"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "870bd37b-5f0b-56e0-8d12-8c9216a6d78c",
+   "key": "rider_protection_kind",
+   "label": "Zona de protección del ciclista",
+   "data_type": "multi_select",
+   "semantic_roles": [
+    "intrinsic"
+   ],
+   "templates": [
+    "rider_protection"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "9fff510a-d1c9-415a-9b0c-f2ea7cbd1f24",
+   "key": "rim_asymmetric_offset_mm",
+   "label": "Offset Asimétrico",
+   "data_type": "number",
+   "semantic_roles": [
+    "measurement"
+   ],
+   "templates": [
+    "rim"
+   ],
+   "current": {
+    "is_customer_visible": true,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "1b11289e-4150-56d6-b57b-2c0d474b221d",
+   "key": "rim_bead_profile",
+   "label": "Perfil del talón de la llanta",
+   "data_type": "single_select",
+   "semantic_roles": [
+    "compatibility"
+   ],
+   "templates": [
+    "rim"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "911db04d-20cf-50c0-9685-fab737b131fd",
+   "key": "rim_brake_wear_indicator",
+   "label": "Indicador de desgaste del flanco de freno",
+   "data_type": "text",
+   "semantic_roles": [
+    "compatibility"
+   ],
+   "templates": [
+    "rim"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": false
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible"
+  },
+  {
+   "definition_id": "072a7b44-3daf-514d-9c0b-daf7788d792f",
+   "key": "rim_erd_datum",
+   "label": "Definición y datum del ERD publicado",
+   "data_type": "text",
+   "semantic_roles": [
+    "compatibility"
+   ],
+   "templates": [
+    "rim"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": false
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible"
+  },
+  {
+   "definition_id": "66d43233-31d9-42f1-b9d6-1db9741abfee",
+   "key": "rim_external_width_mm",
+   "label": "Ancho Externo",
+   "data_type": "number",
+   "semantic_roles": [
+    "measurement"
+   ],
+   "templates": [
+    "rim"
+   ],
+   "current": {
+    "is_customer_visible": true,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "d55546f1-6fa1-5ab1-8996-09cb63b8bcd0",
+   "key": "rim_joint_designation",
+   "label": "Unión de la llanta declarada",
+   "data_type": "text",
+   "semantic_roles": [
+    "compatibility"
+   ],
+   "templates": [
+    "rim"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": false
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible"
+  },
+  {
+   "definition_id": "3805d063-a885-5807-a95b-da50360f6281",
+   "key": "rim_material_intended",
+   "label": "Material de pista declarado",
+   "data_type": "multi_select",
+   "semantic_roles": [
+    "declaration"
+   ],
+   "templates": [
+    "brake_pad"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "a9d018fe-0631-576d-88b4-e619781f28e7",
+   "key": "rim_pad_interface_model",
+   "label": "Interfaz / soporte OEM de la zapata",
+   "data_type": "text",
+   "semantic_roles": [
+    "compatibility"
+   ],
+   "templates": [
+    "brake_pad"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": false
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible"
+  },
+  {
+   "definition_id": "b654632b-c121-58d2-a3ed-29d5edc19b25",
+   "key": "roll_length_m",
+   "label": "Largo del rollo",
+   "data_type": "number",
+   "semantic_roles": [
+    "contents"
+   ],
+   "templates": [
+    "tubeless_tape"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "df8cde3a-1497-5453-aafe-9af7dab196b6",
+   "key": "rotation_360",
+   "label": "Permite giro completo",
+   "data_type": "boolean",
+   "semantic_roles": [
+    "intrinsic"
+   ],
+   "templates": [
+    "accessory_mount"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "29c754a5-1513-5bc5-bab8-b4f932976617",
+   "key": "rotational_protection_claimed",
+   "label": "Declara sistema de protección rotacional",
+   "data_type": "boolean",
+   "semantic_roles": [
+    "declaration"
+   ],
+   "templates": [
+    "helmet"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "7085a68a-1dea-53c9-baa4-64634e5b309c",
+   "key": "rotational_protection_system",
+   "label": "Nombre del sistema de protección rotacional",
+   "data_type": "text",
+   "semantic_roles": [
+    "declaration"
+   ],
+   "templates": [
+    "helmet"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": false
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible"
+  },
+  {
+   "definition_id": "dd997dab-0448-482b-b998-8604f2a5ec7c",
+   "key": "rotor_floating",
+   "label": "Rotor Flotante",
+   "data_type": "boolean",
+   "semantic_roles": [
+    "intrinsic"
+   ],
+   "templates": [
+    "rotor"
+   ],
+   "current": {
+    "is_customer_visible": true,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "3f66a7a2-29fc-5451-afb5-217706c2db6a",
+   "key": "saddle_cutout",
+   "label": "Canal o abertura central",
+   "data_type": "boolean",
+   "semantic_roles": [
+    "intrinsic"
+   ],
+   "templates": [
+    "saddle"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "2ae21bfc-61fa-59fb-9ae6-f5a92eb32c1f",
+   "key": "saddle_intended_use",
+   "label": "Uso declarado del sillín",
+   "data_type": "single_select",
+   "semantic_roles": [
+    "declaration"
+   ],
+   "templates": [
+    "saddle"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "c4653bc3-72be-538a-9811-9c9575d08fd4",
+   "key": "saddle_length_mm",
+   "label": "Largo del sillín",
+   "data_type": "number",
+   "semantic_roles": [
+    "measurement"
+   ],
+   "templates": [
+    "saddle"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "08db7f3f-3acb-55e3-9676-5d274403c7dc",
+   "key": "saddle_mount_model",
+   "label": "Sistema o geometría declarada del anclaje (detalle OEM)",
+   "data_type": "text",
+   "semantic_roles": [
+    "compatibility"
+   ],
+   "templates": [
+    "saddle"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": false
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible"
+  },
+  {
+   "definition_id": "9a9aa10d-9970-5759-a9a8-69e1cf98986d",
+   "key": "saddle_rail_geometry",
+   "label": "Geometría de los rieles o del anclaje del sillín",
+   "data_type": "single_select",
+   "semantic_roles": [
+    "compatibility"
+   ],
+   "templates": [
+    "saddle"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "68062cd0-0c9d-5d6e-9c33-b3dce876a4d6",
+   "key": "saddle_rail_material",
+   "label": "Material declarado de los rieles",
+   "data_type": "text",
+   "semantic_roles": [
+    "intrinsic"
+   ],
+   "templates": [
+    "saddle"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": false
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible"
+  },
+  {
+   "definition_id": "be895c8e-d7f5-5347-b56e-4af6a427aac3",
+   "key": "saddle_width_mm",
+   "label": "Ancho del sillín",
+   "data_type": "number",
+   "semantic_roles": [
+    "measurement"
+   ],
+   "templates": [
+    "saddle"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "de7e6560-4f53-5283-9f61-2f0de6658b6b",
+   "key": "seat_tube_outer_diameter_mm",
+   "label": "Diámetro exterior del tubo de asiento",
+   "data_type": "number",
+   "semantic_roles": [
+    "compatibility"
+   ],
+   "templates": [
+    "seat_clamp"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "26883883-b05a-535a-908c-5ad586edb4ac",
+   "key": "seatpost_bottom_clearance_mm",
+   "label": "Proyección inferior adicional a la longitud declarada (cota OEM)",
+   "data_type": "number",
+   "semantic_roles": [
+    "compatibility"
+   ],
+   "templates": [
+    "seatpost"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "7889a6e1-2f6d-53ef-bdaf-edc7edf41e39",
+   "key": "seatpost_diameter_mm",
+   "label": "Diámetro de la tija",
+   "data_type": "number",
+   "semantic_roles": [
+    "compatibility"
+   ],
+   "templates": [
+    "seatpost"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "18fe5637-8a8f-5ad7-a41e-5a5abc156732",
+   "key": "seatpost_kind",
+   "label": "Tipo de tija",
+   "data_type": "single_select",
+   "semantic_roles": [
+    "intrinsic"
+   ],
+   "templates": [
+    "seatpost"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "2a5c443e-fd2a-518e-8e56-7cb54f2126e8",
+   "key": "seatpost_length_mm",
+   "label": "Largo declarado de la tija (referencia OEM)",
+   "data_type": "number",
+   "semantic_roles": [
+    "measurement"
+   ],
+   "templates": [
+    "seatpost"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "415be9fc-5e89-50ed-b518-320bb0737536",
+   "key": "seatpost_min_exposed_mm",
+   "label": "Mínimo expuesto (tope del tubo a riel)",
+   "data_type": "number",
+   "semantic_roles": [
+    "compatibility"
+   ],
+   "templates": [
+    "seatpost"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "155303ed-08b2-53fe-88d2-94f64bf8ae63",
+   "key": "seatpost_min_insertion_mm",
+   "label": "Inserción mínima de la tija",
+   "data_type": "number",
+   "semantic_roles": [
+    "compatibility"
+   ],
+   "templates": [
+    "seatpost"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "df6e0ef6-ca56-5e93-b64b-2774aa157c26",
+   "key": "seatpost_offset_mm",
+   "label": "Retroceso de la tija",
+   "data_type": "number",
+   "semantic_roles": [
+    "measurement"
+   ],
+   "templates": [
+    "seatpost"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "f60cf6cb-2a3a-504d-acbd-d4e07d1d92d1",
+   "key": "seatpost_shim_length_mm",
+   "label": "Longitud del suplemento de tija",
+   "data_type": "number",
+   "semantic_roles": [
+    "compatibility"
+   ],
+   "templates": [
+    "seatpost_shim"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "48078a32-5974-5c0e-984d-e1b0faed7d08",
+   "key": "serving_size",
+   "label": "Tamaño de venta (preparado)",
+   "data_type": "single_select",
+   "semantic_roles": [
+    "intrinsic"
+   ],
+   "templates": [
+    "food_beverage"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "496ccab1-2861-527a-ac7d-9c5dd38b7b7c",
+   "key": "serving_volume_ml",
+   "label": "Volumen de la porción",
+   "data_type": "number",
+   "semantic_roles": [
+    "intrinsic"
+   ],
+   "templates": [
+    "food_beverage"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "3038be90-27de-5c05-bf08-81ed4ffeace4",
+   "key": "shackle_diameter_mm",
+   "label": "Diámetro del arco",
+   "data_type": "number",
+   "semantic_roles": [
+    "measurement"
+   ],
+   "templates": [
+    "lock"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "62e31618-8413-522c-b1e4-be4dab72ddee",
+   "key": "sheet_or_piece_count",
+   "label": "Cantidad de hojas o piezas",
+   "data_type": "number",
+   "semantic_roles": [
+    "contents"
+   ],
+   "templates": [
+    "souvenir"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "05dff997-8caf-58cb-87de-3ec6dd9bbd16",
+   "key": "shifter_indexed_positions",
+   "label": "Cantidad de posiciones indexadas",
+   "data_type": "number",
+   "semantic_roles": [
+    "intrinsic"
+   ],
+   "templates": [
+    "shifter"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "fa6ff71e-7b9b-5415-8669-a0dfe586d6c8",
+   "key": "shim_inner_diameter_mm",
+   "label": "Diámetro interior del suplemento",
+   "data_type": "number",
+   "semantic_roles": [
+    "compatibility"
+   ],
+   "templates": [
+    "seatpost_shim"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "f091e753-d9f4-5b85-9f1b-2556821054ec",
+   "key": "shim_outer_diameter_mm",
+   "label": "Diámetro exterior del suplemento",
+   "data_type": "number",
+   "semantic_roles": [
+    "compatibility"
+   ],
+   "templates": [
+    "seatpost_shim"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "150b3426-82dd-5fc3-a26a-702be6f91b0a",
+   "key": "side_entry",
+   "label": "Entrada lateral",
+   "data_type": "boolean",
+   "semantic_roles": [
+    "intrinsic"
+   ],
+   "templates": [
+    "bottle_cage"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "926bcbc7-dcf8-5ab9-a783-187fd945fcd0",
+   "key": "side_entry_side",
+   "label": "Lado de extracción",
+   "data_type": "single_select",
+   "semantic_roles": [
+    "intrinsic"
+   ],
+   "templates": [
+    "bottle_cage"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "deedcce6-5df2-5ffd-aec9-97360dc16557",
+   "key": "signal_kind",
+   "label": "Tipo de señal acústica",
+   "data_type": "single_select",
+   "semantic_roles": [
+    "intrinsic"
+   ],
+   "templates": [
+    "audible_signal"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "ec8f3939-f764-51f9-a975-bf9084e92eb1",
+   "key": "size_label",
+   "label": "Talla o medida comercial",
+   "data_type": "single_select",
+   "semantic_roles": [
+    "intrinsic"
+   ],
+   "templates": [
+    "workshop_tool"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "ac2fcfba-ea32-5652-9bf5-dc7775072e70",
+   "key": "sleeve",
+   "label": "Tipo de manga",
+   "data_type": "single_select",
+   "semantic_roles": [
+    "intrinsic"
+   ],
+   "templates": [
+    "rider_apparel"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "8aa6fa11-30d1-5e79-8d50-19fe75f5c210",
+   "key": "sold_as",
+   "label": "Presentación de venta",
+   "data_type": "single_select",
+   "semantic_roles": [
+    "contents"
+   ],
+   "templates": [
+    "grip",
+    "pedal"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "ece1ebe1-3a56-5c82-8d41-3881db49df41",
+   "key": "souvenir_kind",
+   "label": "Tipo de souvenir",
+   "data_type": "single_select",
+   "semantic_roles": [
+    "intrinsic"
+   ],
+   "templates": [
+    "souvenir"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "acebf8ea-5848-549c-8e27-c799eca77326",
+   "key": "speed_class_claim",
+   "label": "Clase de velocidad declarada",
+   "data_type": "text",
+   "semantic_roles": [
+    "declaration"
+   ],
+   "templates": [
+    "consumer_electronics"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": false
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible"
+  },
+  {
+   "definition_id": "4727498f-262a-5d3c-b4c6-9944032c5131",
+   "key": "speed_source",
+   "label": "Fuente de la velocidad",
+   "data_type": "single_select",
+   "semantic_roles": [
+    "intrinsic"
+   ],
+   "templates": [
+    "cycle_computer"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "0fd632e8-c3fd-5a9a-b9a1-3dc3f41727d5",
+   "key": "spindle_diameter_datum",
+   "label": "Zona y método de medición del diámetro del eje",
+   "data_type": "text",
+   "semantic_roles": [
+    "measurement"
+   ],
+   "templates": [
+    "bottom_bracket",
+    "bottom_bracket_axle"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": false
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible"
+  },
+  {
+   "definition_id": "fe22f5fd-4042-5e96-9674-f548e77e3b80",
+   "key": "spoke_finish_declared",
+   "label": "Acabado del rayo",
+   "data_type": "text",
+   "semantic_roles": [
+    "intrinsic"
+   ],
+   "templates": [
+    "spoke"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": false
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible"
+  },
+  {
+   "definition_id": "95383fc3-e0ca-5168-8256-8b36974162d0",
+   "key": "spoke_gauge_designation",
+   "label": "Calibre escrito por el fabricante",
+   "data_type": "text",
+   "semantic_roles": [
+    "intrinsic"
+   ],
+   "templates": [
+    "spoke"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": false
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible"
+  },
+  {
+   "definition_id": "a59c33a4-c8d2-5bc2-901e-a633003f782f",
+   "key": "spoke_head_oem_designation",
+   "label": "Referencia OEM del anclaje",
+   "data_type": "text",
+   "semantic_roles": [
+    "compatibility"
+   ],
+   "templates": [
+    "spoke"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": false
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible"
+  },
+  {
+   "definition_id": "df091594-125c-5ad3-bb8d-63cb2899e977",
+   "key": "spoke_hub_hole_class_declared",
+   "label": "Clase de anclaje de maza declarada por el fabricante",
+   "data_type": "text",
+   "semantic_roles": [
+    "compatibility"
+   ],
+   "templates": [
+    "spoke"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": false
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible"
+  },
+  {
+   "definition_id": "066058db-7dca-5275-8646-37af247096e8",
+   "key": "spoke_material_declared",
+   "label": "Material declarado del rayo",
+   "data_type": "text",
+   "semantic_roles": [
+    "intrinsic"
+   ],
+   "templates": [
+    "spoke"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": false
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible"
+  },
+  {
+   "definition_id": "502037ce-884b-56d8-b013-f606e6fcc313",
+   "key": "spoke_thread_standard",
+   "label": "Designación de la rosca declarada por el fabricante (por ejemplo FG 2.3)",
+   "data_type": "text",
+   "semantic_roles": [
+    "compatibility"
+   ],
+   "templates": [
+    "spoke"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": false
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible"
+  },
+  {
+   "definition_id": "79992671-ca19-501b-b21e-9512e753f975",
+   "key": "spring_kind",
+   "label": "Tipo de resorte",
+   "data_type": "single_select",
+   "semantic_roles": [
+    "intrinsic"
+   ],
+   "templates": [
+    "rear_shock"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "7af078f2-4d19-5190-9d87-40204fc6cfcc",
+   "key": "stack_height_mm",
+   "label": "Altura de montaje",
+   "data_type": "number",
+   "semantic_roles": [
+    "measurement"
+   ],
+   "templates": [
+    "stem"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "8f3acc8d-2062-52b9-9ea4-10be1b926330",
+   "key": "stanchion_diameter_mm",
+   "label": "Diámetro de las barras",
+   "data_type": "number",
+   "semantic_roles": [
+    "measurement"
+   ],
+   "templates": [
+    "fork"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "d07ffcf3-8fcc-50c5-951e-45f51902338a",
+   "key": "steerer_fit",
+   "label": "Interfaz de sujeción a la espiga",
+   "data_type": "single_select",
+   "semantic_roles": [
+    "compatibility"
+   ],
+   "templates": [
+    "bmx_cable_detangler",
+    "fork"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "b1f8573e-327a-5b4f-8399-ee0d8bf7cc2f",
+   "key": "steerer_length_mm",
+   "label": "Largo de la espiga",
+   "data_type": "number",
+   "semantic_roles": [
+    "measurement"
+   ],
+   "templates": [
+    "fork"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "9fff95e5-2947-5d6d-bb7a-95e369dea67e",
+   "key": "steerer_threaded",
+   "label": "Espiga con rosca",
+   "data_type": "boolean",
+   "semantic_roles": [
+    "compatibility"
+   ],
+   "templates": [
+    "fork"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "b01dfbff-52c2-5e26-9cea-63fbad54c32e",
+   "key": "stem_angle_deg",
+   "label": "Ángulo de la tee",
+   "data_type": "number",
+   "semantic_roles": [
+    "measurement"
+   ],
+   "templates": [
+    "stem"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "db2376e1-8cf5-58a4-90bd-2b1c44f3fab3",
+   "key": "stem_kind",
+   "label": "Tipo de tee",
+   "data_type": "single_select",
+   "semantic_roles": [
+    "intrinsic"
+   ],
+   "templates": [
+    "stem"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "ce9e23ea-717c-5ce5-8f67-332af4581abf",
+   "key": "stem_length_mm",
+   "label": "Largo de la tee",
+   "data_type": "number",
+   "semantic_roles": [
+    "measurement"
+   ],
+   "templates": [
+    "stem"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "0fe8b781-858f-5a36-be59-09c054205aea",
+   "key": "stem_steerer_clamp_diameter_mm",
+   "label": "Diámetro de abrazadera de dirección (zona superior de la espiga)",
+   "data_type": "number",
+   "semantic_roles": [
+    "compatibility"
+   ],
+   "templates": [
+    "stem"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "cfb844d1-9160-5a3e-9c94-226abc367a9d",
+   "key": "storage_capacity_gb",
+   "label": "Capacidad de almacenamiento",
+   "data_type": "number",
+   "semantic_roles": [
+    "intrinsic"
+   ],
+   "templates": [
+    "consumer_electronics"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "af414e4a-0c26-5cdc-91f1-97ef1daf3415",
+   "key": "storage_capacity_label",
+   "label": "Capacidad impresa (literal con su unidad: GB, TB o GiB)",
+   "data_type": "text",
+   "semantic_roles": [
+    "identity"
+   ],
+   "templates": [
+    "consumer_electronics"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": false
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible"
+  },
+  {
+   "definition_id": "cbc8f931-b8d8-54f1-9d6d-cbba8745db5c",
+   "key": "strap_length_mm",
+   "label": "Largo de la correa",
+   "data_type": "number",
+   "semantic_roles": [
+    "measurement"
+   ],
+   "templates": [
+    "rack_basket"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "90069a74-5d3f-59f2-aebf-4a698be9832f",
+   "key": "strength_class_claim",
+   "label": "Clase o grado declarado",
+   "data_type": "text",
+   "semantic_roles": [
+    "declaration"
+   ],
+   "templates": [
+    "fastener"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": false
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible"
+  },
+  {
+   "definition_id": "8d3c91b9-acee-50ed-a8ee-8a9ae277bdc6",
+   "key": "tape_thickness_mm",
+   "label": "Espesor de la cinta",
+   "data_type": "number",
+   "semantic_roles": [
+    "measurement"
+   ],
+   "templates": [
+    "tubeless_tape"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "884cffd4-2209-5069-b6b4-6dfaf55ab4f9",
+   "key": "tape_width_mm",
+   "label": "Ancho de la cinta",
+   "data_type": "number",
+   "semantic_roles": [
+    "compatibility"
+   ],
+   "templates": [
+    "tubeless_tape"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "c7ba48fe-8db9-52a3-bdbf-37e24a590492",
+   "key": "target_rear_drive_interface",
+   "label": "Interfaz de transmisión de destino",
+   "data_type": "single_select",
+   "semantic_roles": [
+    "compatibility"
+   ],
+   "templates": [
+    "cassette_spacer"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "bf3179a9-3e22-5f19-8731-092b195629b0",
+   "key": "temperature",
+   "label": "Temperatura de servicio",
+   "data_type": "single_select",
+   "semantic_roles": [
+    "intrinsic"
+   ],
+   "templates": [
+    "food_beverage"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "47a7a897-43e6-5c70-a7ef-c83f764c8adb",
+   "key": "theme",
+   "label": "Diseño o motivo",
+   "data_type": "text",
+   "semantic_roles": [
+    "intrinsic"
+   ],
+   "templates": [
+    "souvenir"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": false
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible"
+  },
+  {
+   "definition_id": "3670f5ec-25ed-5ab0-84ef-f65ea562cef0",
+   "key": "thickness_mm",
+   "label": "Espesor",
+   "data_type": "number",
+   "semantic_roles": [
+    "measurement"
+   ],
+   "templates": [
+    "handlebar_covering"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "920bb7cf-9240-5ba9-8ec9-744c335ec01b",
+   "key": "thread",
+   "label": "Designación nominal de la rosca (según etiqueta)",
+   "data_type": "single_select",
+   "semantic_roles": [
+    "compatibility"
+   ],
+   "templates": [
+    "fastener",
+    "kickstand"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "b0565325-34a7-5239-bacd-113696488b60",
+   "key": "thread_hand",
+   "label": "Sentido de la rosca",
+   "data_type": "single_select",
+   "semantic_roles": [
+    "compatibility"
+   ],
+   "templates": [
+    "fastener"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "4f1aedeb-e5d3-5e68-9988-f1e0e13ccc9b",
+   "key": "thread_pitch_mm",
+   "label": "Paso de la rosca",
+   "data_type": "number",
+   "semantic_roles": [
+    "compatibility"
+   ],
+   "templates": [
+    "fastener"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "da75e1bf-5a85-5990-9245-032953cd1ce8",
+   "key": "thread_pitch_system",
+   "label": "Forma declarada de expresar el paso",
+   "data_type": "single_select",
+   "semantic_roles": [
+    "compatibility"
+   ],
+   "templates": [
+    "fastener"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "b0b4fc6d-2fb4-5f26-9797-dac15d4a6cc8",
+   "key": "thread_tpi",
+   "label": "Hilos por pulgada de la rosca",
+   "data_type": "number",
+   "semantic_roles": [
+    "compatibility"
+   ],
+   "templates": [
+    "fastener"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "67cda0df-aaaa-5968-8867-7d8679e52990",
+   "key": "toluene_free",
+   "label": "Sin tolueno declarado",
+   "data_type": "boolean",
+   "semantic_roles": [
+    "declaration"
+   ],
+   "templates": [
+    "tube_repair"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "50a3d56f-f495-56c9-8bd5-6d8cd3fe807b",
+   "key": "tool_included",
+   "label": "Incluye herramienta",
+   "data_type": "boolean",
+   "semantic_roles": [
+    "contents"
+   ],
+   "templates": [
+    "tubeless_repair"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "fcc52430-0759-516b-a7b5-b4a363fffdc4",
+   "key": "tool_interface",
+   "label": "Interfaz de trabajo de la herramienta",
+   "data_type": "text",
+   "semantic_roles": [
+    "declaration"
+   ],
+   "templates": [
+    "workshop_tool"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": false
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible"
+  },
+  {
+   "definition_id": "593c81b5-7b25-5c2f-8990-3304b2ac1762",
+   "key": "tool_kind",
+   "label": "Tipo de herramienta",
+   "data_type": "single_select",
+   "semantic_roles": [
+    "intrinsic"
+   ],
+   "templates": [
+    "workshop_tool"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "f015db1f-63a4-52e1-b9b9-f01bd7646c93",
+   "key": "torx_size",
+   "label": "Código Torx (por ejemplo T25)",
+   "data_type": "text",
+   "semantic_roles": [
+    "intrinsic"
+   ],
+   "templates": [
+    "fastener"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": false
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible"
+  },
+  {
+   "definition_id": "45d66661-dce4-5eaa-8c45-d52e1c358a69",
+   "key": "touchscreen",
+   "label": "Uso con pantalla táctil declarado",
+   "data_type": "boolean",
+   "semantic_roles": [
+    "intrinsic"
+   ],
+   "templates": [
+    "rider_glove"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "9db726ed-5c99-5e1d-b667-07d72a0bb95d",
+   "key": "travel_mm",
+   "label": "Recorrido",
+   "data_type": "number",
+   "semantic_roles": [
+    "measurement"
+   ],
+   "templates": [
+    "fork"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "a296bfa2-e373-5a88-88ac-d2d424012877",
+   "key": "tubeless_tape_application",
+   "label": "Aplicación e instrucciones de la cinta",
+   "data_type": "text",
+   "semantic_roles": [
+    "compatibility"
+   ],
+   "templates": [
+    "tubeless_tape"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": false
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible"
+  },
+  {
+   "definition_id": "a11fa75b-4b04-525d-9491-393cf797e419",
+   "key": "unit_mass_g",
+   "label": "Masa por unidad / sobre",
+   "data_type": "number",
+   "semantic_roles": [
+    "measurement"
+   ],
+   "templates": [
+    "food_beverage"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "d40169e0-66f5-58e1-a2ea-92acdfa6e92c",
+   "key": "units_per_pack",
+   "label": "Unidades por envase",
+   "data_type": "number",
+   "semantic_roles": [
+    "contents"
+   ],
+   "templates": [
+    "food_beverage"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "86f991df-fa96-5757-9f4f-614461953eb6",
+   "key": "uv_protection_claim",
+   "label": "Protección UV declarada",
+   "data_type": "text",
+   "semantic_roles": [
+    "declaration"
+   ],
+   "templates": [
+    "eyewear"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": false
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible"
+  },
+  {
+   "definition_id": "7e634e80-4109-5fab-862d-425e7fd1eb5e",
+   "key": "valve_heads_supported",
+   "label": "Válvulas admitidas",
+   "data_type": "multi_select",
+   "semantic_roles": [
+    "compatibility"
+   ],
+   "templates": [
+    "pump"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "a96eb3ef-7f06-5119-b733-f349627c4e8e",
+   "key": "visor",
+   "label": "Incluye visera",
+   "data_type": "boolean",
+   "semantic_roles": [
+    "intrinsic"
+   ],
+   "templates": [
+    "helmet"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "16b2c2e5-e139-5573-aa9d-f89378b34bd9",
+   "key": "volume_basis",
+   "label": "Qué incluye la capacidad declarada",
+   "data_type": "single_select",
+   "semantic_roles": [
+    "declaration"
+   ],
+   "templates": [
+    "bike_bag",
+    "rider_bag"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "b16a96ae-dea5-5c6b-a08c-b4ed813bbdab",
+   "key": "volume_l",
+   "label": "Capacidad declarada",
+   "data_type": "number",
+   "semantic_roles": [
+    "intrinsic"
+   ],
+   "templates": [
+    "bike_bag",
+    "rider_bag"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "24d89aea-7eef-52c3-9a6e-4b4773518374",
+   "key": "volume_ml",
+   "label": "Volumen",
+   "data_type": "number",
+   "semantic_roles": [
+    "contents",
+    "intrinsic"
+   ],
+   "templates": [
+    "bottle",
+    "workshop_chemical",
+    "workshop_tool"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "31b27fd9-ea32-5012-b15c-f0f58fd20b75",
+   "key": "volume_scope",
+   "label": "A qué corresponde la capacidad declarada",
+   "data_type": "single_select",
+   "semantic_roles": [
+    "declaration"
+   ],
+   "templates": [
+    "bike_bag",
+    "rider_bag"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "f73a5987-5992-54eb-9aa1-76033f589518",
+   "key": "washer_inner_diameter_mm",
+   "label": "Diámetro interior de la golilla",
+   "data_type": "number",
+   "semantic_roles": [
+    "compatibility"
+   ],
+   "templates": [
+    "fastener"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "a2990c48-57c7-58f6-ac1e-36ef391a7362",
+   "key": "washer_thickness_mm",
+   "label": "Espesor de la golilla",
+   "data_type": "number",
+   "semantic_roles": [
+    "measurement"
+   ],
+   "templates": [
+    "fastener"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "2bc11626-d4bc-5b7f-aa50-e22aafa273e3",
+   "key": "waterproof_claim",
+   "label": "Impermeabilidad declarada",
+   "data_type": "boolean",
+   "semantic_roles": [
+    "declaration"
+   ],
+   "templates": [
+    "bike_bag",
+    "rider_bag"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "2cd304b2-2891-5706-84ab-c949d3099430",
+   "key": "weight_g",
+   "label": "Peso",
+   "data_type": "number",
+   "semantic_roles": [
+    "compatibility",
+    "contents",
+    "measurement"
+   ],
+   "templates": [
+    "helmet",
+    "saddle",
+    "seatpost_shim",
+    "workshop_chemical"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "1e2b9a84-7a31-5939-8867-672ace160c49",
+   "key": "weight_kg",
+   "label": "Peso",
+   "data_type": "number",
+   "semantic_roles": [
+    "measurement"
+   ],
+   "templates": [
+    "bicycle",
+    "frame"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "b0a14174-bee5-597f-ac46-221b9d2a511b",
+   "key": "weight_pair_g",
+   "label": "Peso del par",
+   "data_type": "number",
+   "semantic_roles": [
+    "measurement"
+   ],
+   "templates": [
+    "pedal"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "fdf9fd7f-ea46-5e13-bf9a-10fd04d35a33",
+   "key": "wheel_setting",
+   "label": "Ajuste de tamaño de rueda",
+   "data_type": "single_select",
+   "semantic_roles": [
+    "declaration"
+   ],
+   "templates": [
+    "cycle_computer"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "b87db839-91fa-5f48-ac9d-271771afcbc5",
+   "key": "width_mm",
+   "label": "Ancho",
+   "data_type": "number",
+   "semantic_roles": [
+    "measurement"
+   ],
+   "templates": [
+    "bike_protection",
+    "reflector"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  },
+  {
+   "definition_id": "8500c6eb-2fa4-57c8-b7f0-1bfb3d24f953",
+   "key": "wireless",
+   "label": "Conexión inalámbrica",
+   "data_type": "boolean",
+   "semantic_roles": [
+    "intrinsic"
+   ],
+   "templates": [
+    "consumer_electronics"
+   ],
+   "current": {
+    "is_customer_visible": false,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "rule": "scalar_non_evidence_field_becomes_visible_and_filterable"
+  }
+ ],
+ "review_only": [
+  {
+   "definition_id": "f831fd26-2a2c-4504-b787-56593fed70df",
+   "key": "bearing_size_code",
+   "label": "Código rodamiento",
+   "data_type": "text",
+   "semantic_roles": [
+    "identity"
+   ],
+   "templates": [
+    "bearing",
+    "bottom_bracket_bearing"
+   ],
+   "current": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "note": "visible or filterable today although outside the rule; kept as adjudicated"
+  },
+  {
+   "definition_id": "61dfef30-5231-49c8-aea8-234e9030fe14",
+   "key": "hanger_model_code",
+   "label": "Código postiza / pata",
+   "data_type": "text",
+   "semantic_roles": [
+    "declaration"
+   ],
+   "templates": [
+    "derailleur_hanger"
+   ],
+   "current": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "note": "visible or filterable today although outside the rule; kept as adjudicated"
+  },
+  {
+   "definition_id": "c494a90c-32ac-5b9a-9391-02ede27a5cf1",
+   "key": "lever_control_mount_oem_code",
+   "label": "Código del anclaje para mando",
+   "data_type": "text",
+   "semantic_roles": [
+    "compatibility"
+   ],
+   "templates": [
+    "brake_lever"
+   ],
+   "current": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "note": "visible or filterable today although outside the rule; kept as adjudicated"
+  },
+  {
+   "definition_id": "5c353cf2-7ce6-5ab2-b601-be5e98748ae7",
+   "key": "lever_mount_oem_interface",
+   "label": "Interfaz específica de montaje",
+   "data_type": "text",
+   "semantic_roles": [
+    "compatibility"
+   ],
+   "templates": [
+    "brake_lever"
+   ],
+   "current": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "note": "visible or filterable today although outside the rule; kept as adjudicated"
+  },
+  {
+   "definition_id": "61c2e601-3e8a-4cd4-ad16-e00867358882",
+   "key": "pad_shape_code",
+   "label": "Código de Forma (Pastilla)",
+   "data_type": "text",
+   "semantic_roles": [
+    "compatibility"
+   ],
+   "templates": [
+    "brake_caliper",
+    "brake_pad"
+   ],
+   "current": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "note": "visible or filterable today although outside the rule; kept as adjudicated"
+  },
+  {
+   "definition_id": "45853d96-5284-4d91-a715-20132cac25da",
+   "key": "rim_etrto",
+   "label": "Medida ETRTO",
+   "data_type": "text",
+   "semantic_roles": [
+    "declaration"
+   ],
+   "templates": [
+    "rim"
+   ],
+   "current": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "note": "visible or filterable today although outside the rule; kept as adjudicated"
+  },
+  {
+   "definition_id": "9ec47488-3553-5449-a9bb-51f1517cb84b",
+   "key": "seatpost_shim_mount_instructions",
+   "label": "Condiciones de montaje del fabricante",
+   "data_type": "text",
+   "semantic_roles": [
+    "evidence"
+   ],
+   "templates": [
+    "seatpost_shim"
+   ],
+   "current": {
+    "is_customer_visible": true,
+    "is_filterable": false
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": false
+   },
+   "note": "visible or filterable today although outside the rule; kept as adjudicated"
+  },
+  {
+   "definition_id": "6338ca65-e81f-45c4-be71-08da24254a23",
+   "key": "tire_etrto",
+   "label": "Medida ETRTO",
+   "data_type": "text",
+   "semantic_roles": [
+    "declaration"
+   ],
+   "templates": [
+    "tire"
+   ],
+   "current": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "proposed": {
+    "is_customer_visible": true,
+    "is_filterable": true
+   },
+   "note": "visible or filterable today although outside the rule; kept as adjudicated"
+  }
+ ],
+ "publication_authorized": false,
+ "writes": 0
+}
