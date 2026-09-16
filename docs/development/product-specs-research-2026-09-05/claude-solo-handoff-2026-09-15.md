@@ -395,6 +395,14 @@ reciente tampoco resuelve automáticamente una contradicción de generación.
 
 ### Simulador y aplicador que faltan
 
+**Actualización 2026-09-16:** el aplicador está publicado en producción
+(`20260916140000`, ver [research-applier-publication-2026-09-16.md](research-applier-publication-2026-09-16.md))
+y no habilita nada: cero readiness, cero aplicaciones, cero recibos, cero hechos
+`research`. El simulador sin escritura es `simulate_product_spec_research.py`;
+el registrador `prepare_product_spec_registration.py` emite SQL para la ruta
+guardada y todavía necesita revisión independiente. Los requisitos de la lista
+siguiente los cumple el RPC; la readiness cerrada es una decisión con hashes.
+
 Antes del primer llenado productivo implementa un simulador que no escriba y que
 muestre el delta por producto/campo. El aplicador debe reutilizar el guardado
 atómico existente y exigir:

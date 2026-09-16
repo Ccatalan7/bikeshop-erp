@@ -1209,5 +1209,41 @@
   "fill_gate_1_reread_global_audit": "done",
   "technical_fill_persisted": 0,
   "scope_limit": "Does not adjudicate product identity, compatibility, assignment correctness, or research completeness."
+ },
+ "research_applier_2026_09_16": {
+  "migration": "supabase/migrations/20260916140000_product_spec_research_applier.sql",
+  "migration_sha256": "bdef2895414ba32e9940a3bf63466a625a942a60d6456e0e123dbdafd48276e5",
+  "status": "APPLIED",
+  "verified_at": "2026-09-16T17:25:50Z",
+  "candidate_sha256": "71db507e742e04c5450acdeb592fb4b236cf44fa07545f3071237223db6457b7",
+  "objects": {
+   "tables": [
+    "product_spec_research_readiness",
+    "product_spec_research_applications",
+    "product_spec_research_receipts"
+   ],
+   "functions": [
+    "apply_product_spec_research_v1",
+    "get_product_spec_research_receipt_v1",
+    "get_product_spec_research_application_status_v1"
+   ],
+   "spec_facts_source_known_admits": "research"
+  },
+  "readiness_rows": 0,
+  "enabled_readiness": 0,
+  "registered_applications": 0,
+  "receipts": 0,
+  "research_facts": 0,
+  "fill_enabled": false,
+  "gates": {
+   "pgtap_assertions": 42,
+   "python_unit_tests": 32,
+   "roundtrip_local": "PASS",
+   "two_session_contention_schedules": 3,
+   "verifier_fails_before": true
+  },
+  "deployment_note": "first run verified functions but not table ACL (codex_test_runner default privilege); migration made rerunnable with an explicit revoke and completed by the same command",
+  "record": "research-applier-publication-2026-09-16.md",
+  "technical_fill_persisted": 0
  }
 }

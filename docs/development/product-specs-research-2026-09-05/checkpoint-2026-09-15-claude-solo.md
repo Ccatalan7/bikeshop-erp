@@ -161,3 +161,11 @@ ya los contiene). Worktrees inventariados: tres de Codex, todos detached.
   1.594 con plantilla, 20 sin ella, cero bloqueantes, 1.584 con pendientes, 461 con
   observaciones (sin cambio), un hecho fuera de plantilla (C1087). Resumen en
   `global-coverage-summary-2026-09-16.json`. Llenado técnico persistido: 0.
+- Aplicador de investigación publicado (`20260916140000`): tres tablas cerradas, procedencia
+  `research` admitida, tres RPC definer para `authenticated`. Nada habilitado: cero readiness,
+  cero aplicaciones, cero recibos. Compuertas: pgTAP 42/42 en base limpia e instalada, Python
+  32/32, ida y vuelta local con tres calendarios de contención, verificador antes/después. El
+  primer despliegue verificó funciones pero no la ACL de tablas (privilegio por defecto a
+  `codex_test_runner`); la migración se rehizo reejecutable y el mismo comando la selló:
+  [research-applier-publication-2026-09-16.md](research-applier-publication-2026-09-16.md).
+  Llenado técnico persistido: 0.

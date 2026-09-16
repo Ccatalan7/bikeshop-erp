@@ -1,6 +1,11 @@
 begin;
 set local client_min_messages=error;
+-- The candidate was published as 20260916140000; on a database that already
+-- has it the same assertions run against the installed objects.
+select to_regprocedure('public.apply_product_spec_research_v1(uuid)') is null as research_candidate_needed \gset
+\if :research_candidate_needed
 \ir ../../scripts/inventory/sql/product_spec_application_candidate.sql
+\endif
 \ir fixtures/product_spec_binding_prerequisites.sql
 select no_plan();
 select set_config('request.jwt.claims','{}',true);
@@ -44,8 +49,13 @@ select public.save_product_with_specs_v1(
  '{"f1112300-0000-4000-8000-000000000051":{"number":"9007199254740993.125"},"f1112300-0000-4000-8000-000000000052":{"boolean":false},"f1112300-0000-4000-8000-000000000053":{"value_ids":["f1112300-0000-4000-8000-000000000061"]},"f1112300-0000-4000-8000-000000000054":{"rows":{"schema_version":1,"rows":[{"id":"original-row","values":{"length":"0.100000000000000001"},"sources":[]}]}}}',
  (select spec_revision from public.products where id='f1112300-0000-4000-8000-000000000020'),null,'research-read-save',
  (select updated_at from public.products where id='f1112300-0000-4000-8000-000000000020'));
-insert into public.spec_fact_readings(fact_id,tenant_id,source_text,source_digest,quote,model)
-select id,tenant_id,'Synthetic historical evidence','synthetic-digest','historical','synthetic'
+-- A reading receipt only hangs from a name_reading fact (20260831290000), and
+-- readings carry their definition and vocabulary digest.
+update public.spec_facts set source='name_reading' where subject_id='f1112300-0000-4000-8000-000000000020'
+ and spec_definition_id='f1112300-0000-4000-8000-000000000053';
+insert into public.spec_fact_readings(fact_id,tenant_id,source_text,source_digest,quote,model,definition_id,vocabulary_digest)
+select id,tenant_id,'Synthetic historical evidence','synthetic-digest','historical','synthetic',
+ spec_definition_id,'synthetic-vocabulary-digest'
 from public.spec_facts where subject_id='f1112300-0000-4000-8000-000000000020' and spec_definition_id='f1112300-0000-4000-8000-000000000053';
 
 set constraints all deferred;

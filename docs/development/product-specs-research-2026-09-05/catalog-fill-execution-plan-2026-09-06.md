@@ -155,6 +155,13 @@ referencia fueron comprobados.
 
 Antes de aplicar se resolverán dos contratos adicionales:
 
+**Resueltos en producción el 2026-09-16** por `20260916140000`
+([registro](research-applier-publication-2026-09-16.md)): la restricción de
+procedencia admite `research` (un efecto de referencia se guarda `catalog`, uno
+de investigación `research`, nunca `mechanic`), y el aplicador corre como el actor
+autenticado real que registró el comando, con recibo por aplicación. Nada
+aplicado: sin readiness habilitada no escribe.
+
 - **Procedencia de investigación:** el writer actual asigna `mechanic` a un
   hecho explícito y `catalog` al derivado de una referencia. Una observación de
   distribuidor o foto no debe hacerse pasar por medición del mecánico. El

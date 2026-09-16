@@ -112,18 +112,26 @@ def reviewed_proposal(snapshot):
     return proposal
 
 
-def cleanup_sql(constraint):
+def cleanup_sql(constraint, installed=False):
     # All IDs are the known seed fixture, guarded absent before setup. Do not
     # use CASCADE to drop candidate objects or disable business triggers.
-    return f"""begin;
-set local request.jwt.claims='{{}}'; set local request.jwt.claim.sub='';
-drop function public.get_product_spec_research_application_status_v1(uuid);
+    objects = '' if installed else """drop function public.get_product_spec_research_application_status_v1(uuid);
 drop function public.get_product_spec_research_receipt_v1(uuid);
 drop function public.apply_product_spec_research_v1(uuid);
 drop table public.product_spec_research_receipts;
 drop table public.product_spec_research_applications;
 drop table public.product_spec_research_readiness;
-delete from public.spec_facts where tenant_id in ('{TENANT}','f1112300-0000-4000-8000-000000000002');
+"""
+    rows = f"""delete from public.product_spec_research_receipts where tenant_id in ('{TENANT}','f1112300-0000-4000-8000-000000000002');
+delete from public.product_spec_research_applications where tenant_id in ('{TENANT}','f1112300-0000-4000-8000-000000000002');
+delete from public.product_spec_research_readiness where tenant_id in ('{TENANT}','f1112300-0000-4000-8000-000000000002');
+""" if installed else ''
+    restore = '' if installed else f"""alter table public.spec_facts drop constraint spec_facts_source_known;
+alter table public.spec_facts add constraint spec_facts_source_known {constraint};
+"""
+    return f"""begin;
+set local request.jwt.claims='{{}}'; set local request.jwt.claim.sub='';
+{objects}{rows}delete from public.spec_facts where tenant_id in ('{TENANT}','f1112300-0000-4000-8000-000000000002');
 delete from public.product_spec_save_receipts where tenant_id in ('{TENANT}','f1112300-0000-4000-8000-000000000002');
 delete from public.products where tenant_id in ('{TENANT}','f1112300-0000-4000-8000-000000000002');
 delete from public.spec_template_fields where template_id='f1112300-0000-4000-8000-000000000050';
@@ -133,9 +141,7 @@ delete from public.spec_definitions where id in ('f1112300-0000-4000-8000-000000
 delete from auth.users where id='{ACTOR}';
 delete from public.tenants where id in ('{TENANT}','f1112300-0000-4000-8000-000000000002');
 set constraints all immediate;
-alter table public.spec_facts drop constraint spec_facts_source_known;
-alter table public.spec_facts add constraint spec_facts_source_known {constraint};
-set constraints all immediate;
+{restore}set constraints all immediate;
 commit;
 """
 
@@ -145,6 +151,7 @@ def main():
     lock = OUTPUT / 'running'
     lock.mkdir()
     started = False
+    installed = False
     owns_dblink = False
     try:
         state = query('before', "select 'RESEARCH_JSON:'||jsonb_build_object("
@@ -155,8 +162,13 @@ def main():
             "'dblink',exists(select 1 from pg_extension where extname='dblink'),"
             "'constraint',(select pg_get_constraintdef(oid) from pg_constraint "
             "where conrelid='public.spec_facts'::regclass and conname='spec_facts_source_known'))::text;", result=True)
-        if state['objects'] or state['fixture'] or not state['constraint']:
-            raise RuntimeError('Prior objects or fixtures exist; refusing to overwrite them')
+        if state['fixture'] or not state['constraint']:
+            raise RuntimeError('Prior fixtures exist; refusing to overwrite them')
+        # Since 20260916140000 the applier is published; a database that has it
+        # keeps its objects and constraint, and only the synthetic seed is owned.
+        installed = bool(state['objects'])
+        if installed and "'research'" not in state['constraint']:
+            raise RuntimeError('Installed applier without the research source; refusing to continue')
         # Reuse the real SQL test seed and real save command, preserving the
         # baseline assertions. Only the local transaction ending differs.
         seed = (ROOT / 'supabase/tests/product_spec_research_application_candidate.sql').read_text()
@@ -164,8 +176,13 @@ def main():
         if seed.count(marker) != 1:
             raise RuntimeError('SQL fixture anchor changed')
         seed = seed.split(marker)[0]
-        seed = seed.replace('\\ir ../../scripts/inventory/sql/product_spec_application_candidate.sql',
+        anchor = '\\ir ../../scripts/inventory/sql/product_spec_application_candidate.sql'
+        if seed.count(anchor) != 1:
+            raise RuntimeError('SQL fixture candidate anchor changed')
+        seed = seed.replace(anchor, '' if installed else
                             '\\ir ' + str(ROOT / 'scripts/inventory/sql/product_spec_application_candidate.sql'))
+        # The psql conditional around that anchor only matters under psql -f.
+        seed = seed.replace('\\if :research_candidate_needed\n', '').replace('\\endif\n', '')
         # Optional reading-column prerequisites belong to rollback tests. This
         # committed seed does not modify unrelated historical schema columns.
         seed = seed.replace('\\ir fixtures/product_spec_binding_prerequisites.sql', '')
@@ -228,9 +245,10 @@ def main():
     finally:
         try:
             if started:
-                query('cleanup', cleanup_sql(state['constraint']))
+                query('cleanup', cleanup_sql(state['constraint'], installed))
                 final = query('cleanup-readback', "select 'RESEARCH_JSON:'||jsonb_build_object("
-                    "'removed',to_regclass('public.product_spec_research_readiness') is null and not exists("
+                    "'removed',(to_regclass('public.product_spec_research_readiness') is null) = "
+                    + ('false' if installed else 'true') + " and not exists("
                     "select 1 from public.tenants where id='" + TENANT + "'),"
                     "'constraint',(select pg_get_constraintdef(oid) from pg_constraint "
                     "where conrelid='public.spec_facts'::regclass and conname='spec_facts_source_known'))::text;", result=True)

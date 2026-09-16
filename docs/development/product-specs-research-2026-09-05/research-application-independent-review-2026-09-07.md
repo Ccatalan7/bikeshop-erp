@@ -1,5 +1,11 @@
 # Aplicador de investigación: revisión independiente
 
+**Publicado el 2026-09-16** como `20260916140000_product_spec_research_applier.sql`
+con los dos hallazgos corregidos en el candidato (llave del candado con uuid
+canónico; observación confirmada exige conflicto resuelto) y con tres calendarios
+de contención entre dos sesiones en la ida y vuelta local. Ver
+[research-applier-publication-2026-09-16.md](research-applier-publication-2026-09-16.md).
+
 2026-09-07. Revisión sólo lectura de los cuatro archivos. No los edité y **no
 corrí SQL local**, porque lo estás usando: todo lo que sigue sale de leer el
 código y de comprobaciones que no tocan la base. Cuando algo no lo pude
