@@ -2982,6 +2982,21 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
       sections.add(content);
     }
 
+    // Technical-spec facets («Aro», «Tipo de válvula», «Velocidades») are
+    // page-owned presentation: they need no editor round-trip and steal no
+    // stored semantic. They follow the brand facet when the presentation
+    // shows brands, and close the rail otherwise (a category presentation
+    // showing only categories still offers them: the tubes of «Cámaras» are
+    // bought by aro and valve, not by brand).
+    var specFacetsAdded = false;
+    void addSpecFacets() {
+      if (specFacetsAdded) return;
+      specFacetsAdded = true;
+      for (final specFacet in _offeredSpecFacets()) {
+        addSection(_buildSpecFacet(specFacet, refreshPanel));
+      }
+    }
+
     for (final facet in facets) {
       // Stored facet keys keep their stored meaning. `availability` renders
       // the visitor stock filter (suppressed only when the public policy
@@ -2993,14 +3008,7 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
         WebsiteCatalogFacet.brand => _buildBrandFacet(refreshPanel),
         WebsiteCatalogFacet.price => _buildPriceFacet(refreshPanel),
       });
-      // Technical-spec facets («Aro», «Tipo de válvula», «Velocidades») are
-      // page-owned presentation accompanying the brand facet: they need no
-      // editor round-trip and steal no stored semantic.
-      if (facet == WebsiteCatalogFacet.brand) {
-        for (final specFacet in _offeredSpecFacets()) {
-          addSection(_buildSpecFacet(specFacet, refreshPanel));
-        }
-      }
+      if (facet == WebsiteCatalogFacet.brand) addSpecFacets();
       // The collection navigator is page-owned presentation accompanying the
       // category facet — deliberately NOT a persisted facet key, so it needs
       // no editor round-trip and steals no stored semantic.
@@ -3008,6 +3016,7 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
         addSection(_buildCollectionNavigatorFacet());
       }
     }
+    addSpecFacets();
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -3382,11 +3391,21 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
     if (facet.values.length < 2 && selected.isEmpty) {
       return const SizedBox.shrink();
     }
+    // A measure reads in its own order (aro 20", 24", 26", 27.5", 29"; largo
+    // 33, 35, 48, 60 mm); an option list, by how many products carry it.
+    final numeric = facet.dataType == 'number';
     final values = List<PublicCatalogSpecFacetValue>.from(facet.values)
       ..sort((a, b) {
         final aSelected = selected.contains(a.value);
         final bSelected = selected.contains(b.value);
         if (aSelected != bSelected) return aSelected ? -1 : 1;
+        if (numeric) {
+          final aNumber = double.tryParse(a.value.replaceAll(',', '.'));
+          final bNumber = double.tryParse(b.value.replaceAll(',', '.'));
+          if (aNumber != null && bNumber != null && aNumber != bNumber) {
+            return aNumber.compareTo(bNumber);
+          }
+        }
         final byCount = b.itemCount.compareTo(a.itemCount);
         if (byCount != 0) return byCount;
         return _specValueLabel(facet.key, a.value)

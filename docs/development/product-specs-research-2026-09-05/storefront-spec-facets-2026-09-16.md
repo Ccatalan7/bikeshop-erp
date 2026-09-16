@@ -54,11 +54,16 @@ valor sobre el campo que nombra y filtra como él (67 pruebas verdes).
 
 ## Cómo lo ve el cliente (se despliega con el merge)
 
-- Los filtros técnicos aparecen debajo de «Marca», cada uno con su rótulo de tienda, sus
-  opciones con conteo y «Ver N opciones más» pasadas seis. Son presentación de la página, no
-  una faceta guardada de la categoría: el editor no tiene que activarlos y no roban ninguna
-  semántica almacenada (`WebsiteCatalogFacet` sigue siendo categorías, disponibilidad, marca y
-  precio).
+- Los filtros técnicos aparecen debajo de «Marca» cuando la presentación muestra marcas y al
+  final del riel si no (la presentación de «Cámaras» sólo muestra categorías, y la primera
+  versión los ataba a la marca: no salían), cada uno con su rótulo de tienda, sus opciones con
+  conteo (las medidas en orden de tamaño, las opciones por cantidad) y «Ver N opciones más»
+  pasadas seis. Son presentación de la página, no una faceta guardada de la categoría: el editor
+  no tiene que activarlos y no roban ninguna semántica almacenada (`WebsiteCatalogFacet` sigue
+  siendo categorías, disponibilidad, marca y precio). Comprobado en la vista previa release
+  contra producción: «Cámaras» ofrece válvula (Auto 18 / Francesa 5), aro (12½" a 29") y largo
+  de válvula (33 a 60 mm); marcar «Francesa (Presta)» deja 5 cámaras con su chip activo, y la
+  URL `?spec.valve_standard=Francesa (Presta)` reproduce ese estado.
 - Un filtro se ofrece cuando describe la colección que el cliente mira: al menos el 30 % de los
   productos del alcance lo tienen (en «Cámaras» la válvula está en todas; en la portada, con 596
   productos, la válvula describe un rincón y no aparece), o cuando ya tiene un valor elegido.
