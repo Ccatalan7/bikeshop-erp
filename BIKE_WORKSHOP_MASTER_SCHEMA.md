@@ -4430,6 +4430,24 @@ por ese conteo de la bicicleta. La diferencia exige identificar la contraparte
 y el armado; coincidencia de agujeros tampoco aprueba el montaje. La revisión
 del largo del rayo requiere la receta y geometría por lado. La calculadora de
 armado y su búsqueda por tolerancia siguen siendo consumidores separados.
+
+**2026-09-16 — las reglas de rueda leen los sucesores.** Las plantillas de
+2026-09 retiraron `hub_spacing_mm`, `spoke_holes`, `wheel_size`, `valve_type`,
+`freehub_type` y `wheel_position` a `legacy`, y el lector
+`get_product_spec_contexts_v1` los excluye: el consumidor de productos recibía
+vacío en cada producto reemplazado. Ahora lee `hub_old_mm`, `spoke_hole_count`,
+`hub_package_position`, `hub_drive_receiver_kind`, `bead_seat_diameter_mm` y
+`valve_standard` primero y el original de respaldo. Tres semánticas nuevas: un
+BSD medido frente a un rótulo inequívoco de la bici (`29"`/`700c` = 622,
+`27.5"` = 584) es veredicto y los rótulos ambiguos siguen en cautela con ambos
+números; `Núcleo estriado de cassette` refuta una bici de rueda libre roscada y
+deja el estriado (HG, Micro Spline, XD) sin resolver frente a una bici de
+cassette; un juego delantera + trasera se revisa por pieza y no se lee como
+maza delantera. 100 pruebas del servicio (9 nuevas) en
+`test/unit/bike_product_compatibility_service_test.dart`; el mismo día entraron
+878 lecturas de nombre en esos sucesores. Evidencia y lo que sigue
+(transmisión, pedalier y freno, 30 claves `legacy` con cambio de forma) en
+`docs/development/product-specs-research-2026-09-05/workshop-compatibility-wheel-successors-2026-09-16.md`.
 Evidencia: `docs/development/product-specs-research-2026-09-05/spoke-wheel-consumer-integration-2026-09-07.md`.
 # Corrección del consumidor de compatibilidad — 2026-09-07
 

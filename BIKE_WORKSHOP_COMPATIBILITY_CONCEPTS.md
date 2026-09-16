@@ -265,6 +265,10 @@ This conservative rule currently applies especially to:
 - hub spacing should use standardized front and rear OLD values instead of one mixed free-text lane.
 - front and rear spoke-hole counts are separate compatibility seams and must not collapse into one generic count field.
 - `valveType` is a first-class compatibility seam for tubes, rims, and tubeless valves.
+- (2026-09-16) the product side of these seams lives in the successor keys of the 2026-09 templates and the engine reads them first, with the retired key as fallback: `hub_old_mm` (was `hub_spacing_mm`), `spoke_hole_count` (`spoke_holes`), `hub_package_position` (`wheel_position`), `hub_drive_receiver_kind` (`freehub_type`), `bead_seat_diameter_mm` (`wheel_size` on rims), `valve_standard` (`valve_type`).
+- a measured bead seat diameter against an unambiguous bicycle label (`29"`/`700c` = 622, `27.5"` = 584) is a verdict; `26"`, `24"`, `20"` and `16"` cover several ISO diameters and stay a caution that names both numbers.
+- `hub_drive_receiver_kind` names the receiver (cassette core, freewheel thread, fixed thread, BMX driver), not the spline: a cassette core refutes a threaded-freewheel bicycle, and against a cassette bicycle the spline (HG, Micro Spline, XD) stays an unresolved seam, never an approval.
+- a hub package `Juego delantera + trasera` describes each hub in its own row; the single width, count and driver rule does not apply to the set and must not read the set as a front hub.
 
 ### Bottom bracket and crank interface
 

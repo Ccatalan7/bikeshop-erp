@@ -63,24 +63,93 @@ class BikeProductCompatibilityService {
     'tool_size_mm',
   };
 
+  // Successor keys of the 2026-09 wheel templates sit next to the retired
+  // ones: the reader excludes `legacy` fields, so a replaced product only
+  // carries the successor and the rule must still see it.
   static const Set<String> _wheelRelevantSpecKeys = {
+    'bead_seat_diameter_mm',
     'bearing_application',
     'bearing_size_code',
     'bearing_system',
     'freehub_type',
     'headset_standard',
+    'hub_drive_receiver_kind',
+    'hub_old_mm',
+    'hub_package_position',
     'hub_spacing_mm',
     'sealant_volume_ml',
     'spoke_bend_type',
     'spoke_gauge',
+    'spoke_gauge_designation',
+    'spoke_head_interface',
+    'spoke_hole_count',
     'spoke_holes',
     'spoke_length_mm',
     'steerer_type',
     'valve_length_mm',
+    'valve_length_mm_value',
+    'valve_standard',
     'valve_type',
     'wheel_position',
     'wheel_size',
   };
+
+  /// First present value among a successor key and its retired predecessors.
+  dynamic _firstSpecValue(Map<String, dynamic> specValues, List<String> keys) {
+    for (final key in keys) {
+      final value = specValues[key];
+      if (value == null) continue;
+      if (value is String && value.trim().isEmpty) continue;
+      return value;
+    }
+    return null;
+  }
+
+  /// Bead seat diameter implied by a bicycle's wheel-size label, only where the
+  /// label is unambiguous. `26"`, `24"`, `20"` and `16"` each cover several
+  /// ISO diameters, so they resolve to null and stay a caution, never a verdict.
+  int? _bsdForWheelSizeLabel(String? canonicalWheelSize) {
+    switch (canonicalWheelSize) {
+      case '29"':
+      case '700c':
+        return 622;
+      case '27.5"':
+        return 584;
+      default:
+        return null;
+    }
+  }
+
+  String _wheelSizeForBsd(int bsd) {
+    switch (bsd) {
+      case 622:
+        return '29" / 700c';
+      case 584:
+        return '27.5" / 650b';
+      case 559:
+        return '26"';
+      case 507:
+        return '24"';
+      case 406:
+        return '20"';
+      case 355:
+        return '18"';
+      case 305:
+        return '16"';
+      case 451:
+        return '20" (451)';
+      case 540:
+        return '24" (540)';
+      case 590:
+        return '26" (590)';
+      case 630:
+        return '27"';
+      case 635:
+        return '28" (635)';
+      default:
+        return '$bsd mm';
+    }
+  }
 
   static const Set<String> _drivetrainRelevantSpecKeys = {
     'bb_shell_width_mm',
@@ -1537,16 +1606,30 @@ class BikeProductCompatibilityService {
     required _BikeCompatibilityContext compatibilityContext,
     required Map<String, dynamic> specValues,
   }) {
-    final wheelPosition = _canonicalWheelPosition(specValues['wheel_position']);
-    final hubSpacingMm = _parseDoubleValue(specValues['hub_spacing_mm']);
-    final spokeHoles = _parseIntValue(specValues['spoke_holes']);
-    final freehubType = _canonicalFreehubType(specValues['freehub_type']);
+    final wheelPosition = _canonicalWheelPosition(_firstSpecValue(
+        specValues, const ['hub_package_position', 'wheel_position']));
+    final hubSpacingMm = _parseDoubleValue(
+        _firstSpecValue(specValues, const ['hub_old_mm', 'hub_spacing_mm']));
+    final spokeHoles = _parseIntValue(
+        _firstSpecValue(specValues, const ['spoke_hole_count', 'spoke_holes']));
+    final freehubType = _canonicalFreehubType(_firstSpecValue(
+        specValues, const ['freehub_type', 'hub_drive_receiver_kind']));
 
     if (wheelPosition == null &&
         hubSpacingMm == null &&
         spokeHoles == null &&
         freehubType == null) {
       return null;
+    }
+
+    if (wheelPosition == 'set') {
+      // A front + rear package describes each hub in its own row; the single
+      // width, count and driver of this rule belong to one hub, not to a set.
+      return const ProductCompatibilityAssessment.caution(
+        detail:
+            'Maza; juego delantero + trasero: revisar cada maza del envase (ancho, perforaciones y driver)',
+        sortPriority: 20,
+      );
     }
 
     if (wheelPosition == null || wheelPosition == 'both') {
@@ -1576,8 +1659,23 @@ class BikeProductCompatibilityService {
       );
     }
 
+    // The successor field names the receiver kind (cassette core, freewheel
+    // thread, fixed thread, BMX driver) and not the spline. A cassette core
+    // refutes a threaded bicycle, but which spline it carries stays open.
+    final productHasUnsplinedCore = freehubType == 'cassette_body';
+    if (!isFront &&
+        productHasUnsplinedCore &&
+        expectedFreehubType != null &&
+        _isThreadedRearCogFamily(expectedFreehubType)) {
+      return ProductCompatibilityAssessment.incompatible(
+        detail:
+            'Maza trasera con núcleo de cassette no coincide con la bici (${_freehubTypeLabel(expectedFreehubType)})',
+      );
+    }
+
     if (!isFront &&
         freehubType != null &&
+        !productHasUnsplinedCore &&
         expectedFreehubType != null &&
         !_areFreehubTypesCompatible(expectedFreehubType, freehubType)) {
       return ProductCompatibilityAssessment.incompatible(
@@ -1589,6 +1687,9 @@ class BikeProductCompatibilityService {
     final matchedParts = <String>[];
     final unresolvedParts = <String>[];
     final assemblyConditions = <String>[];
+    if (!isFront && productHasUnsplinedCore) {
+      unresolvedParts.add('estriado del núcleo (HG, Micro Spline, XD)');
+    }
 
     if (hubSpacingMm != null) {
       if (expectedSpacing != null) {
@@ -1616,7 +1717,7 @@ class BikeProductCompatibilityService {
       }
     }
 
-    if (!isFront && freehubType != null) {
+    if (!isFront && freehubType != null && !productHasUnsplinedCore) {
       if (expectedFreehubType != null) {
         matchedParts.add('driver ${_freehubTypeLabel(freehubType)}');
       } else {
@@ -1663,16 +1764,29 @@ class BikeProductCompatibilityService {
     required _BikeCompatibilityContext compatibilityContext,
     required Map<String, dynamic> specValues,
   }) {
+    final productBsd = _parseIntValue(specValues['bead_seat_diameter_mm']);
     final productWheelSize = _canonicalWheelSize(specValues['wheel_size']);
     final bikeWheelSize = _canonicalWheelSize(compatibilityContext.wheelSize);
-    final productSpokeHoles = _parseIntValue(specValues['spoke_holes']);
+    final bikeBsd = _bsdForWheelSizeLabel(bikeWheelSize);
+    final productSpokeHoles = _parseIntValue(
+        _firstSpecValue(specValues, const ['spoke_hole_count', 'spoke_holes']));
     final productValveType = _canonicalValveType(specValues['valve_type']);
     final bikeValveType = _canonicalValveType(compatibilityContext.valveType);
 
-    if (productWheelSize == null &&
+    if (productBsd == null &&
+        productWheelSize == null &&
         productSpokeHoles == null &&
         productValveType == null) {
       return null;
+    }
+
+    // A measured bead seat diameter against an unambiguous bicycle label is a
+    // verdict; a label against a label was only ever a caution.
+    if (productBsd != null && bikeBsd != null && productBsd != bikeBsd) {
+      return ProductCompatibilityAssessment.incompatible(
+        detail:
+            'Llanta BSD $productBsd mm (${_wheelSizeForBsd(productBsd)}) no coincide con la bici ($bikeWheelSize = $bikeBsd mm)',
+      );
     }
 
     final matchingSides = <String>[];
@@ -1697,7 +1811,17 @@ class BikeProductCompatibilityService {
     final unresolvedParts = <String>[];
     final cautionParts = <String>[];
 
-    if (productWheelSize != null) {
+    if (productBsd != null) {
+      if (bikeBsd != null) {
+        matchedParts.add('BSD $productBsd mm');
+      } else if (bikeWheelSize != null) {
+        cautionParts.add(
+          'BSD $productBsd mm (${_wheelSizeForBsd(productBsd)}) frente a rótulo $bikeWheelSize: confirmar el diámetro real de la bici',
+        );
+      } else {
+        unresolvedParts.add('rodado de la bici');
+      }
+    } else if (productWheelSize != null) {
       if (bikeWheelSize == productWheelSize) {
         matchedParts.add('aro $productWheelSize');
       } else if (bikeWheelSize != null) {
@@ -1773,7 +1897,8 @@ class BikeProductCompatibilityService {
   }) {
     final productWheelSize = _canonicalWheelSize(specValues['wheel_size']);
     final bikeWheelSize = _canonicalWheelSize(compatibilityContext.wheelSize);
-    final productValveType = _canonicalValveType(specValues['valve_type']);
+    final productValveType = _canonicalValveType(
+        _firstSpecValue(specValues, const ['valve_standard', 'valve_type']));
     final bikeValveType = _canonicalValveType(compatibilityContext.valveType);
 
     if (productWheelSize == null && productValveType == null) {
@@ -1837,7 +1962,8 @@ class BikeProductCompatibilityService {
   }) {
     final productWheelSize = _canonicalWheelSize(specValues['wheel_size']);
     final bikeWheelSize = _canonicalWheelSize(compatibilityContext.wheelSize);
-    final productValveType = _canonicalValveType(specValues['valve_type']);
+    final productValveType = _canonicalValveType(
+        _firstSpecValue(specValues, const ['valve_standard', 'valve_type']));
     final bikeValveType = _canonicalValveType(compatibilityContext.valveType);
 
     if (productWheelSize == null && productValveType == null) {
@@ -1899,7 +2025,8 @@ class BikeProductCompatibilityService {
     required _BikeCompatibilityContext compatibilityContext,
     required Map<String, dynamic> specValues,
   }) {
-    final productValveType = _canonicalValveType(specValues['valve_type']);
+    final productValveType = _canonicalValveType(
+        _firstSpecValue(specValues, const ['valve_standard', 'valve_type']));
     final bikeValveType = _canonicalValveType(compatibilityContext.valveType);
 
     if (productValveType == null) {
@@ -2877,6 +3004,10 @@ class BikeProductCompatibilityService {
     if (normalized.isEmpty) {
       return null;
     }
+    // `Juego delantera + trasera` names both hubs; it must not read as front.
+    if (normalized.contains('juego') || normalized.contains('jgo')) {
+      return 'set';
+    }
     if (normalized.contains('delan') || normalized == 'front') {
       return 'front';
     }
@@ -2973,8 +3104,15 @@ class BikeProductCompatibilityService {
     if (normalized.contains('driver') || normalized.contains('bmx')) {
       return 'bmx_driver';
     }
-    if (normalized.contains('fija') || normalized.contains('fixed')) {
+    if (normalized.contains('fija') ||
+        normalized.contains('fijo') ||
+        normalized.contains('fixed')) {
       return 'fixed_threaded';
+    }
+    // `Núcleo estriado de cassette` (hub_drive_receiver_kind) states the
+    // receiver, not its spline: a cassette core of unknown standard.
+    if (normalized.contains('nucleo') && normalized.contains('cassette')) {
+      return 'cassette_body';
     }
     if (normalized.contains('contrapedal') || normalized.contains('coaster')) {
       return 'coaster_hub';
@@ -3319,6 +3457,8 @@ class BikeProductCompatibilityService {
         return 'Rosca fija / contratuerca';
       case 'coaster_hub':
         return 'Maza contrapedal';
+      case 'cassette_body':
+        return 'núcleo de cassette (estriado sin confirmar)';
       default:
         return freehubType;
     }

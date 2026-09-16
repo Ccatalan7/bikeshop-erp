@@ -1280,6 +1280,139 @@ void main() {
       });
     }
   });
+
+  group('wheel successor keys (2026-09 templates)', () {
+    test('rear hub read through hub_old_mm, spoke_hole_count and position',
+        () async {
+      final assessment = await _assessProduct(
+        technicalFamily: 'hub',
+        bikeRearHubSpacingMm: 135,
+        bikeTechnicalValues: {
+          'rearSpokeHoles': 32,
+          'freehubType': 'Shimano HG'
+        },
+        productSpecs: {
+          'hub_package_position': 'Trasera',
+          'hub_old_mm': 135,
+          'spoke_hole_count': 32,
+          'hub_drive_receiver_kind': 'Núcleo estriado de cassette',
+        },
+      );
+      expect(assessment.level, ProductCompatibilityLevel.caution);
+      expect(assessment.detail, contains('Maza trasera'));
+      expect(assessment.detail, contains('ancho 135 mm'));
+      expect(assessment.detail, contains('32H'));
+      expect(assessment.detail, contains('estriado del núcleo'));
+      expect(assessment.detail, isNot(contains('no coincide')));
+    });
+
+    test('successor hub width refutes the bicycle spacing', () async {
+      final assessment = await _assessProduct(
+        technicalFamily: 'hub',
+        bikeRearHubSpacingMm: 135,
+        bikeTechnicalValues: {},
+        productSpecs: {'hub_package_position': 'Trasera', 'hub_old_mm': 142},
+      );
+      expect(assessment.level, ProductCompatibilityLevel.incompatible);
+      expect(assessment.detail, contains('142'));
+      expect(assessment.detail, contains('135'));
+    });
+
+    test('a front + rear hub set is reviewed per piece, never as a front hub',
+        () async {
+      final assessment = await _assessProduct(
+        technicalFamily: 'hub',
+        bikeRearHubSpacingMm: 135,
+        bikeTechnicalValues: {},
+        productSpecs: {
+          'hub_package_position': 'Juego delantera + trasera',
+          'hub_old_mm': 100,
+        },
+      );
+      expect(assessment.level, ProductCompatibilityLevel.caution);
+      expect(assessment.detail, contains('juego'));
+      expect(assessment.detail, isNot(contains('no coincide')));
+    });
+
+    test('a freewheel thread receiver refutes a cassette bicycle', () async {
+      final assessment = await _assessProduct(
+        technicalFamily: 'hub',
+        bikeTechnicalValues: {'freehubType': 'Shimano HG'},
+        productSpecs: {
+          'hub_package_position': 'Trasera',
+          'hub_drive_receiver_kind': 'Rosca para rueda libre',
+        },
+      );
+      expect(assessment.level, ProductCompatibilityLevel.incompatible);
+      expect(assessment.detail, contains('Rueda libre roscada'));
+    });
+
+    test('a cassette core refutes a threaded-freewheel bicycle', () async {
+      final assessment = await _assessProduct(
+        technicalFamily: 'hub',
+        bikeTechnicalValues: {'freehubType': 'Rueda libre roscada'},
+        productSpecs: {
+          'hub_package_position': 'Trasera',
+          'hub_drive_receiver_kind': 'Núcleo estriado de cassette',
+        },
+      );
+      expect(assessment.level, ProductCompatibilityLevel.incompatible);
+      expect(assessment.detail, contains('núcleo de cassette'));
+    });
+
+    test('rim bead seat diameter matches an unambiguous 29" bicycle', () async {
+      final assessment = await _assessProduct(
+        technicalFamily: 'rim',
+        bikeTechnicalValues: {'frontSpokeHoles': 32},
+        productSpecs: {'bead_seat_diameter_mm': 622, 'spoke_hole_count': 32},
+      );
+      expect(assessment.level, ProductCompatibilityLevel.caution);
+      expect(assessment.detail, contains('BSD 622 mm'));
+      expect(assessment.detail, contains('32H'));
+      expect(assessment.detail, isNot(contains('no coincide')));
+    });
+
+    test('rim bead seat diameter refutes an unambiguous 29" bicycle', () async {
+      final assessment = await _assessProduct(
+        technicalFamily: 'rim',
+        bikeTechnicalValues: {},
+        productSpecs: {'bead_seat_diameter_mm': 559, 'spoke_hole_count': 36},
+      );
+      expect(assessment.level, ProductCompatibilityLevel.incompatible);
+      expect(assessment.detail, contains('559'));
+      expect(assessment.detail, contains('622'));
+    });
+
+    test('tube valve standard is read like the retired valve type', () async {
+      final different = await _assessProduct(
+        technicalFamily: 'tube',
+        bikeTechnicalValues: {'valveType': 'Schrader'},
+        productSpecs: {'valve_standard': 'Presta (francesa)'},
+      );
+      expect(different.level, ProductCompatibilityLevel.caution);
+      expect(different.detail, contains('Presta'));
+      expect(different.detail, contains('agujero'));
+
+      final same = await _assessProduct(
+        technicalFamily: 'tube',
+        bikeTechnicalValues: {'valveType': 'Schrader'},
+        productSpecs: {'valve_standard': 'Schrader (americana / auto)'},
+      );
+      expect(same.level, ProductCompatibilityLevel.caution);
+      expect(same.detail, contains('válvula Schrader'));
+    });
+
+    test('tubeless valve standard is read like the retired valve type',
+        () async {
+      final assessment = await _assessProduct(
+        technicalFamily: 'tubeless_valve',
+        bikeTechnicalValues: {'valveType': 'Presta'},
+        productSpecs: {'valve_standard': 'Presta (francesa)'},
+      );
+      expect(assessment.level, ProductCompatibilityLevel.caution);
+      expect(assessment.detail, contains('Válvula Presta'));
+    });
+  });
 }
 
 Future<ProductCompatibilityAssessment> _assessProduct({

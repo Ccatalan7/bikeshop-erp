@@ -218,3 +218,22 @@ ya los contiene). Worktrees inventariados: tres de Codex, todos detached.
   consistente con la lectura posterior; la ficha pública muestra cuatro filas:
   [fill-001-cl573r-record.md](fill-001-cl573r-record.md). Todo con procedencia `research` y sin
   confirmar; nada comercial tocado.
+- **Segundo llenado, masivo: 842 lecturas de nombre en 575 productos de 33 familias** por el
+  RPC `record_product_spec_reading_v1` como el actor real (`fill_name_readings.py`, ensayo con
+  rollback y luego 23 transacciones). Reglas deterministas por familia
+  (`spec_name_reading_rules.py`) con réplica offline de los chequeos del servidor; la guardia de
+  coherencia rechazó 6 lecturas en total (juegos de mazas, pedalier integrado) y las reglas se
+  recortaron antes del commit. Hechos `name_reading` 14→847, productos con lectura 13→578,
+  68 campos, todos visibles al cliente y filtrables. Sin leer por diseño: listas de velocidades,
+  válvulas `V/A`/`VF`, cadenas `1/8`, «Resina», booleanos cuyo vocabulario es el sustantivo del
+  producto: [fill-002-name-readings-record.md](fill-002-name-readings-record.md). Llenado técnico
+  persistido tras la segunda pasada (cáliper, horquilla, cierres: 36 lecturas en 25 productos):
+  601 productos, 884 hechos (1/6 research + 600/878 name_reading), nada confirmado.
+- **Compatibilidad de taller, familias de rueda, migrada a los sucesores.** El servicio de
+  compatibilidad leía sólo las claves `legacy` (`hub_spacing_mm`, `spoke_holes`, `wheel_size`,
+  `valve_type`, `freehub_type`, `wheel_position`) que el lector excluye; ahora lee `hub_old_mm`,
+  `spoke_hole_count`, `hub_package_position`, `hub_drive_receiver_kind`, `bead_seat_diameter_mm`
+  y `valve_standard` con el original de respaldo. BSD medido vs rótulo inequívoco es veredicto;
+  núcleo de cassette refuta bici roscada y deja el estriado por confirmar; un juego se revisa por
+  pieza. 100 pruebas verdes (9 nuevas). Transmisión, pedalier y freno siguen en `legacy` (30
+  claves): [workshop-compatibility-wheel-successors-2026-09-16.md](workshop-compatibility-wheel-successors-2026-09-16.md).
