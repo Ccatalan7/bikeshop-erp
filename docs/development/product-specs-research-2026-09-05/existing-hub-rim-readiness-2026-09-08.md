@@ -1,5 +1,7 @@
 # Candidato correctivo `hub` + `rim` — 2026-09-08
 
+**Publicado el 2026-09-16** como `20260916050000_hub_rim_successors.sql` sobre 96 productos, con adopción medida; ver [hub-rim-successors-adjudication-2026-09-16.md](hub-rim-successors-adjudication-2026-09-16.md).
+
 **Adjudicación posterior:** este informe conserva la propuesta independiente
 inicial. El [candidato actual de Root](existing-hub-rim-root-decisions-2026-09-08.md)
 corrige la propiedad de todas las interfaces del juego, la rosca de eje pasante,

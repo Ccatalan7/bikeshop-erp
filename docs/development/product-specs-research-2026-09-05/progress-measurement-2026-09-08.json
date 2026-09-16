@@ -6,9 +6,9 @@
  "present_global_templates": 107,
  "stage": "template_deliveries",
  "new_published_deliveries": 68,
- "delivered_stage_percent": 75.24,
+ "delivered_stage_percent": 77.14,
  "original_successor_candidates": 37,
- "original_successors_activated": 11,
+ "original_successors_activated": 13,
  "task_product_fills": 0,
  "task_new_assignments": 720,
  "overall_percent": null,
@@ -337,7 +337,7 @@
   "review": "Root; no Claude review claimed",
   "record": "assignment-sanitation-checkpoint-2026-09-14.md"
  },
- "delivery_status_updated_at": "2026-09-16T02:50:00Z",
+ "delivery_status_updated_at": "2026-09-16T05:55:00Z",
  "assignment_repair_progress": {
   "initial_missing": 746,
   "repaired": 724,
@@ -591,7 +591,7 @@
    "Phone and embedded routes, next client distribution and existing shared field surface flags remain open."
   ]
  },
- "published_planned_deliveries": 79,
+ "published_planned_deliveries": 81,
  "new_templates_outside_initial_plan": 2,
  "strict_scalar_extension_2026_09_15": {
   "migration": "20260915200000",
@@ -757,6 +757,40 @@
    "unprojected_active_observations": 0
   },
   "record": "spoke-successor-adjudication-2026-09-16.md",
+  "technical_fill_persisted": 0
+ },
+ "hub_rim_replacements_2026_09_16": {
+  "migration": "supabase/migrations/20260916050000_hub_rim_successors.sql",
+  "status": "APPLIED",
+  "verified_at": "2026-09-16T05:53:15Z",
+  "versions": {
+   "hub": [
+    2,
+    34
+   ],
+   "rim": [
+    5,
+    35
+   ]
+  },
+  "authenticated_products": 96,
+  "product_revisions_unchanged": 96,
+  "facts_before_after": [
+   29,
+   29
+  ],
+  "new_definitions": 30,
+  "surface_definitions": 20,
+  "sql_cases_local_rollback": 63,
+  "dart_form_tests": 65,
+  "adoption": {
+   "products_evaluated": 96,
+   "products_with_blocking_issues": 0,
+   "products_with_pending_issues": 96,
+   "legacy_observations": 22,
+   "unprojected_active_observations": 0
+  },
+  "record": "hub-rim-successors-adjudication-2026-09-16.md",
   "technical_fill_persisted": 0
  }
 }
