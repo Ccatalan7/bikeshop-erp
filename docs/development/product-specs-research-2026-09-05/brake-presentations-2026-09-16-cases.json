@@ -1,0 +1,1525 @@
+{
+  "schema_version": 1,
+  "catalogue_sha256": "24be252a8cdb18c2311d58b88cca53213c008c17b4d4c27d265f0e471d8a0316",
+  "cases": [
+    {
+      "id": "brake_presentation_without_a_presentation_everything_is_pending",
+      "template": "hydraulic_disc_brake",
+      "values": {},
+      "kind": "synthetic_boundary",
+      "source_urls": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "expected_blocking": [],
+      "expected_issue_subset": [
+        {
+          "code": "required_missing",
+          "field": "brake_presentation",
+          "blocking": false
+        },
+        {
+          "code": "required_missing",
+          "field": "kit_members",
+          "blocking": false
+        }
+      ],
+      "forbidden_issue_fields": [
+        "brake_circuits"
+      ],
+      "expected_sql_blocking": [],
+      "expected_sql_issue_subset": [
+        {
+          "code": "required_missing",
+          "field": "brake_presentation",
+          "blocking": false
+        },
+        {
+          "code": "required_missing",
+          "field": "kit_members",
+          "blocking": false
+        }
+      ]
+    },
+    {
+      "id": "brake_presentation_a_presentation_without_pieces_is_pending_never_single",
+      "template": "hydraulic_disc_brake",
+      "values": {
+        "spec_evidence_source": "Synthetic package, no inventory claim.",
+        "brake_presentation": "Un freno completo (maneta, manguera, cáliper)"
+      },
+      "kind": "synthetic_boundary",
+      "source_urls": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "expected_blocking": [],
+      "expected_issue_subset": [
+        {
+          "code": "required_missing",
+          "field": "kit_members",
+          "blocking": false
+        },
+        {
+          "code": "required_missing",
+          "field": "brake_circuits",
+          "blocking": false
+        }
+      ],
+      "forbidden_issue_fields": [],
+      "expected_sql_blocking": [],
+      "expected_sql_issue_subset": [
+        {
+          "code": "required_missing",
+          "field": "kit_members",
+          "blocking": false
+        },
+        {
+          "code": "required_missing",
+          "field": "brake_circuits",
+          "blocking": false
+        }
+      ]
+    },
+    {
+      "id": "brake_presentation_a_complete_hydraulic_brake_with_its_circuit",
+      "template": "hydraulic_disc_brake",
+      "values": {
+        "spec_evidence_source": "Synthetic package, no inventory claim.",
+        "brake_presentation": "Un freno completo (maneta, manguera, cáliper)",
+        "kit_members": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "lever",
+              "values": {
+                "member_role": "maneta",
+                "family": "brake_lever",
+                "quantity": "1",
+                "position": "Derecho",
+                "identity_model": "Synthetic lever"
+              },
+              "sources": [
+                "https://example.invalid/synthetic-package"
+              ]
+            },
+            {
+              "id": "caliper",
+              "values": {
+                "member_role": "cáliper",
+                "family": "brake_caliper",
+                "quantity": "1",
+                "position": "Delantero",
+                "identity_model": "Synthetic caliper"
+              },
+              "sources": [
+                "https://example.invalid/synthetic-package"
+              ]
+            },
+            {
+              "id": "hose",
+              "values": {
+                "member_role": "manguera",
+                "family": "hydraulic_hose",
+                "quantity": "1",
+                "position": "Delantero"
+              },
+              "sources": [
+                "https://example.invalid/synthetic-package"
+              ]
+            }
+          ]
+        },
+        "brake_circuits": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "front",
+              "values": {
+                "circuit_id": "front",
+                "position": "Delantero",
+                "actuation": "Hidráulico",
+                "source_url": "https://example.invalid/synthetic-package",
+                "lever_row_id": "lever",
+                "caliper_row_id": "caliper",
+                "line_row_id": "hose",
+                "fluid_as_shipped": "Aceite Mineral"
+              },
+              "sources": [
+                "https://example.invalid/synthetic-package"
+              ]
+            }
+          ]
+        }
+      },
+      "kind": "synthetic_boundary",
+      "source_urls": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "expected_blocking": [],
+      "expected_issue_subset": [],
+      "forbidden_issue_fields": [],
+      "expected_sql_blocking": [],
+      "expected_sql_issue_subset": [],
+      "expected_row_counts": {
+        "kit_members": 3,
+        "brake_circuits": 1
+      }
+    },
+    {
+      "id": "brake_presentation_a_bare_caliper_with_hose_owes_no_circuit",
+      "template": "hydraulic_disc_brake",
+      "values": {
+        "spec_evidence_source": "Synthetic package, no inventory claim.",
+        "brake_presentation": "Cáliper con manguera, sin maneta",
+        "kit_members": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "caliper",
+              "values": {
+                "member_role": "cáliper",
+                "family": "brake_caliper",
+                "quantity": "1",
+                "position": "Delantero",
+                "identity_model": "Synthetic caliper"
+              },
+              "sources": [
+                "https://example.invalid/synthetic-package"
+              ]
+            },
+            {
+              "id": "hose",
+              "values": {
+                "member_role": "manguera",
+                "family": "hydraulic_hose",
+                "quantity": "1",
+                "position": "Delantero"
+              },
+              "sources": [
+                "https://example.invalid/synthetic-package"
+              ]
+            }
+          ]
+        }
+      },
+      "kind": "synthetic_boundary",
+      "source_urls": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "expected_blocking": [],
+      "expected_issue_subset": [],
+      "forbidden_issue_fields": [
+        "brake_circuits"
+      ],
+      "expected_sql_blocking": [],
+      "expected_sql_issue_subset": [],
+      "expected_row_counts": {
+        "kit_members": 2
+      }
+    },
+    {
+      "id": "brake_presentation_a_bare_caliper_cannot_declare_a_circuit",
+      "template": "hydraulic_disc_brake",
+      "values": {
+        "spec_evidence_source": "Synthetic package, no inventory claim.",
+        "brake_presentation": "Cáliper con manguera, sin maneta",
+        "kit_members": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "caliper",
+              "values": {
+                "member_role": "cáliper",
+                "family": "brake_caliper",
+                "quantity": "1",
+                "position": "Delantero",
+                "identity_model": "Synthetic caliper"
+              },
+              "sources": [
+                "https://example.invalid/synthetic-package"
+              ]
+            },
+            {
+              "id": "hose",
+              "values": {
+                "member_role": "manguera",
+                "family": "hydraulic_hose",
+                "quantity": "1",
+                "position": "Delantero"
+              },
+              "sources": [
+                "https://example.invalid/synthetic-package"
+              ]
+            }
+          ]
+        },
+        "brake_circuits": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "front",
+              "values": {
+                "circuit_id": "front",
+                "position": "Delantero",
+                "actuation": "Hidráulico",
+                "source_url": "https://example.invalid/synthetic-package",
+                "caliper_row_id": "caliper"
+              },
+              "sources": [
+                "https://example.invalid/synthetic-package"
+              ]
+            }
+          ]
+        }
+      },
+      "kind": "synthetic_boundary",
+      "source_urls": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "expected_blocking": [
+        {
+          "code": "field_applicability",
+          "field": "brake_circuits"
+        }
+      ],
+      "expected_issue_subset": [],
+      "forbidden_issue_fields": [],
+      "expected_sql_blocking": [
+        {
+          "code": "field_applicability",
+          "field": "brake_circuits"
+        }
+      ],
+      "expected_sql_issue_subset": []
+    },
+    {
+      "id": "brake_presentation_a_pair_keeps_two_levers_of_the_same_model_apart",
+      "template": "hydraulic_disc_brake",
+      "values": {
+        "spec_evidence_source": "Synthetic package, no inventory claim.",
+        "brake_presentation": "Par delantero y trasero",
+        "kit_members": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "lever-r",
+              "values": {
+                "member_role": "maneta",
+                "family": "brake_lever",
+                "quantity": "1",
+                "position": "Derecho",
+                "identity_model": "Synthetic lever"
+              },
+              "sources": [
+                "https://example.invalid/synthetic-package"
+              ]
+            },
+            {
+              "id": "lever-l",
+              "values": {
+                "member_role": "maneta",
+                "family": "brake_lever",
+                "quantity": "1",
+                "position": "Izquierdo",
+                "identity_model": "Synthetic lever"
+              },
+              "sources": [
+                "https://example.invalid/synthetic-package"
+              ]
+            },
+            {
+              "id": "caliper-f",
+              "values": {
+                "member_role": "cáliper",
+                "family": "brake_caliper",
+                "quantity": "1",
+                "position": "Delantero",
+                "identity_model": "Synthetic caliper"
+              },
+              "sources": [
+                "https://example.invalid/synthetic-package"
+              ]
+            },
+            {
+              "id": "caliper-r",
+              "values": {
+                "member_role": "cáliper",
+                "family": "brake_caliper",
+                "quantity": "1",
+                "position": "Trasero",
+                "identity_model": "Synthetic caliper"
+              },
+              "sources": [
+                "https://example.invalid/synthetic-package"
+              ]
+            }
+          ]
+        },
+        "brake_circuits": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "front",
+              "values": {
+                "circuit_id": "front",
+                "position": "Delantero",
+                "actuation": "Hidráulico",
+                "source_url": "https://example.invalid/synthetic-package",
+                "lever_row_id": "lever-r",
+                "caliper_row_id": "caliper-f"
+              },
+              "sources": [
+                "https://example.invalid/synthetic-package"
+              ]
+            },
+            {
+              "id": "rear",
+              "values": {
+                "circuit_id": "rear",
+                "position": "Trasero",
+                "actuation": "Hidráulico",
+                "source_url": "https://example.invalid/synthetic-package",
+                "lever_row_id": "lever-l",
+                "caliper_row_id": "caliper-r"
+              },
+              "sources": [
+                "https://example.invalid/synthetic-package"
+              ]
+            }
+          ]
+        }
+      },
+      "kind": "synthetic_boundary",
+      "source_urls": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "expected_blocking": [],
+      "expected_issue_subset": [],
+      "forbidden_issue_fields": [],
+      "expected_sql_blocking": [],
+      "expected_sql_issue_subset": [],
+      "expected_row_counts": {
+        "kit_members": 4,
+        "brake_circuits": 2
+      }
+    },
+    {
+      "id": "brake_presentation_a_complete_brake_cannot_contain_a_complete_brake",
+      "template": "hydraulic_disc_brake",
+      "values": {
+        "spec_evidence_source": "Synthetic package, no inventory claim.",
+        "brake_presentation": "Un freno completo (maneta, manguera, cáliper)",
+        "kit_members": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "nested",
+              "values": {
+                "member_role": "otro",
+                "family": "hydraulic_disc_brake",
+                "quantity": "1",
+                "position": "Sin posición"
+              },
+              "sources": [
+                "https://example.invalid/synthetic-package"
+              ]
+            }
+          ]
+        }
+      },
+      "kind": "synthetic_boundary",
+      "source_urls": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "expected_blocking": [
+        {
+          "code": "row_option",
+          "field": "kit_members"
+        }
+      ],
+      "expected_issue_subset": [],
+      "forbidden_issue_fields": [],
+      "expected_sql_blocking": [
+        {
+          "code": "row_option",
+          "field": "kit_members"
+        }
+      ],
+      "expected_sql_issue_subset": []
+    },
+    {
+      "id": "brake_presentation_a_hydraulic_presentation_admits_no_cable_circuit",
+      "template": "hydraulic_disc_brake",
+      "values": {
+        "spec_evidence_source": "Synthetic package, no inventory claim.",
+        "brake_presentation": "Un freno completo (maneta, manguera, cáliper)",
+        "kit_members": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "lever",
+              "values": {
+                "member_role": "maneta",
+                "family": "brake_lever",
+                "quantity": "1",
+                "position": "Derecho",
+                "identity_model": "Synthetic lever"
+              },
+              "sources": [
+                "https://example.invalid/synthetic-package"
+              ]
+            },
+            {
+              "id": "caliper",
+              "values": {
+                "member_role": "cáliper",
+                "family": "brake_caliper",
+                "quantity": "1",
+                "position": "Delantero",
+                "identity_model": "Synthetic caliper"
+              },
+              "sources": [
+                "https://example.invalid/synthetic-package"
+              ]
+            }
+          ]
+        },
+        "brake_circuits": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "front",
+              "values": {
+                "circuit_id": "front",
+                "position": "Delantero",
+                "actuation": "Cable",
+                "source_url": "https://example.invalid/synthetic-package",
+                "lever_row_id": "lever",
+                "caliper_row_id": "caliper"
+              },
+              "sources": [
+                "https://example.invalid/synthetic-package"
+              ]
+            }
+          ]
+        }
+      },
+      "kind": "synthetic_boundary",
+      "source_urls": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "expected_blocking": [
+        {
+          "code": "row_option",
+          "field": "brake_circuits"
+        }
+      ],
+      "expected_issue_subset": [],
+      "forbidden_issue_fields": [],
+      "expected_sql_blocking": [
+        {
+          "code": "row_option",
+          "field": "brake_circuits"
+        }
+      ],
+      "expected_sql_issue_subset": []
+    },
+    {
+      "id": "brake_presentation_a_circuit_pointing_at_a_missing_piece_blocks",
+      "template": "hydraulic_disc_brake",
+      "values": {
+        "spec_evidence_source": "Synthetic package, no inventory claim.",
+        "brake_presentation": "Un freno completo (maneta, manguera, cáliper)",
+        "kit_members": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "lever",
+              "values": {
+                "member_role": "maneta",
+                "family": "brake_lever",
+                "quantity": "1",
+                "position": "Derecho",
+                "identity_model": "Synthetic lever"
+              },
+              "sources": [
+                "https://example.invalid/synthetic-package"
+              ]
+            },
+            {
+              "id": "caliper",
+              "values": {
+                "member_role": "cáliper",
+                "family": "brake_caliper",
+                "quantity": "1",
+                "position": "Delantero",
+                "identity_model": "Synthetic caliper"
+              },
+              "sources": [
+                "https://example.invalid/synthetic-package"
+              ]
+            }
+          ]
+        },
+        "brake_circuits": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "front",
+              "values": {
+                "circuit_id": "front",
+                "position": "Delantero",
+                "actuation": "Hidráulico",
+                "source_url": "https://example.invalid/synthetic-package",
+                "lever_row_id": "lever",
+                "caliper_row_id": "ghost"
+              },
+              "sources": [
+                "https://example.invalid/synthetic-package"
+              ]
+            }
+          ]
+        }
+      },
+      "kind": "synthetic_boundary",
+      "source_urls": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "expected_blocking": [
+        {
+          "code": "row_reference_unresolved",
+          "field": "brake_circuits"
+        }
+      ],
+      "expected_issue_subset": [],
+      "forbidden_issue_fields": [],
+      "expected_sql_blocking": [
+        {
+          "code": "row_reference_unresolved",
+          "field": "brake_circuits"
+        }
+      ],
+      "expected_sql_issue_subset": []
+    },
+    {
+      "id": "brake_presentation_two_circuits_cannot_share_an_identifier",
+      "template": "hydraulic_disc_brake",
+      "values": {
+        "spec_evidence_source": "Synthetic package, no inventory claim.",
+        "brake_presentation": "Un freno completo (maneta, manguera, cáliper)",
+        "kit_members": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "lever",
+              "values": {
+                "member_role": "maneta",
+                "family": "brake_lever",
+                "quantity": "1",
+                "position": "Derecho",
+                "identity_model": "Synthetic lever"
+              },
+              "sources": [
+                "https://example.invalid/synthetic-package"
+              ]
+            },
+            {
+              "id": "caliper",
+              "values": {
+                "member_role": "cáliper",
+                "family": "brake_caliper",
+                "quantity": "1",
+                "position": "Delantero",
+                "identity_model": "Synthetic caliper"
+              },
+              "sources": [
+                "https://example.invalid/synthetic-package"
+              ]
+            }
+          ]
+        },
+        "brake_circuits": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "front",
+              "values": {
+                "circuit_id": "front",
+                "position": "Delantero",
+                "actuation": "Hidráulico",
+                "source_url": "https://example.invalid/synthetic-package",
+                "lever_row_id": "lever",
+                "caliper_row_id": "caliper"
+              },
+              "sources": [
+                "https://example.invalid/synthetic-package"
+              ]
+            },
+            {
+              "id": "front",
+              "values": {
+                "circuit_id": "front",
+                "position": "Trasero",
+                "actuation": "Hidráulico",
+                "source_url": "https://example.invalid/synthetic-package",
+                "lever_row_id": "lever",
+                "caliper_row_id": "caliper"
+              },
+              "sources": [
+                "https://example.invalid/synthetic-package"
+              ]
+            }
+          ]
+        }
+      },
+      "kind": "synthetic_boundary",
+      "source_urls": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "expected_blocking": [
+        {
+          "code": "row_shape",
+          "field": "brake_circuits"
+        }
+      ],
+      "expected_issue_subset": [],
+      "forbidden_issue_fields": [],
+      "expected_sql_blocking": [
+        {
+          "code": "row_shape",
+          "field": "brake_circuits"
+        }
+      ],
+      "expected_sql_issue_subset": []
+    },
+    {
+      "id": "brake_presentation_legacy_readings_stay_inert",
+      "template": "hydraulic_disc_brake",
+      "values": {
+        "spec_evidence_source": "Synthetic package, no inventory claim.",
+        "brake_presentation": "Un freno completo (maneta, manguera, cáliper)",
+        "kit_members": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "lever",
+              "values": {
+                "member_role": "maneta",
+                "family": "brake_lever",
+                "quantity": "1",
+                "position": "Derecho",
+                "identity_model": "Synthetic lever"
+              },
+              "sources": [
+                "https://example.invalid/synthetic-package"
+              ]
+            },
+            {
+              "id": "caliper",
+              "values": {
+                "member_role": "cáliper",
+                "family": "brake_caliper",
+                "quantity": "1",
+                "position": "Delantero",
+                "identity_model": "Synthetic caliper"
+              },
+              "sources": [
+                "https://example.invalid/synthetic-package"
+              ]
+            }
+          ]
+        },
+        "brake_circuits": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "front",
+              "values": {
+                "circuit_id": "front",
+                "position": "Delantero",
+                "actuation": "Hidráulico",
+                "source_url": "https://example.invalid/synthetic-package",
+                "lever_row_id": "lever",
+                "caliper_row_id": "caliper"
+              },
+              "sources": [
+                "https://example.invalid/synthetic-package"
+              ]
+            }
+          ]
+        },
+        "brake_system": "invalid legacy",
+        "fluid_type": "invalid legacy",
+        "piston_count": "invalid legacy",
+        "rotor_diameter_mm": "invalid legacy",
+        "hose_length_mm": "not a number"
+      },
+      "kind": "synthetic_boundary",
+      "source_urls": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "expected_blocking": [],
+      "expected_issue_subset": [],
+      "forbidden_issue_fields": [
+        "brake_system",
+        "fluid_type",
+        "piston_count",
+        "rotor_diameter_mm",
+        "hose_length_mm",
+        "bleed_port",
+        "hose_fitting_type",
+        "mount_standard",
+        "pad_shape_code",
+        "reach_adjust",
+        "brake_position"
+      ],
+      "expected_sql_blocking": [],
+      "expected_sql_issue_subset": []
+    },
+    {
+      "id": "brake_presentation_a_cable_circuit_carries_no_shipped_fluid",
+      "template": "mechanical_disc_brake",
+      "values": {
+        "spec_evidence_source": "Synthetic package, no inventory claim.",
+        "brake_presentation": "Un freno completo (maneta, cable y funda, cáliper)",
+        "kit_members": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "lever",
+              "values": {
+                "member_role": "maneta",
+                "family": "brake_lever",
+                "quantity": "1",
+                "position": "Derecho",
+                "identity_model": "Synthetic lever"
+              },
+              "sources": [
+                "https://example.invalid/synthetic-package"
+              ]
+            },
+            {
+              "id": "caliper",
+              "values": {
+                "member_role": "cáliper",
+                "family": "brake_caliper",
+                "quantity": "1",
+                "position": "Delantero",
+                "identity_model": "Synthetic caliper"
+              },
+              "sources": [
+                "https://example.invalid/synthetic-package"
+              ]
+            },
+            {
+              "id": "cable",
+              "values": {
+                "member_role": "cable",
+                "family": "control_cable",
+                "quantity": "1",
+                "position": "Delantero"
+              },
+              "sources": [
+                "https://example.invalid/synthetic-package"
+              ]
+            }
+          ]
+        },
+        "brake_circuits": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "front",
+              "values": {
+                "circuit_id": "front",
+                "position": "Delantero",
+                "actuation": "Cable",
+                "source_url": "https://example.invalid/synthetic-package",
+                "lever_row_id": "lever",
+                "caliper_row_id": "caliper",
+                "line_row_id": "cable",
+                "fluid_as_shipped": "DOT 4"
+              },
+              "sources": [
+                "https://example.invalid/synthetic-package"
+              ]
+            }
+          ]
+        }
+      },
+      "kind": "synthetic_boundary",
+      "source_urls": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "expected_blocking": [
+        {
+          "code": "row_field_applicability",
+          "field": "brake_circuits"
+        }
+      ],
+      "expected_issue_subset": [],
+      "forbidden_issue_fields": [],
+      "expected_sql_blocking": [
+        {
+          "code": "row_field_applicability",
+          "field": "brake_circuits"
+        }
+      ],
+      "expected_sql_issue_subset": []
+    },
+    {
+      "id": "brake_presentation_a_complete_mechanical_brake_with_its_circuit",
+      "template": "mechanical_disc_brake",
+      "values": {
+        "spec_evidence_source": "Synthetic package, no inventory claim.",
+        "brake_presentation": "Un freno completo (maneta, cable y funda, cáliper)",
+        "kit_members": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "lever",
+              "values": {
+                "member_role": "maneta",
+                "family": "brake_lever",
+                "quantity": "1",
+                "position": "Derecho",
+                "identity_model": "Synthetic lever"
+              },
+              "sources": [
+                "https://example.invalid/synthetic-package"
+              ]
+            },
+            {
+              "id": "caliper",
+              "values": {
+                "member_role": "cáliper",
+                "family": "brake_caliper",
+                "quantity": "1",
+                "position": "Delantero",
+                "identity_model": "Synthetic caliper"
+              },
+              "sources": [
+                "https://example.invalid/synthetic-package"
+              ]
+            },
+            {
+              "id": "cable",
+              "values": {
+                "member_role": "cable",
+                "family": "control_cable",
+                "quantity": "1",
+                "position": "Delantero"
+              },
+              "sources": [
+                "https://example.invalid/synthetic-package"
+              ]
+            }
+          ]
+        },
+        "brake_circuits": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "front",
+              "values": {
+                "circuit_id": "front",
+                "position": "Delantero",
+                "actuation": "Cable",
+                "source_url": "https://example.invalid/synthetic-package",
+                "lever_row_id": "lever",
+                "caliper_row_id": "caliper",
+                "line_row_id": "cable"
+              },
+              "sources": [
+                "https://example.invalid/synthetic-package"
+              ]
+            }
+          ]
+        }
+      },
+      "kind": "synthetic_boundary",
+      "source_urls": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "expected_blocking": [],
+      "expected_issue_subset": [],
+      "forbidden_issue_fields": [
+        "tool_size_mm",
+        "rotor_diameter_mm"
+      ],
+      "expected_sql_blocking": [],
+      "expected_sql_issue_subset": [],
+      "expected_row_counts": {
+        "kit_members": 3,
+        "brake_circuits": 1
+      }
+    },
+    {
+      "id": "brake_presentation_the_retired_root_tool_size_no_longer_answers",
+      "template": "mechanical_disc_brake",
+      "values": {
+        "spec_evidence_source": "Synthetic package, no inventory claim.",
+        "brake_presentation": "Un freno completo (maneta, cable y funda, cáliper)",
+        "kit_members": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "lever",
+              "values": {
+                "member_role": "maneta",
+                "family": "brake_lever",
+                "quantity": "1",
+                "position": "Derecho",
+                "identity_model": "Synthetic lever"
+              },
+              "sources": [
+                "https://example.invalid/synthetic-package"
+              ]
+            },
+            {
+              "id": "caliper",
+              "values": {
+                "member_role": "cáliper",
+                "family": "brake_caliper",
+                "quantity": "1",
+                "position": "Delantero",
+                "identity_model": "Synthetic caliper"
+              },
+              "sources": [
+                "https://example.invalid/synthetic-package"
+              ]
+            },
+            {
+              "id": "cable",
+              "values": {
+                "member_role": "cable",
+                "family": "control_cable",
+                "quantity": "1",
+                "position": "Delantero"
+              },
+              "sources": [
+                "https://example.invalid/synthetic-package"
+              ]
+            }
+          ]
+        },
+        "brake_circuits": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "front",
+              "values": {
+                "circuit_id": "front",
+                "position": "Delantero",
+                "actuation": "Cable",
+                "source_url": "https://example.invalid/synthetic-package",
+                "lever_row_id": "lever",
+                "caliper_row_id": "caliper",
+                "line_row_id": "cable"
+              },
+              "sources": [
+                "https://example.invalid/synthetic-package"
+              ]
+            }
+          ]
+        },
+        "tool_size_mm": "5 mm",
+        "rotor_diameter_mm": "160"
+      },
+      "kind": "synthetic_boundary",
+      "source_urls": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "expected_blocking": [],
+      "expected_issue_subset": [],
+      "forbidden_issue_fields": [
+        "tool_size_mm",
+        "rotor_diameter_mm"
+      ],
+      "expected_sql_blocking": [],
+      "expected_sql_issue_subset": []
+    },
+    {
+      "id": "brake_presentation_a_mechanical_presentation_admits_no_hydraulic_line",
+      "template": "mechanical_disc_brake",
+      "values": {
+        "spec_evidence_source": "Synthetic package, no inventory claim.",
+        "brake_presentation": "Un freno completo (maneta, cable y funda, cáliper)",
+        "kit_members": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "lever",
+              "values": {
+                "member_role": "maneta",
+                "family": "brake_lever",
+                "quantity": "1",
+                "position": "Derecho",
+                "identity_model": "Synthetic lever"
+              },
+              "sources": [
+                "https://example.invalid/synthetic-package"
+              ]
+            },
+            {
+              "id": "caliper",
+              "values": {
+                "member_role": "cáliper",
+                "family": "brake_caliper",
+                "quantity": "1",
+                "position": "Delantero",
+                "identity_model": "Synthetic caliper"
+              },
+              "sources": [
+                "https://example.invalid/synthetic-package"
+              ]
+            },
+            {
+              "id": "hose",
+              "values": {
+                "member_role": "manguera",
+                "family": "hydraulic_hose",
+                "quantity": "1",
+                "position": "Sin posición"
+              },
+              "sources": [
+                "https://example.invalid/synthetic-package"
+              ]
+            }
+          ]
+        }
+      },
+      "kind": "synthetic_boundary",
+      "source_urls": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "expected_blocking": [
+        {
+          "code": "row_option",
+          "field": "kit_members"
+        }
+      ],
+      "expected_issue_subset": [],
+      "forbidden_issue_fields": [],
+      "expected_sql_blocking": [
+        {
+          "code": "row_option",
+          "field": "kit_members"
+        }
+      ],
+      "expected_sql_issue_subset": []
+    },
+    {
+      "id": "brake_presentation_one_rim_mechanism_is_one_piece_row",
+      "template": "rim_brake",
+      "values": {
+        "spec_evidence_source": "Synthetic package, no inventory claim.",
+        "brake_presentation": "Un mecanismo (un extremo)",
+        "kit_members": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "arm",
+              "values": {
+                "member_role": "cáliper",
+                "family": "brake_caliper",
+                "quantity": "1",
+                "position": "Delantero",
+                "identity_model": "Synthetic rim mechanism"
+              },
+              "sources": [
+                "https://example.invalid/synthetic-package"
+              ]
+            }
+          ]
+        }
+      },
+      "kind": "synthetic_boundary",
+      "source_urls": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "expected_blocking": [],
+      "expected_issue_subset": [],
+      "forbidden_issue_fields": [
+        "brake_circuits",
+        "brake_system",
+        "brake_position",
+        "tool_size_mm"
+      ],
+      "expected_sql_blocking": [],
+      "expected_sql_issue_subset": [],
+      "expected_row_counts": {
+        "kit_members": 1
+      }
+    },
+    {
+      "id": "brake_presentation_a_single_mechanism_owes_no_circuit",
+      "template": "rim_brake",
+      "values": {
+        "spec_evidence_source": "Synthetic package, no inventory claim.",
+        "brake_presentation": "Un mecanismo (un extremo)",
+        "kit_members": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "arm",
+              "values": {
+                "member_role": "cáliper",
+                "family": "brake_caliper",
+                "quantity": "1",
+                "position": "Delantero",
+                "identity_model": "Synthetic rim mechanism"
+              },
+              "sources": [
+                "https://example.invalid/synthetic-package"
+              ]
+            }
+          ]
+        },
+        "brake_circuits": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "front",
+              "values": {
+                "circuit_id": "front",
+                "position": "Delantero",
+                "actuation": "Cable",
+                "source_url": "https://example.invalid/synthetic-package",
+                "caliper_row_id": "arm"
+              },
+              "sources": [
+                "https://example.invalid/synthetic-package"
+              ]
+            }
+          ]
+        }
+      },
+      "kind": "synthetic_boundary",
+      "source_urls": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "expected_blocking": [
+        {
+          "code": "field_applicability",
+          "field": "brake_circuits"
+        }
+      ],
+      "expected_issue_subset": [],
+      "forbidden_issue_fields": [],
+      "expected_sql_blocking": [
+        {
+          "code": "field_applicability",
+          "field": "brake_circuits"
+        }
+      ],
+      "expected_sql_issue_subset": []
+    },
+    {
+      "id": "brake_presentation_a_pair_of_rim_mechanisms_is_two_rows_with_their_own_profiles",
+      "template": "rim_brake",
+      "values": {
+        "spec_evidence_source": "Synthetic package, no inventory claim.",
+        "brake_presentation": "Par de mecanismos",
+        "kit_members": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "arm-f",
+              "values": {
+                "member_role": "cáliper",
+                "family": "brake_caliper",
+                "quantity": "1",
+                "position": "Delantero",
+                "identity_model": "Synthetic V-brake"
+              },
+              "sources": [
+                "https://example.invalid/synthetic-package"
+              ]
+            },
+            {
+              "id": "arm-r",
+              "values": {
+                "member_role": "cáliper",
+                "family": "brake_caliper",
+                "quantity": "1",
+                "position": "Trasero",
+                "identity_model": "Synthetic V-brake"
+              },
+              "sources": [
+                "https://example.invalid/synthetic-package"
+              ]
+            }
+          ]
+        }
+      },
+      "kind": "synthetic_boundary",
+      "source_urls": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "expected_blocking": [],
+      "expected_issue_subset": [],
+      "forbidden_issue_fields": [
+        "brake_system",
+        "brake_position",
+        "tool_size_mm"
+      ],
+      "expected_sql_blocking": [],
+      "expected_sql_issue_subset": [],
+      "expected_row_counts": {
+        "kit_members": 2
+      }
+    },
+    {
+      "id": "brake_presentation_a_rim_set_with_levers_declares_its_cable_circuits",
+      "template": "rim_brake",
+      "values": {
+        "spec_evidence_source": "Synthetic package, no inventory claim.",
+        "brake_presentation": "Set con manetas y cables",
+        "kit_members": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "arm-f",
+              "values": {
+                "member_role": "cáliper",
+                "family": "brake_caliper",
+                "quantity": "1",
+                "position": "Delantero"
+              },
+              "sources": [
+                "https://example.invalid/synthetic-package"
+              ]
+            },
+            {
+              "id": "arm-r",
+              "values": {
+                "member_role": "cáliper",
+                "family": "brake_caliper",
+                "quantity": "1",
+                "position": "Trasero"
+              },
+              "sources": [
+                "https://example.invalid/synthetic-package"
+              ]
+            },
+            {
+              "id": "lever-r",
+              "values": {
+                "member_role": "maneta",
+                "family": "brake_lever",
+                "quantity": "1",
+                "position": "Derecho"
+              },
+              "sources": [
+                "https://example.invalid/synthetic-package"
+              ]
+            },
+            {
+              "id": "lever-l",
+              "values": {
+                "member_role": "maneta",
+                "family": "brake_lever",
+                "quantity": "1",
+                "position": "Izquierdo"
+              },
+              "sources": [
+                "https://example.invalid/synthetic-package"
+              ]
+            },
+            {
+              "id": "cables",
+              "values": {
+                "member_role": "cable",
+                "family": "control_cable",
+                "quantity": "2",
+                "position": "Sin posición"
+              },
+              "sources": [
+                "https://example.invalid/synthetic-package"
+              ]
+            }
+          ]
+        },
+        "brake_circuits": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "front",
+              "values": {
+                "circuit_id": "front",
+                "position": "Delantero",
+                "actuation": "Cable",
+                "source_url": "https://example.invalid/synthetic-package",
+                "lever_row_id": "lever-r",
+                "caliper_row_id": "arm-f",
+                "line_row_id": "cables"
+              },
+              "sources": [
+                "https://example.invalid/synthetic-package"
+              ]
+            },
+            {
+              "id": "rear",
+              "values": {
+                "circuit_id": "rear",
+                "position": "Trasero",
+                "actuation": "Cable",
+                "source_url": "https://example.invalid/synthetic-package",
+                "lever_row_id": "lever-l",
+                "caliper_row_id": "arm-r",
+                "line_row_id": "cables"
+              },
+              "sources": [
+                "https://example.invalid/synthetic-package"
+              ]
+            }
+          ]
+        }
+      },
+      "kind": "synthetic_boundary",
+      "source_urls": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "expected_blocking": [],
+      "expected_issue_subset": [],
+      "forbidden_issue_fields": [],
+      "expected_sql_blocking": [],
+      "expected_sql_issue_subset": [],
+      "expected_row_counts": {
+        "kit_members": 5,
+        "brake_circuits": 2
+      }
+    },
+    {
+      "id": "brake_presentation_a_rim_presentation_cannot_contain_a_rim_presentation",
+      "template": "rim_brake",
+      "values": {
+        "spec_evidence_source": "Synthetic package, no inventory claim.",
+        "brake_presentation": "Par de mecanismos",
+        "kit_members": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "nested",
+              "values": {
+                "member_role": "otro",
+                "family": "rim_brake",
+                "quantity": "1",
+                "position": "Sin posición"
+              },
+              "sources": [
+                "https://example.invalid/synthetic-package"
+              ]
+            }
+          ]
+        }
+      },
+      "kind": "synthetic_boundary",
+      "source_urls": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "expected_blocking": [
+        {
+          "code": "row_option",
+          "field": "kit_members"
+        }
+      ],
+      "expected_issue_subset": [],
+      "forbidden_issue_fields": [],
+      "expected_sql_blocking": [
+        {
+          "code": "row_option",
+          "field": "kit_members"
+        }
+      ],
+      "expected_sql_issue_subset": []
+    },
+    {
+      "id": "brake_presentation_the_retired_rim_root_readings_stay_inert",
+      "template": "rim_brake",
+      "values": {
+        "spec_evidence_source": "Synthetic package, no inventory claim.",
+        "brake_presentation": "Un mecanismo (un extremo)",
+        "kit_members": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "arm",
+              "values": {
+                "member_role": "cáliper",
+                "family": "brake_caliper",
+                "quantity": "1",
+                "position": "Delantero",
+                "identity_model": "Synthetic rim mechanism"
+              },
+              "sources": [
+                "https://example.invalid/synthetic-package"
+              ]
+            }
+          ]
+        },
+        "brake_system": "invalid legacy",
+        "brake_position": "invalid legacy",
+        "tool_size_mm": "M6"
+      },
+      "kind": "synthetic_boundary",
+      "source_urls": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "expected_blocking": [],
+      "expected_issue_subset": [],
+      "forbidden_issue_fields": [
+        "brake_system",
+        "brake_position",
+        "tool_size_mm",
+        "reach_adjust"
+      ],
+      "expected_sql_blocking": [],
+      "expected_sql_issue_subset": []
+    },
+    {
+      "id": "brake_presentation_a_caliper_declares_the_tool_size_of_its_bolts",
+      "template": "brake_caliper",
+      "values": {
+        "braking_surface": "Disco",
+        "brake_actuation": "Mecánico (cable)",
+        "caliper_mount_interface": "Post Mount",
+        "tool_size_mm": "5 mm hex",
+        "spec_evidence_source": "Synthetic sheet"
+      },
+      "kind": "synthetic_boundary",
+      "source_urls": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "expected_blocking": [],
+      "expected_issue_subset": [],
+      "forbidden_issue_fields": [
+        "tool_size_mm"
+      ],
+      "expected_sql_blocking": [],
+      "expected_sql_issue_subset": []
+    }
+  ],
+  "pending_cases": [
+    {
+      "id": "oem_relation_and_editor_validation_pending",
+      "template": null,
+      "reason": "No engine compares an included rotor with the diameters a caliper profile admits, a lever pull with a mechanism, or a shipped fluid with the approvals of each piece (E2). Declared, not verified."
+    },
+    {
+      "id": "circuit_target_family_is_not_checked",
+      "template": null,
+      "reason": "A link proves that the target row exists; it does not check that lever_row_id points at a lever. The row labels show role, position and model so the operator sees what was chosen."
+    },
+    {
+      "id": "a_pair_does_not_count_its_circuits",
+      "template": null,
+      "reason": "No total field exists for circuits; a pair with one circuit stays incomplete by inspection, not by rule."
+    },
+    {
+      "id": "lever_pairs_sold_alone_wait_for_their_presentation",
+      "template": null,
+      "reason": "A pair of levers is not a brake_lever; it needs a lever presentation or member scoping (E1)."
+    }
+  ]
+}

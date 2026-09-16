@@ -6,17 +6,17 @@
  "present_global_templates": 107,
  "stage": "template_deliveries",
  "new_published_deliveries": 68,
- "delivered_stage_percent": 97.14,
+ "delivered_stage_percent": 100.0,
  "original_successor_candidates": 37,
- "original_successors_activated": 34,
+ "original_successors_activated": 37,
  "task_product_fills": 0,
  "task_new_assignments": 720,
  "overall_percent": null,
  "limitations": [
   "Stage percentage is not overall project completion.",
-  "32 original family replacements remain unactivated. Adapted drivetrain_kit, brake_caliper, brake_pad, rotor and brake_lever replacements are live; the frozen 37-family catalogue remains a historical candidate, not the production catalogue.",
+  "All 37 original family replacements are activated as adapted successors (last three on 2026-09-16); the frozen 37-family catalogue remains a historical candidate, not the production catalogue.",
   "Candidate coverage is not family closure or completed product research.",
-  "Member framework and 11 template opt-ins deployed, authenticated read-backs verified, root desktop/compact editor exercised. Embedded editor, OEM relations, consumers, client distribution, remaining original replacements and global sanitation remain open. Template-delivery percentage is not overall completion."
+  "Member framework and 11 template opt-ins deployed, authenticated read-backs verified, root desktop/compact editor exercised. Embedded editor, OEM relations, consumers, client distribution, global sanitation, consumers, E1/E2 engine comparisons and an authenticated fill applier remain open. Template-delivery percentage is not overall completion."
  ],
  "plan_sha256": "16459826fee4c589cce37243afe4e159317212ddf1d47d6d6f1d76f9b3fadf15",
  "candidate_status_updated_at": "2026-09-16T02:12:00Z",
@@ -337,7 +337,7 @@
   "review": "Root; no Claude review claimed",
   "record": "assignment-sanitation-checkpoint-2026-09-14.md"
  },
- "delivery_status_updated_at": "2026-09-16T07:45:00Z",
+ "delivery_status_updated_at": "2026-09-16T08:01:26Z",
  "assignment_repair_progress": {
   "initial_missing": 746,
   "repaired": 726,
@@ -421,7 +421,7 @@
   "record": "assignment-sanitation-checkpoint-2026-09-14.md",
   "reference_choices_are_family_catalog_not_product_bindings": true
  },
- "original_successor_delivery_definition": "Five adapted replacements deployed and read back: drivetrain_kit, brake_caliper, brake_pad, rotor, brake_lever. Frozen prototypes were not activated unchanged; 32 originals await replacement. This counts delivered template architecture, not complete compatibility research or product filling.",
+ "original_successor_delivery_definition": "Five adapted replacements deployed and read back: drivetrain_kit, brake_caliper, brake_pad, rotor, brake_lever. Frozen prototypes were not activated unchanged; 32 originals await replacement. This counts delivered template architecture, not complete compatibility research or product filling. Updated 2026-09-16: all 37 originals now run an adapted replacement (the last three brake presentations as revision 223); the frozen 37-family catalogue stays historical. Still template architecture only.",
  "assignment_image_reviewed_2026_09_15": {
   "assignments_applied": 10,
   "authenticated_readbacks": 10,
@@ -591,7 +591,7 @@
    "Phone and embedded routes, next client distribution and existing shared field surface flags remain open."
   ]
  },
- "published_planned_deliveries": 102,
+ "published_planned_deliveries": 105,
  "new_templates_outside_initial_plan": 2,
  "strict_scalar_extension_2026_09_15": {
   "migration": "20260915200000",
@@ -1075,13 +1075,10 @@
   "technical_fill_persisted": 0
  },
  "remaining_original_replacements": {
-  "count": 3,
-  "families": [
-   "rim_brake",
-   "hydraulic_disc_brake",
-   "mechanical_disc_brake"
-  ],
-  "blocker": "brake-member-ownership-adjudication-2026-09-15.md acceptance conditions (revision 223 pending)"
+  "count": 0,
+  "families": [],
+  "closed_at": "2026-09-16T08:01:26Z",
+  "closed_by": "brake-presentations-adjudication-2026-09-16.md"
  },
  "assignment_seatpost_shim_2026_09_16": {
   "verified_at": "2026-09-16T07:36:49Z",
@@ -1098,5 +1095,63 @@
   "proposal_sha256": "b3e68405be0e863f5401c90dafd8a9e89328011423bc57333ced5a706657e22f",
   "application_sha256": "392728a0386988d1d7ec35c8d5aef909c5b3a324ecdec02b6681ca098bb6959b",
   "record": "seatpost-shim-assignment-2026-09-16.md"
+ },
+ "brake_presentations_2026_09_16": {
+  "migration": "supabase/migrations/20260916130000_brake_presentations.sql",
+  "status": "APPLIED",
+  "verified_at": "2026-09-16T08:01:26Z",
+  "revision": "223",
+  "versions": {
+   "hydraulic_disc_brake": [
+    3,
+    18
+   ],
+   "mechanical_disc_brake": [
+    2,
+    13
+   ],
+   "rim_brake": [
+    2,
+    10
+   ],
+   "brake_caliper": [
+    30,
+    32
+   ]
+  },
+  "authenticated_products": 44,
+  "product_revisions_unchanged": 44,
+  "facts_before_after": [
+   5,
+   5
+  ],
+  "new_definitions": 2,
+  "surface_definitions": 1,
+  "prototypes_absent_before_after": true,
+  "root_errors_closed": [
+   "tool_size_mm owner is brake_caliper; presentation root datum kept as legacy",
+   "rim pair mechanisms are two brake_caliper member rows with their own profiles"
+  ],
+  "sql_cases_local_rollback": 22,
+  "dart_form_tests": 26,
+  "adoption": {
+   "products_evaluated": 44,
+   "products_with_blocking_issues": 0,
+   "products_with_pending_issues": 44,
+   "legacy_observations": 5,
+   "unprojected_active_observations": 0
+  },
+  "engine_limits_documented": [
+   "no cross-profile comparison (E2)",
+   "pair with one circuit is not flagged",
+   "presentation change semantics belong to the client and save RPC"
+  ],
+  "misassigned_candidate_noted": {
+   "sku": "8092",
+   "template": "rim_brake",
+   "reason": "spring pair, a small part, not a presentation; assignment queue"
+  },
+  "record": "brake-presentations-adjudication-2026-09-16.md",
+  "technical_fill_persisted": 0
  }
 }

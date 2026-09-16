@@ -142,11 +142,17 @@ ya los contiene). Worktrees inventariados: tres de Codex, todos detached.
   bielas y platos (`20260916070000`, 57), cadena y conector (`20260916080000`, 44),
   patillas y roldanas (`20260916090000`, 38), rodamiento y pedalier (`20260916100000`, 72),
   dirección (`20260916120000`, 16) y piñonería trasera (`20260916110000`, 64). Cada uno con
-  su `*-successors-adjudication-2026-09-16.md`. Entregas planificadas: **102 de 105**; quedan
-  las tres presentaciones completas de freno, no publicables por diseño.
+  su `*-successors-adjudication-2026-09-16.md`. Entregas planificadas en ese momento: 102 de 105.
 - Dos reglas nuevas quedaron escritas en los compiladores: un campo nuevo nacido `legacy` sólo
   se crea si Root lo retiró con casos; y una publicación que cambia coherencia sobre campos con
   hechos necesita diagnóstico inline y suspensión acotada de la guardia (piñonería).
 - El cliente publicado desde `dc1e6093` (macOS, Android y Windows, 2026-09-15 22:25Z) contiene
   la extensión `8f3d8926`; con eso AE0266 y AE0274 se asignaron a `seatpost_shim` por la ruta
   auditada. Cobertura viva: 1.594 con plantilla, 20 sin ella, 726 explícitas.
+- D2 cerrado: las tres presentaciones completas de freno se publicaron como revisión 223
+  (`20260916130000`, 44 productos, cero bloqueantes, 5 observaciones legacy conservadas, guardia de
+  coherencia sin tocar): [brake-presentations-adjudication-2026-09-16.md](brake-presentations-adjudication-2026-09-16.md).
+  Cierra los dos errores de propiedad de Root (dueño de `tool_size_mm` y los dos mecanismos de un
+  par de llanta). Entregas planificadas: **105 de 105**; quedan 0 reemplazos originales. Lo que no
+  prueba: comparación entre perfiles (E2), un par con un solo circuito, cambio de presentación
+  conservando filas. Llenado técnico persistido: 0.

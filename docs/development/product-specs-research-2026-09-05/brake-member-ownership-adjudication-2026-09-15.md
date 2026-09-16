@@ -3,6 +3,8 @@
 La propuesta de Claude 221 fue rechazada; la corrección 222 conserva avances
 pero todavía no es publicable. Ningún cambio D2 está aplicado.
 
+**Cerrada el 2026-09-16:** la revisión 223 se publicó como `20260916130000_brake_presentations.sql` con los dos errores de propiedad resueltos y las condiciones de aceptación probadas o declaradas como límite del motor; ver [brake-presentations-adjudication-2026-09-16.md](brake-presentations-adjudication-2026-09-16.md).
+
 Se acepta: identificar explícitamente la presentación, separar el circuito de
 sus piezas, dirigir conexiones a IDs de filas y conservar como legacy los
 campos ambiguos que realmente existen. Un campo ausente no demuestra pieza

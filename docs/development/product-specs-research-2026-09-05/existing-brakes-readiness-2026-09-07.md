@@ -7,6 +7,8 @@ runtime. `mechanical_coverage_complete` y `automatic_fill_authorized` en
 `false`. No toqué las cinco de rodamiento/motor, ni las otras 25, ni las 68
 nuevas.
 
+**Publicado el 2026-09-16** el último tramo: las tres presentaciones completas y el dueño de `tool_size_mm` en `brake_caliper` como `20260916130000_brake_presentations.sql` (revisión 223, 44 productos); las cinco piezas se habían publicado el 2026-09-15. Ver [brake-presentations-adjudication-2026-09-16.md](brake-presentations-adjudication-2026-09-16.md).
+
 Auditando los 128 usos y no sólo la lista que diste, el bloque tenía **tres
 defectos sistemáticos**, y cada uno explica varios de los puntos que señalaste:
 

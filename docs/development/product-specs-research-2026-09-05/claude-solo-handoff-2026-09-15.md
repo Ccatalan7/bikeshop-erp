@@ -21,7 +21,7 @@ estos indicadores separados:
 
 | Frente | Estado verificable | Porcentaje | Qué significa |
 |---|---:|---:|---|
-| Entregas planificadas de arquitectura de plantillas | 78 de 105 (actualizado 2026-09-16; era 73) | **74,29%** | 68 plantillas nuevas y diez reemplazos originales adaptados ya publicados (los cinco de neumático y cámara el 2026-09-16); quedan 27 reemplazos originales. No mide compatibilidad completa ni llenado. |
+| Entregas planificadas de arquitectura de plantillas | 105 de 105 (actualizado 2026-09-16; era 73) | **100%** | 68 plantillas nuevas y los 37 reemplazos originales adaptados ya publicados (los últimos, las tres presentaciones completas de freno, el 2026-09-16); quedan 0 reemplazos originales. No mide compatibilidad completa ni llenado. |
 | Saneamiento del lote inicial sin ficha | 720 de 746 | **96,51%** | Asignaciones aplicadas con recibo y lectura autenticada; quedan 26 registros del lote (9 no materiales y 17 por resolver). No equivale a que todos los productos sean piezas físicas bien clasificados. |
 | Cobertura de plantillas globales | 1.588 de 1.614 registros marcados producto/no servicio tienen plantilla efectiva en la última lectura | **98,39% nominal** | El denominador todavía incluye registros no materiales mal clasificados; la auditoría semántica no está cerrada. No es una certificación de familias. |
 | Llenado técnico de productos | 0 productos | **0%** | No se ha persistido ningún perfil ni hecho técnico investigado como llenado de catálogo. |
@@ -312,7 +312,7 @@ cinco están activos como reemplazos adaptados: `drivetrain_kit`,
 **Actualización 2026-09-16:** publicado el reemplazo de `tire`, `tube`, `rim_strip`,
 `tubeless_consumable` y `tubeless_valve` (`20260916030000`, 271 productos, cero
 bloqueantes); ver [su adjudicación](tire-tube-successors-adjudication-2026-09-16.md).
-**Quedan 27.** Rayos se publicó después (`20260916040000`, 58 productos) y maza y llanta también (`20260916050000`, 96 productos) y mandos y desviadores (`20260916060000`, 94 productos) y cadena y conector (`20260916080000`, 44 productos) y bielas, platos y volantes (`20260916070000`, 57 productos), patillas, roldanas y guías (`20260916090000`, 38) y rodamiento, pedalier, eje y cubeta (`20260916100000`, 72): **quedan 3** tras dirección (`20260916120000`, 16) y piñonería trasera (`20260916110000`, 64, activación revisada sobre datos poblados): las tres presentaciones completas de freno (`rim_brake`, `hydraulic_disc_brake`, `mechanical_disc_brake`), no publicables hasta cumplir las condiciones de [brake-member-ownership-adjudication-2026-09-15.md](brake-member-ownership-adjudication-2026-09-15.md). El molde para los siguientes es `scripts/inventory/compile_tire_tube_successors.py`:
+**Quedan 27.** Rayos se publicó después (`20260916040000`, 58 productos) y maza y llanta también (`20260916050000`, 96 productos) y mandos y desviadores (`20260916060000`, 94 productos) y cadena y conector (`20260916080000`, 44 productos) y bielas, platos y volantes (`20260916070000`, 57 productos), patillas, roldanas y guías (`20260916090000`, 38) y rodamiento, pedalier, eje y cubeta (`20260916100000`, 72): dirección (`20260916120000`, 16) y piñonería trasera (`20260916110000`, 64, activación revisada sobre datos poblados) siguieron, y las tres presentaciones completas de freno (`rim_brake`, `hydraulic_disc_brake`, `mechanical_disc_brake`) se publicaron como revisión 223 (`20260916130000`, 44 productos) cumpliendo las condiciones de [brake-member-ownership-adjudication-2026-09-15.md](brake-member-ownership-adjudication-2026-09-15.md); ver [brake-presentations-adjudication-2026-09-16.md](brake-presentations-adjudication-2026-09-16.md). **Quedan 0.** El molde para los siguientes es `scripts/inventory/compile_tire_tube_successors.py`:
 preimagen fresca comparada con la congelada, delta de IDs, captura de fichas por
 RPC con los IDs resueltos antes de cambiar de rol, ensayo local, arnés Dart,
 adopción, verificador que falla antes, despliegue con `--verify` y lectura posterior.
@@ -330,13 +330,15 @@ casos positivos/negativos/desconocidos, writer autenticado, read-back de todos
 los productos afectados y revisión independiente. No actives un prototipo sólo
 porque compila o porque el número de campos coincide.
 
-El siguiente bloque grande disponible es D2 de presentaciones completas de
-freno. [`brake-member-ownership-adjudication-2026-09-15.md`](brake-member-ownership-adjudication-2026-09-15.md)
-lo dejó no publicable por dos asuntos: propiedad de `tool_size_mm` del cáliper
-y separación de los dos mecanismos de un par de frenos de llanta. También
-quedaron pendientes rutas de teléfono/embebidas y la superficie de consumidores.
+D2, las presentaciones completas de freno, se publicó el 2026-09-16 como
+revisión 223 (`20260916130000`, 44 productos, cero bloqueantes):
+[`brake-presentations-adjudication-2026-09-16.md`](brake-presentations-adjudication-2026-09-16.md)
+cierra los dos asuntos de [`brake-member-ownership-adjudication-2026-09-15.md`](brake-member-ownership-adjudication-2026-09-15.md)
+(el cáliper es dueño de `tool_size_mm`; los dos mecanismos de un par de llanta
+son dos filas con perfil propio). Siguen pendientes rutas de teléfono/embebidas,
+la superficie de consumidores, E1/E2 en el motor y los pares de manetas.
 No uses la existencia de las cinco piezas de freno como certificado de un
-conjunto completo.
+conjunto completo: las 44 fichas tienen la presentación pendiente.
 
 ## Preparación obligatoria del llenado
 

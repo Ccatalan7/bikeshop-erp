@@ -1,0 +1,4621 @@
+{
+  "schema_version": 2,
+  "templates": [
+    {
+      "contract_version": 3,
+      "created_at": "2026-03-18T21:38:37.526215+00:00",
+      "default_tags": [],
+      "description": "Kit o freno completo hidráulico",
+      "form_contract": {
+        "rules_version": 2,
+        "roles": {
+          "fluid_type": "legacy",
+          "brake_system": "legacy",
+          "mount_standard": "legacy",
+          "piston_count": "legacy",
+          "rotor_diameter_mm": "legacy",
+          "reach_adjust": "legacy",
+          "brake_position": "legacy",
+          "hose_length_mm": "legacy",
+          "pad_shape_code": "legacy",
+          "hose_fitting_type": "legacy",
+          "bleed_port": "legacy",
+          "spec_evidence_source": "declaration",
+          "brake_presentation": "primary",
+          "kit_members": "contents",
+          "brake_circuits": "declaration"
+        },
+        "semantic_roles": {
+          "fluid_type": "legacy",
+          "brake_system": "legacy",
+          "mount_standard": "legacy",
+          "piston_count": "legacy",
+          "rotor_diameter_mm": "legacy",
+          "reach_adjust": "legacy",
+          "brake_position": "legacy",
+          "hose_length_mm": "legacy",
+          "pad_shape_code": "legacy",
+          "hose_fitting_type": "legacy",
+          "bleed_port": "legacy",
+          "spec_evidence_source": "evidence",
+          "brake_presentation": "intrinsic",
+          "kit_members": "contents",
+          "brake_circuits": "compatibility"
+        },
+        "labels": {},
+        "allowed_options": {
+          "brake_presentation": [
+            "Un freno completo (maneta, manguera, cáliper)",
+            "Par delantero y trasero",
+            "Cáliper con manguera, sin maneta"
+          ]
+        },
+        "allowed_when": {
+          "fluid_type": {
+            "kind": "never"
+          },
+          "brake_system": {
+            "kind": "never"
+          },
+          "mount_standard": {
+            "kind": "never"
+          },
+          "piston_count": {
+            "kind": "never"
+          },
+          "rotor_diameter_mm": {
+            "kind": "never"
+          },
+          "reach_adjust": {
+            "kind": "never"
+          },
+          "brake_position": {
+            "kind": "never"
+          },
+          "hose_length_mm": {
+            "kind": "never"
+          },
+          "pad_shape_code": {
+            "kind": "never"
+          },
+          "hose_fitting_type": {
+            "kind": "never"
+          },
+          "bleed_port": {
+            "kind": "never"
+          },
+          "spec_evidence_source": {
+            "kind": "always"
+          },
+          "brake_presentation": {
+            "kind": "always"
+          },
+          "kit_members": {
+            "kind": "always"
+          },
+          "brake_circuits": {
+            "kind": "when",
+            "rows": [
+              [
+                {
+                  "field": "brake_presentation",
+                  "operator": "in",
+                  "value_type": "token",
+                  "value": [
+                    "Un freno completo (maneta, manguera, cáliper)",
+                    "Par delantero y trasero"
+                  ]
+                }
+              ]
+            ]
+          }
+        },
+        "required_when": {
+          "fluid_type": {
+            "kind": "never"
+          },
+          "brake_system": {
+            "kind": "never"
+          },
+          "mount_standard": {
+            "kind": "never"
+          },
+          "piston_count": {
+            "kind": "never"
+          },
+          "rotor_diameter_mm": {
+            "kind": "never"
+          },
+          "reach_adjust": {
+            "kind": "never"
+          },
+          "brake_position": {
+            "kind": "never"
+          },
+          "hose_length_mm": {
+            "kind": "never"
+          },
+          "pad_shape_code": {
+            "kind": "never"
+          },
+          "hose_fitting_type": {
+            "kind": "never"
+          },
+          "bleed_port": {
+            "kind": "never"
+          },
+          "spec_evidence_source": {
+            "kind": "never"
+          },
+          "brake_presentation": {
+            "kind": "always"
+          },
+          "kit_members": {
+            "kind": "always"
+          },
+          "brake_circuits": {
+            "kind": "when",
+            "rows": [
+              [
+                {
+                  "field": "brake_presentation",
+                  "operator": "in",
+                  "value_type": "token",
+                  "value": [
+                    "Un freno completo (maneta, manguera, cáliper)",
+                    "Par delantero y trasero"
+                  ]
+                }
+              ]
+            ]
+          }
+        },
+        "prerequisites": {
+          "kit_members": [
+            "brake_presentation",
+            "spec_evidence_source"
+          ],
+          "brake_circuits": [
+            "brake_presentation",
+            "spec_evidence_source"
+          ]
+        },
+        "helpers": {
+          "brake_presentation": "Qué se vende armado: un freno completo, un par o una pieza con su línea. Todo lo demás depende de esta elección; la ausencia de filas nunca significa pieza única.",
+          "kit_members": "Una fila por pieza física incluida, con su perfil propio: cada maneta, cada cáliper, cada línea, rotor, adaptador o pastilla. Dos piezas del mismo modelo son dos filas. Las medidas e interfaces viven en el perfil de cada pieza, nunca en esta raíz.",
+          "brake_circuits": "Un circuito por freno accionado: qué maneta mueve qué cáliper o mecanismo y por qué línea, apuntando a las filas de piezas. El líquido con que se entrega es del circuito; el que cada pieza admite es de esa pieza. Declararlo no verifica que las piezas calcen.",
+          "spec_evidence_source": "Documento o envase que respalda el contenido y los circuitos declarados."
+        },
+        "evidence_requirements": {
+          "kit_members": "package_or_label",
+          "brake_circuits": "package_or_label",
+          "spec_evidence_source": "oem_or_package"
+        },
+        "row_conditions": {
+          "version": 1,
+          "fields": {
+            "kit_members": {
+              "allowed_options": {
+                "family": [
+                  "brake_lever",
+                  "brake_caliper",
+                  "hydraulic_hose",
+                  "rotor",
+                  "brake_mount_adapter",
+                  "brake_pad",
+                  "brake_fluid"
+                ]
+              }
+            },
+            "brake_circuits": {
+              "allowed_options": {
+                "actuation": [
+                  "Hidráulico"
+                ]
+              },
+              "allowed_when": {
+                "fluid_as_shipped": {
+                  "kind": "when",
+                  "rows": [
+                    [
+                      {
+                        "field": "actuation",
+                        "operator": "eq",
+                        "value_type": "token",
+                        "value": "Hidráulico"
+                      }
+                    ]
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "member_profiles": {
+          "version": 1,
+          "collections": [
+            {
+              "field": "kit_members",
+              "family_column": "family",
+              "identity_columns": [
+                "member_role",
+                "position",
+                "identity_brand",
+                "identity_model"
+              ]
+            }
+          ]
+        },
+        "row_coherence": {
+          "version": 2,
+          "cardinalities": [],
+          "links": [
+            {
+              "id": "brake_circuit_lever",
+              "field": "brake_circuits",
+              "column": "lever_row_id",
+              "target_field": "kit_members",
+              "label_columns": [
+                "member_role",
+                "position",
+                "identity_model"
+              ]
+            },
+            {
+              "id": "brake_circuit_caliper",
+              "field": "brake_circuits",
+              "column": "caliper_row_id",
+              "target_field": "kit_members",
+              "label_columns": [
+                "member_role",
+                "position",
+                "identity_model"
+              ]
+            },
+            {
+              "id": "brake_circuit_line",
+              "field": "brake_circuits",
+              "column": "line_row_id",
+              "target_field": "kit_members",
+              "label_columns": [
+                "member_role",
+                "position",
+                "identity_model"
+              ]
+            }
+          ]
+        }
+      },
+      "id": "22fdca94-afe0-4221-a436-959c8ce94a81",
+      "is_active": true,
+      "key": "hydraulic_disc_brake",
+      "name": "Freno Disco Hidráulico",
+      "technical_family": "complete_brake",
+      "tenant_id": null,
+      "updated_at": "2026-03-18T21:38:37.526215+00:00",
+      "origin": "existing",
+      "fields": [
+        {
+          "constraint_rules": [],
+          "created_at": "2026-03-18T21:38:37.526215+00:00",
+          "default_value_json": null,
+          "helper_text": null,
+          "id": "37ae62a7-7234-427d-a869-1df8eeefe6ce",
+          "is_required": false,
+          "option_rules": [],
+          "section_key": "legacy",
+          "sort_order": 10,
+          "spec_definition_id": "221402c1-3400-496d-ac3a-93937fc411ca",
+          "template_id": "22fdca94-afe0-4221-a436-959c8ce94a81",
+          "tenant_id": null,
+          "updated_at": "2026-03-18T21:38:37.526215+00:00",
+          "visibility_rules": [],
+          "key": "rotor_diameter_mm"
+        },
+        {
+          "constraint_rules": [],
+          "created_at": "2026-03-18T21:38:37.526215+00:00",
+          "default_value_json": null,
+          "helper_text": null,
+          "id": "636cc0e8-8289-4add-a694-b8140d3ee1ea",
+          "is_required": false,
+          "option_rules": [],
+          "section_key": "legacy",
+          "sort_order": 20,
+          "spec_definition_id": "2adde90f-610c-4c9a-9cbb-5c0f9aa31c10",
+          "template_id": "22fdca94-afe0-4221-a436-959c8ce94a81",
+          "tenant_id": null,
+          "updated_at": "2026-03-18T21:38:37.526215+00:00",
+          "visibility_rules": [],
+          "key": "hose_length_mm"
+        },
+        {
+          "constraint_rules": [],
+          "created_at": "2026-03-18T21:38:37.526215+00:00",
+          "default_value_json": null,
+          "helper_text": null,
+          "id": "6ea8c23a-07df-43e3-9aff-8edecff42d7d",
+          "is_required": false,
+          "option_rules": [],
+          "section_key": "legacy",
+          "sort_order": 10,
+          "spec_definition_id": "58b593b8-edb8-47a2-852d-4a40ff247543",
+          "template_id": "22fdca94-afe0-4221-a436-959c8ce94a81",
+          "tenant_id": null,
+          "updated_at": "2026-03-18T21:38:37.526215+00:00",
+          "visibility_rules": [],
+          "key": "reach_adjust"
+        },
+        {
+          "constraint_rules": [],
+          "created_at": "2026-03-18T21:38:37.526215+00:00",
+          "default_value_json": null,
+          "helper_text": null,
+          "id": "789ac6c8-8000-472a-84f3-f375e1d45c8c",
+          "is_required": false,
+          "option_rules": [],
+          "section_key": "legacy",
+          "sort_order": 10,
+          "spec_definition_id": "de380dfb-d1ad-4702-a978-069692dabd49",
+          "template_id": "22fdca94-afe0-4221-a436-959c8ce94a81",
+          "tenant_id": null,
+          "updated_at": "2026-03-18T21:38:37.526215+00:00",
+          "visibility_rules": [],
+          "key": "brake_system"
+        },
+        {
+          "constraint_rules": [],
+          "created_at": "2026-03-18T21:38:37.526215+00:00",
+          "default_value_json": null,
+          "helper_text": null,
+          "id": "899e088b-fa21-40e5-8c04-72da03596e8d",
+          "is_required": false,
+          "option_rules": [],
+          "section_key": "legacy",
+          "sort_order": 40,
+          "spec_definition_id": "91f8707f-311a-4232-8a79-073fd41b5535",
+          "template_id": "22fdca94-afe0-4221-a436-959c8ce94a81",
+          "tenant_id": null,
+          "updated_at": "2026-03-18T21:38:37.526215+00:00",
+          "visibility_rules": [],
+          "key": "bleed_port"
+        },
+        {
+          "constraint_rules": [],
+          "created_at": "2026-09-06T06:58:57.745728+00:00",
+          "default_value_json": null,
+          "helper_text": null,
+          "id": "a9ad16e3-8077-432d-bd55-b8c26f269d46",
+          "is_required": false,
+          "option_rules": [],
+          "section_key": "declaration",
+          "sort_order": 5,
+          "spec_definition_id": "4f055961-6c16-430b-a4e2-e6b09dc1cccc",
+          "template_id": "22fdca94-afe0-4221-a436-959c8ce94a81",
+          "tenant_id": null,
+          "updated_at": "2026-09-06T06:58:57.745728+00:00",
+          "visibility_rules": [],
+          "key": "spec_evidence_source"
+        },
+        {
+          "constraint_rules": [],
+          "created_at": "2026-03-18T21:38:37.526215+00:00",
+          "default_value_json": null,
+          "helper_text": null,
+          "id": "acf9dd9d-5175-4e7c-a3dd-5a1779819922",
+          "is_required": false,
+          "option_rules": [],
+          "section_key": "legacy",
+          "sort_order": 10,
+          "spec_definition_id": "7d4a8477-18a9-4132-b027-ebe866dba164",
+          "template_id": "22fdca94-afe0-4221-a436-959c8ce94a81",
+          "tenant_id": null,
+          "updated_at": "2026-03-18T21:38:37.526215+00:00",
+          "visibility_rules": [],
+          "key": "fluid_type"
+        },
+        {
+          "constraint_rules": [],
+          "created_at": "2026-03-18T21:38:37.526215+00:00",
+          "default_value_json": null,
+          "helper_text": null,
+          "id": "b24fe2c4-4fd9-4046-b13b-58b0739d363e",
+          "is_required": false,
+          "option_rules": [],
+          "section_key": "legacy",
+          "sort_order": 20,
+          "spec_definition_id": "61c2e601-3e8a-4cd4-ad16-e00867358882",
+          "template_id": "22fdca94-afe0-4221-a436-959c8ce94a81",
+          "tenant_id": null,
+          "updated_at": "2026-03-18T21:38:37.526215+00:00",
+          "visibility_rules": [],
+          "key": "pad_shape_code"
+        },
+        {
+          "constraint_rules": [],
+          "created_at": "2026-03-18T21:38:37.526215+00:00",
+          "default_value_json": null,
+          "helper_text": null,
+          "id": "d0279d3b-094f-404f-a5e0-f674eb6a9cc2",
+          "is_required": false,
+          "option_rules": [],
+          "section_key": "legacy",
+          "sort_order": 20,
+          "spec_definition_id": "ef5f6e33-beec-4eb9-9add-26257133cf49",
+          "template_id": "22fdca94-afe0-4221-a436-959c8ce94a81",
+          "tenant_id": null,
+          "updated_at": "2026-03-18T21:38:37.526215+00:00",
+          "visibility_rules": [],
+          "key": "brake_position"
+        },
+        {
+          "constraint_rules": [],
+          "created_at": "2026-03-18T21:38:37.526215+00:00",
+          "default_value_json": null,
+          "helper_text": null,
+          "id": "d09861f4-ec93-469c-8b11-8bfe63d1ba36",
+          "is_required": false,
+          "option_rules": [],
+          "section_key": "legacy",
+          "sort_order": 30,
+          "spec_definition_id": "ecaa9ec5-4849-439c-a81e-9dbadaca0f3a",
+          "template_id": "22fdca94-afe0-4221-a436-959c8ce94a81",
+          "tenant_id": null,
+          "updated_at": "2026-03-18T21:38:37.526215+00:00",
+          "visibility_rules": [],
+          "key": "hose_fitting_type"
+        },
+        {
+          "constraint_rules": [],
+          "created_at": "2026-03-18T21:38:37.526215+00:00",
+          "default_value_json": null,
+          "helper_text": null,
+          "id": "d7a34da6-a3e4-4315-b1fb-a3de28f0b439",
+          "is_required": false,
+          "option_rules": [],
+          "section_key": "legacy",
+          "sort_order": 10,
+          "spec_definition_id": "c5756549-2382-4f90-9995-6409684067c7",
+          "template_id": "22fdca94-afe0-4221-a436-959c8ce94a81",
+          "tenant_id": null,
+          "updated_at": "2026-03-18T21:38:37.526215+00:00",
+          "visibility_rules": [],
+          "key": "piston_count"
+        },
+        {
+          "constraint_rules": [],
+          "created_at": "2026-03-18T21:38:37.526215+00:00",
+          "default_value_json": null,
+          "helper_text": null,
+          "id": "e01e0403-1a24-4e44-abf6-dc339948100c",
+          "is_required": false,
+          "option_rules": [],
+          "section_key": "legacy",
+          "sort_order": 10,
+          "spec_definition_id": "0ea458cc-c939-4a2d-b888-7e21e302f636",
+          "template_id": "22fdca94-afe0-4221-a436-959c8ce94a81",
+          "tenant_id": null,
+          "updated_at": "2026-03-18T21:38:37.526215+00:00",
+          "visibility_rules": [],
+          "key": "mount_standard"
+        },
+        {
+          "key": "brake_presentation",
+          "section_key": "primary",
+          "sort_order": 0,
+          "is_required": false,
+          "visibility_rules": [],
+          "option_rules": [],
+          "constraint_rules": [],
+          "helper_text": null,
+          "default_value_json": null
+        },
+        {
+          "key": "kit_members",
+          "section_key": "contents",
+          "sort_order": 1,
+          "is_required": false,
+          "visibility_rules": [],
+          "option_rules": [],
+          "constraint_rules": [],
+          "helper_text": null,
+          "default_value_json": null
+        },
+        {
+          "key": "brake_circuits",
+          "section_key": "declaration",
+          "sort_order": 2,
+          "is_required": false,
+          "visibility_rules": [],
+          "option_rules": [],
+          "constraint_rules": [],
+          "helper_text": null,
+          "default_value_json": null
+        }
+      ]
+    },
+    {
+      "contract_version": 2,
+      "created_at": "2026-03-18T21:38:37.526215+00:00",
+      "default_tags": [],
+      "description": "Freno de disco mecánico completo",
+      "form_contract": {
+        "rules_version": 2,
+        "roles": {
+          "brake_system": "legacy",
+          "mount_standard": "legacy",
+          "rotor_diameter_mm": "legacy",
+          "reach_adjust": "legacy",
+          "tool_size_mm": "legacy",
+          "brake_position": "legacy",
+          "pad_shape_code": "legacy",
+          "spec_evidence_source": "declaration",
+          "brake_presentation": "primary",
+          "kit_members": "contents",
+          "brake_circuits": "declaration"
+        },
+        "semantic_roles": {
+          "brake_system": "legacy",
+          "mount_standard": "legacy",
+          "rotor_diameter_mm": "legacy",
+          "reach_adjust": "legacy",
+          "tool_size_mm": "legacy",
+          "brake_position": "legacy",
+          "pad_shape_code": "legacy",
+          "spec_evidence_source": "evidence",
+          "brake_presentation": "intrinsic",
+          "kit_members": "contents",
+          "brake_circuits": "compatibility"
+        },
+        "labels": {},
+        "allowed_options": {
+          "brake_presentation": [
+            "Un freno completo (maneta, cable y funda, cáliper)",
+            "Par delantero y trasero",
+            "Cáliper sin maneta"
+          ]
+        },
+        "allowed_when": {
+          "brake_system": {
+            "kind": "never"
+          },
+          "mount_standard": {
+            "kind": "never"
+          },
+          "rotor_diameter_mm": {
+            "kind": "never"
+          },
+          "reach_adjust": {
+            "kind": "never"
+          },
+          "tool_size_mm": {
+            "kind": "never"
+          },
+          "brake_position": {
+            "kind": "never"
+          },
+          "pad_shape_code": {
+            "kind": "never"
+          },
+          "spec_evidence_source": {
+            "kind": "always"
+          },
+          "brake_presentation": {
+            "kind": "always"
+          },
+          "kit_members": {
+            "kind": "always"
+          },
+          "brake_circuits": {
+            "kind": "when",
+            "rows": [
+              [
+                {
+                  "field": "brake_presentation",
+                  "operator": "in",
+                  "value_type": "token",
+                  "value": [
+                    "Un freno completo (maneta, cable y funda, cáliper)",
+                    "Par delantero y trasero"
+                  ]
+                }
+              ]
+            ]
+          }
+        },
+        "required_when": {
+          "brake_system": {
+            "kind": "never"
+          },
+          "mount_standard": {
+            "kind": "never"
+          },
+          "rotor_diameter_mm": {
+            "kind": "never"
+          },
+          "reach_adjust": {
+            "kind": "never"
+          },
+          "tool_size_mm": {
+            "kind": "never"
+          },
+          "brake_position": {
+            "kind": "never"
+          },
+          "pad_shape_code": {
+            "kind": "never"
+          },
+          "spec_evidence_source": {
+            "kind": "never"
+          },
+          "brake_presentation": {
+            "kind": "always"
+          },
+          "kit_members": {
+            "kind": "always"
+          },
+          "brake_circuits": {
+            "kind": "when",
+            "rows": [
+              [
+                {
+                  "field": "brake_presentation",
+                  "operator": "in",
+                  "value_type": "token",
+                  "value": [
+                    "Un freno completo (maneta, cable y funda, cáliper)",
+                    "Par delantero y trasero"
+                  ]
+                }
+              ]
+            ]
+          }
+        },
+        "prerequisites": {
+          "kit_members": [
+            "brake_presentation",
+            "spec_evidence_source"
+          ],
+          "brake_circuits": [
+            "brake_presentation",
+            "spec_evidence_source"
+          ]
+        },
+        "helpers": {
+          "brake_presentation": "Qué se vende armado: un freno completo, un par o una pieza con su línea. Todo lo demás depende de esta elección; la ausencia de filas nunca significa pieza única.",
+          "kit_members": "Una fila por pieza física incluida, con su perfil propio: cada maneta, cada cáliper, cada línea, rotor, adaptador o pastilla. Dos piezas del mismo modelo son dos filas. Las medidas e interfaces viven en el perfil de cada pieza, nunca en esta raíz.",
+          "brake_circuits": "Un circuito por freno accionado: qué maneta mueve qué cáliper o mecanismo y por qué línea, apuntando a las filas de piezas. El líquido con que se entrega es del circuito; el que cada pieza admite es de esa pieza. Declararlo no verifica que las piezas calcen.",
+          "spec_evidence_source": "Documento o envase que respalda el contenido y los circuitos declarados."
+        },
+        "evidence_requirements": {
+          "kit_members": "package_or_label",
+          "brake_circuits": "package_or_label",
+          "spec_evidence_source": "oem_or_package"
+        },
+        "row_conditions": {
+          "version": 1,
+          "fields": {
+            "kit_members": {
+              "allowed_options": {
+                "family": [
+                  "brake_lever",
+                  "brake_caliper",
+                  "control_cable",
+                  "control_housing",
+                  "rotor",
+                  "brake_mount_adapter",
+                  "brake_pad"
+                ]
+              }
+            },
+            "brake_circuits": {
+              "allowed_options": {
+                "actuation": [
+                  "Cable"
+                ]
+              },
+              "allowed_when": {
+                "fluid_as_shipped": {
+                  "kind": "when",
+                  "rows": [
+                    [
+                      {
+                        "field": "actuation",
+                        "operator": "eq",
+                        "value_type": "token",
+                        "value": "Hidráulico"
+                      }
+                    ]
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "member_profiles": {
+          "version": 1,
+          "collections": [
+            {
+              "field": "kit_members",
+              "family_column": "family",
+              "identity_columns": [
+                "member_role",
+                "position",
+                "identity_brand",
+                "identity_model"
+              ]
+            }
+          ]
+        },
+        "row_coherence": {
+          "version": 2,
+          "cardinalities": [],
+          "links": [
+            {
+              "id": "brake_circuit_lever",
+              "field": "brake_circuits",
+              "column": "lever_row_id",
+              "target_field": "kit_members",
+              "label_columns": [
+                "member_role",
+                "position",
+                "identity_model"
+              ]
+            },
+            {
+              "id": "brake_circuit_caliper",
+              "field": "brake_circuits",
+              "column": "caliper_row_id",
+              "target_field": "kit_members",
+              "label_columns": [
+                "member_role",
+                "position",
+                "identity_model"
+              ]
+            },
+            {
+              "id": "brake_circuit_line",
+              "field": "brake_circuits",
+              "column": "line_row_id",
+              "target_field": "kit_members",
+              "label_columns": [
+                "member_role",
+                "position",
+                "identity_model"
+              ]
+            }
+          ]
+        }
+      },
+      "id": "b6df9356-898e-4f0b-aea8-d27db45e96d1",
+      "is_active": true,
+      "key": "mechanical_disc_brake",
+      "name": "Freno Disco Mecánico",
+      "technical_family": "complete_brake",
+      "tenant_id": null,
+      "updated_at": "2026-03-18T21:38:37.526215+00:00",
+      "origin": "existing",
+      "fields": [
+        {
+          "constraint_rules": [],
+          "created_at": "2026-03-18T21:38:37.526215+00:00",
+          "default_value_json": null,
+          "helper_text": null,
+          "id": "01651f1e-1aa7-4bed-ae36-badbc5fecd59",
+          "is_required": false,
+          "option_rules": [],
+          "section_key": "legacy",
+          "sort_order": 20,
+          "spec_definition_id": "61c2e601-3e8a-4cd4-ad16-e00867358882",
+          "template_id": "b6df9356-898e-4f0b-aea8-d27db45e96d1",
+          "tenant_id": null,
+          "updated_at": "2026-03-18T21:38:37.526215+00:00",
+          "visibility_rules": [],
+          "key": "pad_shape_code"
+        },
+        {
+          "constraint_rules": [],
+          "created_at": "2026-03-18T21:38:37.526215+00:00",
+          "default_value_json": null,
+          "helper_text": null,
+          "id": "09fc8205-4b12-4a6a-afe8-addc27965a58",
+          "is_required": false,
+          "option_rules": [],
+          "section_key": "legacy",
+          "sort_order": 10,
+          "spec_definition_id": "d27e19a6-1746-4239-bea6-82f1e43ff6f3",
+          "template_id": "b6df9356-898e-4f0b-aea8-d27db45e96d1",
+          "tenant_id": null,
+          "updated_at": "2026-03-18T21:38:37.526215+00:00",
+          "visibility_rules": [],
+          "key": "tool_size_mm"
+        },
+        {
+          "constraint_rules": [],
+          "created_at": "2026-03-18T21:38:37.526215+00:00",
+          "default_value_json": null,
+          "helper_text": null,
+          "id": "3cde8fe8-451d-4f60-9741-22320f82bb7a",
+          "is_required": false,
+          "option_rules": [],
+          "section_key": "legacy",
+          "sort_order": 10,
+          "spec_definition_id": "de380dfb-d1ad-4702-a978-069692dabd49",
+          "template_id": "b6df9356-898e-4f0b-aea8-d27db45e96d1",
+          "tenant_id": null,
+          "updated_at": "2026-03-18T21:38:37.526215+00:00",
+          "visibility_rules": [],
+          "key": "brake_system"
+        },
+        {
+          "constraint_rules": [],
+          "created_at": "2026-03-18T21:38:37.526215+00:00",
+          "default_value_json": null,
+          "helper_text": null,
+          "id": "57aa9322-4cf1-4164-8925-a09db11cba14",
+          "is_required": false,
+          "option_rules": [],
+          "section_key": "legacy",
+          "sort_order": 10,
+          "spec_definition_id": "221402c1-3400-496d-ac3a-93937fc411ca",
+          "template_id": "b6df9356-898e-4f0b-aea8-d27db45e96d1",
+          "tenant_id": null,
+          "updated_at": "2026-03-18T21:38:37.526215+00:00",
+          "visibility_rules": [],
+          "key": "rotor_diameter_mm"
+        },
+        {
+          "constraint_rules": [],
+          "created_at": "2026-03-18T21:38:37.526215+00:00",
+          "default_value_json": null,
+          "helper_text": null,
+          "id": "9f87f9e3-ecf2-46cb-8587-357421001175",
+          "is_required": false,
+          "option_rules": [],
+          "section_key": "legacy",
+          "sort_order": 10,
+          "spec_definition_id": "58b593b8-edb8-47a2-852d-4a40ff247543",
+          "template_id": "b6df9356-898e-4f0b-aea8-d27db45e96d1",
+          "tenant_id": null,
+          "updated_at": "2026-03-18T21:38:37.526215+00:00",
+          "visibility_rules": [],
+          "key": "reach_adjust"
+        },
+        {
+          "constraint_rules": [],
+          "created_at": "2026-03-18T21:38:37.526215+00:00",
+          "default_value_json": null,
+          "helper_text": null,
+          "id": "bd628843-2584-49dc-9219-5d0c322ba633",
+          "is_required": false,
+          "option_rules": [],
+          "section_key": "legacy",
+          "sort_order": 10,
+          "spec_definition_id": "0ea458cc-c939-4a2d-b888-7e21e302f636",
+          "template_id": "b6df9356-898e-4f0b-aea8-d27db45e96d1",
+          "tenant_id": null,
+          "updated_at": "2026-03-18T21:38:37.526215+00:00",
+          "visibility_rules": [],
+          "key": "mount_standard"
+        },
+        {
+          "constraint_rules": [],
+          "created_at": "2026-03-18T21:38:37.526215+00:00",
+          "default_value_json": null,
+          "helper_text": null,
+          "id": "eb9e2693-7d5b-4a70-aa55-a3f1bc25ec75",
+          "is_required": false,
+          "option_rules": [],
+          "section_key": "legacy",
+          "sort_order": 20,
+          "spec_definition_id": "ef5f6e33-beec-4eb9-9add-26257133cf49",
+          "template_id": "b6df9356-898e-4f0b-aea8-d27db45e96d1",
+          "tenant_id": null,
+          "updated_at": "2026-03-18T21:38:37.526215+00:00",
+          "visibility_rules": [],
+          "key": "brake_position"
+        },
+        {
+          "constraint_rules": [],
+          "created_at": "2026-09-06T06:58:57.745728+00:00",
+          "default_value_json": null,
+          "helper_text": null,
+          "id": "f9bed137-d1c5-484b-ba11-91fe09b28453",
+          "is_required": false,
+          "option_rules": [],
+          "section_key": "declaration",
+          "sort_order": 5,
+          "spec_definition_id": "4f055961-6c16-430b-a4e2-e6b09dc1cccc",
+          "template_id": "b6df9356-898e-4f0b-aea8-d27db45e96d1",
+          "tenant_id": null,
+          "updated_at": "2026-09-06T06:58:57.745728+00:00",
+          "visibility_rules": [],
+          "key": "spec_evidence_source"
+        },
+        {
+          "key": "brake_presentation",
+          "section_key": "primary",
+          "sort_order": 0,
+          "is_required": false,
+          "visibility_rules": [],
+          "option_rules": [],
+          "constraint_rules": [],
+          "helper_text": null,
+          "default_value_json": null
+        },
+        {
+          "key": "kit_members",
+          "section_key": "contents",
+          "sort_order": 1,
+          "is_required": false,
+          "visibility_rules": [],
+          "option_rules": [],
+          "constraint_rules": [],
+          "helper_text": null,
+          "default_value_json": null
+        },
+        {
+          "key": "brake_circuits",
+          "section_key": "declaration",
+          "sort_order": 2,
+          "is_required": false,
+          "visibility_rules": [],
+          "option_rules": [],
+          "constraint_rules": [],
+          "helper_text": null,
+          "default_value_json": null
+        }
+      ]
+    },
+    {
+      "contract_version": 2,
+      "created_at": "2026-03-18T21:38:37.526215+00:00",
+      "default_tags": [],
+      "description": "Frenos tipo V-Brake o cantilever",
+      "form_contract": {
+        "rules_version": 2,
+        "roles": {
+          "tool_size_mm": "legacy",
+          "brake_system": "legacy",
+          "reach_adjust": "legacy",
+          "brake_position": "legacy",
+          "spec_evidence_source": "declaration",
+          "brake_presentation": "primary",
+          "kit_members": "contents",
+          "brake_circuits": "declaration"
+        },
+        "semantic_roles": {
+          "tool_size_mm": "legacy",
+          "brake_system": "legacy",
+          "reach_adjust": "legacy",
+          "brake_position": "legacy",
+          "spec_evidence_source": "evidence",
+          "brake_presentation": "intrinsic",
+          "kit_members": "contents",
+          "brake_circuits": "compatibility"
+        },
+        "labels": {},
+        "allowed_options": {
+          "brake_presentation": [
+            "Un mecanismo (un extremo)",
+            "Par de mecanismos",
+            "Set con manetas y cables"
+          ]
+        },
+        "allowed_when": {
+          "tool_size_mm": {
+            "kind": "never"
+          },
+          "brake_system": {
+            "kind": "never"
+          },
+          "reach_adjust": {
+            "kind": "never"
+          },
+          "brake_position": {
+            "kind": "never"
+          },
+          "spec_evidence_source": {
+            "kind": "always"
+          },
+          "brake_presentation": {
+            "kind": "always"
+          },
+          "kit_members": {
+            "kind": "always"
+          },
+          "brake_circuits": {
+            "kind": "when",
+            "rows": [
+              [
+                {
+                  "field": "brake_presentation",
+                  "operator": "in",
+                  "value_type": "token",
+                  "value": [
+                    "Set con manetas y cables"
+                  ]
+                }
+              ]
+            ]
+          }
+        },
+        "required_when": {
+          "tool_size_mm": {
+            "kind": "never"
+          },
+          "brake_system": {
+            "kind": "never"
+          },
+          "reach_adjust": {
+            "kind": "never"
+          },
+          "brake_position": {
+            "kind": "never"
+          },
+          "spec_evidence_source": {
+            "kind": "never"
+          },
+          "brake_presentation": {
+            "kind": "always"
+          },
+          "kit_members": {
+            "kind": "always"
+          },
+          "brake_circuits": {
+            "kind": "when",
+            "rows": [
+              [
+                {
+                  "field": "brake_presentation",
+                  "operator": "in",
+                  "value_type": "token",
+                  "value": [
+                    "Set con manetas y cables"
+                  ]
+                }
+              ]
+            ]
+          }
+        },
+        "prerequisites": {
+          "kit_members": [
+            "brake_presentation",
+            "spec_evidence_source"
+          ],
+          "brake_circuits": [
+            "brake_presentation",
+            "spec_evidence_source"
+          ]
+        },
+        "helpers": {
+          "brake_presentation": "Qué se vende armado: un freno completo, un par o una pieza con su línea. Todo lo demás depende de esta elección; la ausencia de filas nunca significa pieza única.",
+          "kit_members": "Una fila por pieza física incluida, con su perfil propio: cada maneta, cada mecanismo, cada línea, rotor, adaptador o pastilla. Dos piezas del mismo modelo son dos filas. Las medidas e interfaces viven en el perfil de cada pieza, nunca en esta raíz.",
+          "brake_circuits": "Un circuito por freno accionado: qué maneta mueve qué cáliper o mecanismo y por qué línea, apuntando a las filas de piezas. El líquido con que se entrega es del circuito; el que cada pieza admite es de esa pieza. Declararlo no verifica que las piezas calcen.",
+          "spec_evidence_source": "Documento o envase que respalda el contenido y los circuitos declarados."
+        },
+        "evidence_requirements": {
+          "kit_members": "package_or_label",
+          "brake_circuits": "package_or_label",
+          "spec_evidence_source": "oem_or_package"
+        },
+        "row_conditions": {
+          "version": 1,
+          "fields": {
+            "kit_members": {
+              "allowed_options": {
+                "family": [
+                  "brake_caliper",
+                  "brake_lever",
+                  "brake_pad",
+                  "control_cable",
+                  "control_housing"
+                ]
+              }
+            },
+            "brake_circuits": {
+              "allowed_options": {
+                "actuation": [
+                  "Cable"
+                ]
+              },
+              "allowed_when": {
+                "fluid_as_shipped": {
+                  "kind": "when",
+                  "rows": [
+                    [
+                      {
+                        "field": "actuation",
+                        "operator": "eq",
+                        "value_type": "token",
+                        "value": "Hidráulico"
+                      }
+                    ]
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "member_profiles": {
+          "version": 1,
+          "collections": [
+            {
+              "field": "kit_members",
+              "family_column": "family",
+              "identity_columns": [
+                "member_role",
+                "position",
+                "identity_brand",
+                "identity_model"
+              ]
+            }
+          ]
+        },
+        "row_coherence": {
+          "version": 2,
+          "cardinalities": [],
+          "links": [
+            {
+              "id": "brake_circuit_lever",
+              "field": "brake_circuits",
+              "column": "lever_row_id",
+              "target_field": "kit_members",
+              "label_columns": [
+                "member_role",
+                "position",
+                "identity_model"
+              ]
+            },
+            {
+              "id": "brake_circuit_caliper",
+              "field": "brake_circuits",
+              "column": "caliper_row_id",
+              "target_field": "kit_members",
+              "label_columns": [
+                "member_role",
+                "position",
+                "identity_model"
+              ]
+            },
+            {
+              "id": "brake_circuit_line",
+              "field": "brake_circuits",
+              "column": "line_row_id",
+              "target_field": "kit_members",
+              "label_columns": [
+                "member_role",
+                "position",
+                "identity_model"
+              ]
+            }
+          ]
+        }
+      },
+      "id": "3a76d564-008d-487b-bd70-0c6179dec598",
+      "is_active": true,
+      "key": "rim_brake",
+      "name": "Freno de Llanta / V-Brake",
+      "technical_family": "rim_brake",
+      "tenant_id": null,
+      "updated_at": "2026-03-18T21:38:37.526215+00:00",
+      "origin": "existing",
+      "fields": [
+        {
+          "constraint_rules": [],
+          "created_at": "2026-09-06T06:58:57.745728+00:00",
+          "default_value_json": null,
+          "helper_text": null,
+          "id": "7da7683d-d0a9-4b2f-b404-eb66a446d634",
+          "is_required": false,
+          "option_rules": [],
+          "section_key": "declaration",
+          "sort_order": 5,
+          "spec_definition_id": "4f055961-6c16-430b-a4e2-e6b09dc1cccc",
+          "template_id": "3a76d564-008d-487b-bd70-0c6179dec598",
+          "tenant_id": null,
+          "updated_at": "2026-09-06T06:58:57.745728+00:00",
+          "visibility_rules": [],
+          "key": "spec_evidence_source"
+        },
+        {
+          "constraint_rules": [],
+          "created_at": "2026-03-18T21:38:37.526215+00:00",
+          "default_value_json": null,
+          "helper_text": null,
+          "id": "8ec49a9e-7d03-4b65-bb30-18c0f32d3f6d",
+          "is_required": false,
+          "option_rules": [],
+          "section_key": "legacy",
+          "sort_order": 10,
+          "spec_definition_id": "de380dfb-d1ad-4702-a978-069692dabd49",
+          "template_id": "3a76d564-008d-487b-bd70-0c6179dec598",
+          "tenant_id": null,
+          "updated_at": "2026-03-18T21:38:37.526215+00:00",
+          "visibility_rules": [],
+          "key": "brake_system"
+        },
+        {
+          "constraint_rules": [],
+          "created_at": "2026-03-18T21:38:37.526215+00:00",
+          "default_value_json": null,
+          "helper_text": null,
+          "id": "904c527e-2306-4ad5-9849-1a31e5e1c82c",
+          "is_required": false,
+          "option_rules": [],
+          "section_key": "legacy",
+          "sort_order": 10,
+          "spec_definition_id": "58b593b8-edb8-47a2-852d-4a40ff247543",
+          "template_id": "3a76d564-008d-487b-bd70-0c6179dec598",
+          "tenant_id": null,
+          "updated_at": "2026-03-18T21:38:37.526215+00:00",
+          "visibility_rules": [],
+          "key": "reach_adjust"
+        },
+        {
+          "constraint_rules": [],
+          "created_at": "2026-03-18T21:38:37.526215+00:00",
+          "default_value_json": null,
+          "helper_text": null,
+          "id": "ca67d649-9cbd-4193-8899-7ad488e002fb",
+          "is_required": false,
+          "option_rules": [],
+          "section_key": "legacy",
+          "sort_order": 10,
+          "spec_definition_id": "d27e19a6-1746-4239-bea6-82f1e43ff6f3",
+          "template_id": "3a76d564-008d-487b-bd70-0c6179dec598",
+          "tenant_id": null,
+          "updated_at": "2026-03-18T21:38:37.526215+00:00",
+          "visibility_rules": [],
+          "key": "tool_size_mm"
+        },
+        {
+          "constraint_rules": [],
+          "created_at": "2026-03-18T21:38:37.526215+00:00",
+          "default_value_json": null,
+          "helper_text": null,
+          "id": "fdbfe560-2ab3-42cf-80c1-2adc2dc72b78",
+          "is_required": false,
+          "option_rules": [],
+          "section_key": "legacy",
+          "sort_order": 20,
+          "spec_definition_id": "ef5f6e33-beec-4eb9-9add-26257133cf49",
+          "template_id": "3a76d564-008d-487b-bd70-0c6179dec598",
+          "tenant_id": null,
+          "updated_at": "2026-03-18T21:38:37.526215+00:00",
+          "visibility_rules": [],
+          "key": "brake_position"
+        },
+        {
+          "key": "brake_presentation",
+          "section_key": "primary",
+          "sort_order": 0,
+          "is_required": false,
+          "visibility_rules": [],
+          "option_rules": [],
+          "constraint_rules": [],
+          "helper_text": null,
+          "default_value_json": null
+        },
+        {
+          "key": "kit_members",
+          "section_key": "contents",
+          "sort_order": 1,
+          "is_required": false,
+          "visibility_rules": [],
+          "option_rules": [],
+          "constraint_rules": [],
+          "helper_text": null,
+          "default_value_json": null
+        },
+        {
+          "key": "brake_circuits",
+          "section_key": "declaration",
+          "sort_order": 2,
+          "is_required": false,
+          "visibility_rules": [],
+          "option_rules": [],
+          "constraint_rules": [],
+          "helper_text": null,
+          "default_value_json": null
+        }
+      ]
+    },
+    {
+      "contract_version": 30,
+      "created_at": "2026-03-18T21:38:37.526215+00:00",
+      "default_tags": [],
+      "description": "Calipers completos hidráulicos o mecánicos",
+      "form_contract": {
+        "allowed_options": {
+          "brake_actuation": [
+            "Mecánico (cable)",
+            "Hidráulico",
+            "Híbrido (cable a hidráulico)",
+            "Desconocido / sin confirmar"
+          ],
+          "brake_conversion_location": [
+            "En esta pieza"
+          ],
+          "braking_surface": [
+            "Disco",
+            "Llanta"
+          ]
+        },
+        "allowed_when": {
+          "bleed_port": {
+            "kind": "never"
+          },
+          "brake_actuation": {
+            "kind": "always"
+          },
+          "brake_bleed_ports": {
+            "kind": "when",
+            "rows": [
+              [
+                {
+                  "field": "brake_actuation",
+                  "operator": "in",
+                  "value": [
+                    "Hidráulico",
+                    "Híbrido (cable a hidráulico)"
+                  ],
+                  "value_type": "token"
+                }
+              ]
+            ]
+          },
+          "brake_conversion_location": {
+            "kind": "when",
+            "rows": [
+              [
+                {
+                  "field": "brake_actuation",
+                  "operator": "eq",
+                  "value": "Híbrido (cable a hidráulico)",
+                  "value_type": "token"
+                }
+              ]
+            ]
+          },
+          "brake_external_hose_connection": {
+            "kind": "when",
+            "rows": [
+              [
+                {
+                  "field": "brake_actuation",
+                  "operator": "in",
+                  "value": [
+                    "Hidráulico",
+                    "Híbrido (cable a hidráulico)"
+                  ],
+                  "value_type": "token"
+                }
+              ]
+            ]
+          },
+          "brake_model_fluid_approvals": {
+            "kind": "when",
+            "rows": [
+              [
+                {
+                  "field": "brake_actuation",
+                  "operator": "in",
+                  "value": [
+                    "Hidráulico",
+                    "Híbrido (cable a hidráulico)"
+                  ],
+                  "value_type": "token"
+                }
+              ]
+            ]
+          },
+          "brake_pad_retainer_model": {
+            "kind": "when",
+            "rows": [
+              [
+                {
+                  "field": "braking_surface",
+                  "operator": "eq",
+                  "value": "Disco",
+                  "value_type": "token"
+                }
+              ]
+            ]
+          },
+          "brake_piece_hydraulic_ports": {
+            "kind": "when",
+            "rows": [
+              [
+                {
+                  "field": "brake_external_hose_connection",
+                  "operator": "eq",
+                  "value": true,
+                  "value_type": "boolean"
+                },
+                {
+                  "field": "brake_actuation",
+                  "operator": "in",
+                  "value": [
+                    "Hidráulico",
+                    "Híbrido (cable a hidráulico)"
+                  ],
+                  "value_type": "token"
+                }
+              ]
+            ]
+          },
+          "brake_position": {
+            "kind": "always"
+          },
+          "brake_system": {
+            "kind": "always"
+          },
+          "brake_type": {
+            "kind": "always"
+          },
+          "braking_surface": {
+            "kind": "always"
+          },
+          "cable_pull_required": {
+            "kind": "when",
+            "rows": [
+              [
+                {
+                  "field": "brake_actuation",
+                  "operator": "in",
+                  "value": [
+                    "Mecánico (cable)",
+                    "Híbrido (cable a hidráulico)"
+                  ],
+                  "value_type": "token"
+                }
+              ]
+            ]
+          },
+          "caliper_hydraulic": {
+            "kind": "always"
+          },
+          "caliper_mount_interface": {
+            "kind": "when",
+            "rows": [
+              [
+                {
+                  "field": "braking_surface",
+                  "operator": "eq",
+                  "value": "Disco",
+                  "value_type": "token"
+                }
+              ]
+            ]
+          },
+          "fluid_type": {
+            "kind": "never"
+          },
+          "hose_fitting_type": {
+            "kind": "never"
+          },
+          "mount_standard": {
+            "kind": "never"
+          },
+          "pad_shape_code": {
+            "kind": "when",
+            "rows": [
+              [
+                {
+                  "field": "braking_surface",
+                  "operator": "eq",
+                  "value": "Disco",
+                  "value_type": "token"
+                }
+              ]
+            ]
+          },
+          "piston_count": {
+            "kind": "always"
+          },
+          "piston_count_value": {
+            "kind": "when",
+            "rows": [
+              [
+                {
+                  "field": "braking_surface",
+                  "operator": "eq",
+                  "value": "Disco",
+                  "value_type": "token"
+                }
+              ]
+            ]
+          },
+          "reach_adjust": {
+            "kind": "never"
+          },
+          "rim_brake_mount_fitments": {
+            "kind": "when",
+            "rows": [
+              [
+                {
+                  "field": "braking_surface",
+                  "operator": "eq",
+                  "value": "Llanta",
+                  "value_type": "token"
+                }
+              ]
+            ]
+          },
+          "rim_pad_stud_type": {
+            "kind": "when",
+            "rows": [
+              [
+                {
+                  "field": "braking_surface",
+                  "operator": "eq",
+                  "value": "Llanta",
+                  "value_type": "token"
+                }
+              ]
+            ]
+          },
+          "rotor_diameter_mm": {
+            "kind": "always"
+          },
+          "rotor_size_recipe": {
+            "kind": "when",
+            "rows": [
+              [
+                {
+                  "field": "braking_surface",
+                  "operator": "eq",
+                  "value": "Disco",
+                  "value_type": "token"
+                }
+              ]
+            ]
+          },
+          "spec_evidence_source": {
+            "kind": "always"
+          },
+          "tool_size_mm": {
+            "kind": "always"
+          }
+        },
+        "evidence_requirements": {
+          "bleed_port": "oem_spec",
+          "brake_actuation": "package_or_label",
+          "brake_bleed_ports": "oem_or_package",
+          "brake_conversion_location": "oem_or_package",
+          "brake_external_hose_connection": "oem_or_package",
+          "brake_model_fluid_approvals": "oem_spec",
+          "brake_pad_retainer_model": "oem_spec",
+          "brake_piece_hydraulic_ports": "oem_or_package",
+          "brake_position": "oem_or_package",
+          "brake_system": "name_reading_hint_only",
+          "brake_type": "name_reading_hint_only",
+          "braking_surface": "package_or_label",
+          "cable_pull_required": "oem_spec",
+          "caliper_hydraulic": "name_reading_hint_only",
+          "caliper_mount_interface": "oem_or_package",
+          "fluid_type": "oem_spec",
+          "hose_fitting_type": "oem_spec",
+          "mount_standard": "oem_spec",
+          "pad_shape_code": "oem_spec",
+          "piston_count": "oem_or_package",
+          "piston_count_value": "oem_or_package",
+          "reach_adjust": "oem_or_package",
+          "rim_brake_mount_fitments": "oem_spec",
+          "rim_pad_stud_type": "oem_or_package",
+          "rotor_diameter_mm": "name_reading_hint_only",
+          "rotor_size_recipe": "oem_spec",
+          "spec_evidence_source": "oem_or_package",
+          "tool_size_mm": "oem_or_package"
+        },
+        "helpers": {
+          "bleed_port": "Mezclaba puerto, herramienta y procedimiento; conservar lectura en historia.",
+          "brake_actuation": "Accionamiento de esta pieza. Si la mueve un convertidor externo, la pinza sigue siendo hidráulica; el convertidor se documenta en la presentación que lo incluye, no en esta pieza.",
+          "brake_conversion_location": "Una pinza híbrida convierte el tiro de cable en presión dentro de sí misma. Un convertidor externo es otra pieza; no cambia el accionamiento hidráulico de la pinza que alimenta.",
+          "brake_external_hose_connection": "Responde sobre este componente. Un circuito hidráulico local puede recibir cable sin tener manguera externa.",
+          "brake_model_fluid_approvals": "Aprobación del modelo y edición concretos. La clase mineral por sí sola no identifica un aceite autorizado; se conserva su especificación/producto OEM. Otra URL no crea otro sistema.",
+          "brake_piece_hydraulic_ports": "Una entrada hidráulica de esta pinza por fila. El puerto de purga se documenta únicamente en Puertos de purga; no duplicarlo aquí.",
+          "cable_pull_required": "El tiro que ESTE cáliper exige de una maneta. No es el que una maneta entrega, y no se deduce de la marca.",
+          "caliper_mount_interface": "Interfaz física de esta pinza. El anclaje del cuadro u horquilla y el adaptador se declaran en cada montaje documentado; no sustituyen esta interfaz.",
+          "fluid_type": "Dato del producto. Los fluidos admitidos y sus condiciones se registran por filas; no deducir accionamiento ni superficie.",
+          "hose_fitting_type": "Resumen retirado: no distingue los extremos ni identifica un racor completo.",
+          "rotor_size_recipe": "Montajes OEM documentados para esta pinza: posición, cuadro u horquilla, adaptador y rotor admitido. La interfaz propia se declara una vez arriba. No conocer una tabla de adaptadores deja su compatibilidad sin confirmar.",
+          "tool_size_mm": "Medida de la herramienta que piden los pernos de fijación y ajuste de esta pinza, tal como la publica su fuente. Es un dato de la pieza; una presentación completa lo lee en el perfil de cada pinza incluida."
+        },
+        "labels": {
+          "rim_pad_stud_type": "Fijación de zapata admitida por esta pinza"
+        },
+        "prerequisites": {},
+        "required_when": {
+          "bleed_port": {
+            "kind": "never"
+          },
+          "brake_actuation": {
+            "kind": "always"
+          },
+          "brake_bleed_ports": {
+            "kind": "never"
+          },
+          "brake_conversion_location": {
+            "kind": "when",
+            "rows": [
+              [
+                {
+                  "field": "brake_actuation",
+                  "operator": "eq",
+                  "value": "Híbrido (cable a hidráulico)",
+                  "value_type": "token"
+                }
+              ]
+            ]
+          },
+          "brake_external_hose_connection": {
+            "kind": "when",
+            "rows": [
+              [
+                {
+                  "field": "brake_actuation",
+                  "operator": "in",
+                  "value": [
+                    "Hidráulico",
+                    "Híbrido (cable a hidráulico)"
+                  ],
+                  "value_type": "token"
+                }
+              ]
+            ]
+          },
+          "brake_model_fluid_approvals": {
+            "kind": "when",
+            "rows": [
+              [
+                {
+                  "field": "brake_actuation",
+                  "operator": "in",
+                  "value": [
+                    "Hidráulico",
+                    "Híbrido (cable a hidráulico)"
+                  ],
+                  "value_type": "token"
+                }
+              ]
+            ]
+          },
+          "brake_pad_retainer_model": {
+            "kind": "never"
+          },
+          "brake_piece_hydraulic_ports": {
+            "kind": "never"
+          },
+          "brake_position": {
+            "kind": "never"
+          },
+          "brake_system": {
+            "kind": "never"
+          },
+          "brake_type": {
+            "kind": "never"
+          },
+          "braking_surface": {
+            "kind": "always"
+          },
+          "cable_pull_required": {
+            "kind": "when",
+            "rows": [
+              [
+                {
+                  "field": "brake_actuation",
+                  "operator": "in",
+                  "value": [
+                    "Mecánico (cable)",
+                    "Híbrido (cable a hidráulico)"
+                  ],
+                  "value_type": "token"
+                }
+              ]
+            ]
+          },
+          "caliper_hydraulic": {
+            "kind": "never"
+          },
+          "caliper_mount_interface": {
+            "kind": "when",
+            "rows": [
+              [
+                {
+                  "field": "braking_surface",
+                  "operator": "eq",
+                  "value": "Disco",
+                  "value_type": "token"
+                }
+              ]
+            ]
+          },
+          "fluid_type": {
+            "kind": "never"
+          },
+          "hose_fitting_type": {
+            "kind": "never"
+          },
+          "mount_standard": {
+            "kind": "never"
+          },
+          "pad_shape_code": {
+            "kind": "when",
+            "rows": [
+              [
+                {
+                  "field": "braking_surface",
+                  "operator": "eq",
+                  "value": "Disco",
+                  "value_type": "token"
+                }
+              ]
+            ]
+          },
+          "piston_count": {
+            "kind": "never"
+          },
+          "piston_count_value": {
+            "kind": "never"
+          },
+          "reach_adjust": {
+            "kind": "never"
+          },
+          "rim_brake_mount_fitments": {
+            "kind": "when",
+            "rows": [
+              [
+                {
+                  "field": "braking_surface",
+                  "operator": "eq",
+                  "value": "Llanta",
+                  "value_type": "token"
+                }
+              ]
+            ]
+          },
+          "rim_pad_stud_type": {
+            "kind": "when",
+            "rows": [
+              [
+                {
+                  "field": "braking_surface",
+                  "operator": "eq",
+                  "value": "Llanta",
+                  "value_type": "token"
+                }
+              ]
+            ]
+          },
+          "rotor_diameter_mm": {
+            "kind": "never"
+          },
+          "rotor_size_recipe": {
+            "kind": "never"
+          },
+          "spec_evidence_source": {
+            "kind": "never"
+          },
+          "tool_size_mm": {
+            "kind": "never"
+          }
+        },
+        "roles": {
+          "bleed_port": "legacy",
+          "brake_actuation": "primary",
+          "brake_bleed_ports": "declaration",
+          "brake_conversion_location": "primary",
+          "brake_external_hose_connection": "primary",
+          "brake_model_fluid_approvals": "measurement",
+          "brake_pad_retainer_model": "measurement",
+          "brake_piece_hydraulic_ports": "declaration",
+          "brake_position": "primary",
+          "brake_system": "legacy",
+          "brake_type": "legacy",
+          "braking_surface": "primary",
+          "cable_pull_required": "measurement",
+          "caliper_hydraulic": "legacy",
+          "caliper_mount_interface": "primary",
+          "fluid_type": "legacy",
+          "hose_fitting_type": "legacy",
+          "mount_standard": "legacy",
+          "pad_shape_code": "measurement",
+          "piston_count": "legacy",
+          "piston_count_value": "primary",
+          "reach_adjust": "legacy",
+          "rim_brake_mount_fitments": "measurement",
+          "rim_pad_stud_type": "measurement",
+          "rotor_diameter_mm": "legacy",
+          "rotor_size_recipe": "measurement",
+          "spec_evidence_source": "declaration",
+          "tool_size_mm": "measurement"
+        },
+        "row_conditions": {
+          "fields": {
+            "brake_bleed_ports": {
+              "allowed_options": {
+                "component_role": [
+                  "Cáliper"
+                ]
+              }
+            },
+            "brake_model_fluid_approvals": {
+              "required_when": {
+                "fluid_product": {
+                  "kind": "when",
+                  "rows": [
+                    [
+                      {
+                        "field": "fluid_class",
+                        "operator": "eq",
+                        "value": "Aceite Mineral",
+                        "value_type": "token"
+                      }
+                    ]
+                  ]
+                }
+              }
+            },
+            "brake_piece_hydraulic_ports": {
+              "allowed_options": {
+                "end_role": [
+                  "Entrada"
+                ]
+              }
+            },
+            "rotor_size_recipe": {
+              "allowed_when": {
+                "accepted_rotor_thickness_mm": {
+                  "kind": "always"
+                },
+                "caliper_model": {
+                  "kind": "never"
+                },
+                "caliper_mount": {
+                  "kind": "never"
+                }
+              },
+              "required_when": {
+                "accepted_rotor_thickness_mm": {
+                  "kind": "never"
+                },
+                "adapter_model": {
+                  "kind": "when",
+                  "rows": [
+                    [
+                      {
+                        "field": "adapter_required",
+                        "operator": "eq",
+                        "value": true,
+                        "value_type": "boolean"
+                      }
+                    ]
+                  ]
+                }
+              }
+            }
+          },
+          "version": 1
+        },
+        "rules_version": 2,
+        "semantic_roles": {
+          "bleed_port": "legacy",
+          "brake_actuation": "intrinsic",
+          "brake_bleed_ports": "declaration",
+          "brake_conversion_location": "primary",
+          "brake_external_hose_connection": "intrinsic",
+          "brake_model_fluid_approvals": "compatibility",
+          "brake_pad_retainer_model": "compatibility",
+          "brake_piece_hydraulic_ports": "compatibility",
+          "brake_position": "intrinsic",
+          "brake_system": "legacy",
+          "brake_type": "legacy",
+          "braking_surface": "intrinsic",
+          "cable_pull_required": "compatibility",
+          "caliper_hydraulic": "legacy",
+          "caliper_mount_interface": "intrinsic",
+          "fluid_type": "legacy",
+          "hose_fitting_type": "legacy",
+          "mount_standard": "legacy",
+          "pad_shape_code": "compatibility",
+          "piston_count": "legacy",
+          "piston_count_value": "intrinsic",
+          "reach_adjust": "legacy",
+          "rim_brake_mount_fitments": "compatibility",
+          "rim_pad_stud_type": "compatibility",
+          "rotor_diameter_mm": "legacy",
+          "rotor_size_recipe": "compatibility",
+          "spec_evidence_source": "evidence",
+          "tool_size_mm": "intrinsic"
+        }
+      },
+      "id": "9d97103e-d49f-4d77-974d-23f775fb49c8",
+      "is_active": true,
+      "key": "brake_caliper",
+      "name": "Caliper de Freno",
+      "technical_family": "brake_caliper",
+      "tenant_id": null,
+      "updated_at": "2026-03-18T21:38:37.526215+00:00",
+      "origin": "existing",
+      "fields": [
+        {
+          "constraint_rules": [],
+          "created_at": "2026-09-15T04:34:25.040098+00:00",
+          "default_value_json": null,
+          "helper_text": null,
+          "id": "1e034695-1706-514e-9606-308eebc58e3d",
+          "is_required": false,
+          "option_rules": [],
+          "section_key": "primary",
+          "sort_order": 270,
+          "spec_definition_id": "4148ee40-a54c-5bad-827e-bde6108fae3b",
+          "template_id": "9d97103e-d49f-4d77-974d-23f775fb49c8",
+          "tenant_id": null,
+          "updated_at": "2026-09-15T04:34:25.040098+00:00",
+          "visibility_rules": [],
+          "key": "brake_conversion_location"
+        },
+        {
+          "constraint_rules": [],
+          "created_at": "2026-09-15T04:34:25.040098+00:00",
+          "default_value_json": null,
+          "helper_text": null,
+          "id": "344e4c82-fe99-51b0-aa95-e48fbe2cb1b3",
+          "is_required": false,
+          "option_rules": [],
+          "section_key": "measurement",
+          "sort_order": 50,
+          "spec_definition_id": "ce285e7e-d2e9-5b60-bb5c-bc36f8c24e72",
+          "template_id": "9d97103e-d49f-4d77-974d-23f775fb49c8",
+          "tenant_id": null,
+          "updated_at": "2026-09-15T04:34:25.040098+00:00",
+          "visibility_rules": [],
+          "key": "rotor_size_recipe"
+        },
+        {
+          "constraint_rules": [],
+          "created_at": "2026-09-15T04:34:25.040098+00:00",
+          "default_value_json": null,
+          "helper_text": null,
+          "id": "3f5549f2-22ed-5313-8676-dda0058d2bc6",
+          "is_required": false,
+          "option_rules": [],
+          "section_key": "measurement",
+          "sort_order": 326,
+          "spec_definition_id": "d0f7a653-7455-5214-add1-1faa4c660d79",
+          "template_id": "9d97103e-d49f-4d77-974d-23f775fb49c8",
+          "tenant_id": null,
+          "updated_at": "2026-09-15T04:34:25.040098+00:00",
+          "visibility_rules": [],
+          "key": "rim_pad_stud_type"
+        },
+        {
+          "constraint_rules": [],
+          "created_at": "2026-03-18T21:38:37.526215+00:00",
+          "default_value_json": null,
+          "helper_text": null,
+          "id": "3fe618bd-dc30-4206-ab59-0bb9fbf91288",
+          "is_required": false,
+          "option_rules": [],
+          "section_key": "primary",
+          "sort_order": 160,
+          "spec_definition_id": "ef5f6e33-beec-4eb9-9add-26257133cf49",
+          "template_id": "9d97103e-d49f-4d77-974d-23f775fb49c8",
+          "tenant_id": null,
+          "updated_at": "2026-03-18T21:38:37.526215+00:00",
+          "visibility_rules": [],
+          "key": "brake_position"
+        },
+        {
+          "constraint_rules": [],
+          "created_at": "2026-03-18T21:38:37.526215+00:00",
+          "default_value_json": null,
+          "helper_text": null,
+          "id": "45159691-69c7-419b-805c-07642ddc9f37",
+          "is_required": false,
+          "option_rules": [],
+          "section_key": "legacy",
+          "sort_order": 20,
+          "spec_definition_id": "d72e7f7c-6330-42bd-9e63-5075740e1a96",
+          "template_id": "9d97103e-d49f-4d77-974d-23f775fb49c8",
+          "tenant_id": null,
+          "updated_at": "2026-03-18T21:38:37.526215+00:00",
+          "visibility_rules": [],
+          "key": "caliper_hydraulic"
+        },
+        {
+          "constraint_rules": [],
+          "created_at": "2026-09-15T04:34:25.040098+00:00",
+          "default_value_json": null,
+          "helper_text": null,
+          "id": "4af03247-648c-5bfb-8554-dcab7b61ce6a",
+          "is_required": false,
+          "option_rules": [],
+          "section_key": "primary",
+          "sort_order": 10,
+          "spec_definition_id": "4eb570b4-b098-59be-96f2-9c1e0bcd7b65",
+          "template_id": "9d97103e-d49f-4d77-974d-23f775fb49c8",
+          "tenant_id": null,
+          "updated_at": "2026-09-15T04:34:25.040098+00:00",
+          "visibility_rules": [],
+          "key": "brake_actuation"
+        },
+        {
+          "constraint_rules": [],
+          "created_at": "2026-03-18T21:38:37.526215+00:00",
+          "default_value_json": null,
+          "helper_text": null,
+          "id": "4c07a3ee-6c76-42b6-9881-5b3cdff279cf",
+          "is_required": false,
+          "option_rules": [],
+          "section_key": "legacy",
+          "sort_order": 20,
+          "spec_definition_id": "221402c1-3400-496d-ac3a-93937fc411ca",
+          "template_id": "9d97103e-d49f-4d77-974d-23f775fb49c8",
+          "tenant_id": null,
+          "updated_at": "2026-03-18T21:38:37.526215+00:00",
+          "visibility_rules": [],
+          "key": "rotor_diameter_mm"
+        },
+        {
+          "constraint_rules": [],
+          "created_at": "2026-03-18T21:38:37.526215+00:00",
+          "default_value_json": null,
+          "helper_text": null,
+          "id": "57e17a3f-078c-4981-9a35-7f70bfe23efd",
+          "is_required": false,
+          "option_rules": [],
+          "section_key": "legacy",
+          "sort_order": 10,
+          "spec_definition_id": "c5756549-2382-4f90-9995-6409684067c7",
+          "template_id": "9d97103e-d49f-4d77-974d-23f775fb49c8",
+          "tenant_id": null,
+          "updated_at": "2026-03-18T21:38:37.526215+00:00",
+          "visibility_rules": [],
+          "key": "piston_count"
+        },
+        {
+          "constraint_rules": [],
+          "created_at": "2026-09-15T04:34:25.040098+00:00",
+          "default_value_json": null,
+          "helper_text": null,
+          "id": "6e8a769e-3b6c-5710-8cc7-489681ac3041",
+          "is_required": false,
+          "option_rules": [],
+          "section_key": "declaration",
+          "sort_order": 260,
+          "spec_definition_id": "6cf165c6-3dc3-5287-ac1b-6c24d1f30736",
+          "template_id": "9d97103e-d49f-4d77-974d-23f775fb49c8",
+          "tenant_id": null,
+          "updated_at": "2026-09-15T04:34:25.040098+00:00",
+          "visibility_rules": [],
+          "key": "brake_piece_hydraulic_ports"
+        },
+        {
+          "constraint_rules": [],
+          "created_at": "2026-03-18T21:38:37.526215+00:00",
+          "default_value_json": null,
+          "helper_text": null,
+          "id": "79043de4-5d19-41a4-8059-239b27ae564e",
+          "is_required": false,
+          "option_rules": [],
+          "section_key": "legacy",
+          "sort_order": 10,
+          "spec_definition_id": "7d4a8477-18a9-4132-b027-ebe866dba164",
+          "template_id": "9d97103e-d49f-4d77-974d-23f775fb49c8",
+          "tenant_id": null,
+          "updated_at": "2026-03-18T21:38:37.526215+00:00",
+          "visibility_rules": [],
+          "key": "fluid_type"
+        },
+        {
+          "constraint_rules": [],
+          "created_at": "2026-09-06T06:58:57.745728+00:00",
+          "default_value_json": null,
+          "helper_text": null,
+          "id": "97edadad-e9ed-46ed-8b5f-b32e6434336e",
+          "is_required": false,
+          "option_rules": [],
+          "section_key": "declaration",
+          "sort_order": 180,
+          "spec_definition_id": "4f055961-6c16-430b-a4e2-e6b09dc1cccc",
+          "template_id": "9d97103e-d49f-4d77-974d-23f775fb49c8",
+          "tenant_id": null,
+          "updated_at": "2026-09-06T06:58:57.745728+00:00",
+          "visibility_rules": [],
+          "key": "spec_evidence_source"
+        },
+        {
+          "constraint_rules": [],
+          "created_at": "2026-03-18T21:38:37.526215+00:00",
+          "default_value_json": null,
+          "helper_text": null,
+          "id": "9d6f7758-81db-4280-93ba-cb58d420b7b2",
+          "is_required": false,
+          "option_rules": [],
+          "section_key": "legacy",
+          "sort_order": 10,
+          "spec_definition_id": "58b593b8-edb8-47a2-852d-4a40ff247543",
+          "template_id": "9d97103e-d49f-4d77-974d-23f775fb49c8",
+          "tenant_id": null,
+          "updated_at": "2026-03-18T21:38:37.526215+00:00",
+          "visibility_rules": [],
+          "key": "reach_adjust"
+        },
+        {
+          "constraint_rules": [],
+          "created_at": "2026-09-15T04:34:25.040098+00:00",
+          "default_value_json": null,
+          "helper_text": null,
+          "id": "a1fc2431-684c-5a47-815a-62c42a7111d1",
+          "is_required": false,
+          "option_rules": [],
+          "section_key": "measurement",
+          "sort_order": 250,
+          "spec_definition_id": "6640d7a1-8f65-58a9-8699-8672e03ba319",
+          "template_id": "9d97103e-d49f-4d77-974d-23f775fb49c8",
+          "tenant_id": null,
+          "updated_at": "2026-09-15T04:34:25.040098+00:00",
+          "visibility_rules": [],
+          "key": "brake_pad_retainer_model"
+        },
+        {
+          "constraint_rules": [],
+          "created_at": "2026-09-15T04:34:25.040098+00:00",
+          "default_value_json": null,
+          "helper_text": null,
+          "id": "a4607a51-1e22-5f45-936a-072fe30ad036",
+          "is_required": false,
+          "option_rules": [],
+          "section_key": "measurement",
+          "sort_order": 200,
+          "spec_definition_id": "8721f156-3a66-547c-b82a-ea6003d644f4",
+          "template_id": "9d97103e-d49f-4d77-974d-23f775fb49c8",
+          "tenant_id": null,
+          "updated_at": "2026-09-15T04:34:25.040098+00:00",
+          "visibility_rules": [],
+          "key": "brake_model_fluid_approvals"
+        },
+        {
+          "constraint_rules": [],
+          "created_at": "2026-03-18T21:38:37.526215+00:00",
+          "default_value_json": null,
+          "helper_text": null,
+          "id": "a769c2e2-1a63-40e3-9f14-18e318cc393e",
+          "is_required": false,
+          "option_rules": [],
+          "section_key": "measurement",
+          "sort_order": 70,
+          "spec_definition_id": "61c2e601-3e8a-4cd4-ad16-e00867358882",
+          "template_id": "9d97103e-d49f-4d77-974d-23f775fb49c8",
+          "tenant_id": null,
+          "updated_at": "2026-03-18T21:38:37.526215+00:00",
+          "visibility_rules": [],
+          "key": "pad_shape_code"
+        },
+        {
+          "constraint_rules": [],
+          "created_at": "2026-03-18T21:38:37.526215+00:00",
+          "default_value_json": null,
+          "helper_text": null,
+          "id": "a79da751-dff0-4dfb-ba62-bcd9354f501a",
+          "is_required": false,
+          "option_rules": [],
+          "section_key": "legacy",
+          "sort_order": 20,
+          "spec_definition_id": "ecaa9ec5-4849-439c-a81e-9dbadaca0f3a",
+          "template_id": "9d97103e-d49f-4d77-974d-23f775fb49c8",
+          "tenant_id": null,
+          "updated_at": "2026-03-18T21:38:37.526215+00:00",
+          "visibility_rules": [],
+          "key": "hose_fitting_type"
+        },
+        {
+          "constraint_rules": [],
+          "created_at": "2026-09-15T04:34:25.040098+00:00",
+          "default_value_json": null,
+          "helper_text": null,
+          "id": "b231f5fe-541d-5d4e-a876-80e13013913e",
+          "is_required": false,
+          "option_rules": [],
+          "section_key": "declaration",
+          "sort_order": 220,
+          "spec_definition_id": "2132bfb4-5e72-5826-9f5b-5b73039de39b",
+          "template_id": "9d97103e-d49f-4d77-974d-23f775fb49c8",
+          "tenant_id": null,
+          "updated_at": "2026-09-15T04:34:25.040098+00:00",
+          "visibility_rules": [],
+          "key": "brake_bleed_ports"
+        },
+        {
+          "constraint_rules": [],
+          "created_at": "2026-03-18T21:38:37.526215+00:00",
+          "default_value_json": null,
+          "helper_text": null,
+          "id": "b459514d-9b55-4d70-b923-2a6a3cb159f3",
+          "is_required": false,
+          "option_rules": [],
+          "section_key": "legacy",
+          "sort_order": 20,
+          "spec_definition_id": "af057d76-e4ea-40d5-a293-941ad6aa0dc2",
+          "template_id": "9d97103e-d49f-4d77-974d-23f775fb49c8",
+          "tenant_id": null,
+          "updated_at": "2026-03-18T21:38:37.526215+00:00",
+          "visibility_rules": [],
+          "key": "brake_type"
+        },
+        {
+          "constraint_rules": [],
+          "created_at": "2026-09-15T04:34:25.040098+00:00",
+          "default_value_json": null,
+          "helper_text": null,
+          "id": "bbfc55d4-0dd5-5a0c-bc7a-781eaf3639f9",
+          "is_required": false,
+          "option_rules": [],
+          "section_key": "primary",
+          "sort_order": 190,
+          "spec_definition_id": "ef01b60f-ea74-5f5b-8e36-22af1ce4fe0b",
+          "template_id": "9d97103e-d49f-4d77-974d-23f775fb49c8",
+          "tenant_id": null,
+          "updated_at": "2026-09-15T04:34:25.040098+00:00",
+          "visibility_rules": [],
+          "key": "brake_external_hose_connection"
+        },
+        {
+          "constraint_rules": [],
+          "created_at": "2026-09-15T04:34:25.040098+00:00",
+          "default_value_json": null,
+          "helper_text": null,
+          "id": "c74c9db8-95a2-5aca-8297-5729227cdc45",
+          "is_required": false,
+          "option_rules": [],
+          "section_key": "measurement",
+          "sort_order": 140,
+          "spec_definition_id": "3a9042ab-486f-54d6-8281-41b5150e66b4",
+          "template_id": "9d97103e-d49f-4d77-974d-23f775fb49c8",
+          "tenant_id": null,
+          "updated_at": "2026-09-15T04:34:25.040098+00:00",
+          "visibility_rules": [],
+          "key": "cable_pull_required"
+        },
+        {
+          "constraint_rules": [],
+          "created_at": "2026-03-18T21:38:37.526215+00:00",
+          "default_value_json": null,
+          "helper_text": null,
+          "id": "ca759bfc-48b3-4c3b-8797-875df6ec5486",
+          "is_required": false,
+          "option_rules": [],
+          "section_key": "legacy",
+          "sort_order": 10,
+          "spec_definition_id": "0ea458cc-c939-4a2d-b888-7e21e302f636",
+          "template_id": "9d97103e-d49f-4d77-974d-23f775fb49c8",
+          "tenant_id": null,
+          "updated_at": "2026-03-18T21:38:37.526215+00:00",
+          "visibility_rules": [],
+          "key": "mount_standard"
+        },
+        {
+          "constraint_rules": [],
+          "created_at": "2026-03-18T21:38:37.526215+00:00",
+          "default_value_json": null,
+          "helper_text": null,
+          "id": "e2558138-eb57-41d8-828d-6eef0585af0a",
+          "is_required": false,
+          "option_rules": [],
+          "section_key": "legacy",
+          "sort_order": 10,
+          "spec_definition_id": "de380dfb-d1ad-4702-a978-069692dabd49",
+          "template_id": "9d97103e-d49f-4d77-974d-23f775fb49c8",
+          "tenant_id": null,
+          "updated_at": "2026-03-18T21:38:37.526215+00:00",
+          "visibility_rules": [],
+          "key": "brake_system"
+        },
+        {
+          "constraint_rules": [],
+          "created_at": "2026-09-15T04:34:25.040098+00:00",
+          "default_value_json": null,
+          "helper_text": null,
+          "id": "e486e437-50e6-5188-bdc9-2ea5f04f2867",
+          "is_required": false,
+          "option_rules": [],
+          "section_key": "primary",
+          "sort_order": 325,
+          "spec_definition_id": "452ccfc8-0663-55bf-b22c-c4b4d6226268",
+          "template_id": "9d97103e-d49f-4d77-974d-23f775fb49c8",
+          "tenant_id": null,
+          "updated_at": "2026-09-15T04:34:25.040098+00:00",
+          "visibility_rules": [],
+          "key": "caliper_mount_interface"
+        },
+        {
+          "constraint_rules": [],
+          "created_at": "2026-09-15T04:34:25.040098+00:00",
+          "default_value_json": null,
+          "helper_text": null,
+          "id": "e67ff0a5-b847-5ae0-af7b-65c8424c087c",
+          "is_required": false,
+          "option_rules": [],
+          "section_key": "primary",
+          "sort_order": 0,
+          "spec_definition_id": "2c5b729e-9f3c-5b92-be50-9f2398997725",
+          "template_id": "9d97103e-d49f-4d77-974d-23f775fb49c8",
+          "tenant_id": null,
+          "updated_at": "2026-09-15T04:34:25.040098+00:00",
+          "visibility_rules": [],
+          "key": "braking_surface"
+        },
+        {
+          "constraint_rules": [],
+          "created_at": "2026-09-15T04:34:25.040098+00:00",
+          "default_value_json": null,
+          "helper_text": null,
+          "id": "ecf86aad-3205-5200-8351-b5e9027a9706",
+          "is_required": false,
+          "option_rules": [],
+          "section_key": "primary",
+          "sort_order": 80,
+          "spec_definition_id": "406a8f0f-5f31-5bb9-be69-0fccd0ef3791",
+          "template_id": "9d97103e-d49f-4d77-974d-23f775fb49c8",
+          "tenant_id": null,
+          "updated_at": "2026-09-15T04:34:25.040098+00:00",
+          "visibility_rules": [],
+          "key": "piston_count_value"
+        },
+        {
+          "constraint_rules": [],
+          "created_at": "2026-09-15T04:34:25.040098+00:00",
+          "default_value_json": null,
+          "helper_text": null,
+          "id": "eee2b093-048d-50d3-8d1b-9fe6aebd943e",
+          "is_required": false,
+          "option_rules": [],
+          "section_key": "measurement",
+          "sort_order": 230,
+          "spec_definition_id": "8b59fe62-3508-59c0-a707-69ffeb3094ea",
+          "template_id": "9d97103e-d49f-4d77-974d-23f775fb49c8",
+          "tenant_id": null,
+          "updated_at": "2026-09-15T04:34:25.040098+00:00",
+          "visibility_rules": [],
+          "key": "rim_brake_mount_fitments"
+        },
+        {
+          "constraint_rules": [],
+          "created_at": "2026-03-18T21:38:37.526215+00:00",
+          "default_value_json": null,
+          "helper_text": null,
+          "id": "fb891e84-24bc-43de-b902-182eb4b61969",
+          "is_required": false,
+          "option_rules": [],
+          "section_key": "legacy",
+          "sort_order": 30,
+          "spec_definition_id": "91f8707f-311a-4232-8a79-073fd41b5535",
+          "template_id": "9d97103e-d49f-4d77-974d-23f775fb49c8",
+          "tenant_id": null,
+          "updated_at": "2026-03-18T21:38:37.526215+00:00",
+          "visibility_rules": [],
+          "key": "bleed_port"
+        },
+        {
+          "key": "tool_size_mm",
+          "section_key": "measurement",
+          "sort_order": 327,
+          "is_required": false,
+          "visibility_rules": [],
+          "option_rules": [],
+          "constraint_rules": [],
+          "helper_text": null,
+          "default_value_json": null
+        }
+      ]
+    }
+  ],
+  "definitions": {
+    "bleed_port": {
+      "allowed_values": [
+        "Tornillo",
+        "Jeringa de Empuje",
+        "Llave 7mm",
+        "Llave T25"
+      ],
+      "created_at": "2026-03-18T21:38:37.526215+00:00",
+      "data_type": "single_select",
+      "description": null,
+      "group_name": "Sistema Hidráulico",
+      "id": "91f8707f-311a-4232-8a79-073fd41b5535",
+      "is_compatibility_relevant": false,
+      "is_customer_visible": true,
+      "is_filterable": false,
+      "is_mechanic_visible": true,
+      "is_required_by_default": false,
+      "key": "bleed_port",
+      "label": "Puerto de Purga",
+      "options": [
+        {
+          "code": "llave_7mm",
+          "created_at": "2026-08-21T17:58:02.773721+00:00",
+          "id": "012faf08-43b4-48cc-8f39-b41a738f9110",
+          "is_active": true,
+          "label": "Llave 7mm",
+          "sort_order": 3,
+          "spec_definition_id": "91f8707f-311a-4232-8a79-073fd41b5535",
+          "tenant_id": null,
+          "updated_at": "2026-08-21T17:58:02.773721+00:00"
+        },
+        {
+          "code": "tornillo",
+          "created_at": "2026-08-21T17:58:02.773721+00:00",
+          "id": "2e31a2d6-6d8b-48c3-a8dd-9e28a4a792d8",
+          "is_active": true,
+          "label": "Tornillo",
+          "sort_order": 1,
+          "spec_definition_id": "91f8707f-311a-4232-8a79-073fd41b5535",
+          "tenant_id": null,
+          "updated_at": "2026-08-21T17:58:02.773721+00:00"
+        },
+        {
+          "code": "llave_t25",
+          "created_at": "2026-08-21T17:58:02.773721+00:00",
+          "id": "b9099d94-7290-49e2-b8a7-744e3d0f4b6b",
+          "is_active": true,
+          "label": "Llave T25",
+          "sort_order": 4,
+          "spec_definition_id": "91f8707f-311a-4232-8a79-073fd41b5535",
+          "tenant_id": null,
+          "updated_at": "2026-08-21T17:58:02.773721+00:00"
+        },
+        {
+          "code": "jeringa_de_empuje",
+          "created_at": "2026-08-21T17:58:02.773721+00:00",
+          "id": "e84d8312-292d-4ecd-a206-5aae7cbffed6",
+          "is_active": true,
+          "label": "Jeringa de Empuje",
+          "sort_order": 2,
+          "spec_definition_id": "91f8707f-311a-4232-8a79-073fd41b5535",
+          "tenant_id": null,
+          "updated_at": "2026-08-21T17:58:02.773721+00:00"
+        }
+      ],
+      "sort_order": 40,
+      "tenant_id": null,
+      "unit": null,
+      "updated_at": "2026-03-18T21:38:37.526215+00:00",
+      "validation_rules": {},
+      "origin": "existing"
+    },
+    "brake_actuation": {
+      "allowed_values": [
+        "Mecánico (cable)",
+        "Hidráulico",
+        "Híbrido (cable a hidráulico)",
+        "Desconocido / sin confirmar",
+        "Contrapedal",
+        "Otro"
+      ],
+      "created_at": "2026-09-08T02:53:16.637744+00:00",
+      "data_type": "single_select",
+      "description": null,
+      "group_name": null,
+      "id": "4eb570b4-b098-59be-96f2-9c1e0bcd7b65",
+      "is_compatibility_relevant": false,
+      "is_customer_visible": false,
+      "is_filterable": false,
+      "is_mechanic_visible": true,
+      "is_required_by_default": false,
+      "key": "brake_actuation",
+      "label": "Accionamiento del freno",
+      "options": [
+        {
+          "code": "catalog_58d6e79ea1b86fd54b776473bafa4682",
+          "created_at": "2026-09-08T02:53:16.637744+00:00",
+          "id": "0ec7fc3a-6f83-58f5-ba5d-76fb76956bb6",
+          "is_active": true,
+          "label": "Mecánico (cable)",
+          "sort_order": 0,
+          "spec_definition_id": "4eb570b4-b098-59be-96f2-9c1e0bcd7b65",
+          "tenant_id": null,
+          "updated_at": "2026-09-08T02:53:16.637744+00:00"
+        },
+        {
+          "code": "catalog_e984e15c8cb42550f8561e627baad4b7",
+          "created_at": "2026-09-08T02:53:16.637744+00:00",
+          "id": "4227c9f3-dfec-5000-96ec-687809bd2543",
+          "is_active": true,
+          "label": "Contrapedal",
+          "sort_order": 4,
+          "spec_definition_id": "4eb570b4-b098-59be-96f2-9c1e0bcd7b65",
+          "tenant_id": null,
+          "updated_at": "2026-09-08T02:53:16.637744+00:00"
+        },
+        {
+          "code": "catalog_de6e897b1c6ced32e6762f3ceaebffd6",
+          "created_at": "2026-09-08T02:53:16.637744+00:00",
+          "id": "769fda80-5854-549d-8b95-886ca2d49c40",
+          "is_active": true,
+          "label": "Desconocido / sin confirmar",
+          "sort_order": 3,
+          "spec_definition_id": "4eb570b4-b098-59be-96f2-9c1e0bcd7b65",
+          "tenant_id": null,
+          "updated_at": "2026-09-08T02:53:16.637744+00:00"
+        },
+        {
+          "code": "catalog_58a6c1638bf20651ee6442e480fc3a2c",
+          "created_at": "2026-09-08T02:53:16.637744+00:00",
+          "id": "9e3a0f4c-145a-56ff-b460-50fd77151648",
+          "is_active": true,
+          "label": "Hidráulico",
+          "sort_order": 1,
+          "spec_definition_id": "4eb570b4-b098-59be-96f2-9c1e0bcd7b65",
+          "tenant_id": null,
+          "updated_at": "2026-09-08T02:53:16.637744+00:00"
+        },
+        {
+          "code": "catalog_ace1b00a5ecbb981b8bdacbf4dd97c07",
+          "created_at": "2026-09-08T02:53:16.637744+00:00",
+          "id": "bfef897c-a0ec-5051-8d68-5350a737eb24",
+          "is_active": true,
+          "label": "Híbrido (cable a hidráulico)",
+          "sort_order": 2,
+          "spec_definition_id": "4eb570b4-b098-59be-96f2-9c1e0bcd7b65",
+          "tenant_id": null,
+          "updated_at": "2026-09-08T02:53:16.637744+00:00"
+        },
+        {
+          "code": "catalog_c2295235a535ea3e85b7a0e5ab85afb0",
+          "created_at": "2026-09-08T02:53:16.637744+00:00",
+          "id": "d1ba8cfa-6a17-5651-8c59-b12eacc0901b",
+          "is_active": true,
+          "label": "Otro",
+          "sort_order": 5,
+          "spec_definition_id": "4eb570b4-b098-59be-96f2-9c1e0bcd7b65",
+          "tenant_id": null,
+          "updated_at": "2026-09-08T02:53:16.637744+00:00"
+        }
+      ],
+      "sort_order": 0,
+      "tenant_id": null,
+      "unit": null,
+      "updated_at": "2026-09-08T02:53:16.637744+00:00",
+      "validation_rules": {},
+      "origin": "existing"
+    },
+    "brake_bleed_ports": {
+      "allowed_values": [],
+      "created_at": "2026-09-15T04:34:25.040098+00:00",
+      "data_type": "json",
+      "description": null,
+      "group_name": null,
+      "id": "2132bfb4-5e72-5826-9f5b-5b73039de39b",
+      "is_compatibility_relevant": false,
+      "is_customer_visible": false,
+      "is_filterable": false,
+      "is_mechanic_visible": true,
+      "is_required_by_default": false,
+      "key": "brake_bleed_ports",
+      "label": "Puertos de purga del modelo",
+      "options": [],
+      "sort_order": 0,
+      "tenant_id": null,
+      "unit": null,
+      "updated_at": "2026-09-15T04:34:25.040098+00:00",
+      "validation_rules": {
+        "rows_schema": {
+          "columns": [
+            {
+              "allowed_values": [
+                "Maneta",
+                "Cáliper",
+                "Convertidor"
+              ],
+              "key": "component_role",
+              "label": "Componente",
+              "required": true,
+              "type": "token"
+            },
+            {
+              "key": "port_id",
+              "label": "Puerto",
+              "required": true,
+              "type": "text"
+            },
+            {
+              "key": "connection_spec",
+              "label": "Rosca / conector de purga",
+              "required": false,
+              "type": "text"
+            },
+            {
+              "key": "tool_interface",
+              "label": "Interfaz de herramienta",
+              "required": false,
+              "type": "text"
+            },
+            {
+              "key": "procedure_reference",
+              "label": "Procedimiento / revisión OEM",
+              "required": false,
+              "type": "text"
+            },
+            {
+              "key": "source_url",
+              "label": "Fuente OEM de esta fila",
+              "required": true,
+              "type": "url"
+            }
+          ],
+          "unique_by": [
+            [
+              "component_role",
+              "port_id"
+            ]
+          ],
+          "version": 1
+        }
+      },
+      "origin": "existing"
+    },
+    "brake_conversion_location": {
+      "allowed_values": [
+        "En esta pieza",
+        "En un dispositivo externo"
+      ],
+      "created_at": "2026-09-15T04:34:25.040098+00:00",
+      "data_type": "single_select",
+      "description": null,
+      "group_name": null,
+      "id": "4148ee40-a54c-5bad-827e-bde6108fae3b",
+      "is_compatibility_relevant": false,
+      "is_customer_visible": false,
+      "is_filterable": false,
+      "is_mechanic_visible": true,
+      "is_required_by_default": false,
+      "key": "brake_conversion_location",
+      "label": "Dónde ocurre la conversión declarada",
+      "options": [
+        {
+          "code": "catalog_7c18d6c28554b2b62738d53d67345e2e",
+          "created_at": "2026-09-15T04:34:25.040098+00:00",
+          "id": "3eb47159-5922-5215-a14d-d6d901e84371",
+          "is_active": true,
+          "label": "En esta pieza",
+          "sort_order": 0,
+          "spec_definition_id": "4148ee40-a54c-5bad-827e-bde6108fae3b",
+          "tenant_id": null,
+          "updated_at": "2026-09-15T04:34:25.040098+00:00"
+        },
+        {
+          "code": "catalog_2b90ca6a649bcf12b454de72e6fc83a8",
+          "created_at": "2026-09-15T04:34:25.040098+00:00",
+          "id": "83945a8f-7fb2-5190-910d-bbf08f85b5d2",
+          "is_active": true,
+          "label": "En un dispositivo externo",
+          "sort_order": 1,
+          "spec_definition_id": "4148ee40-a54c-5bad-827e-bde6108fae3b",
+          "tenant_id": null,
+          "updated_at": "2026-09-15T04:34:25.040098+00:00"
+        }
+      ],
+      "sort_order": 0,
+      "tenant_id": null,
+      "unit": null,
+      "updated_at": "2026-09-15T04:34:25.040098+00:00",
+      "validation_rules": {},
+      "origin": "existing"
+    },
+    "brake_external_hose_connection": {
+      "allowed_values": [],
+      "created_at": "2026-09-08T04:14:19.950959+00:00",
+      "data_type": "boolean",
+      "description": null,
+      "group_name": null,
+      "id": "ef01b60f-ea74-5f5b-8e36-22af1ce4fe0b",
+      "is_compatibility_relevant": false,
+      "is_customer_visible": false,
+      "is_filterable": false,
+      "is_mechanic_visible": true,
+      "is_required_by_default": false,
+      "key": "brake_external_hose_connection",
+      "label": "Este componente tiene conexión de manguera externa",
+      "options": [],
+      "sort_order": 0,
+      "tenant_id": null,
+      "unit": null,
+      "updated_at": "2026-09-08T04:14:19.950959+00:00",
+      "validation_rules": {},
+      "origin": "existing"
+    },
+    "brake_model_fluid_approvals": {
+      "allowed_values": [],
+      "created_at": "2026-09-15T04:34:25.040098+00:00",
+      "data_type": "json",
+      "description": null,
+      "group_name": null,
+      "id": "8721f156-3a66-547c-b82a-ea6003d644f4",
+      "is_compatibility_relevant": false,
+      "is_customer_visible": false,
+      "is_filterable": false,
+      "is_mechanic_visible": true,
+      "is_required_by_default": false,
+      "key": "brake_model_fluid_approvals",
+      "label": "Fluidos aprobados por modelo y edición",
+      "options": [],
+      "sort_order": 0,
+      "tenant_id": null,
+      "unit": null,
+      "updated_at": "2026-09-15T04:34:25.040098+00:00",
+      "validation_rules": {
+        "rows_schema": {
+          "columns": [
+            {
+              "key": "system_brand",
+              "label": "Marca del sistema",
+              "required": true,
+              "type": "text"
+            },
+            {
+              "key": "system_model",
+              "label": "Modelo del sistema",
+              "required": true,
+              "type": "text"
+            },
+            {
+              "key": "generation",
+              "label": "Generación / edición del modelo",
+              "required": true,
+              "type": "text"
+            },
+            {
+              "allowed_values": [
+                "Aceite Mineral",
+                "DOT 3",
+                "DOT 4",
+                "DOT 5",
+                "DOT 5.1"
+              ],
+              "key": "fluid_class",
+              "label": "Clase de fluido",
+              "required": true,
+              "type": "token"
+            },
+            {
+              "key": "fluid_product",
+              "label": "Producto / especificación OEM del fluido",
+              "required": false,
+              "type": "text"
+            },
+            {
+              "key": "conditions",
+              "label": "Condiciones expresas de uso",
+              "required": false,
+              "type": "text"
+            },
+            {
+              "key": "source_url",
+              "label": "Fuente OEM de esta fila",
+              "required": true,
+              "type": "url"
+            }
+          ],
+          "unique_by": [
+            [
+              "system_brand",
+              "system_model",
+              "generation",
+              "fluid_class",
+              "fluid_product"
+            ]
+          ],
+          "version": 1
+        }
+      },
+      "origin": "existing"
+    },
+    "brake_pad_retainer_model": {
+      "allowed_values": [],
+      "created_at": "2026-09-15T04:34:25.040098+00:00",
+      "data_type": "text",
+      "description": null,
+      "group_name": null,
+      "id": "6640d7a1-8f65-58a9-8699-8672e03ba319",
+      "is_compatibility_relevant": false,
+      "is_customer_visible": false,
+      "is_filterable": false,
+      "is_mechanic_visible": true,
+      "is_required_by_default": false,
+      "key": "brake_pad_retainer_model",
+      "label": "Modelo de pasador / retención de pastilla",
+      "options": [],
+      "sort_order": 0,
+      "tenant_id": null,
+      "unit": null,
+      "updated_at": "2026-09-15T04:34:25.040098+00:00",
+      "validation_rules": {},
+      "origin": "existing"
+    },
+    "brake_piece_hydraulic_ports": {
+      "allowed_values": [],
+      "created_at": "2026-09-15T04:34:25.040098+00:00",
+      "data_type": "json",
+      "description": null,
+      "group_name": null,
+      "id": "6cf165c6-3dc3-5287-ac1b-6c24d1f30736",
+      "is_compatibility_relevant": false,
+      "is_customer_visible": false,
+      "is_filterable": false,
+      "is_mechanic_visible": true,
+      "is_required_by_default": false,
+      "key": "brake_piece_hydraulic_ports",
+      "label": "Puertos hidráulicos de esta pieza",
+      "options": [],
+      "sort_order": 0,
+      "tenant_id": null,
+      "unit": null,
+      "updated_at": "2026-09-15T04:34:25.040098+00:00",
+      "validation_rules": {
+        "rows_schema": {
+          "columns": [
+            {
+              "key": "port_id",
+              "label": "Identificador del puerto físico",
+              "required": true,
+              "type": "text"
+            },
+            {
+              "allowed_values": [
+                "Entrada",
+                "Salida",
+                "Purgador"
+              ],
+              "key": "end_role",
+              "label": "Papel del extremo",
+              "required": true,
+              "type": "token"
+            },
+            {
+              "key": "fitting_model",
+              "label": "Conector declarado",
+              "type": "text"
+            },
+            {
+              "key": "connection_spec",
+              "label": "Especificación de la conexión",
+              "type": "text"
+            },
+            {
+              "key": "source_scope",
+              "label": "Apartado y alcance de la fuente",
+              "required": true,
+              "type": "text"
+            },
+            {
+              "key": "source_url",
+              "label": "Fuente",
+              "required": true,
+              "type": "url"
+            }
+          ],
+          "unique_by": [
+            [
+              "port_id"
+            ]
+          ],
+          "version": 1
+        }
+      },
+      "origin": "existing"
+    },
+    "brake_position": {
+      "allowed_values": [
+        "Delantero",
+        "Trasero",
+        "Universal"
+      ],
+      "created_at": "2026-03-18T21:38:37.526215+00:00",
+      "data_type": "single_select",
+      "description": null,
+      "group_name": "Identificación",
+      "id": "ef5f6e33-beec-4eb9-9add-26257133cf49",
+      "is_compatibility_relevant": false,
+      "is_customer_visible": true,
+      "is_filterable": true,
+      "is_mechanic_visible": true,
+      "is_required_by_default": false,
+      "key": "brake_position",
+      "label": "Posición",
+      "options": [
+        {
+          "code": "delantero",
+          "created_at": "2026-08-21T17:58:02.773721+00:00",
+          "id": "92bf31a9-e2ef-49d6-8b4a-d56520091bd5",
+          "is_active": true,
+          "label": "Delantero",
+          "sort_order": 1,
+          "spec_definition_id": "ef5f6e33-beec-4eb9-9add-26257133cf49",
+          "tenant_id": null,
+          "updated_at": "2026-08-21T17:58:02.773721+00:00"
+        },
+        {
+          "code": "trasero",
+          "created_at": "2026-08-21T17:58:02.773721+00:00",
+          "id": "99c6a482-f64e-4d10-ab1a-add5a8fe0fd9",
+          "is_active": true,
+          "label": "Trasero",
+          "sort_order": 2,
+          "spec_definition_id": "ef5f6e33-beec-4eb9-9add-26257133cf49",
+          "tenant_id": null,
+          "updated_at": "2026-08-21T17:58:02.773721+00:00"
+        },
+        {
+          "code": "universal",
+          "created_at": "2026-08-21T17:58:02.773721+00:00",
+          "id": "ae1775e0-5802-48f9-94f5-51f9227a53c9",
+          "is_active": true,
+          "label": "Universal",
+          "sort_order": 3,
+          "spec_definition_id": "ef5f6e33-beec-4eb9-9add-26257133cf49",
+          "tenant_id": null,
+          "updated_at": "2026-08-21T17:58:02.773721+00:00"
+        }
+      ],
+      "sort_order": 30,
+      "tenant_id": null,
+      "unit": null,
+      "updated_at": "2026-03-18T21:38:37.526215+00:00",
+      "validation_rules": {},
+      "origin": "existing"
+    },
+    "brake_system": {
+      "allowed_values": [
+        "Shimano",
+        "SRAM",
+        "Magura",
+        "Tektro",
+        "Hayes",
+        "Bengal",
+        "TRP",
+        "Hope",
+        "Promax",
+        "Genérico"
+      ],
+      "created_at": "2026-03-18T21:38:37.526215+00:00",
+      "data_type": "single_select",
+      "description": null,
+      "group_name": "Identificación",
+      "id": "de380dfb-d1ad-4702-a978-069692dabd49",
+      "is_compatibility_relevant": true,
+      "is_customer_visible": true,
+      "is_filterable": true,
+      "is_mechanic_visible": true,
+      "is_required_by_default": false,
+      "key": "brake_system",
+      "label": "Sistema de Freno",
+      "options": [
+        {
+          "code": "trp",
+          "created_at": "2026-08-21T17:58:02.773721+00:00",
+          "id": "07780408-b7ce-4509-8ca2-0d9ecefb16ad",
+          "is_active": true,
+          "label": "TRP",
+          "sort_order": 7,
+          "spec_definition_id": "de380dfb-d1ad-4702-a978-069692dabd49",
+          "tenant_id": null,
+          "updated_at": "2026-08-21T17:58:02.773721+00:00"
+        },
+        {
+          "code": "bengal",
+          "created_at": "2026-08-21T17:58:02.773721+00:00",
+          "id": "27a2302a-51ea-4519-b5c2-68aa8f485038",
+          "is_active": true,
+          "label": "Bengal",
+          "sort_order": 6,
+          "spec_definition_id": "de380dfb-d1ad-4702-a978-069692dabd49",
+          "tenant_id": null,
+          "updated_at": "2026-08-21T17:58:02.773721+00:00"
+        },
+        {
+          "code": "hayes",
+          "created_at": "2026-08-21T17:58:02.773721+00:00",
+          "id": "2c306126-d813-4b45-bd67-086d17348fbb",
+          "is_active": true,
+          "label": "Hayes",
+          "sort_order": 5,
+          "spec_definition_id": "de380dfb-d1ad-4702-a978-069692dabd49",
+          "tenant_id": null,
+          "updated_at": "2026-08-21T17:58:02.773721+00:00"
+        },
+        {
+          "code": "shimano",
+          "created_at": "2026-08-21T17:58:02.773721+00:00",
+          "id": "2cd7274b-0c4c-4a66-9165-c659eddfc9fb",
+          "is_active": true,
+          "label": "Shimano",
+          "sort_order": 1,
+          "spec_definition_id": "de380dfb-d1ad-4702-a978-069692dabd49",
+          "tenant_id": null,
+          "updated_at": "2026-08-21T17:58:02.773721+00:00"
+        },
+        {
+          "code": "magura",
+          "created_at": "2026-08-21T17:58:02.773721+00:00",
+          "id": "31147f63-d129-438d-9248-0a8fe6495399",
+          "is_active": true,
+          "label": "Magura",
+          "sort_order": 3,
+          "spec_definition_id": "de380dfb-d1ad-4702-a978-069692dabd49",
+          "tenant_id": null,
+          "updated_at": "2026-08-21T17:58:02.773721+00:00"
+        },
+        {
+          "code": "promax",
+          "created_at": "2026-08-21T17:58:02.773721+00:00",
+          "id": "698ac9f3-65ef-4bd3-885e-d88574b9a984",
+          "is_active": true,
+          "label": "Promax",
+          "sort_order": 9,
+          "spec_definition_id": "de380dfb-d1ad-4702-a978-069692dabd49",
+          "tenant_id": null,
+          "updated_at": "2026-08-21T17:58:02.773721+00:00"
+        },
+        {
+          "code": "tektro",
+          "created_at": "2026-08-21T17:58:02.773721+00:00",
+          "id": "9ad63046-67de-4962-9992-26f0de45aa45",
+          "is_active": true,
+          "label": "Tektro",
+          "sort_order": 4,
+          "spec_definition_id": "de380dfb-d1ad-4702-a978-069692dabd49",
+          "tenant_id": null,
+          "updated_at": "2026-08-21T17:58:02.773721+00:00"
+        },
+        {
+          "code": "generico",
+          "created_at": "2026-08-21T17:58:02.773721+00:00",
+          "id": "9ec3a64b-c111-4784-ad3f-9c1a6e8563eb",
+          "is_active": true,
+          "label": "Genérico",
+          "sort_order": 10,
+          "spec_definition_id": "de380dfb-d1ad-4702-a978-069692dabd49",
+          "tenant_id": null,
+          "updated_at": "2026-08-21T17:58:02.773721+00:00"
+        },
+        {
+          "code": "sram",
+          "created_at": "2026-08-21T17:58:02.773721+00:00",
+          "id": "b6a20795-fc16-46c1-b16c-221d9303e535",
+          "is_active": true,
+          "label": "SRAM",
+          "sort_order": 2,
+          "spec_definition_id": "de380dfb-d1ad-4702-a978-069692dabd49",
+          "tenant_id": null,
+          "updated_at": "2026-08-21T17:58:02.773721+00:00"
+        },
+        {
+          "code": "hope",
+          "created_at": "2026-08-21T17:58:02.773721+00:00",
+          "id": "bea73ba4-02dd-471b-b441-48a542290a19",
+          "is_active": true,
+          "label": "Hope",
+          "sort_order": 8,
+          "spec_definition_id": "de380dfb-d1ad-4702-a978-069692dabd49",
+          "tenant_id": null,
+          "updated_at": "2026-08-21T17:58:02.773721+00:00"
+        }
+      ],
+      "sort_order": 10,
+      "tenant_id": null,
+      "unit": null,
+      "updated_at": "2026-03-18T21:38:37.526215+00:00",
+      "validation_rules": {},
+      "origin": "existing"
+    },
+    "brake_type": {
+      "allowed_values": [
+        "Disco Hidráulico",
+        "Disco Mecánico",
+        "V-Brake",
+        "Cantilever"
+      ],
+      "created_at": "2026-03-18T21:38:37.526215+00:00",
+      "data_type": "single_select",
+      "description": null,
+      "group_name": "Identificación",
+      "id": "af057d76-e4ea-40d5-a293-941ad6aa0dc2",
+      "is_compatibility_relevant": true,
+      "is_customer_visible": true,
+      "is_filterable": true,
+      "is_mechanic_visible": true,
+      "is_required_by_default": false,
+      "key": "brake_type",
+      "label": "Tipo de Freno",
+      "options": [
+        {
+          "code": "mechanical_disc",
+          "created_at": "2026-08-21T17:58:02.773721+00:00",
+          "id": "16e47a1e-6b03-4308-ba2b-2444d9beb7fa",
+          "is_active": true,
+          "label": "Disco Mecánico",
+          "sort_order": 2,
+          "spec_definition_id": "af057d76-e4ea-40d5-a293-941ad6aa0dc2",
+          "tenant_id": null,
+          "updated_at": "2026-08-21T17:58:02.773721+00:00"
+        },
+        {
+          "code": "v_brake",
+          "created_at": "2026-08-21T17:58:02.773721+00:00",
+          "id": "6b1430f2-d310-4890-a8e4-2b0ebbbfec9a",
+          "is_active": true,
+          "label": "V-Brake",
+          "sort_order": 3,
+          "spec_definition_id": "af057d76-e4ea-40d5-a293-941ad6aa0dc2",
+          "tenant_id": null,
+          "updated_at": "2026-08-21T17:58:02.773721+00:00"
+        },
+        {
+          "code": "hydraulic_disc",
+          "created_at": "2026-08-21T17:58:02.773721+00:00",
+          "id": "7aaf9804-cbd1-4037-a8d5-665030b65e18",
+          "is_active": true,
+          "label": "Disco Hidráulico",
+          "sort_order": 1,
+          "spec_definition_id": "af057d76-e4ea-40d5-a293-941ad6aa0dc2",
+          "tenant_id": null,
+          "updated_at": "2026-08-21T17:58:02.773721+00:00"
+        },
+        {
+          "code": "cantilever",
+          "created_at": "2026-08-21T17:58:02.773721+00:00",
+          "id": "96913323-fada-42f2-b27a-cb59fc5659ed",
+          "is_active": true,
+          "label": "Cantilever",
+          "sort_order": 4,
+          "spec_definition_id": "af057d76-e4ea-40d5-a293-941ad6aa0dc2",
+          "tenant_id": null,
+          "updated_at": "2026-08-21T17:58:02.773721+00:00"
+        }
+      ],
+      "sort_order": 20,
+      "tenant_id": null,
+      "unit": null,
+      "updated_at": "2026-03-18T21:38:37.526215+00:00",
+      "validation_rules": {},
+      "origin": "existing"
+    },
+    "braking_surface": {
+      "allowed_values": [
+        "Disco",
+        "Llanta",
+        "Maza (banda / tambor / rodillo)"
+      ],
+      "created_at": "2026-09-15T04:34:25.040098+00:00",
+      "data_type": "single_select",
+      "description": null,
+      "group_name": null,
+      "id": "2c5b729e-9f3c-5b92-be50-9f2398997725",
+      "is_compatibility_relevant": false,
+      "is_customer_visible": true,
+      "is_filterable": true,
+      "is_mechanic_visible": true,
+      "is_required_by_default": false,
+      "key": "braking_surface",
+      "label": "Superficie de frenado",
+      "options": [
+        {
+          "code": "catalog_9a139865dd37f19122c0a1e858af9bbf",
+          "created_at": "2026-09-15T04:34:25.040098+00:00",
+          "id": "07b8ea84-037e-50b3-8d90-3e22ad08f90c",
+          "is_active": true,
+          "label": "Llanta",
+          "sort_order": 1,
+          "spec_definition_id": "2c5b729e-9f3c-5b92-be50-9f2398997725",
+          "tenant_id": null,
+          "updated_at": "2026-09-15T04:34:25.040098+00:00"
+        },
+        {
+          "code": "catalog_588814a70d95ca42af32c7a691e42984",
+          "created_at": "2026-09-15T04:34:25.040098+00:00",
+          "id": "9332f1f5-4182-5c78-9796-995001c8f6b6",
+          "is_active": true,
+          "label": "Maza (banda / tambor / rodillo)",
+          "sort_order": 2,
+          "spec_definition_id": "2c5b729e-9f3c-5b92-be50-9f2398997725",
+          "tenant_id": null,
+          "updated_at": "2026-09-15T04:34:25.040098+00:00"
+        },
+        {
+          "code": "catalog_6b8a071d3bbcb8dbc788e488f7ece25c",
+          "created_at": "2026-09-15T04:34:25.040098+00:00",
+          "id": "ce514671-a43a-59a5-9834-70a1df43eddb",
+          "is_active": true,
+          "label": "Disco",
+          "sort_order": 0,
+          "spec_definition_id": "2c5b729e-9f3c-5b92-be50-9f2398997725",
+          "tenant_id": null,
+          "updated_at": "2026-09-15T04:34:25.040098+00:00"
+        }
+      ],
+      "sort_order": 0,
+      "tenant_id": null,
+      "unit": null,
+      "updated_at": "2026-09-15T04:34:25.040098+00:00",
+      "validation_rules": {},
+      "origin": "existing"
+    },
+    "cable_pull_required": {
+      "allowed_values": [
+        "Tiro largo (V-brake / disco mecánico tiro largo)",
+        "Tiro corto (ruta / cantilever / caliper)",
+        "Desconocido / sin confirmar"
+      ],
+      "created_at": "2026-09-15T04:34:25.040098+00:00",
+      "data_type": "single_select",
+      "description": null,
+      "group_name": null,
+      "id": "3a9042ab-486f-54d6-8281-41b5150e66b4",
+      "is_compatibility_relevant": false,
+      "is_customer_visible": true,
+      "is_filterable": true,
+      "is_mechanic_visible": true,
+      "is_required_by_default": false,
+      "key": "cable_pull_required",
+      "label": "Tiro de cable requerido",
+      "options": [
+        {
+          "code": "catalog_de6e897b1c6ced32e6762f3ceaebffd6",
+          "created_at": "2026-09-15T04:34:25.040098+00:00",
+          "id": "02304914-eefd-52fa-b685-f5d03a3748f6",
+          "is_active": true,
+          "label": "Desconocido / sin confirmar",
+          "sort_order": 2,
+          "spec_definition_id": "3a9042ab-486f-54d6-8281-41b5150e66b4",
+          "tenant_id": null,
+          "updated_at": "2026-09-15T04:34:25.040098+00:00"
+        },
+        {
+          "code": "catalog_0951275088ebf5ad70fd3cf55b35545b",
+          "created_at": "2026-09-15T04:34:25.040098+00:00",
+          "id": "6dbfa9e4-7a05-593b-b7f9-343463ba4434",
+          "is_active": true,
+          "label": "Tiro largo (V-brake / disco mecánico tiro largo)",
+          "sort_order": 0,
+          "spec_definition_id": "3a9042ab-486f-54d6-8281-41b5150e66b4",
+          "tenant_id": null,
+          "updated_at": "2026-09-15T04:34:25.040098+00:00"
+        },
+        {
+          "code": "catalog_2b9f5addba5f7f34d11699d4fcda4158",
+          "created_at": "2026-09-15T04:34:25.040098+00:00",
+          "id": "fa5ee717-c044-5f77-ba15-decf7e1e1569",
+          "is_active": true,
+          "label": "Tiro corto (ruta / cantilever / caliper)",
+          "sort_order": 1,
+          "spec_definition_id": "3a9042ab-486f-54d6-8281-41b5150e66b4",
+          "tenant_id": null,
+          "updated_at": "2026-09-15T04:34:25.040098+00:00"
+        }
+      ],
+      "sort_order": 0,
+      "tenant_id": null,
+      "unit": null,
+      "updated_at": "2026-09-15T04:34:25.040098+00:00",
+      "validation_rules": {},
+      "origin": "existing"
+    },
+    "caliper_hydraulic": {
+      "allowed_values": [],
+      "created_at": "2026-03-18T21:38:37.526215+00:00",
+      "data_type": "boolean",
+      "description": null,
+      "group_name": "Especificaciones",
+      "id": "d72e7f7c-6330-42bd-9e63-5075740e1a96",
+      "is_compatibility_relevant": true,
+      "is_customer_visible": true,
+      "is_filterable": true,
+      "is_mechanic_visible": true,
+      "is_required_by_default": false,
+      "key": "caliper_hydraulic",
+      "label": "Hidráulico",
+      "options": [],
+      "sort_order": 20,
+      "tenant_id": null,
+      "unit": null,
+      "updated_at": "2026-03-18T21:38:37.526215+00:00",
+      "validation_rules": {},
+      "origin": "existing"
+    },
+    "caliper_mount_interface": {
+      "allowed_values": [
+        "International Standard",
+        "Post Mount",
+        "Flat Mount",
+        "Desconocido / sin confirmar"
+      ],
+      "created_at": "2026-09-15T04:34:25.040098+00:00",
+      "data_type": "single_select",
+      "description": null,
+      "group_name": null,
+      "id": "452ccfc8-0663-55bf-b22c-c4b4d6226268",
+      "is_compatibility_relevant": false,
+      "is_customer_visible": true,
+      "is_filterable": true,
+      "is_mechanic_visible": true,
+      "is_required_by_default": false,
+      "key": "caliper_mount_interface",
+      "label": "Montaje propio de la pinza",
+      "options": [
+        {
+          "code": "catalog_9f59560c8fbce2c8a11323777a4d0702",
+          "created_at": "2026-09-15T04:34:25.040098+00:00",
+          "id": "22475207-e60a-516a-b409-b248daa84dde",
+          "is_active": true,
+          "label": "Flat Mount",
+          "sort_order": 2,
+          "spec_definition_id": "452ccfc8-0663-55bf-b22c-c4b4d6226268",
+          "tenant_id": null,
+          "updated_at": "2026-09-15T04:34:25.040098+00:00"
+        },
+        {
+          "code": "catalog_ae5384c6d9ca9155f85dfa4a074d2b7e",
+          "created_at": "2026-09-15T04:34:25.040098+00:00",
+          "id": "8bab2375-5760-5550-9531-9cfc8a44e595",
+          "is_active": true,
+          "label": "Post Mount",
+          "sort_order": 1,
+          "spec_definition_id": "452ccfc8-0663-55bf-b22c-c4b4d6226268",
+          "tenant_id": null,
+          "updated_at": "2026-09-15T04:34:25.040098+00:00"
+        },
+        {
+          "code": "catalog_de6e897b1c6ced32e6762f3ceaebffd6",
+          "created_at": "2026-09-15T04:34:25.040098+00:00",
+          "id": "dea81dcb-c44a-544e-bb07-52d46b191444",
+          "is_active": true,
+          "label": "Desconocido / sin confirmar",
+          "sort_order": 3,
+          "spec_definition_id": "452ccfc8-0663-55bf-b22c-c4b4d6226268",
+          "tenant_id": null,
+          "updated_at": "2026-09-15T04:34:25.040098+00:00"
+        },
+        {
+          "code": "catalog_40e8181e7b525876b5613416e29ee69a",
+          "created_at": "2026-09-15T04:34:25.040098+00:00",
+          "id": "f52732f3-f739-5d52-a6d9-637e4dd0fd8d",
+          "is_active": true,
+          "label": "International Standard",
+          "sort_order": 0,
+          "spec_definition_id": "452ccfc8-0663-55bf-b22c-c4b4d6226268",
+          "tenant_id": null,
+          "updated_at": "2026-09-15T04:34:25.040098+00:00"
+        }
+      ],
+      "sort_order": 0,
+      "tenant_id": null,
+      "unit": null,
+      "updated_at": "2026-09-15T04:34:25.040098+00:00",
+      "validation_rules": {},
+      "origin": "existing"
+    },
+    "fluid_type": {
+      "allowed_values": [
+        "Aceite Mineral",
+        "DOT 4",
+        "DOT 5.1"
+      ],
+      "created_at": "2026-03-18T21:38:37.526215+00:00",
+      "data_type": "single_select",
+      "description": null,
+      "group_name": "Sistema Hidráulico",
+      "id": "7d4a8477-18a9-4132-b027-ebe866dba164",
+      "is_compatibility_relevant": true,
+      "is_customer_visible": true,
+      "is_filterable": true,
+      "is_mechanic_visible": true,
+      "is_required_by_default": false,
+      "key": "fluid_type",
+      "label": "Tipo de Fluido",
+      "options": [
+        {
+          "code": "dot_5_1",
+          "created_at": "2026-08-21T17:58:02.773721+00:00",
+          "id": "220956e3-5ea1-4631-b7f6-29c58fcd6a19",
+          "is_active": true,
+          "label": "DOT 5.1",
+          "sort_order": 3,
+          "spec_definition_id": "7d4a8477-18a9-4132-b027-ebe866dba164",
+          "tenant_id": null,
+          "updated_at": "2026-08-21T17:58:02.773721+00:00"
+        },
+        {
+          "code": "aceite_mineral",
+          "created_at": "2026-08-21T17:58:02.773721+00:00",
+          "id": "db7b92b2-32d8-4489-b03a-678a15a634c3",
+          "is_active": true,
+          "label": "Aceite Mineral",
+          "sort_order": 1,
+          "spec_definition_id": "7d4a8477-18a9-4132-b027-ebe866dba164",
+          "tenant_id": null,
+          "updated_at": "2026-08-21T17:58:02.773721+00:00"
+        },
+        {
+          "code": "dot_4",
+          "created_at": "2026-08-21T17:58:02.773721+00:00",
+          "id": "dd09b816-d169-4e18-9850-52c2bd37f28c",
+          "is_active": true,
+          "label": "DOT 4",
+          "sort_order": 2,
+          "spec_definition_id": "7d4a8477-18a9-4132-b027-ebe866dba164",
+          "tenant_id": null,
+          "updated_at": "2026-08-21T17:58:02.773721+00:00"
+        }
+      ],
+      "sort_order": 10,
+      "tenant_id": null,
+      "unit": null,
+      "updated_at": "2026-03-18T21:38:37.526215+00:00",
+      "validation_rules": {},
+      "origin": "existing"
+    },
+    "hose_fitting_type": {
+      "allowed_values": [
+        "Oliva + Barb",
+        "Compresión",
+        "Push-fit"
+      ],
+      "created_at": "2026-03-18T21:38:37.526215+00:00",
+      "data_type": "single_select",
+      "description": null,
+      "group_name": "Sistema Hidráulico",
+      "id": "ecaa9ec5-4849-439c-a81e-9dbadaca0f3a",
+      "is_compatibility_relevant": false,
+      "is_customer_visible": true,
+      "is_filterable": false,
+      "is_mechanic_visible": true,
+      "is_required_by_default": false,
+      "key": "hose_fitting_type",
+      "label": "Tipo de Fitting",
+      "options": [
+        {
+          "code": "compresion",
+          "created_at": "2026-08-21T17:58:02.773721+00:00",
+          "id": "3968c3ad-65d9-45ed-afae-230cf3a5db63",
+          "is_active": true,
+          "label": "Compresión",
+          "sort_order": 2,
+          "spec_definition_id": "ecaa9ec5-4849-439c-a81e-9dbadaca0f3a",
+          "tenant_id": null,
+          "updated_at": "2026-08-21T17:58:02.773721+00:00"
+        },
+        {
+          "code": "oliva_barb",
+          "created_at": "2026-08-21T17:58:02.773721+00:00",
+          "id": "6ab3ffac-0894-47fc-859e-574f70d57a23",
+          "is_active": true,
+          "label": "Oliva + Barb",
+          "sort_order": 1,
+          "spec_definition_id": "ecaa9ec5-4849-439c-a81e-9dbadaca0f3a",
+          "tenant_id": null,
+          "updated_at": "2026-08-21T17:58:02.773721+00:00"
+        },
+        {
+          "code": "push_fit",
+          "created_at": "2026-08-21T17:58:02.773721+00:00",
+          "id": "bd74baec-a022-483b-93c2-922c0678834b",
+          "is_active": true,
+          "label": "Push-fit",
+          "sort_order": 3,
+          "spec_definition_id": "ecaa9ec5-4849-439c-a81e-9dbadaca0f3a",
+          "tenant_id": null,
+          "updated_at": "2026-08-21T17:58:02.773721+00:00"
+        }
+      ],
+      "sort_order": 30,
+      "tenant_id": null,
+      "unit": null,
+      "updated_at": "2026-03-18T21:38:37.526215+00:00",
+      "validation_rules": {},
+      "origin": "existing"
+    },
+    "hose_length_mm": {
+      "allowed_values": [],
+      "created_at": "2026-03-18T21:38:37.526215+00:00",
+      "data_type": "number",
+      "description": null,
+      "group_name": "Sistema Hidráulico",
+      "id": "2adde90f-610c-4c9a-9cbb-5c0f9aa31c10",
+      "is_compatibility_relevant": false,
+      "is_customer_visible": true,
+      "is_filterable": false,
+      "is_mechanic_visible": true,
+      "is_required_by_default": false,
+      "key": "hose_length_mm",
+      "label": "Largo de Manguera (mm)",
+      "options": [],
+      "sort_order": 20,
+      "tenant_id": null,
+      "unit": null,
+      "updated_at": "2026-03-18T21:38:37.526215+00:00",
+      "validation_rules": {
+        "positive": true
+      },
+      "origin": "existing"
+    },
+    "kit_members": {
+      "allowed_values": [],
+      "created_at": "2026-09-07T22:33:40.381707+00:00",
+      "data_type": "json",
+      "description": null,
+      "group_name": null,
+      "id": "d0cfc800-78a6-5bba-945b-ccbff6fa88e1",
+      "is_compatibility_relevant": false,
+      "is_customer_visible": false,
+      "is_filterable": false,
+      "is_mechanic_visible": true,
+      "is_required_by_default": false,
+      "key": "kit_members",
+      "label": "Componentes incluidos",
+      "options": [],
+      "sort_order": 0,
+      "tenant_id": null,
+      "unit": null,
+      "updated_at": "2026-09-07T22:33:40.381707+00:00",
+      "validation_rules": {
+        "rows_schema": {
+          "columns": [
+            {
+              "allowed_values": [
+                "maneta",
+                "cáliper",
+                "manguera",
+                "rotor",
+                "adaptador",
+                "cassette",
+                "cadena",
+                "biela",
+                "pedalier",
+                "copas",
+                "rodamientos",
+                "eje",
+                "plato",
+                "mando",
+                "cambio trasero",
+                "desviador",
+                "pastilla",
+                "parche",
+                "pegamento",
+                "válvula",
+                "cinta",
+                "sellante",
+                "rueda delantera",
+                "rueda trasera",
+                "llanta",
+                "maza",
+                "rayos",
+                "cubierta",
+                "tapa",
+                "araña",
+                "oliva",
+                "inserto",
+                "otro",
+                "cable",
+                "soporte",
+                "correa",
+                "espaciador"
+              ],
+              "key": "member_role",
+              "label": "Componente",
+              "required": true,
+              "type": "token"
+            },
+            {
+              "allowed_values": [
+                "accessory_mount",
+                "audible_signal",
+                "bearing",
+                "bicycle",
+                "bike_bag",
+                "bike_protection",
+                "bmx_cable_detangler",
+                "bottle",
+                "bottle_cage",
+                "bottom_bracket",
+                "bottom_bracket_axle",
+                "bottom_bracket_bearing",
+                "bottom_bracket_cup",
+                "brake_caliper",
+                "brake_fluid",
+                "brake_lever",
+                "brake_mount_adapter",
+                "brake_pad",
+                "brake_shift_combined_control",
+                "brake_small_part",
+                "cassette",
+                "cassette_lockring",
+                "cassette_spacer",
+                "chain",
+                "chain_guide",
+                "chain_link",
+                "chainring",
+                "chainring_guard",
+                "consumer_electronics",
+                "control_cable",
+                "control_housing",
+                "control_small_part",
+                "crank_arm",
+                "crankset",
+                "cycle_computer",
+                "derailleur_hanger",
+                "derailleur_hanger_extender",
+                "derailleur_pulley",
+                "drivetrain_kit",
+                "eyewear",
+                "fastener",
+                "fender",
+                "fixed_cog",
+                "food_beverage",
+                "fork",
+                "frame",
+                "freewheel",
+                "front_derailleur",
+                "grip",
+                "handlebar",
+                "handlebar_covering",
+                "headset",
+                "headset_small_part",
+                "helmet",
+                "hub",
+                "hub_axle",
+                "hub_brake",
+                "hub_small_part",
+                "hydraulic_disc_brake",
+                "hydraulic_fitting",
+                "hydraulic_hose",
+                "kickstand",
+                "light",
+                "lock",
+                "mechanical_disc_brake",
+                "pedal",
+                "pedal_peg",
+                "pump",
+                "rack_basket",
+                "rear_derailleur",
+                "rear_shock",
+                "reflector",
+                "rider_apparel",
+                "rider_bag",
+                "rider_glove",
+                "rider_protection",
+                "rim",
+                "rim_brake",
+                "rim_strip",
+                "rotor",
+                "rotor_mount_adapter",
+                "saddle",
+                "saddle_cover",
+                "seat_clamp",
+                "seatpost",
+                "shifter",
+                "souvenir",
+                "spacer",
+                "spoke",
+                "spoke_nipple",
+                "stem",
+                "tire",
+                "tire_liner",
+                "training_wheel",
+                "tube",
+                "tube_repair",
+                "tubeless_consumable",
+                "tubeless_repair",
+                "tubeless_tape",
+                "tubeless_valve",
+                "valve_small_part",
+                "wheel",
+                "wheel_retention",
+                "workshop_chemical",
+                "workshop_tool"
+              ],
+              "key": "family",
+              "label": "Familia técnica",
+              "required": true,
+              "type": "token"
+            },
+            {
+              "key": "quantity",
+              "label": "Cantidad",
+              "required": true,
+              "type": "integer",
+              "validation": {
+                "positive": true
+              }
+            },
+            {
+              "allowed_values": [
+                "Delantero",
+                "Trasero",
+                "Izquierdo",
+                "Derecho",
+                "Sin posición"
+              ],
+              "key": "position",
+              "label": "Posición",
+              "required": true,
+              "type": "token"
+            },
+            {
+              "key": "identity_brand",
+              "label": "Marca",
+              "required": false,
+              "type": "text"
+            },
+            {
+              "key": "identity_model",
+              "label": "Modelo",
+              "required": false,
+              "type": "text"
+            }
+          ],
+          "version": 1
+        }
+      },
+      "origin": "existing"
+    },
+    "mount_standard": {
+      "allowed_values": [
+        "Post Mount",
+        "Flat Mount",
+        "International Standard",
+        "Adaptor Requerido"
+      ],
+      "created_at": "2026-03-18T21:38:37.526215+00:00",
+      "data_type": "single_select",
+      "description": null,
+      "group_name": "Montaje",
+      "id": "0ea458cc-c939-4a2d-b888-7e21e302f636",
+      "is_compatibility_relevant": true,
+      "is_customer_visible": true,
+      "is_filterable": true,
+      "is_mechanic_visible": true,
+      "is_required_by_default": false,
+      "key": "mount_standard",
+      "label": "Estándar de Montaje",
+      "options": [
+        {
+          "code": "international_standard",
+          "created_at": "2026-08-21T17:58:02.773721+00:00",
+          "id": "5e4096b5-4620-4e91-87c9-d523d70e2224",
+          "is_active": true,
+          "label": "International Standard",
+          "sort_order": 3,
+          "spec_definition_id": "0ea458cc-c939-4a2d-b888-7e21e302f636",
+          "tenant_id": null,
+          "updated_at": "2026-08-21T17:58:02.773721+00:00"
+        },
+        {
+          "code": "post_mount",
+          "created_at": "2026-08-21T17:58:02.773721+00:00",
+          "id": "a4a1d4d4-31ce-41dc-a0ef-468b74c5d4d2",
+          "is_active": true,
+          "label": "Post Mount",
+          "sort_order": 1,
+          "spec_definition_id": "0ea458cc-c939-4a2d-b888-7e21e302f636",
+          "tenant_id": null,
+          "updated_at": "2026-08-21T17:58:02.773721+00:00"
+        },
+        {
+          "code": "flat_mount",
+          "created_at": "2026-08-21T17:58:02.773721+00:00",
+          "id": "d455b941-a60f-4b90-a982-59d46b126e86",
+          "is_active": true,
+          "label": "Flat Mount",
+          "sort_order": 2,
+          "spec_definition_id": "0ea458cc-c939-4a2d-b888-7e21e302f636",
+          "tenant_id": null,
+          "updated_at": "2026-08-21T17:58:02.773721+00:00"
+        },
+        {
+          "code": "adaptor_requerido",
+          "created_at": "2026-08-21T17:58:02.773721+00:00",
+          "id": "dc27f13c-d504-4986-a290-247b57c85302",
+          "is_active": true,
+          "label": "Adaptor Requerido",
+          "sort_order": 4,
+          "spec_definition_id": "0ea458cc-c939-4a2d-b888-7e21e302f636",
+          "tenant_id": null,
+          "updated_at": "2026-08-21T17:58:02.773721+00:00"
+        }
+      ],
+      "sort_order": 10,
+      "tenant_id": null,
+      "unit": null,
+      "updated_at": "2026-03-18T21:38:37.526215+00:00",
+      "validation_rules": {},
+      "origin": "existing"
+    },
+    "pad_shape_code": {
+      "allowed_values": [],
+      "created_at": "2026-03-18T21:38:37.526215+00:00",
+      "data_type": "text",
+      "description": null,
+      "group_name": "Compatibilidad",
+      "id": "61c2e601-3e8a-4cd4-ad16-e00867358882",
+      "is_compatibility_relevant": true,
+      "is_customer_visible": true,
+      "is_filterable": true,
+      "is_mechanic_visible": true,
+      "is_required_by_default": false,
+      "key": "pad_shape_code",
+      "label": "Código de Forma (Pastilla)",
+      "options": [],
+      "sort_order": 10,
+      "tenant_id": null,
+      "unit": null,
+      "updated_at": "2026-03-18T21:38:37.526215+00:00",
+      "validation_rules": {},
+      "origin": "existing"
+    },
+    "piston_count": {
+      "allowed_values": [
+        "2",
+        "4",
+        "6"
+      ],
+      "created_at": "2026-03-18T21:38:37.526215+00:00",
+      "data_type": "single_select",
+      "description": null,
+      "group_name": "Especificaciones",
+      "id": "c5756549-2382-4f90-9995-6409684067c7",
+      "is_compatibility_relevant": true,
+      "is_customer_visible": true,
+      "is_filterable": true,
+      "is_mechanic_visible": true,
+      "is_required_by_default": false,
+      "key": "piston_count",
+      "label": "Número de Pistones",
+      "options": [
+        {
+          "code": "v_6",
+          "created_at": "2026-08-21T17:58:02.773721+00:00",
+          "id": "0741a957-ce0c-47a7-a5b5-19a8ca58bdc3",
+          "is_active": true,
+          "label": "6",
+          "sort_order": 3,
+          "spec_definition_id": "c5756549-2382-4f90-9995-6409684067c7",
+          "tenant_id": null,
+          "updated_at": "2026-08-21T17:58:02.773721+00:00"
+        },
+        {
+          "code": "v_2",
+          "created_at": "2026-08-21T17:58:02.773721+00:00",
+          "id": "1ef2994a-5e7e-43f6-b5e2-e266e0f4c0dc",
+          "is_active": true,
+          "label": "2",
+          "sort_order": 1,
+          "spec_definition_id": "c5756549-2382-4f90-9995-6409684067c7",
+          "tenant_id": null,
+          "updated_at": "2026-08-21T17:58:02.773721+00:00"
+        },
+        {
+          "code": "v_4",
+          "created_at": "2026-08-21T17:58:02.773721+00:00",
+          "id": "eb24c2cb-3ad1-4002-b73c-a2ae5accc731",
+          "is_active": true,
+          "label": "4",
+          "sort_order": 2,
+          "spec_definition_id": "c5756549-2382-4f90-9995-6409684067c7",
+          "tenant_id": null,
+          "updated_at": "2026-08-21T17:58:02.773721+00:00"
+        }
+      ],
+      "sort_order": 10,
+      "tenant_id": null,
+      "unit": null,
+      "updated_at": "2026-03-18T21:38:37.526215+00:00",
+      "validation_rules": {},
+      "origin": "existing"
+    },
+    "piston_count_value": {
+      "allowed_values": [],
+      "created_at": "2026-09-15T04:34:25.040098+00:00",
+      "data_type": "number",
+      "description": null,
+      "group_name": null,
+      "id": "406a8f0f-5f31-5bb9-be69-0fccd0ef3791",
+      "is_compatibility_relevant": false,
+      "is_customer_visible": true,
+      "is_filterable": true,
+      "is_mechanic_visible": true,
+      "is_required_by_default": false,
+      "key": "piston_count_value",
+      "label": "Cantidad de pistones",
+      "options": [],
+      "sort_order": 0,
+      "tenant_id": null,
+      "unit": null,
+      "updated_at": "2026-09-15T04:34:25.040098+00:00",
+      "validation_rules": {
+        "integer": true,
+        "positive": true
+      },
+      "origin": "existing"
+    },
+    "reach_adjust": {
+      "allowed_values": [],
+      "created_at": "2026-03-18T21:38:37.526215+00:00",
+      "data_type": "boolean",
+      "description": null,
+      "group_name": "Características",
+      "id": "58b593b8-edb8-47a2-852d-4a40ff247543",
+      "is_compatibility_relevant": false,
+      "is_customer_visible": true,
+      "is_filterable": false,
+      "is_mechanic_visible": true,
+      "is_required_by_default": false,
+      "key": "reach_adjust",
+      "label": "Regulación de Alcance",
+      "options": [],
+      "sort_order": 20,
+      "tenant_id": null,
+      "unit": null,
+      "updated_at": "2026-03-18T21:38:37.526215+00:00",
+      "validation_rules": {},
+      "origin": "existing"
+    },
+    "rim_brake_mount_fitments": {
+      "allowed_values": [],
+      "created_at": "2026-09-15T04:34:25.040098+00:00",
+      "data_type": "json",
+      "description": null,
+      "group_name": null,
+      "id": "8b59fe62-3508-59c0-a707-69ffeb3094ea",
+      "is_compatibility_relevant": false,
+      "is_customer_visible": false,
+      "is_filterable": false,
+      "is_mechanic_visible": true,
+      "is_required_by_default": false,
+      "key": "rim_brake_mount_fitments",
+      "label": "Montajes de freno de llanta documentados",
+      "options": [],
+      "sort_order": 0,
+      "tenant_id": null,
+      "unit": null,
+      "updated_at": "2026-09-15T04:34:25.040098+00:00",
+      "validation_rules": {
+        "rows_schema": {
+          "columns": [
+            {
+              "key": "configuration",
+              "label": "Montaje documentado",
+              "required": true,
+              "type": "text"
+            },
+            {
+              "allowed_values": [
+                "Delantero",
+                "Trasero"
+              ],
+              "key": "position",
+              "label": "Posición",
+              "required": true,
+              "type": "token"
+            },
+            {
+              "key": "mount_spec",
+              "label": "Especificación del soporte de cuadro / horquilla",
+              "required": true,
+              "type": "text"
+            },
+            {
+              "key": "adapter_model",
+              "label": "Adaptador / soporte requerido",
+              "required": false,
+              "type": "text"
+            },
+            {
+              "key": "brake_model",
+              "label": "Modelo de freno",
+              "required": true,
+              "type": "text"
+            },
+            {
+              "key": "generation",
+              "label": "Generación / edición del modelo",
+              "required": false,
+              "type": "text"
+            },
+            {
+              "key": "boss_spacing_min_mm",
+              "label": "Separación mínima de postes",
+              "required": false,
+              "type": "decimal",
+              "unit": "mm",
+              "validation": {
+                "positive": true
+              }
+            },
+            {
+              "key": "boss_spacing_max_mm",
+              "label": "Separación máxima de postes",
+              "required": false,
+              "type": "decimal",
+              "unit": "mm",
+              "validation": {
+                "positive": true
+              }
+            },
+            {
+              "key": "track_offset_min_mm",
+              "label": "Distancia mínima poste–pista",
+              "required": false,
+              "type": "decimal",
+              "unit": "mm",
+              "validation": {
+                "positive": true
+              }
+            },
+            {
+              "key": "track_offset_max_mm",
+              "label": "Distancia máxima poste–pista",
+              "required": false,
+              "type": "decimal",
+              "unit": "mm",
+              "validation": {
+                "positive": true
+              }
+            },
+            {
+              "key": "rim_width_min_mm",
+              "label": "Ancho mínimo de llanta",
+              "required": false,
+              "type": "decimal",
+              "unit": "mm",
+              "validation": {
+                "positive": true
+              }
+            },
+            {
+              "key": "rim_width_max_mm",
+              "label": "Ancho máximo de llanta",
+              "required": false,
+              "type": "decimal",
+              "unit": "mm",
+              "validation": {
+                "positive": true
+              }
+            },
+            {
+              "key": "source_url",
+              "label": "Fuente OEM de esta fila",
+              "required": true,
+              "type": "url"
+            },
+            {
+              "key": "reach_min_mm",
+              "label": "Reach mínimo desde este montaje",
+              "type": "decimal",
+              "unit": "mm",
+              "validation": {
+                "positive": true
+              }
+            },
+            {
+              "key": "reach_max_mm",
+              "label": "Reach máximo desde este montaje",
+              "type": "decimal",
+              "unit": "mm",
+              "validation": {
+                "positive": true
+              }
+            }
+          ],
+          "ordered_pairs": [
+            [
+              "boss_spacing_min_mm",
+              "boss_spacing_max_mm"
+            ],
+            [
+              "track_offset_min_mm",
+              "track_offset_max_mm"
+            ],
+            [
+              "rim_width_min_mm",
+              "rim_width_max_mm"
+            ],
+            [
+              "reach_min_mm",
+              "reach_max_mm"
+            ]
+          ],
+          "unique_by": [
+            [
+              "configuration",
+              "position"
+            ]
+          ],
+          "version": 1
+        }
+      },
+      "origin": "existing"
+    },
+    "rim_pad_stud_type": {
+      "allowed_values": [
+        "Espárrago roscado",
+        "Poste liso",
+        "Perno de ruta",
+        "Desconocido / sin confirmar"
+      ],
+      "created_at": "2026-09-15T04:34:25.040098+00:00",
+      "data_type": "single_select",
+      "description": null,
+      "group_name": null,
+      "id": "d0f7a653-7455-5214-add1-1faa4c660d79",
+      "is_compatibility_relevant": false,
+      "is_customer_visible": true,
+      "is_filterable": true,
+      "is_mechanic_visible": true,
+      "is_required_by_default": false,
+      "key": "rim_pad_stud_type",
+      "label": "Fijación de la zapata",
+      "options": [
+        {
+          "code": "catalog_0816300d889b10fb0f9a83ea221d0729",
+          "created_at": "2026-09-15T04:34:25.040098+00:00",
+          "id": "12b9b200-6a18-5686-9d09-2c78648a2358",
+          "is_active": true,
+          "label": "Espárrago roscado",
+          "sort_order": 0,
+          "spec_definition_id": "d0f7a653-7455-5214-add1-1faa4c660d79",
+          "tenant_id": null,
+          "updated_at": "2026-09-15T04:34:25.040098+00:00"
+        },
+        {
+          "code": "catalog_f4f9e9dc376f36470eff0bc7acaecccd",
+          "created_at": "2026-09-15T04:34:25.040098+00:00",
+          "id": "28837489-6642-566c-8fb5-b1a058ec73ff",
+          "is_active": true,
+          "label": "Poste liso",
+          "sort_order": 1,
+          "spec_definition_id": "d0f7a653-7455-5214-add1-1faa4c660d79",
+          "tenant_id": null,
+          "updated_at": "2026-09-15T04:34:25.040098+00:00"
+        },
+        {
+          "code": "catalog_de6e897b1c6ced32e6762f3ceaebffd6",
+          "created_at": "2026-09-15T04:34:25.040098+00:00",
+          "id": "42aeeb64-bd1b-586a-9e4e-7a7ea0fa5d24",
+          "is_active": true,
+          "label": "Desconocido / sin confirmar",
+          "sort_order": 3,
+          "spec_definition_id": "d0f7a653-7455-5214-add1-1faa4c660d79",
+          "tenant_id": null,
+          "updated_at": "2026-09-15T04:34:25.040098+00:00"
+        },
+        {
+          "code": "catalog_37d50101f62ea0b8fa37ce1b4aa1ebb2",
+          "created_at": "2026-09-15T04:34:25.040098+00:00",
+          "id": "9a05d162-ad9e-57e8-a546-397223cb366e",
+          "is_active": true,
+          "label": "Perno de ruta",
+          "sort_order": 2,
+          "spec_definition_id": "d0f7a653-7455-5214-add1-1faa4c660d79",
+          "tenant_id": null,
+          "updated_at": "2026-09-15T04:34:25.040098+00:00"
+        }
+      ],
+      "sort_order": 0,
+      "tenant_id": null,
+      "unit": null,
+      "updated_at": "2026-09-15T04:34:25.040098+00:00",
+      "validation_rules": {},
+      "origin": "existing"
+    },
+    "rotor_diameter_mm": {
+      "allowed_values": [
+        "140",
+        "160",
+        "180",
+        "203",
+        "220",
+        "160/140",
+        "180/160",
+        "203/180"
+      ],
+      "created_at": "2026-03-18T21:38:37.526215+00:00",
+      "data_type": "single_select",
+      "description": null,
+      "group_name": "Dimensiones",
+      "id": "221402c1-3400-496d-ac3a-93937fc411ca",
+      "is_compatibility_relevant": true,
+      "is_customer_visible": true,
+      "is_filterable": true,
+      "is_mechanic_visible": true,
+      "is_required_by_default": false,
+      "key": "rotor_diameter_mm",
+      "label": "Diámetro del Rotor (mm)",
+      "options": [
+        {
+          "code": "v_203_180",
+          "created_at": "2026-08-21T17:58:02.773721+00:00",
+          "id": "35d7dfc2-4571-454b-9a19-474d8671167e",
+          "is_active": true,
+          "label": "203/180",
+          "sort_order": 8,
+          "spec_definition_id": "221402c1-3400-496d-ac3a-93937fc411ca",
+          "tenant_id": null,
+          "updated_at": "2026-08-21T17:58:02.773721+00:00"
+        },
+        {
+          "code": "v_160_140",
+          "created_at": "2026-08-21T17:58:02.773721+00:00",
+          "id": "44acad3e-8d29-4e70-9b71-ff9d0bb3f61b",
+          "is_active": true,
+          "label": "160/140",
+          "sort_order": 6,
+          "spec_definition_id": "221402c1-3400-496d-ac3a-93937fc411ca",
+          "tenant_id": null,
+          "updated_at": "2026-08-21T17:58:02.773721+00:00"
+        },
+        {
+          "code": "v_203",
+          "created_at": "2026-08-21T17:58:02.773721+00:00",
+          "id": "7f67b201-2e41-4445-a146-a7b1f833bd92",
+          "is_active": true,
+          "label": "203",
+          "sort_order": 4,
+          "spec_definition_id": "221402c1-3400-496d-ac3a-93937fc411ca",
+          "tenant_id": null,
+          "updated_at": "2026-08-21T17:58:02.773721+00:00"
+        },
+        {
+          "code": "v_180_160",
+          "created_at": "2026-08-21T17:58:02.773721+00:00",
+          "id": "92680a16-569f-4711-b6d0-7995682bf505",
+          "is_active": true,
+          "label": "180/160",
+          "sort_order": 7,
+          "spec_definition_id": "221402c1-3400-496d-ac3a-93937fc411ca",
+          "tenant_id": null,
+          "updated_at": "2026-08-21T17:58:02.773721+00:00"
+        },
+        {
+          "code": "v_160",
+          "created_at": "2026-08-21T17:58:02.773721+00:00",
+          "id": "af4f47d2-412f-4a09-9193-18f6dbe95cfc",
+          "is_active": true,
+          "label": "160",
+          "sort_order": 2,
+          "spec_definition_id": "221402c1-3400-496d-ac3a-93937fc411ca",
+          "tenant_id": null,
+          "updated_at": "2026-08-21T17:58:02.773721+00:00"
+        },
+        {
+          "code": "v_180",
+          "created_at": "2026-08-21T17:58:02.773721+00:00",
+          "id": "b2ed87a1-c152-4c83-b60f-40451c1bd62f",
+          "is_active": true,
+          "label": "180",
+          "sort_order": 3,
+          "spec_definition_id": "221402c1-3400-496d-ac3a-93937fc411ca",
+          "tenant_id": null,
+          "updated_at": "2026-08-21T17:58:02.773721+00:00"
+        },
+        {
+          "code": "v_140",
+          "created_at": "2026-08-21T17:58:02.773721+00:00",
+          "id": "ed6039cb-3c7d-486d-acc5-4ca1ecc75866",
+          "is_active": true,
+          "label": "140",
+          "sort_order": 1,
+          "spec_definition_id": "221402c1-3400-496d-ac3a-93937fc411ca",
+          "tenant_id": null,
+          "updated_at": "2026-08-21T17:58:02.773721+00:00"
+        },
+        {
+          "code": "v_220",
+          "created_at": "2026-08-21T17:58:02.773721+00:00",
+          "id": "eeb9174a-ebcc-489e-90de-d7b98d11dfc1",
+          "is_active": true,
+          "label": "220",
+          "sort_order": 5,
+          "spec_definition_id": "221402c1-3400-496d-ac3a-93937fc411ca",
+          "tenant_id": null,
+          "updated_at": "2026-08-21T17:58:02.773721+00:00"
+        }
+      ],
+      "sort_order": 10,
+      "tenant_id": null,
+      "unit": null,
+      "updated_at": "2026-03-18T21:38:37.526215+00:00",
+      "validation_rules": {},
+      "origin": "existing"
+    },
+    "rotor_size_recipe": {
+      "allowed_values": [],
+      "created_at": "2026-09-15T04:34:25.040098+00:00",
+      "data_type": "json",
+      "description": null,
+      "group_name": null,
+      "id": "ce285e7e-d2e9-5b60-bb5c-bc36f8c24e72",
+      "is_compatibility_relevant": false,
+      "is_customer_visible": false,
+      "is_filterable": false,
+      "is_mechanic_visible": true,
+      "is_required_by_default": false,
+      "key": "rotor_size_recipe",
+      "label": "Configuraciones de rotor y montaje",
+      "options": [],
+      "sort_order": 0,
+      "tenant_id": null,
+      "unit": null,
+      "updated_at": "2026-09-15T04:34:25.040098+00:00",
+      "validation_rules": {
+        "rows_schema": {
+          "columns": [
+            {
+              "key": "configuration",
+              "label": "Montaje documentado",
+              "required": true,
+              "type": "text"
+            },
+            {
+              "allowed_values": [
+                "Delantero",
+                "Trasero"
+              ],
+              "key": "position",
+              "label": "Posición",
+              "required": true,
+              "type": "token"
+            },
+            {
+              "key": "rotor_diameter_mm",
+              "label": "Diámetro de disco",
+              "required": true,
+              "type": "decimal",
+              "unit": "mm",
+              "validation": {
+                "positive": true
+              }
+            },
+            {
+              "key": "accepted_rotor_thickness_mm",
+              "label": "Espesor de rotor admitido por esta receta",
+              "type": "decimal",
+              "unit": "mm",
+              "validation": {
+                "positive": true
+              }
+            },
+            {
+              "allowed_values": [
+                "International Standard",
+                "Post Mount",
+                "Flat Mount",
+                "Desconocido / sin confirmar"
+              ],
+              "key": "frame_mount",
+              "label": "Anclaje de cuadro u horquilla",
+              "required": true,
+              "type": "token"
+            },
+            {
+              "key": "adapter_required",
+              "label": "Requiere adaptador",
+              "required": true,
+              "type": "boolean"
+            },
+            {
+              "key": "adapter_model",
+              "label": "Modelo de adaptador",
+              "required": false,
+              "type": "text"
+            },
+            {
+              "key": "source_url",
+              "label": "Fuente",
+              "required": true,
+              "type": "url"
+            },
+            {
+              "allowed_values": [
+                "International Standard",
+                "Post Mount",
+                "Flat Mount"
+              ],
+              "key": "caliper_mount",
+              "label": "Anclaje de cáliper",
+              "required": false,
+              "type": "token"
+            },
+            {
+              "key": "frame_base_rotor_mm",
+              "label": "Diámetro nativo del anclaje",
+              "required": false,
+              "type": "decimal",
+              "unit": "mm",
+              "validation": {
+                "positive": true
+              }
+            },
+            {
+              "key": "caliper_model",
+              "label": "Modelo de cáliper",
+              "required": false,
+              "type": "text"
+            },
+            {
+              "key": "conditions",
+              "label": "Condiciones OEM",
+              "required": false,
+              "type": "text"
+            }
+          ],
+          "unique_by": [
+            [
+              "configuration",
+              "position"
+            ]
+          ],
+          "version": 1
+        }
+      },
+      "origin": "existing"
+    },
+    "spec_evidence_source": {
+      "allowed_values": [],
+      "created_at": "2026-09-06T06:58:57.745728+00:00",
+      "data_type": "text",
+      "description": "URL del fabricante, manual o identificación del envase que respalda la declaración.",
+      "group_name": null,
+      "id": "4f055961-6c16-430b-a4e2-e6b09dc1cccc",
+      "is_compatibility_relevant": false,
+      "is_customer_visible": false,
+      "is_filterable": false,
+      "is_mechanic_visible": true,
+      "is_required_by_default": false,
+      "key": "spec_evidence_source",
+      "label": "Fuente de la declaración",
+      "options": [],
+      "sort_order": 900,
+      "tenant_id": null,
+      "unit": null,
+      "updated_at": "2026-09-06T06:58:57.745728+00:00",
+      "validation_rules": {},
+      "origin": "existing"
+    },
+    "tool_size_mm": {
+      "allowed_values": [],
+      "created_at": "2026-03-18T21:38:37.526215+00:00",
+      "data_type": "text",
+      "description": null,
+      "group_name": "Instalación",
+      "id": "d27e19a6-1746-4239-bea6-82f1e43ff6f3",
+      "is_compatibility_relevant": false,
+      "is_customer_visible": true,
+      "is_filterable": false,
+      "is_mechanic_visible": true,
+      "is_required_by_default": false,
+      "key": "tool_size_mm",
+      "label": "Tamaño de Herramienta (mm)",
+      "options": [],
+      "sort_order": 10,
+      "tenant_id": null,
+      "unit": null,
+      "updated_at": "2026-03-18T21:38:37.526215+00:00",
+      "validation_rules": {},
+      "origin": "existing"
+    },
+    "brake_presentation": {
+      "id": "daa3972f-3565-598f-9c5b-00d92f61b0de",
+      "key": "brake_presentation",
+      "origin": "new",
+      "label": "Presentación de este freno",
+      "data_type": "single_select",
+      "unit": null,
+      "allowed_values": [
+        "Cáliper con manguera, sin maneta",
+        "Cáliper sin maneta",
+        "Par de mecanismos",
+        "Par delantero y trasero",
+        "Set con manetas y cables",
+        "Un freno completo (maneta, cable y funda, cáliper)",
+        "Un freno completo (maneta, manguera, cáliper)",
+        "Un mecanismo (un extremo)"
+      ],
+      "validation_rules": {},
+      "used_by": [
+        "hydraulic_disc_brake",
+        "mechanical_disc_brake",
+        "rim_brake"
+      ]
+    },
+    "brake_circuits": {
+      "id": "d9fe443a-3d63-5af9-9daa-4ad340baa0bb",
+      "key": "brake_circuits",
+      "origin": "new",
+      "label": "Circuitos de freno de esta presentación",
+      "data_type": "json",
+      "unit": null,
+      "allowed_values": [],
+      "used_by": [
+        "hydraulic_disc_brake",
+        "mechanical_disc_brake",
+        "rim_brake"
+      ],
+      "validation_rules": {
+        "rows_schema": {
+          "version": 1,
+          "unique_by": [
+            [
+              "circuit_id"
+            ]
+          ],
+          "columns": [
+            {
+              "key": "circuit_id",
+              "type": "text",
+              "label": "Identificador del circuito",
+              "required": true
+            },
+            {
+              "key": "position",
+              "type": "token",
+              "label": "Rueda que frena",
+              "required": true,
+              "allowed_values": [
+                "Delantero",
+                "Trasero",
+                "Único"
+              ]
+            },
+            {
+              "key": "actuation",
+              "type": "token",
+              "label": "Accionamiento del circuito",
+              "required": true,
+              "allowed_values": [
+                "Hidráulico",
+                "Cable"
+              ]
+            },
+            {
+              "key": "lever_row_id",
+              "type": "text",
+              "label": "Fila de la maneta"
+            },
+            {
+              "key": "caliper_row_id",
+              "type": "text",
+              "label": "Fila del cáliper o mecanismo"
+            },
+            {
+              "key": "line_row_id",
+              "type": "text",
+              "label": "Fila de la manguera o cable"
+            },
+            {
+              "key": "fluid_as_shipped",
+              "type": "token",
+              "label": "Líquido con que se entrega",
+              "allowed_values": [
+                "Aceite Mineral",
+                "DOT 4",
+                "DOT 5.1",
+                "Desconocido / sin confirmar"
+              ]
+            },
+            {
+              "key": "source_url",
+              "type": "url",
+              "label": "Fuente"
+            }
+          ]
+        }
+      }
+    }
+  },
+  "publication_authorized": false,
+  "mechanical_coverage_complete": false,
+  "automatic_fill_authorized": false
+}
