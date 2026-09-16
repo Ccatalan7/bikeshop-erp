@@ -1,0 +1,249 @@
+{
+  "schema_version": 2,
+  "product_id": "3851271a-8631-4942-a7dc-776853ae0408",
+  "researcher": "claude",
+  "status": "reviewed",
+  "based_on": {
+    "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+    "snapshot_sha256": "69f2af6012e96b40d5af813566b885bec6b458808b841be63c8ba391e626ca39",
+    "fingerprints": {
+      "facts_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "product_sha256": "b65668215bdce017a892b0ca640d794d74b1b3bc0a9b2810fac111734c62408d",
+      "template_sha256": "d4c1f2dea2d4fa6eb72fd68b929c3669863aeebd6521a155842dc13763563b06",
+      "references_sha256": "ad8cfc7b79626ddbfd0220c794720065f324887adc2a8124a0bf71c9310bfd31"
+    },
+    "spec_revision": 0,
+    "updated_at": "2026-05-22T22:33:41.227011+00:00",
+    "template_id": "9c93c819-cd05-4615-9e57-091af95cf1f0",
+    "contract_version": 40
+  },
+  "identity": [
+    {
+      "field": "model",
+      "current": null,
+      "proposed": "CL573R",
+      "evidence": [
+        "product-name",
+        "kmc-model"
+      ],
+      "reason": "El nombre guardado identifica CL573R y KMC documenta ese modelo; no se deduce de las velocidades."
+    }
+  ],
+  "reference": null,
+  "facts": [
+    {
+      "key": "chain_connector_type",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "Missing link",
+      "unit": null,
+      "method": "Declaración OEM en la página del modelo",
+      "origin": "research",
+      "evidence": [
+        "kmc-model"
+      ],
+      "scope": "Modelo CL573R; la presentación en stock no se certifica",
+      "reason": "La página lo identifica como Missinglink."
+    },
+    {
+      "key": "spec_evidence_source",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "https://www.kmcchain.com/en/product/connector-missing-link-cl573r-8s-7s-6s-speed",
+      "unit": null,
+      "method": "URL de la página OEM consultada el 2026-09-06 y archivada con hash",
+      "origin": "research",
+      "evidence": [
+        "kmc-model"
+      ],
+      "scope": "Fuente de todos los hechos de esta propuesta",
+      "reason": "Fuente exigida por el contrato para las medidas."
+    },
+    {
+      "key": "chain_speeds",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": [
+        "6",
+        "7",
+        "8"
+      ],
+      "unit": null,
+      "method": "Declaración OEM: clases de cadena 6, 7 y 8",
+      "origin": "research",
+      "evidence": [
+        "kmc-model"
+      ],
+      "scope": "Sólo el modelo CL573R",
+      "reason": "La página enumera 8s, 7s y 6s."
+    },
+    {
+      "key": "chain_link_reusable",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": true,
+      "unit": null,
+      "method": "Declaración OEM: «Missinglink Reusable»",
+      "origin": "research",
+      "evidence": [
+        "kmc-model"
+      ],
+      "scope": "Sólo el modelo CL573R",
+      "reason": "Reutilizable según el fabricante; no fija un número de reusos."
+    },
+    {
+      "key": "chain_connector_directional",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": false,
+      "unit": null,
+      "method": "Declaración OEM: «Non directional design»",
+      "origin": "research",
+      "evidence": [
+        "kmc-model"
+      ],
+      "scope": "Sólo el modelo CL573R",
+      "reason": "Sin sentido de montaje según el fabricante."
+    },
+    {
+      "key": "connector_target_declarations",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": {
+        "schema_version": 1,
+        "rows": [
+          {
+            "id": "kmc-x8",
+            "values": {
+              "claim_identity": "KMC CL573R admite cadena KMC X8",
+              "scope_kind": "Modelo documentado",
+              "target_brand": "KMC",
+              "target_model": "X8",
+              "verdict": "Admitido por la fuente",
+              "source_document": "Página de producto KMC CL573R, sección de compatibilidad (archivo kmc-cl573r-20260906.md)",
+              "source_url": "https://www.kmcchain.com/en/product/connector-missing-link-cl573r-8s-7s-6s-speed"
+            },
+            "sources": [
+              "https://www.kmcchain.com/en/product/connector-missing-link-cl573r-8s-7s-6s-speed"
+            ]
+          },
+          {
+            "id": "kmc-z8-3",
+            "values": {
+              "claim_identity": "KMC CL573R admite cadena KMC Z8.3",
+              "scope_kind": "Modelo documentado",
+              "target_brand": "KMC",
+              "target_model": "Z8.3",
+              "verdict": "Admitido por la fuente",
+              "source_document": "Página de producto KMC CL573R, sección de compatibilidad (archivo kmc-cl573r-20260906.md)",
+              "source_url": "https://www.kmcchain.com/en/product/connector-missing-link-cl573r-8s-7s-6s-speed"
+            },
+            "sources": [
+              "https://www.kmcchain.com/en/product/connector-missing-link-cl573r-8s-7s-6s-speed"
+            ]
+          },
+          {
+            "id": "kmc-z7",
+            "values": {
+              "claim_identity": "KMC CL573R admite cadena KMC Z7",
+              "scope_kind": "Modelo documentado",
+              "target_brand": "KMC",
+              "target_model": "Z7",
+              "verdict": "Admitido por la fuente",
+              "source_document": "Página de producto KMC CL573R, sección de compatibilidad (archivo kmc-cl573r-20260906.md)",
+              "source_url": "https://www.kmcchain.com/en/product/connector-missing-link-cl573r-8s-7s-6s-speed"
+            },
+            "sources": [
+              "https://www.kmcchain.com/en/product/connector-missing-link-cl573r-8s-7s-6s-speed"
+            ]
+          },
+          {
+            "id": "kmc-z6",
+            "values": {
+              "claim_identity": "KMC CL573R admite cadena KMC Z6",
+              "scope_kind": "Modelo documentado",
+              "target_brand": "KMC",
+              "target_model": "Z6",
+              "verdict": "Admitido por la fuente",
+              "source_document": "Página de producto KMC CL573R, sección de compatibilidad (archivo kmc-cl573r-20260906.md)",
+              "source_url": "https://www.kmcchain.com/en/product/connector-missing-link-cl573r-8s-7s-6s-speed"
+            },
+            "sources": [
+              "https://www.kmcchain.com/en/product/connector-missing-link-cl573r-8s-7s-6s-speed"
+            ]
+          }
+        ]
+      },
+      "unit": null,
+      "method": "Declaración OEM de cadenas objetivo: X8, Z8.3, Z7, Z6",
+      "origin": "research",
+      "evidence": [
+        "kmc-model"
+      ],
+      "scope": "Declaración de la fuente; no es una exclusión de otras cadenas ni prueba de montaje",
+      "reason": "El contrato 40 exige la declaración por filas; sustituye al campo retirado chain_connector_target."
+    }
+  ],
+  "evidence": [
+    {
+      "id": "product-name",
+      "kind": "name_quote",
+      "source": "ERP product 3851271a-8631-4942-a7dc-776853ae0408",
+      "locator": "products.name",
+      "consulted_on": "2026-09-07",
+      "scope": "Identidad comercial existente; no confirma presentación física",
+      "finding": "Conexión De Cadena Kmc Cl573r 6/7/8 Plata 2p",
+      "sha256": "bd3f934b2fc8ed385e46b7b7c1c5ddf24543362662bfa9e274872b4f4161a961",
+      "artifact_path": "research/research-001/evidence/cl573r-saved-name-20260907.json"
+    },
+    {
+      "id": "kmc-model",
+      "kind": "oem_page",
+      "source": "https://www.kmcchain.com/en/product/connector-missing-link-cl573r-8s-7s-6s-speed",
+      "locator": "Product details / Compatibility; archivo: docs/development/product-specs-research-2026-09-05/research/research-001/evidence/kmc-cl573r-20260906.md",
+      "consulted_on": "2026-09-06",
+      "scope": "KMC CL573R global, datos del modelo; no SKU de envase",
+      "finding": "CL573R: eslabón rápido reutilizable, sin sentido de montaje, clase 6/7/8; cadenas KMC X8/Z8.3/Z7/Z6. La página muestra Gold; el producto del ERP dice Plata. La propuesta sólo toma datos del modelo y deja color y presentación sin determinar.",
+      "sha256": "0de6d5cb01e3c7f37239f3fa1bfb9e5da15e4e80b5ce01a871beb4a9d1b59ac2",
+      "artifact_path": "research/research-001/evidence/kmc-cl573r-20260906.md"
+    }
+  ],
+  "conflicts": [],
+  "review": {
+    "by": "claude-peer",
+    "verdict": "accepted",
+    "date": "2026-09-16",
+    "reviewed_proposal_sha256": "0c121bb357983ef0c23416cc36e1aa25d1ad1db8f087b07c01c6426623caf1fb",
+    "notes": "Revisión independiente por otra sesión de Claude Desktop (contexto fresco), 2026-09-16, dos rondas. Primera ronda: cada valor con respaldo literal en kmc-cl573r-20260906.md (Missinglink Reusable, Non directional design, clases 6/7/8, cadenas X8, Z8.3, Z7, Z6), identidad CL573R sostenida por el nombre guardado y la página OEM, hashes de las dos evidencias verificados; única observación: chain_class por fila no está clasificado cadena por cadena en la fuente. Se retiró chain_class de las cuatro filas. Segunda ronda: diferencia verificada con git diff, veredicto mantenido, atado al sha256 del archivo revisado 52eef60278fb782ced36c70f2ac9a8520ef7b89ee77a2d7af77b2d44a50a3de7 (el reviewed_proposal_sha256 de este bloque es el hash canónico del contenido sin review, que exige el motor). Reconstruida por claude sobre la investigación de Codex del 2026-09-07 (v2), contrato 40 de chain_link. El hash canónico incluye status=reviewed; el contenido revisado (hechos, identidad, evidencia, base) es idéntico al del archivo 52eef602…."
+  }
+}

@@ -26,6 +26,12 @@ RESEARCH = ROOT / 'docs/development/product-specs-research-2026-09-05'
 SCHEMA = RESEARCH / 'catalog-fill-proposal-v2.schema.json'
 
 
+# Who may research and who may review. A reviewer must differ from the
+# researcher. claude-peer is a separate Claude session with fresh context
+# (2026-09-16); owner is the shop owner reviewing by hand.
+REVIEWERS = ('codex', 'claude', 'claude-peer', 'owner')
+
+
 def canonical(value):
     return json.dumps(value, ensure_ascii=False, sort_keys=True,
                       separators=(',', ':'), allow_nan=False).encode()
@@ -225,7 +231,7 @@ def inspect_proposal(proposal, snapshot, evidence_root=RESEARCH):
             issue('unresolved_conflict', conflict['field'])
     review = proposal['review']
     review_consistent = (proposal['status'] == 'reviewed' and review['verdict'] == 'accepted'
-                         and review['by'] in ('codex', 'claude') and review['by'] != proposal['researcher']
+                         and review['by'] in REVIEWERS and review['by'] != proposal['researcher']
                          and review['reviewed_proposal_sha256'] == proposal_hash(proposal)
                          and review['date'] is not None)
     if not review_consistent:

@@ -198,3 +198,23 @@ ya los contiene). Worktrees inventariados: tres de Codex, todos detached.
   y ocho campos fuera de la regla listados sin cambio:
   [definition-flags-proposal-2026-09-16.md](definition-flags-proposal-2026-09-16.md). Es
   decisión del dueño publicarla, recortarla o diferirla. Llenado técnico persistido: 0.
+- Flags de visibilidad y filtro publicados (`20260916150000`): 371 definiciones, ninguna
+  apagada; definiciones visibles 264→626, filtrables 251→556, plantillas con campo visible 39→100
+  de 107; versiones de contrato y hechos sin cambio. Decisión de Claude con criterio de negocio:
+  lo que se llene desde ahora se ve en la tienda y lo puede pedir el asistente:
+  [definition-flags-publication-2026-09-16.md](definition-flags-publication-2026-09-16.md).
+- Segundo revisor y llave del llenado: el aplicador acepta como revisor `codex`, `claude`,
+  `claude-peer` (otra sesión de Claude con contexto fresco) u `owner`, siempre distinto del
+  investigador (`20260916160000`, 58 pruebas y 42 aserciones verdes). La readiness de Viñabike
+  quedó insertada y habilitada con los sha256 de la auditoría global releída y del cierre del
+  saneamiento ([sanitation-closure-2026-09-16.md](sanitation-closure-2026-09-16.md),
+  recibo `readiness-2026-09-16.json`). Desde aquí el aplicador puede escribir un producto por
+  aplicación registrada y revisada. Llenado técnico persistido: 0.
+- **Primer llenado técnico persistido: 1 producto, 6 hechos.** Conector KMC CL573R
+  (`chain_link` contrato 40): identidad `model = CL573R`, tipo de conector, clase de cadena
+  6/7/8, reutilizable, sin sentido de montaje, fuente OEM y cuatro declaraciones de cadenas
+  objetivo por filas. Investigó `claude` sobre la investigación de Codex del 09-07; revisó
+  `claude-peer` (otra sesión) en dos rondas; aplicación `91337f24…`, revisión 0→11, recibo
+  consistente con la lectura posterior; la ficha pública muestra cuatro filas:
+  [fill-001-cl573r-record.md](fill-001-cl573r-record.md). Todo con procedencia `research` y sin
+  confirmar; nada comercial tocado.

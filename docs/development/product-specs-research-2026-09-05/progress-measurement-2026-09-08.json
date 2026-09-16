@@ -9,7 +9,7 @@
  "delivered_stage_percent": 100.0,
  "original_successor_candidates": 37,
  "original_successors_activated": 37,
- "task_product_fills": 0,
+ "task_product_fills": 1,
  "task_new_assignments": 720,
  "overall_percent": null,
  "limitations": [
@@ -337,7 +337,7 @@
   "review": "Root; no Claude review claimed",
   "record": "assignment-sanitation-checkpoint-2026-09-14.md"
  },
- "delivery_status_updated_at": "2026-09-16T18:30:00Z",
+ "delivery_status_updated_at": "2026-09-16T18:35:00Z",
  "assignment_repair_progress": {
   "initial_missing": 746,
   "repaired": 726,
@@ -1391,8 +1391,8 @@
   "file_sha256": "4ae211ac93aa7faca4165d18772d954fb786006a3dfcc91797dff6b5f28237d2",
   "runner": "scripts/inventory/propose_definition_flags.py",
   "writes": 0,
-  "published": false,
-  "decision": "owner: publish as is, trim to compatibility/intrinsic/measurement, or defer per family",
+  "published": true,
+  "decision": "published as is on 2026-09-16 (definition_flags_publication_2026_09_16)",
   "definitions_with_active_use": 725,
   "proposed_changes": 371,
   "to_visible": 362,
@@ -1402,5 +1402,92 @@
   "templates_touched": 90,
   "record": "definition-flags-proposal-2026-09-16.md",
   "technical_fill_persisted": 0
- }
+ },
+ "definition_flags_publication_2026_09_16": {
+  "migration": "supabase/migrations/20260916150000_definition_visibility_flags.sql",
+  "migration_sha256": "882c76cd1a177341c79b1892d1d107aee0dbd1c6234502d6a8af920defbcdfd0",
+  "status": "APPLIED",
+  "definitions_changed": 371,
+  "downgrades": 0,
+  "visible_definitions_before_after": [
+   264,
+   626
+  ],
+  "filterable_definitions_before_after": [
+   251,
+   556
+  ],
+  "templates_with_visible_active_field_before_after": [
+   39,
+   100
+  ],
+  "active_templates": 107,
+  "template_versions_unchanged": true,
+  "facts_before_after": [
+   2502,
+   2502
+  ],
+  "decision": "claude, under the owner instruction to decide with the business as the criterion",
+  "record": "definition-flags-publication-2026-09-16.md",
+  "technical_fill_persisted": 0
+ },
+ "research_reviewer_identities_2026_09_16": {
+  "migration": "supabase/migrations/20260916160000_research_reviewer_identities.sql",
+  "status": "APPLIED",
+  "function_md5_before_after": [
+   "dd356e99326b",
+   "431920eb97996e87c4e44d8e28a10e03"
+  ],
+  "reviewers": [
+   "codex",
+   "claude",
+   "claude-peer",
+   "owner"
+  ],
+  "rule": "reviewer must differ from researcher",
+  "python_unit_tests": 58,
+  "pgtap_assertions": 42,
+  "technical_fill_persisted": 0
+ },
+ "research_readiness_2026_09_16": {
+  "readiness_id": "6eeca4fa-8daa-59aa-a020-a31056276632",
+  "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+  "closed_at": "2026-09-16T18:31:06+00:00",
+  "enabled": true,
+  "audit": "global-coverage-summary-2026-09-16.json",
+  "audit_sha256": "bcd6d2af0d44687314c7713a11e60ef89d75cc5d707ff49302fefd5f2d687e20",
+  "review": "sanitation-closure-2026-09-16.md",
+  "review_sha256": "2506f3441b0227f38406942c05b70f0c25c0f937454d49e55abe3855527b5e11",
+  "receipt": "readiness-2026-09-16.json",
+  "inserted_by": "guarded write through scripts/db/query.sh production",
+  "decision": "claude, under the owner instruction of 2026-09-16 to decide everything with the business as the criterion",
+  "technical_fill_persisted_at_closure": 0
+ },
+ "fill_001_cl573r_2026_09_16": {
+  "product_id": "3851271a-8631-4942-a7dc-776853ae0408",
+  "sku": "4715575894768",
+  "template": "chain_link",
+  "contract_version": 40,
+  "researcher": "claude",
+  "reviewer": "claude-peer",
+  "application_id": "91337f24-180c-51b0-a713-fa583235d300",
+  "command_sha256": "4d14bc93ae24d4c094577b19b14a21b9add8ec6a02ce2608698b97e3ddfdaf71",
+  "changed_keys": [
+   "chain_connector_directional",
+   "chain_connector_type",
+   "chain_link_reusable",
+   "chain_speeds",
+   "connector_target_declarations",
+   "spec_evidence_source"
+  ],
+  "revision_before_after": [
+   0,
+   11
+  ],
+  "observations_after": 6,
+  "confirmed_facts_written": 0,
+  "record": "fill-001-cl573r-record.md"
+ },
+ "technical_fill_persisted_products": 1,
+ "technical_fill_persisted_facts": 6
 }

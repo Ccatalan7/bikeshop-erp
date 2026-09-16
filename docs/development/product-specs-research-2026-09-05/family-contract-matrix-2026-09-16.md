@@ -70,7 +70,9 @@ bielas 32/0, pastilla 53/13) son donde encontraría más vacío.
   [definition-flags-proposal-2026-09-16.md](definition-flags-proposal-2026-09-16.md): 371
   definiciones (362 visibles, 305 filtrables, ningún apagado), regla «escalar y no evidencia»,
   con los ocho campos visibles hoy fuera de la regla listados sin cambio. La decisión de
-  publicarla, recortarla o diferirla por familia es del dueño.
+  publicarla, recortarla o diferirla por familia es del dueño. **Publicada tal cual el mismo
+  día** (`20260916150000`): 100 de 107 plantillas con campo visible; ver
+  [definition-flags-publication-2026-09-16.md](definition-flags-publication-2026-09-16.md).
 - **Campos críticos por familia**: hecho como borrador en
   [catalog-fill-critical-fields-derived-2026-09-16.json](catalog-fill-critical-fields-derived-2026-09-16.json)
   por `scripts/inventory/derive_critical_fields.py` (cadena y conector copiados del archivo

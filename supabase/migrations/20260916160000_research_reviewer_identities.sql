@@ -1,60 +1,22 @@
--- LOCAL CANDIDATE ONLY. No readiness row or approved application is seeded.
--- Forward deployment needs pinned preimages, independent review and live gates.
--- Tests wrap this entire file in BEGIN/ROLLBACK; this file never commits.
+-- Research applier: the reviewer of a proposal may be codex, claude,
+-- claude-peer (a separate Claude session with fresh context) or owner, and
+-- must still differ from the researcher. Only apply_product_spec_research_v1
+-- changes; tables, grants, readiness, applications, receipts and facts stay.
+-- Rerunnable: with the new body already installed it exits.
+-- Candidate sha256 f80610525ba56c2c4b4ad3e96c7986dd15b3a362ada28c5083192d191d418653.
+begin;
+set local lock_timeout='5s';
+set local statement_timeout='120s';
+do $guard$ begin
+ if to_regprocedure('public.apply_product_spec_research_v1(uuid)') is null then
+  raise exception 'The research applier is not installed';
+ end if;
+ if md5(pg_get_functiondef('public.apply_product_spec_research_v1(uuid)'::regprocedure))<>'dd356e99326b9d1727b5dcba3b695c43' and md5(pg_get_functiondef('public.apply_product_spec_research_v1(uuid)'::regprocedure))<>'431920eb97996e87c4e44d8e28a10e03' then
+  raise exception 'apply_product_spec_research_v1 differs from the reviewed publication';
+ end if;
+end $guard$;
 
-create table public.product_spec_research_readiness (
- id uuid primary key,
- tenant_id uuid not null references public.tenants(id),
- audit_sha256 text not null check(audit_sha256 ~ '^[a-f0-9]{64}$'),
- review_sha256 text not null check(review_sha256 ~ '^[a-f0-9]{64}$'),
- closed_at timestamptz not null,
- enabled boolean not null default false,
- unique(id,tenant_id)
-);
-create table public.product_spec_research_applications (
- id uuid primary key,
- tenant_id uuid not null references public.tenants(id),
- actor_id uuid not null references auth.users(id),
- readiness_id uuid not null,
- command_text text not null check(octet_length(command_text) between 2 and 4194304),
- command_sha256 text not null check(command_sha256 ~ '^[a-f0-9]{64}$'),
- proposal jsonb not null check(jsonb_typeof(proposal)='object'),
- bundle_sha256 text not null check(bundle_sha256 ~ '^[a-f0-9]{64}$'),
- registered_at timestamptz not null default clock_timestamp(),
- revoked_at timestamptz,
- foreign key(readiness_id,tenant_id) references public.product_spec_research_readiness(id,tenant_id),
- check(encode(extensions.digest(command_text,'sha256'),'hex')=command_sha256),
- unique(tenant_id,command_sha256)
-);
-create table public.product_spec_research_receipts (
- application_id uuid primary key references public.product_spec_research_applications(id),
- tenant_id uuid not null references public.tenants(id),
- actor_id uuid not null references auth.users(id),
- product_id uuid not null references public.products(id),
- command_sha256 text not null,
- before_product_text text not null,
- after_product_text text not null,
- before_snapshot jsonb not null,
- after_snapshot jsonb not null,
- changed_fact_ids uuid[] not null,
- result jsonb not null,
- applied_at timestamptz not null default clock_timestamp()
-);
-alter table public.product_spec_research_readiness enable row level security;
-alter table public.product_spec_research_applications enable row level security;
-alter table public.product_spec_research_receipts enable row level security;
-revoke all on public.product_spec_research_readiness,public.product_spec_research_applications,
- public.product_spec_research_receipts from public,anon,authenticated;
--- Registration and readiness are privileged, reviewed DB operations. Neither
--- the client nor the apply RPC can manufacture or enable its own permission.
-revoke all on public.product_spec_research_readiness,public.product_spec_research_applications,
- public.product_spec_research_receipts from service_role;
-
-alter table public.spec_facts drop constraint spec_facts_source_known;
-alter table public.spec_facts add constraint spec_facts_source_known check(source=any(array[
- 'mechanic','catalog','supplier_text','inferred','import','name_reading','research']));
-
-create function public.apply_product_spec_research_v1(p_application_id uuid)
+create or replace function public.apply_product_spec_research_v1(p_application_id uuid)
 returns jsonb language plpgsql security definer set search_path=pg_catalog,public,pg_temp as $apply$
 declare
  tenant uuid:=public.user_tenant_id(); actor uuid:=auth.uid();
@@ -254,41 +216,4 @@ end $apply$;
 revoke all on function public.apply_product_spec_research_v1(uuid) from public,anon,authenticated,service_role;
 grant execute on function public.apply_product_spec_research_v1(uuid) to authenticated;
 
-comment on function public.apply_product_spec_research_v1(uuid) is
- 'Apply one privileged registered research command as its real authenticated actor. Requires closed global readiness, locked exact preimage, canonical preview, complete preservation check and atomic before/after receipt. No product creation, assignment, stock, price or arbitrary patch.';
-
-create function public.get_product_spec_research_receipt_v1(p_application_id uuid)
-returns jsonb language plpgsql stable security definer set search_path=pg_catalog,public,pg_temp as $receipt$
-declare result jsonb;
-begin
- if auth.uid() is null or public.user_tenant_id() is null then
-  raise exception 'Authenticated tenant required' using errcode='42501';
- end if;
- select to_jsonb(r) into result from public.product_spec_research_receipts r
- where r.application_id=p_application_id and r.tenant_id=public.user_tenant_id() and r.actor_id=auth.uid();
- if not found then raise exception 'Recibo no disponible' using errcode='42501'; end if;
- return result;
-end $receipt$;
-revoke all on function public.get_product_spec_research_receipt_v1(uuid) from public,anon,authenticated,service_role;
-grant execute on function public.get_product_spec_research_receipt_v1(uuid) to authenticated;
-
-create function public.get_product_spec_research_application_status_v1(p_application_id uuid)
-returns jsonb language plpgsql stable security definer set search_path=pg_catalog,public,pg_temp as $status$
-declare result jsonb;
-begin
- if auth.uid() is null or public.user_tenant_id() is null then
-  raise exception 'Authenticated tenant required' using errcode='42501';
- end if;
- select jsonb_build_object('application_id',a.id,'tenant_id',a.tenant_id,'actor_id',a.actor_id,
-  'command_sha256',a.command_sha256,'bundle_sha256',a.bundle_sha256,
-  'readiness_id',a.readiness_id,'readiness_enabled',g.enabled,
-  'revoked',a.revoked_at is not null,'applied',r.application_id is not null)
- into result from public.product_spec_research_applications a
- join public.product_spec_research_readiness g on g.id=a.readiness_id and g.tenant_id=a.tenant_id
- left join public.product_spec_research_receipts r on r.application_id=a.id
- where a.id=p_application_id and a.tenant_id=public.user_tenant_id() and a.actor_id=auth.uid();
- if not found then raise exception 'Aplicación no disponible' using errcode='42501'; end if;
- return result;
-end $status$;
-revoke all on function public.get_product_spec_research_application_status_v1(uuid) from public,anon,authenticated,service_role;
-grant execute on function public.get_product_spec_research_application_status_v1(uuid) to authenticated;
+commit;

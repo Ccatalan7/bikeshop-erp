@@ -387,11 +387,13 @@ consumidores y un aplicador autenticado.
    **Estado 2026-09-16:** compuertas 1, 2 y 3 hechas en su parte estructural
    (auditoría global releída, definiciones con consumidores, matriz por
    familia); campos críticos derivados como borrador; aplicador publicado y
-   registrador revisado. Decisiones que quedan para el dueño, cada una con su
-   lista concreta: los flags de visibilidad y filtro
-   ([definition-flags-proposal-2026-09-16.md](definition-flags-proposal-2026-09-16.md)),
-   la readiness que cierra el saneamiento (dos hashes), y el orden de
-   migración de la compatibilidad de taller a los sucesores.
+   registrador revisado. El mismo día, con la instrucción del dueño de decidir
+   todo con el negocio como criterio, Claude publicó los flags de visibilidad
+   ([definition-flags-publication-2026-09-16.md](definition-flags-publication-2026-09-16.md)),
+   amplió los revisores admitidos a `claude-peer` y `owner` (`20260916160000`)
+   e insertó la readiness habilitada
+   ([sanitation-closure-2026-09-16.md](sanitation-closure-2026-09-16.md)).
+   Queda el orden de migración de la compatibilidad de taller a los sucesores.
 
 ### Investigación por producto y campo
 
@@ -513,6 +515,9 @@ Al cerrar cada bloque, escribe antes de terminar en esta carpeta:
 - bloqueos restantes y siguiente acción concreta.
 
 Actualiza `progress-measurement-2026-09-08.json` con contadores separados. Nunca
-reemplace `overall_percent = null` por un promedio. La frase que debe seguir
-siendo cierta hasta que el aplicador exista es: **llenado técnico persistido: 0**.
+reemplace `overall_percent = null` por un promedio. Desde el 2026-09-16 el
+aplicador existe y la readiness está habilitada: el contador que se reporta es
+**llenado técnico persistido: N productos, M hechos** (`task_product_fills`,
+`technical_fill_persisted_facts`), y cada aplicación tiene su
+`fill-NNN-<sku>-record.md`. El primero: [fill-001-cl573r-record.md](fill-001-cl573r-record.md).
 

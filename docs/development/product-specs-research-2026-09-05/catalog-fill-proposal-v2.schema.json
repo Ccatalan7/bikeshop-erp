@@ -15,7 +15,9 @@
     "researcher": {
       "enum": [
         "codex",
-        "claude"
+        "claude",
+        "claude-peer",
+        "owner"
       ]
     },
     "status": {
@@ -469,6 +471,8 @@
           "enum": [
             "codex",
             "claude",
+            "claude-peer",
+            "owner",
             null
           ]
         },

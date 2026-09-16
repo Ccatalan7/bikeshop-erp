@@ -1,5 +1,8 @@
 # Propuesta de flags de visibilidad y filtro para los campos ciegos — 2026-09-16
 
+**Publicada tal cual el 2026-09-16** como `20260916150000_definition_visibility_flags.sql`; ver
+[definition-flags-publication-2026-09-16.md](definition-flags-publication-2026-09-16.md).
+
 La matriz estructural del mismo día encontró 68 plantillas sin ningún campo visible al
 cliente ni filtrable (620 productos, 609 campos activos). Esta propuesta convierte ese vacío en
 una lista concreta por definición, calculada por `scripts/inventory/propose_definition_flags.py`
