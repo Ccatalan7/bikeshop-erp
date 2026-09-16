@@ -1539,10 +1539,13 @@
   "migrations": [
    "20260916180000",
    "20260916181000",
-   "20260916182000"
+   "20260916182000",
+   "20260916190000"
   ],
-  "definition_labels": 126,
-  "option_labels": 20,
+  "definition_labels": 427,
+  "option_labels": 32,
+  "visible_definitions": 570,
+  "left_as_is": "shifter_position options (distributed Dart client compares the exact texts); Delantera/Trasera/Universal/Otro/Desconocido; literal measures",
   "record": "customer-facing-labels-2026-09-16.md"
  }
 }

@@ -249,3 +249,10 @@ ya los contiene). Worktrees inventariados: tres de Codex, todos detached.
   (13 nuevas gracias a los rótulos: Resina, Tiro arriba/abajo, Clave):
   [customer-facing-labels-2026-09-16.md](customer-facing-labels-2026-09-16.md). Llenado técnico
   persistido: 607 productos, 897 hechos, nada confirmado.
+- **Rótulos, segunda pasada global (`20260916190000`).** Las 301 definiciones visibles que
+  faltaban (427 de 570 relabeladas en total; el resto ya era lenguaje de tienda) y las opciones
+  que los contratos nombran («Alambre», «Plegable (kevlar)», «Juego (delantera y trasera)», «Un
+  plato», «Ahead (sin rosca)»…), renombradas en fila, `allowed_values` y contrato en una sola
+  transacción verificada. Se queda `shifter_position` porque el cliente Dart distribuido compara
+  sus textos exactos: requiere distribución. Sin hechos fuera de opciones tras el cambio; ficha
+  pública leída como anónimo con los rótulos nuevos.

@@ -1325,7 +1325,7 @@ void main() {
         bikeRearHubSpacingMm: 135,
         bikeTechnicalValues: {},
         productSpecs: {
-          'hub_package_position': 'Juego delantera + trasera',
+          'hub_package_position': 'Juego (delantera y trasera)',
           'hub_old_mm': 100,
         },
       );

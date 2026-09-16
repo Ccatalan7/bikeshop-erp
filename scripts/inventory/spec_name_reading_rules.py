@@ -251,7 +251,7 @@ PAIR_WORDS = r'\bPAR\b|\bJUEGO\b|\bJGO\b|\bSET\b'
 SPOKE_HOLES = number(NB + r'(28|32|36|40|48)\s?(?:H\b|H\.|HOYOS?\b|AGUJEROS\b|RAYOS\b|HOLES?\b)',
                      allowed={28, 32, 36, 40, 48})
 POSITION_F = words(('Delantera', r'\bDELANTER[AO]\b'), ('Trasera', r'\bTRASER[AO]\b'))
-POSITION_OR_SET = first(words(('Juego delantera + trasera', r'\bJUEGO\b')), POSITION_F)
+POSITION_OR_SET = first(words(('Juego (delantera y trasera)', r'\bJUEGO\b')), POSITION_F)
 SPEEDS = (NB + r'(?<![xX/])([5-9]|1[0-3])\s?(?:V\b|V\.|VEL\b|VEL\.|VELOC\b|VELOCIDADES\b|S\b|SPEED\b|-SPEED\b|SI\b)')
 COG_RANGE = re.compile(NB + r'(?<!-)(1[0-6])\s?[-/]\s?(\d{2})(\s?T)?\b(?!\s?[-/]\s?\d)')
 
@@ -338,7 +338,7 @@ RULES = {
         'teeth_count': unless(number(NB + r'(?<![-/])([2-5]\d)\s?(?:T\b|DTS\b|DIENTES\b)', allowed=set(range(20, 61))),
                               r'\d{2}\s?[-/]\s?\d{2}'),
         'chainring_bcd_mm': number(NB + r'(64|94|96|100|104|110|130)\s?BCD\b'),
-        'chainring_package_kind': words(('Juego de platos en el mismo envase', r'\bJUEGO\b')),
+        'chainring_package_kind': words(('Juego de platos', r'\bJUEGO\b')),
         'narrow_wide': flag(r'\bNARROW\b'),
     },
     'front_derailleur': {
@@ -458,7 +458,7 @@ RULES = {
         'material': words(MATERIAL_ALU, MATERIAL_ACERO),
     },
     'tire': {
-        'tire_bead_type': words(('Talón de alambre', r'\bALAMBRE\b'), ('Talón plegable', r'\bPLEGABLE\b')),
+        'tire_bead_type': words(('Alambre', r'\bALAMBRE\b'), ('Plegable (kevlar)', r'\bPLEGABLE\b|\bKEVLAR\b')),
         'tire_use': words(('MTB', r'\bMTB\b'), ('Ruta', r'\bRUTA\b'), ('BMX', r'\bBMX\b')),
         'tire_tpi': number(NB + r'(\d{2,3})\s?TPI\b'),
         'tire_width_mm': number(r'\b700\s?[xX]\s?(\d{2})\s?[cC]\b'),

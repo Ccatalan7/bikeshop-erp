@@ -65,16 +65,32 @@ opciones de su campo. Las 96 diferencias que quedan entre ambas copias son numé
 `"103"`) y de vocabularios de estado de la bici, con el mismo conteo a ambos lados: no son un
 desfase.
 
+## Segunda pasada, global (`20260916190000`)
+
+El dueño precisó que el problema es global, no de las mazas. `compile_customer_labels_2.py`
+relabeló las **301 definiciones visibles restantes** (de las 570 que ve el cliente) con la
+misma vara: nada de «declarado por el fabricante», «datum OEM», «interfaz», «geometría del
+casquillo»; en su lugar «Cómo se mide el largo», «Para manubrio de», «Rieles (redondo 7 mm,
+oval…)», «Con aletas (disipador)», «Backsweep (ángulo hacia atrás)», «Calibre (14G, 15G…)»,
+«Ojetillos» (así lo escriben los nombres de Weinmann en Chile). Y renombró, junto con el texto
+del contrato de cada plantilla que las nombra, las opciones que la primera pasada dejó
+pendientes: «Talón de alambre» → «Alambre», «Talón plegable» → «Plegable (kevlar)», «Juego
+delantera + trasera» → «Juego (delantera y trasera)», «Plato individual» → «Un plato», «Juego
+de platos en el mismo envase» → «Juego de platos», «Tee sin rosca (ahead)» → «Ahead (sin
+rosca)», «Tee de espiga (quill)» → «De espiga (quill)», «Adaptador quill → ahead» → «Adaptador
+(quill a ahead)», más los ojetillos de llanta. Fila de opción, `allowed_values` y contrato en
+una sola transacción, verificador que exige que no quede el texto viejo en ninguno de los tres.
+
 ## Qué no se tocó y por qué
 
-- Opciones que un contrato de plantilla nombra en sus reglas (`Talón de alambre`, `Talón
-  plegable`, `Juego delantera + trasera`, `Delantera`/`Trasera`, `Izquierdo / delantero`,
-  `Derecho / trasero`, `Plato individual`, `Juego de platos en el mismo envase`, `Tee sin rosca
-  (ahead)`, `Tee de espiga (quill)`, `Adaptador quill → ahead`): renombrarlas exige migrar el
-  contrato en el mismo paso. El rótulo del campo ya las contextualiza («Talón (alambre o
-  plegable)», «Posición de la maza»).
-- Rótulos de campos muy técnicos sin hechos (datums, designaciones de rosca de rayo, cotas OEM
-  de tijas): siguen con la redacción del motor hasta que alguna familia los llene.
+- `shifter_position` («Izquierdo / delantero», «Derecho / trasero»): el cliente Dart
+  distribuido compara esos textos exactos (`drivetrain_canonical_data.dart`, comportamiento de
+  campos del editor); renombrarlos exige una nueva distribución de la app, que autoriza el
+  dueño. El rótulo del campo ya dice «Lado (izquierdo o derecho)».
+- «Delantera» / «Trasera» / «Universal» / «Otro» / «Desconocido / sin confirmar» y las medidas
+  literales (M8, 1/8, 9/16" x 20 TPI): ya son lenguaje de tienda.
+- «Obús desmontable» se queda: «Núcleo de válvula desmontable» convertiría «válvula» en término
+  del vocabulario booleano y daría «sí» a cualquier cámara.
 
 ## Efecto en las lecturas de nombre
 
