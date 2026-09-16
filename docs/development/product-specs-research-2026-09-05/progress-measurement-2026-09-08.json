@@ -6,9 +6,9 @@
  "present_global_templates": 107,
  "stage": "template_deliveries",
  "new_published_deliveries": 68,
- "delivered_stage_percent": 77.14,
+ "delivered_stage_percent": 80.0,
  "original_successor_candidates": 37,
- "original_successors_activated": 13,
+ "original_successors_activated": 16,
  "task_product_fills": 0,
  "task_new_assignments": 720,
  "overall_percent": null,
@@ -337,7 +337,7 @@
   "review": "Root; no Claude review claimed",
   "record": "assignment-sanitation-checkpoint-2026-09-14.md"
  },
- "delivery_status_updated_at": "2026-09-16T05:55:00Z",
+ "delivery_status_updated_at": "2026-09-16T06:02:00Z",
  "assignment_repair_progress": {
   "initial_missing": 746,
   "repaired": 724,
@@ -591,7 +591,7 @@
    "Phone and embedded routes, next client distribution and existing shared field surface flags remain open."
   ]
  },
- "published_planned_deliveries": 81,
+ "published_planned_deliveries": 84,
  "new_templates_outside_initial_plan": 2,
  "strict_scalar_extension_2026_09_15": {
   "migration": "20260915200000",
@@ -791,6 +791,47 @@
    "unprojected_active_observations": 0
   },
   "record": "hub-rim-successors-adjudication-2026-09-16.md",
+  "technical_fill_persisted": 0
+ },
+ "shifting_replacements_2026_09_16": {
+  "migration": "supabase/migrations/20260916060000_shifting_successors.sql",
+  "status": "APPLIED",
+  "verified_at": "2026-09-16T06:00:03Z",
+  "versions": {
+   "shifter": [
+    2,
+    21
+   ],
+   "rear_derailleur": [
+    5,
+    24
+   ],
+   "front_derailleur": [
+    2,
+    19
+   ]
+  },
+  "authenticated_products": 94,
+  "product_revisions_unchanged": 94,
+  "facts_before_after": [
+   0,
+   0
+  ],
+  "new_definitions": 18,
+  "surface_definitions": 8,
+  "dead_on_arrival_dropped": [
+   "max_chainring_teeth"
+  ],
+  "sql_cases_local_rollback": 48,
+  "dart_form_tests": 51,
+  "adoption": {
+   "products_evaluated": 94,
+   "products_with_blocking_issues": 0,
+   "products_with_pending_issues": 94,
+   "legacy_observations": 0,
+   "unprojected_active_observations": 0
+  },
+  "record": "shifting-successors-adjudication-2026-09-16.md",
   "technical_fill_persisted": 0
  }
 }

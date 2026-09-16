@@ -1,5 +1,7 @@
 # Mandos y desviadores: candidato sin aplicar — 2026-09-08
 
+**Publicado el 2026-09-16** como `20260916060000_shifting_successors.sql` sobre 94 productos; ver [shifting-successors-adjudication-2026-09-16.md](shifting-successors-adjudication-2026-09-16.md).
+
 Sucesor local para las tres originales `shifter`, `rear_derailleur` y
 `front_derailleur`. **No aplicado.** Sin escrituras de producción, migración,
 publicación, asignaciones ni llenado; sin commit, push ni runtime. Este
