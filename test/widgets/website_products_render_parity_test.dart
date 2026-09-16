@@ -43,6 +43,7 @@ class _PolicyPublicInventoryService extends PublicInventoryService {
     bool onlyInStock = true,
     bool applyAvailabilityFacet = false,
     List<String>? brandIds,
+    Map<String, Iterable<String>>? specFilters,
     double? minPrice,
     double? maxPrice,
     String sortBy = 'name',

@@ -31,6 +31,7 @@ import 'package:vinabike_erp/public_store/utils/product_url.dart';
 import 'package:vinabike_erp/public_store/utils/structured_data.dart';
 import 'package:vinabike_erp/shared/widgets/safe_layout_builder.dart';
 import 'package:vinabike_erp/public_store/services/meta_pixel_service.dart';
+import '../utils/public_spec_display.dart';
 
 void _productDetailDebugLog(String message) {
   if (kDebugMode || const bool.fromEnvironment('STORE_PERF_LOGS')) {
@@ -2294,8 +2295,14 @@ class _ProductDetailPageState extends State<ProductDetailPage>
     // rodado: «29"», «700c», «26"». Se muestra el rodado y el ISO entre
     // paréntesis, sin repetir la unidad.
     if (spec.specKey == 'bead_seat_diameter_mm') {
-      final rodado = _wheelSizeLabelForBsd(raw);
+      final rodado = wheelSizeLabelForBsd(raw);
       if (rodado != null) return rodado;
+    }
+    // El ancho de un neumático MTB se compra en pulgadas («2.1"»); el de
+    // ruta, en milímetros. El milímetro guardado acompaña siempre.
+    if (spec.specKey == 'tire_width_mm') {
+      final ancho = tireWidthLabel(raw);
+      if (ancho != null) return ancho;
     }
     // Las filas de ajuste de una cámara llegan ya redactadas por el servidor
     // («Diámetro de asiento (BSD): 559 mm · Ancho mínimo: 38.1 mm · Ancho
@@ -2342,7 +2349,7 @@ class _ProductDetailPageState extends State<ProductDetailPage>
     for (final row in raw.split(RegExp(r'\s*\|\s*|\n'))) {
       final bsd = RegExp(r'BSD\)?\s*:\s*([0-9]+)').firstMatch(row);
       if (bsd == null) continue;
-      final rodado = _wheelSizeLabelForBsd(bsd.group(1)!) ?? 'ISO ${bsd.group(1)}';
+      final rodado = wheelSizeLabelForBsd(bsd.group(1)!) ?? 'ISO ${bsd.group(1)}';
       final min = RegExp(r'm[ií]nimo\s*:\s*([0-9]+(?:[.,][0-9]+)?)', caseSensitive: false)
           .firstMatch(row)
           ?.group(1);
@@ -2359,33 +2366,6 @@ class _ProductDetailPageState extends State<ProductDetailPage>
       rows.add('$rodado$ancho');
     }
     return rows.isEmpty ? null : rows.join(' · ');
-  }
-
-  /// Rodado comercial de un diámetro ISO 5775 (tabla de Sheldon Brown), o
-  /// null cuando el número no es un diámetro conocido.
-  String? _wheelSizeLabelForBsd(String raw) {
-    final bsd = int.tryParse(raw.replaceAll(RegExp(r'[^0-9]'), ''));
-    if (bsd == null) return null;
-    const labels = <int, String>{
-      622: '29" / 700c',
-      584: '27.5" / 650b',
-      559: '26"',
-      590: '26" x 1 3/8 (650A)',
-      571: '26" (650C)',
-      507: '24"',
-      540: '24" x 1 3/8',
-      520: '24" x 1 3/8 (S-5)',
-      451: '20" x 1 3/8',
-      406: '20"',
-      355: '18"',
-      349: '16" x 1 3/8',
-      305: '16"',
-      203: '12 1/2"',
-      630: '27"',
-      635: '28" x 1 1/2',
-    };
-    final label = labels[bsd];
-    return label == null ? null : '$label (ISO $bsd)';
   }
 
   bool _valueAlreadyHasUnit(String value, String unit) {

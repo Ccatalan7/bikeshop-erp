@@ -201,6 +201,56 @@ void main() {
     });
   });
 
+  group('WebsiteCatalogQuery spec filters', () {
+    test('round-trips spec filters through canonical parameters', () {
+      final query = WebsiteCatalogQuery(
+        specFilters: const {
+          'valve_standard': ['Francesa (Presta)'],
+          'bead_seat_diameter_mm': ['622', '584'],
+        },
+      );
+
+      expect(query.toQueryParameters(), {
+        'spec.bead_seat_diameter_mm': '584,622',
+        'spec.valve_standard': 'Francesa (Presta)',
+      });
+
+      final parsed = WebsiteCatalogQuery.tryParse(
+        Uri(path: '/productos', queryParameters: query.toQueryParameters()),
+      );
+      expect(parsed, isNotNull);
+      expect(parsed!.specFilters, {
+        'bead_seat_diameter_mm': ['584', '622'],
+        'valve_standard': ['Francesa (Presta)'],
+      });
+    });
+
+    test('reads the short alias and ignores parameters that are not specs',
+        () {
+      final parsed = WebsiteCatalogQuery.tryParse(
+        Uri.parse('/productos?s.valve_standard=Auto%20(Schrader%20%2F%20americana)&spec.=x&other=1'),
+      );
+      expect(parsed, isNotNull);
+      expect(parsed!.specFilters, {
+        'valve_standard': ['Auto (Schrader / americana)'],
+      });
+      expect(parsed.toQueryParameters(), {
+        'spec.valve_standard': 'Auto (Schrader / americana)',
+      });
+    });
+
+    test('an invalid spec key fails closed', () {
+      expect(
+        () => WebsiteCatalogQuery(specFilters: const {'Bad Key': ['x']}),
+        throwsArgumentError,
+      );
+      expect(
+        WebsiteCatalogQuery.specFilterKeyFromParameter('spec.Bad-Key'),
+        isNull,
+      );
+    });
+  });
+
   test('legacy routeForCatalog calls remain source compatible', () {
     expect(
       WebsiteDestination.routeForCatalog(

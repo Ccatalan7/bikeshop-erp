@@ -21,6 +21,7 @@ import '../../shared/utils/seo_helper.dart';
 import '../widgets/full_page_loading.dart';
 import '../widgets/catalog_collection_presentation.dart';
 import '../utils/product_url.dart';
+import '../utils/public_spec_display.dart';
 import '../utils/public_store_tenant_resolver.dart';
 import '../../modules/website/providers/website_edit_mode_provider.dart';
 import '../../modules/inventory/models/category_models.dart';
@@ -193,6 +194,11 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
   String _searchQuery = '';
   String _lastRouteFiltersSignature = '';
   final Set<String> _selectedBrandIds = <String>{};
+  // Technical-spec filters by definition key («aro», «válvula»…), page-owned
+  // like the collection navigator: they accompany the brand facet and are
+  // never a persisted facet key of the website presentation.
+  final Map<String, Set<String>> _selectedSpecFilters = <String, Set<String>>{};
+  final Set<String> _expandedSpecFacets = <String>{};
   double? _minPrice;
   double? _maxPrice;
   String? _priceFilterError;
@@ -348,6 +354,12 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
         _selectedBrandIds
           ..clear()
           ..addAll(catalogQuery?.brandIds ?? const <String>[]);
+        _selectedSpecFilters.clear();
+        for (final entry
+            in (catalogQuery?.specFilters ?? const <String, List<String>>{})
+                .entries) {
+          _selectedSpecFilters[entry.key] = entry.value.toSet();
+        }
         _minPrice = catalogQuery?.minPrice;
         _maxPrice = catalogQuery?.maxPrice;
         _stockFilter =
@@ -621,6 +633,7 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
         searchQuery: _searchQuery,
         productType: selectedType == routeType ? null : selectedType,
         brandIds: _selectedBrandIds,
+        specFilters: _selectedSpecFilters,
         minPrice: _minPrice,
         maxPrice: _maxPrice,
         stock: _stockFilter,
@@ -665,6 +678,9 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
       }) {
         nextParameters.remove(key);
       }
+      nextParameters.removeWhere(
+        (key, _) => WebsiteCatalogQuery.specFilterKeyFromParameter(key) != null,
+      );
       nextParameters.addAll(query.toQueryParameters());
       final destination = Uri(
         path: current.path,
@@ -689,6 +705,7 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
     required bool onlyInStock,
     required bool applyAvailabilityFacet,
     required List<String> brandIds,
+    required Map<String, List<String>>? specFilters,
     required double? minPrice,
     required double? maxPrice,
     required String sortBy,
@@ -700,7 +717,7 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
     policySettings.sort((a, b) => a.key.compareTo(b.key));
 
     return <String>[
-      'catalog-page-v1',
+      'catalog-page-v2',
       tenantId,
       categories.join(','),
       searchQuery.trim().toLowerCase(),
@@ -709,6 +726,7 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
       onlyInStock.toString(),
       applyAvailabilityFacet.toString(),
       brands.join(','),
+      _specFilterSignature(specFilters),
       minPrice?.toString() ?? '',
       maxPrice?.toString() ?? '',
       sortBy,
@@ -725,6 +743,7 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
     required bool onlyInStock,
     required bool applyAvailabilityFacet,
     required List<String> brandIds,
+    required Map<String, List<String>>? specFilters,
     required double? minPrice,
     required double? maxPrice,
   }) {
@@ -733,7 +752,7 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
     final policySettings = policy?.toSettings().entries.toList() ?? [];
     policySettings.sort((a, b) => a.key.compareTo(b.key));
     return <String>[
-      'catalog-facets-v1',
+      'catalog-facets-v2',
       tenantId,
       categories.join(','),
       searchQuery.trim().toLowerCase(),
@@ -742,9 +761,18 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
       onlyInStock.toString(),
       applyAvailabilityFacet.toString(),
       brands.join(','),
+      _specFilterSignature(specFilters),
       minPrice?.toString() ?? '',
       maxPrice?.toString() ?? '',
     ].map(Uri.encodeComponent).join('|');
+  }
+
+  static String _specFilterSignature(Map<String, List<String>>? specFilters) {
+    if (specFilters == null || specFilters.isEmpty) return '';
+    final keys = specFilters.keys.toList()..sort();
+    return keys
+        .map((key) => '$key=${([...specFilters[key]!]..sort()).join(',')}')
+        .join(';');
   }
 
   Future<void> _loadProducts({
@@ -761,6 +789,7 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
     // visitor flag below is an additional narrowing only when explicitly on.
     const requestCanonicalStockPolicy = true;
     final requestBrandIds = _selectedBrandIds.toList(growable: false)..sort();
+    final requestSpecFilters = publicSpecFiltersForRpc(_selectedSpecFilters);
     final requestMinPrice = _minPrice;
     final requestMaxPrice = _maxPrice;
     final requestCategoryScope = _categoryScope;
@@ -864,6 +893,7 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
             onlyInStock: requestCanonicalStockPolicy,
             applyAvailabilityFacet: requestApplyAvailabilityFacet,
             brandIds: requestBrandIds,
+            specFilters: requestSpecFilters,
             minPrice: requestMinPrice,
             maxPrice: requestMaxPrice,
             sortBy: requestSort,
@@ -882,6 +912,7 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
           onlyInStock: requestCanonicalStockPolicy,
           applyAvailabilityFacet: requestApplyAvailabilityFacet,
           brandIds: requestBrandIds,
+          specFilters: requestSpecFilters,
           minPrice: requestMinPrice,
           maxPrice: requestMaxPrice,
           sortBy: requestSort,
@@ -906,6 +937,7 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
           onlyInStock: requestCanonicalStockPolicy,
           applyAvailabilityFacet: requestApplyAvailabilityFacet,
           brandIds: requestBrandIds,
+          specFilters: requestSpecFilters,
           minPrice: requestMinPrice,
           maxPrice: requestMaxPrice,
         );
@@ -920,6 +952,7 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
             onlyInStock: requestCanonicalStockPolicy,
             applyAvailabilityFacet: requestApplyAvailabilityFacet,
             brandIds: requestBrandIds,
+            specFilters: requestSpecFilters,
             minPrice: requestMinPrice,
             maxPrice: requestMaxPrice,
           ),
@@ -940,6 +973,7 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
           onlyInStock: requestCanonicalStockPolicy,
           applyAvailabilityFacet: requestApplyAvailabilityFacet,
           brandIds: requestBrandIds,
+          specFilters: requestSpecFilters,
           minPrice: requestMinPrice,
           maxPrice: requestMaxPrice,
           sortBy: requestSort,
@@ -1121,6 +1155,7 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
           onlyInStock: requestCanonicalStockPolicy,
           applyAvailabilityFacet: requestApplyAvailabilityFacet,
           brandIds: requestBrandIds,
+          specFilters: requestSpecFilters,
           minPrice: requestMinPrice,
           maxPrice: requestMaxPrice,
           sortBy: requestSort,
@@ -1830,6 +1865,16 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
     _handleFiltersChanged();
   }
 
+  void _toggleSpecValue(String key, String value) {
+    setState(() {
+      final values = _selectedSpecFilters.putIfAbsent(key, () => <String>{});
+      if (!values.add(value)) values.remove(value);
+      if (values.isEmpty) _selectedSpecFilters.remove(key);
+    });
+    _syncCatalogQueryToRoute(resetPage: true);
+    _handleFiltersChanged();
+  }
+
   double? _parsePriceInput(String raw) {
     final value = raw.trim();
     if (value.isEmpty) return null;
@@ -1882,6 +1927,7 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
       _searchQuery = '';
       _filtersSearchController.clear();
       _selectedBrandIds.clear();
+      _selectedSpecFilters.clear();
       _minPrice = null;
       _maxPrice = null;
       _stockFilter = null;
@@ -2339,18 +2385,40 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
     super.dispose();
   }
 
+  bool get _hasActiveSpecFilters =>
+      _selectedSpecFilters.values.any((values) => values.isNotEmpty);
+
   bool get _hasActiveSecondaryFilters =>
       _searchQuery.trim().isNotEmpty ||
       _selectedBrandIds.isNotEmpty ||
+      _hasActiveSpecFilters ||
       _minPrice != null ||
       _maxPrice != null ||
       _onlyInStock;
 
   bool get _hasActiveProfessionalFilters =>
       _selectedBrandIds.isNotEmpty ||
+      _hasActiveSpecFilters ||
       _minPrice != null ||
       _maxPrice != null ||
       _onlyInStock;
+
+  PublicCatalogSpecFacet? _specFacetForKey(String key) {
+    for (final facet in _catalogFacets.specFacets) {
+      if (facet.key == key) return facet;
+    }
+    return null;
+  }
+
+  String _specValueLabel(String key, String value) {
+    final facet = _specFacetForKey(key);
+    return publicSpecValueLabel(
+      specKey: key,
+      value: value,
+      dataType: facet?.dataType,
+      unit: facet?.unit,
+    );
+  }
 
   String _brandLabel(String brandId) {
     for (final facet in _catalogFacets.brands) {
@@ -2403,6 +2471,21 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
           onDeleted: () => _toggleBrand(brandId),
         ),
       );
+    }
+
+    final specKeys = _selectedSpecFilters.keys.toList()..sort();
+    for (final key in specKeys) {
+      final facetLabel = _specFacetForKey(key)?.label ?? key;
+      final values = _selectedSpecFilters[key]!.toList()..sort();
+      for (final value in values) {
+        chips.add(
+          _buildActiveFilterChip(
+            label: '$facetLabel: ${_specValueLabel(key, value)}',
+            tooltip: 'Quitar $facetLabel',
+            onDeleted: () => _toggleSpecValue(key, value),
+          ),
+        );
+      }
     }
 
     if (_minPrice != null || _maxPrice != null) {
@@ -2910,6 +2993,14 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
         WebsiteCatalogFacet.brand => _buildBrandFacet(refreshPanel),
         WebsiteCatalogFacet.price => _buildPriceFacet(refreshPanel),
       });
+      // Technical-spec facets («Aro», «Tipo de válvula», «Velocidades») are
+      // page-owned presentation accompanying the brand facet: they need no
+      // editor round-trip and steal no stored semantic.
+      if (facet == WebsiteCatalogFacet.brand) {
+        for (final specFacet in _offeredSpecFacets()) {
+          addSection(_buildSpecFacet(specFacet, refreshPanel));
+        }
+      }
       // The collection navigator is page-owned presentation accompanying the
       // category facet — deliberately NOT a persisted facet key, so it needs
       // no editor round-trip and steals no stored semantic.
@@ -3250,6 +3341,92 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
               _showAllBrands
                   ? 'Mostrar menos'
                   : 'Ver ${brands.length - visible.length} marcas más',
+            ),
+          ),
+      ],
+    );
+  }
+
+  /// A spec facet is offered when it describes most of what the visitor is
+  /// looking at (the tubes of «Cámaras» all have a valve; on the home
+  /// collection a valve describes a corner), or when one of its values is
+  /// already selected. At most [_maxOfferedSpecFacets], best coverage first.
+  static const double _minSpecFacetCoverage = 0.3;
+  static const int _maxOfferedSpecFacets = 8;
+
+  List<PublicCatalogSpecFacet> _offeredSpecFacets() {
+    final offered = <PublicCatalogSpecFacet>[];
+    for (final facet in _catalogFacets.specFacets) {
+      final selected = _selectedSpecFilters[facet.key]?.isNotEmpty == true;
+      if (!selected && facet.coverage < _minSpecFacetCoverage) continue;
+      if (!selected && facet.values.length < 2) continue;
+      offered.add(facet);
+    }
+    offered.sort((a, b) {
+      final aSelected = _selectedSpecFilters[a.key]?.isNotEmpty == true;
+      final bSelected = _selectedSpecFilters[b.key]?.isNotEmpty == true;
+      if (aSelected != bSelected) return aSelected ? -1 : 1;
+      final byCoverage = b.productCount.compareTo(a.productCount);
+      return byCoverage != 0 ? byCoverage : a.label.compareTo(b.label);
+    });
+    return offered.take(_maxOfferedSpecFacets).toList(growable: false);
+  }
+
+  Widget _buildSpecFacet(
+    PublicCatalogSpecFacet facet,
+    VoidCallback? refreshPanel,
+  ) {
+    if (!_catalogFacets.isAvailable) return const SizedBox.shrink();
+    final selected = _selectedSpecFilters[facet.key] ?? const <String>{};
+    // A facet with one value and nothing selected narrows nothing.
+    if (facet.values.length < 2 && selected.isEmpty) {
+      return const SizedBox.shrink();
+    }
+    final values = List<PublicCatalogSpecFacetValue>.from(facet.values)
+      ..sort((a, b) {
+        final aSelected = selected.contains(a.value);
+        final bSelected = selected.contains(b.value);
+        if (aSelected != bSelected) return aSelected ? -1 : 1;
+        final byCount = b.itemCount.compareTo(a.itemCount);
+        if (byCount != 0) return byCount;
+        return _specValueLabel(facet.key, a.value)
+            .compareTo(_specValueLabel(facet.key, b.value));
+      });
+    final expanded = _expandedSpecFacets.contains(facet.key);
+    final visible = expanded ? values : values.take(6).toList();
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _buildFacetHeading(facet.label),
+        const SizedBox(height: 8),
+        ...visible.map(
+          (entry) => _buildFacetCheckbox(
+            checked: selected.contains(entry.value),
+            label: _specValueLabel(facet.key, entry.value),
+            count: entry.itemCount,
+            onChanged: () {
+              _toggleSpecValue(facet.key, entry.value);
+              refreshPanel?.call();
+            },
+          ),
+        ),
+        if (values.length > 6)
+          TextButton(
+            onPressed: () {
+              setState(() {
+                if (!_expandedSpecFacets.add(facet.key)) {
+                  _expandedSpecFacets.remove(facet.key);
+                }
+              });
+              refreshPanel?.call();
+            },
+            style: TextButton.styleFrom(
+              padding: const EdgeInsets.symmetric(vertical: 6),
+            ),
+            child: Text(
+              expanded
+                  ? 'Mostrar menos'
+                  : 'Ver ${values.length - visible.length} opciones más',
             ),
           ),
       ],

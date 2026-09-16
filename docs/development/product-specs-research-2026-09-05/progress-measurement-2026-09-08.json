@@ -1634,5 +1634,41 @@
   "migration": "20260916202000",
   "label": "Aro y ancho de neumático",
   "storefront_format": "_tubeFitLabel in product_detail_page.dart"
+ },
+ "storefront_spec_facets_2026_09_16": {
+  "migration": "20260916210000",
+  "rpcs": [
+   "get_public_products_faceted_v2",
+   "get_public_product_facets_v2"
+  ],
+  "kernels": [
+   "spec_public_facet_values_internal_v1",
+   "spec_public_facet_matches_internal_v1"
+  ],
+  "filterable_visible_definitions_with_facts": 109,
+  "facet_values_live": 1495,
+  "facet_keys_live": 81,
+  "offer_rule": "coverage >= 0.30 of scope or selected; max 8; >= 2 values",
+  "tubes_probe": {
+   "valve_standard": {
+    "Auto (Schrader / americana)": 18,
+    "Francesa (Presta)": 5
+   },
+   "valve_length_mm_value": {
+    "48": 14,
+    "60": 3,
+    "35": 1,
+    "33": 1
+   },
+   "presta_page": 5,
+   "unfiltered_page": 23
+  },
+  "pgtap_added": 11,
+  "pgtap_total": 66,
+  "dart_tests_added": 8,
+  "relabel": {
+   "spoke_length_mm": "Largo del rayo"
+  },
+  "record": "storefront-spec-facets-2026-09-16.md"
  }
 }

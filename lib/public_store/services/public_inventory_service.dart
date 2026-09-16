@@ -100,8 +100,53 @@ class PublicCatalogBrandFacet {
   });
 }
 
+/// One value of a technical-spec facet («Francesa (Presta)», «622») and how
+/// many visible products carry it.
+class PublicCatalogSpecFacetValue {
+  final String value;
+  final int itemCount;
+
+  const PublicCatalogSpecFacetValue({
+    required this.value,
+    required this.itemCount,
+  });
+}
+
+/// A filterable technical-spec definition among the visible products of the
+/// current collection: its key, its shop label, its data type and unit, and
+/// its values with counts. Rows arrive from the facet RPC as
+/// `facet_key = spec:<key>:<data_type>:<unit>`.
+class PublicCatalogSpecFacet {
+  final String key;
+  final String label;
+  final String dataType;
+  final String? unit;
+  final List<PublicCatalogSpecFacetValue> values;
+
+  /// Products of the collection that carry this spec at all.
+  final int productCount;
+
+  /// Products the collection holds once the other filters apply.
+  final int scopeCount;
+
+  const PublicCatalogSpecFacet({
+    required this.key,
+    required this.label,
+    required this.dataType,
+    required this.unit,
+    required this.values,
+    required this.productCount,
+    required this.scopeCount,
+  });
+
+  /// Share of the collection this spec describes, 0..1.
+  double get coverage =>
+      scopeCount <= 0 ? 0 : (productCount / scopeCount).clamp(0, 1);
+}
+
 class PublicCatalogFacetSnapshot {
   final List<PublicCatalogBrandFacet> brands;
+  final List<PublicCatalogSpecFacet> specFacets;
   final Map<String, int> directCategoryCounts;
   final int? filteredTotalCount;
   final double? minPrice;
@@ -110,6 +155,7 @@ class PublicCatalogFacetSnapshot {
 
   const PublicCatalogFacetSnapshot({
     required this.brands,
+    this.specFacets = const [],
     this.directCategoryCounts = const {},
     this.filteredTotalCount,
     required this.minPrice,
@@ -119,11 +165,33 @@ class PublicCatalogFacetSnapshot {
 
   const PublicCatalogFacetSnapshot.unavailable()
       : brands = const [],
+        specFacets = const [],
         directCategoryCounts = const {},
         filteredTotalCount = null,
         minPrice = null,
         maxPrice = null,
         isAvailable = false;
+}
+
+/// `{"valve_standard": ["Francesa (Presta)"]}` for the RPCs, or null when
+/// there is nothing to filter. Keys and values are sorted so equal filters
+/// give equal requests.
+Map<String, List<String>>? publicSpecFiltersForRpc(
+  Map<String, Iterable<String>>? specFilters,
+) {
+  if (specFilters == null || specFilters.isEmpty) return null;
+  final result = <String, List<String>>{};
+  final keys = specFilters.keys.toList()..sort();
+  for (final key in keys) {
+    final values = specFilters[key]!
+        .map((value) => value.trim())
+        .where((value) => value.isNotEmpty)
+        .toSet()
+        .toList()
+      ..sort();
+    if (values.isNotEmpty) result[key] = values;
+  }
+  return result.isEmpty ? null : result;
 }
 
 /// Public-facing inventory service for the storefront
@@ -460,6 +528,7 @@ class PublicInventoryService extends ChangeNotifier {
     bool onlyInStock = true,
     bool applyAvailabilityFacet = false,
     List<String>? brandIds,
+    Map<String, Iterable<String>>? specFilters,
     double? minPrice,
     double? maxPrice,
     String sortBy = 'name',
@@ -477,6 +546,7 @@ class PublicInventoryService extends ChangeNotifier {
       onlyInStock: onlyInStock,
       applyAvailabilityFacet: applyAvailabilityFacet,
       brandIds: brandIds,
+      specFilters: specFilters,
       minPrice: minPrice,
       maxPrice: maxPrice,
       sortBy: sortBy,
@@ -499,6 +569,7 @@ class PublicInventoryService extends ChangeNotifier {
       onlyInStock: onlyInStock,
       applyAvailabilityFacet: applyAvailabilityFacet,
       brandIds: brandIds,
+      specFilters: specFilters,
       minPrice: minPrice,
       maxPrice: maxPrice,
       sortBy: sortBy,
@@ -532,6 +603,7 @@ class PublicInventoryService extends ChangeNotifier {
     required bool onlyInStock,
     required bool applyAvailabilityFacet,
     required List<String>? brandIds,
+    required Map<String, Iterable<String>>? specFilters,
     required double? minPrice,
     required double? maxPrice,
     required String sortBy,
@@ -541,6 +613,7 @@ class PublicInventoryService extends ChangeNotifier {
     final categories = [...?categoryIds]..sort();
     final products = [...?productIds]..sort();
     final brands = [...?brandIds]..sort();
+    final specs = publicSpecFiltersForRpc(specFilters);
     final policyEntries = policy?.toSettings().entries.toList() ?? [];
     policyEntries.sort((a, b) => a.key.compareTo(b.key));
     return <Object?>[
@@ -554,6 +627,11 @@ class PublicInventoryService extends ChangeNotifier {
       onlyInStock,
       applyAvailabilityFacet,
       brands.join(','),
+      specs == null
+          ? ''
+          : specs.entries
+              .map((entry) => '${entry.key}=${entry.value.join(',')}')
+              .join(';'),
       minPrice,
       maxPrice,
       sortBy,
@@ -576,6 +654,7 @@ class PublicInventoryService extends ChangeNotifier {
     // additional availability restriction in the faceted facade.
     bool applyAvailabilityFacet = false,
     List<String>? brandIds,
+    Map<String, Iterable<String>>? specFilters,
     double? minPrice,
     double? maxPrice,
     String sortBy = 'name',
@@ -584,13 +663,17 @@ class PublicInventoryService extends ChangeNotifier {
   }) async {
     final sw = Stopwatch()..start();
     try {
+      final specs = publicSpecFiltersForRpc(specFilters);
       final hasProfessionalFacets = applyAvailabilityFacet ||
           brandIds?.isNotEmpty == true ||
+          specs != null ||
           minPrice != null ||
           maxPrice != null;
+      // v2 adds the technical-spec filters (2026-09-16); v1 stays for
+      // clients built before it.
       final response = await _supabase.rpc(
         hasProfessionalFacets
-            ? 'get_public_products_faceted_v1'
+            ? 'get_public_products_faceted_v2'
             : 'get_public_products',
         params: _cleanRpcParams(hasProfessionalFacets
             ? {
@@ -600,6 +683,7 @@ class PublicInventoryService extends ChangeNotifier {
                 'p_product_type': productType?.name,
                 'p_only_in_stock': applyAvailabilityFacet && onlyInStock,
                 'p_brand_ids': brandIds,
+                'p_spec_filters': specs,
                 'p_min_price': minPrice,
                 'p_max_price': maxPrice,
                 'p_sort_by': sortBy,
@@ -655,12 +739,13 @@ class PublicInventoryService extends ChangeNotifier {
     // True only when the visitor explicitly selected the availability facet.
     bool applyAvailabilityFacet = false,
     List<String>? brandIds,
+    Map<String, Iterable<String>>? specFilters,
     double? minPrice,
     double? maxPrice,
   }) async {
     try {
       final response = await _supabase.rpc(
-        'get_public_product_facets_v1',
+        'get_public_product_facets_v2',
         params: _cleanRpcParams({
           'p_tenant_id': tenantId,
           'p_category_ids': categoryIds,
@@ -668,19 +753,27 @@ class PublicInventoryService extends ChangeNotifier {
           'p_product_type': productType?.name,
           'p_only_in_stock': applyAvailabilityFacet && onlyInStock,
           'p_brand_ids': brandIds,
+          'p_spec_filters': publicSpecFiltersForRpc(specFilters),
           'p_min_price': minPrice,
           'p_max_price': maxPrice,
         }),
       );
 
       final brands = <PublicCatalogBrandFacet>[];
+      // `spec:<key>:<data_type>:<unit>` rows, one per value, grouped here.
+      final specRows = <String, List<Map<String, dynamic>>>{};
       final directCategoryCounts = <String, int>{};
       int? filteredTotalCount;
       double? rangeMin;
       double? rangeMax;
       for (final raw in response as List) {
         final row = Map<String, dynamic>.from(raw as Map);
-        switch (row['facet_key']?.toString()) {
+        final facetKey = row['facet_key']?.toString() ?? '';
+        if (facetKey.startsWith('spec:')) {
+          specRows.putIfAbsent(facetKey, () => []).add(row);
+          continue;
+        }
+        switch (facetKey) {
           case 'brand':
             final id = row['value_id']?.toString().trim() ?? '';
             final label = row['value_label']?.toString().trim() ?? '';
@@ -711,8 +804,47 @@ class PublicInventoryService extends ChangeNotifier {
       brands.sort((a, b) => a.label.toLowerCase().compareTo(
             b.label.toLowerCase(),
           ));
+      final specFacets = <PublicCatalogSpecFacet>[];
+      for (final entry in specRows.entries) {
+        final parts = entry.key.split(':');
+        if (parts.length < 3) continue;
+        final key = parts[1].trim();
+        final dataType = parts[2].trim();
+        final unit = parts.length > 3 ? parts.sublist(3).join(':').trim() : '';
+        final label = entry.value
+            .map((row) => row['value_label']?.toString().trim() ?? '')
+            .firstWhere((value) => value.isNotEmpty, orElse: () => key);
+        final values = <PublicCatalogSpecFacetValue>[
+          for (final row in entry.value)
+            if ((row['value_id']?.toString().trim() ?? '').isNotEmpty)
+              PublicCatalogSpecFacetValue(
+                value: row['value_id'].toString().trim(),
+                itemCount: (row['item_count'] as num?)?.toInt() ?? 0,
+              ),
+        ]..sort((a, b) {
+            final byCount = b.itemCount.compareTo(a.itemCount);
+            return byCount != 0 ? byCount : a.value.compareTo(b.value);
+          });
+        if (key.isEmpty || values.isEmpty) continue;
+        final first = entry.value.first;
+        specFacets.add(PublicCatalogSpecFacet(
+          key: key,
+          label: label,
+          dataType: dataType,
+          unit: unit.isEmpty ? null : unit,
+          values: List.unmodifiable(values),
+          productCount: (first['range_min'] as num?)?.toInt() ?? 0,
+          scopeCount: (first['range_max'] as num?)?.toInt() ?? 0,
+        ));
+      }
+      // The facets that describe most of the collection come first.
+      specFacets.sort((a, b) {
+        final byCoverage = b.productCount.compareTo(a.productCount);
+        return byCoverage != 0 ? byCoverage : a.label.compareTo(b.label);
+      });
       return PublicCatalogFacetSnapshot(
         brands: List.unmodifiable(brands),
+        specFacets: List.unmodifiable(specFacets),
         directCategoryCounts: Map.unmodifiable(directCategoryCounts),
         filteredTotalCount: filteredTotalCount,
         minPrice: rangeMin,

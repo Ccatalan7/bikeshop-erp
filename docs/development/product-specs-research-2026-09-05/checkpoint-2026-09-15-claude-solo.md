@@ -276,4 +276,12 @@ ya los contiene). Worktrees inventariados: tres de Codex, todos detached.
   (ISO 559), neumático 38.1-44.4 mm». Auditoría global de 22:34Z: físicos con hechos 461 → 844,
   pendientes 1.584 → 1.458, cero bloqueantes; hechos vivos 1.885 en 824 productos
   ([global-coverage-summary-2026-09-16b.json](global-coverage-summary-2026-09-16b.json)).
-
+- **Filtros técnicos en la tienda (`20260916210000`).** `get_public_products_faceted_v2` y
+  `get_public_product_facets_v2` aceptan `p_spec_filters`; el snapshot devuelve una fila por valor
+  (`spec:<clave>:<tipo>:<unidad>`) con cobertura. Sólo campos filtrables y visibles del contrato
+  vivo, sin `legacy` ni inferencias sin confirmar. La página ofrece los filtros que describen ≥30 %
+  de lo que el cliente mira (válvula y largo en «Cámaras»; aro y ancho en neumáticos; velocidades
+  y piñón mayor en cassettes), con conteos, URL y chips. 11 pruebas pgTAP nuevas (66 verdes) y
+  8 pruebas Dart del formateador («2.1" · 53 mm», «29" / 700c (ISO 622)»). «Largo del rayo»
+  reemplaza al único rótulo filtrable de ingeniero:
+  [storefront-spec-facets-2026-09-16.md](storefront-spec-facets-2026-09-16.md).

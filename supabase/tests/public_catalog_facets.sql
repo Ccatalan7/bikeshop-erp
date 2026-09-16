@@ -1105,6 +1105,326 @@ select results_eq(
   'the wider visitor view exposes reservation-aware zero rather than physical stock'
 );
 
+
+-- ---------------------------------------------------------------------------
+-- Technical-spec facets (2026-09-16). v2 of both facades takes
+-- `p_spec_filters` (`{"key": ["value", …]}`, every key must match, any listed
+-- value matches) and the snapshot returns one `spec:<key>:<data_type>:<unit>`
+-- row per value, with the products carrying the key in range_min and the
+-- scope size in range_max. v1 keeps its contract for older clients.
+-- ---------------------------------------------------------------------------
+
+select has_function(
+  'public',
+  'get_public_products_faceted_v2',
+  array[
+    'uuid', 'uuid[]', 'text', 'text', 'boolean', 'uuid[]', 'numeric',
+    'numeric', 'jsonb', 'text', 'integer', 'integer'
+  ],
+  'the paged public catalog accepts technical-spec filters in v2'
+);
+select has_function(
+  'public',
+  'get_public_product_facets_v2',
+  array[
+    'uuid', 'uuid[]', 'text', 'text', 'boolean', 'uuid[]', 'numeric',
+    'numeric', 'jsonb'
+  ],
+  'the facet snapshot accepts technical-spec filters in v2'
+);
+select ok(
+  has_function_privilege('anon', 'public.get_public_products_faceted_v2(uuid,uuid[],text,text,boolean,uuid[],numeric,numeric,jsonb,text,integer,integer)', 'EXECUTE')
+  and has_function_privilege('authenticated', 'public.get_public_products_faceted_v2(uuid,uuid[],text,text,boolean,uuid[],numeric,numeric,jsonb,text,integer,integer)', 'EXECUTE')
+  and has_function_privilege('anon', 'public.get_public_product_facets_v2(uuid,uuid[],text,text,boolean,uuid[],numeric,numeric,jsonb)', 'EXECUTE')
+  and has_function_privilege('authenticated', 'public.get_public_product_facets_v2(uuid,uuid[],text,text,boolean,uuid[],numeric,numeric,jsonb)', 'EXECUTE'),
+  'storefront visitors can call both v2 facades'
+);
+select ok(
+  not has_function_privilege('service_role', 'public.get_public_products_faceted_v2(uuid,uuid[],text,text,boolean,uuid[],numeric,numeric,jsonb,text,integer,integer)', 'EXECUTE')
+  and not has_function_privilege('service_role', 'public.get_public_product_facets_v2(uuid,uuid[],text,text,boolean,uuid[],numeric,numeric,jsonb)', 'EXECUTE')
+  and not has_function_privilege('public_catalog_facets_untrusted', 'public.get_public_products_faceted_v2(uuid,uuid[],text,text,boolean,uuid[],numeric,numeric,jsonb,text,integer,integer)', 'EXECUTE')
+  and not has_function_privilege('public_catalog_facets_untrusted', 'public.get_public_product_facets_v2(uuid,uuid[],text,text,boolean,uuid[],numeric,numeric,jsonb)', 'EXECUTE'),
+  'the v2 facades grant execution only to visitor roles'
+);
+select ok(
+  not has_function_privilege('anon', 'public.spec_public_facet_values_internal_v1(uuid)', 'EXECUTE')
+  and not has_function_privilege('authenticated', 'public.spec_public_facet_values_internal_v1(uuid)', 'EXECUTE')
+  and not has_function_privilege('anon', 'public.spec_public_facet_matches_internal_v1(uuid,jsonb,text)', 'EXECUTE')
+  and not has_function_privilege('authenticated', 'public.spec_public_facet_matches_internal_v1(uuid,jsonb,text)', 'EXECUTE'),
+  'the spec facet kernels stay private to the facades'
+);
+select ok(
+  (
+    select bool_and(procedure_record.prosecdef)
+      and bool_and(owner_role.rolname = 'postgres')
+    from pg_proc procedure_record
+    join pg_roles owner_role on owner_role.oid = procedure_record.proowner
+    where procedure_record.oid in ('public.get_public_products_faceted_v2(uuid,uuid[],text,text,boolean,uuid[],numeric,numeric,jsonb,text,integer,integer)'::regprocedure, 'public.get_public_product_facets_v2(uuid,uuid[],text,text,boolean,uuid[],numeric,numeric,jsonb)'::regprocedure)
+  ),
+  'the v2 facades are postgres-owned SECURITY DEFINER functions'
+);
+
+-- One filterable option field, one filterable number whose template contract
+-- renames it, one number the shop keeps private (not filterable) and one
+-- retired (`legacy`) option field that must never reach a visitor.
+insert into public.spec_definitions (
+  id, tenant_id, key, label, data_type, unit, allowed_values,
+  is_filterable, is_customer_visible
+)
+values
+  (
+    '7fac5000-0000-4000-8000-000000000001', null, 'facet_test_valve',
+    'Tipo de válvula (prueba)', 'single_select', null,
+    '["Francesa (Presta)", "Auto (Schrader / americana)"]'::jsonb, true, true
+  ),
+  (
+    '7fac5000-0000-4000-8000-000000000002', null, 'facet_test_valve_len',
+    'Largo de la válvula (prueba)', 'number', 'mm', '[]'::jsonb, true, true
+  ),
+  (
+    '7fac5000-0000-4000-8000-000000000003', null, 'facet_test_private',
+    'Ancho interno (prueba)', 'number', 'mm', '[]'::jsonb, false, true
+  ),
+  (
+    '7fac5000-0000-4000-8000-000000000004', null, 'facet_test_retired',
+    'Válvula antigua (prueba)', 'single_select', null,
+    '["Presta"]'::jsonb, true, true
+  );
+
+insert into public.spec_definition_values (
+  id, spec_definition_id, code, label, sort_order, is_active
+)
+values
+  (
+    '7fac5100-0000-4000-8000-000000000001',
+    '7fac5000-0000-4000-8000-000000000001', 'presta', 'Francesa (Presta)', 1, true
+  ),
+  (
+    '7fac5100-0000-4000-8000-000000000002',
+    '7fac5000-0000-4000-8000-000000000001', 'schrader',
+    'Auto (Schrader / americana)', 2, true
+  ),
+  (
+    '7fac5100-0000-4000-8000-000000000003',
+    '7fac5000-0000-4000-8000-000000000004', 'presta', 'Presta', 1, true
+  );
+
+insert into public.spec_templates (
+  id, tenant_id, key, name, technical_family, form_contract
+)
+values (
+  '7fac6000-0000-4000-8000-000000000001', null, 'facet_test_tube',
+  'Cámara (prueba)', 'tube',
+  '{"roles": {"facet_test_retired": "legacy"}, "labels": {"facet_test_valve_len": "Largo de válvula (contrato)"}}'::jsonb
+);
+
+insert into public.spec_template_fields (
+  template_id, spec_definition_id, section_key, sort_order
+)
+values
+  ('7fac6000-0000-4000-8000-000000000001', '7fac5000-0000-4000-8000-000000000001', 'primary', 1),
+  ('7fac6000-0000-4000-8000-000000000001', '7fac5000-0000-4000-8000-000000000002', 'measurement', 2),
+  ('7fac6000-0000-4000-8000-000000000001', '7fac5000-0000-4000-8000-000000000003', 'measurement', 3),
+  ('7fac6000-0000-4000-8000-000000000001', '7fac5000-0000-4000-8000-000000000004', 'legacy', 4);
+
+update public.products
+set spec_template_id = '7fac6000-0000-4000-8000-000000000001'
+where id in (
+  '7fac2000-0000-4000-8000-000000000001',
+  '7fac2000-0000-4000-8000-000000000002',
+  '7fac2000-0000-4000-8000-000000000003'
+);
+
+-- Entry: Presta, 48 mm. Premium: Schrader, 48 mm, plus the private width and
+-- the retired field. Third product: an unconfirmed inference of Presta (never
+-- shown) and a confirmed inference of 60 mm (shown).
+insert into public.spec_facts (
+  id, tenant_id, subject_type, subject_id, spec_definition_id,
+  value_number, source, confirmed
+)
+values
+  (
+    '7fac7000-0000-4000-8000-000000000001', '7fac0000-0000-4000-8000-000000000001', 'product',
+    '7fac2000-0000-4000-8000-000000000001', '7fac5000-0000-4000-8000-000000000001',
+    null, 'catalog', true
+  ),
+  (
+    '7fac7000-0000-4000-8000-000000000002', '7fac0000-0000-4000-8000-000000000001', 'product',
+    '7fac2000-0000-4000-8000-000000000001', '7fac5000-0000-4000-8000-000000000002',
+    48, 'catalog', true
+  ),
+  (
+    '7fac7000-0000-4000-8000-000000000003', '7fac0000-0000-4000-8000-000000000001', 'product',
+    '7fac2000-0000-4000-8000-000000000002', '7fac5000-0000-4000-8000-000000000001',
+    null, 'mechanic', false
+  ),
+  (
+    '7fac7000-0000-4000-8000-000000000004', '7fac0000-0000-4000-8000-000000000001', 'product',
+    '7fac2000-0000-4000-8000-000000000002', '7fac5000-0000-4000-8000-000000000002',
+    48.0, 'mechanic', false
+  ),
+  (
+    '7fac7000-0000-4000-8000-000000000005', '7fac0000-0000-4000-8000-000000000001', 'product',
+    '7fac2000-0000-4000-8000-000000000002', '7fac5000-0000-4000-8000-000000000003',
+    19, 'mechanic', false
+  ),
+  (
+    '7fac7000-0000-4000-8000-000000000006', '7fac0000-0000-4000-8000-000000000001', 'product',
+    '7fac2000-0000-4000-8000-000000000002', '7fac5000-0000-4000-8000-000000000004',
+    null, 'import', false
+  ),
+  (
+    '7fac7000-0000-4000-8000-000000000007', '7fac0000-0000-4000-8000-000000000001', 'product',
+    '7fac2000-0000-4000-8000-000000000003', '7fac5000-0000-4000-8000-000000000001',
+    null, 'inferred', false
+  ),
+  (
+    '7fac7000-0000-4000-8000-000000000008', '7fac0000-0000-4000-8000-000000000001', 'product',
+    '7fac2000-0000-4000-8000-000000000003', '7fac5000-0000-4000-8000-000000000002',
+    60, 'inferred', true
+  );
+
+insert into public.spec_fact_values (fact_id, value_id, position)
+values
+  ('7fac7000-0000-4000-8000-000000000001', '7fac5100-0000-4000-8000-000000000001', 0),
+  ('7fac7000-0000-4000-8000-000000000003', '7fac5100-0000-4000-8000-000000000002', 0),
+  ('7fac7000-0000-4000-8000-000000000006', '7fac5100-0000-4000-8000-000000000003', 0),
+  ('7fac7000-0000-4000-8000-000000000007', '7fac5100-0000-4000-8000-000000000001', 0);
+
+select results_eq(
+  $$
+    select facet.facet_key, facet.value_id, facet.value_label, facet.item_count, facet.range_min
+    from public.get_public_product_facets_v2(
+      p_tenant_id := '7fac0000-0000-4000-8000-000000000001',
+      p_only_in_stock := false
+    ) facet
+    where facet.facet_key like 'spec:%'
+    order by facet.facet_key collate "C", facet.value_id collate "C"
+  $$,
+  $$
+    values
+      ('spec:facet_test_valve:single_select:'::text, 'Auto (Schrader / americana)'::text, 'Tipo de válvula (prueba)'::text, 1::bigint, 2::numeric),
+      ('spec:facet_test_valve:single_select:'::text, 'Francesa (Presta)'::text, 'Tipo de válvula (prueba)'::text, 1::bigint, 2::numeric),
+      ('spec:facet_test_valve_len:number:mm'::text, '48'::text, 'Largo de válvula (contrato)'::text, 2::bigint, 3::numeric),
+      ('spec:facet_test_valve_len:number:mm'::text, '60'::text, 'Largo de válvula (contrato)'::text, 1::bigint, 3::numeric)
+  $$,
+  'spec facets list filterable visible fields by shop label, counting products per value and per key, and hide private, retired and unconfirmed inferred facts'
+);
+
+select ok(
+  (
+    select bool_and(facet.range_max >= facet.range_min)
+    from public.get_public_product_facets_v2(
+      p_tenant_id := '7fac0000-0000-4000-8000-000000000001',
+      p_only_in_stock := false
+    ) facet
+    where facet.facet_key like 'spec:%'
+  ),
+  'spec facet coverage never exceeds the scope it is measured against'
+);
+
+select results_eq(
+  $$
+    select facet.facet_key, facet.value_id, facet.item_count
+    from public.get_public_product_facets_v2(
+      p_tenant_id := '7fac0000-0000-4000-8000-000000000001',
+      p_only_in_stock := false,
+      p_spec_filters := '{"facet_test_valve": ["Francesa (Presta)"]}'::jsonb
+    ) facet
+    where facet.facet_key like 'spec:%'
+    order by facet.facet_key collate "C", facet.value_id collate "C"
+  $$,
+  $$
+    values
+      ('spec:facet_test_valve:single_select:'::text, 'Auto (Schrader / americana)'::text, 1::bigint),
+      ('spec:facet_test_valve:single_select:'::text, 'Francesa (Presta)'::text, 1::bigint),
+      ('spec:facet_test_valve_len:number:mm'::text, '48'::text, 1::bigint)
+  $$,
+  'a spec filter narrows the other spec facets but keeps its own alternatives, as the brand facet does'
+);
+
+select results_eq(
+  $$
+    select product.id
+    from public.get_public_products_faceted_v2(
+      p_tenant_id := '7fac0000-0000-4000-8000-000000000001',
+      p_only_in_stock := false,
+      p_spec_filters := '{"facet_test_valve": ["Francesa (Presta)"]}'::jsonb
+    ) product
+    order by product.id
+  $$,
+  $$
+    values ('7fac2000-0000-4000-8000-000000000001'::uuid)
+  $$,
+  'the paged catalog keeps only the products carrying the requested option'
+);
+
+select results_eq(
+  $$
+    select product.id
+    from public.get_public_products_faceted_v2(
+      p_tenant_id := '7fac0000-0000-4000-8000-000000000001',
+      p_only_in_stock := false,
+      p_spec_filters := '{"facet_test_valve_len": ["48", "60"]}'::jsonb
+    ) product
+    order by product.id
+  $$,
+  $$
+    values
+      ('7fac2000-0000-4000-8000-000000000001'::uuid),
+      ('7fac2000-0000-4000-8000-000000000002'::uuid),
+      ('7fac2000-0000-4000-8000-000000000003'::uuid)
+  $$,
+  'several values of one key are alternatives'
+);
+
+select is(
+  (
+    select count(*)
+    from public.get_public_products_faceted_v2(
+      p_tenant_id := '7fac0000-0000-4000-8000-000000000001',
+      p_only_in_stock := false,
+      p_spec_filters := '{"facet_test_valve": ["Francesa (Presta)"], "facet_test_valve_len": ["60"]}'::jsonb
+    )
+  ),
+  0::bigint,
+  'two keys must both match: no product is Presta and 60 mm'
+);
+
+select is(
+  (
+    select count(*)
+    from public.get_public_products_faceted_v2(
+      p_tenant_id := '7fac0000-0000-4000-8000-000000000001',
+      p_only_in_stock := false,
+      p_spec_filters := '{"facet_test_private": ["19"], "facet_test_retired": ["Presta"]}'::jsonb
+    )
+  ),
+  0::bigint,
+  'a private or retired key can not be used as a filter, not even by name'
+);
+
+select results_eq(
+  $$
+    select product.id
+    from public.get_public_products_faceted_v2(
+      p_tenant_id := '7fac0000-0000-4000-8000-000000000001',
+      p_only_in_stock := false,
+      p_spec_filters := '{}'::jsonb
+    ) product
+    order by product.id
+  $$,
+  $$
+    select product.id
+    from public.get_public_products_faceted_v1(
+      p_tenant_id := '7fac0000-0000-4000-8000-000000000001',
+      p_only_in_stock := false
+    ) product
+    order by product.id
+  $$,
+  'without spec filters v2 pages exactly what v1 pages'
+);
+
 select finish();
 
 rollback;

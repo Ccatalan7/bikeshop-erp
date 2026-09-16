@@ -570,7 +570,10 @@ preserving the current page draft and return context.
   attached to a real category: stable public slug, inherited/overridden hero,
   breadcrumbs, subcategory navigation, supported facets, and grid density.
   Removing it restores the polished shared default; it never removes or
-  unpublishes the category.
+  unpublishes the category. The technical-spec filters (valve, wheel size,
+  speeds…) are not a stored facet: the catalog page offers them next to the
+  brand facet whenever the spec describes at least 30 % of the collection
+  (2026-09-16, `get_public_product_facets_v2`).
 - `Estructura > Páginas` owns CMS page records.
 - `Estructura > Navegación y menús` and `website_navigation` own header/footer
   placement and hierarchy.

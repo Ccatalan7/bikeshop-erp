@@ -114,6 +114,7 @@ class WebsiteCatalogQuery {
     this.productType,
     this.categoryScope = WebsiteCatalogCategoryScope.subtree,
     Iterable<String> brandIds = const <String>[],
+    Map<String, Iterable<String>> specFilters = const <String, Iterable<String>>{},
     this.minPrice,
     this.maxPrice,
     this.stock,
@@ -121,7 +122,8 @@ class WebsiteCatalogQuery {
     this.page = defaultPage,
     this.pageSize = defaultPageSize,
   })  : searchQuery = _normalizeSearch(searchQuery),
-        brandIds = List<String>.unmodifiable(_normalizeBrandIds(brandIds)) {
+        brandIds = List<String>.unmodifiable(_normalizeBrandIds(brandIds)),
+        specFilters = _normalizeSpecFilters(specFilters) {
     _validatePrice(minPrice, 'minPrice');
     _validatePrice(maxPrice, 'maxPrice');
     if (minPrice != null && maxPrice != null && minPrice! > maxPrice!) {
@@ -151,6 +153,12 @@ class WebsiteCatalogQuery {
   final WebsiteCatalogProductTypeFilter? productType;
   final WebsiteCatalogCategoryScope categoryScope;
   final List<String> brandIds;
+
+  /// Filtros por medida de la ficha técnica, por clave de definición
+  /// (`bead_seat_diameter_mm`, `valve_standard`…) con los valores tal como la
+  /// tienda los muestra. Un producto calza cuando cumple todas las claves y,
+  /// dentro de cada clave, alguno de sus valores. En la URL: `spec.<clave>=v1,v2`.
+  final Map<String, List<String>> specFilters;
   final double? minPrice;
   final double? maxPrice;
   final WebsiteCatalogStockFilter? stock;
@@ -245,12 +253,26 @@ class WebsiteCatalogQuery {
       'marcas',
     ]);
 
+    final specFilters = <String, List<String>>{};
+    for (final entry in parameters.entries) {
+      final key = specFilterKeyFromParameter(entry.key);
+      if (key == null) continue;
+      final values = entry.value
+          .split(',')
+          .map((value) => value.trim())
+          .where((value) => value.isNotEmpty)
+          .toList(growable: false);
+      if (values.isEmpty) continue;
+      specFilters[key] = values;
+    }
+
     try {
       return WebsiteCatalogQuery(
         searchQuery: _firstNonEmpty(parameters, const ['q', 'search']) ?? '',
         productType: productType,
         categoryScope: categoryScope,
         brandIds: rawBrands?.split(',') ?? const <String>[],
+        specFilters: specFilters,
         minPrice: minPrice,
         maxPrice: maxPrice,
         stock: stock,
@@ -281,6 +303,9 @@ class WebsiteCatalogQuery {
       result['category_scope'] = categoryScope.storageValue;
     }
     if (brandIds.isNotEmpty) result['brand'] = brandIds.join(',');
+    for (final entry in specFilters.entries) {
+      result['$specParameterPrefix${entry.key}'] = entry.value.join(',');
+    }
     if (minPrice != null) result['min_price'] = _formatPrice(minPrice!);
     if (maxPrice != null) result['max_price'] = _formatPrice(maxPrice!);
     if (stock != null) result['stock'] = stock!.storageValue;
@@ -292,6 +317,50 @@ class WebsiteCatalogQuery {
 
   static String _normalizeSearch(String raw) =>
       raw.trim().replaceAll(RegExp(r'\s+'), ' ');
+
+  /// Canonical prefix of a spec filter parameter (`spec.valve_standard`).
+  static const String specParameterPrefix = 'spec.';
+
+  /// The definition key a query parameter names, or null when the parameter
+  /// is not a spec filter. `s.` is accepted as a short alias on the way in.
+  static String? specFilterKeyFromParameter(String parameter) {
+    final trimmed = parameter.trim();
+    String? key;
+    if (trimmed.startsWith(specParameterPrefix)) {
+      key = trimmed.substring(specParameterPrefix.length);
+    } else if (trimmed.startsWith('s.')) {
+      key = trimmed.substring(2);
+    }
+    if (key == null || !_specKeyPattern.hasMatch(key)) return null;
+    return key;
+  }
+
+  static final RegExp _specKeyPattern = RegExp(r'^[a-z][a-z0-9_]{0,63}$');
+
+  static Map<String, List<String>> _normalizeSpecFilters(
+    Map<String, Iterable<String>> raw,
+  ) {
+    final result = <String, List<String>>{};
+    final keys = raw.keys.map((key) => key.trim()).toList()..sort();
+    for (final key in keys) {
+      if (!_specKeyPattern.hasMatch(key)) {
+        throw ArgumentError.value(
+          key,
+          'specFilters',
+          'Cada filtro de ficha usa la clave canónica de su definición.',
+        );
+      }
+      final values = (raw[key] ?? raw[' $key'] ?? const <String>[])
+          .map((value) => value.trim().replaceAll(RegExp(r'\s+'), ' '))
+          .where((value) => value.isNotEmpty && !value.contains(','))
+          .toSet()
+          .toList(growable: false)
+        ..sort();
+      if (values.isEmpty) continue;
+      result[key] = List<String>.unmodifiable(values);
+    }
+    return Map<String, List<String>>.unmodifiable(result);
+  }
 
   static List<String> _normalizeBrandIds(Iterable<String> raw) {
     final values = raw

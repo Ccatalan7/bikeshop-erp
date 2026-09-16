@@ -162,7 +162,8 @@ Two corollaries worth remembering when a page half-loads:
 
 - the elapsed time in the console tells you which role the request used —
   ~4-5s means `anon`, ~12s means a signed-in session;
-- `get_public_product_facets_v1` is heavy enough to time out intermittently on
+- `get_public_product_facets_v2` (v1 until 2026-09-16; v2 adds the
+  technical-spec facets) is heavy enough to time out intermittently on
   production too. Facets degrade silently, so a 500 there is not the reason a
   catalog is empty.
 
