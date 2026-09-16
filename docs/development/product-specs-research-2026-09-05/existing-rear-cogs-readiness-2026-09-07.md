@@ -1,5 +1,7 @@
 # Sucesor de las cuatro familias de piñonería trasera
 
+**Publicado el 2026-09-16** como `20260916110000_rear_cog_successors.sql` sobre 64 productos, con activación revisada sobre 44 pares ya poblados; ver [rear-cogs-successors-adjudication-2026-09-16.md](rear-cogs-successors-adjudication-2026-09-16.md).
+
 `cassette`, `freewheel`, `fixed_cog`, `cassette_spacer`. Candidato para revisión
 de root. **Sin migración, sin producción, sin fill, sin cambios de asignación,
 sin git y sin SQL.** Inventario y readback son de root.

@@ -137,3 +137,13 @@ ya los contiene). Worktrees inventariados: tres de Codex, todos detached.
   plantillas, 271 productos, cero bloqueantes, 813 observaciones legacy
   conservadas): [tire-tube-successors-adjudication-2026-09-16.md](tire-tube-successors-adjudication-2026-09-16.md).
   Entregas planificadas: 78 de 105; quedan 27 reemplazos originales.
+- Después de neumáticos y cámaras se publicaron el mismo día rayos (`20260916040000`, 58),
+  maza y llanta (`20260916050000`, 96), mandos y desviadores (`20260916060000`, 94),
+  bielas y platos (`20260916070000`, 57), cadena y conector (`20260916080000`, 44),
+  patillas y roldanas (`20260916090000`, 38), rodamiento y pedalier (`20260916100000`, 72),
+  dirección (`20260916120000`, 16) y piñonería trasera (`20260916110000`, 64). Cada uno con
+  su `*-successors-adjudication-2026-09-16.md`. Entregas planificadas: **102 de 105**; quedan
+  las tres presentaciones completas de freno, no publicables por diseño.
+- Dos reglas nuevas quedaron escritas en los compiladores: un campo nuevo nacido `legacy` sólo
+  se crea si Root lo retiró con casos; y una publicación que cambia coherencia sobre campos con
+  hechos necesita diagnóstico inline y suspensión acotada de la guardia (piñonería).
