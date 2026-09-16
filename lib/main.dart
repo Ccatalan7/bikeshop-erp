@@ -14,6 +14,7 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 import 'firebase_options.dart';
 import 'shared/services/memory_hygiene.dart';
 import 'shared/services/notification_service.dart';
+import 'shared/services/tenant_broadcast_channel.dart';
 import 'shared/services/mail_notification_gate.dart';
 import 'shared/services/chat_notification_gate.dart';
 import 'shared/services/erp_notification_gate.dart';
@@ -616,10 +617,15 @@ class VinabikeApp extends StatelessWidget {
           create: (context) => ChatProvider(
             context.read<UserManagementService>(),
             context.read<TenantService>(),
+            ChatInboxTransport.tenantBroadcast,
           ),
           update: (context, userService, tenantService, previous) {
-            final provider =
-                previous ?? ChatProvider(userService, tenantService);
+            final provider = previous ??
+                ChatProvider(
+                  userService,
+                  tenantService,
+                  ChatInboxTransport.tenantBroadcast,
+                );
             unawaited(provider.synchronizeSessionScope());
             return provider;
           },
@@ -1001,7 +1007,8 @@ class _WorkspaceDeepLinkBridgeState extends State<_WorkspaceDeepLinkBridge>
   OverlayEntry? _workspaceAlertOverlay;
   Timer? _workspaceAlertTimer;
   Timer? _erpNotificationsRefreshTimer;
-  RealtimeChannel? _erpNotificationsChannel;
+  TenantBroadcastListener? _erpNotificationsChannel;
+  TenantBroadcastListener? _erpNotificationsAllChannel;
   late final WorkspaceManager _workspaceManager;
   bool _isWorkspaceForeground = true;
   bool _erpNotificationsRefreshInFlight = false;
@@ -1058,8 +1065,10 @@ class _WorkspaceDeepLinkBridgeState extends State<_WorkspaceDeepLinkBridge>
     _workspaceAlertTimer?.cancel();
     _workspaceAlertOverlay?.remove();
     _erpNotificationsRefreshTimer?.cancel();
-    _erpNotificationsChannel?.unsubscribe();
+    _erpNotificationsChannel?.cancel();
     _erpNotificationsChannel = null;
+    _erpNotificationsAllChannel?.cancel();
+    _erpNotificationsAllChannel = null;
     ChatNotificationGate.shared.clearScope();
     MailNotificationGate.shared.clearScope();
     ErpNotificationGate.shared.clearScope();
@@ -1135,7 +1144,10 @@ class _WorkspaceDeepLinkBridgeState extends State<_WorkspaceDeepLinkBridge>
     _erpNotificationsRefreshTimer = null;
     final oldChannel = _erpNotificationsChannel;
     _erpNotificationsChannel = null;
-    if (oldChannel != null) unawaited(oldChannel.unsubscribe());
+    if (oldChannel != null) unawaited(oldChannel.cancel());
+    final oldAllChannel = _erpNotificationsAllChannel;
+    _erpNotificationsAllChannel = null;
+    if (oldAllChannel != null) unawaited(oldAllChannel.cancel());
 
     ChatNotificationGate.shared.clearScope();
     MailNotificationGate.shared.clearScope();
@@ -1230,49 +1242,34 @@ class _WorkspaceDeepLinkBridgeState extends State<_WorkspaceDeepLinkBridge>
 
     final previousChannel = _erpNotificationsChannel;
     _erpNotificationsChannel = null;
-    if (previousChannel != null) await previousChannel.unsubscribe();
+    if (previousChannel != null) await previousChannel.cancel();
     if (!_isCurrentNotificationLifecycle(userId, epoch)) return;
 
-    late final RealtimeChannel channel;
-    channel = Supabase.instance.client
-        .channel('workspace-erp-notifications-$userId-$tenantId')
-        .onPostgresChanges(
-          event: PostgresChangeEvent.insert,
-          schema: 'public',
-          table: 'erp_notifications',
-          filter: PostgresChangeFilter(
-            type: PostgresChangeFilterType.eq,
-            column: 'tenant_id',
-            value: tenantId,
-          ),
-          callback: (payload) => _handleErpNotificationRecord(
-            payload.newRecord,
-            userId: userId,
-            tenantId: tenantId,
-            epoch: epoch,
-            allowPresentation: true,
-          ),
-        )
-        .onPostgresChanges(
-          event: PostgresChangeEvent.update,
-          schema: 'public',
-          table: 'erp_notifications',
-          filter: PostgresChangeFilter(
-            type: PostgresChangeFilterType.eq,
-            column: 'tenant_id',
-            value: tenantId,
-          ),
-          callback: (payload) => _handleErpNotificationRecord(
-            payload.newRecord,
-            userId: userId,
-            tenantId: tenantId,
-            epoch: epoch,
-            allowPresentation: false,
-          ),
-        )
-        .subscribe((status, error) {
+    final previousAllChannel = _erpNotificationsAllChannel;
+    _erpNotificationsAllChannel = null;
+    if (previousAllChannel != null) await previousAllChannel.cancel();
+    if (!_isCurrentNotificationLifecycle(userId, epoch)) return;
+
+    // The database emits each notification row to a private Broadcast topic
+    // (migration 20260916010000): the recipient's own topic, or the tenant
+    // ':all' topic for rows without a recipient. Two joins replace the
+    // postgres_changes subscription that made Realtime re-evaluate RLS for
+    // every change on the table.
+    void onEvent(Map<String, dynamic> payload) {
+      final record = payload['record'];
+      if (record is! Map) return;
+      _handleErpNotificationRecord(
+        Map<String, dynamic>.from(record),
+        userId: userId,
+        tenantId: tenantId,
+        epoch: epoch,
+        allowPresentation: payload['operation'] == 'insert',
+      );
+    }
+
+    void onStatus(TenantBroadcastStatus status, Object? error) {
       if (!_isCurrentNotificationLifecycle(userId, epoch)) return;
-      if (status == RealtimeSubscribeStatus.subscribed) {
+      if (status == TenantBroadcastStatus.subscribed) {
         unawaited(
           _refreshErpNotifications(
             userId: userId,
@@ -1280,19 +1277,37 @@ class _WorkspaceDeepLinkBridgeState extends State<_WorkspaceDeepLinkBridge>
             epoch: epoch,
           ),
         );
-      } else if (status == RealtimeSubscribeStatus.channelError ||
-          status == RealtimeSubscribeStatus.timedOut) {
+      } else if (status == TenantBroadcastStatus.degraded) {
         debugPrint(
           '🔔 [WorkspaceShell] ERP notifications realtime issue: $error',
         );
       }
-    });
+    }
 
+    final client = Supabase.instance.client;
+    final userListener = await TenantBroadcastHub.instance.listen(
+      client: client,
+      topic: erpNotificationsTopic(tenantId: tenantId, recipient: userId),
+      onEvent: onEvent,
+      onStatus: onStatus,
+    );
     if (!_isCurrentNotificationLifecycle(userId, epoch)) {
-      await channel.unsubscribe();
+      await userListener.cancel();
       return;
     }
-    _erpNotificationsChannel = channel;
+    final allListener = await TenantBroadcastHub.instance.listen(
+      client: client,
+      topic: erpNotificationsTopic(tenantId: tenantId, recipient: 'all'),
+      onEvent: onEvent,
+      onStatus: onStatus,
+    );
+    if (!_isCurrentNotificationLifecycle(userId, epoch)) {
+      await userListener.cancel();
+      await allListener.cancel();
+      return;
+    }
+    _erpNotificationsChannel = userListener;
+    _erpNotificationsAllChannel = allListener;
   }
 
   Future<void> _refreshErpNotifications({

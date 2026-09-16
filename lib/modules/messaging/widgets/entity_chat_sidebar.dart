@@ -5,6 +5,8 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../../../shared/services/tenant_broadcast_channel.dart';
+import '../../../shared/services/tenant_service.dart';
 import '../services/messaging_service.dart';
 import '../models/conversation.dart';
 import '../utils/conversation_channel_presentation.dart';
@@ -49,6 +51,7 @@ class _EntityChatSidebarState extends State<EntityChatSidebar> {
   final Set<String> _deletingConversationIds = {};
   double _expandedWidth = _defaultExpandedWidth;
   RealtimeChannel? _realtimeChannel;
+  TenantBroadcastListener? _broadcastListener;
   bool _hasStartedLoading = false;
 
   int get _unreadCount =>
@@ -109,6 +112,7 @@ class _EntityChatSidebarState extends State<EntityChatSidebar> {
   @override
   void dispose() {
     _realtimeChannel?.unsubscribe();
+    _broadcastListener?.cancel();
     super.dispose();
   }
 
@@ -117,9 +121,31 @@ class _EntityChatSidebarState extends State<EntityChatSidebar> {
     try {
       final messagingService =
           Provider.of<MessagingService>(context, listen: false);
-      _realtimeChannel = messagingService.subscribeToConversationsUpdates(() {
-        if (mounted) _loadConversations();
-      });
+      final tenantId = TenantService().currentTenantId;
+      if (tenantId == null || tenantId.isEmpty) {
+        _realtimeChannel = messagingService.subscribeToConversationsUpdates(() {
+          if (mounted) _loadConversations();
+        });
+        return;
+      }
+      // ERP staff: the tenant's private Broadcast topic (migration
+      // 20260916010000) instead of three postgres_changes subscriptions.
+      unawaited(
+        messagingService
+            .subscribeToTenantMessagingUpdates(
+          tenantId: tenantId,
+          onUpdate: () {
+            if (mounted) _loadConversations();
+          },
+        )
+            .then((listener) {
+          if (!mounted) {
+            unawaited(listener.cancel());
+            return;
+          }
+          _broadcastListener = listener;
+        }),
+      );
     } catch (e) {
       debugPrint('MessagingService not available: $e');
     }

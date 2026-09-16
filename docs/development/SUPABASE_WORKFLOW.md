@@ -506,6 +506,94 @@ and live Realtime subscriptions. Read §12d and §5 first; then §2/§3. Trailin
 sections read the `cron`, `net` and `realtime` schemas and may stop on a
 permission error without invalidating the earlier ones.
 
+### Bloque 2a — Realtime: notificaciones y mensajería a Broadcast (2026-09-16)
+
+Migración `20260916010000_realtime_broadcast_notifications_and_messaging`
+con su `verify_*.sql` (corrido contra producción antes del deploy exigiendo
+`division by zero`), pgTAP `supabase/tests/realtime_broadcast_notifications.sql`
+y el cliente en `lib/shared/services/tenant_broadcast_channel.dart`.
+
+**La causa.** `realtime.list_changes` —la sentencia `SELECT wal->>$5 as
+type …` que encabeza el perfil de CPU— es el sondeo del poller de Realtime:
+existe mientras haya **una** suscripción `postgres_changes` viva en el
+proyecto, y su costo por llamada es `realtime.apply_rls` por cada cambio del
+WAL **por cada suscripción** a esa tabla. El 2026-09-16 02:03 UTC
+`realtime.subscription` tenía 34 suscripciones sobre 17 tablas desde 4
+clientes; `erp_notifications`, `messages` y `sales_invoices` con 4 cada una,
+y la bandeja de chat suscribía `conversations`, `conversation_participants`
+y `messages` **sin filtro** (RLS descarta fila a fila lo que el filtro no
+acota). Un Broadcast se autoriza una sola vez al unirse al canal (política
+sobre `realtime.messages`) y no vuelve a evaluarse por cambio; es el patrón
+que `20260726164000` ya usa para la proyección financiera.
+
+**Lo que cambia.**
+- `erp_notifications`: trigger `AFTER INSERT OR UPDATE` que envía la fila
+  completa (lo mismo que entregaba `postgres_changes`) al tópico
+  `erp-notifications:<tenant>:<recipient_user_id>` o, sin destinatario,
+  `…:all`. La política de `realtime.messages` reproduce exactamente
+  `erp_notifications_select` (`tenant_id = user_tenant_id() and
+  (recipient_user_id is null or recipient_user_id = auth.uid())`): un miembro
+  sólo puede unirse al `…:all` de su tenant y a su propio tópico. El shell
+  del workspace (`lib/main.dart`) se une a los dos.
+- Mensajería: triggers en `messages` (insert/update), `conversations` y
+  `conversation_participants` (insert/update/delete) envían a
+  `messaging:<tenant>` sólo tabla, operación, ids y `external_status`
+  (recibos de entrega); nunca contenido, remitente ni identidad del
+  participante. `ChatProvider` del ERP (`ChatInboxTransport.tenantBroadcast`),
+  `EntityChatSidebar` y los toasts de escritorio (`NotificationService`, que
+  relee el mensaje por PostgREST bajo RLS antes de mostrarlo) usan ese
+  tópico; si el canal degrada, `ChatProvider` vuelve a `postgres_changes`.
+  La tienda (`main_store.dart`) conserva `postgres_changes`: un cliente no
+  tiene `user_profiles`, `user_tenant_id()` es null para él y no podría
+  unirse.
+- `TenantBroadcastHub`: un canal privado por tópico y por proceso, con
+  `setAuth` del token de sesión; el canal se cierra al cancelar el último
+  oyente y cada oyente recibe el último estado al unirse.
+
+**Inventario de `postgres_changes` en `lib/`** (26 sitios, 14 archivos,
+21 tablas; `grep -rn "onPostgresChanges(" lib`):
+
+| Sitio | Tablas | Cuándo se crea | Bloque |
+| --- | --- | --- | --- |
+| `main.dart` `_subscribeErpNotifications` | `erp_notifications` | al abrir el workspace | **2a: Broadcast** |
+| `notification_service.dart` `_setupDesktopMessageRealtime` | `messages` | al arrancar en escritorio | **2a: Broadcast** |
+| `messaging_service.dart` `subscribeToConversationsUpdates` | `conversations`, `conversation_participants`, `messages` (sin filtro) | `ChatProvider` del workspace y `EntityChatSidebar` | **2a: Broadcast en el ERP**; la tienda lo conserva |
+| `messaging_service.dart` `subscribeToConversationLifecycleUpdates` | `conversations` (filtro `id`) | pantalla de una conversación | pantalla: se queda |
+| `bikeshop_service.dart` `_setupMechanicJobsRealtime`, `_setupMechanicJobBikesRealtime`, `_setupSalesInvoicesRealtime` | `mechanic_jobs`, `mechanic_job_bikes`, `sales_invoices` | lease del workspace, al crear el servicio | 2b |
+| `customer_service.dart` `_setupCustomersRealtime` | `customers` | constructor | 2b |
+| `inventory_service.dart` `_setupStockMovementsRealtime` | `products` | constructor | 2b |
+| `job_status_service.dart` `_setupRealtimeSubscription` | `job_statuses` | constructor | 2b |
+| `smart_task_service.dart` `_setupTasksRealtime` | `mechanic_job_tasks` | constructor | 2b |
+| `task_service.dart` `_setupTasksRealtime` | `smart_tasks` | init y reanudación | 2b |
+| `purchase_service.dart` `_setupPurchaseRealtime`, `refreshReceiptReadModel` | `purchase_invoices`, `purchase_payments`, `purchase_receipts`, `purchase_receipt_resolution_allocations`, `purchase_credit_notes` | tras la primera carga | 2b |
+| `sales_service.dart` `_ensureRealtimeSubscriptions` | `sales_invoices`, `sales_payments` | tras la primera carga | 2b |
+| `stock_movements_service.dart` `_setupRealtime` | `stock_movements`, `stock_adjustments` | tras la carga | 2b |
+| `smart_purchase_list_service.dart` `_setupRealtimeListeners` | `smart_purchase_list`, `products` (update) | al cargar la lista | 2b |
+| `website_service.dart` `_setupOrdersRealtime` | `online_orders` | lease del workspace | 2b |
+| `mail_account_manager.dart` `_setupPushSubscription` | `email_push_subscriptions` (update) | al conectar la cuenta | 2b |
+| `worker_tasks_section.dart` `_setupRealtime` | `smart_tasks` | pantalla del portal | pantalla: se queda |
+
+**Antes** (2026-09-16 02:03 UTC; `pg_stat_statements` sin reset desde
+2026-08-30 05:29):
+
+| `realtime.list_changes` | acumulado desde 2026-08-30 | intervalo 00:16–02:03 UTC (ya con bloque 1) |
+| --- | ---: | ---: |
+| llamadas | 2 094 568 | 10 218 |
+| media por llamada | 77,75 ms | 9,0 ms |
+| llamadas por minuto | 86,3 | 95,9 |
+| suscripciones vivas | 34 en 17 tablas, 4 clientes | — |
+
+La media acumulada baja despacio porque arrastra 2,09 M llamadas de la
+ventana anterior a los bloques; lo que mueve cada bloque es la media del
+intervalo y el número de suscripciones por tabla. El ritmo de sondeo (≈ 96
+por minuto) no depende de cuántas suscripciones hay sino de que exista
+alguna, así que sólo llega a cero cuando ningún cliente conserva una
+suscripción `postgres_changes` (bloque 2b). Los clientes de escritorio
+instalados siguen suscribiendo con `postgres_changes` hasta que se publique
+un build con este cambio; la web del ERP lo toma en el siguiente deploy.
+
+**Después.** «pendiente de deploy»
+
 ## Authorized production writes
 
 Production writes must already be in task scope and satisfy the policy

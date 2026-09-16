@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../../../shared/services/tenant_broadcast_channel.dart';
 import '../../../shared/services/user_management_service.dart';
 import '../../../shared/services/tenant_service.dart';
 import '../models/conversation.dart';
@@ -19,6 +20,13 @@ import '../utils/message_timeline_merge.dart';
 import '../models/message_reply.dart';
 import '../models/chat_attachment_draft.dart';
 import '../../../shared/services/notification_service.dart';
+
+/// How the inbox learns about conversation, participant and message changes.
+///
+/// ERP staff join the tenant's private Broadcast topic fed by database
+/// triggers (migration 20260916010000); store customers, who have no tenant
+/// profile, keep the RLS-scoped postgres_changes subscriptions.
+enum ChatInboxTransport { postgresChanges, tenantBroadcast }
 
 class ConversationDraft {
   final String body;
@@ -161,6 +169,10 @@ class ChatProvider extends ChangeNotifier {
   final Map<String, Map<String, List<MessageReaction>>>
       _reactionsByConversation = {};
   RealtimeChannel? _conversationsSubscription;
+  TenantBroadcastListener? _inboxBroadcastListener;
+
+  /// How the staff inbox learns about changes; see [ChatInboxTransport].
+  final ChatInboxTransport inboxTransport;
   StreamSubscription? _notificationSubscription;
   StreamSubscription<AuthState>? _authStateSubscription;
   Timer? _conversationsRefreshTimer;
@@ -416,6 +428,7 @@ class ChatProvider extends ChangeNotifier {
   ChatProvider([
     this._userService,
     TenantService? tenantService,
+    this.inboxTransport = ChatInboxTransport.postgresChanges,
   ]) : _tenantService = tenantService ?? TenantService() {
     _messageReceiptRefreshCoalescer = MessageReceiptRefreshCoalescer(
       onRefresh: _refreshMessageReceipts,
@@ -510,6 +523,11 @@ class ChatProvider extends ChangeNotifier {
     final conversationsSubscription = _conversationsSubscription;
     if (conversationsSubscription != null) {
       unawaited(conversationsSubscription.unsubscribe());
+    }
+    final inboxBroadcastListener = _inboxBroadcastListener;
+    _inboxBroadcastListener = null;
+    if (inboxBroadcastListener != null) {
+      unawaited(inboxBroadcastListener.cancel());
     }
     _messagesSubscription = null;
     _reactionsSubscription = null;
@@ -660,6 +678,31 @@ class ChatProvider extends ChangeNotifier {
     // are useful, but they should not block message delivery feedback.
     loadConversations(refreshContextHints: false);
 
+    final tenantId = _sessionTenantId;
+    if (inboxTransport == ChatInboxTransport.tenantBroadcast &&
+        tenantId != null &&
+        tenantId.isNotEmpty) {
+      unawaited(_initTenantBroadcastListener(epoch, tenantId));
+    } else {
+      _initPostgresChangesListener(epoch);
+    }
+
+    // Also listen to NotificationService for realtime alerts (triggers badge update)
+    _notificationSubscription = NotificationService().onMessageReceived.listen(
+      (message) {
+        if (!_isCurrentSession(epoch)) return;
+        applyIncomingNotification(message);
+      },
+    );
+  }
+
+  /// Store customers and any session without a tenant profile keep the
+  /// RLS-scoped postgres_changes inbox; it is also the fallback when the
+  /// private Broadcast topic refuses the join.
+  void _initPostgresChangesListener(int epoch) {
+    if (!_isCurrentSession(epoch) || _conversationsSubscription != null) {
+      return;
+    }
     _conversationsSubscription = _service.subscribeToConversationsUpdates(
       () {
         if (!_isCurrentSession(epoch)) return;
@@ -674,14 +717,50 @@ class ChatProvider extends ChangeNotifier {
         );
       },
     );
+  }
 
-    // Also listen to NotificationService for realtime alerts (triggers badge update)
-    _notificationSubscription = NotificationService().onMessageReceived.listen(
-      (message) {
+  /// ERP staff inbox: one private Broadcast topic per tenant fed by the
+  /// database (migration 20260916010000) instead of three unfiltered
+  /// postgres_changes subscriptions. Receipts arrive without the row, so the
+  /// coalesced re-read paints them; the optimistic merge stays on the
+  /// postgres_changes path only.
+  Future<void> _initTenantBroadcastListener(int epoch, String tenantId) async {
+    var fellBack = false;
+    final listener = await _service.subscribeToTenantMessagingUpdates(
+      tenantId: tenantId,
+      onUpdate: () {
         if (!_isCurrentSession(epoch)) return;
-        applyIncomingNotification(message);
+        _scheduleConversationRefresh(const Duration(milliseconds: 80));
+      },
+      onMessageReceiptUpdate: (update) {
+        if (!_isCurrentSession(epoch)) return;
+        _messageReceiptRefreshCoalescer.schedule(
+          conversationId: update.conversationId,
+          messageId: update.messageId,
+        );
+      },
+      onStatus: (status, error) {
+        if (!_isCurrentSession(epoch) || fellBack) return;
+        if (status == TenantBroadcastStatus.degraded) {
+          // A refused join (no tenant membership, revoked policy) must not
+          // leave the inbox blind: fall back to the RLS-scoped subscription.
+          fellBack = true;
+          debugPrint(
+            '💬 [ChatProvider] messaging broadcast degraded ($error); '
+            'falling back to postgres_changes',
+          );
+          final current = _inboxBroadcastListener;
+          _inboxBroadcastListener = null;
+          if (current != null) unawaited(current.cancel());
+          _initPostgresChangesListener(epoch);
+        }
       },
     );
+    if (!_isCurrentSession(epoch) || fellBack) {
+      await listener.cancel();
+      return;
+    }
+    _inboxBroadcastListener = listener;
   }
 
   void applyIncomingNotification(RemoteMessage message) {
@@ -3555,6 +3634,7 @@ class ChatProvider extends ChangeNotifier {
     _messagesSubscription?.cancel();
     _reactionsSubscription?.cancel();
     _conversationsSubscription?.unsubscribe();
+    _inboxBroadcastListener?.cancel();
     _notificationSubscription?.cancel();
     _authStateSubscription?.cancel();
     super.dispose();

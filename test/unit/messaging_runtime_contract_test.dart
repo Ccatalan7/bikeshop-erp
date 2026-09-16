@@ -83,7 +83,7 @@ void main() {
     expect(mainLayoutSource, isNot(contains('Timer.periodic(')));
     expect(mainSource, contains('_notificationLifecycleEpoch++;'));
     expect(mainSource, contains('_erpNotificationsRefreshTimer?.cancel();'));
-    expect(mainSource, contains('_erpNotificationsChannel?.unsubscribe();'));
+    expect(mainSource, contains('_erpNotificationsChannel?.cancel();'));
     expect(
       mainSource,
       matches(

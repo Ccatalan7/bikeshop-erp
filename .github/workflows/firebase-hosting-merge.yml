@@ -73,11 +73,26 @@ jobs:
           projectId: project-vinabike
 
       - name: Verify exact live ERP commit
+        # Hosting reports the release finished before every CDN edge serves
+        # the new release.json. `curl --retry` only covers transport errors, so
+        # a stale 200 with the previous commit failed this step on 2026-09-16
+        # (e9da83b1, attempt 1) while the site was already correct on the next
+        # attempt. Poll the content until it names this commit.
         run: |
-          curl --fail --silent --show-error --retry 10 --retry-delay 3 \
-            -H 'Cache-Control: no-cache' \
-            "https://project-vinabike.web.app/release.json?commit=${{ github.sha }}" \
-            | jq -e --arg commit "${{ github.sha }}" '.commit == $commit'
+          for attempt in $(seq 1 24); do
+            live=$(curl --fail --silent --show-error --retry 3 --retry-delay 3 \
+              -H 'Cache-Control: no-cache' \
+              "https://project-vinabike.web.app/release.json?commit=${{ github.sha }}&attempt=${attempt}" \
+              | jq -r '.commit // empty' || true)
+            if [ "${live}" = "${{ github.sha }}" ]; then
+              echo "release.json serves ${live} (attempt ${attempt})"
+              exit 0
+            fi
+            echo "attempt ${attempt}: live commit '${live:-none}' is not ${{ github.sha }}; waiting 10 s"
+            sleep 10
+          done
+          echo "release.json never served ${{ github.sha }} after 24 attempts" >&2
+          exit 1
 
       - name: Verify read-only production ERP invariants
         env:
