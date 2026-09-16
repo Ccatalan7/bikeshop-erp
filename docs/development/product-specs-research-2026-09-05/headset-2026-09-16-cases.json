@@ -1,0 +1,733 @@
+{
+  "schema_version": 1,
+  "catalogue_sha256": "ee1ae0daf37d1c928bcc2093aa30e9c1903a5979eaff5ea91c656f0738fd5bac",
+  "cases": [
+    {
+      "id": "hs_mixed_ends_preserve_two_shis_codes",
+      "template": "headset",
+      "values": {
+        "headset_part_scope": "Completa",
+        "headset_upper_shis": "ZS44/28.6",
+        "headset_lower_shis": "EC44/40",
+        "spec_evidence_source": "https://www.canecreek.com/products/fifty"
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [
+        "https://www.parktool.com/en-us/blog/repair-help/standardized-headset-identification-system",
+        "https://www.canecreek.com/products/fifty"
+      ]
+    },
+    {
+      "id": "hs_upper_only_cannot_claim_lower_code",
+      "template": "headset",
+      "values": {
+        "headset_part_scope": "Superior",
+        "headset_lower_shis": "EC44/40",
+        "spec_evidence_source": "https://example.invalid/synthetic"
+      },
+      "expected_blocking": [
+        {
+          "code": "field_applicability",
+          "field": "headset_lower_shis"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "hs_lower_only_cannot_claim_upper_bearing",
+      "template": "headset",
+      "values": {
+        "headset_part_scope": "Inferior",
+        "headset_upper_bearing_configuration": {
+          "schema_version": 2,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "position": "Superior",
+                "construction": "Cartucho",
+                "source_document": "Synthetic document"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [
+        {
+          "code": "field_applicability",
+          "field": "headset_upper_bearing_configuration"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "hs_upper_only_cannot_claim_lower_bearing",
+      "template": "headset",
+      "values": {
+        "headset_part_scope": "Superior",
+        "headset_lower_bearing_configuration": {
+          "schema_version": 2,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "position": "Inferior",
+                "construction": "Cartucho",
+                "source_document": "Synthetic document"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [
+        {
+          "code": "field_applicability",
+          "field": "headset_lower_bearing_configuration"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "hs_upper_table_rejects_lower_position",
+      "template": "headset",
+      "values": {
+        "headset_part_scope": "Superior",
+        "headset_upper_bearing_configuration": {
+          "schema_version": 2,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "position": "Inferior",
+                "construction": "Cartucho",
+                "source_document": "Synthetic document"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [
+        {
+          "code": "row_shape",
+          "field": "headset_upper_bearing_configuration"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "hs_lower_table_rejects_upper_position",
+      "template": "headset",
+      "values": {
+        "headset_part_scope": "Inferior",
+        "headset_lower_bearing_configuration": {
+          "schema_version": 2,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "position": "Superior",
+                "construction": "Cartucho",
+                "source_document": "Synthetic document"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [
+        {
+          "code": "row_shape",
+          "field": "headset_lower_bearing_configuration"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "hs_duplicate_upper_position_blocks",
+      "template": "headset",
+      "values": {
+        "headset_part_scope": "Superior",
+        "headset_upper_bearing_configuration": {
+          "schema_version": 2,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "position": "Superior",
+                "construction": "Cartucho",
+                "source_document": "Synthetic document"
+              },
+              "sources": []
+            },
+            {
+              "id": "r2",
+              "values": {
+                "position": "Superior",
+                "construction": "Cartucho",
+                "source_document": "Synthetic document"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [
+        {
+          "code": "row_shape",
+          "field": "headset_upper_bearing_configuration"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "hs_upper_body_inner_cannot_exceed_outer",
+      "template": "headset",
+      "values": {
+        "headset_part_scope": "Superior",
+        "headset_upper_bearing_configuration": {
+          "schema_version": 2,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "position": "Superior",
+                "construction": "Cartucho",
+                "source_document": "Synthetic document",
+                "bearing_inner_diameter_mm": "41",
+                "bearing_outer_diameter_mm": "30"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [
+        {
+          "code": "row_shape",
+          "field": "headset_upper_bearing_configuration"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "hs_lower_body_inner_cannot_exceed_outer",
+      "template": "headset",
+      "values": {
+        "headset_part_scope": "Inferior",
+        "headset_lower_bearing_configuration": {
+          "schema_version": 2,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "position": "Inferior",
+                "construction": "Cartucho",
+                "source_document": "Synthetic document",
+                "bearing_inner_diameter_mm": "52",
+                "bearing_outer_diameter_mm": "40"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [
+        {
+          "code": "row_shape",
+          "field": "headset_lower_bearing_configuration"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "hs_upper_body_requires_positive_wall_thickness",
+      "template": "headset",
+      "values": {
+        "headset_part_scope": "Superior",
+        "headset_upper_bearing_configuration": {
+          "schema_version": 2,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "position": "Superior",
+                "construction": "Cartucho",
+                "source_document": "Synthetic document",
+                "bearing_inner_diameter_mm": "41",
+                "bearing_outer_diameter_mm": "41.00"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [
+        {
+          "code": "row_shape",
+          "field": "headset_upper_bearing_configuration"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "hs_lower_body_requires_positive_wall_thickness",
+      "template": "headset",
+      "values": {
+        "headset_part_scope": "Inferior",
+        "headset_lower_bearing_configuration": {
+          "schema_version": 2,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "position": "Inferior",
+                "construction": "Cartucho",
+                "source_document": "Synthetic document",
+                "bearing_inner_diameter_mm": "40",
+                "bearing_outer_diameter_mm": "4e1"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [
+        {
+          "code": "row_shape",
+          "field": "headset_lower_bearing_configuration"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "hs_body_without_an_outer_measure_is_incomplete",
+      "template": "headset",
+      "values": {
+        "headset_part_scope": "Superior",
+        "headset_upper_bearing_configuration": {
+          "schema_version": 2,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "position": "Superior",
+                "construction": "Cartucho",
+                "source_document": "Synthetic document",
+                "bearing_inner_diameter_mm": "30"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "hs_loose_balls_do_not_have_cartridge_body",
+      "template": "headset",
+      "values": {
+        "headset_part_scope": "Superior",
+        "headset_upper_bearing_configuration": {
+          "schema_version": 2,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "position": "Superior",
+                "construction": "Bolas sueltas",
+                "source_document": "Synthetic document",
+                "bearing_outer_diameter_mm": "41"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [
+        {
+          "code": "row_field_applicability",
+          "field": "headset_upper_bearing_configuration"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "hs_loose_balls_record_diameter_and_count",
+      "template": "headset",
+      "values": {
+        "headset_part_scope": "Superior",
+        "headset_upper_bearing_configuration": {
+          "schema_version": 2,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "position": "Superior",
+                "construction": "Bolas sueltas",
+                "source_document": "Synthetic document",
+                "ball_count": "22",
+                "ball_diameter_mm": "4"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "hs_cartridge_does_not_have_a_loose_ball_count",
+      "template": "headset",
+      "values": {
+        "headset_part_scope": "Superior",
+        "headset_upper_bearing_configuration": {
+          "schema_version": 2,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "position": "Superior",
+                "construction": "Cartucho",
+                "source_document": "Synthetic document",
+                "ball_count": "22"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [
+        {
+          "code": "row_field_applicability",
+          "field": "headset_upper_bearing_configuration"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "hs_inner_and_outer_bevels_are_separate",
+      "template": "headset",
+      "values": {
+        "headset_part_scope": "Inferior",
+        "headset_lower_bearing_configuration": {
+          "schema_version": 2,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "position": "Inferior",
+                "construction": "Cartucho",
+                "source_document": "Synthetic document",
+                "seat_geometry": "Biseles interior y exterior",
+                "inner_contact_angle_deg": "36",
+                "outer_contact_angle_deg": "45"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [
+        "https://www.sheldonbrown.com/headsets.html"
+      ]
+    },
+    {
+      "id": "hs_no_bevel_does_not_accept_a_bevel_angle",
+      "template": "headset",
+      "values": {
+        "headset_part_scope": "Inferior",
+        "headset_lower_bearing_configuration": {
+          "schema_version": 2,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "position": "Inferior",
+                "construction": "Cartucho",
+                "source_document": "Synthetic document",
+                "seat_geometry": "Sin biseles de apoyo",
+                "inner_contact_angle_deg": "36"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [
+        {
+          "code": "row_field_applicability",
+          "field": "headset_lower_bearing_configuration"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "hs_incomplete_scope_is_pending",
+      "template": "headset",
+      "values": {
+        "headset_part_scope": "Desconocido / sin confirmar",
+        "headset_lower_bearing_configuration": {
+          "schema_version": 2,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "position": "Inferior",
+                "construction": "Cartucho",
+                "source_document": "Synthetic document"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": [],
+      "expected_issue_subset": [
+        {
+          "code": "prerequisite",
+          "field": "headset_lower_bearing_configuration",
+          "blocking": false
+        }
+      ],
+      "expected_sql_issue_subset": [
+        {
+          "code": "field_applicability",
+          "field": "headset_lower_bearing_configuration",
+          "blocking": false
+        }
+      ]
+    },
+    {
+      "id": "hs_crown_race_absent_disallows_its_reference",
+      "template": "headset",
+      "values": {
+        "crown_race_included": false,
+        "headset_supplied_crown_race_reference": "Synthetic crown race",
+        "spec_evidence_source": "https://example.invalid/synthetic",
+        "headset_part_scope": "Inferior"
+      },
+      "expected_blocking": [
+        {
+          "code": "field_applicability",
+          "field": "headset_supplied_crown_race_reference"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "hs_complete_does_not_force_a_separate_crown_race",
+      "template": "headset",
+      "values": {
+        "headset_part_scope": "Completa",
+        "crown_race_included": false
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "hs_lower_only_disallows_upper_stack",
+      "template": "headset",
+      "values": {
+        "headset_part_scope": "Inferior",
+        "headset_upper_stack_height_mm": "8",
+        "spec_evidence_source": "https://example.invalid/synthetic"
+      },
+      "expected_blocking": [
+        {
+          "code": "field_applicability",
+          "field": "headset_upper_stack_height_mm"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "hs_legacy_classification_does_not_overrule_the_ends",
+      "template": "headset",
+      "values": {
+        "headset_part_scope": "Completa",
+        "headset_standard": "Tapered",
+        "steerer_type": "1\"",
+        "bearing_system": "Mixto"
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "headset_an_upper_only_headset_cannot_include_a_crown_race",
+      "template": "headset",
+      "values": {
+        "headset_part_scope": "Superior",
+        "headset_upper_bearing_configuration": {
+          "schema_version": 2,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "position": "Superior",
+                "construction": "Bolas sueltas",
+                "source_document": "Synthetic document",
+                "ball_count": "22",
+                "ball_diameter_mm": "4"
+              },
+              "sources": []
+            }
+          ]
+        },
+        "crown_race_included": true
+      },
+      "expected_blocking": [
+        {
+          "code": "field_applicability",
+          "field": "crown_race_included"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_boundary",
+      "source_urls": [
+        "https://www.parktool.com/en-us/blog/repair-help/headset-standards",
+        "https://www.sheldonbrown.com/headsets.html"
+      ],
+      "expected_sql_blocking": [
+        {
+          "code": "field_applicability",
+          "field": "crown_race_included"
+        }
+      ],
+      "forbidden_issue_fields": []
+    },
+    {
+      "id": "headset_an_upper_only_headset_owes_no_crown_race_answer",
+      "template": "headset",
+      "values": {
+        "headset_part_scope": "Superior",
+        "headset_upper_bearing_configuration": {
+          "schema_version": 2,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "position": "Superior",
+                "construction": "Bolas sueltas",
+                "source_document": "Synthetic document",
+                "ball_count": "22",
+                "ball_diameter_mm": "4"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_boundary",
+      "source_urls": [],
+      "expected_sql_blocking": [],
+      "forbidden_issue_fields": [
+        "crown_race_included",
+        "headset_supplied_crown_race_reference"
+      ]
+    },
+    {
+      "id": "headset_a_complete_headset_may_include_a_crown_race_with_its_reference",
+      "template": "headset",
+      "values": {
+        "headset_part_scope": "Completa",
+        "crown_race_included": true,
+        "headset_supplied_crown_race_reference": "Synthetic crown race ref",
+        "spec_evidence_source": "Ficha sintética"
+      },
+      "expected_blocking": [],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_boundary",
+      "source_urls": [],
+      "expected_sql_blocking": [],
+      "forbidden_issue_fields": [
+        "crown_race_included",
+        "headset_supplied_crown_race_reference"
+      ]
+    }
+  ],
+  "pending_cases": [
+    {
+      "id": "headset_shis_source_and_model_scope",
+      "required_result": "Model-scoped source required before a fitment verdict.",
+      "reason": "SHIS names are codes, not measured bore/race dimensions. Do not infer from a product-title number."
+    }
+  ]
+}

@@ -1,5 +1,7 @@
 # Dirección original: candidato por extremo, sin aplicar
 
+**Publicado el 2026-09-16** como `20260916120000_headset_successor.sql` sobre 16 productos, con la compuerta de pista de corona adjudicada; ver [headset-successor-adjudication-2026-09-16.md](headset-successor-adjudication-2026-09-16.md).
+
 Una plantilla, 13 definiciones y 13 usos. Pasan 23 pruebas Dart y el avance,
 repetición exacta y 22 casos SQL locales bajo la extensión de orden estricto,
 con rollback. Se conservan sin cambios
