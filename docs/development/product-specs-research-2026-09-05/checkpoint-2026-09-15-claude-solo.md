@@ -239,3 +239,13 @@ ya los contiene). Worktrees inventariados: tres de Codex, todos detached.
   claves): [workshop-compatibility-wheel-successors-2026-09-16.md](workshop-compatibility-wheel-successors-2026-09-16.md).
   La búsqueda en portales de proveedor recibió los mismos sucesores en su mapa de medidas (122
   pruebas verdes, 1 nueva); la ficha pública de la tienda no necesita cambio.
+- **Rótulos en el idioma de las tiendas chilenas.** El dueño vio «Posición de las mazas de este
+  envase» y secciones en inglés en vinabike.cl. Con referencias de Bike Factory, Viaja en Bici,
+  Faucon, Trek Chile, Imperio Bikers, Rideshop y Oxford Store se relabelaron 126 definiciones y 20
+  opciones (`20260916180000`, `181000`), se sincronizó la segunda copia de las opciones que el
+  validador usa (`182000`, sin ella la tienda ocultaba las fichas con opciones renombradas) y las
+  secciones `primary/measurement/contents/declaration` se muestran como Características, Medidas,
+  Qué incluye y Según el fabricante. Las lecturas de nombre pasaron a 896 hechos en 609 productos
+  (13 nuevas gracias a los rótulos: Resina, Tiro arriba/abajo, Clave):
+  [customer-facing-labels-2026-09-16.md](customer-facing-labels-2026-09-16.md). Llenado técnico
+  persistido: 607 productos, 897 hechos, nada confirmado.

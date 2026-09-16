@@ -1488,8 +1488,8 @@
   "confirmed_facts_written": 0,
   "record": "fill-001-cl573r-record.md"
  },
- "technical_fill_persisted_products": 601,
- "technical_fill_persisted_facts": 884,
+ "technical_fill_persisted_products": 607,
+ "technical_fill_persisted_facts": 897,
  "name_reading_fill": {
   "batch": "fill-002-name-readings",
   "date": "2026-09-16",
@@ -1523,7 +1523,26 @@
    "fields": 7,
    "name_reading_facts_after": 883,
    "products_with_name_reading_after": 603
+  },
+  "third_pass": {
+   "batch": "fill-002c-name-readings",
+   "calls": 13,
+   "recorded": 13,
+   "rejected": 0,
+   "enabled_by": "customer-facing labels 20260916180000/181000 + allowed_values sync 20260916182000",
+   "name_reading_facts_after": 896,
+   "products_with_name_reading_after": 609
   }
  },
- "technical_fill_note": "601 productos / 884 hechos = 1 producto con 6 hechos research (fill-001) + 600 productos con 878 lecturas de nombre (fill-002 y fill-002b). Todo sin confirmar; el contador no distingue calidad de procedencia."
+ "technical_fill_note": "607 productos / 897 hechos = 1 producto con 6 hechos research (fill-001) + 606 productos con 891 lecturas de nombre (fill-002, 002b, 002c). Todo sin confirmar; el contador no distingue calidad de procedencia.",
+ "customer_facing_labels": {
+  "migrations": [
+   "20260916180000",
+   "20260916181000",
+   "20260916182000"
+  ],
+  "definition_labels": 126,
+  "option_labels": 20,
+  "record": "customer-facing-labels-2026-09-16.md"
+ }
 }

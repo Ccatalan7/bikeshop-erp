@@ -108,3 +108,18 @@ el bloque `second_pass` del mismo JSON.
 **Total del día en lecturas de nombre: 878 hechos en 600 productos.** Con la aplicación de
 investigación de fill-001, el llenado técnico persistido queda en 601 productos y 884 hechos,
 todos sin confirmar.
+
+## Tercera pasada (fill-002c): lo que los rótulos nuevos hicieron legible
+
+Tras la migración de rótulos ([customer-facing-labels-2026-09-16.md](customer-facing-labels-2026-09-16.md)),
+13 lecturas más, todas `recorded`: pastillas «Resina» → Compuesto: Orgánico (resina) (2),
+cambiadores «T/ARRIBA», «T/ABAJO», «TIRO ARRIBA», «DOBLE TIRON» → Tiro del cable (5) y candados
+OnGuard «Clave» → Cierre: Clave (combinación) (6). El primer intento fue rechazado entero por la
+guardia («La respuesta no pertenece a las opciones del campo»): el validador compara contra
+`spec_definitions.allowed_values`, una segunda copia de las opciones que la migración de rótulos no
+había tocado; `20260916182000_allowed_values_label_sync.sql` la sincronizó y las fichas con
+opciones renombradas volvieron a mostrarse en la tienda («Larga (SGS)», «Francesa (Presta)»
+leídas como anónimo después).
+
+Lectura posterior: hechos `name_reading` 896, productos con lectura 609, recibos 896.
+**Total del día en lecturas de nombre: 891 hechos en 606 productos.**

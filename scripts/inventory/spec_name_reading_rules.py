@@ -283,7 +283,7 @@ RULES = {
         # applicable there and the coherence guard refuses the pair.
         'spoke_hole_count': unless(SPOKE_HOLES, PAIR_WORDS + r'|^\s*MAZAS\b'),
         'hub_package_position': POSITION_OR_SET,
-        'bearing_system': words(('Rodamientos sellados', r'\bSELLAD[AO]S?\b')),
+        'bearing_system': unless(words(('Sellados', r'\bSELLAD[AO]S?\b')), PAIR_WORDS + r'|^\s*MAZAS\b'),
         'hub_old_mm': either(
             number(NB + r'(100|110|130|135|141|142|148|150|157)\s?[xX]\s?(?:9|10|12|15|20)\s?MM\b',
                    allowed={100, 110, 130, 135, 141, 142, 148, 150, 157}),
@@ -296,7 +296,7 @@ RULES = {
             number(NB + r'(?:100|110|130|135|141|142|148|150|157)\s?[xX]\s?(9|10|12|15|20)\s?MM\b'),
             number(NB + r'(9|10|12|15|20)\s?MM\s?[xX]\s?(?:100|110|130|135|141|142|148|150|157)\s?MM\b'),
             number(r'\bEJE\s+(12|15|20)\s?MM\b')),
-        'hub_drive_receiver_kind': words(('Núcleo estriado de cassette', r'\bN[UÚ]CLEO\b')),
+        'hub_drive_receiver_kind': words(('Núcleo de cassette', r'\bN[UÚ]CLEO\b')),
     },
     'rim': {
         'spoke_hole_count': SPOKE_HOLES,
@@ -305,8 +305,8 @@ RULES = {
         'bead_seat_diameter_mm': number(NB + r'(622|559|584|507|406|451|540|590|630|635|305|355|349)\s?[xX]\s?\d{2}\s?MM\b'),
     },
     'rear_derailleur': {
-        'derailleur_cage_length': words(('SGS / larga', r'\bSGS\b|\bLARGA\b'), ('GS / media', r'\bGS\b'),
-                                        ('SS / corta', r'\bSS\b')),
+        'derailleur_cage_length': words(('Larga (SGS)', r'\bSGS\b|\bLARGA\b'), ('Media (GS)', r'\bGS\b'),
+                                        ('Corta (SS)', r'\bSS\b')),
     },
     'shifter': {
         'shifter_position': either(
@@ -332,7 +332,7 @@ RULES = {
         'crank_arm_length_mm': either(
             number(NB + r'(160|165|170|172\.5|175)\s?MM\b', cast=float, allowed={160, 165, 170, 172.5, 175}),
             number(r'\bBIELA\s+(165|170|175)\b')),
-        'crankset_construction': words(('Una pieza (americana / Ashtabula)', r'\bAMERICANA\b')),
+        'crankset_construction': words(('Una pieza (americana)', r'\bAMERICANA\b')),
     },
     'chainring': {
         'teeth_count': unless(number(NB + r'(?<![-/])([2-5]\d)\s?(?:T\b|DTS\b|DIENTES\b)', allowed=set(range(20, 61))),
@@ -342,7 +342,11 @@ RULES = {
         'narrow_wide': flag(r'\bNARROW\b'),
     },
     'front_derailleur': {
-        'front_derailleur_cable_pull': words(('Dual pull', r'\bDUAL\b')),
+        # `t/abajo/arriba` names both pulls: it is a dual-pull unit, not a down pull.
+        'front_derailleur_cable_pull': words(
+            ('Doble tiro (dual pull)', r'\bDUAL\b|\bDOBLE\s+TIR[OÓ]N?\b|\bABAJO\s*/\s*ARRIBA\b|\bARRIBA\s*/\s*ABAJO\b'),
+            ('Tiro arriba (top pull)', r'(?<![/A-Z])T/?\s?ARRIBA\b(?!\s*/\s*ABAJO)|\bTIRO\s+ARRIBA\b'),
+            ('Tiro abajo (down pull)', r'(?<![/A-Z])T/?\s?ABAJO\b(?!\s*/\s*ARRIBA)|\bTIRO\s+ABAJO\b')),
         'front_derailleur_mount_type': words(('Abrazadera', r'\bABRAZADERA\b')),
     },
     'rotor': {
@@ -368,12 +372,12 @@ RULES = {
         'compound_type': words(('Metálico', r'(?<!SEMI )(?<!SEMI-)\bMET[AÁ]LIC[AO]S?\b'),
                                ('Semi-Metálico', r'\bSEMI[\s-]?MET[AÁ]L(?:IC[AO]S?)?\b|\bSEMIMET[AÁ]LIC[AO]S?\b'),
                                ('Cerámico', r'\bCER[AÁ]MIC[AO]S?\b'),
-                               ('Orgánico', r'\bORG[AÁ]N(?:IC[AO]S?)?\b')),
+                               ('Orgánico (resina)', r'\bORG[AÁ]N(?:IC[AO]S?)?\b|\bRESINA\b')),
         'rim_pad_length_mm': unless(number(NB + r'(50|55|60|65|70|72)\s?MM\b'), r'\bDISCO\b|\bPASTILLA'),
     },
     'tube': {
-        'valve_standard': words(('Schrader (americana / auto)', r'\bSCHRADER\b|\bAMERICANA\b|\bAUTO\b'),
-                                ('Presta (francesa)', r'\bPRESTA\b|\bFRANCESA\b')),
+        'valve_standard': words(('Auto (Schrader / americana)', r'\bSCHRADER\b|\bAMERICANA\b|\bAUTO\b'),
+                                ('Francesa (Presta)', r'\bPRESTA\b|\bFRANCESA\b')),
         'valve_length_mm_value': number(NB + r'(33|35|40|42|48|52|60|80)\s?MM\b', allowed={33, 35, 40, 42, 48, 52, 60, 80}),
     },
     'spoke': {
@@ -405,7 +409,7 @@ RULES = {
     'lock': {
         'lock_kind': words(('U-lock', r'\bU-LOCK\b'), ('Cadena', r'\bCADENA\b'), ('Cable / espiral', r'\bCABLE\b|\bESPIRAL\b'),
                            ('Plegable', r'\bPLEGABLE\b')),
-        'locking_mechanism': words(('Llave', r'\bLLAVES?\b'), ('Combinación', r'\bCOMBINACI[OÓ]N\b')),
+        'locking_mechanism': words(('Llave', r'\bLLAVES?\b'), ('Clave (combinación)', r'\bCOMBINACI[OÓ]N\b|\bCLAVE\b')),
     },
     'pump': {
         'pump_kind': words(('De pie', r'\bPIE\b'), ('De mano / mini', r'\bMANO\b|\bMINI\b'), ('Inflador CO2', r'\bINFLADOR\b|\bCO2\b')),
@@ -428,7 +432,7 @@ RULES = {
     'handlebar': {
         'bar_width_mm': number(NB + r'(5[8-9]\d|[67]\d\d|800)\s?MM\b'),
         'bar_clamp_diameter_mm': number(NB + r'(25\.4|31\.8)(?:\s?MM)?\b', cast=float),
-        'bar_style': words(('Riser', r'\bRISER\b'), ('Recto', r'\bRECTO\b'), ('Ruta (drop)', r'\bRUTA\b|\bDROP\b')),
+        'bar_style': words(('Riser', r'\bRISER\b'), ('Recto (plano)', r'\bRECTO\b|\bPLANO\b'), ('Ruta (drop)', r'\bRUTA\b|\bDROP\b')),
         'material': words(MATERIAL_ALU, MATERIAL_ACERO, MATERIAL_CARBONO),
     },
     'saddle': {
