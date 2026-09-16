@@ -310,8 +310,8 @@ RULES = {
     },
     'shifter': {
         'shifter_position': either(
-            words(('Derecho / trasero', r'\bDERECH[OA]\b|\bTRASER[OA]\b|\bTRAS\b'),
-                  ('Izquierdo / delantero', r'\bIZQUIERD[OA]\b|\bDELANTER[OA]\b')),
+            words(('Derecho (trasero)', r'\bDERECH[OA]\b|\bTRASER[OA]\b|\bTRAS\b'),
+                  ('Izquierdo (delantero)', r'\bIZQUIERD[OA]\b|\bDELANTER[OA]\b')),
             unless(words(('Par', r'\bPAR\b')), SIDE_WORDS)),
         'shifter_indexed_positions': unless(
             unless(number(SPEEDS, allowed=set(range(3, 14))), r'\d\s?[xX]\s?\d|\d[vV]?\s?/\s?\d{1,2}[vV]'),

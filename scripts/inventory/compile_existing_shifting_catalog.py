@@ -44,7 +44,7 @@ STYLES = ['Gatillo (trigger)', 'Giro (twist)', 'Palanca de pulgar',
           'Palanca en tubo o soporte del cuadro',
           'Integrado con la maneta de freno',
           'Otro estilo documentado']
-LEFT, RIGHT = 'Izquierdo / delantero', 'Derecho / trasero'
+LEFT, RIGHT = 'Izquierdo (delantero)', 'Derecho (trasero)'  # renamed 2026-09-16 (20260916230000)
 PAIR_TOKEN, UNIVERSAL = 'Par', 'Universal'
 
 

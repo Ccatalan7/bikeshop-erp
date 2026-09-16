@@ -48,9 +48,10 @@ No hay revisor distinto disponible: queda dicho, no disimulado.
 
 ## Lo que sigue abierto
 
-- **Nadie puede revocar una aplicación** salvo por SQL privilegiado directo (`revoked_at`); no
-  hay herramienta ni recibo de revocación. Antes del primer lote conviene un SQL guardado con
-  preimagen y read-back, como el de registro.
+- ~~**Nadie puede revocar una aplicación** salvo por SQL privilegiado directo (`revoked_at`); no
+  hay herramienta ni recibo de revocación.~~ **Cerrado el 2026-09-16:**
+  `revoke_product_spec_research_application_v1` y su recibo
+  ([research-revocation-2026-09-16.md](research-revocation-2026-09-16.md)).
 - **Nadie lee los recibos salvo el actor** por RPC. Un lector de auditoría para el dueño sigue
   pendiente (registro del aplicador).
 - **La readiness no existe** y su creación es una decisión: apunta por sha256 a una auditoría

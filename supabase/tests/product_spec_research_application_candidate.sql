@@ -128,6 +128,7 @@ select is(public.get_product_spec_research_snapshot_v1('f1112300-0000-4000-8000-
 select is(public.get_product_spec_research_application_status_v1(
  (select (value#>>'{}')::uuid from application_fixture where label='application'))->'applied',
  'true'::jsonb,'status exposes receipt availability for recovery without a second write');
+
 reset role;
 select is((select count(*) from public.product_spec_research_receipts),1::bigint,'single immutable application receipt');
 select is((select before_snapshot from public.product_spec_research_receipts),
@@ -213,6 +214,39 @@ select is(has_function_privilege('anon','public.get_product_spec_research_applic
 set local role authenticated;
 select throws_ok($$select public.get_product_spec_research_application_status_v1('f1112300-0000-4000-8000-000000000099')$$,
  '42501',null,'absent or foreign application status does not disclose its registration');
+reset role;
+
+set local role authenticated;
+-- Revocation (20260916240000): the actor undoes its own applied command with a
+-- reason; changed facts go back to their archived preimage, identity too.
+select throws_ok($$select public.revoke_product_spec_research_application_v1((select (value#>>'{}')::uuid from application_fixture where label='application'),'no')$$,
+ '22023',null,'a revocation needs a reason');
+select throws_ok($$select public.revoke_product_spec_research_application_v1('f1112300-0000-4000-8000-000000000099','Motivo suficiente')$$,
+ '42501',null,'client cannot revoke an application it does not own');
+insert into application_fixture select 'revocation',public.revoke_product_spec_research_application_v1(
+ (select (value#>>'{}')::uuid from application_fixture where label='application'),'Prueba: la fuente resultó equivocada');
+insert into application_fixture select 'reverted',public.get_product_spec_research_snapshot_v1('f1112300-0000-4000-8000-000000000020');
+select is((select value->'applied' from application_fixture where label='revocation'),'true'::jsonb,'revocation reports an applied command');
+select is((select jsonb_array_length(value->'restored_fact_ids') from application_fixture where label='revocation'),2,'both replaced facts are restored');
+select is((select jsonb_array_length(value->'deleted_fact_ids') from application_fixture where label='revocation'),0,'nothing to delete: both facts existed before');
+select is((select value->'identity_restored' from application_fixture where label='revocation'),'["gtin","model"]'::jsonb,'patched identity fields go back');
+select is((select value#>>'{editor,values,research_option}' from application_fixture where label='reverted'),'01','option returns to its archived value');
+select is((select jsonb_array_length(value#>'{editor,values,research_rows,rows}') from application_fixture where label='reverted'),1,'the appended row is gone');
+select is((select value#>>'{editor,values,research_rows,rows,0,values,length}' from application_fixture where label='reverted'),'0.100000000000000001','the original row keeps its exact decimal');
+select is((select value#>>'{product,model}' from application_fixture where label='reverted'),'Read','model returns to its archived value');
+select is((select value#>'{product,gtin}' from application_fixture where label='reverted'),'null'::jsonb,'gtin returns to null');
+select is((select (o#>>'{fact,source}') from application_fixture f, jsonb_array_elements(f.value->'observations') o where f.label='reverted' and o#>>'{definition,key}'='research_option'),
+ 'name_reading','the archived provenance comes back with the value');
+select is((select jsonb_array_length(o->'readings') from application_fixture f, jsonb_array_elements(f.value->'observations') o where f.label='reverted' and o#>>'{definition,key}'='research_option'),
+ 1,'the archived name reading is reattached');
+select is(public.revoke_product_spec_research_application_v1((select (value#>>'{}')::uuid from application_fixture where label='application'),'Otra vez')->'replayed',
+ 'true'::jsonb,'a second revocation returns the receipt');
+select is(public.get_product_spec_research_snapshot_v1('f1112300-0000-4000-8000-000000000020'),
+ (select value from application_fixture where label='reverted'),'the replay has zero further effects');
+select is(public.get_product_spec_research_revocation_v1((select (value#>>'{}')::uuid from application_fixture where label='application'))->>'reason',
+ 'Prueba: la fuente resultó equivocada','the actor reads its revocation receipt back');
+select is(public.apply_product_spec_research_v1((select (value#>>'{}')::uuid from application_fixture where label='application'))->'replayed',
+ 'true'::jsonb,'the applier still answers with the original receipt, never re-applies');
 reset role;
 select * from finish();
 rollback;

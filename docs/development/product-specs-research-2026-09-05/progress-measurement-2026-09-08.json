@@ -1683,5 +1683,33 @@
    },
    "pgtap_total": 67
   }
+ },
+ "shifter_side_labels_2026_09_16": {
+  "migration": "20260916230000",
+  "options": {
+   "Izquierdo / delantero": "Izquierdo (delantero)",
+   "Derecho / trasero": "Derecho (trasero)"
+  },
+  "release_needed": false,
+  "reason": "Dart canonicalises by words (izquierdo/derecho/delantero/trasero); name-reading rules updated"
+ },
+ "research_revocation_2026_09_16": {
+  "migration": "20260916240000",
+  "rpc": "revoke_product_spec_research_application_v1",
+  "reader": "get_product_spec_research_revocation_v1",
+  "table": "product_spec_research_revocations",
+  "pgtap_total": 59,
+  "helper": "scripts/inventory/revoke_product_spec_research.py",
+  "record": "research-revocation-2026-09-16.md"
+ },
+ "erp_release_2026_09_16": {
+  "commit": "4ac87117fb10e83cc610c375378a111f95cea1fa",
+  "integrity_run": "35162024511",
+  "notes_base": "dc1e609350847ede26d16b638f721d9346dacb55",
+  "runs": {
+   "macos": "35163749180",
+   "windows": "35163751540",
+   "android": "35163753608"
+  }
  }
 }

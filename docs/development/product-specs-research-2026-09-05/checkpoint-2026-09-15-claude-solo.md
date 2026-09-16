@@ -289,3 +289,17 @@ ya los contiene). Worktrees inventariados: tres de Codex, todos detached.
   `bead_seat_diameter_mm` de «Aro y ancho de neumático» sobre el campo global «Aro (diámetro
   ISO)»: en «Cámaras» el cliente filtra por aro (21 de 23 cámaras) igual que en neumáticos. 2
   prueba pgTAP más (67).
+- **«Lado» del shifter en lenguaje de tienda (`20260916230000`).** «Izquierdo (delantero)» y
+  «Derecho (trasero)» en fila de opción, `allowed_values` y contrato de «Shifter / Mando Cambio»
+  en una transacción verificada; sin release, porque el cliente Dart canonicaliza por palabras y
+  no por texto exacto (corrige la nota del 2026-09-16). Las reglas de lectura de nombre apuntan a
+  los textos nuevos.
+- **Revocación de una aplicación de investigación (`20260916240000`).**
+  `revoke_product_spec_research_application_v1` devuelve cada hecho a su preimagen archivada (o
+  lo borra) sólo si sigue siendo lo que la aplicación escribió; conserva lo que un mecánico tocó;
+  identidad de vuelta; recibo en `product_spec_research_revocations` y lector para el actor.
+  Escenario pgTAP al cierre del test del aplicador (59 verdes):
+  [research-revocation-2026-09-16.md](research-revocation-2026-09-16.md).
+- **Publicación del ERP a los compañeros.** macOS, Windows y Android despachados desde el commit
+  4ac87117 (gate 35162024511) con `publish_release=true`; las reglas de compatibilidad del taller
+  con las claves sucesoras llegan con esta versión.
