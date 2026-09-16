@@ -2642,10 +2642,11 @@ const Map<String, PartSpecKind> _identityKindByField = <String, PartSpecKind>{
   'rotor_mount_type': PartSpecKind.brakeMount,
   'pack_count': PartSpecKind.packCount,
   'pack_quantity': PartSpecKind.packCount,
+  // `rim_material`, `rotor_material` and `body_material` stay out on purpose:
+  // routed as a measure kind, the identity extractor answered for them and
+  // the literal ficha-value reading («Aluminio», «Acero Inoxidable») no
+  // longer ran (requirement-discovery tests, 2026-09-16).
   'material': PartSpecKind.constructionMaterial,
-  'rim_material': PartSpecKind.constructionMaterial,
-  'body_material': PartSpecKind.constructionMaterial,
-  'rotor_material': PartSpecKind.constructionMaterial,
 };
 
 bool _sameOriginUrl(String candidate, String reference) {
