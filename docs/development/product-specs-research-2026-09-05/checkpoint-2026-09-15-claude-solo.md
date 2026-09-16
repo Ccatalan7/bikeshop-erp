@@ -264,3 +264,10 @@ ya los contiene). Worktrees inventariados: tres de Codex, todos detached.
   bici no registra dirección ni tubo. Los hechos `legacy` no migran solos (34 pedalieres con caja
   vieja y 0 con montajes declarados):
   [workshop-compatibility-drivetrain-bb-brake-successors-2026-09-16.md](workshop-compatibility-drivetrain-bb-brake-successors-2026-09-16.md).
+- **Aplicador de observaciones retiradas de rueda (`20260916200000`).** 406 hechos en 263
+  productos: rodado → diámetro ISO (tabla de Sheldon; ambiguos por la notación de ancho del
+  nombre), pulgadas → mm, rodado + anchos → fila de ajuste de la cámara, válvula y calibre
+  retirados → sucesor; misma fuente, sin confirmar. Fuera: rotores (prohibición de frenos) y
+  pedalieres (filas con URL obligatoria). El taller compara neumáticos y cámaras por ISO y la
+  tienda muestra «29" / 700c (ISO 622)»:
+  [legacy-projections-2026-09-16.md](legacy-projections-2026-09-16.md).

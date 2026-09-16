@@ -1404,6 +1404,81 @@ void main() {
       expect(same.detail, contains('válvula Schrader'));
     });
 
+    test('a tyre with the bicycle ISO diameter matches, another refutes',
+        () async {
+      final matches = await _assessProduct(
+        technicalFamily: 'tire',
+        bikeTechnicalValues: {},
+        productSpecs: {
+          'bead_seat_diameter_mm': 622,
+          'tire_width_mm': 57.1,
+          'tire_bead_type': 'Alambre',
+        },
+      );
+      expect(matches.level, ProductCompatibilityLevel.caution);
+      expect(matches.detail, contains('coincide en aro 29" / 700c'));
+      expect(matches.detail, contains('ancho 57.1 mm'));
+      expect(matches.detail, contains('talón alambre'));
+
+      final refuted = await _assessProduct(
+        technicalFamily: 'tire',
+        bikeTechnicalValues: {},
+        productSpecs: {'bead_seat_diameter_mm': 584},
+      );
+      expect(refuted.level, ProductCompatibilityLevel.incompatible);
+      expect(refuted.detail, contains('27.5" / 650b'));
+      expect(refuted.detail, contains('29"'));
+    });
+
+    test('tube fit rows carry the diameter and the width range', () async {
+      final rows = _rows([
+        {
+          'bead_seat_diameter_mm': 622,
+          'width_min_mm': 49.5,
+          'width_max_mm': 55.9,
+        },
+      ]);
+      final matches = await _assessProduct(
+        technicalFamily: 'tube',
+        bikeTechnicalValues: {'valveType': 'Presta'},
+        productSpecs: {
+          'tube_fit_rows': rows,
+          'valve_standard': 'Francesa (Presta)',
+        },
+      );
+      expect(matches.level, ProductCompatibilityLevel.caution);
+      expect(matches.detail, contains('aro 29" / 700c para neumático 49.5-55.9 mm'));
+      expect(matches.detail, contains('válvula Presta'));
+
+      final other = await _assessProduct(
+        technicalFamily: 'tube',
+        bikeTechnicalValues: {},
+        productSpecs: {
+          'tube_fit_rows': _rows([
+            {
+              'bead_seat_diameter_mm': 559,
+              'width_min_mm': 49.5,
+              'width_max_mm': 54,
+            },
+          ]),
+        },
+      );
+      expect(other.level, ProductCompatibilityLevel.caution);
+      expect(other.detail, contains('Cámara para aro 26" y bici 29"'));
+    });
+
+    test('a rim strip ISO diameter is read like the retired wheel size',
+        () async {
+      final assessment = await _assessProduct(
+        technicalFamily: 'rim_strip',
+        bikeTechnicalValues: {},
+        productSpecs: {'bead_seat_diameter_mm': 622},
+      );
+      expect(assessment.level, ProductCompatibilityLevel.caution);
+      expect(assessment.detail, contains('aro 29" / 700c'));
+      expect(assessment.detail, isNot(contains('y bici')));
+    });
+
     test('tubeless valve standard is read like the retired valve type',
         () async {
       final assessment = await _assessProduct(
@@ -2213,9 +2288,23 @@ void main() {
   });
 }
 
-/// A row-shaped fact as the reader hands it: the stored JSON text.
-String _rows(List<Map<String, Object?>> rows) =>
-    jsonEncode({'schema_version': 1, 'rows': rows});
+/// A row-shaped fact as the reader hands it: the stored JSON text, each row
+/// as `{id, values, sources}` with numeric cells as text, which is what the
+/// row validator persists.
+String _rows(List<Map<String, Object?>> rows) => jsonEncode({
+      'schema_version': 1,
+      'rows': [
+        for (var i = 0; i < rows.length; i++)
+          {
+            'id': 'row-$i',
+            'values': {
+              for (final cell in rows[i].entries)
+                cell.key: cell.value is num ? '${cell.value}' : cell.value,
+            },
+            'sources': const <String>[],
+          },
+      ],
+    });
 
 Future<ProductCompatibilityAssessment> _assessProduct({
   required String technicalFamily,

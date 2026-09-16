@@ -1,0 +1,7113 @@
+{
+ "version": "20260916200000",
+ "name": "legacy_projections_wheels_cogs",
+ "input": "/private/tmp/claude-502/-Users-Claudio-Dev-bikeshop-erp/698d4a4c-c95c-41fa-a3a1-9d4c76e19df8/scratchpad/projection-input.csv",
+ "products_in_scope": 457,
+ "products_touched": 263,
+ "projections": 406,
+ "skipped": 14,
+ "by_pair": [
+  {
+   "template": "hub",
+   "legacy_key": "freehub_type",
+   "successor": "hub_drive_receiver_kind",
+   "facts": 1
+  },
+  {
+   "template": "hub",
+   "legacy_key": "hub_spacing_mm",
+   "successor": "hub_old_mm",
+   "facts": 1
+  },
+  {
+   "template": "rim",
+   "legacy_key": "wheel_size",
+   "successor": "bead_seat_diameter_mm",
+   "facts": 4
+  },
+  {
+   "template": "spoke",
+   "legacy_key": "spoke_gauge",
+   "successor": "spoke_gauge_designation",
+   "facts": 15
+  },
+  {
+   "template": "tire",
+   "legacy_key": "tire_width_in",
+   "successor": "tire_width_mm",
+   "facts": 86
+  },
+  {
+   "template": "tire",
+   "legacy_key": "wheel_size",
+   "successor": "bead_seat_diameter_mm",
+   "facts": 110
+  },
+  {
+   "template": "tube",
+   "legacy_key": "valve_length_mm",
+   "successor": "valve_length_mm_value",
+   "facts": 2
+  },
+  {
+   "template": "tube",
+   "legacy_key": "valve_type",
+   "successor": "valve_standard",
+   "facts": 58
+  },
+  {
+   "template": "tube",
+   "legacy_key": "wheel_size",
+   "successor": "tube_fit_rows",
+   "facts": 123
+  },
+  {
+   "template": "tubeless_valve",
+   "legacy_key": "valve_length_mm",
+   "successor": "valve_length_mm_value",
+   "facts": 3
+  },
+  {
+   "template": "tubeless_valve",
+   "legacy_key": "valve_type",
+   "successor": "valve_standard",
+   "facts": 3
+  }
+ ],
+ "rules": {
+  "label_to_number": 6,
+  "option": 62,
+  "bsd": 114,
+  "copy_text": 15,
+  "inch_to_mm": 86,
+  "tube_fit_row": 123
+ },
+ "skipped_reasons": {
+  "26\" without a width notation in the name": 3,
+  "24\" fractional width is ambiguous (540/520)": 4,
+  "24\" without a width notation in the name": 1,
+  "no usable width range": 5,
+  "label 'Otra' has no ISO mapping": 1
+ },
+ "entries": [
+  {
+   "product_id": "cc828965-0efc-4d84-b589-99ae863b3faa",
+   "sku": "AE0313",
+   "name": "Maza Novatec 32H trasera 10x135mm QR MicroSpline",
+   "template": "hub",
+   "successor": "hub_old_mm",
+   "kind": "number",
+   "value": 135.0,
+   "legacy_key": "hub_spacing_mm",
+   "legacy_value": "135",
+   "source": "import",
+   "rule": "label_to_number"
+  },
+  {
+   "product_id": "cc828965-0efc-4d84-b589-99ae863b3faa",
+   "sku": "AE0313",
+   "name": "Maza Novatec 32H trasera 10x135mm QR MicroSpline",
+   "template": "hub",
+   "successor": "hub_drive_receiver_kind",
+   "kind": "option",
+   "value": "Núcleo de cassette",
+   "legacy_key": "freehub_type",
+   "legacy_value": "Micro Spline",
+   "source": "import",
+   "rule": "option"
+  },
+  {
+   "product_id": "4109cd4b-c958-4bd3-9d60-4d14f47a8c6c",
+   "sku": "OS002",
+   "name": "Alexrims Llanta MD30 SSE 27.5\" 28h",
+   "template": "rim",
+   "successor": "bead_seat_diameter_mm",
+   "kind": "number",
+   "value": 584,
+   "legacy_key": "wheel_size",
+   "legacy_value": "27.5\"",
+   "source": "import",
+   "rule": "bsd: 27.5\" is one ISO diameter"
+  },
+  {
+   "product_id": "e12ec06b-b74b-4867-9119-916d1f29f83d",
+   "sku": "17164",
+   "name": "Llanta Aluminio FOSS Pared Simple 26x1,75x36H Black.",
+   "template": "rim",
+   "successor": "bead_seat_diameter_mm",
+   "kind": "number",
+   "value": 559,
+   "legacy_key": "wheel_size",
+   "legacy_value": "26\"",
+   "source": "import",
+   "rule": "bsd: 26\" with a decimal width"
+  },
+  {
+   "product_id": "df1bbb6b-35c7-439c-aaeb-0df23114c279",
+   "sku": "L471",
+   "name": "Llanta Weinmann U28 27.5\" Ojetillos 32H Schrader Negro",
+   "template": "rim",
+   "successor": "bead_seat_diameter_mm",
+   "kind": "number",
+   "value": 584,
+   "legacy_key": "wheel_size",
+   "legacy_value": "27.5\"",
+   "source": "import",
+   "rule": "bsd: 27.5\" is one ISO diameter"
+  },
+  {
+   "product_id": "cd71aafd-bbd3-4aa4-8914-fa7271b2b776",
+   "sku": "L893",
+   "name": "Llanta Weinmann U32 TL 29\" Ojetillos 32H Presta Negro",
+   "template": "rim",
+   "successor": "bead_seat_diameter_mm",
+   "kind": "number",
+   "value": 622,
+   "legacy_key": "wheel_size",
+   "legacy_value": "29\"",
+   "source": "import",
+   "rule": "bsd: 29\" is one ISO diameter"
+  },
+  {
+   "product_id": "d1645285-9149-49e7-8c21-839654410cd8",
+   "sku": "213061",
+   "name": "GRUESA DE RAYOS NEGROS 265X14G",
+   "template": "spoke",
+   "successor": "spoke_gauge_designation",
+   "kind": "text",
+   "value": "14G",
+   "legacy_key": "spoke_gauge",
+   "legacy_value": "14G",
+   "source": "import",
+   "rule": "copy_text"
+  },
+  {
+   "product_id": "87b19076-1626-478c-8941-32823cfec205",
+   "sku": "NNV62",
+   "name": "GRUESA DE RAYOS NEGROS 273MM X 14G",
+   "template": "spoke",
+   "successor": "spoke_gauge_designation",
+   "kind": "text",
+   "value": "14G",
+   "legacy_key": "spoke_gauge",
+   "legacy_value": "14G",
+   "source": "supplier_text",
+   "rule": "copy_text"
+  },
+  {
+   "product_id": "04b7cd41-0c0d-4571-b88e-be80ce73897f",
+   "sku": "21000BN",
+   "name": "GRUESA DE RAYOS NEGROS 273MM X14G",
+   "template": "spoke",
+   "successor": "spoke_gauge_designation",
+   "kind": "text",
+   "value": "14G",
+   "legacy_key": "spoke_gauge",
+   "legacy_value": "14G",
+   "source": "supplier_text",
+   "rule": "copy_text"
+  },
+  {
+   "product_id": "b17e4a2c-0aef-4e16-b47a-dd92383914d9",
+   "sku": "213071",
+   "name": "GRUESA DE RAYOS NEGROS 275MM X 14G BN",
+   "template": "spoke",
+   "successor": "spoke_gauge_designation",
+   "kind": "text",
+   "value": "14G",
+   "legacy_key": "spoke_gauge",
+   "legacy_value": "14G",
+   "source": "supplier_text",
+   "rule": "copy_text"
+  },
+  {
+   "product_id": "6f0c5057-069c-4672-8c65-9af90cd0a4f2",
+   "sku": "213081BN",
+   "name": "GRUESA DE RAYOS NEGROS 285MM X 14G",
+   "template": "spoke",
+   "successor": "spoke_gauge_designation",
+   "kind": "text",
+   "value": "14G",
+   "legacy_key": "spoke_gauge",
+   "legacy_value": "14G",
+   "source": "supplier_text",
+   "rule": "copy_text"
+  },
+  {
+   "product_id": "77d9b626-5dfe-4f5e-84c8-a50c8254fc3e",
+   "sku": "213016BN",
+   "name": "GRUESA RAYOS NEGROS 185MM×14G RALLEX",
+   "template": "spoke",
+   "successor": "spoke_gauge_designation",
+   "kind": "text",
+   "value": "14G",
+   "legacy_key": "spoke_gauge",
+   "legacy_value": "14G",
+   "source": "supplier_text",
+   "rule": "copy_text"
+  },
+  {
+   "product_id": "96c9846c-a5f9-40de-9eee-14046a47fd49",
+   "sku": "BPS007",
+   "name": "Rayo 272MM cnSPOKE STD14 - Straight Pull - Negro",
+   "template": "spoke",
+   "successor": "spoke_gauge_designation",
+   "kind": "text",
+   "value": "14G",
+   "legacy_key": "spoke_gauge",
+   "legacy_value": "14G",
+   "source": "supplier_text",
+   "rule": "copy_text"
+  },
+  {
+   "product_id": "34d431f6-4b14-4ba4-b0e9-0142bb9590b8",
+   "sku": "BPS008",
+   "name": "Rayo 274MM cnSPOKE STD14 - Straight Pull - Negro",
+   "template": "spoke",
+   "successor": "spoke_gauge_designation",
+   "kind": "text",
+   "value": "14G",
+   "legacy_key": "spoke_gauge",
+   "legacy_value": "14G",
+   "source": "supplier_text",
+   "rule": "copy_text"
+  },
+  {
+   "product_id": "89c6283a-ea88-499b-85d3-cfa76da689e2",
+   "sku": "BPS003",
+   "name": "Rayo cnSPOKE STD14 290mm - Straight Pull - Negro",
+   "template": "spoke",
+   "successor": "spoke_gauge_designation",
+   "kind": "text",
+   "value": "14G",
+   "legacy_key": "spoke_gauge",
+   "legacy_value": "14G",
+   "source": "supplier_text",
+   "rule": "copy_text"
+  },
+  {
+   "product_id": "42b125fe-9bae-430a-bb34-47372057fdf6",
+   "sku": "BPS001",
+   "name": "Rayo cnSPOKE STD14 292mm - J-Bend - Negro",
+   "template": "spoke",
+   "successor": "spoke_gauge_designation",
+   "kind": "text",
+   "value": "14G",
+   "legacy_key": "spoke_gauge",
+   "legacy_value": "14G",
+   "source": "import",
+   "rule": "copy_text"
+  },
+  {
+   "product_id": "a86f56be-173f-4a29-a865-9d592870602d",
+   "sku": "23404",
+   "name": "Rayos 10TEN, Acero UCP 14x275mm con Nipples 16mm, Black.",
+   "template": "spoke",
+   "successor": "spoke_gauge_designation",
+   "kind": "text",
+   "value": "14G",
+   "legacy_key": "spoke_gauge",
+   "legacy_value": "14G",
+   "source": "supplier_text",
+   "rule": "copy_text"
+  },
+  {
+   "product_id": "d7e8c54d-1488-4baf-9e43-95d6d7ea2bfa",
+   "sku": "4757",
+   "name": "RAYOS 225 mm (2.0mm) 14G Nipple 16mm",
+   "template": "spoke",
+   "successor": "spoke_gauge_designation",
+   "kind": "text",
+   "value": "14G",
+   "legacy_key": "spoke_gauge",
+   "legacy_value": "14G",
+   "source": "supplier_text",
+   "rule": "copy_text"
+  },
+  {
+   "product_id": "a3110d79-23d2-4e77-a576-5e2fab2d4e7a",
+   "sku": "4758",
+   "name": "RAYOS 227 mm (2.0 mm) 14G Nipple",
+   "template": "spoke",
+   "successor": "spoke_gauge_designation",
+   "kind": "text",
+   "value": "14G",
+   "legacy_key": "spoke_gauge",
+   "legacy_value": "14G",
+   "source": "supplier_text",
+   "rule": "copy_text"
+  },
+  {
+   "product_id": "61d33d07-cfb9-4f4c-a7ce-9c07c9fd1211",
+   "sku": "8961",
+   "name": "RAYOS COLOR 290 mm X 14G NEGRO\nHUAJIU GRS",
+   "template": "spoke",
+   "successor": "spoke_gauge_designation",
+   "kind": "text",
+   "value": "14G",
+   "legacy_key": "spoke_gauge",
+   "legacy_value": "14G",
+   "source": "supplier_text",
+   "rule": "copy_text"
+  },
+  {
+   "product_id": "b8c0ab7c-84b9-446a-b634-4cc8e7838f46",
+   "sku": "213111BN",
+   "name": "RAYOS NEGROS 180MM×14G RALLEX",
+   "template": "spoke",
+   "successor": "spoke_gauge_designation",
+   "kind": "text",
+   "value": "14G",
+   "legacy_key": "spoke_gauge",
+   "legacy_value": "14G",
+   "source": "supplier_text",
+   "rule": "copy_text"
+  },
+  {
+   "product_id": "085aedf6-f2f9-4d0a-87f4-b1674343d445",
+   "sku": "4717784040011",
+   "name": "MAXXIS ALAMBRE 26X2.20 IKON",
+   "template": "tire",
+   "successor": "bead_seat_diameter_mm",
+   "kind": "number",
+   "value": 559,
+   "legacy_key": "wheel_size",
+   "legacy_value": "26\"",
+   "source": "supplier_text",
+   "rule": "bsd: 26\" with a decimal width"
+  },
+  {
+   "product_id": "085aedf6-f2f9-4d0a-87f4-b1674343d445",
+   "sku": "4717784040011",
+   "name": "MAXXIS ALAMBRE 26X2.20 IKON",
+   "template": "tire",
+   "successor": "tire_width_mm",
+   "kind": "number",
+   "value": 55.9,
+   "legacy_key": "tire_width_in",
+   "legacy_value": "2.20",
+   "source": "supplier_text",
+   "rule": "inch_to_mm"
+  },
+  {
+   "product_id": "5670a812-b5eb-49a2-a33f-1d6c3ff5cc94",
+   "sku": "4717784039176",
+   "name": "MAXXIS ALAMBRE 27.5X2.25 REKON",
+   "template": "tire",
+   "successor": "bead_seat_diameter_mm",
+   "kind": "number",
+   "value": 584,
+   "legacy_key": "wheel_size",
+   "legacy_value": "27.5\"",
+   "source": "supplier_text",
+   "rule": "bsd: 27.5\" is one ISO diameter"
+  },
+  {
+   "product_id": "5670a812-b5eb-49a2-a33f-1d6c3ff5cc94",
+   "sku": "4717784039176",
+   "name": "MAXXIS ALAMBRE 27.5X2.25 REKON",
+   "template": "tire",
+   "successor": "tire_width_mm",
+   "kind": "number",
+   "value": 57.1,
+   "legacy_key": "tire_width_in",
+   "legacy_value": "2.25",
+   "source": "supplier_text",
+   "rule": "inch_to_mm"
+  },
+  {
+   "product_id": "3459d2f7-33cd-447c-86f2-68b58975f694",
+   "sku": "7293",
+   "name": "MAXXIS ALAMBRE 27.5X2.25 REKON RACE",
+   "template": "tire",
+   "successor": "bead_seat_diameter_mm",
+   "kind": "number",
+   "value": 584,
+   "legacy_key": "wheel_size",
+   "legacy_value": "27.5\"",
+   "source": "supplier_text",
+   "rule": "bsd: 27.5\" is one ISO diameter"
+  },
+  {
+   "product_id": "3459d2f7-33cd-447c-86f2-68b58975f694",
+   "sku": "7293",
+   "name": "MAXXIS ALAMBRE 27.5X2.25 REKON RACE",
+   "template": "tire",
+   "successor": "tire_width_mm",
+   "kind": "number",
+   "value": 57.1,
+   "legacy_key": "tire_width_in",
+   "legacy_value": "2.25",
+   "source": "supplier_text",
+   "rule": "inch_to_mm"
+  },
+  {
+   "product_id": "1629b9d6-3a4c-4e04-be6b-02e73c3780d1",
+   "sku": "7376",
+   "name": "MAXXIS ALAMBRE 27.5X2.25 REKON RACE EXO TANWALL",
+   "template": "tire",
+   "successor": "bead_seat_diameter_mm",
+   "kind": "number",
+   "value": 584,
+   "legacy_key": "wheel_size",
+   "legacy_value": "27.5\"",
+   "source": "supplier_text",
+   "rule": "bsd: 27.5\" is one ISO diameter"
+  },
+  {
+   "product_id": "1629b9d6-3a4c-4e04-be6b-02e73c3780d1",
+   "sku": "7376",
+   "name": "MAXXIS ALAMBRE 27.5X2.25 REKON RACE EXO TANWALL",
+   "template": "tire",
+   "successor": "tire_width_mm",
+   "kind": "number",
+   "value": 57.1,
+   "legacy_key": "tire_width_in",
+   "legacy_value": "2.25",
+   "source": "supplier_text",
+   "rule": "inch_to_mm"
+  },
+  {
+   "product_id": "f7016bed-381a-491d-ae25-31570d0f0960",
+   "sku": "4717784039169",
+   "name": "MAXXIS ALAMBRE 29X2.20 ARDENT RACE",
+   "template": "tire",
+   "successor": "bead_seat_diameter_mm",
+   "kind": "number",
+   "value": 622,
+   "legacy_key": "wheel_size",
+   "legacy_value": "29\"",
+   "source": "supplier_text",
+   "rule": "bsd: 29\" is one ISO diameter"
+  },
+  {
+   "product_id": "f7016bed-381a-491d-ae25-31570d0f0960",
+   "sku": "4717784039169",
+   "name": "MAXXIS ALAMBRE 29X2.20 ARDENT RACE",
+   "template": "tire",
+   "successor": "tire_width_mm",
+   "kind": "number",
+   "value": 55.9,
+   "legacy_key": "tire_width_in",
+   "legacy_value": "2.20",
+   "source": "supplier_text",
+   "rule": "inch_to_mm"
+  },
+  {
+   "product_id": "8f29bd7f-7927-4424-a8f7-91241d7958aa",
+   "sku": "4717784038872",
+   "name": "MAXXIS ALAMBRE 29X2.25 M315P ARDENT",
+   "template": "tire",
+   "successor": "bead_seat_diameter_mm",
+   "kind": "number",
+   "value": 622,
+   "legacy_key": "wheel_size",
+   "legacy_value": "29\"",
+   "source": "supplier_text",
+   "rule": "bsd: 29\" is one ISO diameter"
+  },
+  {
+   "product_id": "8f29bd7f-7927-4424-a8f7-91241d7958aa",
+   "sku": "4717784038872",
+   "name": "MAXXIS ALAMBRE 29X2.25 M315P ARDENT",
+   "template": "tire",
+   "successor": "tire_width_mm",
+   "kind": "number",
+   "value": 57.1,
+   "legacy_key": "tire_width_in",
+   "legacy_value": "2.25",
+   "source": "supplier_text",
+   "rule": "inch_to_mm"
+  },
+  {
+   "product_id": "4f35e59c-5177-4de8-a990-7ba22a77a2b8",
+   "sku": "9688",
+   "name": "MAXXIS ALAMBRE 29X2.25 W FOREKASTER",
+   "template": "tire",
+   "successor": "bead_seat_diameter_mm",
+   "kind": "number",
+   "value": 622,
+   "legacy_key": "wheel_size",
+   "legacy_value": "29\"",
+   "source": "supplier_text",
+   "rule": "bsd: 29\" is one ISO diameter"
+  },
+  {
+   "product_id": "4f35e59c-5177-4de8-a990-7ba22a77a2b8",
+   "sku": "9688",
+   "name": "MAXXIS ALAMBRE 29X2.25 W FOREKASTER",
+   "template": "tire",
+   "successor": "tire_width_mm",
+   "kind": "number",
+   "value": 57.1,
+   "legacy_key": "tire_width_in",
+   "legacy_value": "2.25",
+   "source": "supplier_text",
+   "rule": "inch_to_mm"
+  },
+  {
+   "product_id": "f1f0b1f3-985a-4bae-8558-04e1e6a4080d",
+   "sku": "TB00297000",
+   "name": "MAXXIS ALAMBRE 29X2.35 FOREKASTER",
+   "template": "tire",
+   "successor": "bead_seat_diameter_mm",
+   "kind": "number",
+   "value": 622,
+   "legacy_key": "wheel_size",
+   "legacy_value": "29\"",
+   "source": "supplier_text",
+   "rule": "bsd: 29\" is one ISO diameter"
+  },
+  {
+   "product_id": "f1f0b1f3-985a-4bae-8558-04e1e6a4080d",
+   "sku": "TB00297000",
+   "name": "MAXXIS ALAMBRE 29X2.35 FOREKASTER",
+   "template": "tire",
+   "successor": "tire_width_mm",
+   "kind": "number",
+   "value": 59.7,
+   "legacy_key": "tire_width_in",
+   "legacy_value": "2.35",
+   "source": "supplier_text",
+   "rule": "inch_to_mm"
+  },
+  {
+   "product_id": "fbe03d6a-eb8a-4046-b505-cee50e38fa87",
+   "sku": "7351",
+   "name": "MAXXIS ALAMBRE 700x25c DETONATOR",
+   "template": "tire",
+   "successor": "bead_seat_diameter_mm",
+   "kind": "number",
+   "value": 622,
+   "legacy_key": "wheel_size",
+   "legacy_value": "700c",
+   "source": "supplier_text",
+   "rule": "bsd: 700c is one ISO diameter"
+  },
+  {
+   "product_id": "c67110dd-346e-4b19-8356-bc6d02eb015f",
+   "sku": "4717784042688",
+   "name": "MAXXIS ALAMBRE 700X40C REAVER EXO",
+   "template": "tire",
+   "successor": "bead_seat_diameter_mm",
+   "kind": "number",
+   "value": 622,
+   "legacy_key": "wheel_size",
+   "legacy_value": "700c",
+   "source": "supplier_text",
+   "rule": "bsd: 700c is one ISO diameter"
+  },
+  {
+   "product_id": "7327b760-4e00-4950-9ff1-8d9b6d92e4a0",
+   "sku": "7302",
+   "name": "MAXXIS ALAMBRE ARDENT 29X2.4 M315P W DK62 BK 458 2PLHO 3YL",
+   "template": "tire",
+   "successor": "bead_seat_diameter_mm",
+   "kind": "number",
+   "value": 622,
+   "legacy_key": "wheel_size",
+   "legacy_value": "29\"",
+   "source": "supplier_text",
+   "rule": "bsd: 29\" is one ISO diameter"
+  },
+  {
+   "product_id": "7327b760-4e00-4950-9ff1-8d9b6d92e4a0",
+   "sku": "7302",
+   "name": "MAXXIS ALAMBRE ARDENT 29X2.4 M315P W DK62 BK 458 2PLHO 3YL",
+   "template": "tire",
+   "successor": "tire_width_mm",
+   "kind": "number",
+   "value": 61.0,
+   "legacy_key": "tire_width_in",
+   "legacy_value": "2.4",
+   "source": "supplier_text",
+   "rule": "inch_to_mm"
+  },
+  {
+   "product_id": "69cee10e-2579-4f8b-8db4-964328bd62fd",
+   "sku": "4717784039237",
+   "name": "MAXXIS ALAMBRE REKON 29X2.4 M349P W TT DK62 314/458 3YL",
+   "template": "tire",
+   "successor": "bead_seat_diameter_mm",
+   "kind": "number",
+   "value": 622,
+   "legacy_key": "wheel_size",
+   "legacy_value": "29\"",
+   "source": "supplier_text",
+   "rule": "bsd: 29\" is one ISO diameter"
+  },
+  {
+   "product_id": "69cee10e-2579-4f8b-8db4-964328bd62fd",
+   "sku": "4717784039237",
+   "name": "MAXXIS ALAMBRE REKON 29X2.4 M349P W TT DK62 314/458 3YL",
+   "template": "tire",
+   "successor": "tire_width_mm",
+   "kind": "number",
+   "value": 61.0,
+   "legacy_key": "tire_width_in",
+   "legacy_value": "2.4",
+   "source": "supplier_text",
+   "rule": "inch_to_mm"
+  },
+  {
+   "product_id": "cc9eae36-e5be-45f5-b9a0-1c366b45ecf3",
+   "sku": "4717784039985",
+   "name": "Maxxis Crossmark II 26 x 2.25",
+   "template": "tire",
+   "successor": "bead_seat_diameter_mm",
+   "kind": "number",
+   "value": 559,
+   "legacy_key": "wheel_size",
+   "legacy_value": "26\"",
+   "source": "supplier_text",
+   "rule": "bsd: 26\" with a decimal width"
+  },
+  {
+   "product_id": "cc9eae36-e5be-45f5-b9a0-1c366b45ecf3",
+   "sku": "4717784039985",
+   "name": "Maxxis Crossmark II 26 x 2.25",
+   "template": "tire",
+   "successor": "tire_width_mm",
+   "kind": "number",
+   "value": 57.1,
+   "legacy_key": "tire_width_in",
+   "legacy_value": "2.25",
+   "source": "supplier_text",
+   "rule": "inch_to_mm"
+  },
+  {
+   "product_id": "4ff4dc02-c8b3-453a-98b2-0def9cbfd7ca",
+   "sku": "4717784032108",
+   "name": "Maxxis Kevlar 27.5 x 2.40 High Roller II Ebike/Silkshield",
+   "template": "tire",
+   "successor": "bead_seat_diameter_mm",
+   "kind": "number",
+   "value": 584,
+   "legacy_key": "wheel_size",
+   "legacy_value": "27.5\"",
+   "source": "supplier_text",
+   "rule": "bsd: 27.5\" is one ISO diameter"
+  },
+  {
+   "product_id": "4ff4dc02-c8b3-453a-98b2-0def9cbfd7ca",
+   "sku": "4717784032108",
+   "name": "Maxxis Kevlar 27.5 x 2.40 High Roller II Ebike/Silkshield",
+   "template": "tire",
+   "successor": "tire_width_mm",
+   "kind": "number",
+   "value": 61.0,
+   "legacy_key": "tire_width_in",
+   "legacy_value": "2.40",
+   "source": "supplier_text",
+   "rule": "inch_to_mm"
+  },
+  {
+   "product_id": "955c2713-6fc6-48c4-b669-2b7968cd5d79",
+   "sku": "4717784039114",
+   "name": "MAXXIS KEVLAR 27.5X2.25 M315P ARDENT",
+   "template": "tire",
+   "successor": "bead_seat_diameter_mm",
+   "kind": "number",
+   "value": 584,
+   "legacy_key": "wheel_size",
+   "legacy_value": "27.5\"",
+   "source": "supplier_text",
+   "rule": "bsd: 27.5\" is one ISO diameter"
+  },
+  {
+   "product_id": "955c2713-6fc6-48c4-b669-2b7968cd5d79",
+   "sku": "4717784039114",
+   "name": "MAXXIS KEVLAR 27.5X2.25 M315P ARDENT",
+   "template": "tire",
+   "successor": "tire_width_mm",
+   "kind": "number",
+   "value": 57.1,
+   "legacy_key": "tire_width_in",
+   "legacy_value": "2.25",
+   "source": "supplier_text",
+   "rule": "inch_to_mm"
+  },
+  {
+   "product_id": "6d664c95-d0c2-4162-8791-e78496f7fd3d",
+   "sku": "4717784030852",
+   "name": "MAXXIS KEVLAR 27.5X2.5 MINION DHF EXO/TR",
+   "template": "tire",
+   "successor": "bead_seat_diameter_mm",
+   "kind": "number",
+   "value": 584,
+   "legacy_key": "wheel_size",
+   "legacy_value": "27.5\"",
+   "source": "supplier_text",
+   "rule": "bsd: 27.5\" is one ISO diameter"
+  },
+  {
+   "product_id": "6d664c95-d0c2-4162-8791-e78496f7fd3d",
+   "sku": "4717784030852",
+   "name": "MAXXIS KEVLAR 27.5X2.5 MINION DHF EXO/TR",
+   "template": "tire",
+   "successor": "tire_width_mm",
+   "kind": "number",
+   "value": 63.5,
+   "legacy_key": "tire_width_in",
+   "legacy_value": "2.5",
+   "source": "supplier_text",
+   "rule": "inch_to_mm"
+  },
+  {
+   "product_id": "9bbd969f-bf10-4c64-97f4-f40c619081e6",
+   "sku": "4717784037790",
+   "name": "MAXXIS KEVLAR 29X1.50 WT ASSEGAI EXO/TR",
+   "template": "tire",
+   "successor": "bead_seat_diameter_mm",
+   "kind": "number",
+   "value": 622,
+   "legacy_key": "wheel_size",
+   "legacy_value": "29\"",
+   "source": "supplier_text",
+   "rule": "bsd: 29\" is one ISO diameter"
+  },
+  {
+   "product_id": "9bbd969f-bf10-4c64-97f4-f40c619081e6",
+   "sku": "4717784037790",
+   "name": "MAXXIS KEVLAR 29X1.50 WT ASSEGAI EXO/TR",
+   "template": "tire",
+   "successor": "tire_width_mm",
+   "kind": "number",
+   "value": 38.1,
+   "legacy_key": "tire_width_in",
+   "legacy_value": "1.50",
+   "source": "supplier_text",
+   "rule": "inch_to_mm"
+  },
+  {
+   "product_id": "8c066cc0-1df8-429b-a04b-64e2806e2e3c",
+   "sku": "5165",
+   "name": "NEUM (W) 700 x 32C \"KENDA \" KWICK TRAX K1053 BK/",
+   "template": "tire",
+   "successor": "bead_seat_diameter_mm",
+   "kind": "number",
+   "value": 622,
+   "legacy_key": "wheel_size",
+   "legacy_value": "700c",
+   "source": "supplier_text",
+   "rule": "bsd: 700c is one ISO diameter"
+  },
+  {
+   "product_id": "261c02a3-5d79-4f85-b51c-017828c39684",
+   "sku": "4465",
+   "name": "NEUM. (W) 20 x 1.75\" KENDA \"APTOR K1153 30TPI BK",
+   "template": "tire",
+   "successor": "bead_seat_diameter_mm",
+   "kind": "number",
+   "value": 406,
+   "legacy_key": "wheel_size",
+   "legacy_value": "20\"",
+   "source": "supplier_text",
+   "rule": "bsd: 20\" with a decimal width"
+  },
+  {
+   "product_id": "261c02a3-5d79-4f85-b51c-017828c39684",
+   "sku": "4465",
+   "name": "NEUM. (W) 20 x 1.75\" KENDA \"APTOR K1153 30TPI BK",
+   "template": "tire",
+   "successor": "tire_width_mm",
+   "kind": "number",
+   "value": 44.4,
+   "legacy_key": "tire_width_in",
+   "legacy_value": "1.75",
+   "source": "supplier_text",
+   "rule": "inch_to_mm"
+  },
+  {
+   "product_id": "a67e22f7-d052-4041-93fc-6b343db4d8e8",
+   "sku": "4717",
+   "name": "NEUM. (W) 26 x 1.5\" KENDA \" K154 BLACK/BLUE/BLACK",
+   "template": "tire",
+   "successor": "bead_seat_diameter_mm",
+   "kind": "number",
+   "value": 559,
+   "legacy_key": "wheel_size",
+   "legacy_value": "26\"",
+   "source": "supplier_text",
+   "rule": "bsd: 26\" with a decimal width"
+  },
+  {
+   "product_id": "a67e22f7-d052-4041-93fc-6b343db4d8e8",
+   "sku": "4717",
+   "name": "NEUM. (W) 26 x 1.5\" KENDA \" K154 BLACK/BLUE/BLACK",
+   "template": "tire",
+   "successor": "tire_width_mm",
+   "kind": "number",
+   "value": 38.1,
+   "legacy_key": "tire_width_in",
+   "legacy_value": "1.5",
+   "source": "supplier_text",
+   "rule": "inch_to_mm"
+  },
+  {
+   "product_id": "e88f8197-9b01-44b2-a81a-2a0f173b9bb8",
+   "sku": "4718",
+   "name": "NEUM. (W) 26 x 1.5\" KENDA \" K154 BLACK/RED/BLACK",
+   "template": "tire",
+   "successor": "bead_seat_diameter_mm",
+   "kind": "number",
+   "value": 559,
+   "legacy_key": "wheel_size",
+   "legacy_value": "26\"",
+   "source": "supplier_text",
+   "rule": "bsd: 26\" with a decimal width"
+  },
+  {
+   "product_id": "e88f8197-9b01-44b2-a81a-2a0f173b9bb8",
+   "sku": "4718",
+   "name": "NEUM. (W) 26 x 1.5\" KENDA \" K154 BLACK/RED/BLACK",
+   "template": "tire",
+   "successor": "tire_width_mm",
+   "kind": "number",
+   "value": 38.1,
+   "legacy_key": "tire_width_in",
+   "legacy_value": "1.5",
+   "source": "supplier_text",
+   "rule": "inch_to_mm"
+  },
+  {
+   "product_id": "b000415f-8c92-4df0-94f2-93b934b4310f",
+   "sku": "4887",
+   "name": "NEUM. (W) 26 x 2.10 \" KENDA \"KADRE K1027 BK K-SHI",
+   "template": "tire",
+   "successor": "bead_seat_diameter_mm",
+   "kind": "number",
+   "value": 559,
+   "legacy_key": "wheel_size",
+   "legacy_value": "26\"",
+   "source": "supplier_text",
+   "rule": "bsd: 26\" with a decimal width"
+  },
+  {
+   "product_id": "b000415f-8c92-4df0-94f2-93b934b4310f",
+   "sku": "4887",
+   "name": "NEUM. (W) 26 x 2.10 \" KENDA \"KADRE K1027 BK K-SHI",
+   "template": "tire",
+   "successor": "tire_width_mm",
+   "kind": "number",
+   "value": 53.3,
+   "legacy_key": "tire_width_in",
+   "legacy_value": "2.10",
+   "source": "supplier_text",
+   "rule": "inch_to_mm"
+  },
+  {
+   "product_id": "cf44c717-ec75-465c-8e80-0ddb21c9ed4d",
+   "sku": "4927",
+   "name": "NEUM. (W) 29 x 2.25\" KENDA \" MOSER K1259 BK/BSK 3",
+   "template": "tire",
+   "successor": "bead_seat_diameter_mm",
+   "kind": "number",
+   "value": 622,
+   "legacy_key": "wheel_size",
+   "legacy_value": "29\"",
+   "source": "supplier_text",
+   "rule": "bsd: 29\" is one ISO diameter"
+  },
+  {
+   "product_id": "cf44c717-ec75-465c-8e80-0ddb21c9ed4d",
+   "sku": "4927",
+   "name": "NEUM. (W) 29 x 2.25\" KENDA \" MOSER K1259 BK/BSK 3",
+   "template": "tire",
+   "successor": "tire_width_mm",
+   "kind": "number",
+   "value": 57.1,
+   "legacy_key": "tire_width_in",
+   "legacy_value": "2.25",
+   "source": "supplier_text",
+   "rule": "inch_to_mm"
+  },
+  {
+   "product_id": "249c65a9-81d4-4778-9ef7-05c4dbdb2ce6",
+   "sku": "4734",
+   "name": "NEUM. (W) 700 x 38C \" KENDA \" KROSS PLUS K847 BLAC",
+   "template": "tire",
+   "successor": "bead_seat_diameter_mm",
+   "kind": "number",
+   "value": 622,
+   "legacy_key": "wheel_size",
+   "legacy_value": "700c",
+   "source": "supplier_text",
+   "rule": "bsd: 700c is one ISO diameter"
+  },
+  {
+   "product_id": "a5ae0f0c-5258-4f10-b892-d55668bb8d10",
+   "sku": "23328",
+   "name": "Neumatico 10TEN 16x2.0, Butterfly Black",
+   "template": "tire",
+   "successor": "bead_seat_diameter_mm",
+   "kind": "number",
+   "value": 305,
+   "legacy_key": "wheel_size",
+   "legacy_value": "16\"",
+   "source": "supplier_text",
+   "rule": "bsd: 16\" with a decimal width"
+  },
+  {
+   "product_id": "a5ae0f0c-5258-4f10-b892-d55668bb8d10",
+   "sku": "23328",
+   "name": "Neumatico 10TEN 16x2.0, Butterfly Black",
+   "template": "tire",
+   "successor": "tire_width_mm",
+   "kind": "number",
+   "value": 50.8,
+   "legacy_key": "tire_width_in",
+   "legacy_value": "2.0",
+   "source": "supplier_text",
+   "rule": "inch_to_mm"
+  },
+  {
+   "product_id": "2f9135e9-6836-4794-93fd-4b45a3990788",
+   "sku": "23511",
+   "name": "Neumatico 10TEN 24x1-3/8, Black",
+   "template": "tire",
+   "successor": "tire_width_mm",
+   "kind": "number",
+   "value": 34.9,
+   "legacy_key": "tire_width_in",
+   "legacy_value": "1.37500000000000000000",
+   "source": "supplier_text",
+   "rule": "inch_to_mm"
+  },
+  {
+   "product_id": "02c0d6df-7936-4c44-a3cd-7486bc5c0623",
+   "sku": "24059",
+   "name": "Neumatico 10TEN Mount, 26x1.75 BLACK AND WHITE SIDE WALL",
+   "template": "tire",
+   "successor": "bead_seat_diameter_mm",
+   "kind": "number",
+   "value": 559,
+   "legacy_key": "wheel_size",
+   "legacy_value": "26\"",
+   "source": "supplier_text",
+   "rule": "bsd: 26\" with a decimal width"
+  },
+  {
+   "product_id": "02c0d6df-7936-4c44-a3cd-7486bc5c0623",
+   "sku": "24059",
+   "name": "Neumatico 10TEN Mount, 26x1.75 BLACK AND WHITE SIDE WALL",
+   "template": "tire",
+   "successor": "tire_width_mm",
+   "kind": "number",
+   "value": 44.4,
+   "legacy_key": "tire_width_in",
+   "legacy_value": "1.75",
+   "source": "supplier_text",
+   "rule": "inch_to_mm"
+  },
+  {
+   "product_id": "8f7e45a5-d851-485b-a340-de3a0ad5a643",
+   "sku": "23407",
+   "name": "Neumatico 10TEN, 26x1.75",
+   "template": "tire",
+   "successor": "bead_seat_diameter_mm",
+   "kind": "number",
+   "value": 559,
+   "legacy_key": "wheel_size",
+   "legacy_value": "26\"",
+   "source": "supplier_text",
+   "rule": "bsd: 26\" with a decimal width"
+  },
+  {
+   "product_id": "8f7e45a5-d851-485b-a340-de3a0ad5a643",
+   "sku": "23407",
+   "name": "Neumatico 10TEN, 26x1.75",
+   "template": "tire",
+   "successor": "tire_width_mm",
+   "kind": "number",
+   "value": 44.4,
+   "legacy_key": "tire_width_in",
+   "legacy_value": "1.75",
+   "source": "supplier_text",
+   "rule": "inch_to_mm"
+  },
+  {
+   "product_id": "575ce307-e1bf-45af-8354-d5d297c3f7b8",
+   "sku": "19454",
+   "name": "Neumático 10TEN, 700x32 = 28x1 5/8 x 1 1/4, 30 TPI",
+   "template": "tire",
+   "successor": "bead_seat_diameter_mm",
+   "kind": "number",
+   "value": 622,
+   "legacy_key": "wheel_size",
+   "legacy_value": "700c",
+   "source": "supplier_text",
+   "rule": "bsd: 700c is one ISO diameter"
+  },
+  {
+   "product_id": "da4345bc-7ef9-4077-aa41-91d4a6e84ffb",
+   "sku": "54012",
+   "name": "Neumático 20.x 1.75” -KENDA – Negro - Liso – Alambre –",
+   "template": "tire",
+   "successor": "bead_seat_diameter_mm",
+   "kind": "number",
+   "value": 406,
+   "legacy_key": "wheel_size",
+   "legacy_value": "20\"",
+   "source": "supplier_text",
+   "rule": "bsd: 20\" with a decimal width"
+  },
+  {
+   "product_id": "da4345bc-7ef9-4077-aa41-91d4a6e84ffb",
+   "sku": "54012",
+   "name": "Neumático 20.x 1.75” -KENDA – Negro - Liso – Alambre –",
+   "template": "tire",
+   "successor": "tire_width_mm",
+   "kind": "number",
+   "value": 44.4,
+   "legacy_key": "tire_width_in",
+   "legacy_value": "1.75",
+   "source": "supplier_text",
+   "rule": "inch_to_mm"
+  },
+  {
+   "product_id": "33ea7f25-8f9e-45f7-bf5d-bb92db65b7d9",
+   "sku": "U-154244",
+   "name": "NEUMATICO 24X2.10 UNIQA",
+   "template": "tire",
+   "successor": "bead_seat_diameter_mm",
+   "kind": "number",
+   "value": 507,
+   "legacy_key": "wheel_size",
+   "legacy_value": "24\"",
+   "source": "supplier_text",
+   "rule": "bsd: 24\" with a decimal width"
+  },
+  {
+   "product_id": "33ea7f25-8f9e-45f7-bf5d-bb92db65b7d9",
+   "sku": "U-154244",
+   "name": "NEUMATICO 24X2.10 UNIQA",
+   "template": "tire",
+   "successor": "tire_width_mm",
+   "kind": "number",
+   "value": 53.3,
+   "legacy_key": "tire_width_in",
+   "legacy_value": "2.10",
+   "source": "supplier_text",
+   "rule": "inch_to_mm"
+  },
+  {
+   "product_id": "be610400-dd1e-4b76-aa33-148d961f58c5",
+   "sku": "4817",
+   "name": "Neumático 26 X 1.75 -KENDA – Negro – Alambre – APTOR",
+   "template": "tire",
+   "successor": "bead_seat_diameter_mm",
+   "kind": "number",
+   "value": 559,
+   "legacy_key": "wheel_size",
+   "legacy_value": "26\"",
+   "source": "supplier_text",
+   "rule": "bsd: 26\" with a decimal width"
+  },
+  {
+   "product_id": "be610400-dd1e-4b76-aa33-148d961f58c5",
+   "sku": "4817",
+   "name": "Neumático 26 X 1.75 -KENDA – Negro – Alambre – APTOR",
+   "template": "tire",
+   "successor": "tire_width_mm",
+   "kind": "number",
+   "value": 44.4,
+   "legacy_key": "tire_width_in",
+   "legacy_value": "1.75",
+   "source": "supplier_text",
+   "rule": "inch_to_mm"
+  },
+  {
+   "product_id": "1c5f31a3-1101-40b3-80d5-26b92b1720fd",
+   "sku": "4491",
+   "name": "Neumático 26 X 2.10 –KENDA –Negro –Alambre",
+   "template": "tire",
+   "successor": "bead_seat_diameter_mm",
+   "kind": "number",
+   "value": 559,
+   "legacy_key": "wheel_size",
+   "legacy_value": "26\"",
+   "source": "supplier_text",
+   "rule": "bsd: 26\" with a decimal width"
+  },
+  {
+   "product_id": "1c5f31a3-1101-40b3-80d5-26b92b1720fd",
+   "sku": "4491",
+   "name": "Neumático 26 X 2.10 –KENDA –Negro –Alambre",
+   "template": "tire",
+   "successor": "tire_width_mm",
+   "kind": "number",
+   "value": 53.3,
+   "legacy_key": "tire_width_in",
+   "legacy_value": "2.10",
+   "source": "supplier_text",
+   "rule": "inch_to_mm"
+  },
+  {
+   "product_id": "1a7115c3-1e09-480f-a587-b7cb76fb671b",
+   "sku": "4554",
+   "name": "Neumático 26 x 2.10 –KENDA –Negro –KOYOTE -REAR –",
+   "template": "tire",
+   "successor": "bead_seat_diameter_mm",
+   "kind": "number",
+   "value": 559,
+   "legacy_key": "wheel_size",
+   "legacy_value": "26\"",
+   "source": "supplier_text",
+   "rule": "bsd: 26\" with a decimal width"
+  },
+  {
+   "product_id": "1a7115c3-1e09-480f-a587-b7cb76fb671b",
+   "sku": "4554",
+   "name": "Neumático 26 x 2.10 –KENDA –Negro –KOYOTE -REAR –",
+   "template": "tire",
+   "successor": "tire_width_mm",
+   "kind": "number",
+   "value": 53.3,
+   "legacy_key": "tire_width_in",
+   "legacy_value": "2.10",
+   "source": "supplier_text",
+   "rule": "inch_to_mm"
+  },
+  {
+   "product_id": "2a4f31ef-55b4-477d-8a0b-fc465bb1f705",
+   "sku": "5225",
+   "name": "Neumático 26 X 2.35 –KENDA – KINETIC",
+   "template": "tire",
+   "successor": "bead_seat_diameter_mm",
+   "kind": "number",
+   "value": 559,
+   "legacy_key": "wheel_size",
+   "legacy_value": "26\"",
+   "source": "supplier_text",
+   "rule": "bsd: 26\" with a decimal width"
+  },
+  {
+   "product_id": "2a4f31ef-55b4-477d-8a0b-fc465bb1f705",
+   "sku": "5225",
+   "name": "Neumático 26 X 2.35 –KENDA – KINETIC",
+   "template": "tire",
+   "successor": "tire_width_mm",
+   "kind": "number",
+   "value": 59.7,
+   "legacy_key": "tire_width_in",
+   "legacy_value": "2.35",
+   "source": "supplier_text",
+   "rule": "inch_to_mm"
+  },
+  {
+   "product_id": "6a9b24fe-c678-4974-a760-b337243b6bb5",
+   "sku": "7120",
+   "name": "NEUMATICO 27.5X2.25 H-5177 DOBLE HAMMER",
+   "template": "tire",
+   "successor": "bead_seat_diameter_mm",
+   "kind": "number",
+   "value": 584,
+   "legacy_key": "wheel_size",
+   "legacy_value": "27.5\"",
+   "source": "supplier_text",
+   "rule": "bsd: 27.5\" is one ISO diameter"
+  },
+  {
+   "product_id": "6a9b24fe-c678-4974-a760-b337243b6bb5",
+   "sku": "7120",
+   "name": "NEUMATICO 27.5X2.25 H-5177 DOBLE HAMMER",
+   "template": "tire",
+   "successor": "tire_width_mm",
+   "kind": "number",
+   "value": 57.1,
+   "legacy_key": "tire_width_in",
+   "legacy_value": "2.25",
+   "source": "supplier_text",
+   "rule": "inch_to_mm"
+  },
+  {
+   "product_id": "e0a96a73-688b-46bd-a081-df2c7c609aa4",
+   "sku": "4213",
+   "name": "Neumático 29 x 2.20 – KENDA – KADRE K1027 60TPI BK",
+   "template": "tire",
+   "successor": "bead_seat_diameter_mm",
+   "kind": "number",
+   "value": 622,
+   "legacy_key": "wheel_size",
+   "legacy_value": "29\"",
+   "source": "supplier_text",
+   "rule": "bsd: 29\" is one ISO diameter"
+  },
+  {
+   "product_id": "e0a96a73-688b-46bd-a081-df2c7c609aa4",
+   "sku": "4213",
+   "name": "Neumático 29 x 2.20 – KENDA – KADRE K1027 60TPI BK",
+   "template": "tire",
+   "successor": "tire_width_mm",
+   "kind": "number",
+   "value": 55.9,
+   "legacy_key": "tire_width_in",
+   "legacy_value": "2.20",
+   "source": "supplier_text",
+   "rule": "inch_to_mm"
+  },
+  {
+   "product_id": "ffbb6ca6-84b4-43bb-aa9c-612a8d91fe6c",
+   "sku": "6938112672317",
+   "name": "NEUMATICO 29X2.25 27TPI H-5177 CHAOYANG DOBLE HAMMER",
+   "template": "tire",
+   "successor": "bead_seat_diameter_mm",
+   "kind": "number",
+   "value": 622,
+   "legacy_key": "wheel_size",
+   "legacy_value": "29\"",
+   "source": "supplier_text",
+   "rule": "bsd: 29\" is one ISO diameter"
+  },
+  {
+   "product_id": "ffbb6ca6-84b4-43bb-aa9c-612a8d91fe6c",
+   "sku": "6938112672317",
+   "name": "NEUMATICO 29X2.25 27TPI H-5177 CHAOYANG DOBLE HAMMER",
+   "template": "tire",
+   "successor": "tire_width_mm",
+   "kind": "number",
+   "value": 57.1,
+   "legacy_key": "tire_width_in",
+   "legacy_value": "2.25",
+   "source": "supplier_text",
+   "rule": "inch_to_mm"
+  },
+  {
+   "product_id": "44f3aacd-2bc4-4dad-8e60-aafc3778cc34",
+   "sku": "4242",
+   "name": "Neumático 700 x 35c – KENDA – NEGRO – SMALL BLOCK – ALAMBRE",
+   "template": "tire",
+   "successor": "bead_seat_diameter_mm",
+   "kind": "number",
+   "value": 622,
+   "legacy_key": "wheel_size",
+   "legacy_value": "700c",
+   "source": "supplier_text",
+   "rule": "bsd: 700c is one ISO diameter"
+  },
+  {
+   "product_id": "b4717e6a-3fa7-48e1-a780-33646a931c9d",
+   "sku": "U-311725",
+   "name": "NEUMATICO 700X25C RALLEX",
+   "template": "tire",
+   "successor": "bead_seat_diameter_mm",
+   "kind": "number",
+   "value": 622,
+   "legacy_key": "wheel_size",
+   "legacy_value": "700c",
+   "source": "supplier_text",
+   "rule": "bsd: 700c is one ISO diameter"
+  },
+  {
+   "product_id": "bbaf4107-eebd-46ca-bd1f-ae9edb8cdbfa",
+   "sku": "V004409",
+   "name": "Neumático 700x28C Kenda K1176 Black",
+   "template": "tire",
+   "successor": "bead_seat_diameter_mm",
+   "kind": "number",
+   "value": 622,
+   "legacy_key": "wheel_size",
+   "legacy_value": "700c",
+   "source": "supplier_text",
+   "rule": "bsd: 700c is one ISO diameter"
+  },
+  {
+   "product_id": "565799bc-bd2e-4d6d-9726-da2292e38daf",
+   "sku": "4711041558295",
+   "name": "Neumático 700x28C Kenda K1176 Negro",
+   "template": "tire",
+   "successor": "bead_seat_diameter_mm",
+   "kind": "number",
+   "value": 622,
+   "legacy_key": "wheel_size",
+   "legacy_value": "700c",
+   "source": "supplier_text",
+   "rule": "bsd: 700c is one ISO diameter"
+  },
+  {
+   "product_id": "987f2242-6dd1-460d-8bba-66c12285caad",
+   "sku": "U-311728",
+   "name": "NEUMATICO 700X28C RALLEX",
+   "template": "tire",
+   "successor": "bead_seat_diameter_mm",
+   "kind": "number",
+   "value": 622,
+   "legacy_key": "wheel_size",
+   "legacy_value": "700c",
+   "source": "supplier_text",
+   "rule": "bsd: 700c is one ISO diameter"
+  },
+  {
+   "product_id": "60b12c04-ce36-4119-ade7-0219c594436e",
+   "sku": "4516",
+   "name": "Neumático 700x32C Kenda Cosmos K184",
+   "template": "tire",
+   "successor": "bead_seat_diameter_mm",
+   "kind": "number",
+   "value": 622,
+   "legacy_key": "wheel_size",
+   "legacy_value": "700c",
+   "source": "supplier_text",
+   "rule": "bsd: 700c is one ISO diameter"
+  },
+  {
+   "product_id": "888ce9dc-4c59-4b92-b20e-5701ff0865ca",
+   "sku": "6927116101312",
+   "name": "NEUMATICO ARISUN 26 X 2.10 MOUNT CAMERON",
+   "template": "tire",
+   "successor": "bead_seat_diameter_mm",
+   "kind": "number",
+   "value": 559,
+   "legacy_key": "wheel_size",
+   "legacy_value": "26\"",
+   "source": "supplier_text",
+   "rule": "bsd: 26\" with a decimal width"
+  },
+  {
+   "product_id": "888ce9dc-4c59-4b92-b20e-5701ff0865ca",
+   "sku": "6927116101312",
+   "name": "NEUMATICO ARISUN 26 X 2.10 MOUNT CAMERON",
+   "template": "tire",
+   "successor": "tire_width_mm",
+   "kind": "number",
+   "value": 53.3,
+   "legacy_key": "tire_width_in",
+   "legacy_value": "2.10",
+   "source": "supplier_text",
+   "rule": "inch_to_mm"
+  },
+  {
+   "product_id": "165ba027-558f-4837-89c4-3c377cad092c",
+   "sku": "6927116101183",
+   "name": "NEUMATICO ARISUN 26 X 2.10 MOUNT EMMONS ALAMBRE (T010304)",
+   "template": "tire",
+   "successor": "bead_seat_diameter_mm",
+   "kind": "number",
+   "value": 559,
+   "legacy_key": "wheel_size",
+   "legacy_value": "26\"",
+   "source": "supplier_text",
+   "rule": "bsd: 26\" with a decimal width"
+  },
+  {
+   "product_id": "165ba027-558f-4837-89c4-3c377cad092c",
+   "sku": "6927116101183",
+   "name": "NEUMATICO ARISUN 26 X 2.10 MOUNT EMMONS ALAMBRE (T010304)",
+   "template": "tire",
+   "successor": "tire_width_mm",
+   "kind": "number",
+   "value": 53.3,
+   "legacy_key": "tire_width_in",
+   "legacy_value": "2.10",
+   "source": "supplier_text",
+   "rule": "inch_to_mm"
+  },
+  {
+   "product_id": "02d0d992-c8f2-4629-8d3a-19584ac43e43",
+   "sku": "6927116102982",
+   "name": "NEUMATICO ARISUN 27.5 X 2.25 30 TPI MOUNT BONA BORDE T030107",
+   "template": "tire",
+   "successor": "bead_seat_diameter_mm",
+   "kind": "number",
+   "value": 584,
+   "legacy_key": "wheel_size",
+   "legacy_value": "27.5\"",
+   "source": "supplier_text",
+   "rule": "bsd: 27.5\" is one ISO diameter"
+  },
+  {
+   "product_id": "02d0d992-c8f2-4629-8d3a-19584ac43e43",
+   "sku": "6927116102982",
+   "name": "NEUMATICO ARISUN 27.5 X 2.25 30 TPI MOUNT BONA BORDE T030107",
+   "template": "tire",
+   "successor": "tire_width_mm",
+   "kind": "number",
+   "value": 57.1,
+   "legacy_key": "tire_width_in",
+   "legacy_value": "2.25",
+   "source": "supplier_text",
+   "rule": "inch_to_mm"
+  },
+  {
+   "product_id": "f3956a10-ef4a-4d1d-8485-10fed60c8f36",
+   "sku": "6927116101626",
+   "name": "NEUMATICO ARISUN 700 X 23C RAPIDE NEGRO KEVLAR",
+   "template": "tire",
+   "successor": "bead_seat_diameter_mm",
+   "kind": "number",
+   "value": 622,
+   "legacy_key": "wheel_size",
+   "legacy_value": "700c",
+   "source": "supplier_text",
+   "rule": "bsd: 700c is one ISO diameter"
+  },
+  {
+   "product_id": "f43e35d3-214e-4031-bdc7-f8b955165073",
+   "sku": "6938112684914",
+   "name": "NEUMATICO ARISUN 700 X 25C XLR8 TOURING CASING T070513",
+   "template": "tire",
+   "successor": "bead_seat_diameter_mm",
+   "kind": "number",
+   "value": 622,
+   "legacy_key": "wheel_size",
+   "legacy_value": "700c",
+   "source": "supplier_text",
+   "rule": "bsd: 700c is one ISO diameter"
+  },
+  {
+   "product_id": "2681e863-3722-4ccc-bf45-5b06474c125b",
+   "sku": "6927116102753",
+   "name": "neumático arisun bmx 20x2.25 60tpi cutting edge b. alambre t080303",
+   "template": "tire",
+   "successor": "bead_seat_diameter_mm",
+   "kind": "number",
+   "value": 406,
+   "legacy_key": "wheel_size",
+   "legacy_value": "20\"",
+   "source": "supplier_text",
+   "rule": "bsd: 20\" with a decimal width"
+  },
+  {
+   "product_id": "2681e863-3722-4ccc-bf45-5b06474c125b",
+   "sku": "6927116102753",
+   "name": "neumático arisun bmx 20x2.25 60tpi cutting edge b. alambre t080303",
+   "template": "tire",
+   "successor": "tire_width_mm",
+   "kind": "number",
+   "value": 57.1,
+   "legacy_key": "tire_width_in",
+   "legacy_value": "2.25",
+   "source": "supplier_text",
+   "rule": "inch_to_mm"
+  },
+  {
+   "product_id": "61174dc4-8b80-4364-a686-5b561e8d63b9",
+   "sku": "18450",
+   "name": "NEUMÁTICO BEST MOD. CROSS ARO 24 X 2.125 NEGRO P1001A WANDA",
+   "template": "tire",
+   "successor": "bead_seat_diameter_mm",
+   "kind": "number",
+   "value": 507,
+   "legacy_key": "wheel_size",
+   "legacy_value": "24\"",
+   "source": "supplier_text",
+   "rule": "bsd: 24\" with a decimal width"
+  },
+  {
+   "product_id": "61174dc4-8b80-4364-a686-5b561e8d63b9",
+   "sku": "18450",
+   "name": "NEUMÁTICO BEST MOD. CROSS ARO 24 X 2.125 NEGRO P1001A WANDA",
+   "template": "tire",
+   "successor": "tire_width_mm",
+   "kind": "number",
+   "value": 54.0,
+   "legacy_key": "tire_width_in",
+   "legacy_value": "2.125",
+   "source": "supplier_text",
+   "rule": "inch_to_mm"
+  },
+  {
+   "product_id": "953ec0a4-e306-42a7-a925-29529135b21a",
+   "sku": "18444",
+   "name": "NEUMÁTICO BEST MOD. PHANTON ARO 29 X 2.25 NEGRO W2030 WANDA",
+   "template": "tire",
+   "successor": "bead_seat_diameter_mm",
+   "kind": "number",
+   "value": 622,
+   "legacy_key": "wheel_size",
+   "legacy_value": "29\"",
+   "source": "supplier_text",
+   "rule": "bsd: 29\" is one ISO diameter"
+  },
+  {
+   "product_id": "953ec0a4-e306-42a7-a925-29529135b21a",
+   "sku": "18444",
+   "name": "NEUMÁTICO BEST MOD. PHANTON ARO 29 X 2.25 NEGRO W2030 WANDA",
+   "template": "tire",
+   "successor": "tire_width_mm",
+   "kind": "number",
+   "value": 57.1,
+   "legacy_key": "tire_width_in",
+   "legacy_value": "2.25",
+   "source": "supplier_text",
+   "rule": "inch_to_mm"
+  },
+  {
+   "product_id": "07204139-4e0f-4f9e-b8c8-a7af7eb03b97",
+   "sku": "18449",
+   "name": "NEUMÁTICO BEST MOD. SMASH ARO 20 X 2.35 NEGRO P1161 WANDA",
+   "template": "tire",
+   "successor": "bead_seat_diameter_mm",
+   "kind": "number",
+   "value": 406,
+   "legacy_key": "wheel_size",
+   "legacy_value": "20\"",
+   "source": "supplier_text",
+   "rule": "bsd: 20\" with a decimal width"
+  },
+  {
+   "product_id": "07204139-4e0f-4f9e-b8c8-a7af7eb03b97",
+   "sku": "18449",
+   "name": "NEUMÁTICO BEST MOD. SMASH ARO 20 X 2.35 NEGRO P1161 WANDA",
+   "template": "tire",
+   "successor": "tire_width_mm",
+   "kind": "number",
+   "value": 59.7,
+   "legacy_key": "tire_width_in",
+   "legacy_value": "2.35",
+   "source": "supplier_text",
+   "rule": "inch_to_mm"
+  },
+  {
+   "product_id": "16eaec3d-89a7-467a-b107-9258a2b937e7",
+   "sku": "6927116101190",
+   "name": "Neumatico Bicicleta 26 X 2.10 Mount Emmons K-Rubber Arisun",
+   "template": "tire",
+   "successor": "bead_seat_diameter_mm",
+   "kind": "number",
+   "value": 559,
+   "legacy_key": "wheel_size",
+   "legacy_value": "26\"",
+   "source": "supplier_text",
+   "rule": "bsd: 26\" with a decimal width"
+  },
+  {
+   "product_id": "16eaec3d-89a7-467a-b107-9258a2b937e7",
+   "sku": "6927116101190",
+   "name": "Neumatico Bicicleta 26 X 2.10 Mount Emmons K-Rubber Arisun",
+   "template": "tire",
+   "successor": "tire_width_mm",
+   "kind": "number",
+   "value": 53.3,
+   "legacy_key": "tire_width_in",
+   "legacy_value": "2.10",
+   "source": "supplier_text",
+   "rule": "inch_to_mm"
+  },
+  {
+   "product_id": "e8413b00-3481-486d-9292-5c8fcc2db95b",
+   "sku": "6927116100735",
+   "name": "Neumatico Bicicleta Aro 20 X 2.25 Berm Grabber Arisun",
+   "template": "tire",
+   "successor": "bead_seat_diameter_mm",
+   "kind": "number",
+   "value": 406,
+   "legacy_key": "wheel_size",
+   "legacy_value": "20\"",
+   "source": "supplier_text",
+   "rule": "bsd: 20\" with a decimal width"
+  },
+  {
+   "product_id": "e8413b00-3481-486d-9292-5c8fcc2db95b",
+   "sku": "6927116100735",
+   "name": "Neumatico Bicicleta Aro 20 X 2.25 Berm Grabber Arisun",
+   "template": "tire",
+   "successor": "tire_width_mm",
+   "kind": "number",
+   "value": 57.1,
+   "legacy_key": "tire_width_in",
+   "legacy_value": "2.25",
+   "source": "supplier_text",
+   "rule": "inch_to_mm"
+  },
+  {
+   "product_id": "fc2b9078-80ee-47a7-9b5e-df404dae9c1b",
+   "sku": "18183",
+   "name": "NEUMATICO BICICLETA ARO 26 X 1.5 NEGRO REFORZADO RALCO",
+   "template": "tire",
+   "successor": "bead_seat_diameter_mm",
+   "kind": "number",
+   "value": 559,
+   "legacy_key": "wheel_size",
+   "legacy_value": "26\"",
+   "source": "supplier_text",
+   "rule": "bsd: 26\" with a decimal width"
+  },
+  {
+   "product_id": "fc2b9078-80ee-47a7-9b5e-df404dae9c1b",
+   "sku": "18183",
+   "name": "NEUMATICO BICICLETA ARO 26 X 1.5 NEGRO REFORZADO RALCO",
+   "template": "tire",
+   "successor": "tire_width_mm",
+   "kind": "number",
+   "value": 38.1,
+   "legacy_key": "tire_width_in",
+   "legacy_value": "1.5",
+   "source": "supplier_text",
+   "rule": "inch_to_mm"
+  },
+  {
+   "product_id": "cd8a9016-0e17-44b5-89c0-c927af1ec27e",
+   "sku": "6927116100452",
+   "name": "NEUMATICO BICICLETA ARO 26 X 2.00 MOUNT BONA ARISUN",
+   "template": "tire",
+   "successor": "bead_seat_diameter_mm",
+   "kind": "number",
+   "value": 559,
+   "legacy_key": "wheel_size",
+   "legacy_value": "26\"",
+   "source": "supplier_text",
+   "rule": "bsd: 26\" with a decimal width"
+  },
+  {
+   "product_id": "cd8a9016-0e17-44b5-89c0-c927af1ec27e",
+   "sku": "6927116100452",
+   "name": "NEUMATICO BICICLETA ARO 26 X 2.00 MOUNT BONA ARISUN",
+   "template": "tire",
+   "successor": "tire_width_mm",
+   "kind": "number",
+   "value": 50.8,
+   "legacy_key": "tire_width_in",
+   "legacy_value": "2.00",
+   "source": "supplier_text",
+   "rule": "inch_to_mm"
+  },
+  {
+   "product_id": "1460e86c-3c38-426e-8536-8637560447e3",
+   "sku": "16297",
+   "name": "NEUMATICO BICICLETA ARO 26 X 2.00 MOUNT BUCKLEY ARISUN",
+   "template": "tire",
+   "successor": "bead_seat_diameter_mm",
+   "kind": "number",
+   "value": 559,
+   "legacy_key": "wheel_size",
+   "legacy_value": "26\"",
+   "source": "supplier_text",
+   "rule": "bsd: 26\" with a decimal width"
+  },
+  {
+   "product_id": "1460e86c-3c38-426e-8536-8637560447e3",
+   "sku": "16297",
+   "name": "NEUMATICO BICICLETA ARO 26 X 2.00 MOUNT BUCKLEY ARISUN",
+   "template": "tire",
+   "successor": "tire_width_mm",
+   "kind": "number",
+   "value": 50.8,
+   "legacy_key": "tire_width_in",
+   "legacy_value": "2.00",
+   "source": "supplier_text",
+   "rule": "inch_to_mm"
+  },
+  {
+   "product_id": "af3b5f40-0964-4304-b72e-816539e3e001",
+   "sku": "6927116100483",
+   "name": "Neumatico Bicicleta Aro 26 X 2.10 Mount Bona Arisun",
+   "template": "tire",
+   "successor": "bead_seat_diameter_mm",
+   "kind": "number",
+   "value": 559,
+   "legacy_key": "wheel_size",
+   "legacy_value": "26\"",
+   "source": "supplier_text",
+   "rule": "bsd: 26\" with a decimal width"
+  },
+  {
+   "product_id": "af3b5f40-0964-4304-b72e-816539e3e001",
+   "sku": "6927116100483",
+   "name": "Neumatico Bicicleta Aro 26 X 2.10 Mount Bona Arisun",
+   "template": "tire",
+   "successor": "tire_width_mm",
+   "kind": "number",
+   "value": 53.3,
+   "legacy_key": "tire_width_in",
+   "legacy_value": "2.10",
+   "source": "supplier_text",
+   "rule": "inch_to_mm"
+  },
+  {
+   "product_id": "12df22c5-5dc9-463a-b270-a35d7417f162",
+   "sku": "18443",
+   "name": "Neumatico Bicicleta Aro 27.5 X 2.10 Voltage Best",
+   "template": "tire",
+   "successor": "bead_seat_diameter_mm",
+   "kind": "number",
+   "value": 584,
+   "legacy_key": "wheel_size",
+   "legacy_value": "27.5\"",
+   "source": "supplier_text",
+   "rule": "bsd: 27.5\" is one ISO diameter"
+  },
+  {
+   "product_id": "12df22c5-5dc9-463a-b270-a35d7417f162",
+   "sku": "18443",
+   "name": "Neumatico Bicicleta Aro 27.5 X 2.10 Voltage Best",
+   "template": "tire",
+   "successor": "tire_width_mm",
+   "kind": "number",
+   "value": 53.3,
+   "legacy_key": "tire_width_in",
+   "legacy_value": "2.10",
+   "source": "supplier_text",
+   "rule": "inch_to_mm"
+  },
+  {
+   "product_id": "93bc1fa4-91a7-49b8-8326-1c8807280636",
+   "sku": "6938112693879",
+   "name": "Neumatico Bicicleta Aro 29 X 2.25 30 Tpi Mount Cook Arisun",
+   "template": "tire",
+   "successor": "bead_seat_diameter_mm",
+   "kind": "number",
+   "value": 622,
+   "legacy_key": "wheel_size",
+   "legacy_value": "29\"",
+   "source": "supplier_text",
+   "rule": "bsd: 29\" is one ISO diameter"
+  },
+  {
+   "product_id": "93bc1fa4-91a7-49b8-8326-1c8807280636",
+   "sku": "6938112693879",
+   "name": "Neumatico Bicicleta Aro 29 X 2.25 30 Tpi Mount Cook Arisun",
+   "template": "tire",
+   "successor": "tire_width_mm",
+   "kind": "number",
+   "value": 57.1,
+   "legacy_key": "tire_width_in",
+   "legacy_value": "2.25",
+   "source": "supplier_text",
+   "rule": "inch_to_mm"
+  },
+  {
+   "product_id": "8187aae6-d59e-4aa9-abd8-ac41563b30c9",
+   "sku": "10192",
+   "name": "NEUMATICO BICICLETA DURO ARO 28 X 1.5/8 X 1.1/4 PANCITO",
+   "template": "tire",
+   "successor": "bead_seat_diameter_mm",
+   "kind": "number",
+   "value": 622,
+   "legacy_key": "wheel_size",
+   "legacy_value": "700c",
+   "source": "supplier_text",
+   "rule": "bsd: 700c is one ISO diameter"
+  },
+  {
+   "product_id": "8187aae6-d59e-4aa9-abd8-ac41563b30c9",
+   "sku": "10192",
+   "name": "NEUMATICO BICICLETA DURO ARO 28 X 1.5/8 X 1.1/4 PANCITO",
+   "template": "tire",
+   "successor": "tire_width_mm",
+   "kind": "number",
+   "value": 41.3,
+   "legacy_key": "tire_width_in",
+   "legacy_value": "1.62500000000000000000",
+   "source": "supplier_text",
+   "rule": "inch_to_mm"
+  },
+  {
+   "product_id": "bbc06dfd-24fb-4286-a725-cc2e3587e13e",
+   "sku": "13339",
+   "name": "Neumático Buffalo Caluga Mtb 26 X 2.10 Negro",
+   "template": "tire",
+   "successor": "bead_seat_diameter_mm",
+   "kind": "number",
+   "value": 559,
+   "legacy_key": "wheel_size",
+   "legacy_value": "26\"",
+   "source": "supplier_text",
+   "rule": "bsd: 26\" with a decimal width"
+  },
+  {
+   "product_id": "bbc06dfd-24fb-4286-a725-cc2e3587e13e",
+   "sku": "13339",
+   "name": "Neumático Buffalo Caluga Mtb 26 X 2.10 Negro",
+   "template": "tire",
+   "successor": "tire_width_mm",
+   "kind": "number",
+   "value": 53.3,
+   "legacy_key": "tire_width_in",
+   "legacy_value": "2.10",
+   "source": "supplier_text",
+   "rule": "inch_to_mm"
+  },
+  {
+   "product_id": "2f8b0311-5abd-4a3a-bed4-55de2719a7bf",
+   "sku": "13029",
+   "name": "Neumático Buffalo Freestyle 20 X 1.75",
+   "template": "tire",
+   "successor": "bead_seat_diameter_mm",
+   "kind": "number",
+   "value": 406,
+   "legacy_key": "wheel_size",
+   "legacy_value": "20\"",
+   "source": "supplier_text",
+   "rule": "bsd: 20\" with a decimal width"
+  },
+  {
+   "product_id": "2f8b0311-5abd-4a3a-bed4-55de2719a7bf",
+   "sku": "13029",
+   "name": "Neumático Buffalo Freestyle 20 X 1.75",
+   "template": "tire",
+   "successor": "tire_width_mm",
+   "kind": "number",
+   "value": 44.4,
+   "legacy_key": "tire_width_in",
+   "legacy_value": "1.75",
+   "source": "supplier_text",
+   "rule": "inch_to_mm"
+  },
+  {
+   "product_id": "11d40720-b287-4d92-8b78-2f2d00ce877c",
+   "sku": "13026",
+   "name": "Neumático Buffalo Freestyle 20 X 1.75 descuento35buffalo",
+   "template": "tire",
+   "successor": "bead_seat_diameter_mm",
+   "kind": "number",
+   "value": 406,
+   "legacy_key": "wheel_size",
+   "legacy_value": "20\"",
+   "source": "supplier_text",
+   "rule": "bsd: 20\" with a decimal width"
+  },
+  {
+   "product_id": "11d40720-b287-4d92-8b78-2f2d00ce877c",
+   "sku": "13026",
+   "name": "Neumático Buffalo Freestyle 20 X 1.75 descuento35buffalo",
+   "template": "tire",
+   "successor": "tire_width_mm",
+   "kind": "number",
+   "value": 44.4,
+   "legacy_key": "tire_width_in",
+   "legacy_value": "1.75",
+   "source": "supplier_text",
+   "rule": "inch_to_mm"
+  },
+  {
+   "product_id": "3f6335dd-06cb-4799-a1ec-2b7b8027aa7d",
+   "sku": "10240",
+   "name": "Neumático Buffalo Mtb 26 X 2.125 Negro",
+   "template": "tire",
+   "successor": "bead_seat_diameter_mm",
+   "kind": "number",
+   "value": 559,
+   "legacy_key": "wheel_size",
+   "legacy_value": "26\"",
+   "source": "supplier_text",
+   "rule": "bsd: 26\" with a decimal width"
+  },
+  {
+   "product_id": "3f6335dd-06cb-4799-a1ec-2b7b8027aa7d",
+   "sku": "10240",
+   "name": "Neumático Buffalo Mtb 26 X 2.125 Negro",
+   "template": "tire",
+   "successor": "tire_width_mm",
+   "kind": "number",
+   "value": 54.0,
+   "legacy_key": "tire_width_in",
+   "legacy_value": "2.125",
+   "source": "supplier_text",
+   "rule": "inch_to_mm"
+  },
+  {
+   "product_id": "85d7f228-e3fc-4ab5-8a2b-1f0fd475c90a",
+   "sku": "6927116126957",
+   "name": "NEUMATICO CHAOYANG 26X2.10 60TPI VICTORY H-5129 HIPO SKIN",
+   "template": "tire",
+   "successor": "bead_seat_diameter_mm",
+   "kind": "number",
+   "value": 559,
+   "legacy_key": "wheel_size",
+   "legacy_value": "26\"",
+   "source": "supplier_text",
+   "rule": "bsd: 26\" with a decimal width"
+  },
+  {
+   "product_id": "85d7f228-e3fc-4ab5-8a2b-1f0fd475c90a",
+   "sku": "6927116126957",
+   "name": "NEUMATICO CHAOYANG 26X2.10 60TPI VICTORY H-5129 HIPO SKIN",
+   "template": "tire",
+   "successor": "tire_width_mm",
+   "kind": "number",
+   "value": 53.3,
+   "legacy_key": "tire_width_in",
+   "legacy_value": "2.10",
+   "source": "supplier_text",
+   "rule": "inch_to_mm"
+  },
+  {
+   "product_id": "82189cb4-68bf-4e08-9ab1-3872aa1c8188",
+   "sku": "6927116122010",
+   "name": "Neumático Chaoyang 700x25c Speed Shark",
+   "template": "tire",
+   "successor": "bead_seat_diameter_mm",
+   "kind": "number",
+   "value": 622,
+   "legacy_key": "wheel_size",
+   "legacy_value": "700c",
+   "source": "supplier_text",
+   "rule": "bsd: 700c is one ISO diameter"
+  },
+  {
+   "product_id": "84afe266-da40-48b5-ad48-bebd6b491706",
+   "sku": "6927116126254",
+   "name": "NEUMATICO CHAOYANG COUGAR 26X2.25 H-5134",
+   "template": "tire",
+   "successor": "bead_seat_diameter_mm",
+   "kind": "number",
+   "value": 559,
+   "legacy_key": "wheel_size",
+   "legacy_value": "26\"",
+   "source": "supplier_text",
+   "rule": "bsd: 26\" with a decimal width"
+  },
+  {
+   "product_id": "84afe266-da40-48b5-ad48-bebd6b491706",
+   "sku": "6927116126254",
+   "name": "NEUMATICO CHAOYANG COUGAR 26X2.25 H-5134",
+   "template": "tire",
+   "successor": "tire_width_mm",
+   "kind": "number",
+   "value": 57.1,
+   "legacy_key": "tire_width_in",
+   "legacy_value": "2.25",
+   "source": "supplier_text",
+   "rule": "inch_to_mm"
+  },
+  {
+   "product_id": "37b7feb7-b775-4566-9038-46983c5c4323",
+   "sku": "36821",
+   "name": "NEUMÁTICO CONTINENTAL 26 X 2.10 EXPLORER MTB",
+   "template": "tire",
+   "successor": "bead_seat_diameter_mm",
+   "kind": "number",
+   "value": 559,
+   "legacy_key": "wheel_size",
+   "legacy_value": "26\"",
+   "source": "supplier_text",
+   "rule": "bsd: 26\" with a decimal width"
+  },
+  {
+   "product_id": "37b7feb7-b775-4566-9038-46983c5c4323",
+   "sku": "36821",
+   "name": "NEUMÁTICO CONTINENTAL 26 X 2.10 EXPLORER MTB",
+   "template": "tire",
+   "successor": "tire_width_mm",
+   "kind": "number",
+   "value": 53.3,
+   "legacy_key": "tire_width_in",
+   "legacy_value": "2.10",
+   "source": "supplier_text",
+   "rule": "inch_to_mm"
+  },
+  {
+   "product_id": "d61519e9-e3a3-4f12-9daf-60f1e073db6d",
+   "sku": "25257",
+   "name": "Neumatico CST 24x2.10 C1020N",
+   "template": "tire",
+   "successor": "bead_seat_diameter_mm",
+   "kind": "number",
+   "value": 507,
+   "legacy_key": "wheel_size",
+   "legacy_value": "24\"",
+   "source": "supplier_text",
+   "rule": "bsd: 24\" with a decimal width"
+  },
+  {
+   "product_id": "d61519e9-e3a3-4f12-9daf-60f1e073db6d",
+   "sku": "25257",
+   "name": "Neumatico CST 24x2.10 C1020N",
+   "template": "tire",
+   "successor": "tire_width_mm",
+   "kind": "number",
+   "value": 53.3,
+   "legacy_key": "tire_width_in",
+   "legacy_value": "2.10",
+   "source": "supplier_text",
+   "rule": "inch_to_mm"
+  },
+  {
+   "product_id": "525d70ed-d0fb-41ec-ab57-8346652b7da0",
+   "sku": "25259",
+   "name": "Neumatico CST AT 26x2.10 C1820",
+   "template": "tire",
+   "successor": "bead_seat_diameter_mm",
+   "kind": "number",
+   "value": 559,
+   "legacy_key": "wheel_size",
+   "legacy_value": "26\"",
+   "source": "supplier_text",
+   "rule": "bsd: 26\" with a decimal width"
+  },
+  {
+   "product_id": "525d70ed-d0fb-41ec-ab57-8346652b7da0",
+   "sku": "25259",
+   "name": "Neumatico CST AT 26x2.10 C1820",
+   "template": "tire",
+   "successor": "tire_width_mm",
+   "kind": "number",
+   "value": 53.3,
+   "legacy_key": "tire_width_in",
+   "legacy_value": "2.10",
+   "source": "supplier_text",
+   "rule": "inch_to_mm"
+  },
+  {
+   "product_id": "718a3a0b-296d-4929-92ba-ffbf977d13d7",
+   "sku": "25268",
+   "name": "Neumatico CST JACK RABBIT, 29x2.25. Black.",
+   "template": "tire",
+   "successor": "bead_seat_diameter_mm",
+   "kind": "number",
+   "value": 622,
+   "legacy_key": "wheel_size",
+   "legacy_value": "29\"",
+   "source": "supplier_text",
+   "rule": "bsd: 29\" is one ISO diameter"
+  },
+  {
+   "product_id": "718a3a0b-296d-4929-92ba-ffbf977d13d7",
+   "sku": "25268",
+   "name": "Neumatico CST JACK RABBIT, 29x2.25. Black.",
+   "template": "tire",
+   "successor": "tire_width_mm",
+   "kind": "number",
+   "value": 57.1,
+   "legacy_key": "tire_width_in",
+   "legacy_value": "2.25",
+   "source": "supplier_text",
+   "rule": "inch_to_mm"
+  },
+  {
+   "product_id": "fdc03f1b-6783-43cc-a9fd-3f0c5d8973cc",
+   "sku": "25267",
+   "name": "Neumatico CST OUSTER, 29x2.25. Black.",
+   "template": "tire",
+   "successor": "bead_seat_diameter_mm",
+   "kind": "number",
+   "value": 622,
+   "legacy_key": "wheel_size",
+   "legacy_value": "29\"",
+   "source": "supplier_text",
+   "rule": "bsd: 29\" is one ISO diameter"
+  },
+  {
+   "product_id": "fdc03f1b-6783-43cc-a9fd-3f0c5d8973cc",
+   "sku": "25267",
+   "name": "Neumatico CST OUSTER, 29x2.25. Black.",
+   "template": "tire",
+   "successor": "tire_width_mm",
+   "kind": "number",
+   "value": 57.1,
+   "legacy_key": "tire_width_in",
+   "legacy_value": "2.25",
+   "source": "supplier_text",
+   "rule": "inch_to_mm"
+  },
+  {
+   "product_id": "aa04c5e3-edb0-469b-ba69-c09384e10336",
+   "sku": "N072",
+   "name": "Neumatico Fantom 20 x 2.125 Negro China",
+   "template": "tire",
+   "successor": "bead_seat_diameter_mm",
+   "kind": "number",
+   "value": 406,
+   "legacy_key": "wheel_size",
+   "legacy_value": "20\"",
+   "source": "supplier_text",
+   "rule": "bsd: 20\" with a decimal width"
+  },
+  {
+   "product_id": "aa04c5e3-edb0-469b-ba69-c09384e10336",
+   "sku": "N072",
+   "name": "Neumatico Fantom 20 x 2.125 Negro China",
+   "template": "tire",
+   "successor": "tire_width_mm",
+   "kind": "number",
+   "value": 54.0,
+   "legacy_key": "tire_width_in",
+   "legacy_value": "2.125",
+   "source": "supplier_text",
+   "rule": "inch_to_mm"
+  },
+  {
+   "product_id": "2d3607da-e42f-4a8c-a9cd-931515ca04d7",
+   "sku": "N399",
+   "name": "Neumatico Fantom 26 X 2.10 Mtb Negro",
+   "template": "tire",
+   "successor": "bead_seat_diameter_mm",
+   "kind": "number",
+   "value": 559,
+   "legacy_key": "wheel_size",
+   "legacy_value": "26\"",
+   "source": "supplier_text",
+   "rule": "bsd: 26\" with a decimal width"
+  },
+  {
+   "product_id": "2d3607da-e42f-4a8c-a9cd-931515ca04d7",
+   "sku": "N399",
+   "name": "Neumatico Fantom 26 X 2.10 Mtb Negro",
+   "template": "tire",
+   "successor": "tire_width_mm",
+   "kind": "number",
+   "value": 53.3,
+   "legacy_key": "tire_width_in",
+   "legacy_value": "2.10",
+   "source": "supplier_text",
+   "rule": "inch_to_mm"
+  },
+  {
+   "product_id": "ab6521c3-9ca3-4809-b712-f7dbf0717f46",
+   "sku": "19160",
+   "name": "Neumático FREEDOM Dual, 29x2.10",
+   "template": "tire",
+   "successor": "bead_seat_diameter_mm",
+   "kind": "number",
+   "value": 622,
+   "legacy_key": "wheel_size",
+   "legacy_value": "29\"",
+   "source": "supplier_text",
+   "rule": "bsd: 29\" is one ISO diameter"
+  },
+  {
+   "product_id": "ab6521c3-9ca3-4809-b712-f7dbf0717f46",
+   "sku": "19160",
+   "name": "Neumático FREEDOM Dual, 29x2.10",
+   "template": "tire",
+   "successor": "tire_width_mm",
+   "kind": "number",
+   "value": 53.3,
+   "legacy_key": "tire_width_in",
+   "legacy_value": "2.10",
+   "source": "supplier_text",
+   "rule": "inch_to_mm"
+  },
+  {
+   "product_id": "382c6a16-3473-4ed3-95ed-0255712cae61",
+   "sku": "19161",
+   "name": "Neumático FREEDOM Gangster, 27,5x2.10",
+   "template": "tire",
+   "successor": "bead_seat_diameter_mm",
+   "kind": "number",
+   "value": 584,
+   "legacy_key": "wheel_size",
+   "legacy_value": "27.5\"",
+   "source": "supplier_text",
+   "rule": "bsd: 27.5\" is one ISO diameter"
+  },
+  {
+   "product_id": "382c6a16-3473-4ed3-95ed-0255712cae61",
+   "sku": "19161",
+   "name": "Neumático FREEDOM Gangster, 27,5x2.10",
+   "template": "tire",
+   "successor": "tire_width_mm",
+   "kind": "number",
+   "value": 53.3,
+   "legacy_key": "tire_width_in",
+   "legacy_value": "2.10",
+   "source": "supplier_text",
+   "rule": "inch_to_mm"
+  },
+  {
+   "product_id": "3a491ff0-019e-4e78-9350-a91c1d206e06",
+   "sku": "20020",
+   "name": "Neumático FREEDOM Roadrunner 700x25",
+   "template": "tire",
+   "successor": "bead_seat_diameter_mm",
+   "kind": "number",
+   "value": 622,
+   "legacy_key": "wheel_size",
+   "legacy_value": "700c",
+   "source": "supplier_text",
+   "rule": "bsd: 700c is one ISO diameter"
+  },
+  {
+   "product_id": "1eb2d9cd-c2f8-4e5e-bcc4-8c7deaad5402",
+   "sku": "36757",
+   "name": "NEUMATICO HARTEX 26 X 2.10 XTRA ACTION 30 TPI SW, PREM 54-559",
+   "template": "tire",
+   "successor": "bead_seat_diameter_mm",
+   "kind": "number",
+   "value": 559,
+   "legacy_key": "wheel_size",
+   "legacy_value": "26\"",
+   "source": "supplier_text",
+   "rule": "bsd: iso number in the name"
+  },
+  {
+   "product_id": "1eb2d9cd-c2f8-4e5e-bcc4-8c7deaad5402",
+   "sku": "36757",
+   "name": "NEUMATICO HARTEX 26 X 2.10 XTRA ACTION 30 TPI SW, PREM 54-559",
+   "template": "tire",
+   "successor": "tire_width_mm",
+   "kind": "number",
+   "value": 53.3,
+   "legacy_key": "tire_width_in",
+   "legacy_value": "2.10",
+   "source": "supplier_text",
+   "rule": "inch_to_mm"
+  },
+  {
+   "product_id": "baf80c1b-37e1-4e31-b64c-0b61a576b2b8",
+   "sku": "36761",
+   "name": "NEUMATICO HARTEX 26 X 2.125 OVERDRIVE 30 TPI GW, PREM 57-559",
+   "template": "tire",
+   "successor": "bead_seat_diameter_mm",
+   "kind": "number",
+   "value": 559,
+   "legacy_key": "wheel_size",
+   "legacy_value": "26\"",
+   "source": "supplier_text",
+   "rule": "bsd: iso number in the name"
+  },
+  {
+   "product_id": "baf80c1b-37e1-4e31-b64c-0b61a576b2b8",
+   "sku": "36761",
+   "name": "NEUMATICO HARTEX 26 X 2.125 OVERDRIVE 30 TPI GW, PREM 57-559",
+   "template": "tire",
+   "successor": "tire_width_mm",
+   "kind": "number",
+   "value": 54.0,
+   "legacy_key": "tire_width_in",
+   "legacy_value": "2.125",
+   "source": "supplier_text",
+   "rule": "inch_to_mm"
+  },
+  {
+   "product_id": "27816b43-014a-4a69-ad66-55a9dd60affc",
+   "sku": "36754",
+   "name": "NEUMATICO HARTEX 29 X 2.10 XTRA ACTION 30 TPI SW, PREM 54-622",
+   "template": "tire",
+   "successor": "bead_seat_diameter_mm",
+   "kind": "number",
+   "value": 622,
+   "legacy_key": "wheel_size",
+   "legacy_value": "29\"",
+   "source": "supplier_text",
+   "rule": "bsd: iso number in the name"
+  },
+  {
+   "product_id": "27816b43-014a-4a69-ad66-55a9dd60affc",
+   "sku": "36754",
+   "name": "NEUMATICO HARTEX 29 X 2.10 XTRA ACTION 30 TPI SW, PREM 54-622",
+   "template": "tire",
+   "successor": "tire_width_mm",
+   "kind": "number",
+   "value": 53.3,
+   "legacy_key": "tire_width_in",
+   "legacy_value": "2.10",
+   "source": "supplier_text",
+   "rule": "inch_to_mm"
+  },
+  {
+   "product_id": "03391f9a-3caa-4119-9e06-3985be9af589",
+   "sku": "148-nitro-1",
+   "name": "NEUMATICO HUTCHINSON NITRO BANDA CAFE 700X28C",
+   "template": "tire",
+   "successor": "bead_seat_diameter_mm",
+   "kind": "number",
+   "value": 622,
+   "legacy_key": "wheel_size",
+   "legacy_value": "700c",
+   "source": "supplier_text",
+   "rule": "bsd: 700c is one ISO diameter"
+  },
+  {
+   "product_id": "a0c58f42-3f1d-4ec1-8f18-066268d8c2bd",
+   "sku": "6938112676117",
+   "name": "NEUMATICO KEVLAR 27.5X2.4 3C AM PERSUADER WET",
+   "template": "tire",
+   "successor": "bead_seat_diameter_mm",
+   "kind": "number",
+   "value": 584,
+   "legacy_key": "wheel_size",
+   "legacy_value": "27.5\"",
+   "source": "supplier_text",
+   "rule": "bsd: 27.5\" is one ISO diameter"
+  },
+  {
+   "product_id": "a0c58f42-3f1d-4ec1-8f18-066268d8c2bd",
+   "sku": "6938112676117",
+   "name": "NEUMATICO KEVLAR 27.5X2.4 3C AM PERSUADER WET",
+   "template": "tire",
+   "successor": "tire_width_mm",
+   "kind": "number",
+   "value": 61.0,
+   "legacy_key": "tire_width_in",
+   "legacy_value": "2.4",
+   "source": "supplier_text",
+   "rule": "inch_to_mm"
+  },
+  {
+   "product_id": "d734c30f-2470-43e9-9f49-d05c13ada7b4",
+   "sku": "18372",
+   "name": "Neumatico Kevlar Bicicleta Aro 27.5 X 2.10 Explorer Ralco",
+   "template": "tire",
+   "successor": "bead_seat_diameter_mm",
+   "kind": "number",
+   "value": 584,
+   "legacy_key": "wheel_size",
+   "legacy_value": "27.5\"",
+   "source": "supplier_text",
+   "rule": "bsd: 27.5\" is one ISO diameter"
+  },
+  {
+   "product_id": "d734c30f-2470-43e9-9f49-d05c13ada7b4",
+   "sku": "18372",
+   "name": "Neumatico Kevlar Bicicleta Aro 27.5 X 2.10 Explorer Ralco",
+   "template": "tire",
+   "successor": "tire_width_mm",
+   "kind": "number",
+   "value": 53.3,
+   "legacy_key": "tire_width_in",
+   "legacy_value": "2.10",
+   "source": "supplier_text",
+   "rule": "inch_to_mm"
+  },
+  {
+   "product_id": "d378a6b3-b8ee-4580-ba38-166ffdb0f178",
+   "sku": "18374",
+   "name": "NEUMATICO KEVLAR RUTA BICICLETA ARO 700 X 23C 60 TPI RALCO",
+   "template": "tire",
+   "successor": "bead_seat_diameter_mm",
+   "kind": "number",
+   "value": 622,
+   "legacy_key": "wheel_size",
+   "legacy_value": "700c",
+   "source": "supplier_text",
+   "rule": "bsd: 700c is one ISO diameter"
+  },
+  {
+   "product_id": "680132a2-fbba-4320-9d01-4372c0b272c6",
+   "sku": "18522",
+   "name": "Neumatico Kevlar Ruta Bicicleta Aro 700 X 38C Ralco",
+   "template": "tire",
+   "successor": "bead_seat_diameter_mm",
+   "kind": "number",
+   "value": 622,
+   "legacy_key": "wheel_size",
+   "legacy_value": "700c",
+   "source": "supplier_text",
+   "rule": "bsd: 700c is one ISO diameter"
+  },
+  {
+   "product_id": "a9da66aa-694b-4c58-bfc7-c64bf0b3dd86",
+   "sku": "4717784039275",
+   "name": "Neumático MAXXIS ALAMBRE 29X2.25 REKON RACE",
+   "template": "tire",
+   "successor": "bead_seat_diameter_mm",
+   "kind": "number",
+   "value": 622,
+   "legacy_key": "wheel_size",
+   "legacy_value": "29\"",
+   "source": "supplier_text",
+   "rule": "bsd: 29\" is one ISO diameter"
+  },
+  {
+   "product_id": "a9da66aa-694b-4c58-bfc7-c64bf0b3dd86",
+   "sku": "4717784039275",
+   "name": "Neumático MAXXIS ALAMBRE 29X2.25 REKON RACE",
+   "template": "tire",
+   "successor": "tire_width_mm",
+   "kind": "number",
+   "value": 57.1,
+   "legacy_key": "tire_width_in",
+   "legacy_value": "2.25",
+   "source": "supplier_text",
+   "rule": "inch_to_mm"
+  },
+  {
+   "product_id": "9c3f7928-9f6d-4c3a-b77a-a2a963e593c3",
+   "sku": "18501",
+   "name": "NEUMATICO RALCO 26 X 2.125 57-559 FIRE ALAMBRE (R-4109) ALAMBRE / RIGIDO",
+   "template": "tire",
+   "successor": "bead_seat_diameter_mm",
+   "kind": "number",
+   "value": 559,
+   "legacy_key": "wheel_size",
+   "legacy_value": "26\"",
+   "source": "supplier_text",
+   "rule": "bsd: iso number in the name"
+  },
+  {
+   "product_id": "9c3f7928-9f6d-4c3a-b77a-a2a963e593c3",
+   "sku": "18501",
+   "name": "NEUMATICO RALCO 26 X 2.125 57-559 FIRE ALAMBRE (R-4109) ALAMBRE / RIGIDO",
+   "template": "tire",
+   "successor": "tire_width_mm",
+   "kind": "number",
+   "value": 54.0,
+   "legacy_key": "tire_width_in",
+   "legacy_value": "2.125",
+   "source": "supplier_text",
+   "rule": "inch_to_mm"
+  },
+  {
+   "product_id": "4b684a5b-a155-4f29-ade9-24c7eae187d7",
+   "sku": "23341",
+   "name": "Neumatico RIDEXC BMX 20x2.40, Black",
+   "template": "tire",
+   "successor": "bead_seat_diameter_mm",
+   "kind": "number",
+   "value": 406,
+   "legacy_key": "wheel_size",
+   "legacy_value": "20\"",
+   "source": "supplier_text",
+   "rule": "bsd: 20\" with a decimal width"
+  },
+  {
+   "product_id": "4b684a5b-a155-4f29-ade9-24c7eae187d7",
+   "sku": "23341",
+   "name": "Neumatico RIDEXC BMX 20x2.40, Black",
+   "template": "tire",
+   "successor": "tire_width_mm",
+   "kind": "number",
+   "value": 61.0,
+   "legacy_key": "tire_width_in",
+   "legacy_value": "2.40",
+   "source": "supplier_text",
+   "rule": "inch_to_mm"
+  },
+  {
+   "product_id": "5cfcfb8e-456b-401d-9bf0-73beeb34f94f",
+   "sku": "23472",
+   "name": "Neumatico RIDEXC COMP 26X2.10",
+   "template": "tire",
+   "successor": "bead_seat_diameter_mm",
+   "kind": "number",
+   "value": 559,
+   "legacy_key": "wheel_size",
+   "legacy_value": "26\"",
+   "source": "supplier_text",
+   "rule": "bsd: 26\" with a decimal width"
+  },
+  {
+   "product_id": "5cfcfb8e-456b-401d-9bf0-73beeb34f94f",
+   "sku": "23472",
+   "name": "Neumatico RIDEXC COMP 26X2.10",
+   "template": "tire",
+   "successor": "tire_width_mm",
+   "kind": "number",
+   "value": 53.3,
+   "legacy_key": "tire_width_in",
+   "legacy_value": "2.10",
+   "source": "supplier_text",
+   "rule": "inch_to_mm"
+  },
+  {
+   "product_id": "053d0d0a-017c-40fe-bb33-e9d3e563a677",
+   "sku": "6927116101619",
+   "name": "NEUMATICO RUTA BICICLETA ARO 700 X 23C RAPIDE NEGRO ARISUN",
+   "template": "tire",
+   "successor": "bead_seat_diameter_mm",
+   "kind": "number",
+   "value": 622,
+   "legacy_key": "wheel_size",
+   "legacy_value": "700c",
+   "source": "supplier_text",
+   "rule": "bsd: 700c is one ISO diameter"
+  },
+  {
+   "product_id": "0930dbdb-4ac0-4f88-a088-5ba0b91ae2d3",
+   "sku": "18445",
+   "name": "Neumatico Ruta Bicicleta Aro 700 X 23C Wanda Fireball Best",
+   "template": "tire",
+   "successor": "bead_seat_diameter_mm",
+   "kind": "number",
+   "value": 622,
+   "legacy_key": "wheel_size",
+   "legacy_value": "700c",
+   "source": "supplier_text",
+   "rule": "bsd: 700c is one ISO diameter"
+  },
+  {
+   "product_id": "449a4c19-3c2d-4248-852d-96a77563defe",
+   "sku": "18446",
+   "name": "NEUMATICO RUTA BICICLETA ARO 700 X 28C WANDA FIREBALL BEST",
+   "template": "tire",
+   "successor": "bead_seat_diameter_mm",
+   "kind": "number",
+   "value": 622,
+   "legacy_key": "wheel_size",
+   "legacy_value": "700c",
+   "source": "supplier_text",
+   "rule": "bsd: 700c is one ISO diameter"
+  },
+  {
+   "product_id": "5c1637ec-4dda-4850-b54e-4b5772a6708b",
+   "sku": "16359",
+   "name": "Neumatico Ruta Bicicleta Aro 700 X 32C Metro Cruiser Arisun",
+   "template": "tire",
+   "successor": "bead_seat_diameter_mm",
+   "kind": "number",
+   "value": 622,
+   "legacy_key": "wheel_size",
+   "legacy_value": "700c",
+   "source": "supplier_text",
+   "rule": "bsd: 700c is one ISO diameter"
+  },
+  {
+   "product_id": "051eb363-e158-4df8-9c46-5ec44cc221d8",
+   "sku": "6927116100094",
+   "name": "Neumatico Ruta Bicicleta Aro 700 X 32C Metro Runner Arisun",
+   "template": "tire",
+   "successor": "bead_seat_diameter_mm",
+   "kind": "number",
+   "value": 622,
+   "legacy_key": "wheel_size",
+   "legacy_value": "700c",
+   "source": "supplier_text",
+   "rule": "bsd: 700c is one ISO diameter"
+  },
+  {
+   "product_id": "803855f4-e2bc-4115-b610-477117205249",
+   "sku": "6927116101848",
+   "name": "Neumatico Ruta Bicicleta Aro 700 X 33C Dual Action Arisun",
+   "template": "tire",
+   "successor": "bead_seat_diameter_mm",
+   "kind": "number",
+   "value": 622,
+   "legacy_key": "wheel_size",
+   "legacy_value": "700c",
+   "source": "supplier_text",
+   "rule": "bsd: 700c is one ISO diameter"
+  },
+  {
+   "product_id": "c11a3a4d-1809-471d-9dad-7cc627530f47",
+   "sku": "N263",
+   "name": "Neumatico Vuelta 20 X 2.125 Cb-567 Freestyle.",
+   "template": "tire",
+   "successor": "bead_seat_diameter_mm",
+   "kind": "number",
+   "value": 406,
+   "legacy_key": "wheel_size",
+   "legacy_value": "20\"",
+   "source": "supplier_text",
+   "rule": "bsd: 20\" with a decimal width"
+  },
+  {
+   "product_id": "c11a3a4d-1809-471d-9dad-7cc627530f47",
+   "sku": "N263",
+   "name": "Neumatico Vuelta 20 X 2.125 Cb-567 Freestyle.",
+   "template": "tire",
+   "successor": "tire_width_mm",
+   "kind": "number",
+   "value": 54.0,
+   "legacy_key": "tire_width_in",
+   "legacy_value": "2.125",
+   "source": "supplier_text",
+   "rule": "inch_to_mm"
+  },
+  {
+   "product_id": "9eaf3153-6bb8-4e2b-8d2e-69c5ec06c493",
+   "sku": "N079",
+   "name": "Neumático Vuelta MTB CB531 26x1.95\" Negro",
+   "template": "tire",
+   "successor": "bead_seat_diameter_mm",
+   "kind": "number",
+   "value": 559,
+   "legacy_key": "wheel_size",
+   "legacy_value": "26\"",
+   "source": "supplier_text",
+   "rule": "bsd: 26\" with a decimal width"
+  },
+  {
+   "product_id": "9eaf3153-6bb8-4e2b-8d2e-69c5ec06c493",
+   "sku": "N079",
+   "name": "Neumático Vuelta MTB CB531 26x1.95\" Negro",
+   "template": "tire",
+   "successor": "tire_width_mm",
+   "kind": "number",
+   "value": 49.5,
+   "legacy_key": "tire_width_in",
+   "legacy_value": "1.95",
+   "source": "supplier_text",
+   "rule": "inch_to_mm"
+  },
+  {
+   "product_id": "5bc8fde8-5c1d-40d7-aef7-ad7b053427c5",
+   "sku": "N235",
+   "name": "Neumatico Vuelta U S A . 20 X 1.95 C-961 Mtb",
+   "template": "tire",
+   "successor": "bead_seat_diameter_mm",
+   "kind": "number",
+   "value": 406,
+   "legacy_key": "wheel_size",
+   "legacy_value": "20\"",
+   "source": "supplier_text",
+   "rule": "bsd: 20\" with a decimal width"
+  },
+  {
+   "product_id": "5bc8fde8-5c1d-40d7-aef7-ad7b053427c5",
+   "sku": "N235",
+   "name": "Neumatico Vuelta U S A . 20 X 1.95 C-961 Mtb",
+   "template": "tire",
+   "successor": "tire_width_mm",
+   "kind": "number",
+   "value": 49.5,
+   "legacy_key": "tire_width_in",
+   "legacy_value": "1.95",
+   "source": "supplier_text",
+   "rule": "inch_to_mm"
+  },
+  {
+   "product_id": "ee4210e3-0ef3-489b-b304-5b26d58f5e7b",
+   "sku": "2000000136042",
+   "name": "Neumatico Vuelta U.s.a 26 X 2.10 Cb-961 Negro",
+   "template": "tire",
+   "successor": "bead_seat_diameter_mm",
+   "kind": "number",
+   "value": 559,
+   "legacy_key": "wheel_size",
+   "legacy_value": "26\"",
+   "source": "supplier_text",
+   "rule": "bsd: 26\" with a decimal width"
+  },
+  {
+   "product_id": "ee4210e3-0ef3-489b-b304-5b26d58f5e7b",
+   "sku": "2000000136042",
+   "name": "Neumatico Vuelta U.s.a 26 X 2.10 Cb-961 Negro",
+   "template": "tire",
+   "successor": "tire_width_mm",
+   "kind": "number",
+   "value": 53.3,
+   "legacy_key": "tire_width_in",
+   "legacy_value": "2.10",
+   "source": "supplier_text",
+   "rule": "inch_to_mm"
+  },
+  {
+   "product_id": "f1988cde-5197-4450-8762-3cef19114fda",
+   "sku": "N082",
+   "name": "Neumatico Vuelta U.s.a 26 X 2.125 Cb-673 Pan",
+   "template": "tire",
+   "successor": "bead_seat_diameter_mm",
+   "kind": "number",
+   "value": 559,
+   "legacy_key": "wheel_size",
+   "legacy_value": "26\"",
+   "source": "supplier_text",
+   "rule": "bsd: 26\" with a decimal width"
+  },
+  {
+   "product_id": "f1988cde-5197-4450-8762-3cef19114fda",
+   "sku": "N082",
+   "name": "Neumatico Vuelta U.s.a 26 X 2.125 Cb-673 Pan",
+   "template": "tire",
+   "successor": "tire_width_mm",
+   "kind": "number",
+   "value": 54.0,
+   "legacy_key": "tire_width_in",
+   "legacy_value": "2.125",
+   "source": "supplier_text",
+   "rule": "inch_to_mm"
+  },
+  {
+   "product_id": "e2084fb6-a3ac-451d-afc4-4c9a5ee47cfb",
+   "sku": "2000000384733",
+   "name": "Neumatico Vuelta U.s.a 27.5 X 2.10 Cb-961",
+   "template": "tire",
+   "successor": "bead_seat_diameter_mm",
+   "kind": "number",
+   "value": 584,
+   "legacy_key": "wheel_size",
+   "legacy_value": "27.5\"",
+   "source": "supplier_text",
+   "rule": "bsd: 27.5\" is one ISO diameter"
+  },
+  {
+   "product_id": "e2084fb6-a3ac-451d-afc4-4c9a5ee47cfb",
+   "sku": "2000000384733",
+   "name": "Neumatico Vuelta U.s.a 27.5 X 2.10 Cb-961",
+   "template": "tire",
+   "successor": "tire_width_mm",
+   "kind": "number",
+   "value": 53.3,
+   "legacy_key": "tire_width_in",
+   "legacy_value": "2.10",
+   "source": "supplier_text",
+   "rule": "inch_to_mm"
+  },
+  {
+   "product_id": "e15caf53-bce6-4a61-ada1-20f3f98fdab6",
+   "sku": "2000000384757",
+   "name": "Neumatico Vuelta U.s.a 29 X 2.10 Cb-561",
+   "template": "tire",
+   "successor": "bead_seat_diameter_mm",
+   "kind": "number",
+   "value": 622,
+   "legacy_key": "wheel_size",
+   "legacy_value": "29\"",
+   "source": "supplier_text",
+   "rule": "bsd: 29\" is one ISO diameter"
+  },
+  {
+   "product_id": "e15caf53-bce6-4a61-ada1-20f3f98fdab6",
+   "sku": "2000000384757",
+   "name": "Neumatico Vuelta U.s.a 29 X 2.10 Cb-561",
+   "template": "tire",
+   "successor": "tire_width_mm",
+   "kind": "number",
+   "value": 53.3,
+   "legacy_key": "tire_width_in",
+   "legacy_value": "2.10",
+   "source": "supplier_text",
+   "rule": "inch_to_mm"
+  },
+  {
+   "product_id": "ecb4f5d2-a41c-4b69-a0f3-d7498f7c1030",
+   "sku": "N306",
+   "name": "Neumatico Vuelta U.s.a. 20 X 2.125 Cb-571 Pan",
+   "template": "tire",
+   "successor": "bead_seat_diameter_mm",
+   "kind": "number",
+   "value": 406,
+   "legacy_key": "wheel_size",
+   "legacy_value": "20\"",
+   "source": "supplier_text",
+   "rule": "bsd: 20\" with a decimal width"
+  },
+  {
+   "product_id": "ecb4f5d2-a41c-4b69-a0f3-d7498f7c1030",
+   "sku": "N306",
+   "name": "Neumatico Vuelta U.s.a. 20 X 2.125 Cb-571 Pan",
+   "template": "tire",
+   "successor": "tire_width_mm",
+   "kind": "number",
+   "value": 54.0,
+   "legacy_key": "tire_width_in",
+   "legacy_value": "2.125",
+   "source": "supplier_text",
+   "rule": "inch_to_mm"
+  },
+  {
+   "product_id": "13c7b197-b7ee-4270-8ae8-894bab2672d8",
+   "sku": "N832",
+   "name": "Neumático Vuelta USA (700 x 32c) Negro",
+   "template": "tire",
+   "successor": "bead_seat_diameter_mm",
+   "kind": "number",
+   "value": 622,
+   "legacy_key": "wheel_size",
+   "legacy_value": "700c",
+   "source": "supplier_text",
+   "rule": "bsd: 700c is one ISO diameter"
+  },
+  {
+   "product_id": "500a9b90-2e0f-4be5-9604-cb3ef5472999",
+   "sku": "N1011",
+   "name": "Neumático Vuelta USA 24x1\"3/8 CB311 Negro",
+   "template": "tire",
+   "successor": "tire_width_mm",
+   "kind": "number",
+   "value": 34.9,
+   "legacy_key": "tire_width_in",
+   "legacy_value": "1.37500000000000000000",
+   "source": "supplier_text",
+   "rule": "inch_to_mm"
+  },
+  {
+   "product_id": "10531389-c439-459c-94fb-fe2c1544699a",
+   "sku": "8859746615496",
+   "name": "Neumático Vuelta USA 26x2.125\" CB-570 PAN",
+   "template": "tire",
+   "successor": "bead_seat_diameter_mm",
+   "kind": "number",
+   "value": 559,
+   "legacy_key": "wheel_size",
+   "legacy_value": "26\"",
+   "source": "supplier_text",
+   "rule": "bsd: 26\" with a decimal width"
+  },
+  {
+   "product_id": "10531389-c439-459c-94fb-fe2c1544699a",
+   "sku": "8859746615496",
+   "name": "Neumático Vuelta USA 26x2.125\" CB-570 PAN",
+   "template": "tire",
+   "successor": "tire_width_mm",
+   "kind": "number",
+   "value": 54.0,
+   "legacy_key": "tire_width_in",
+   "legacy_value": "2.125",
+   "source": "supplier_text",
+   "rule": "inch_to_mm"
+  },
+  {
+   "product_id": "451b3894-3fc2-4944-8c31-cb7a26eed34b",
+   "sku": "8859746630000",
+   "name": "Neumatico Vuelta USA 700x38c CB588 Negro",
+   "template": "tire",
+   "successor": "bead_seat_diameter_mm",
+   "kind": "number",
+   "value": 622,
+   "legacy_key": "wheel_size",
+   "legacy_value": "700c",
+   "source": "supplier_text",
+   "rule": "bsd: 700c is one ISO diameter"
+  },
+  {
+   "product_id": "d1853891-5670-44a9-905b-43b9f3c15fde",
+   "sku": "N898",
+   "name": "Neumatico Wanda Pro 26x2.10 P1197 Negro",
+   "template": "tire",
+   "successor": "bead_seat_diameter_mm",
+   "kind": "number",
+   "value": 559,
+   "legacy_key": "wheel_size",
+   "legacy_value": "26\"",
+   "source": "supplier_text",
+   "rule": "bsd: 26\" with a decimal width"
+  },
+  {
+   "product_id": "d1853891-5670-44a9-905b-43b9f3c15fde",
+   "sku": "N898",
+   "name": "Neumatico Wanda Pro 26x2.10 P1197 Negro",
+   "template": "tire",
+   "successor": "tire_width_mm",
+   "kind": "number",
+   "value": 53.3,
+   "legacy_key": "tire_width_in",
+   "legacy_value": "2.10",
+   "source": "supplier_text",
+   "rule": "inch_to_mm"
+  },
+  {
+   "product_id": "03fe7045-7423-4935-876e-71f86afe99c2",
+   "sku": "4717784029900",
+   "name": "Neumático XC 27.5X2.30 K MAXXIS TOMAHAWK 3C/TR/EXO",
+   "template": "tire",
+   "successor": "bead_seat_diameter_mm",
+   "kind": "number",
+   "value": 584,
+   "legacy_key": "wheel_size",
+   "legacy_value": "27.5\"",
+   "source": "supplier_text",
+   "rule": "bsd: 27.5\" is one ISO diameter"
+  },
+  {
+   "product_id": "03fe7045-7423-4935-876e-71f86afe99c2",
+   "sku": "4717784029900",
+   "name": "Neumático XC 27.5X2.30 K MAXXIS TOMAHAWK 3C/TR/EXO",
+   "template": "tire",
+   "successor": "tire_width_mm",
+   "kind": "number",
+   "value": 58.4,
+   "legacy_key": "tire_width_in",
+   "legacy_value": "2.30",
+   "source": "supplier_text",
+   "rule": "inch_to_mm"
+  },
+  {
+   "product_id": "f268cf37-362c-415f-a1be-6baa2e388a7e",
+   "sku": "8859746618961",
+   "name": "VUELTA USA 26X1.95 CB-531",
+   "template": "tire",
+   "successor": "bead_seat_diameter_mm",
+   "kind": "number",
+   "value": 559,
+   "legacy_key": "wheel_size",
+   "legacy_value": "26\"",
+   "source": "supplier_text",
+   "rule": "bsd: 26\" with a decimal width"
+  },
+  {
+   "product_id": "f268cf37-362c-415f-a1be-6baa2e388a7e",
+   "sku": "8859746618961",
+   "name": "VUELTA USA 26X1.95 CB-531",
+   "template": "tire",
+   "successor": "tire_width_mm",
+   "kind": "number",
+   "value": 49.5,
+   "legacy_key": "tire_width_in",
+   "legacy_value": "1.95",
+   "source": "supplier_text",
+   "rule": "inch_to_mm"
+  },
+  {
+   "product_id": "ccd76879-21d9-4065-af45-72427761e1f8",
+   "sku": "23215",
+   "name": "Camara 10 Ten 700x19/25 VF 60mm",
+   "template": "tube",
+   "successor": "tube_fit_rows",
+   "kind": "rows",
+   "value": {
+    "schema_version": 1,
+    "rows": [
+     {
+      "id": "bsd-622",
+      "values": {
+       "bead_seat_diameter_mm": "622",
+       "width_min_mm": "19",
+       "width_max_mm": "25"
+      },
+      "sources": []
+     }
+    ]
+   },
+   "legacy_key": "wheel_size",
+   "legacy_value": "700c",
+   "source": "supplier_text",
+   "rule": "tube_fit_row: 700c is one ISO diameter; widths mm"
+  },
+  {
+   "product_id": "ccd76879-21d9-4065-af45-72427761e1f8",
+   "sku": "23215",
+   "name": "Camara 10 Ten 700x19/25 VF 60mm",
+   "template": "tube",
+   "successor": "valve_standard",
+   "kind": "option",
+   "value": "Francesa (Presta)",
+   "legacy_key": "valve_type",
+   "legacy_value": "Presta (francesa)",
+   "source": "supplier_text",
+   "rule": "option"
+  },
+  {
+   "product_id": "31a2996f-766e-45a2-8845-76b24296c8b9",
+   "sku": "24048",
+   "name": "Cámara 10Ten 20x1,95/2,125 VA 35mm",
+   "template": "tube",
+   "successor": "tube_fit_rows",
+   "kind": "rows",
+   "value": {
+    "schema_version": 1,
+    "rows": [
+     {
+      "id": "bsd-406",
+      "values": {
+       "bead_seat_diameter_mm": "406",
+       "width_min_mm": "49.5",
+       "width_max_mm": "54"
+      },
+      "sources": []
+     }
+    ]
+   },
+   "legacy_key": "wheel_size",
+   "legacy_value": "20\"",
+   "source": "import",
+   "rule": "tube_fit_row: 20\" with a decimal width; widths inch_to_mm"
+  },
+  {
+   "product_id": "31a2996f-766e-45a2-8845-76b24296c8b9",
+   "sku": "24048",
+   "name": "Cámara 10Ten 20x1,95/2,125 VA 35mm",
+   "template": "tube",
+   "successor": "valve_standard",
+   "kind": "option",
+   "value": "Auto (Schrader / americana)",
+   "legacy_key": "valve_type",
+   "legacy_value": "Schrader (americana / auto)",
+   "source": "import",
+   "rule": "option"
+  },
+  {
+   "product_id": "5e9531d6-dfd4-4bc2-82ff-cbbdfb738204",
+   "sku": "24049",
+   "name": "Cámara 10Ten 24x1,95/2,20 VA 35m",
+   "template": "tube",
+   "successor": "tube_fit_rows",
+   "kind": "rows",
+   "value": {
+    "schema_version": 1,
+    "rows": [
+     {
+      "id": "bsd-507",
+      "values": {
+       "bead_seat_diameter_mm": "507",
+       "width_min_mm": "49.5",
+       "width_max_mm": "55.9"
+      },
+      "sources": []
+     }
+    ]
+   },
+   "legacy_key": "wheel_size",
+   "legacy_value": "24\"",
+   "source": "supplier_text",
+   "rule": "tube_fit_row: 24\" with a decimal width; widths inch_to_mm"
+  },
+  {
+   "product_id": "5e9531d6-dfd4-4bc2-82ff-cbbdfb738204",
+   "sku": "24049",
+   "name": "Cámara 10Ten 24x1,95/2,20 VA 35m",
+   "template": "tube",
+   "successor": "valve_standard",
+   "kind": "option",
+   "value": "Auto (Schrader / americana)",
+   "legacy_key": "valve_type",
+   "legacy_value": "Schrader (americana / auto)",
+   "source": "supplier_text",
+   "rule": "option"
+  },
+  {
+   "product_id": "5e9531d6-dfd4-4bc2-82ff-cbbdfb738204",
+   "sku": "24049",
+   "name": "Cámara 10Ten 24x1,95/2,20 VA 35m",
+   "template": "tube",
+   "successor": "valve_length_mm_value",
+   "kind": "number",
+   "value": 35.0,
+   "legacy_key": "valve_length_mm",
+   "legacy_value": "35",
+   "source": "supplier_text",
+   "rule": "label_to_number"
+  },
+  {
+   "product_id": "f3b94958-5744-4503-a004-2da79d11b8f3",
+   "sku": "23211",
+   "name": "Camara 10TEN 26x1.50/1.75, Valvula de Auto 48mm",
+   "template": "tube",
+   "successor": "tube_fit_rows",
+   "kind": "rows",
+   "value": {
+    "schema_version": 1,
+    "rows": [
+     {
+      "id": "bsd-559",
+      "values": {
+       "bead_seat_diameter_mm": "559",
+       "width_min_mm": "38.1",
+       "width_max_mm": "44.4"
+      },
+      "sources": []
+     }
+    ]
+   },
+   "legacy_key": "wheel_size",
+   "legacy_value": "26\"",
+   "source": "supplier_text",
+   "rule": "tube_fit_row: 26\" with a decimal width; widths inch_to_mm"
+  },
+  {
+   "product_id": "a1833eee-c61e-49bb-9b97-4439d2c6f0db",
+   "sku": "23209",
+   "name": "Camara 10TEN 26x1.95/2.20 Valvula de Auto 48mm",
+   "template": "tube",
+   "successor": "tube_fit_rows",
+   "kind": "rows",
+   "value": {
+    "schema_version": 1,
+    "rows": [
+     {
+      "id": "bsd-559",
+      "values": {
+       "bead_seat_diameter_mm": "559",
+       "width_min_mm": "49.5",
+       "width_max_mm": "55.9"
+      },
+      "sources": []
+     }
+    ]
+   },
+   "legacy_key": "wheel_size",
+   "legacy_value": "26\"",
+   "source": "supplier_text",
+   "rule": "tube_fit_row: 26\" with a decimal width; widths inch_to_mm"
+  },
+  {
+   "product_id": "d359f2d7-584e-4602-b432-13f34522f0bf",
+   "sku": "23216",
+   "name": "Camara 10Ten 700x35/45 VA 48mm",
+   "template": "tube",
+   "successor": "tube_fit_rows",
+   "kind": "rows",
+   "value": {
+    "schema_version": 1,
+    "rows": [
+     {
+      "id": "bsd-622",
+      "values": {
+       "bead_seat_diameter_mm": "622",
+       "width_min_mm": "35",
+       "width_max_mm": "45"
+      },
+      "sources": []
+     }
+    ]
+   },
+   "legacy_key": "wheel_size",
+   "legacy_value": "700c",
+   "source": "supplier_text",
+   "rule": "tube_fit_row: 700c is one ISO diameter; widths mm"
+  },
+  {
+   "product_id": "d359f2d7-584e-4602-b432-13f34522f0bf",
+   "sku": "23216",
+   "name": "Camara 10Ten 700x35/45 VA 48mm",
+   "template": "tube",
+   "successor": "valve_standard",
+   "kind": "option",
+   "value": "Auto (Schrader / americana)",
+   "legacy_key": "valve_type",
+   "legacy_value": "Schrader (americana / auto)",
+   "source": "supplier_text",
+   "rule": "option"
+  },
+  {
+   "product_id": "8a8159fa-600d-45b4-bfef-15a74ff9cec4",
+   "sku": "6927116170189",
+   "name": "Camara 12 1/2 X 1.75x 2 1/4 Chaoyang A/V",
+   "template": "tube",
+   "successor": "tube_fit_rows",
+   "kind": "rows",
+   "value": {
+    "schema_version": 1,
+    "rows": [
+     {
+      "id": "bsd-203",
+      "values": {
+       "bead_seat_diameter_mm": "203",
+       "width_min_mm": "44.4",
+       "width_max_mm": "44.4"
+      },
+      "sources": []
+     }
+    ]
+   },
+   "legacy_key": "wheel_size",
+   "legacy_value": "12\"",
+   "source": "supplier_text",
+   "rule": "tube_fit_row: 12\" with a fractional width; widths inch_to_mm"
+  },
+  {
+   "product_id": "8a8159fa-600d-45b4-bfef-15a74ff9cec4",
+   "sku": "6927116170189",
+   "name": "Camara 12 1/2 X 1.75x 2 1/4 Chaoyang A/V",
+   "template": "tube",
+   "successor": "valve_standard",
+   "kind": "option",
+   "value": "Auto (Schrader / americana)",
+   "legacy_key": "valve_type",
+   "legacy_value": "Schrader (americana / auto)",
+   "source": "supplier_text",
+   "rule": "option"
+  },
+  {
+   "product_id": "cfdae92b-2898-4e3e-a5d1-407a41c1df04",
+   "sku": "6927116100148",
+   "name": "CAMARA 12 1/2 X 2.1/4 V/AUTO",
+   "template": "tube",
+   "successor": "tube_fit_rows",
+   "kind": "rows",
+   "value": {
+    "schema_version": 1,
+    "rows": [
+     {
+      "id": "bsd-203",
+      "values": {
+       "bead_seat_diameter_mm": "203",
+       "width_min_mm": "57.1",
+       "width_max_mm": "57.1"
+      },
+      "sources": []
+     }
+    ]
+   },
+   "legacy_key": "wheel_size",
+   "legacy_value": "12\"",
+   "source": "supplier_text",
+   "rule": "tube_fit_row: 12\" with a fractional width; widths inch_to_mm"
+  },
+  {
+   "product_id": "4f558b91-d882-40c5-94da-0a58a2c2e4a4",
+   "sku": "6927116100230",
+   "name": "CAMARA 16 X 1.50/2.20 V/AUTO 33mm EN CAJA",
+   "template": "tube",
+   "successor": "tube_fit_rows",
+   "kind": "rows",
+   "value": {
+    "schema_version": 1,
+    "rows": [
+     {
+      "id": "bsd-305",
+      "values": {
+       "bead_seat_diameter_mm": "305",
+       "width_min_mm": "38.1",
+       "width_max_mm": "55.9"
+      },
+      "sources": []
+     }
+    ]
+   },
+   "legacy_key": "wheel_size",
+   "legacy_value": "16\"",
+   "source": "supplier_text",
+   "rule": "tube_fit_row: 16\" with a decimal width; widths inch_to_mm"
+  },
+  {
+   "product_id": "596652f3-1d3a-43f0-8085-40dcee71b690",
+   "sku": "6927116100247",
+   "name": "CAMARA 20 X 1.50/2.20 V/AUTO EN CAJA",
+   "template": "tube",
+   "successor": "tube_fit_rows",
+   "kind": "rows",
+   "value": {
+    "schema_version": 1,
+    "rows": [
+     {
+      "id": "bsd-406",
+      "values": {
+       "bead_seat_diameter_mm": "406",
+       "width_min_mm": "38.1",
+       "width_max_mm": "55.9"
+      },
+      "sources": []
+     }
+    ]
+   },
+   "legacy_key": "wheel_size",
+   "legacy_value": "20\"",
+   "source": "supplier_text",
+   "rule": "tube_fit_row: 20\" with a decimal width; widths inch_to_mm"
+  },
+  {
+   "product_id": "aca62b2b-9bd2-4d9a-a4c6-04533e1f2a8b",
+   "sku": "2000000116808",
+   "name": "Camara 20 X 1.95/2.125 Veloce Butyl A/v China",
+   "template": "tube",
+   "successor": "tube_fit_rows",
+   "kind": "rows",
+   "value": {
+    "schema_version": 1,
+    "rows": [
+     {
+      "id": "bsd-406",
+      "values": {
+       "bead_seat_diameter_mm": "406",
+       "width_min_mm": "49.5",
+       "width_max_mm": "54"
+      },
+      "sources": []
+     }
+    ]
+   },
+   "legacy_key": "wheel_size",
+   "legacy_value": "20\"",
+   "source": "supplier_text",
+   "rule": "tube_fit_row: 20\" with a decimal width; widths inch_to_mm"
+  },
+  {
+   "product_id": "aca62b2b-9bd2-4d9a-a4c6-04533e1f2a8b",
+   "sku": "2000000116808",
+   "name": "Camara 20 X 1.95/2.125 Veloce Butyl A/v China",
+   "template": "tube",
+   "successor": "valve_standard",
+   "kind": "option",
+   "value": "Auto (Schrader / americana)",
+   "legacy_key": "valve_type",
+   "legacy_value": "Schrader (americana / auto)",
+   "source": "supplier_text",
+   "rule": "option"
+  },
+  {
+   "product_id": "560e6f3f-aa55-4be1-9e7d-93abe6b9b8ea",
+   "sku": "2000000224305",
+   "name": "Camara 20 X 2.125/2.35 Veloce Butyl A/V",
+   "template": "tube",
+   "successor": "tube_fit_rows",
+   "kind": "rows",
+   "value": {
+    "schema_version": 1,
+    "rows": [
+     {
+      "id": "bsd-406",
+      "values": {
+       "bead_seat_diameter_mm": "406",
+       "width_min_mm": "54",
+       "width_max_mm": "59.7"
+      },
+      "sources": []
+     }
+    ]
+   },
+   "legacy_key": "wheel_size",
+   "legacy_value": "20\"",
+   "source": "supplier_text",
+   "rule": "tube_fit_row: 20\" with a decimal width; widths inch_to_mm"
+  },
+  {
+   "product_id": "560e6f3f-aa55-4be1-9e7d-93abe6b9b8ea",
+   "sku": "2000000224305",
+   "name": "Camara 20 X 2.125/2.35 Veloce Butyl A/V",
+   "template": "tube",
+   "successor": "valve_standard",
+   "kind": "option",
+   "value": "Auto (Schrader / americana)",
+   "legacy_key": "valve_type",
+   "legacy_value": "Schrader (americana / auto)",
+   "source": "supplier_text",
+   "rule": "option"
+  },
+  {
+   "product_id": "bb697f84-2deb-4754-bda6-e225f63fb43f",
+   "sku": "6927116100292",
+   "name": "CAMARA 20 X 2.30/2.50 V/AUTO 48MM EN CAJA",
+   "template": "tube",
+   "successor": "tube_fit_rows",
+   "kind": "rows",
+   "value": {
+    "schema_version": 1,
+    "rows": [
+     {
+      "id": "bsd-406",
+      "values": {
+       "bead_seat_diameter_mm": "406",
+       "width_min_mm": "58.4",
+       "width_max_mm": "63.5"
+      },
+      "sources": []
+     }
+    ]
+   },
+   "legacy_key": "wheel_size",
+   "legacy_value": "20\"",
+   "source": "supplier_text",
+   "rule": "tube_fit_row: 20\" with a decimal width; widths inch_to_mm"
+  },
+  {
+   "product_id": "aa21dfe0-7ba5-4223-80df-98850656da95",
+   "sku": "6927116112400",
+   "name": "CAMARA 24 X 1.5/2.20 V/AUTO EN CAJA",
+   "template": "tube",
+   "successor": "tube_fit_rows",
+   "kind": "rows",
+   "value": {
+    "schema_version": 1,
+    "rows": [
+     {
+      "id": "bsd-507",
+      "values": {
+       "bead_seat_diameter_mm": "507",
+       "width_min_mm": "38.1",
+       "width_max_mm": "55.9"
+      },
+      "sources": []
+     }
+    ]
+   },
+   "legacy_key": "wheel_size",
+   "legacy_value": "24\"",
+   "source": "supplier_text",
+   "rule": "tube_fit_row: 24\" with a decimal width; widths inch_to_mm"
+  },
+  {
+   "product_id": "f185c970-c4ec-4340-a513-047be148eae8",
+   "sku": "2000000116822",
+   "name": "Camara 24 X 1.95/2.125 Veloce Butyl A/v China",
+   "template": "tube",
+   "successor": "tube_fit_rows",
+   "kind": "rows",
+   "value": {
+    "schema_version": 1,
+    "rows": [
+     {
+      "id": "bsd-507",
+      "values": {
+       "bead_seat_diameter_mm": "507",
+       "width_min_mm": "49.5",
+       "width_max_mm": "54"
+      },
+      "sources": []
+     }
+    ]
+   },
+   "legacy_key": "wheel_size",
+   "legacy_value": "24\"",
+   "source": "supplier_text",
+   "rule": "tube_fit_row: 24\" with a decimal width; widths inch_to_mm"
+  },
+  {
+   "product_id": "f185c970-c4ec-4340-a513-047be148eae8",
+   "sku": "2000000116822",
+   "name": "Camara 24 X 1.95/2.125 Veloce Butyl A/v China",
+   "template": "tube",
+   "successor": "valve_standard",
+   "kind": "option",
+   "value": "Auto (Schrader / americana)",
+   "legacy_key": "valve_type",
+   "legacy_value": "Schrader (americana / auto)",
+   "source": "supplier_text",
+   "rule": "option"
+  },
+  {
+   "product_id": "748142f5-2dbb-404c-846d-22c3be6703a3",
+   "sku": "2000000116884",
+   "name": "Camara 24 x1.3/8 Veloce Butyl A/V China",
+   "template": "tube",
+   "successor": "valve_standard",
+   "kind": "option",
+   "value": "Auto (Schrader / americana)",
+   "legacy_key": "valve_type",
+   "legacy_value": "Schrader (americana / auto)",
+   "source": "supplier_text",
+   "rule": "option"
+  },
+  {
+   "product_id": "d98e5a2f-44dd-4f47-9ff2-2d8db61f9069",
+   "sku": "6927116100001",
+   "name": "CAMARA 26 X 1.25/1.75 V/AUTO 48MM",
+   "template": "tube",
+   "successor": "tube_fit_rows",
+   "kind": "rows",
+   "value": {
+    "schema_version": 1,
+    "rows": [
+     {
+      "id": "bsd-559",
+      "values": {
+       "bead_seat_diameter_mm": "559",
+       "width_min_mm": "31.8",
+       "width_max_mm": "44.4"
+      },
+      "sources": []
+     }
+    ]
+   },
+   "legacy_key": "wheel_size",
+   "legacy_value": "26\"",
+   "source": "supplier_text",
+   "rule": "tube_fit_row: 26\" with a decimal width; widths inch_to_mm"
+  },
+  {
+   "product_id": "1496ccc8-9cf7-4338-8099-04fadffc6daf",
+   "sku": "6927116100018",
+   "name": "CAMARA 26 X 1.50/2.20 V/AUTO 48MM BUTYL",
+   "template": "tube",
+   "successor": "tube_fit_rows",
+   "kind": "rows",
+   "value": {
+    "schema_version": 1,
+    "rows": [
+     {
+      "id": "bsd-559",
+      "values": {
+       "bead_seat_diameter_mm": "559",
+       "width_min_mm": "38.1",
+       "width_max_mm": "55.9"
+      },
+      "sources": []
+     }
+    ]
+   },
+   "legacy_key": "wheel_size",
+   "legacy_value": "26\"",
+   "source": "supplier_text",
+   "rule": "tube_fit_row: 26\" with a decimal width; widths inch_to_mm"
+  },
+  {
+   "product_id": "9987d678-0ce3-42dd-bd3c-bec8292c4875",
+   "sku": "6927116112370",
+   "name": "CAMARA 26 X 1.50/2.20 V/AUTO 48MM BUTYL\tORNATE",
+   "template": "tube",
+   "successor": "tube_fit_rows",
+   "kind": "rows",
+   "value": {
+    "schema_version": 1,
+    "rows": [
+     {
+      "id": "bsd-559",
+      "values": {
+       "bead_seat_diameter_mm": "559",
+       "width_min_mm": "38.1",
+       "width_max_mm": "55.9"
+      },
+      "sources": []
+     }
+    ]
+   },
+   "legacy_key": "wheel_size",
+   "legacy_value": "26\"",
+   "source": "supplier_text",
+   "rule": "tube_fit_row: 26\" with a decimal width; widths inch_to_mm"
+  },
+  {
+   "product_id": "45df83b1-a80d-4cb5-a18c-be38f07fa578",
+   "sku": "6927116100124",
+   "name": "CAMARA 26 X 1.50/2.20 V/FRANCESA 48mm EN CAJA",
+   "template": "tube",
+   "successor": "tube_fit_rows",
+   "kind": "rows",
+   "value": {
+    "schema_version": 1,
+    "rows": [
+     {
+      "id": "bsd-559",
+      "values": {
+       "bead_seat_diameter_mm": "559",
+       "width_min_mm": "38.1",
+       "width_max_mm": "55.9"
+      },
+      "sources": []
+     }
+    ]
+   },
+   "legacy_key": "wheel_size",
+   "legacy_value": "26\"",
+   "source": "import",
+   "rule": "tube_fit_row: 26\" with a decimal width; widths inch_to_mm"
+  },
+  {
+   "product_id": "6da06edc-642a-449c-b374-b0877a6ae794",
+   "sku": "4417",
+   "name": "Cámara 26 x 1.75-2.35 – KENDA – Válvula de auto de 48mm",
+   "template": "tube",
+   "successor": "tube_fit_rows",
+   "kind": "rows",
+   "value": {
+    "schema_version": 1,
+    "rows": [
+     {
+      "id": "bsd-559",
+      "values": {
+       "bead_seat_diameter_mm": "559",
+       "width_min_mm": "44.4",
+       "width_max_mm": "59.7"
+      },
+      "sources": []
+     }
+    ]
+   },
+   "legacy_key": "wheel_size",
+   "legacy_value": "26\"",
+   "source": "supplier_text",
+   "rule": "tube_fit_row: 26\" with a decimal width; widths inch_to_mm"
+  },
+  {
+   "product_id": "0053e6df-a4f5-4b2e-bfa0-d29b8b9e54c0",
+   "sku": "6938112671129",
+   "name": "CAMARA 26 X 1.95/2.125 V/FRANCESA 48MM (NO ES EXACTAMENTE LA MISMA: 1.50X2.2 ORNATE)",
+   "template": "tube",
+   "successor": "tube_fit_rows",
+   "kind": "rows",
+   "value": {
+    "schema_version": 1,
+    "rows": [
+     {
+      "id": "bsd-559",
+      "values": {
+       "bead_seat_diameter_mm": "559",
+       "width_min_mm": "49.5",
+       "width_max_mm": "54"
+      },
+      "sources": []
+     }
+    ]
+   },
+   "legacy_key": "wheel_size",
+   "legacy_value": "26\"",
+   "source": "supplier_text",
+   "rule": "tube_fit_row: 26\" with a decimal width; widths inch_to_mm"
+  },
+  {
+   "product_id": "13bfb177-8270-4b84-93f4-8e803fc4bffe",
+   "sku": "6907",
+   "name": "CAMARA 26 X 2.30/2.50 V/AUTO 48MM EN CAJA\nRBX",
+   "template": "tube",
+   "successor": "tube_fit_rows",
+   "kind": "rows",
+   "value": {
+    "schema_version": 1,
+    "rows": [
+     {
+      "id": "bsd-559",
+      "values": {
+       "bead_seat_diameter_mm": "559",
+       "width_min_mm": "58.4",
+       "width_max_mm": "63.5"
+      },
+      "sources": []
+     }
+    ]
+   },
+   "legacy_key": "wheel_size",
+   "legacy_value": "26\"",
+   "source": "supplier_text",
+   "rule": "tube_fit_row: 26\" with a decimal width; widths inch_to_mm"
+  },
+  {
+   "product_id": "4f1efcf2-22a7-40e5-85a4-c1eb237ed9fb",
+   "sku": "6927116174002",
+   "name": "CAMARA 26X1.95-2.125 V/AUTO 48MM CHAOYANG CON LIQUIDO",
+   "template": "tube",
+   "successor": "tube_fit_rows",
+   "kind": "rows",
+   "value": {
+    "schema_version": 1,
+    "rows": [
+     {
+      "id": "bsd-559",
+      "values": {
+       "bead_seat_diameter_mm": "559",
+       "width_min_mm": "49.5",
+       "width_max_mm": "54"
+      },
+      "sources": []
+     }
+    ]
+   },
+   "legacy_key": "wheel_size",
+   "legacy_value": "26\"",
+   "source": "supplier_text",
+   "rule": "tube_fit_row: 26\" with a decimal width; widths inch_to_mm"
+  },
+  {
+   "product_id": "80e948f8-bca4-4f61-a202-1d36b0bfb58d",
+   "sku": "6927116112356",
+   "name": "CAMARA 27,5 X 1.50/2.20 V/AUTO 48MM BUTYL",
+   "template": "tube",
+   "successor": "tube_fit_rows",
+   "kind": "rows",
+   "value": {
+    "schema_version": 1,
+    "rows": [
+     {
+      "id": "bsd-584",
+      "values": {
+       "bead_seat_diameter_mm": "584",
+       "width_min_mm": "38.1",
+       "width_max_mm": "55.9"
+      },
+      "sources": []
+     }
+    ]
+   },
+   "legacy_key": "wheel_size",
+   "legacy_value": "27.5\"",
+   "source": "supplier_text",
+   "rule": "tube_fit_row: 27.5\" is one ISO diameter; widths inch_to_mm"
+  },
+  {
+   "product_id": "85164038-dcd0-424b-880f-082071c8de51",
+   "sku": "6927116100278",
+   "name": "CAMARA 27,5 X 1.50/2.20 V/AUTO48MM BUTYL",
+   "template": "tube",
+   "successor": "tube_fit_rows",
+   "kind": "rows",
+   "value": {
+    "schema_version": 1,
+    "rows": [
+     {
+      "id": "bsd-584",
+      "values": {
+       "bead_seat_diameter_mm": "584",
+       "width_min_mm": "38.1",
+       "width_max_mm": "55.9"
+      },
+      "sources": []
+     }
+    ]
+   },
+   "legacy_key": "wheel_size",
+   "legacy_value": "27.5\"",
+   "source": "supplier_text",
+   "rule": "tube_fit_row: 27.5\" is one ISO diameter; widths inch_to_mm"
+  },
+  {
+   "product_id": "85164038-dcd0-424b-880f-082071c8de51",
+   "sku": "6927116100278",
+   "name": "CAMARA 27,5 X 1.50/2.20 V/AUTO48MM BUTYL",
+   "template": "tube",
+   "successor": "valve_standard",
+   "kind": "option",
+   "value": "Auto (Schrader / americana)",
+   "legacy_key": "valve_type",
+   "legacy_value": "Schrader (americana / auto)",
+   "source": "supplier_text",
+   "rule": "option"
+  },
+  {
+   "product_id": "738683b3-ccee-44c4-9435-6f97a2bfd208",
+   "sku": "6927116100322",
+   "name": "CAMARA 27,5 X 1.50/2.20 V/FRANCESA 48MM BUTYL",
+   "template": "tube",
+   "successor": "tube_fit_rows",
+   "kind": "rows",
+   "value": {
+    "schema_version": 1,
+    "rows": [
+     {
+      "id": "bsd-584",
+      "values": {
+       "bead_seat_diameter_mm": "584",
+       "width_min_mm": "38.1",
+       "width_max_mm": "55.9"
+      },
+      "sources": []
+     }
+    ]
+   },
+   "legacy_key": "wheel_size",
+   "legacy_value": "27.5\"",
+   "source": "supplier_text",
+   "rule": "tube_fit_row: 27.5\" is one ISO diameter; widths inch_to_mm"
+  },
+  {
+   "product_id": "bd849260-ac53-442f-b3dc-9cf6b5f8b24d",
+   "sku": "6927116100346",
+   "name": "CAMARA 27,5 X 1.50/2.20 V/FRANCESA 60MM BUTYL",
+   "template": "tube",
+   "successor": "tube_fit_rows",
+   "kind": "rows",
+   "value": {
+    "schema_version": 1,
+    "rows": [
+     {
+      "id": "bsd-584",
+      "values": {
+       "bead_seat_diameter_mm": "584",
+       "width_min_mm": "38.1",
+       "width_max_mm": "55.9"
+      },
+      "sources": []
+     }
+    ]
+   },
+   "legacy_key": "wheel_size",
+   "legacy_value": "27.5\"",
+   "source": "supplier_text",
+   "rule": "tube_fit_row: 27.5\" is one ISO diameter; widths inch_to_mm"
+  },
+  {
+   "product_id": "15b06172-4d4b-4df7-90ad-8f93bc0c0a18",
+   "sku": "2000000224343",
+   "name": "Camara 27.5 X 1.95/2.125 Veloce Butyl A/v 48m",
+   "template": "tube",
+   "successor": "tube_fit_rows",
+   "kind": "rows",
+   "value": {
+    "schema_version": 1,
+    "rows": [
+     {
+      "id": "bsd-584",
+      "values": {
+       "bead_seat_diameter_mm": "584",
+       "width_min_mm": "49.5",
+       "width_max_mm": "54"
+      },
+      "sources": []
+     }
+    ]
+   },
+   "legacy_key": "wheel_size",
+   "legacy_value": "27.5\"",
+   "source": "supplier_text",
+   "rule": "tube_fit_row: 27.5\" is one ISO diameter; widths inch_to_mm"
+  },
+  {
+   "product_id": "15b06172-4d4b-4df7-90ad-8f93bc0c0a18",
+   "sku": "2000000224343",
+   "name": "Camara 27.5 X 1.95/2.125 Veloce Butyl A/v 48m",
+   "template": "tube",
+   "successor": "valve_standard",
+   "kind": "option",
+   "value": "Auto (Schrader / americana)",
+   "legacy_key": "valve_type",
+   "legacy_value": "Schrader (americana / auto)",
+   "source": "supplier_text",
+   "rule": "option"
+  },
+  {
+   "product_id": "15b06172-4d4b-4df7-90ad-8f93bc0c0a18",
+   "sku": "2000000224343",
+   "name": "Camara 27.5 X 1.95/2.125 Veloce Butyl A/v 48m",
+   "template": "tube",
+   "successor": "valve_length_mm_value",
+   "kind": "number",
+   "value": 48.0,
+   "legacy_key": "valve_length_mm",
+   "legacy_value": "48",
+   "source": "supplier_text",
+   "rule": "label_to_number"
+  },
+  {
+   "product_id": "b5506b1a-e9ab-490d-be85-dd181345c41c",
+   "sku": "NNV22",
+   "name": "CAMARA 27.5 X 2.25/2.50 A/V 48MM",
+   "template": "tube",
+   "successor": "tube_fit_rows",
+   "kind": "rows",
+   "value": {
+    "schema_version": 1,
+    "rows": [
+     {
+      "id": "bsd-584",
+      "values": {
+       "bead_seat_diameter_mm": "584",
+       "width_min_mm": "57.1",
+       "width_max_mm": "63.5"
+      },
+      "sources": []
+     }
+    ]
+   },
+   "legacy_key": "wheel_size",
+   "legacy_value": "27.5\"",
+   "source": "supplier_text",
+   "rule": "tube_fit_row: 27.5\" is one ISO diameter; widths inch_to_mm"
+  },
+  {
+   "product_id": "b5506b1a-e9ab-490d-be85-dd181345c41c",
+   "sku": "NNV22",
+   "name": "CAMARA 27.5 X 2.25/2.50 A/V 48MM",
+   "template": "tube",
+   "successor": "valve_standard",
+   "kind": "option",
+   "value": "Auto (Schrader / americana)",
+   "legacy_key": "valve_type",
+   "legacy_value": "Schrader (americana / auto)",
+   "source": "supplier_text",
+   "rule": "option"
+  },
+  {
+   "product_id": "cadac9d4-f402-4a8b-a281-5efc44b5f59a",
+   "sku": "6927116109813",
+   "name": "CAMARA 27.5X1.90/2.10 AV 48MM CHAOYANG CON LIQUIDO",
+   "template": "tube",
+   "successor": "tube_fit_rows",
+   "kind": "rows",
+   "value": {
+    "schema_version": 1,
+    "rows": [
+     {
+      "id": "bsd-584",
+      "values": {
+       "bead_seat_diameter_mm": "584",
+       "width_min_mm": "48.3",
+       "width_max_mm": "53.3"
+      },
+      "sources": []
+     }
+    ]
+   },
+   "legacy_key": "wheel_size",
+   "legacy_value": "27.5\"",
+   "source": "supplier_text",
+   "rule": "tube_fit_row: 27.5\" is one ISO diameter; widths inch_to_mm"
+  },
+  {
+   "product_id": "cadac9d4-f402-4a8b-a281-5efc44b5f59a",
+   "sku": "6927116109813",
+   "name": "CAMARA 27.5X1.90/2.10 AV 48MM CHAOYANG CON LIQUIDO",
+   "template": "tube",
+   "successor": "valve_standard",
+   "kind": "option",
+   "value": "Auto (Schrader / americana)",
+   "legacy_key": "valve_type",
+   "legacy_value": "Schrader (americana / auto)",
+   "source": "supplier_text",
+   "rule": "option"
+  },
+  {
+   "product_id": "a2b25b86-46f9-44a6-b54e-cff622acde99",
+   "sku": "6927116112349",
+   "name": "CAMARA 29 X 1.50/2.20 V/AMERICANA 48mm EN CAJA",
+   "template": "tube",
+   "successor": "tube_fit_rows",
+   "kind": "rows",
+   "value": {
+    "schema_version": 1,
+    "rows": [
+     {
+      "id": "bsd-622",
+      "values": {
+       "bead_seat_diameter_mm": "622",
+       "width_min_mm": "38.1",
+       "width_max_mm": "55.9"
+      },
+      "sources": []
+     }
+    ]
+   },
+   "legacy_key": "wheel_size",
+   "legacy_value": "29\"",
+   "source": "supplier_text",
+   "rule": "tube_fit_row: 29\" is one ISO diameter; widths inch_to_mm"
+  },
+  {
+   "product_id": "466dbfb9-6865-42af-a4dd-1e5366ef249f",
+   "sku": "17418",
+   "name": "Cámara 29 X 1.75/2.35 Le Tour V/Francesa",
+   "template": "tube",
+   "successor": "tube_fit_rows",
+   "kind": "rows",
+   "value": {
+    "schema_version": 1,
+    "rows": [
+     {
+      "id": "bsd-622",
+      "values": {
+       "bead_seat_diameter_mm": "622",
+       "width_min_mm": "44.4",
+       "width_max_mm": "59.7"
+      },
+      "sources": []
+     }
+    ]
+   },
+   "legacy_key": "wheel_size",
+   "legacy_value": "29\"",
+   "source": "supplier_text",
+   "rule": "tube_fit_row: 29\" is one ISO diameter; widths inch_to_mm"
+  },
+  {
+   "product_id": "39f406fa-115c-47a5-935f-e49f454cd8cc",
+   "sku": "6927116100261",
+   "name": "CAMARA 29 X 1.75/2.35 V/AMERICANA 48mm EN CAJA",
+   "template": "tube",
+   "successor": "tube_fit_rows",
+   "kind": "rows",
+   "value": {
+    "schema_version": 1,
+    "rows": [
+     {
+      "id": "bsd-622",
+      "values": {
+       "bead_seat_diameter_mm": "622",
+       "width_min_mm": "44.4",
+       "width_max_mm": "59.7"
+      },
+      "sources": []
+     }
+    ]
+   },
+   "legacy_key": "wheel_size",
+   "legacy_value": "29\"",
+   "source": "supplier_text",
+   "rule": "tube_fit_row: 29\" is one ISO diameter; widths inch_to_mm"
+  },
+  {
+   "product_id": "6b434795-bbdf-4a7b-90d4-f99c3dab6179",
+   "sku": "6927116100315",
+   "name": "CAMARA 29 X 1.75/2.35 V/FRANCESA 48mm EN CAJA",
+   "template": "tube",
+   "successor": "tube_fit_rows",
+   "kind": "rows",
+   "value": {
+    "schema_version": 1,
+    "rows": [
+     {
+      "id": "bsd-622",
+      "values": {
+       "bead_seat_diameter_mm": "622",
+       "width_min_mm": "44.4",
+       "width_max_mm": "59.7"
+      },
+      "sources": []
+     }
+    ]
+   },
+   "legacy_key": "wheel_size",
+   "legacy_value": "29\"",
+   "source": "supplier_text",
+   "rule": "tube_fit_row: 29\" is one ISO diameter; widths inch_to_mm"
+  },
+  {
+   "product_id": "87170d5e-c4d2-47b6-9227-f9d3f5a8fad7",
+   "sku": "2000000225784",
+   "name": "Camara 29 X 1.95/2.10 Veloce Butyl A/v 48mm",
+   "template": "tube",
+   "successor": "tube_fit_rows",
+   "kind": "rows",
+   "value": {
+    "schema_version": 1,
+    "rows": [
+     {
+      "id": "bsd-622",
+      "values": {
+       "bead_seat_diameter_mm": "622",
+       "width_min_mm": "49.5",
+       "width_max_mm": "53.3"
+      },
+      "sources": []
+     }
+    ]
+   },
+   "legacy_key": "wheel_size",
+   "legacy_value": "29\"",
+   "source": "supplier_text",
+   "rule": "tube_fit_row: 29\" is one ISO diameter; widths inch_to_mm"
+  },
+  {
+   "product_id": "87170d5e-c4d2-47b6-9227-f9d3f5a8fad7",
+   "sku": "2000000225784",
+   "name": "Camara 29 X 1.95/2.10 Veloce Butyl A/v 48mm",
+   "template": "tube",
+   "successor": "valve_standard",
+   "kind": "option",
+   "value": "Auto (Schrader / americana)",
+   "legacy_key": "valve_type",
+   "legacy_value": "Schrader (americana / auto)",
+   "source": "supplier_text",
+   "rule": "option"
+  },
+  {
+   "product_id": "27f1bd43-e059-4162-8045-903e74896aed",
+   "sku": "4420",
+   "name": "Cámara 29 x 2.0-2.40 – KENDA – Válvula de auto de48mm",
+   "template": "tube",
+   "successor": "tube_fit_rows",
+   "kind": "rows",
+   "value": {
+    "schema_version": 1,
+    "rows": [
+     {
+      "id": "bsd-622",
+      "values": {
+       "bead_seat_diameter_mm": "622",
+       "width_min_mm": "50.8",
+       "width_max_mm": "61"
+      },
+      "sources": []
+     }
+    ]
+   },
+   "legacy_key": "wheel_size",
+   "legacy_value": "29\"",
+   "source": "supplier_text",
+   "rule": "tube_fit_row: 29\" is one ISO diameter; widths inch_to_mm"
+  },
+  {
+   "product_id": "de25db90-55e9-41cc-a2fd-c09bfa6fca33",
+   "sku": "6927116100353",
+   "name": "CAMARA 700 X 18/25C V/A 60MM",
+   "template": "tube",
+   "successor": "tube_fit_rows",
+   "kind": "rows",
+   "value": {
+    "schema_version": 1,
+    "rows": [
+     {
+      "id": "bsd-622",
+      "values": {
+       "bead_seat_diameter_mm": "622",
+       "width_min_mm": "18",
+       "width_max_mm": "25"
+      },
+      "sources": []
+     }
+    ]
+   },
+   "legacy_key": "wheel_size",
+   "legacy_value": "700c",
+   "source": "supplier_text",
+   "rule": "tube_fit_row: 700c is one ISO diameter; widths mm"
+  },
+  {
+   "product_id": "de25db90-55e9-41cc-a2fd-c09bfa6fca33",
+   "sku": "6927116100353",
+   "name": "CAMARA 700 X 18/25C V/A 60MM",
+   "template": "tube",
+   "successor": "valve_standard",
+   "kind": "option",
+   "value": "Auto (Schrader / americana)",
+   "legacy_key": "valve_type",
+   "legacy_value": "Schrader (americana / auto)",
+   "source": "supplier_text",
+   "rule": "option"
+  },
+  {
+   "product_id": "8d3d4bc1-326b-468a-b34a-7382c7709de5",
+   "sku": "6927116100063",
+   "name": "CAMARA 700 X 18/25C V/FRANCESA 48MM CAJA",
+   "template": "tube",
+   "successor": "tube_fit_rows",
+   "kind": "rows",
+   "value": {
+    "schema_version": 1,
+    "rows": [
+     {
+      "id": "bsd-622",
+      "values": {
+       "bead_seat_diameter_mm": "622",
+       "width_min_mm": "18",
+       "width_max_mm": "25"
+      },
+      "sources": []
+     }
+    ]
+   },
+   "legacy_key": "wheel_size",
+   "legacy_value": "700c",
+   "source": "supplier_text",
+   "rule": "tube_fit_row: 700c is one ISO diameter; widths mm"
+  },
+  {
+   "product_id": "83173c98-b053-41c6-b474-cc51f68bf4cb",
+   "sku": "6927116100070",
+   "name": "CAMARA 700 X 18/25C V/FRANCESA 60MM",
+   "template": "tube",
+   "successor": "tube_fit_rows",
+   "kind": "rows",
+   "value": {
+    "schema_version": 1,
+    "rows": [
+     {
+      "id": "bsd-622",
+      "values": {
+       "bead_seat_diameter_mm": "622",
+       "width_min_mm": "18",
+       "width_max_mm": "25"
+      },
+      "sources": []
+     }
+    ]
+   },
+   "legacy_key": "wheel_size",
+   "legacy_value": "700c",
+   "source": "supplier_text",
+   "rule": "tube_fit_row: 700c is one ISO diameter; widths mm"
+  },
+  {
+   "product_id": "14f02364-b0aa-4c55-b7d0-b4c919919a17",
+   "sku": "6927116185497",
+   "name": "Camara 700 x 25/32C Chaoyang  V/F 60[mm]",
+   "template": "tube",
+   "successor": "tube_fit_rows",
+   "kind": "rows",
+   "value": {
+    "schema_version": 1,
+    "rows": [
+     {
+      "id": "bsd-622",
+      "values": {
+       "bead_seat_diameter_mm": "622",
+       "width_min_mm": "25",
+       "width_max_mm": "32"
+      },
+      "sources": []
+     }
+    ]
+   },
+   "legacy_key": "wheel_size",
+   "legacy_value": "700c",
+   "source": "supplier_text",
+   "rule": "tube_fit_row: 700c is one ISO diameter; widths mm"
+  },
+  {
+   "product_id": "14f02364-b0aa-4c55-b7d0-b4c919919a17",
+   "sku": "6927116185497",
+   "name": "Camara 700 x 25/32C Chaoyang  V/F 60[mm]",
+   "template": "tube",
+   "successor": "valve_standard",
+   "kind": "option",
+   "value": "Francesa (Presta)",
+   "legacy_key": "valve_type",
+   "legacy_value": "Presta (francesa)",
+   "source": "supplier_text",
+   "rule": "option"
+  },
+  {
+   "product_id": "a009c5de-4570-4be8-9a50-7d0bce9f0e99",
+   "sku": "6927116100209",
+   "name": "CAMARA 700 X 28/38C V/AUTO 48MM (28-5/8-1/4)",
+   "template": "tube",
+   "successor": "tube_fit_rows",
+   "kind": "rows",
+   "value": {
+    "schema_version": 1,
+    "rows": [
+     {
+      "id": "bsd-622",
+      "values": {
+       "bead_seat_diameter_mm": "622",
+       "width_min_mm": "28",
+       "width_max_mm": "38"
+      },
+      "sources": []
+     }
+    ]
+   },
+   "legacy_key": "wheel_size",
+   "legacy_value": "700c",
+   "source": "supplier_text",
+   "rule": "tube_fit_row: 700c is one ISO diameter; widths mm"
+  },
+  {
+   "product_id": "f8c6e858-ccc5-4d68-8df6-d59eb9cb3bff",
+   "sku": "6927116100308",
+   "name": "CAMARA 700 X 28/38C V/FRANCESA 48MM (28-5/8-1/4)",
+   "template": "tube",
+   "successor": "tube_fit_rows",
+   "kind": "rows",
+   "value": {
+    "schema_version": 1,
+    "rows": [
+     {
+      "id": "bsd-622",
+      "values": {
+       "bead_seat_diameter_mm": "622",
+       "width_min_mm": "28",
+       "width_max_mm": "38"
+      },
+      "sources": []
+     }
+    ]
+   },
+   "legacy_key": "wheel_size",
+   "legacy_value": "700c",
+   "source": "supplier_text",
+   "rule": "tube_fit_row: 700c is one ISO diameter; widths mm"
+  },
+  {
+   "product_id": "419fa664-207c-47e0-bb49-cb0a3faad857",
+   "sku": "IM09125",
+   "name": "CAMARA 700X28C BUTYL VAL. FRANCESA 60MM. RITECH",
+   "template": "tube",
+   "successor": "tube_fit_rows",
+   "kind": "rows",
+   "value": {
+    "schema_version": 1,
+    "rows": [
+     {
+      "id": "bsd-622",
+      "values": {
+       "bead_seat_diameter_mm": "622",
+       "width_min_mm": "28",
+       "width_max_mm": "28"
+      },
+      "sources": []
+     }
+    ]
+   },
+   "legacy_key": "wheel_size",
+   "legacy_value": "700c",
+   "source": "supplier_text",
+   "rule": "tube_fit_row: 700c is one ISO diameter; widths mm"
+  },
+  {
+   "product_id": "1b99bd8e-3c4c-43e9-b510-d3b0c22a743f",
+   "sku": "NNV23",
+   "name": "Cámara 700x33/37c Chaoyang vF",
+   "template": "tube",
+   "successor": "tube_fit_rows",
+   "kind": "rows",
+   "value": {
+    "schema_version": 1,
+    "rows": [
+     {
+      "id": "bsd-622",
+      "values": {
+       "bead_seat_diameter_mm": "622",
+       "width_min_mm": "33",
+       "width_max_mm": "37"
+      },
+      "sources": []
+     }
+    ]
+   },
+   "legacy_key": "wheel_size",
+   "legacy_value": "700c",
+   "source": "supplier_text",
+   "rule": "tube_fit_row: 700c is one ISO diameter; widths mm"
+  },
+  {
+   "product_id": "1b99bd8e-3c4c-43e9-b510-d3b0c22a743f",
+   "sku": "NNV23",
+   "name": "Cámara 700x33/37c Chaoyang vF",
+   "template": "tube",
+   "successor": "valve_standard",
+   "kind": "option",
+   "value": "Francesa (Presta)",
+   "legacy_key": "valve_type",
+   "legacy_value": "Presta (francesa)",
+   "source": "supplier_text",
+   "rule": "option"
+  },
+  {
+   "product_id": "e28bf124-1b03-4c9d-b7e9-122dd2d8acba",
+   "sku": "ACC-CMA-36080",
+   "name": "CAMARA 700X35/43C (28X1 5/8 X 1 3/8) BUTYL VAL AUTO 48MM RITECH",
+   "template": "tube",
+   "successor": "tube_fit_rows",
+   "kind": "rows",
+   "value": {
+    "schema_version": 1,
+    "rows": [
+     {
+      "id": "bsd-622",
+      "values": {
+       "bead_seat_diameter_mm": "622",
+       "width_min_mm": "35",
+       "width_max_mm": "43"
+      },
+      "sources": []
+     }
+    ]
+   },
+   "legacy_key": "wheel_size",
+   "legacy_value": "700c",
+   "source": "supplier_text",
+   "rule": "tube_fit_row: 700c is one ISO diameter; widths mm"
+  },
+  {
+   "product_id": "5a440f19-81e2-4a82-b5a0-5bea614de0c8",
+   "sku": "252085",
+   "name": "CAMARA ARO 26X1.95/2.125 A/V 48MM",
+   "template": "tube",
+   "successor": "tube_fit_rows",
+   "kind": "rows",
+   "value": {
+    "schema_version": 1,
+    "rows": [
+     {
+      "id": "bsd-559",
+      "values": {
+       "bead_seat_diameter_mm": "559",
+       "width_min_mm": "49.5",
+       "width_max_mm": "54"
+      },
+      "sources": []
+     }
+    ]
+   },
+   "legacy_key": "wheel_size",
+   "legacy_value": "26\"",
+   "source": "supplier_text",
+   "rule": "tube_fit_row: 26\" with a decimal width; widths inch_to_mm"
+  },
+  {
+   "product_id": "5a440f19-81e2-4a82-b5a0-5bea614de0c8",
+   "sku": "252085",
+   "name": "CAMARA ARO 26X1.95/2.125 A/V 48MM",
+   "template": "tube",
+   "successor": "valve_standard",
+   "kind": "option",
+   "value": "Auto (Schrader / americana)",
+   "legacy_key": "valve_type",
+   "legacy_value": "Schrader (americana / auto)",
+   "source": "supplier_text",
+   "rule": "option"
+  },
+  {
+   "product_id": "57e3ca4d-d2fd-4425-8984-75b000b537bf",
+   "sku": "160-4",
+   "name": "CAMARA ARO 29 X 1.75/2.1 F/V 60MM",
+   "template": "tube",
+   "successor": "tube_fit_rows",
+   "kind": "rows",
+   "value": {
+    "schema_version": 1,
+    "rows": [
+     {
+      "id": "bsd-622",
+      "values": {
+       "bead_seat_diameter_mm": "622",
+       "width_min_mm": "44.4",
+       "width_max_mm": "53.3"
+      },
+      "sources": []
+     }
+    ]
+   },
+   "legacy_key": "wheel_size",
+   "legacy_value": "29\"",
+   "source": "supplier_text",
+   "rule": "tube_fit_row: 29\" is one ISO diameter; widths inch_to_mm"
+  },
+  {
+   "product_id": "57e3ca4d-d2fd-4425-8984-75b000b537bf",
+   "sku": "160-4",
+   "name": "CAMARA ARO 29 X 1.75/2.1 F/V 60MM",
+   "template": "tube",
+   "successor": "valve_standard",
+   "kind": "option",
+   "value": "Francesa (Presta)",
+   "legacy_key": "valve_type",
+   "legacy_value": "Presta (francesa)",
+   "source": "supplier_text",
+   "rule": "option"
+  },
+  {
+   "product_id": "149a86c3-9920-4466-a92a-474ec5e2dc0e",
+   "sku": "160-2",
+   "name": "CAMARA ARO 29 X 1.75/2.125 A/V 48MM2.686",
+   "template": "tube",
+   "successor": "tube_fit_rows",
+   "kind": "rows",
+   "value": {
+    "schema_version": 1,
+    "rows": [
+     {
+      "id": "bsd-622",
+      "values": {
+       "bead_seat_diameter_mm": "622",
+       "width_min_mm": "44.4",
+       "width_max_mm": "54"
+      },
+      "sources": []
+     }
+    ]
+   },
+   "legacy_key": "wheel_size",
+   "legacy_value": "29\"",
+   "source": "supplier_text",
+   "rule": "tube_fit_row: 29\" is one ISO diameter; widths inch_to_mm"
+  },
+  {
+   "product_id": "149a86c3-9920-4466-a92a-474ec5e2dc0e",
+   "sku": "160-2",
+   "name": "CAMARA ARO 29 X 1.75/2.125 A/V 48MM2.686",
+   "template": "tube",
+   "successor": "valve_standard",
+   "kind": "option",
+   "value": "Auto (Schrader / americana)",
+   "legacy_key": "valve_type",
+   "legacy_value": "Schrader (americana / auto)",
+   "source": "supplier_text",
+   "rule": "option"
+  },
+  {
+   "product_id": "e62c6a7b-bb93-4d59-826d-84c444e1d0aa",
+   "sku": "252375",
+   "name": "CAMARA ARO 29 X 1.95C V/A 48MM UNIQUA",
+   "template": "tube",
+   "successor": "tube_fit_rows",
+   "kind": "rows",
+   "value": {
+    "schema_version": 1,
+    "rows": [
+     {
+      "id": "bsd-622",
+      "values": {
+       "bead_seat_diameter_mm": "622",
+       "width_min_mm": "49.5",
+       "width_max_mm": "49.5"
+      },
+      "sources": []
+     }
+    ]
+   },
+   "legacy_key": "wheel_size",
+   "legacy_value": "29\"",
+   "source": "supplier_text",
+   "rule": "tube_fit_row: 29\" is one ISO diameter; widths inch_to_mm"
+  },
+  {
+   "product_id": "e62c6a7b-bb93-4d59-826d-84c444e1d0aa",
+   "sku": "252375",
+   "name": "CAMARA ARO 29 X 1.95C V/A 48MM UNIQUA",
+   "template": "tube",
+   "successor": "valve_standard",
+   "kind": "option",
+   "value": "Auto (Schrader / americana)",
+   "legacy_key": "valve_type",
+   "legacy_value": "Schrader (americana / auto)",
+   "source": "supplier_text",
+   "rule": "option"
+  },
+  {
+   "product_id": "bfe4311b-9583-4897-b807-46d6e30daac8",
+   "sku": "23057",
+   "name": "Camara Autosellante FLAT ATTACK 29x1.9-2.125 VF",
+   "template": "tube",
+   "successor": "tube_fit_rows",
+   "kind": "rows",
+   "value": {
+    "schema_version": 1,
+    "rows": [
+     {
+      "id": "bsd-622",
+      "values": {
+       "bead_seat_diameter_mm": "622",
+       "width_min_mm": "48.3",
+       "width_max_mm": "54"
+      },
+      "sources": []
+     }
+    ]
+   },
+   "legacy_key": "wheel_size",
+   "legacy_value": "29\"",
+   "source": "supplier_text",
+   "rule": "tube_fit_row: 29\" is one ISO diameter; widths inch_to_mm"
+  },
+  {
+   "product_id": "bfe4311b-9583-4897-b807-46d6e30daac8",
+   "sku": "23057",
+   "name": "Camara Autosellante FLAT ATTACK 29x1.9-2.125 VF",
+   "template": "tube",
+   "successor": "valve_standard",
+   "kind": "option",
+   "value": "Francesa (Presta)",
+   "legacy_key": "valve_type",
+   "legacy_value": "Presta (francesa)",
+   "source": "supplier_text",
+   "rule": "option"
+  },
+  {
+   "product_id": "13199678-e946-4906-9985-9170341c705f",
+   "sku": "18474",
+   "name": "CAMARA BEST BUTILO 27.5 X 1.95 / 2.125 VAL/FRANCESA 48MM WANDA",
+   "template": "tube",
+   "successor": "tube_fit_rows",
+   "kind": "rows",
+   "value": {
+    "schema_version": 1,
+    "rows": [
+     {
+      "id": "bsd-584",
+      "values": {
+       "bead_seat_diameter_mm": "584",
+       "width_min_mm": "49.5",
+       "width_max_mm": "54"
+      },
+      "sources": []
+     }
+    ]
+   },
+   "legacy_key": "wheel_size",
+   "legacy_value": "27.5\"",
+   "source": "supplier_text",
+   "rule": "tube_fit_row: 27.5\" is one ISO diameter; widths inch_to_mm"
+  },
+  {
+   "product_id": "7ccaf8ee-fc65-4eae-92bf-f69cb09f67cd",
+   "sku": "18476",
+   "name": "CAMARA BEST BUTILO 29 X 1.95 / 2.125 VAL/FRANCESA 48MM WANDA",
+   "template": "tube",
+   "successor": "tube_fit_rows",
+   "kind": "rows",
+   "value": {
+    "schema_version": 1,
+    "rows": [
+     {
+      "id": "bsd-622",
+      "values": {
+       "bead_seat_diameter_mm": "622",
+       "width_min_mm": "49.5",
+       "width_max_mm": "54"
+      },
+      "sources": []
+     }
+    ]
+   },
+   "legacy_key": "wheel_size",
+   "legacy_value": "29\"",
+   "source": "supplier_text",
+   "rule": "tube_fit_row: 29\" is one ISO diameter; widths inch_to_mm"
+  },
+  {
+   "product_id": "ecaa8cf6-f46a-49e7-98b5-d9fa3a9a1edf",
+   "sku": "6938112698508",
+   "name": "Camara Bicicleta 26 X 1.5 a 2.20 Valvula de Auto Arisun",
+   "template": "tube",
+   "successor": "tube_fit_rows",
+   "kind": "rows",
+   "value": {
+    "schema_version": 1,
+    "rows": [
+     {
+      "id": "bsd-559",
+      "values": {
+       "bead_seat_diameter_mm": "559",
+       "width_min_mm": "38.1",
+       "width_max_mm": "55.9"
+      },
+      "sources": []
+     }
+    ]
+   },
+   "legacy_key": "wheel_size",
+   "legacy_value": "26\"",
+   "source": "supplier_text",
+   "rule": "tube_fit_row: 26\" with a decimal width; widths inch_to_mm"
+  },
+  {
+   "product_id": "d2da8d97-a83b-46bb-aa0b-65daa983cfea",
+   "sku": "6927116112769",
+   "name": "Camara Bicicleta Aro 20 X 1.5 a 2.2 Valvula de Auto Arisun",
+   "template": "tube",
+   "successor": "tube_fit_rows",
+   "kind": "rows",
+   "value": {
+    "schema_version": 1,
+    "rows": [
+     {
+      "id": "bsd-406",
+      "values": {
+       "bead_seat_diameter_mm": "406",
+       "width_min_mm": "38.1",
+       "width_max_mm": "55.9"
+      },
+      "sources": []
+     }
+    ]
+   },
+   "legacy_key": "wheel_size",
+   "legacy_value": "20\"",
+   "source": "supplier_text",
+   "rule": "tube_fit_row: 20\" with a decimal width; widths inch_to_mm"
+  },
+  {
+   "product_id": "654eab60-c4cc-4818-8e7f-bbddd0e9c98e",
+   "sku": "A1989018188A",
+   "name": "Camara Bicicleta Aro 24 X 1.95 a 2.125 Valvula de Auto Ralco",
+   "template": "tube",
+   "successor": "tube_fit_rows",
+   "kind": "rows",
+   "value": {
+    "schema_version": 1,
+    "rows": [
+     {
+      "id": "bsd-507",
+      "values": {
+       "bead_seat_diameter_mm": "507",
+       "width_min_mm": "49.5",
+       "width_max_mm": "54"
+      },
+      "sources": []
+     }
+    ]
+   },
+   "legacy_key": "wheel_size",
+   "legacy_value": "24\"",
+   "source": "supplier_text",
+   "rule": "tube_fit_row: 24\" with a decimal width; widths inch_to_mm"
+  },
+  {
+   "product_id": "f1b68aaa-9c35-4f39-9f25-dd86b2be6be4",
+   "sku": "6927116100896",
+   "name": "Camara Bicicleta Aro 26 X 1.25 a 1.75 Valvula de Auto Arisun",
+   "template": "tube",
+   "successor": "tube_fit_rows",
+   "kind": "rows",
+   "value": {
+    "schema_version": 1,
+    "rows": [
+     {
+      "id": "bsd-559",
+      "values": {
+       "bead_seat_diameter_mm": "559",
+       "width_min_mm": "31.8",
+       "width_max_mm": "44.4"
+      },
+      "sources": []
+     }
+    ]
+   },
+   "legacy_key": "wheel_size",
+   "legacy_value": "26\"",
+   "source": "supplier_text",
+   "rule": "tube_fit_row: 26\" with a decimal width; widths inch_to_mm"
+  },
+  {
+   "product_id": "3d65da80-971c-4d0e-ae75-d555f5bc7a65",
+   "sku": "A1989018190A",
+   "name": "Camara Bicicleta Aro 26 X 1.95 a 2.125 V. Francesa Ralco",
+   "template": "tube",
+   "successor": "tube_fit_rows",
+   "kind": "rows",
+   "value": {
+    "schema_version": 1,
+    "rows": [
+     {
+      "id": "bsd-559",
+      "values": {
+       "bead_seat_diameter_mm": "559",
+       "width_min_mm": "49.5",
+       "width_max_mm": "54"
+      },
+      "sources": []
+     }
+    ]
+   },
+   "legacy_key": "wheel_size",
+   "legacy_value": "26\"",
+   "source": "supplier_text",
+   "rule": "tube_fit_row: 26\" with a decimal width; widths inch_to_mm"
+  },
+  {
+   "product_id": "8074052b-27b5-4c71-8859-c224a6bbdc0b",
+   "sku": "A1989018186A",
+   "name": "Camara Bicicleta Aro 26 X 1.95 a 2.125 Valvula de Auto Ralco",
+   "template": "tube",
+   "successor": "tube_fit_rows",
+   "kind": "rows",
+   "value": {
+    "schema_version": 1,
+    "rows": [
+     {
+      "id": "bsd-559",
+      "values": {
+       "bead_seat_diameter_mm": "559",
+       "width_min_mm": "49.5",
+       "width_max_mm": "54"
+      },
+      "sources": []
+     }
+    ]
+   },
+   "legacy_key": "wheel_size",
+   "legacy_value": "26\"",
+   "source": "supplier_text",
+   "rule": "tube_fit_row: 26\" with a decimal width; widths inch_to_mm"
+  },
+  {
+   "product_id": "4a3646bf-3015-4b4f-951f-68ee221e5e05",
+   "sku": "16582",
+   "name": "Camara Bicicleta Aro 26 X 2.125 Valvula Auto 35Mm Duro",
+   "template": "tube",
+   "successor": "tube_fit_rows",
+   "kind": "rows",
+   "value": {
+    "schema_version": 1,
+    "rows": [
+     {
+      "id": "bsd-559",
+      "values": {
+       "bead_seat_diameter_mm": "559",
+       "width_min_mm": "54",
+       "width_max_mm": "54"
+      },
+      "sources": []
+     }
+    ]
+   },
+   "legacy_key": "wheel_size",
+   "legacy_value": "26\"",
+   "source": "supplier_text",
+   "rule": "tube_fit_row: 26\" with a decimal width; widths inch_to_mm"
+  },
+  {
+   "product_id": "000ca591-e26b-4397-b56d-fcbab4ee36bb",
+   "sku": "6927116164430",
+   "name": "Camara Bicicleta Aro 27.5 X 1.75 a 2.35 V.Francesa Arisun",
+   "template": "tube",
+   "successor": "tube_fit_rows",
+   "kind": "rows",
+   "value": {
+    "schema_version": 1,
+    "rows": [
+     {
+      "id": "bsd-584",
+      "values": {
+       "bead_seat_diameter_mm": "584",
+       "width_min_mm": "44.4",
+       "width_max_mm": "59.7"
+      },
+      "sources": []
+     }
+    ]
+   },
+   "legacy_key": "wheel_size",
+   "legacy_value": "27.5\"",
+   "source": "supplier_text",
+   "rule": "tube_fit_row: 27.5\" is one ISO diameter; widths inch_to_mm"
+  },
+  {
+   "product_id": "d0389c09-35d8-4326-a53f-189b044ea8c5",
+   "sku": "6927116172435",
+   "name": "Camara Bicicleta Aro 27.5 X 1.75 a 2.35 Valvula Auto Arisun",
+   "template": "tube",
+   "successor": "tube_fit_rows",
+   "kind": "rows",
+   "value": {
+    "schema_version": 1,
+    "rows": [
+     {
+      "id": "bsd-584",
+      "values": {
+       "bead_seat_diameter_mm": "584",
+       "width_min_mm": "44.4",
+       "width_max_mm": "59.7"
+      },
+      "sources": []
+     }
+    ]
+   },
+   "legacy_key": "wheel_size",
+   "legacy_value": "27.5\"",
+   "source": "supplier_text",
+   "rule": "tube_fit_row: 27.5\" is one ISO diameter; widths inch_to_mm"
+  },
+  {
+   "product_id": "ee2995f7-849f-4d4b-aa5a-609837c11197",
+   "sku": "18473",
+   "name": "Camara Bicicleta Aro 27.5 X 1.95 a 2.125 V.Auto 48Mm Best",
+   "template": "tube",
+   "successor": "tube_fit_rows",
+   "kind": "rows",
+   "value": {
+    "schema_version": 1,
+    "rows": [
+     {
+      "id": "bsd-584",
+      "values": {
+       "bead_seat_diameter_mm": "584",
+       "width_min_mm": "49.5",
+       "width_max_mm": "54"
+      },
+      "sources": []
+     }
+    ]
+   },
+   "legacy_key": "wheel_size",
+   "legacy_value": "27.5\"",
+   "source": "supplier_text",
+   "rule": "tube_fit_row: 27.5\" is one ISO diameter; widths inch_to_mm"
+  },
+  {
+   "product_id": "f012acdc-d8c4-4790-8f70-c74b6377e98f",
+   "sku": "A1989018187A",
+   "name": "Camara Bicicleta Aro 27.5X1.95 a 2.125 Valvula de Auto Ralco",
+   "template": "tube",
+   "successor": "tube_fit_rows",
+   "kind": "rows",
+   "value": {
+    "schema_version": 1,
+    "rows": [
+     {
+      "id": "bsd-584",
+      "values": {
+       "bead_seat_diameter_mm": "584",
+       "width_min_mm": "49.5",
+       "width_max_mm": "54"
+      },
+      "sources": []
+     }
+    ]
+   },
+   "legacy_key": "wheel_size",
+   "legacy_value": "27.5\"",
+   "source": "supplier_text",
+   "rule": "tube_fit_row: 27.5\" is one ISO diameter; widths inch_to_mm"
+  },
+  {
+   "product_id": "f061a61a-5bc2-4fd9-aa2c-9bfbc76709f2",
+   "sku": "6938112698485",
+   "name": "Camara Bicicleta Aro 29 X 1.75 a 2.35 V. Francesa Arisun",
+   "template": "tube",
+   "successor": "tube_fit_rows",
+   "kind": "rows",
+   "value": {
+    "schema_version": 1,
+    "rows": [
+     {
+      "id": "bsd-622",
+      "values": {
+       "bead_seat_diameter_mm": "622",
+       "width_min_mm": "44.4",
+       "width_max_mm": "59.7"
+      },
+      "sources": []
+     }
+    ]
+   },
+   "legacy_key": "wheel_size",
+   "legacy_value": "29\"",
+   "source": "supplier_text",
+   "rule": "tube_fit_row: 29\" is one ISO diameter; widths inch_to_mm"
+  },
+  {
+   "product_id": "36ca732a-5ab7-4641-b47b-6f6a96eeb86a",
+   "sku": "6938112698478",
+   "name": "Camara Bicicleta Aro 29 X 1.75 a 2.35 Valvula Auto Arisun",
+   "template": "tube",
+   "successor": "tube_fit_rows",
+   "kind": "rows",
+   "value": {
+    "schema_version": 1,
+    "rows": [
+     {
+      "id": "bsd-622",
+      "values": {
+       "bead_seat_diameter_mm": "622",
+       "width_min_mm": "44.4",
+       "width_max_mm": "59.7"
+      },
+      "sources": []
+     }
+    ]
+   },
+   "legacy_key": "wheel_size",
+   "legacy_value": "29\"",
+   "source": "supplier_text",
+   "rule": "tube_fit_row: 29\" is one ISO diameter; widths inch_to_mm"
+  },
+  {
+   "product_id": "82c4056e-7faf-42b2-8ac6-270a718afe8b",
+   "sku": "18475",
+   "name": "Camara Bicicleta Aro 29 X 1.95 a 2.125 V.Auto 48Mm Best",
+   "template": "tube",
+   "successor": "tube_fit_rows",
+   "kind": "rows",
+   "value": {
+    "schema_version": 1,
+    "rows": [
+     {
+      "id": "bsd-622",
+      "values": {
+       "bead_seat_diameter_mm": "622",
+       "width_min_mm": "49.5",
+       "width_max_mm": "54"
+      },
+      "sources": []
+     }
+    ]
+   },
+   "legacy_key": "wheel_size",
+   "legacy_value": "29\"",
+   "source": "supplier_text",
+   "rule": "tube_fit_row: 29\" is one ISO diameter; widths inch_to_mm"
+  },
+  {
+   "product_id": "dd852474-b1ab-4719-b0ce-3fdbc176d404",
+   "sku": "12053",
+   "name": "Camara Bicicleta Niño Aro 16 X 1.75 a 2.125 V.Auto Duro",
+   "template": "tube",
+   "successor": "tube_fit_rows",
+   "kind": "rows",
+   "value": {
+    "schema_version": 1,
+    "rows": [
+     {
+      "id": "bsd-305",
+      "values": {
+       "bead_seat_diameter_mm": "305",
+       "width_min_mm": "44.4",
+       "width_max_mm": "54"
+      },
+      "sources": []
+     }
+    ]
+   },
+   "legacy_key": "wheel_size",
+   "legacy_value": "16\"",
+   "source": "supplier_text",
+   "rule": "tube_fit_row: 16\" with a decimal width; widths inch_to_mm"
+  },
+  {
+   "product_id": "c25399a4-6e14-4000-b091-2f2385ebc74e",
+   "sku": "6927116103552",
+   "name": "Camara Bicicleta Ruta 700 X 25 a 38C V. Francesa Arisun",
+   "template": "tube",
+   "successor": "tube_fit_rows",
+   "kind": "rows",
+   "value": {
+    "schema_version": 1,
+    "rows": [
+     {
+      "id": "bsd-622",
+      "values": {
+       "bead_seat_diameter_mm": "622",
+       "width_min_mm": "25",
+       "width_max_mm": "38"
+      },
+      "sources": []
+     }
+    ]
+   },
+   "legacy_key": "wheel_size",
+   "legacy_value": "700c",
+   "source": "supplier_text",
+   "rule": "tube_fit_row: 700c is one ISO diameter; widths mm"
+  },
+  {
+   "product_id": "e657b792-51b0-457d-82b7-7fc6356a57bb",
+   "sku": "6927116103538",
+   "name": "Camara Bicicleta Ruta 700 X 25 a 38C V.Auto Arisun",
+   "template": "tube",
+   "successor": "tube_fit_rows",
+   "kind": "rows",
+   "value": {
+    "schema_version": 1,
+    "rows": [
+     {
+      "id": "bsd-622",
+      "values": {
+       "bead_seat_diameter_mm": "622",
+       "width_min_mm": "25",
+       "width_max_mm": "38"
+      },
+      "sources": []
+     }
+    ]
+   },
+   "legacy_key": "wheel_size",
+   "legacy_value": "700c",
+   "source": "supplier_text",
+   "rule": "tube_fit_row: 700c is one ISO diameter; widths mm"
+  },
+  {
+   "product_id": "4c21cf6e-56b7-40f5-905b-06fd4b8d8e6a",
+   "sku": "6938112698461",
+   "name": "Camara Bicicleta Ruta Aro 700 X 18 a 25C V. Francesa 48Mm",
+   "template": "tube",
+   "successor": "tube_fit_rows",
+   "kind": "rows",
+   "value": {
+    "schema_version": 1,
+    "rows": [
+     {
+      "id": "bsd-622",
+      "values": {
+       "bead_seat_diameter_mm": "622",
+       "width_min_mm": "18",
+       "width_max_mm": "25"
+      },
+      "sources": []
+     }
+    ]
+   },
+   "legacy_key": "wheel_size",
+   "legacy_value": "700c",
+   "source": "supplier_text",
+   "rule": "tube_fit_row: 700c is one ISO diameter; widths mm"
+  },
+  {
+   "product_id": "4880309b-b3d4-46b5-828f-884bab463c4b",
+   "sku": "10868",
+   "name": "Camara Bicicleta Ruta Aro 700 X 25C V. Francesa 52Mm Duro",
+   "template": "tube",
+   "successor": "tube_fit_rows",
+   "kind": "rows",
+   "value": {
+    "schema_version": 1,
+    "rows": [
+     {
+      "id": "bsd-622",
+      "values": {
+       "bead_seat_diameter_mm": "622",
+       "width_min_mm": "25",
+       "width_max_mm": "25"
+      },
+      "sources": []
+     }
+    ]
+   },
+   "legacy_key": "wheel_size",
+   "legacy_value": "700c",
+   "source": "supplier_text",
+   "rule": "tube_fit_row: 700c is one ISO diameter; widths mm"
+  },
+  {
+   "product_id": "746b9f9a-7318-40fc-835e-babcc00542ab",
+   "sku": "18457",
+   "name": "Camara Bicicleta Ruta Aro 700 X 25C V.Francesa 60Mm Best",
+   "template": "tube",
+   "successor": "tube_fit_rows",
+   "kind": "rows",
+   "value": {
+    "schema_version": 1,
+    "rows": [
+     {
+      "id": "bsd-622",
+      "values": {
+       "bead_seat_diameter_mm": "622",
+       "width_min_mm": "25",
+       "width_max_mm": "25"
+      },
+      "sources": []
+     }
+    ]
+   },
+   "legacy_key": "wheel_size",
+   "legacy_value": "700c",
+   "source": "supplier_text",
+   "rule": "tube_fit_row: 700c is one ISO diameter; widths mm"
+  },
+  {
+   "product_id": "34f44e2d-82d2-4e63-b3d4-f0a88d405201",
+   "sku": "36389",
+   "name": "Camara Bicicleta Ruta Aro 700 X 28 a 42C V. Francesa 48Mm",
+   "template": "tube",
+   "successor": "tube_fit_rows",
+   "kind": "rows",
+   "value": {
+    "schema_version": 1,
+    "rows": [
+     {
+      "id": "bsd-622",
+      "values": {
+       "bead_seat_diameter_mm": "622",
+       "width_min_mm": "28",
+       "width_max_mm": "42"
+      },
+      "sources": []
+     }
+    ]
+   },
+   "legacy_key": "wheel_size",
+   "legacy_value": "700c",
+   "source": "supplier_text",
+   "rule": "tube_fit_row: 700c is one ISO diameter; widths mm"
+  },
+  {
+   "product_id": "4ae9d374-e86e-418a-bc14-67eecf9b33dd",
+   "sku": "18456",
+   "name": "Camara Bicicleta Ruta Aro 700 X 35C V.Bicicleta Best",
+   "template": "tube",
+   "successor": "tube_fit_rows",
+   "kind": "rows",
+   "value": {
+    "schema_version": 1,
+    "rows": [
+     {
+      "id": "bsd-622",
+      "values": {
+       "bead_seat_diameter_mm": "622",
+       "width_min_mm": "35",
+       "width_max_mm": "35"
+      },
+      "sources": []
+     }
+    ]
+   },
+   "legacy_key": "wheel_size",
+   "legacy_value": "700c",
+   "source": "supplier_text",
+   "rule": "tube_fit_row: 700c is one ISO diameter; widths mm"
+  },
+  {
+   "product_id": "619cd4a3-c772-4ae6-ba7a-a8f6ef6c3ffd",
+   "sku": "12060",
+   "name": "Camara Bicicleta Ruta Aro 700 X 35C Valvula Auto Duro",
+   "template": "tube",
+   "successor": "tube_fit_rows",
+   "kind": "rows",
+   "value": {
+    "schema_version": 1,
+    "rows": [
+     {
+      "id": "bsd-622",
+      "values": {
+       "bead_seat_diameter_mm": "622",
+       "width_min_mm": "35",
+       "width_max_mm": "35"
+      },
+      "sources": []
+     }
+    ]
+   },
+   "legacy_key": "wheel_size",
+   "legacy_value": "700c",
+   "source": "supplier_text",
+   "rule": "tube_fit_row: 700c is one ISO diameter; widths mm"
+  },
+  {
+   "product_id": "b19abb0f-f8ed-4f60-8bf6-e73f55da8146",
+   "sku": "6927116108656",
+   "name": "CAMARA CHAO YANG 700X18/23   F/V 60MM CON LIQUIDO",
+   "template": "tube",
+   "successor": "tube_fit_rows",
+   "kind": "rows",
+   "value": {
+    "schema_version": 1,
+    "rows": [
+     {
+      "id": "bsd-622",
+      "values": {
+       "bead_seat_diameter_mm": "622",
+       "width_min_mm": "18",
+       "width_max_mm": "23"
+      },
+      "sources": []
+     }
+    ]
+   },
+   "legacy_key": "wheel_size",
+   "legacy_value": "700c",
+   "source": "supplier_text",
+   "rule": "tube_fit_row: 700c is one ISO diameter; widths mm"
+  },
+  {
+   "product_id": "b19abb0f-f8ed-4f60-8bf6-e73f55da8146",
+   "sku": "6927116108656",
+   "name": "CAMARA CHAO YANG 700X18/23   F/V 60MM CON LIQUIDO",
+   "template": "tube",
+   "successor": "valve_standard",
+   "kind": "option",
+   "value": "Francesa (Presta)",
+   "legacy_key": "valve_type",
+   "legacy_value": "Presta (francesa)",
+   "source": "supplier_text",
+   "rule": "option"
+  },
+  {
+   "product_id": "32d996a7-497e-4270-bd74-d4022a40d3cf",
+   "sku": "6927116197933",
+   "name": "Cámara Chaoyang 20x1.95/2.125 A/V 33MM",
+   "template": "tube",
+   "successor": "tube_fit_rows",
+   "kind": "rows",
+   "value": {
+    "schema_version": 1,
+    "rows": [
+     {
+      "id": "bsd-406",
+      "values": {
+       "bead_seat_diameter_mm": "406",
+       "width_min_mm": "49.5",
+       "width_max_mm": "54"
+      },
+      "sources": []
+     }
+    ]
+   },
+   "legacy_key": "wheel_size",
+   "legacy_value": "20\"",
+   "source": "supplier_text",
+   "rule": "tube_fit_row: 20\" with a decimal width; widths inch_to_mm"
+  },
+  {
+   "product_id": "32d996a7-497e-4270-bd74-d4022a40d3cf",
+   "sku": "6927116197933",
+   "name": "Cámara Chaoyang 20x1.95/2.125 A/V 33MM",
+   "template": "tube",
+   "successor": "valve_standard",
+   "kind": "option",
+   "value": "Auto (Schrader / americana)",
+   "legacy_key": "valve_type",
+   "legacy_value": "Schrader (americana / auto)",
+   "source": "supplier_text",
+   "rule": "option"
+  },
+  {
+   "product_id": "0d0f238a-acbb-4582-bf38-52abaa394731",
+   "sku": "6927116185589",
+   "name": "Cámara Chaoyang 26x1.95/2.125 A/V 33MM",
+   "template": "tube",
+   "successor": "tube_fit_rows",
+   "kind": "rows",
+   "value": {
+    "schema_version": 1,
+    "rows": [
+     {
+      "id": "bsd-559",
+      "values": {
+       "bead_seat_diameter_mm": "559",
+       "width_min_mm": "49.5",
+       "width_max_mm": "54"
+      },
+      "sources": []
+     }
+    ]
+   },
+   "legacy_key": "wheel_size",
+   "legacy_value": "26\"",
+   "source": "supplier_text",
+   "rule": "tube_fit_row: 26\" with a decimal width; widths inch_to_mm"
+  },
+  {
+   "product_id": "0d0f238a-acbb-4582-bf38-52abaa394731",
+   "sku": "6927116185589",
+   "name": "Cámara Chaoyang 26x1.95/2.125 A/V 33MM",
+   "template": "tube",
+   "successor": "valve_standard",
+   "kind": "option",
+   "value": "Auto (Schrader / americana)",
+   "legacy_key": "valve_type",
+   "legacy_value": "Schrader (americana / auto)",
+   "source": "supplier_text",
+   "rule": "option"
+  },
+  {
+   "product_id": "7aac2370-f3c5-426b-bb46-4de68d1f9359",
+   "sku": "6927116119034",
+   "name": "Cámara Chaoyang 26x1.95/2.125 A/V 48MM",
+   "template": "tube",
+   "successor": "tube_fit_rows",
+   "kind": "rows",
+   "value": {
+    "schema_version": 1,
+    "rows": [
+     {
+      "id": "bsd-559",
+      "values": {
+       "bead_seat_diameter_mm": "559",
+       "width_min_mm": "49.5",
+       "width_max_mm": "54"
+      },
+      "sources": []
+     }
+    ]
+   },
+   "legacy_key": "wheel_size",
+   "legacy_value": "26\"",
+   "source": "supplier_text",
+   "rule": "tube_fit_row: 26\" with a decimal width; widths inch_to_mm"
+  },
+  {
+   "product_id": "7aac2370-f3c5-426b-bb46-4de68d1f9359",
+   "sku": "6927116119034",
+   "name": "Cámara Chaoyang 26x1.95/2.125 A/V 48MM",
+   "template": "tube",
+   "successor": "valve_standard",
+   "kind": "option",
+   "value": "Auto (Schrader / americana)",
+   "legacy_key": "valve_type",
+   "legacy_value": "Schrader (americana / auto)",
+   "source": "supplier_text",
+   "rule": "option"
+  },
+  {
+   "product_id": "febc585d-fa97-450d-81fa-e15d2526071f",
+   "sku": "6927116119065",
+   "name": "Cámara Chaoyang 26x1.95/2.125 F/V 48MM",
+   "template": "tube",
+   "successor": "tube_fit_rows",
+   "kind": "rows",
+   "value": {
+    "schema_version": 1,
+    "rows": [
+     {
+      "id": "bsd-559",
+      "values": {
+       "bead_seat_diameter_mm": "559",
+       "width_min_mm": "49.5",
+       "width_max_mm": "54"
+      },
+      "sources": []
+     }
+    ]
+   },
+   "legacy_key": "wheel_size",
+   "legacy_value": "26\"",
+   "source": "supplier_text",
+   "rule": "tube_fit_row: 26\" with a decimal width; widths inch_to_mm"
+  },
+  {
+   "product_id": "febc585d-fa97-450d-81fa-e15d2526071f",
+   "sku": "6927116119065",
+   "name": "Cámara Chaoyang 26x1.95/2.125 F/V 48MM",
+   "template": "tube",
+   "successor": "valve_standard",
+   "kind": "option",
+   "value": "Francesa (Presta)",
+   "legacy_key": "valve_type",
+   "legacy_value": "Presta (francesa)",
+   "source": "supplier_text",
+   "rule": "option"
+  },
+  {
+   "product_id": "76adca35-9189-4f14-a66f-b35fb2a3b2a9",
+   "sku": "6927116105105",
+   "name": "CÁMARA CHAOYANG 27.5X1.75/2.10 F/V 48MM CON LÍQUIDO",
+   "template": "tube",
+   "successor": "tube_fit_rows",
+   "kind": "rows",
+   "value": {
+    "schema_version": 1,
+    "rows": [
+     {
+      "id": "bsd-584",
+      "values": {
+       "bead_seat_diameter_mm": "584",
+       "width_min_mm": "44.4",
+       "width_max_mm": "53.3"
+      },
+      "sources": []
+     }
+    ]
+   },
+   "legacy_key": "wheel_size",
+   "legacy_value": "27.5\"",
+   "source": "supplier_text",
+   "rule": "tube_fit_row: 27.5\" is one ISO diameter; widths inch_to_mm"
+  },
+  {
+   "product_id": "76adca35-9189-4f14-a66f-b35fb2a3b2a9",
+   "sku": "6927116105105",
+   "name": "CÁMARA CHAOYANG 27.5X1.75/2.10 F/V 48MM CON LÍQUIDO",
+   "template": "tube",
+   "successor": "valve_standard",
+   "kind": "option",
+   "value": "Francesa (Presta)",
+   "legacy_key": "valve_type",
+   "legacy_value": "Presta (francesa)",
+   "source": "supplier_text",
+   "rule": "option"
+  },
+  {
+   "product_id": "43699021-98e5-409a-acef-c4f5f0b67f11",
+   "sku": "6927116185633",
+   "name": "Cámara Chaoyang 27.5x1.75/2.25 F/V 48MM",
+   "template": "tube",
+   "successor": "tube_fit_rows",
+   "kind": "rows",
+   "value": {
+    "schema_version": 1,
+    "rows": [
+     {
+      "id": "bsd-584",
+      "values": {
+       "bead_seat_diameter_mm": "584",
+       "width_min_mm": "44.4",
+       "width_max_mm": "57.1"
+      },
+      "sources": []
+     }
+    ]
+   },
+   "legacy_key": "wheel_size",
+   "legacy_value": "27.5\"",
+   "source": "supplier_text",
+   "rule": "tube_fit_row: 27.5\" is one ISO diameter; widths inch_to_mm"
+  },
+  {
+   "product_id": "43699021-98e5-409a-acef-c4f5f0b67f11",
+   "sku": "6927116185633",
+   "name": "Cámara Chaoyang 27.5x1.75/2.25 F/V 48MM",
+   "template": "tube",
+   "successor": "valve_standard",
+   "kind": "option",
+   "value": "Francesa (Presta)",
+   "legacy_key": "valve_type",
+   "legacy_value": "Presta (francesa)",
+   "source": "supplier_text",
+   "rule": "option"
+  },
+  {
+   "product_id": "b56d6b6a-d450-4e69-b97a-8de03833a2c8",
+   "sku": "6927116186333",
+   "name": "Cámara Chaoyang 29x1.75/2.10 A/V 48MM",
+   "template": "tube",
+   "successor": "tube_fit_rows",
+   "kind": "rows",
+   "value": {
+    "schema_version": 1,
+    "rows": [
+     {
+      "id": "bsd-622",
+      "values": {
+       "bead_seat_diameter_mm": "622",
+       "width_min_mm": "44.4",
+       "width_max_mm": "53.3"
+      },
+      "sources": []
+     }
+    ]
+   },
+   "legacy_key": "wheel_size",
+   "legacy_value": "29\"",
+   "source": "supplier_text",
+   "rule": "tube_fit_row: 29\" is one ISO diameter; widths inch_to_mm"
+  },
+  {
+   "product_id": "b56d6b6a-d450-4e69-b97a-8de03833a2c8",
+   "sku": "6927116186333",
+   "name": "Cámara Chaoyang 29x1.75/2.10 A/V 48MM",
+   "template": "tube",
+   "successor": "valve_standard",
+   "kind": "option",
+   "value": "Auto (Schrader / americana)",
+   "legacy_key": "valve_type",
+   "legacy_value": "Schrader (americana / auto)",
+   "source": "supplier_text",
+   "rule": "option"
+  },
+  {
+   "product_id": "531443ed-dd46-4929-befe-952ed73e698c",
+   "sku": "6927116192006",
+   "name": "CÁMARA CHAOYANG 29X1.75/2.10 F/V 48MM CON LÍQUIDO",
+   "template": "tube",
+   "successor": "tube_fit_rows",
+   "kind": "rows",
+   "value": {
+    "schema_version": 1,
+    "rows": [
+     {
+      "id": "bsd-622",
+      "values": {
+       "bead_seat_diameter_mm": "622",
+       "width_min_mm": "44.4",
+       "width_max_mm": "53.3"
+      },
+      "sources": []
+     }
+    ]
+   },
+   "legacy_key": "wheel_size",
+   "legacy_value": "29\"",
+   "source": "supplier_text",
+   "rule": "tube_fit_row: 29\" is one ISO diameter; widths inch_to_mm"
+  },
+  {
+   "product_id": "531443ed-dd46-4929-befe-952ed73e698c",
+   "sku": "6927116192006",
+   "name": "CÁMARA CHAOYANG 29X1.75/2.10 F/V 48MM CON LÍQUIDO",
+   "template": "tube",
+   "successor": "valve_standard",
+   "kind": "option",
+   "value": "Francesa (Presta)",
+   "legacy_key": "valve_type",
+   "legacy_value": "Presta (francesa)",
+   "source": "supplier_text",
+   "rule": "option"
+  },
+  {
+   "product_id": "4676bcbb-5441-4a23-821b-51072166098f",
+   "sku": "6927116185619",
+   "name": "Cámara Chaoyang 29x2.10-2.25 F/V 48mm",
+   "template": "tube",
+   "successor": "tube_fit_rows",
+   "kind": "rows",
+   "value": {
+    "schema_version": 1,
+    "rows": [
+     {
+      "id": "bsd-622",
+      "values": {
+       "bead_seat_diameter_mm": "622",
+       "width_min_mm": "53.3",
+       "width_max_mm": "57.1"
+      },
+      "sources": []
+     }
+    ]
+   },
+   "legacy_key": "wheel_size",
+   "legacy_value": "29\"",
+   "source": "supplier_text",
+   "rule": "tube_fit_row: 29\" is one ISO diameter; widths inch_to_mm"
+  },
+  {
+   "product_id": "4676bcbb-5441-4a23-821b-51072166098f",
+   "sku": "6927116185619",
+   "name": "Cámara Chaoyang 29x2.10-2.25 F/V 48mm",
+   "template": "tube",
+   "successor": "valve_standard",
+   "kind": "option",
+   "value": "Francesa (Presta)",
+   "legacy_key": "valve_type",
+   "legacy_value": "Presta (francesa)",
+   "source": "supplier_text",
+   "rule": "option"
+  },
+  {
+   "product_id": "83bc00be-3336-46b2-8cce-a78ef149e4bb",
+   "sku": "6927116185978",
+   "name": "Cámara Chaoyang Aro 24 1.95/2.125 A/V",
+   "template": "tube",
+   "successor": "tube_fit_rows",
+   "kind": "rows",
+   "value": {
+    "schema_version": 1,
+    "rows": [
+     {
+      "id": "bsd-507",
+      "values": {
+       "bead_seat_diameter_mm": "507",
+       "width_min_mm": "49.5",
+       "width_max_mm": "54"
+      },
+      "sources": []
+     }
+    ]
+   },
+   "legacy_key": "wheel_size",
+   "legacy_value": "24\"",
+   "source": "supplier_text",
+   "rule": "tube_fit_row: 24\" with a decimal width; widths inch_to_mm"
+  },
+  {
+   "product_id": "83bc00be-3336-46b2-8cce-a78ef149e4bb",
+   "sku": "6927116185978",
+   "name": "Cámara Chaoyang Aro 24 1.95/2.125 A/V",
+   "template": "tube",
+   "successor": "valve_standard",
+   "kind": "option",
+   "value": "Auto (Schrader / americana)",
+   "legacy_key": "valve_type",
+   "legacy_value": "Schrader (americana / auto)",
+   "source": "supplier_text",
+   "rule": "option"
+  },
+  {
+   "product_id": "2ad5752d-a68b-4016-8623-5c2c11d51da3",
+   "sku": "25247",
+   "name": "CAMARA CST 26x1.9/2.125 Valvula de Auto 48mm.",
+   "template": "tube",
+   "successor": "tube_fit_rows",
+   "kind": "rows",
+   "value": {
+    "schema_version": 1,
+    "rows": [
+     {
+      "id": "bsd-559",
+      "values": {
+       "bead_seat_diameter_mm": "559",
+       "width_min_mm": "48.3",
+       "width_max_mm": "54"
+      },
+      "sources": []
+     }
+    ]
+   },
+   "legacy_key": "wheel_size",
+   "legacy_value": "26\"",
+   "source": "supplier_text",
+   "rule": "tube_fit_row: 26\" with a decimal width; widths inch_to_mm"
+  },
+  {
+   "product_id": "aa53a533-fa57-4752-86cc-aef600008b5c",
+   "sku": "25249",
+   "name": "Camara CST 27.5x1.90/2.125 Valvula Francesa 48mm.",
+   "template": "tube",
+   "successor": "tube_fit_rows",
+   "kind": "rows",
+   "value": {
+    "schema_version": 1,
+    "rows": [
+     {
+      "id": "bsd-584",
+      "values": {
+       "bead_seat_diameter_mm": "584",
+       "width_min_mm": "48.3",
+       "width_max_mm": "54"
+      },
+      "sources": []
+     }
+    ]
+   },
+   "legacy_key": "wheel_size",
+   "legacy_value": "27.5\"",
+   "source": "supplier_text",
+   "rule": "tube_fit_row: 27.5\" is one ISO diameter; widths inch_to_mm"
+  },
+  {
+   "product_id": "ae4387c0-79ff-4ebc-aa9e-3ca6be341c86",
+   "sku": "25250",
+   "name": "Camara CST 29x1.90/2.35 VA 48mm",
+   "template": "tube",
+   "successor": "tube_fit_rows",
+   "kind": "rows",
+   "value": {
+    "schema_version": 1,
+    "rows": [
+     {
+      "id": "bsd-622",
+      "values": {
+       "bead_seat_diameter_mm": "622",
+       "width_min_mm": "48.3",
+       "width_max_mm": "59.7"
+      },
+      "sources": []
+     }
+    ]
+   },
+   "legacy_key": "wheel_size",
+   "legacy_value": "29\"",
+   "source": "supplier_text",
+   "rule": "tube_fit_row: 29\" is one ISO diameter; widths inch_to_mm"
+  },
+  {
+   "product_id": "ae4387c0-79ff-4ebc-aa9e-3ca6be341c86",
+   "sku": "25250",
+   "name": "Camara CST 29x1.90/2.35 VA 48mm",
+   "template": "tube",
+   "successor": "valve_standard",
+   "kind": "option",
+   "value": "Auto (Schrader / americana)",
+   "legacy_key": "valve_type",
+   "legacy_value": "Schrader (americana / auto)",
+   "source": "supplier_text",
+   "rule": "option"
+  },
+  {
+   "product_id": "41975b14-d5ad-4b8a-b1ce-23726d4fa0b9",
+   "sku": "6927116186227",
+   "name": "CAMARA CYT 700X18-23C F/V 60MM BOX",
+   "template": "tube",
+   "successor": "tube_fit_rows",
+   "kind": "rows",
+   "value": {
+    "schema_version": 1,
+    "rows": [
+     {
+      "id": "bsd-622",
+      "values": {
+       "bead_seat_diameter_mm": "622",
+       "width_min_mm": "18",
+       "width_max_mm": "23"
+      },
+      "sources": []
+     }
+    ]
+   },
+   "legacy_key": "wheel_size",
+   "legacy_value": "700c",
+   "source": "supplier_text",
+   "rule": "tube_fit_row: 700c is one ISO diameter; widths mm"
+  },
+  {
+   "product_id": "41975b14-d5ad-4b8a-b1ce-23726d4fa0b9",
+   "sku": "6927116186227",
+   "name": "CAMARA CYT 700X18-23C F/V 60MM BOX",
+   "template": "tube",
+   "successor": "valve_standard",
+   "kind": "option",
+   "value": "Francesa (Presta)",
+   "legacy_key": "valve_type",
+   "legacy_value": "Presta (francesa)",
+   "source": "supplier_text",
+   "rule": "option"
+  },
+  {
+   "product_id": "9f873d96-b8dd-4dce-929b-4e3a69664b1f",
+   "sku": "DKD-CMA-41295",
+   "name": "Cámara DKD 26'' V/A",
+   "template": "tube",
+   "successor": "valve_standard",
+   "kind": "option",
+   "value": "Auto (Schrader / americana)",
+   "legacy_key": "valve_type",
+   "legacy_value": "Schrader (americana / auto)",
+   "source": "supplier_text",
+   "rule": "option"
+  },
+  {
+   "product_id": "e248cd8b-305e-45f5-bb88-62f77f1769a6",
+   "sku": "DKD-CMA-41296",
+   "name": "Cámara DKD 29'' V/A",
+   "template": "tube",
+   "successor": "valve_standard",
+   "kind": "option",
+   "value": "Auto (Schrader / americana)",
+   "legacy_key": "valve_type",
+   "legacy_value": "Schrader (americana / auto)",
+   "source": "supplier_text",
+   "rule": "option"
+  },
+  {
+   "product_id": "b11cafee-1209-46f3-9ce5-bf7bea327812",
+   "sku": "759",
+   "name": "CAMARA GENUINE 29x1.95-2.125 VA 48mm",
+   "template": "tube",
+   "successor": "tube_fit_rows",
+   "kind": "rows",
+   "value": {
+    "schema_version": 1,
+    "rows": [
+     {
+      "id": "bsd-622",
+      "values": {
+       "bead_seat_diameter_mm": "622",
+       "width_min_mm": "49.5",
+       "width_max_mm": "54"
+      },
+      "sources": []
+     }
+    ]
+   },
+   "legacy_key": "wheel_size",
+   "legacy_value": "29\"",
+   "source": "supplier_text",
+   "rule": "tube_fit_row: 29\" is one ISO diameter; widths inch_to_mm"
+  },
+  {
+   "product_id": "b11cafee-1209-46f3-9ce5-bf7bea327812",
+   "sku": "759",
+   "name": "CAMARA GENUINE 29x1.95-2.125 VA 48mm",
+   "template": "tube",
+   "successor": "valve_standard",
+   "kind": "option",
+   "value": "Auto (Schrader / americana)",
+   "legacy_key": "valve_type",
+   "legacy_value": "Schrader (americana / auto)",
+   "source": "supplier_text",
+   "rule": "option"
+  },
+  {
+   "product_id": "dbec9b8f-a2c5-493b-909f-6420124a197a",
+   "sku": "716281509650",
+   "name": "Camara Impinchable Aro 27.5, Slime A/V",
+   "template": "tube",
+   "successor": "valve_standard",
+   "kind": "option",
+   "value": "Auto (Schrader / americana)",
+   "legacy_key": "valve_type",
+   "legacy_value": "Schrader (americana / auto)",
+   "source": "supplier_text",
+   "rule": "option"
+  },
+  {
+   "product_id": "451d9973-8c76-4078-8dab-9d4ca56ef06b",
+   "sku": "716281505140",
+   "name": "Camara Impinchable Aro 29, Slime A/V",
+   "template": "tube",
+   "successor": "valve_standard",
+   "kind": "option",
+   "value": "Auto (Schrader / americana)",
+   "legacy_key": "valve_type",
+   "legacy_value": "Schrader (americana / auto)",
+   "source": "supplier_text",
+   "rule": "option"
+  },
+  {
+   "product_id": "4ef0dc5b-6c01-4269-ba79-143fcf765f0f",
+   "sku": "17417",
+   "name": "Cámara Le Tour 20 X 1.5/2.2 V/Auto",
+   "template": "tube",
+   "successor": "tube_fit_rows",
+   "kind": "rows",
+   "value": {
+    "schema_version": 1,
+    "rows": [
+     {
+      "id": "bsd-406",
+      "values": {
+       "bead_seat_diameter_mm": "406",
+       "width_min_mm": "38.1",
+       "width_max_mm": "55.9"
+      },
+      "sources": []
+     }
+    ]
+   },
+   "legacy_key": "wheel_size",
+   "legacy_value": "20\"",
+   "source": "supplier_text",
+   "rule": "tube_fit_row: 20\" with a decimal width; widths inch_to_mm"
+  },
+  {
+   "product_id": "ffe5178b-4fea-4ad5-b7dd-c6cc61ea1d60",
+   "sku": "13309",
+   "name": "Cámara Le Tour 26 X 1.95/2.125 V/Auto Butyl",
+   "template": "tube",
+   "successor": "tube_fit_rows",
+   "kind": "rows",
+   "value": {
+    "schema_version": 1,
+    "rows": [
+     {
+      "id": "bsd-559",
+      "values": {
+       "bead_seat_diameter_mm": "559",
+       "width_min_mm": "49.5",
+       "width_max_mm": "54"
+      },
+      "sources": []
+     }
+    ]
+   },
+   "legacy_key": "wheel_size",
+   "legacy_value": "26\"",
+   "source": "supplier_text",
+   "rule": "tube_fit_row: 26\" with a decimal width; widths inch_to_mm"
+  },
+  {
+   "product_id": "9f6c554b-dd77-4c80-bb6b-d313c125e5a5",
+   "sku": "13310",
+   "name": "Cámara Le Tour 26 X 1.95/2.125 V/Bicicleta Butyl",
+   "template": "tube",
+   "successor": "tube_fit_rows",
+   "kind": "rows",
+   "value": {
+    "schema_version": 1,
+    "rows": [
+     {
+      "id": "bsd-559",
+      "values": {
+       "bead_seat_diameter_mm": "559",
+       "width_min_mm": "49.5",
+       "width_max_mm": "54"
+      },
+      "sources": []
+     }
+    ]
+   },
+   "legacy_key": "wheel_size",
+   "legacy_value": "26\"",
+   "source": "supplier_text",
+   "rule": "tube_fit_row: 26\" with a decimal width; widths inch_to_mm"
+  },
+  {
+   "product_id": "8a4935c4-f7b8-4548-b456-be4dfd30c153",
+   "sku": "17419",
+   "name": "CAMARA LE TOUR 29 X 1.75/2.35 VALVULA AUTO",
+   "template": "tube",
+   "successor": "tube_fit_rows",
+   "kind": "rows",
+   "value": {
+    "schema_version": 1,
+    "rows": [
+     {
+      "id": "bsd-622",
+      "values": {
+       "bead_seat_diameter_mm": "622",
+       "width_min_mm": "44.4",
+       "width_max_mm": "59.7"
+      },
+      "sources": []
+     }
+    ]
+   },
+   "legacy_key": "wheel_size",
+   "legacy_value": "29\"",
+   "source": "supplier_text",
+   "rule": "tube_fit_row: 29\" is one ISO diameter; widths inch_to_mm"
+  },
+  {
+   "product_id": "46b81289-bf5c-41be-9787-86542adfa793",
+   "sku": "4717784039749",
+   "name": "Camara Maxxis  26x1.5/2.5 0.8 LSV48mm B-CAP",
+   "template": "tube",
+   "successor": "tube_fit_rows",
+   "kind": "rows",
+   "value": {
+    "schema_version": 1,
+    "rows": [
+     {
+      "id": "bsd-559",
+      "values": {
+       "bead_seat_diameter_mm": "559",
+       "width_min_mm": "38.1",
+       "width_max_mm": "63.5"
+      },
+      "sources": []
+     }
+    ]
+   },
+   "legacy_key": "wheel_size",
+   "legacy_value": "26\"",
+   "source": "supplier_text",
+   "rule": "tube_fit_row: 26\" with a decimal width; widths inch_to_mm"
+  },
+  {
+   "product_id": "46b81289-bf5c-41be-9787-86542adfa793",
+   "sku": "4717784039749",
+   "name": "Camara Maxxis  26x1.5/2.5 0.8 LSV48mm B-CAP",
+   "template": "tube",
+   "successor": "valve_standard",
+   "kind": "option",
+   "value": "Auto (Schrader / americana)",
+   "legacy_key": "valve_type",
+   "legacy_value": "Schrader (americana / auto)",
+   "source": "supplier_text",
+   "rule": "option"
+  },
+  {
+   "product_id": "c82d9c3c-b67d-4541-ab17-3fe1528f2b9a",
+   "sku": "7364",
+   "name": "CAMARA MAXXIS 26X1.5/2.5 (40/63-559) 0.8 LFVSEP48",
+   "template": "tube",
+   "successor": "tube_fit_rows",
+   "kind": "rows",
+   "value": {
+    "schema_version": 1,
+    "rows": [
+     {
+      "id": "bsd-559",
+      "values": {
+       "bead_seat_diameter_mm": "559",
+       "width_min_mm": "38.1",
+       "width_max_mm": "63.5"
+      },
+      "sources": []
+     }
+    ]
+   },
+   "legacy_key": "wheel_size",
+   "legacy_value": "26\"",
+   "source": "supplier_text",
+   "rule": "tube_fit_row: iso number in the name; widths inch_to_mm"
+  },
+  {
+   "product_id": "c82d9c3c-b67d-4541-ab17-3fe1528f2b9a",
+   "sku": "7364",
+   "name": "CAMARA MAXXIS 26X1.5/2.5 (40/63-559) 0.8 LFVSEP48",
+   "template": "tube",
+   "successor": "valve_standard",
+   "kind": "option",
+   "value": "Francesa (Presta)",
+   "legacy_key": "valve_type",
+   "legacy_value": "Presta (francesa)",
+   "source": "supplier_text",
+   "rule": "option"
+  },
+  {
+   "product_id": "938041e0-2e9d-48d6-9fc8-8c438eae8a91",
+   "sku": "4717784039732",
+   "name": "CAMARA MAXXIS 26X1.5/2.5 FRANCESA-48MM",
+   "template": "tube",
+   "successor": "tube_fit_rows",
+   "kind": "rows",
+   "value": {
+    "schema_version": 1,
+    "rows": [
+     {
+      "id": "bsd-559",
+      "values": {
+       "bead_seat_diameter_mm": "559",
+       "width_min_mm": "38.1",
+       "width_max_mm": "63.5"
+      },
+      "sources": []
+     }
+    ]
+   },
+   "legacy_key": "wheel_size",
+   "legacy_value": "26\"",
+   "source": "supplier_text",
+   "rule": "tube_fit_row: 26\" with a decimal width; widths inch_to_mm"
+  },
+  {
+   "product_id": "ed04a3a2-4129-4e4b-a68d-a6c7df836a47",
+   "sku": "8370",
+   "name": "CAMARA MAXXIS 27.5X1.75/2.4 AV 48MM",
+   "template": "tube",
+   "successor": "tube_fit_rows",
+   "kind": "rows",
+   "value": {
+    "schema_version": 1,
+    "rows": [
+     {
+      "id": "bsd-584",
+      "values": {
+       "bead_seat_diameter_mm": "584",
+       "width_min_mm": "44.4",
+       "width_max_mm": "61"
+      },
+      "sources": []
+     }
+    ]
+   },
+   "legacy_key": "wheel_size",
+   "legacy_value": "27.5\"",
+   "source": "supplier_text",
+   "rule": "tube_fit_row: 27.5\" is one ISO diameter; widths inch_to_mm"
+  },
+  {
+   "product_id": "ed04a3a2-4129-4e4b-a68d-a6c7df836a47",
+   "sku": "8370",
+   "name": "CAMARA MAXXIS 27.5X1.75/2.4 AV 48MM",
+   "template": "tube",
+   "successor": "valve_standard",
+   "kind": "option",
+   "value": "Auto (Schrader / americana)",
+   "legacy_key": "valve_type",
+   "legacy_value": "Schrader (americana / auto)",
+   "source": "supplier_text",
+   "rule": "option"
+  },
+  {
+   "product_id": "24134b3f-ec55-4a66-9cd3-7fc4f9ee9904",
+   "sku": "4717784040196",
+   "name": "Camara Maxxis 29 x 1.75 / 2.40 FV48",
+   "template": "tube",
+   "successor": "tube_fit_rows",
+   "kind": "rows",
+   "value": {
+    "schema_version": 1,
+    "rows": [
+     {
+      "id": "bsd-622",
+      "values": {
+       "bead_seat_diameter_mm": "622",
+       "width_min_mm": "44.4",
+       "width_max_mm": "61"
+      },
+      "sources": []
+     }
+    ]
+   },
+   "legacy_key": "wheel_size",
+   "legacy_value": "29\"",
+   "source": "supplier_text",
+   "rule": "tube_fit_row: 29\" is one ISO diameter; widths inch_to_mm"
+  },
+  {
+   "product_id": "24134b3f-ec55-4a66-9cd3-7fc4f9ee9904",
+   "sku": "4717784040196",
+   "name": "Camara Maxxis 29 x 1.75 / 2.40 FV48",
+   "template": "tube",
+   "successor": "valve_standard",
+   "kind": "option",
+   "value": "Francesa (Presta)",
+   "legacy_key": "valve_type",
+   "legacy_value": "Presta (francesa)",
+   "source": "supplier_text",
+   "rule": "option"
+  },
+  {
+   "product_id": "967a79d7-0e08-4cec-b4f5-920510fc080e",
+   "sku": "4717784040202",
+   "name": "CAMARA MAXXIS 29X1.75/2.40 A/V 48MM",
+   "template": "tube",
+   "successor": "tube_fit_rows",
+   "kind": "rows",
+   "value": {
+    "schema_version": 1,
+    "rows": [
+     {
+      "id": "bsd-622",
+      "values": {
+       "bead_seat_diameter_mm": "622",
+       "width_min_mm": "44.4",
+       "width_max_mm": "61"
+      },
+      "sources": []
+     }
+    ]
+   },
+   "legacy_key": "wheel_size",
+   "legacy_value": "29\"",
+   "source": "supplier_text",
+   "rule": "tube_fit_row: 29\" is one ISO diameter; widths inch_to_mm"
+  },
+  {
+   "product_id": "967a79d7-0e08-4cec-b4f5-920510fc080e",
+   "sku": "4717784040202",
+   "name": "CAMARA MAXXIS 29X1.75/2.40 A/V 48MM",
+   "template": "tube",
+   "successor": "valve_standard",
+   "kind": "option",
+   "value": "Auto (Schrader / americana)",
+   "legacy_key": "valve_type",
+   "legacy_value": "Schrader (americana / auto)",
+   "source": "supplier_text",
+   "rule": "option"
+  },
+  {
+   "product_id": "a7c3d034-e98d-4e19-b135-61abd218c7b3",
+   "sku": "4717784040080",
+   "name": "Camara Maxxis 700x 33/ 50C 0.8 LFV  60MM",
+   "template": "tube",
+   "successor": "tube_fit_rows",
+   "kind": "rows",
+   "value": {
+    "schema_version": 1,
+    "rows": [
+     {
+      "id": "bsd-622",
+      "values": {
+       "bead_seat_diameter_mm": "622",
+       "width_min_mm": "33",
+       "width_max_mm": "50"
+      },
+      "sources": []
+     }
+    ]
+   },
+   "legacy_key": "wheel_size",
+   "legacy_value": "700c",
+   "source": "supplier_text",
+   "rule": "tube_fit_row: 700c is one ISO diameter; widths mm"
+  },
+  {
+   "product_id": "a7c3d034-e98d-4e19-b135-61abd218c7b3",
+   "sku": "4717784040080",
+   "name": "Camara Maxxis 700x 33/ 50C 0.8 LFV  60MM",
+   "template": "tube",
+   "successor": "valve_standard",
+   "kind": "option",
+   "value": "Francesa (Presta)",
+   "legacy_key": "valve_type",
+   "legacy_value": "Presta (francesa)",
+   "source": "supplier_text",
+   "rule": "option"
+  },
+  {
+   "product_id": "1e4862cd-e0c5-4fdc-a683-97b27b39387c",
+   "sku": "4717784040066",
+   "name": "Camara Maxxis 700x 33c / 50C 0.8 L AV  48MM",
+   "template": "tube",
+   "successor": "tube_fit_rows",
+   "kind": "rows",
+   "value": {
+    "schema_version": 1,
+    "rows": [
+     {
+      "id": "bsd-622",
+      "values": {
+       "bead_seat_diameter_mm": "622",
+       "width_min_mm": "33",
+       "width_max_mm": "50"
+      },
+      "sources": []
+     }
+    ]
+   },
+   "legacy_key": "wheel_size",
+   "legacy_value": "700c",
+   "source": "supplier_text",
+   "rule": "tube_fit_row: 700c is one ISO diameter; widths mm"
+  },
+  {
+   "product_id": "1e4862cd-e0c5-4fdc-a683-97b27b39387c",
+   "sku": "4717784040066",
+   "name": "Camara Maxxis 700x 33c / 50C 0.8 L AV  48MM",
+   "template": "tube",
+   "successor": "valve_standard",
+   "kind": "option",
+   "value": "Auto (Schrader / americana)",
+   "legacy_key": "valve_type",
+   "legacy_value": "Schrader (americana / auto)",
+   "source": "supplier_text",
+   "rule": "option"
+  },
+  {
+   "product_id": "69f12463-9068-40be-8798-da84a8b75859",
+   "sku": "4717784039701",
+   "name": "Camara Maxxis 700x23 / 32C FV  60MM",
+   "template": "tube",
+   "successor": "tube_fit_rows",
+   "kind": "rows",
+   "value": {
+    "schema_version": 1,
+    "rows": [
+     {
+      "id": "bsd-622",
+      "values": {
+       "bead_seat_diameter_mm": "622",
+       "width_min_mm": "23",
+       "width_max_mm": "32"
+      },
+      "sources": []
+     }
+    ]
+   },
+   "legacy_key": "wheel_size",
+   "legacy_value": "700c",
+   "source": "supplier_text",
+   "rule": "tube_fit_row: 700c is one ISO diameter; widths mm"
+  },
+  {
+   "product_id": "69f12463-9068-40be-8798-da84a8b75859",
+   "sku": "4717784039701",
+   "name": "Camara Maxxis 700x23 / 32C FV  60MM",
+   "template": "tube",
+   "successor": "valve_standard",
+   "kind": "option",
+   "value": "Francesa (Presta)",
+   "legacy_key": "valve_type",
+   "legacy_value": "Presta (francesa)",
+   "source": "supplier_text",
+   "rule": "option"
+  },
+  {
+   "product_id": "e5a8640e-adef-4032-bb5e-4b712e757148",
+   "sku": "SKU-E5A8640E",
+   "name": "Cámara Maxxis aro 20×1.5/2.5 Válvula Auto 48mm",
+   "template": "tube",
+   "successor": "tube_fit_rows",
+   "kind": "rows",
+   "value": {
+    "schema_version": 1,
+    "rows": [
+     {
+      "id": "bsd-406",
+      "values": {
+       "bead_seat_diameter_mm": "406",
+       "width_min_mm": "38.1",
+       "width_max_mm": "63.5"
+      },
+      "sources": []
+     }
+    ]
+   },
+   "legacy_key": "wheel_size",
+   "legacy_value": "20\"",
+   "source": "supplier_text",
+   "rule": "tube_fit_row: 20\" with a decimal width; widths inch_to_mm"
+  },
+  {
+   "product_id": "01f81199-9c7c-416c-8291-98ca7df339a0",
+   "sku": "6927116112783",
+   "name": "CAMARA ORNATE 20 X 1.50/2.20 V/AUTO EN CAJA",
+   "template": "tube",
+   "successor": "tube_fit_rows",
+   "kind": "rows",
+   "value": {
+    "schema_version": 1,
+    "rows": [
+     {
+      "id": "bsd-406",
+      "values": {
+       "bead_seat_diameter_mm": "406",
+       "width_min_mm": "38.1",
+       "width_max_mm": "55.9"
+      },
+      "sources": []
+     }
+    ]
+   },
+   "legacy_key": "wheel_size",
+   "legacy_value": "20\"",
+   "source": "supplier_text",
+   "rule": "tube_fit_row: 20\" with a decimal width; widths inch_to_mm"
+  },
+  {
+   "product_id": "92ffa066-65d0-46aa-992b-66534369539c",
+   "sku": "NNV24",
+   "name": "Cámara RBX 700 x 18-25 C Presta 48MM",
+   "template": "tube",
+   "successor": "tube_fit_rows",
+   "kind": "rows",
+   "value": {
+    "schema_version": 1,
+    "rows": [
+     {
+      "id": "bsd-622",
+      "values": {
+       "bead_seat_diameter_mm": "622",
+       "width_min_mm": "18",
+       "width_max_mm": "25"
+      },
+      "sources": []
+     }
+    ]
+   },
+   "legacy_key": "wheel_size",
+   "legacy_value": "700c",
+   "source": "import",
+   "rule": "tube_fit_row: 700c is one ISO diameter; widths mm"
+  },
+  {
+   "product_id": "98fe588b-2847-4a50-9ff8-e2682ef9550a",
+   "sku": "NNV25",
+   "name": "Camara Rbx 700 x 28/38 V. auto 48mm",
+   "template": "tube",
+   "successor": "tube_fit_rows",
+   "kind": "rows",
+   "value": {
+    "schema_version": 1,
+    "rows": [
+     {
+      "id": "bsd-622",
+      "values": {
+       "bead_seat_diameter_mm": "622",
+       "width_min_mm": "28",
+       "width_max_mm": "38"
+      },
+      "sources": []
+     }
+    ]
+   },
+   "legacy_key": "wheel_size",
+   "legacy_value": "700c",
+   "source": "supplier_text",
+   "rule": "tube_fit_row: 700c is one ISO diameter; widths mm"
+  },
+  {
+   "product_id": "4edfca38-948e-48d6-9c20-94d651f1e795",
+   "sku": "18187",
+   "name": "Cámara RBX 700 x 38/45c V/F 60mm",
+   "template": "tube",
+   "successor": "tube_fit_rows",
+   "kind": "rows",
+   "value": {
+    "schema_version": 1,
+    "rows": [
+     {
+      "id": "bsd-622",
+      "values": {
+       "bead_seat_diameter_mm": "622",
+       "width_min_mm": "38",
+       "width_max_mm": "45"
+      },
+      "sources": []
+     }
+    ]
+   },
+   "legacy_key": "wheel_size",
+   "legacy_value": "700c",
+   "source": "supplier_text",
+   "rule": "tube_fit_row: 700c is one ISO diameter; widths mm"
+  },
+  {
+   "product_id": "4edfca38-948e-48d6-9c20-94d651f1e795",
+   "sku": "18187",
+   "name": "Cámara RBX 700 x 38/45c V/F 60mm",
+   "template": "tube",
+   "successor": "valve_standard",
+   "kind": "option",
+   "value": "Francesa (Presta)",
+   "legacy_key": "valve_type",
+   "legacy_value": "Presta (francesa)",
+   "source": "supplier_text",
+   "rule": "option"
+  },
+  {
+   "product_id": "ef1a362f-9709-46c5-95fb-6cdf81d0d5d9",
+   "sku": "6927116100360",
+   "name": "Camara RBX 700x28/38 V/F 60MM",
+   "template": "tube",
+   "successor": "tube_fit_rows",
+   "kind": "rows",
+   "value": {
+    "schema_version": 1,
+    "rows": [
+     {
+      "id": "bsd-622",
+      "values": {
+       "bead_seat_diameter_mm": "622",
+       "width_min_mm": "28",
+       "width_max_mm": "38"
+      },
+      "sources": []
+     }
+    ]
+   },
+   "legacy_key": "wheel_size",
+   "legacy_value": "700c",
+   "source": "supplier_text",
+   "rule": "tube_fit_row: 700c is one ISO diameter; widths mm"
+  },
+  {
+   "product_id": "ef1a362f-9709-46c5-95fb-6cdf81d0d5d9",
+   "sku": "6927116100360",
+   "name": "Camara RBX 700x28/38 V/F 60MM",
+   "template": "tube",
+   "successor": "valve_standard",
+   "kind": "option",
+   "value": "Francesa (Presta)",
+   "legacy_key": "valve_type",
+   "legacy_value": "Presta (francesa)",
+   "source": "supplier_text",
+   "rule": "option"
+  },
+  {
+   "product_id": "34767747-b635-4aa9-b6bc-a1ecd1e3d2f0",
+   "sku": "10371",
+   "name": "Camara Ride 26x1,95/2,125 VA 35mm",
+   "template": "tube",
+   "successor": "tube_fit_rows",
+   "kind": "rows",
+   "value": {
+    "schema_version": 1,
+    "rows": [
+     {
+      "id": "bsd-559",
+      "values": {
+       "bead_seat_diameter_mm": "559",
+       "width_min_mm": "49.5",
+       "width_max_mm": "54"
+      },
+      "sources": []
+     }
+    ]
+   },
+   "legacy_key": "wheel_size",
+   "legacy_value": "26\"",
+   "source": "supplier_text",
+   "rule": "tube_fit_row: 26\" with a decimal width; widths inch_to_mm"
+  },
+  {
+   "product_id": "34767747-b635-4aa9-b6bc-a1ecd1e3d2f0",
+   "sku": "10371",
+   "name": "Camara Ride 26x1,95/2,125 VA 35mm",
+   "template": "tube",
+   "successor": "valve_standard",
+   "kind": "option",
+   "value": "Auto (Schrader / americana)",
+   "legacy_key": "valve_type",
+   "legacy_value": "Schrader (americana / auto)",
+   "source": "supplier_text",
+   "rule": "option"
+  },
+  {
+   "product_id": "a6b6ef7f-32bd-4a1f-a551-c0591d4a60b7",
+   "sku": "19005",
+   "name": "Camara Ride 700x25/38 VF 48MM",
+   "template": "tube",
+   "successor": "tube_fit_rows",
+   "kind": "rows",
+   "value": {
+    "schema_version": 1,
+    "rows": [
+     {
+      "id": "bsd-622",
+      "values": {
+       "bead_seat_diameter_mm": "622",
+       "width_min_mm": "25",
+       "width_max_mm": "38"
+      },
+      "sources": []
+     }
+    ]
+   },
+   "legacy_key": "wheel_size",
+   "legacy_value": "700c",
+   "source": "supplier_text",
+   "rule": "tube_fit_row: 700c is one ISO diameter; widths mm"
+  },
+  {
+   "product_id": "a6b6ef7f-32bd-4a1f-a551-c0591d4a60b7",
+   "sku": "19005",
+   "name": "Camara Ride 700x25/38 VF 48MM",
+   "template": "tube",
+   "successor": "valve_standard",
+   "kind": "option",
+   "value": "Francesa (Presta)",
+   "legacy_key": "valve_type",
+   "legacy_value": "Presta (francesa)",
+   "source": "supplier_text",
+   "rule": "option"
+  },
+  {
+   "product_id": "82cc0a77-a4db-40c3-8c05-44600d403940",
+   "sku": "16004",
+   "name": "Camara Ride Butyl 26x1,95/2,125 VF 48MM",
+   "template": "tube",
+   "successor": "tube_fit_rows",
+   "kind": "rows",
+   "value": {
+    "schema_version": 1,
+    "rows": [
+     {
+      "id": "bsd-559",
+      "values": {
+       "bead_seat_diameter_mm": "559",
+       "width_min_mm": "49.5",
+       "width_max_mm": "54"
+      },
+      "sources": []
+     }
+    ]
+   },
+   "legacy_key": "wheel_size",
+   "legacy_value": "26\"",
+   "source": "supplier_text",
+   "rule": "tube_fit_row: 26\" with a decimal width; widths inch_to_mm"
+  },
+  {
+   "product_id": "82cc0a77-a4db-40c3-8c05-44600d403940",
+   "sku": "16004",
+   "name": "Camara Ride Butyl 26x1,95/2,125 VF 48MM",
+   "template": "tube",
+   "successor": "valve_standard",
+   "kind": "option",
+   "value": "Francesa (Presta)",
+   "legacy_key": "valve_type",
+   "legacy_value": "Presta (francesa)",
+   "source": "supplier_text",
+   "rule": "option"
+  },
+  {
+   "product_id": "e47ab4db-6503-42b6-a118-645ab0d45f85",
+   "sku": "16001",
+   "name": "Camara RIDEXC Butyl 20x1,95/2,125 Valvula de Auto 35mm .Incluye Cubre Llanta,",
+   "template": "tube",
+   "successor": "tube_fit_rows",
+   "kind": "rows",
+   "value": {
+    "schema_version": 1,
+    "rows": [
+     {
+      "id": "bsd-406",
+      "values": {
+       "bead_seat_diameter_mm": "406",
+       "width_min_mm": "49.5",
+       "width_max_mm": "54"
+      },
+      "sources": []
+     }
+    ]
+   },
+   "legacy_key": "wheel_size",
+   "legacy_value": "20\"",
+   "source": "supplier_text",
+   "rule": "tube_fit_row: 20\" with a decimal width; widths inch_to_mm"
+  },
+  {
+   "product_id": "7d3c47f8-0667-409c-b1bd-c46fdd3a5f12",
+   "sku": "16224",
+   "name": "Camara RIDEXC Butyl 26x1,25/1,75 Valvula de Auto 48mm, Incluye Cubre Llanta",
+   "template": "tube",
+   "successor": "tube_fit_rows",
+   "kind": "rows",
+   "value": {
+    "schema_version": 1,
+    "rows": [
+     {
+      "id": "bsd-559",
+      "values": {
+       "bead_seat_diameter_mm": "559",
+       "width_min_mm": "31.8",
+       "width_max_mm": "44.4"
+      },
+      "sources": []
+     }
+    ]
+   },
+   "legacy_key": "wheel_size",
+   "legacy_value": "26\"",
+   "source": "supplier_text",
+   "rule": "tube_fit_row: 26\" with a decimal width; widths inch_to_mm"
+  },
+  {
+   "product_id": "0ad47d4b-b84e-4c53-952f-aca7a9b27e3f",
+   "sku": "16003",
+   "name": "Camara RIDEXC Butyl 26x1,95/2,125 Valvula de Auto 48mm",
+   "template": "tube",
+   "successor": "tube_fit_rows",
+   "kind": "rows",
+   "value": {
+    "schema_version": 1,
+    "rows": [
+     {
+      "id": "bsd-559",
+      "values": {
+       "bead_seat_diameter_mm": "559",
+       "width_min_mm": "49.5",
+       "width_max_mm": "54"
+      },
+      "sources": []
+     }
+    ]
+   },
+   "legacy_key": "wheel_size",
+   "legacy_value": "26\"",
+   "source": "supplier_text",
+   "rule": "tube_fit_row: 26\" with a decimal width; widths inch_to_mm"
+  },
+  {
+   "product_id": "8cdf4934-f84b-4602-af93-9abd151ccc0d",
+   "sku": "16005",
+   "name": "Camara RIDEXC Butyl 27,5x1,95/2,125 VA 48mm + cubre llanta",
+   "template": "tube",
+   "successor": "tube_fit_rows",
+   "kind": "rows",
+   "value": {
+    "schema_version": 1,
+    "rows": [
+     {
+      "id": "bsd-584",
+      "values": {
+       "bead_seat_diameter_mm": "584",
+       "width_min_mm": "49.5",
+       "width_max_mm": "54"
+      },
+      "sources": []
+     }
+    ]
+   },
+   "legacy_key": "wheel_size",
+   "legacy_value": "27.5\"",
+   "source": "supplier_text",
+   "rule": "tube_fit_row: 27.5\" is one ISO diameter; widths inch_to_mm"
+  },
+  {
+   "product_id": "8cdf4934-f84b-4602-af93-9abd151ccc0d",
+   "sku": "16005",
+   "name": "Camara RIDEXC Butyl 27,5x1,95/2,125 VA 48mm + cubre llanta",
+   "template": "tube",
+   "successor": "valve_standard",
+   "kind": "option",
+   "value": "Auto (Schrader / americana)",
+   "legacy_key": "valve_type",
+   "legacy_value": "Schrader (americana / auto)",
+   "source": "supplier_text",
+   "rule": "option"
+  },
+  {
+   "product_id": "b970f22c-982e-4e21-8692-09112ba8fe25",
+   "sku": "16225",
+   "name": "Camara RIDEXC Butyl 29x1,75/2,125 Valvula de Auto 48mm",
+   "template": "tube",
+   "successor": "tube_fit_rows",
+   "kind": "rows",
+   "value": {
+    "schema_version": 1,
+    "rows": [
+     {
+      "id": "bsd-622",
+      "values": {
+       "bead_seat_diameter_mm": "622",
+       "width_min_mm": "44.4",
+       "width_max_mm": "54"
+      },
+      "sources": []
+     }
+    ]
+   },
+   "legacy_key": "wheel_size",
+   "legacy_value": "29\"",
+   "source": "supplier_text",
+   "rule": "tube_fit_row: 29\" is one ISO diameter; widths inch_to_mm"
+  },
+  {
+   "product_id": "fe2d8c63-da9c-4bf1-b65a-0d5125dbf5ea",
+   "sku": "16008",
+   "name": "Camara RIDEXC Butyl 29x1,75/2,125 Valvula Francesa 48mm",
+   "template": "tube",
+   "successor": "tube_fit_rows",
+   "kind": "rows",
+   "value": {
+    "schema_version": 1,
+    "rows": [
+     {
+      "id": "bsd-622",
+      "values": {
+       "bead_seat_diameter_mm": "622",
+       "width_min_mm": "44.4",
+       "width_max_mm": "54"
+      },
+      "sources": []
+     }
+    ]
+   },
+   "legacy_key": "wheel_size",
+   "legacy_value": "29\"",
+   "source": "import",
+   "rule": "tube_fit_row: 29\" is one ISO diameter; widths inch_to_mm"
+  },
+  {
+   "product_id": "b8d46129-c68f-426f-837a-3a6c7d0d6788",
+   "sku": "16009",
+   "name": "Camara RIDEXC Butyl 700x19/23C VF 60mm",
+   "template": "tube",
+   "successor": "tube_fit_rows",
+   "kind": "rows",
+   "value": {
+    "schema_version": 1,
+    "rows": [
+     {
+      "id": "bsd-622",
+      "values": {
+       "bead_seat_diameter_mm": "622",
+       "width_min_mm": "19",
+       "width_max_mm": "23"
+      },
+      "sources": []
+     }
+    ]
+   },
+   "legacy_key": "wheel_size",
+   "legacy_value": "700c",
+   "source": "supplier_text",
+   "rule": "tube_fit_row: 700c is one ISO diameter; widths mm"
+  },
+  {
+   "product_id": "b8d46129-c68f-426f-837a-3a6c7d0d6788",
+   "sku": "16009",
+   "name": "Camara RIDEXC Butyl 700x19/23C VF 60mm",
+   "template": "tube",
+   "successor": "valve_standard",
+   "kind": "option",
+   "value": "Francesa (Presta)",
+   "legacy_key": "valve_type",
+   "legacy_value": "Presta (francesa)",
+   "source": "supplier_text",
+   "rule": "option"
+  },
+  {
+   "product_id": "360dd6a8-2a7e-4c34-9d27-a3542659939e",
+   "sku": "16223",
+   "name": "Camara RIDEXC Butyl 700x25/38c V/A 48mm, Incluye Cubre Llanta",
+   "template": "tube",
+   "successor": "tube_fit_rows",
+   "kind": "rows",
+   "value": {
+    "schema_version": 1,
+    "rows": [
+     {
+      "id": "bsd-622",
+      "values": {
+       "bead_seat_diameter_mm": "622",
+       "width_min_mm": "25",
+       "width_max_mm": "38"
+      },
+      "sources": []
+     }
+    ]
+   },
+   "legacy_key": "wheel_size",
+   "legacy_value": "700c",
+   "source": "supplier_text",
+   "rule": "tube_fit_row: 700c is one ISO diameter; widths mm"
+  },
+  {
+   "product_id": "360dd6a8-2a7e-4c34-9d27-a3542659939e",
+   "sku": "16223",
+   "name": "Camara RIDEXC Butyl 700x25/38c V/A 48mm, Incluye Cubre Llanta",
+   "template": "tube",
+   "successor": "valve_standard",
+   "kind": "option",
+   "value": "Auto (Schrader / americana)",
+   "legacy_key": "valve_type",
+   "legacy_value": "Schrader (americana / auto)",
+   "source": "supplier_text",
+   "rule": "option"
+  },
+  {
+   "product_id": "003addb4-e910-4655-8a0b-f87fbc77f1b3",
+   "sku": "ACC-CAM-23697",
+   "name": "Camara Ritech 26 X 1.75/2.20 V/a 48mm",
+   "template": "tube",
+   "successor": "tube_fit_rows",
+   "kind": "rows",
+   "value": {
+    "schema_version": 1,
+    "rows": [
+     {
+      "id": "bsd-559",
+      "values": {
+       "bead_seat_diameter_mm": "559",
+       "width_min_mm": "44.4",
+       "width_max_mm": "55.9"
+      },
+      "sources": []
+     }
+    ]
+   },
+   "legacy_key": "wheel_size",
+   "legacy_value": "26\"",
+   "source": "supplier_text",
+   "rule": "tube_fit_row: 26\" with a decimal width; widths inch_to_mm"
+  },
+  {
+   "product_id": "003addb4-e910-4655-8a0b-f87fbc77f1b3",
+   "sku": "ACC-CAM-23697",
+   "name": "Camara Ritech 26 X 1.75/2.20 V/a 48mm",
+   "template": "tube",
+   "successor": "valve_standard",
+   "kind": "option",
+   "value": "Auto (Schrader / americana)",
+   "legacy_key": "valve_type",
+   "legacy_value": "Schrader (americana / auto)",
+   "source": "supplier_text",
+   "rule": "option"
+  },
+  {
+   "product_id": "ac13dbfb-3313-4465-88ad-1ad94a8f845d",
+   "sku": "2000000389905",
+   "name": "Camara Vuelta Usa 27.5 X 2.10-2.30 F/V 48mm",
+   "template": "tube",
+   "successor": "tube_fit_rows",
+   "kind": "rows",
+   "value": {
+    "schema_version": 1,
+    "rows": [
+     {
+      "id": "bsd-584",
+      "values": {
+       "bead_seat_diameter_mm": "584",
+       "width_min_mm": "53.3",
+       "width_max_mm": "58.4"
+      },
+      "sources": []
+     }
+    ]
+   },
+   "legacy_key": "wheel_size",
+   "legacy_value": "27.5\"",
+   "source": "supplier_text",
+   "rule": "tube_fit_row: 27.5\" is one ISO diameter; widths inch_to_mm"
+  },
+  {
+   "product_id": "ac13dbfb-3313-4465-88ad-1ad94a8f845d",
+   "sku": "2000000389905",
+   "name": "Camara Vuelta Usa 27.5 X 2.10-2.30 F/V 48mm",
+   "template": "tube",
+   "successor": "valve_standard",
+   "kind": "option",
+   "value": "Francesa (Presta)",
+   "legacy_key": "valve_type",
+   "legacy_value": "Presta (francesa)",
+   "source": "supplier_text",
+   "rule": "option"
+  },
+  {
+   "product_id": "a6cf0009-8f8f-4eb5-91ef-b6937139ee81",
+   "sku": "AE0039",
+   "name": "Válvula Tubeless Deemount A/V 1 Un. 40mm",
+   "template": "tubeless_valve",
+   "successor": "valve_standard",
+   "kind": "option",
+   "value": "Auto (Schrader / americana)",
+   "legacy_key": "valve_type",
+   "legacy_value": "Schrader (americana / auto)",
+   "source": "import",
+   "rule": "option"
+  },
+  {
+   "product_id": "a6cf0009-8f8f-4eb5-91ef-b6937139ee81",
+   "sku": "AE0039",
+   "name": "Válvula Tubeless Deemount A/V 1 Un. 40mm",
+   "template": "tubeless_valve",
+   "successor": "valve_length_mm_value",
+   "kind": "number",
+   "value": 40.0,
+   "legacy_key": "valve_length_mm",
+   "legacy_value": "40",
+   "source": "import",
+   "rule": "label_to_number"
+  },
+  {
+   "product_id": "213fdc9e-5377-4988-9f3a-fe6f24480afc",
+   "sku": "AE0046",
+   "name": "Válvula Tubeless Deemount F/V 1 Un. 60mm",
+   "template": "tubeless_valve",
+   "successor": "valve_standard",
+   "kind": "option",
+   "value": "Francesa (Presta)",
+   "legacy_key": "valve_type",
+   "legacy_value": "Presta (francesa)",
+   "source": "import",
+   "rule": "option"
+  },
+  {
+   "product_id": "213fdc9e-5377-4988-9f3a-fe6f24480afc",
+   "sku": "AE0046",
+   "name": "Válvula Tubeless Deemount F/V 1 Un. 60mm",
+   "template": "tubeless_valve",
+   "successor": "valve_length_mm_value",
+   "kind": "number",
+   "value": 60.0,
+   "legacy_key": "valve_length_mm",
+   "legacy_value": "60",
+   "source": "import",
+   "rule": "label_to_number"
+  },
+  {
+   "product_id": "59351c5c-a2bc-49ea-a6b7-c85c4c723c71",
+   "sku": "AE0287",
+   "name": "Válvula Tubeless Deemount F/V 1un. 40mm",
+   "template": "tubeless_valve",
+   "successor": "valve_standard",
+   "kind": "option",
+   "value": "Francesa (Presta)",
+   "legacy_key": "valve_type",
+   "legacy_value": "Presta (francesa)",
+   "source": "import",
+   "rule": "option"
+  },
+  {
+   "product_id": "59351c5c-a2bc-49ea-a6b7-c85c4c723c71",
+   "sku": "AE0287",
+   "name": "Válvula Tubeless Deemount F/V 1un. 40mm",
+   "template": "tubeless_valve",
+   "successor": "valve_length_mm_value",
+   "kind": "number",
+   "value": 40.0,
+   "legacy_key": "valve_length_mm",
+   "legacy_value": "40",
+   "source": "import",
+   "rule": "label_to_number"
+  }
+ ],
+ "skipped_entries": [
+  {
+   "product_id": "5e6f5566-cb6f-45a3-9ad4-566db7124910",
+   "sku": "19188",
+   "name": "LLANTA 26 VISION ALUMINIO NEGRA  DOBLE PARED 32H",
+   "template": "rim",
+   "skipped": "bead_seat_diameter_mm",
+   "legacy_key": "wheel_size",
+   "legacy_value": "26\"",
+   "reason": "26\" without a width notation in the name"
+  },
+  {
+   "product_id": "ec6ef4d0-6c00-4630-bb4a-ba00f6104e67",
+   "sku": "PO02633001533",
+   "name": "CUBRE CAMARA PARA ARO 26 GOMA COMPATIBLE / GENERICO",
+   "template": "rim_strip",
+   "skipped": "bead_seat_diameter_mm",
+   "legacy_key": "wheel_size",
+   "legacy_value": "26\"",
+   "reason": "26\" without a width notation in the name"
+  },
+  {
+   "product_id": "2f9135e9-6836-4794-93fd-4b45a3990788",
+   "sku": "23511",
+   "name": "Neumatico 10TEN 24x1-3/8, Black",
+   "template": "tire",
+   "skipped": "bead_seat_diameter_mm",
+   "legacy_key": "wheel_size",
+   "legacy_value": "24\"",
+   "reason": "24\" fractional width is ambiguous (540/520)"
+  },
+  {
+   "product_id": "f8a4d0a7-e54b-41e3-8269-d422b82feec2",
+   "sku": "13024",
+   "name": "Neumático Buffalo Mtb 24 X 2 125 Negro",
+   "template": "tire",
+   "skipped": "bead_seat_diameter_mm",
+   "legacy_key": "wheel_size",
+   "legacy_value": "24\"",
+   "reason": "24\" without a width notation in the name"
+  },
+  {
+   "product_id": "500a9b90-2e0f-4be5-9604-cb3ef5472999",
+   "sku": "N1011",
+   "name": "Neumático Vuelta USA 24x1\"3/8 CB311 Negro",
+   "template": "tire",
+   "skipped": "bead_seat_diameter_mm",
+   "legacy_key": "wheel_size",
+   "legacy_value": "24\"",
+   "reason": "24\" fractional width is ambiguous (540/520)"
+  },
+  {
+   "product_id": "0af1c487-9c8a-4087-bb8c-865de9dc356d",
+   "sku": "6927116105525",
+   "name": "CAMARA 24 X 1.3/8 V/AUTO 33MM EN CAJA",
+   "template": "tube",
+   "skipped": "tube_fit_rows",
+   "legacy_key": "wheel_size",
+   "legacy_value": "24\"",
+   "reason": "24\" fractional width is ambiguous (540/520)"
+  },
+  {
+   "product_id": "748142f5-2dbb-404c-846d-22c3be6703a3",
+   "sku": "2000000116884",
+   "name": "Camara 24 x1.3/8 Veloce Butyl A/V China",
+   "template": "tube",
+   "skipped": "tube_fit_rows",
+   "legacy_key": "wheel_size",
+   "legacy_value": "24\"",
+   "reason": "24\" fractional width is ambiguous (540/520)"
+  },
+  {
+   "product_id": "9f873d96-b8dd-4dce-929b-4e3a69664b1f",
+   "sku": "DKD-CMA-41295",
+   "name": "Cámara DKD 26'' V/A",
+   "template": "tube",
+   "skipped": "tube_fit_rows",
+   "legacy_key": "wheel_size",
+   "legacy_value": "26\"",
+   "reason": "26\" without a width notation in the name"
+  },
+  {
+   "product_id": "e248cd8b-305e-45f5-bb88-62f77f1769a6",
+   "sku": "DKD-CMA-41296",
+   "name": "Cámara DKD 29'' V/A",
+   "template": "tube",
+   "skipped": "tube_fit_rows",
+   "legacy_key": "wheel_size",
+   "legacy_value": "29\"",
+   "reason": "no usable width range"
+  },
+  {
+   "product_id": "b4b5b21a-767e-4320-9b3a-a630bfdd3367",
+   "sku": "8904348400145",
+   "name": "CAMARA HARTEX BUTYLO COMPACT 24\" VAL/AUTO 48MM 47/57-507",
+   "template": "tube",
+   "skipped": "tube_fit_rows",
+   "legacy_key": "wheel_size",
+   "legacy_value": "24\"",
+   "reason": "no usable width range"
+  },
+  {
+   "product_id": "8b042ce4-cff5-4ca1-a8cb-9def64046d85",
+   "sku": "8904348400138",
+   "name": "CÁMARA HARTEX BUTYLO TOUR 28\" VAL/FRANCESA 48MM 37/47-622/635",
+   "template": "tube",
+   "skipped": "tube_fit_rows",
+   "legacy_key": "wheel_size",
+   "legacy_value": "700c",
+   "reason": "no usable width range"
+  },
+  {
+   "product_id": "dbec9b8f-a2c5-493b-909f-6420124a197a",
+   "sku": "716281509650",
+   "name": "Camara Impinchable Aro 27.5, Slime A/V",
+   "template": "tube",
+   "skipped": "tube_fit_rows",
+   "legacy_key": "wheel_size",
+   "legacy_value": "27.5\"",
+   "reason": "no usable width range"
+  },
+  {
+   "product_id": "451d9973-8c76-4078-8dab-9d4ca56ef06b",
+   "sku": "716281505140",
+   "name": "Camara Impinchable Aro 29, Slime A/V",
+   "template": "tube",
+   "skipped": "tube_fit_rows",
+   "legacy_key": "wheel_size",
+   "legacy_value": "29\"",
+   "reason": "no usable width range"
+  },
+  {
+   "product_id": "01256748-5da7-45eb-9326-bde6e601b3bd",
+   "sku": "10209",
+   "name": "Camara Para Carretilla 3.50 X 8 Valvula Auto Duro",
+   "template": "tube",
+   "skipped": "tube_fit_rows",
+   "legacy_key": "wheel_size",
+   "legacy_value": "Otra",
+   "reason": "label 'Otra' has no ISO mapping"
+  }
+ ]
+}

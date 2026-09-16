@@ -2290,6 +2290,14 @@ class _ProductDetailPageState extends State<ProductDetailPage>
     final raw = spec.displayValue.trim();
     if (raw.isEmpty) return raw;
 
+    // El diámetro ISO es la medida exacta del aro, pero el cliente compra por
+    // rodado: «29"», «700c», «26"». Se muestra el rodado y el ISO entre
+    // paréntesis, sin repetir la unidad.
+    if (spec.specKey == 'bead_seat_diameter_mm') {
+      final rodado = _wheelSizeLabelForBsd(raw);
+      if (rodado != null) return rodado;
+    }
+
     // La coma sólo separa elementos cuando el campo es multi-valor: el RPC une
     // ahí un `value_json` con «, ». En cualquier otro tipo la coma es parte del
     // valor — un decimal escrito a la chilena — y partirlo lo corrompe:
@@ -2317,6 +2325,33 @@ class _ProductDetailPageState extends State<ProductDetailPage>
       display = '$display $unit';
     }
     return display;
+  }
+
+  /// Rodado comercial de un diámetro ISO 5775 (tabla de Sheldon Brown), o
+  /// null cuando el número no es un diámetro conocido.
+  String? _wheelSizeLabelForBsd(String raw) {
+    final bsd = int.tryParse(raw.replaceAll(RegExp(r'[^0-9]'), ''));
+    if (bsd == null) return null;
+    const labels = <int, String>{
+      622: '29" / 700c',
+      584: '27.5" / 650b',
+      559: '26"',
+      590: '26" x 1 3/8 (650A)',
+      571: '26" (650C)',
+      507: '24"',
+      540: '24" x 1 3/8',
+      520: '24" x 1 3/8 (S-5)',
+      451: '20" x 1 3/8',
+      406: '20"',
+      355: '18"',
+      349: '16" x 1 3/8',
+      305: '16"',
+      203: '12 1/2"',
+      630: '27"',
+      635: '28" x 1 1/2',
+    };
+    final label = labels[bsd];
+    return label == null ? null : '$label (ISO $bsd)';
   }
 
   bool _valueAlreadyHasUnit(String value, String unit) {

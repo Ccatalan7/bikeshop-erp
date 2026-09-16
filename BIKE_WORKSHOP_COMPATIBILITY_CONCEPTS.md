@@ -273,6 +273,7 @@ This conservative rule currently applies especially to:
 - a measured bead seat diameter against an unambiguous bicycle label (`29"`/`700c` = 622, `27.5"` = 584) is a verdict; `26"`, `24"`, `20"` and `16"` cover several ISO diameters and stay a caution that names both numbers.
 - `hub_drive_receiver_kind` names the receiver (cassette core, freewheel thread, fixed thread, BMX driver), not the spline: a cassette core refutes a threaded-freewheel bicycle, and against a cassette bicycle the spline (HG, Micro Spline, XD) stays an unresolved seam, never an approval.
 - a hub package `Juego delantera + trasera` describes each hub in its own row; the single width, count and driver rule does not apply to the set and must not read the set as a front hub.
+- (2026-09-16) tyres, tubes and rim strips carry their diameter as ISO 5775 (`bead_seat_diameter_mm`, or the `tube_fit_rows` rows of a tube) and the engine reads it before the retired `wheel_size` label; a commercial label covers a set of ISO diameters (`26"` is 559, 571, 590 or 597), so a product ISO outside the bicycle label's set is a mismatch, and a product ISO different from an unambiguous bicycle label (`29"`/`700c` = 622, `27.5"` = 584) refutes a tyre. Row-shaped facts arrive as `{id, values, sources}` with numeric cells as text.
 
 ### Bottom bracket and crank interface
 

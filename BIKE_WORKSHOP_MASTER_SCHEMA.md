@@ -4474,6 +4474,19 @@ y la cautela de freno describe la pieza con sus propios campos. La dirección no
 cambia: la bici no registra dirección ni tubo. 124 pruebas del servicio (24
 nuevas). Evidencia y lo que queda (los hechos `legacy` no migran solos) en
 `docs/development/product-specs-research-2026-09-05/workshop-compatibility-drivetrain-bb-brake-successors-2026-09-16.md`.
+
+**2026-09-16 — las observaciones retiradas de rueda se proyectan a sus
+sucesores.** 406 hechos en 263 productos (`20260916200000`): rodado → diámetro
+ISO 5775 (los rótulos ambiguos se deciden por la notación de ancho del nombre,
+decimal o fraccionaria; `24 x 1 3/8` no se proyecta), pulgadas → mm, rodado +
+anchos → una fila de `tube_fit_rows`, opción retirada → opción sucesora, con la
+misma fuente y sin confirmar. Rotores y pedalieres quedan fuera (prohibición de
+la adjudicación de frenos; filas con `source_url` obligatoria). La forma real de
+una fila es `{id, values, sources}` con números como texto: el consumidor de
+productos aplana `values`. Neumático con regla propia por ISO (584 frente a
+29" es incompatible), cámara y cubre cámara por ISO y filas de ajuste; la tienda
+muestra «29" / 700c (ISO 622)». 127 pruebas del servicio. Evidencia en
+`docs/development/product-specs-research-2026-09-05/legacy-projections-2026-09-16.md`.
 Evidencia: `docs/development/product-specs-research-2026-09-05/spoke-wheel-consumer-integration-2026-09-07.md`.
 # Corrección del consumidor de compatibilidad — 2026-09-07
 

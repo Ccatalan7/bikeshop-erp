@@ -1581,5 +1581,30 @@
   "service_tests": 124,
   "new_tests": 24,
   "left": "legacy facts do not migrate by themselves: 34 bottom brackets carry bb_shell_standard and 0 carry bb_installation_claims"
+ },
+ "legacy_projections_2026_09_16": {
+  "migration": "20260916200000",
+  "facts": 406,
+  "products": 263,
+  "by_pair": {
+   "tire.wheel_size->bead_seat_diameter_mm": 110,
+   "tire.tire_width_in->tire_width_mm": 86,
+   "tube.wheel_size->tube_fit_rows": 123,
+   "tube.valve_type->valve_standard": 58,
+   "tube.valve_length_mm->valve_length_mm_value": 2,
+   "rim.wheel_size->bead_seat_diameter_mm": 4,
+   "tubeless_valve.valve_type->valve_standard": 3,
+   "tubeless_valve.valve_length_mm->valve_length_mm_value": 3,
+   "spoke.spoke_gauge->spoke_gauge_designation": 15,
+   "hub.hub_spacing_mm->hub_old_mm": 1,
+   "hub.freehub_type->hub_drive_receiver_kind": 1
+  },
+  "skipped": 14,
+  "excluded_by_design": [
+   "rotor (brake adjudication forbids conversion)",
+   "bottom_bracket (row successors require source_url)"
+  ],
+  "record": "legacy-projections-2026-09-16.json",
+  "note": "legacy-projections-2026-09-16.md"
  }
 }

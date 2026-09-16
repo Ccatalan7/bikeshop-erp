@@ -95,6 +95,11 @@ class BikeProductCompatibilityService {
   // carries the successor and the rule must still see it.
   static const Set<String> _wheelRelevantSpecKeys = {
     'bead_seat_diameter_mm',
+    'tire_bead_type',
+    'tire_etrto',
+    'tire_tubeless_ready',
+    'tire_width_mm',
+    'tube_fit_rows',
     'bearing_application',
     'bearing_size_code',
     'bearing_system',
@@ -133,8 +138,10 @@ class BikeProductCompatibilityService {
   }
 
   /// Rows of a row-shaped successor field. The reader hands the stored JSON
-  /// text (`{"schema_version":1,"rows":[…]}`); a decoded map or a bare list
-  /// is accepted too.
+  /// text (`{"schema_version":1,"rows":[{"id","values","sources"}…]}`); a
+  /// decoded map or a bare list is accepted too. Each row comes back as its
+  /// `values` cells (numeric cells are text) plus `__id` and `__sources`; a
+  /// row that already is a flat map is kept as is.
   List<Map<String, dynamic>> _specRows(
       Map<String, dynamic> specValues, String key) {
     dynamic decoded = specValues[key];
@@ -151,7 +158,15 @@ class BikeProductCompatibilityService {
     if (decoded is! List) return const [];
     return [
       for (final row in decoded)
-        if (row is Map) Map<String, dynamic>.from(row),
+        if (row is Map)
+          if (row['values'] is Map)
+            <String, dynamic>{
+              ...Map<String, dynamic>.from(row['values'] as Map),
+              '__id': row['id'],
+              '__sources': row['sources'],
+            }
+          else
+            Map<String, dynamic>.from(row),
     ];
   }
 
@@ -842,6 +857,11 @@ class BikeProductCompatibilityService {
           );
         case 'rim_strip':
           return _assessDetailedRimStripCompatibility(
+            compatibilityContext: compatibilityContext,
+            specValues: specValues,
+          );
+        case 'tire':
+          return _assessDetailedTireCompatibility(
             compatibilityContext: compatibilityContext,
             specValues: specValues,
           );
@@ -2818,26 +2838,161 @@ class BikeProductCompatibilityService {
     );
   }
 
+  /// What a tyre, tube or rim strip says about its diameter: the successor
+  /// (a measured BSD, or the BSDs of its fit rows) first, then the retired
+  /// wheel-size label.
+  _WheelDiameterReading _readWheelDiameter(
+    Map<String, dynamic> specValues, {
+    String? rowsKey,
+  }) {
+    final bsds = <int>{};
+    final scalar = _parseIntValue(specValues['bead_seat_diameter_mm']);
+    if (scalar != null) bsds.add(scalar);
+    if (rowsKey != null) {
+      for (final row in _specRows(specValues, rowsKey)) {
+        final bsd = _parseIntValue(row['bead_seat_diameter_mm']);
+        if (bsd != null) bsds.add(bsd);
+      }
+    }
+    return _WheelDiameterReading(
+      bsds: bsds,
+      label: bsds.isEmpty ? _canonicalWheelSize(specValues['wheel_size']) : null,
+    );
+  }
+
+  /// ISO diameters a commercial wheel-size label can mean (ISO 5775).
+  Set<int> _bsdCandidatesForWheelSizeLabel(String? canonicalWheelSize) {
+    switch (canonicalWheelSize) {
+      case '29"':
+      case '700c':
+        return const {622};
+      case '27.5"':
+        return const {584};
+      case '26"':
+        return const {559, 571, 590, 597};
+      case '24"':
+        return const {507, 520, 540};
+      case '20"':
+        return const {406, 451};
+      case '16"':
+        return const {305, 349};
+      case '12"':
+        return const {203};
+      default:
+        return const {};
+    }
+  }
+
+  /// null when either side is unknown; otherwise whether the product's
+  /// diameter can be the bicycle's.
+  bool? _wheelDiameterMatchesBike(
+    _WheelDiameterReading reading,
+    String? bikeWheelSize,
+  ) {
+    if (bikeWheelSize == null || reading.isEmpty) return null;
+    if (reading.bsds.isNotEmpty) {
+      final candidates = _bsdCandidatesForWheelSizeLabel(bikeWheelSize);
+      if (candidates.isEmpty) return null;
+      return reading.bsds.any(candidates.contains);
+    }
+    return reading.label == bikeWheelSize;
+  }
+
+  /// A mismatch that no label ambiguity can explain: the bicycle's label is
+  /// one ISO diameter and the product measures another.
+  bool _wheelDiameterRefutesBike(
+    _WheelDiameterReading reading,
+    String? bikeWheelSize,
+  ) {
+    final bikeBsd = _bsdForWheelSizeLabel(bikeWheelSize);
+    return bikeBsd != null &&
+        reading.bsds.isNotEmpty &&
+        !reading.bsds.contains(bikeBsd);
+  }
+
+  String _wheelDiameterLabel(_WheelDiameterReading reading) {
+    if (reading.bsds.isNotEmpty) {
+      final sorted = reading.bsds.toList()..sort();
+      return sorted.map(_wheelSizeForBsd).join(' / ');
+    }
+    return reading.label ?? '';
+  }
+
+  ProductCompatibilityAssessment? _assessDetailedTireCompatibility({
+    required _BikeCompatibilityContext compatibilityContext,
+    required Map<String, dynamic> specValues,
+  }) {
+    final reading = _readWheelDiameter(specValues);
+    final bikeWheelSize = _canonicalWheelSize(compatibilityContext.wheelSize);
+    final width = _parseDoubleValue(specValues['tire_width_mm']);
+    final bead = _confirmedText(specValues['tire_bead_type']);
+    final tubeless = specValues['tire_tubeless_ready'] == true;
+    final knownParts = <String>[
+      if (width != null) 'ancho ${_formatMeasurement(width)} mm',
+      if (bead != null) 'talón ${bead.toLowerCase()}',
+      if (tubeless) 'tubeless ready',
+    ];
+    final known = knownParts.isEmpty ? '' : ' (${knownParts.join(', ')})';
+    if (reading.isEmpty) {
+      if (knownParts.isEmpty) return null;
+      return ProductCompatibilityAssessment.caution(
+        detail:
+            'Neumático$known; falta el rodado del neumático para compararlo con la bici',
+        sortPriority: 30,
+      );
+    }
+
+    if (_wheelDiameterRefutesBike(reading, bikeWheelSize)) {
+      return ProductCompatibilityAssessment.incompatible(
+        detail:
+            'Neumático aro ${_wheelDiameterLabel(reading)} no corresponde a la bici $bikeWheelSize',
+      );
+    }
+
+    final matches = _wheelDiameterMatchesBike(reading, bikeWheelSize);
+    if (matches == false) {
+      return ProductCompatibilityAssessment.caution(
+        detail:
+            'Neumático aro ${_wheelDiameterLabel(reading)} y bici $bikeWheelSize: confirma el diámetro ISO de la llanta antes de montarlo.',
+      );
+    }
+    if (matches == true) {
+      return ProductCompatibilityAssessment.caution(
+        detail:
+            'Neumático coincide en aro ${_wheelDiameterLabel(reading)}$known; confirma el ancho admitido por la llanta y el paso libre del cuadro u horquilla.',
+        sortPriority: 16,
+      );
+    }
+    return ProductCompatibilityAssessment.caution(
+      detail:
+          'Neumático aro ${_wheelDiameterLabel(reading)}$known; falta confirmar el rodado de la bici',
+      sortPriority: 24,
+    );
+  }
+
   ProductCompatibilityAssessment? _assessDetailedTubeCompatibility({
     required _BikeCompatibilityContext compatibilityContext,
     required Map<String, dynamic> specValues,
   }) {
-    final productWheelSize = _canonicalWheelSize(specValues['wheel_size']);
+    final diameter =
+        _readWheelDiameter(specValues, rowsKey: 'tube_fit_rows');
+    final productWheelSize =
+        diameter.isEmpty ? null : _wheelDiameterLabel(diameter);
     final bikeWheelSize = _canonicalWheelSize(compatibilityContext.wheelSize);
     final productValveType = _canonicalValveType(
         _firstSpecValue(specValues, const ['valve_standard', 'valve_type']));
     final bikeValveType = _canonicalValveType(compatibilityContext.valveType);
+    final widthRange = _tubeWidthRangeLabel(specValues);
 
     if (productWheelSize == null && productValveType == null) {
       return null;
     }
 
     if (productWheelSize != null &&
-        bikeWheelSize != null &&
-        productWheelSize != bikeWheelSize) {
+        _wheelDiameterMatchesBike(diameter, bikeWheelSize) == false) {
       return ProductCompatibilityAssessment.caution(
         detail:
-            'Cámara rotulada $productWheelSize y bici $bikeWheelSize: compara el BSD y el intervalo de ancho declarado para ese diámetro.',
+            'Cámara para aro $productWheelSize y bici $bikeWheelSize: compara el BSD y el intervalo de ancho declarado para ese diámetro.',
       );
     }
 
@@ -2855,7 +3010,7 @@ class BikeProductCompatibilityService {
 
     if (productWheelSize != null) {
       if (bikeWheelSize != null) {
-        matchedParts.add('aro $productWheelSize');
+        matchedParts.add('aro $productWheelSize$widthRange');
       } else {
         unresolvedParts.add('rodado de la bici');
       }
@@ -2883,11 +3038,27 @@ class BikeProductCompatibilityService {
     );
   }
 
+  /// «para neumático 49-54 mm» from the tube's fit rows, when they exist.
+  String _tubeWidthRangeLabel(Map<String, dynamic> specValues) {
+    double? min;
+    double? max;
+    for (final row in _specRows(specValues, 'tube_fit_rows')) {
+      final lo = _parseDoubleValue(row['width_min_mm']);
+      final hi = _parseDoubleValue(row['width_max_mm']);
+      if (lo != null && (min == null || lo < min)) min = lo;
+      if (hi != null && (max == null || hi > max)) max = hi;
+    }
+    if (min == null || max == null) return '';
+    return ' para neumático ${_formatMeasurement(min)}-${_formatMeasurement(max)} mm';
+  }
+
   ProductCompatibilityAssessment? _assessDetailedRimStripCompatibility({
     required _BikeCompatibilityContext compatibilityContext,
     required Map<String, dynamic> specValues,
   }) {
-    final productWheelSize = _canonicalWheelSize(specValues['wheel_size']);
+    final diameter = _readWheelDiameter(specValues);
+    final productWheelSize =
+        diameter.isEmpty ? null : _wheelDiameterLabel(diameter);
     final bikeWheelSize = _canonicalWheelSize(compatibilityContext.wheelSize);
     final productValveType = _canonicalValveType(
         _firstSpecValue(specValues, const ['valve_standard', 'valve_type']));
@@ -2898,11 +3069,10 @@ class BikeProductCompatibilityService {
     }
 
     if (productWheelSize != null &&
-        bikeWheelSize != null &&
-        productWheelSize != bikeWheelSize) {
+        _wheelDiameterMatchesBike(diameter, bikeWheelSize) == false) {
       return ProductCompatibilityAssessment.caution(
         detail:
-            'Cubre cámara rotulado $productWheelSize y bici $bikeWheelSize: confirma diámetro real, ancho y ajuste al canal de la llanta.',
+            'Cubre cámara para aro $productWheelSize y bici $bikeWheelSize: confirma diámetro real, ancho y ajuste al canal de la llanta.',
       );
     }
 
@@ -4774,6 +4944,15 @@ class BikeProductCompatibilityService {
         .replaceAll('ó', 'o')
         .replaceAll('ú', 'u');
   }
+}
+
+class _WheelDiameterReading {
+  final Set<int> bsds;
+  final String? label;
+
+  const _WheelDiameterReading({required this.bsds, required this.label});
+
+  bool get isEmpty => bsds.isEmpty && label == null;
 }
 
 class _WidthRange {

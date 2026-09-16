@@ -58,11 +58,21 @@ compuerta de «este producto trae algo que la regla sabe leer». `sprocket_count
   opciones de fila vienen capitalizadas («Delantero»); el servicio pasa por
   `_canonicalWheelPosition` antes.
 
+## Adenda del mismo día: filas reales, neumáticos y cámaras
+
+El primer ensayo del aplicador de observaciones retiradas mostró la forma real de una fila:
+`{id, values, sources}` con las celdas numéricas como texto. `_specRows` aplana `values` y
+conserva `__id`/`__sources`; las pruebas construyen las filas con esa forma. Las reglas de
+cámara y cubre cámara leen ahora el diámetro ISO (`bead_seat_diameter_mm`, filas de
+`tube_fit_rows`) antes que `wheel_size`, y el neumático tiene regla propia: ISO distinto al de
+una bici de rótulo inequívoco es incompatible; igual, coincide con ancho y talón. Datos y
+compuertas en [legacy-projections-2026-09-16.md](legacy-projections-2026-09-16.md).
+
 ## Qué queda
 
-- Los hechos `legacy` no migran solos: 34 pedalieres tienen `bb_shell_standard` y 0 tienen
-  `bb_installation_claims`; 29 cassettes tienen `drivetrain_speeds` y 31 `sprocket_count`. Donde
-  el sucesor es escalar, las lecturas de nombre ya lo llenan; donde es de filas (pedalier, cambio,
-  cáliper) hace falta un llenado por investigación o una migración de datos revisada por familia.
+- Los hechos `legacy` de neumáticos, cámaras, llantas, rayos y mazas se proyectaron el mismo día
+  (`20260916200000`, 406 hechos). Los de pedalier (34 con `bb_shell_standard`, 0 con
+  `bb_installation_claims`) siguen fuera: sus sucesores son filas con `source_url` obligatoria y
+  una observación importada no la tiene; hace falta un llenado por investigación por familia.
 - El asistente de compras y el matcher de identidad leen sus propias claves; este bloque no los
   toca.
