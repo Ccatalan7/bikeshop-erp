@@ -1,5 +1,7 @@
 # Rayos: candidato con posiciones físicas y contenido identificado
 
+**Publicado el 2026-09-16** como `20260916040000_spoke_successor.sql` sobre 58 productos; ver [spoke-successor-adjudication-2026-09-16.md](spoke-successor-adjudication-2026-09-16.md). Lo que sigue es el estado del candidato al 2026-09-08.
+
 Estado: una plantilla original, 20 definiciones, 31 casos y la comprobación de
 metadatos Dart pasan localmente. No aplicada. Ni investigación de identidad ni
 llenado de productos ejecutados por este compilador. Los 48 productos ligados
