@@ -1,0 +1,125 @@
+{
+  "schema_version": 2,
+  "product_id": "35cb97f8-2188-4925-8b6a-1bccb7e4b103",
+  "researcher": "claude",
+  "status": "reviewed",
+  "based_on": {
+    "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+    "snapshot_sha256": "ab338e0e38f12225e4d38061601059eacd0d6cf266b6d291027d16bd30fdb2b4",
+    "fingerprints": {
+      "facts_sha256": "0aaab6ab1b466254ee236efbc4c7f583f3e0602412222a16c1a0d9789809d298",
+      "product_sha256": "d334d4a9f602a5e616c1c568620431c9f1ac0edfc309dbcf3ad6ccd10214cfcc",
+      "template_sha256": "a788e2db3fa29e6c1cfa155dcfc274824180854016998ef9f0533059a9661098",
+      "references_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    "spec_revision": 2,
+    "updated_at": "2026-07-21T21:04:48.291667+00:00",
+    "template_id": "61005a7e-a107-49f3-96c3-2fa2796d3299",
+    "contract_version": 34
+  },
+  "identity": [
+    {
+      "field": "model",
+      "current": null,
+      "proposed": "SLM2T R7",
+      "evidence": [
+        "product-name",
+        "oem"
+      ],
+      "reason": "El nombre guardado dice «Sun Race M2t 7s juego - Trasero» y la ficha oficial SunRace documenta SLM2T R7 («Thumb shifter Right», grupo M2); el ERP vende el juego partido en dos productos y este es el lado derecho."
+    }
+  ],
+  "reference": null,
+  "facts": [
+    {
+      "key": "spec_evidence_source",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "https://sunrace.com/product/slm2t-r7/",
+      "unit": null,
+      "method": "URL de la ficha oficial consultada el 2026-09-16 y archivada con hash",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "Fuente de todos los hechos",
+      "reason": "Fuente exigida por el contrato."
+    },
+    {
+      "key": "shifter_position",
+      "current": {
+        "value": "Derecho (trasero)",
+        "source": "name_reading",
+        "fact_id": "971db655-a0e8-49c7-bf38-ffccc3d107d4",
+        "fact_sha256": "218d5c17f84254206c1492545348598d990551242f1dab7417d0d75eaa16c649",
+        "confirmed": false
+      },
+      "proposed": "Derecho (trasero)",
+      "unit": null,
+      "method": "Ficha oficial: «Thumb shifter Right»; nombre guardado «- Trasero»",
+      "origin": "research",
+      "evidence": [
+        "oem",
+        "product-name"
+      ],
+      "scope": "SLM2T R7",
+      "reason": "Literal en ficha y nombre."
+    },
+    {
+      "key": "shifter_control_style",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "Palanca de pulgar",
+      "unit": null,
+      "method": "Ficha oficial: «Thumb shifter»",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "SLM2T R7",
+      "reason": "Literal."
+    }
+  ],
+  "evidence": [
+    {
+      "id": "oem",
+      "kind": "oem_page",
+      "source": "SunRace (sunrace.com)",
+      "locator": "https://sunrace.com/product/slm2t-r7/",
+      "consulted_on": "2026-09-16",
+      "scope": "Ficha oficial SLM2T R7",
+      "finding": "Thumb shifter Right; 7-speed; Including Cable; Alloy; EAN 4710944231304",
+      "artifact_path": "research/fill-014-shifters/evidence/sunrace-slm2t-r7-20260916.md",
+      "sha256": "97f9a28616df13ae80a527292fb931bcd1f148dff73ae77b25be5b94bc3b031e"
+    },
+    {
+      "id": "product-name",
+      "kind": "name_quote",
+      "source": "ERP product 35cb97f8-2188-4925-8b6a-1bccb7e4b103",
+      "locator": "products.name",
+      "consulted_on": "2026-09-16",
+      "scope": "Identidad comercial y variante (lado, velocidades) declaradas en el ERP",
+      "finding": "Manillas De Cambio Mtb Sun Race M2t 7s \"juego\" - Trasero",
+      "artifact_path": "research/fill-014-shifters/evidence/sunrace-m2t-rear-saved-name-20260916.json",
+      "sha256": "9ea3eef677f8f1d16487a04b7a3316832e4e466dad08f5b09edaf6b3164af479"
+    }
+  ],
+  "conflicts": [],
+  "review": {
+    "by": "claude-peer",
+    "verdict": "accepted",
+    "date": "2026-09-16",
+    "reviewed_proposal_sha256": "9702d76cdfe6dcc36b0db834af150f4f5fa6f24c4aa94daa06494624e7d632cd",
+    "notes": "Revisión par (sesión Look dude): identidad SLM2T R7 fijada por el nombre (M2t→SLM2T, Trasero→Right, 7s→7-speed) y confirmada por la ficha archivada; palanca de pulgar literal; accionamiento sin declarar, correcto («Including Cable» no es un modo). Correcciones a las notas del investigador: este producto no tiene lectura de nombre «Indexado» (sólo shifter_position=Trasero); el EAN 4710944234304 del sku guardado no coincide con el EAN de la unidad y su origen no está verificado."
+  }
+}

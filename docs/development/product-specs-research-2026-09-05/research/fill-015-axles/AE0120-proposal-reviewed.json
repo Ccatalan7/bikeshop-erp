@@ -1,0 +1,180 @@
+{
+  "schema_version": 2,
+  "product_id": "e55dfdea-ed5f-41e6-9e2d-a0ecc2bac90d",
+  "researcher": "claude",
+  "status": "reviewed",
+  "based_on": {
+    "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+    "snapshot_sha256": "d4c23ee974b2f2948adb5e5849b803f57c7dcb6e6e99528285042ce03d4cdbfa",
+    "fingerprints": {
+      "facts_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "product_sha256": "55fbfdc34f001ea64f40bd87ea88ed89b7db9395b2a3776c26c58de5f069efbe",
+      "template_sha256": "3ac848212b166501cac3033600cac91691ebfeb51ab993683734a2b39ff14ae6",
+      "references_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    "spec_revision": 1,
+    "updated_at": "2026-09-15T00:08:10.530343+00:00",
+    "template_id": "18bf5b75-1306-5851-8c19-9551a780698f",
+    "contract_version": 18
+  },
+  "identity": [
+    {
+      "field": "manufacturer_sku",
+      "current": null,
+      "proposed": "TZG13",
+      "evidence": [
+        "oem-variants",
+        "product-name"
+      ],
+      "reason": "El JSON de producto de la tienda oficial ZTTO asigna el sku «TZG13» a la variante «12x177LxM12(P1.5)x19», que es literalmente la que nombra el ERP. El código dimensional no va en modelo: identifica un calce, no un modelo (product-identity-matching-contract, «A measurement is never a model»)."
+    }
+  ],
+  "reference": null,
+  "facts": [
+    {
+      "key": "spec_evidence_source",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "https://ztto.net/products/ztto-mtb-thru-axle-road-bike-shaft-front-rear-skewers-12mm-15mm-wheel-axis-hub-x-12-shaft-15x100-12x142-12x100-12x148-15x110",
+      "unit": null,
+      "method": "URL de la ficha oficial consultada el 2026-09-16 y archivada con hash",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "Fuente de todos los hechos",
+      "reason": "Fuente exigida por el contrato."
+    },
+    {
+      "key": "wheel_retention_configurations",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": {
+        "schema_version": 1,
+        "rows": [
+          {
+            "id": "axle",
+            "values": {
+              "component": "Eje pasante ZTTO, variante «12x177LxM12(P1.5)x19»",
+              "configuration": "Variante literal de la ficha «12x177LxM12(P1.5)x19»: eje de 12 mm, largo 177 mm, rosca M12 con paso 1,5 mm; el «x19» final no viene explicado en la ficha (lectura habitual: largo de rosca) y no se declara como cifra",
+              "position": "Sin posición específica",
+              "kind": "Eje pasante",
+              "shaft_diameter_mm": "12",
+              "shaft_length_mm": "177",
+              "length_kind": "Longitud exacta",
+              "conditions": "La ficha lista 18 variantes por código; la presentación en stock es la que nombra el ERP (sku de variante TZG13 en el JSON de la tienda). Material y peso no publicados en el texto de la ficha.",
+              "source_url": "https://ztto.net/products/ztto-mtb-thru-axle-road-bike-shaft-front-rear-skewers-12mm-15mm-wheel-axis-hub-x-12-shaft-15x100-12x142-12x100-12x148-15x110",
+              "thread_interface_id": "thread"
+            },
+            "sources": [
+              "https://ztto.net/products/ztto-mtb-thru-axle-road-bike-shaft-front-rear-skewers-12mm-15mm-wheel-axis-hub-x-12-shaft-15x100-12x142-12x100-12x148-15x110"
+            ]
+          }
+        ]
+      },
+      "unit": null,
+      "method": "Variante literal de la ficha ZTTO «12x177LxM12(P1.5)x19»; nombre guardado idéntico",
+      "origin": "research",
+      "evidence": [
+        "oem",
+        "oem-variants",
+        "product-name"
+      ],
+      "scope": "Variante en stock",
+      "reason": "Diámetro y largo leídos del código publicado (12, 177L); la clave de la notación no está escrita en la ficha y así se dice en la fila."
+    },
+    {
+      "key": "wheel_part_interfaces",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": {
+        "schema_version": 1,
+        "rows": [
+          {
+            "id": "thread",
+            "values": {
+              "scope": "Rosca del eje pasante (variante 12x177LxM12(P1.5)x19)",
+              "interface_kind": "Rosca",
+              "diameter_unit": "mm",
+              "pitch_unit": "mm",
+              "diameter_mm": "12",
+              "pitch_mm": "1.5",
+              "conditions": "Notación de la ficha «M12(P1.5)»: métrica 12 con paso 1,5 mm (la designación literal va aquí porque la fila «Rosca» no admite la columna de designación OEM)",
+              "source_url": "https://ztto.net/products/ztto-mtb-thru-axle-road-bike-shaft-front-rear-skewers-12mm-15mm-wheel-axis-hub-x-12-shaft-15x100-12x142-12x100-12x148-15x110"
+            },
+            "sources": [
+              "https://ztto.net/products/ztto-mtb-thru-axle-road-bike-shaft-front-rear-skewers-12mm-15mm-wheel-axis-hub-x-12-shaft-15x100-12x142-12x100-12x148-15x110"
+            ]
+          }
+        ]
+      },
+      "unit": null,
+      "method": "Ficha ZTTO: «M12(P1.5)» dentro del código de la variante",
+      "origin": "research",
+      "evidence": [
+        "oem",
+        "product-name"
+      ],
+      "scope": "Rosca de la variante en stock",
+      "reason": "M12 y paso 1,5 son explícitos en la notación métrica del código."
+    }
+  ],
+  "evidence": [
+    {
+      "id": "oem",
+      "kind": "oem_page",
+      "source": "ZTTO (ztto.net)",
+      "locator": "https://ztto.net/products/ztto-mtb-thru-axle-road-bike-shaft-front-rear-skewers-12mm-15mm-wheel-axis-hub-x-12-shaft-15x100-12x142-12x100-12x148-15x110",
+      "consulted_on": "2026-09-16",
+      "scope": "Ficha oficial del eje pasante ZTTO (título y selector de variantes)",
+      "finding": "Variantes por código, incl. «12x177LxM12(P1.5)x19»; sin material ni peso en el texto",
+      "artifact_path": "research/fill-015-axles/evidence/ztto-thru-axle-page-20260916.md",
+      "sha256": "e51f72f5ea2defbf8238e9cf3bb35047f9fa114b3e8de4136ffbf88cec428f29"
+    },
+    {
+      "id": "product-name",
+      "kind": "name_quote",
+      "source": "ERP product e55dfdea-ed5f-41e6-9e2d-a0ecc2bac90d",
+      "locator": "products.name",
+      "consulted_on": "2026-09-16",
+      "scope": "Identidad comercial y variante (lado, velocidades) declaradas en el ERP",
+      "finding": "Eje Pasante ZTTO 12x177LxM12(P1.5)x19",
+      "artifact_path": "research/fill-015-axles/evidence/ztto-axle-saved-name-20260916.json",
+      "sha256": "389716cff8b4ab6bf73e246581e6e506e4fc6b61e5081e53c16681b00c2f45bd"
+    },
+    {
+      "id": "oem-variants",
+      "kind": "oem_page",
+      "source": "ZTTO (ztto.net, tienda Shopify oficial)",
+      "locator": "https://ztto.net/products/ztto-mtb-thru-axle-road-bike-shaft-front-rear-skewers-12mm-15mm-wheel-axis-hub-x-12-shaft-15x100-12x142-12x100-12x148-15x110.js",
+      "consulted_on": "2026-09-16",
+      "scope": "JSON público de producto: sku por variante",
+      "finding": "La variante «12x177LxM12(P1.5)x19» lleva sku «TZG13»; sin barcode; peso 80 (unidad no declarada)",
+      "artifact_path": "research/fill-015-axles/evidence/ztto-thru-axle-variants-20260916.json",
+      "sha256": "89f5a65d3c03f23a800488ca11cfb6a27d82594f32f5a353e5b93b006437da21"
+    }
+  ],
+  "conflicts": [],
+  "review": {
+    "by": "claude-peer",
+    "verdict": "accepted",
+    "date": "2026-09-16",
+    "reviewed_proposal_sha256": "ac4b67eb554f7d377b7612d3c16dab86634052f51a3b43f67fe2c7252b755851",
+    "notes": "Revisión par (sesión Look dude), v2 aceptada sobre bb119e7af4674245ce2a94ad6056c5c57fdc91ff93df8aa8d054a94b02da46bd: identity.manufacturer_sku «TZG13» del JSON público de la tienda oficial ZTTO (vendor ZTTO), variante cuyo título es literalmente el nombre guardado; barcode null, nada para gtin. Modelo retirado (designación dimensional, no modelo). thread_interface_id «thread» enlaza la fila de rosca; diámetro 12 / largo 177 / M12 paso 1,5 con la salvedad de notación escrita en la fila; x19 sin declarar; effective_length_mm y length_datum vacíos porque la ficha no los publica."
+  }
+}

@@ -1,0 +1,158 @@
+{
+  "schema_version": 2,
+  "product_id": "d694a747-dedb-4546-a6e3-48bd61b6ada5",
+  "researcher": "claude",
+  "status": "reviewed",
+  "based_on": {
+    "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+    "snapshot_sha256": "d39639b6b8f75e7a9e8b150609628d7f350ebb38ec25216a6c02e759e4835c44",
+    "fingerprints": {
+      "facts_sha256": "4ea707801628c0bdba1655bbdd53f3c3006f221ef7725a5c8b28bb017e6e6f78",
+      "product_sha256": "33e362279283fcc0176542d7d44c7faca087434836a9acdebb4ebe20692b9079",
+      "template_sha256": "a788e2db3fa29e6c1cfa155dcfc274824180854016998ef9f0533059a9661098",
+      "references_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    "spec_revision": 2,
+    "updated_at": "2026-07-21T21:04:48.309175+00:00",
+    "template_id": "61005a7e-a107-49f3-96c3-2fa2796d3299",
+    "contract_version": 34
+  },
+  "identity": [
+    {
+      "field": "model",
+      "current": null,
+      "proposed": "SLM2T LF",
+      "evidence": [
+        "product-name",
+        "oem",
+        "oem-list"
+      ],
+      "reason": "El nombre guardado dice «Sun Race M2t 7s juego - Delantero»: M2t fija la familia SLM2T y «Delantero» fija el lado izquierdo (L). El listado oficial SunRace publica exactamente cuatro SLM2T (R5, LF, R6, R7) y LF es el único izquierdo, así que la ficha SLM2T LF («Thumb shifter Left», grupo M2) es la única que corresponde; el ERP vende el juego partido en dos productos y este es el lado izquierdo."
+    }
+  ],
+  "reference": null,
+  "facts": [
+    {
+      "key": "spec_evidence_source",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "https://sunrace.com/product/slm2t-lf/",
+      "unit": null,
+      "method": "URL de la ficha oficial consultada el 2026-09-16 y archivada con hash",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "Fuente de todos los hechos",
+      "reason": "Fuente exigida por el contrato."
+    },
+    {
+      "key": "shifter_position",
+      "current": {
+        "value": "Izquierdo (delantero)",
+        "source": "name_reading",
+        "fact_id": "887d3c79-030b-40bf-b817-fcb24054bc18",
+        "fact_sha256": "3a98b5cffcf8cdb792d95ec2f6494478ccff00feec04173dc5b4462a2e56f3a2",
+        "confirmed": false
+      },
+      "proposed": "Izquierdo (delantero)",
+      "unit": null,
+      "method": "Ficha oficial: «Thumb shifter Left»; nombre guardado «- Delantero»",
+      "origin": "research",
+      "evidence": [
+        "oem",
+        "product-name"
+      ],
+      "scope": "SLM2T LF",
+      "reason": "Literal en ficha y nombre."
+    },
+    {
+      "key": "shifter_control_style",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "Palanca de pulgar",
+      "unit": null,
+      "method": "Ficha oficial: «Thumb shifter»",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "SLM2T LF",
+      "reason": "Literal."
+    },
+    {
+      "key": "shifter_actuation_mode",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "Fricción",
+      "unit": null,
+      "method": "Ficha oficial SLM2T LF: «Fitting: Friction». La identidad LF descansa en el nombre («Delantero» → izquierdo) y en el listado oficial, donde LF es el único SLM2T izquierdo.",
+      "origin": "research",
+      "evidence": [
+        "oem",
+        "oem-list",
+        "product-name"
+      ],
+      "scope": "SLM2T LF",
+      "reason": "Literal."
+    }
+  ],
+  "evidence": [
+    {
+      "id": "oem",
+      "kind": "oem_page",
+      "source": "SunRace (sunrace.com)",
+      "locator": "https://sunrace.com/product/slm2t-lf/",
+      "consulted_on": "2026-09-16",
+      "scope": "Ficha oficial SLM2T LF",
+      "finding": "Thumb shifter Left; 2/3-speed; Fitting Friction; Alloy; EAN 4710944239430",
+      "artifact_path": "research/fill-014-shifters/evidence/sunrace-slm2t-lf-20260916.md",
+      "sha256": "10bae6114671824c9fc0b554a25788c2ff8e663bf468411850a3fdb6add8c125"
+    },
+    {
+      "id": "product-name",
+      "kind": "name_quote",
+      "source": "ERP product d694a747-dedb-4546-a6e3-48bd61b6ada5",
+      "locator": "products.name",
+      "consulted_on": "2026-09-16",
+      "scope": "Identidad comercial y variante (lado, velocidades) declaradas en el ERP",
+      "finding": "Manillas De Cambio Mtb Sun Race M2t 7s \"juego\" - Delantero",
+      "artifact_path": "research/fill-014-shifters/evidence/sunrace-m2t-front-saved-name-20260916.json",
+      "sha256": "0cbc245d2de57c04c9596be6be423e543f195eba1ce90f35f9a20086303ec6ad"
+    },
+    {
+      "id": "oem-list",
+      "kind": "oem_page",
+      "source": "SunRace (sunrace.com)",
+      "locator": "https://sunrace.com/?s=SLM2T&post_type=product",
+      "consulted_on": "2026-09-16",
+      "scope": "Listado oficial de productos SLM2T (búsqueda del sitio)",
+      "finding": "Cuatro modelos publicados: SLM2T R5 (4710944239867), SLM2T LF (4710944239430), SLM2T R7 (4710944231304), SLM2T R6 (4710944226430); LF es el único izquierdo",
+      "artifact_path": "research/fill-014-shifters/evidence/sunrace-slm2t-listing-20260916.md",
+      "sha256": "b2bd2eaf7eca5701cb2fff5163df4bd55983ded3ed24b211508623765f804ca5"
+    }
+  ],
+  "conflicts": [],
+  "review": {
+    "by": "claude-peer",
+    "verdict": "accepted",
+    "date": "2026-09-16",
+    "reviewed_proposal_sha256": "9cca0ee6eaef447803ae46a5a55ed7c31afbbb7faf18b06eb8ca08c7dd766982",
+    "notes": "Revisión par (sesión Look dude), v2 aceptada sobre e8d8783c243e378004730da8e3e3b5e35391442d98858469437d326e53458ed4: identidad SLM2T LF por eliminación literal (el nombre fija M2T y el lado; el listado oficial archivado muestra que LF es el único SLM2T izquierdo; la ficha archivada confirma «Thumb shifter Left» grupo M2). Fricción descansa en esa identidad y cita las tres evidencias. Resto sin cambios respecto de la v1 revisada (mismo snapshot d39639b6…)."
+  }
+}

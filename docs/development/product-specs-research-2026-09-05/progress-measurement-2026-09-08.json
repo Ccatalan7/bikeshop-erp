@@ -1897,5 +1897,31 @@
   "workshop_chemical.chemical_kind": "no token for universal / all-conditions chain lube (Liqui Moly 6055)",
   "rim_brake": "no fields for material, rim range, shoe model, weight (Alhonga HJ-612AD7 / HJ-811AD7)",
   "record": "fill-011-013-record-2026-09-16.md"
+ },
+ "research_fill_014_shifters_2026_09_16": {
+  "batch": "fill-014-shifters",
+  "products": 2,
+  "facts": 7,
+  "applications": [
+   "5db5d8d4-becd-52d2-a21a-79e39c35fd44",
+   "fb78a087-cca0-5550-9cfd-d4eb65aa2397"
+  ],
+  "reviewer": "claude-peer",
+  "rounds": 2,
+  "record": "fill-014-015-record-2026-09-16.md",
+  "blocked": {
+   "99cf1a0e-e383-4cc1-8fb0-bcb96627c15a": "Saiguan KD-20 set: una lectura de nombre previa (shifter_actuation_mode) deja de aplicar con «Par»; la investigación no retira hechos; salida humana en el editor"
+  }
+ },
+ "research_fill_015_axles_2026_09_16": {
+  "batch": "fill-015-axles",
+  "products": 1,
+  "facts": 3,
+  "applications": [
+   "8808e82f-17ac-5d16-a05f-b1f2b01cb1ff"
+  ],
+  "reviewer": "claude-peer",
+  "rounds": 2,
+  "record": "fill-014-015-record-2026-09-16.md"
  }
 }

@@ -1,0 +1,153 @@
+{
+ "source": "https://ztto.net/products/ztto-mtb-thru-axle-road-bike-shaft-front-rear-skewers-12mm-15mm-wheel-axis-hub-x-12-shaft-15x100-12x142-12x100-12x148-15x110.js",
+ "consulted_on": "2026-09-16",
+ "note": "JSON público de producto de la tienda Shopify oficial de ZTTO (misma URL de la ficha + .js); se conservan título, vendor y por variante id, title, sku, barcode, weight.",
+ "title": "ZTTO MTB Thru Axle Road Bike Shaft Front Rear Skewers 12mm 15mm Wheel Axis Hub X-12 Shaft 15x100 12x142 12x100 12x148 15x110",
+ "vendor": "ZTTO",
+ "variants": [
+  {
+   "id": 41868374179996,
+   "title": "15x148LxM15(P1.5)x9",
+   "sku": "TZG1",
+   "barcode": null,
+   "weight": 80,
+   "weight_unit": null
+  },
+  {
+   "id": 41868374212764,
+   "title": "15x155LxM14(P1.5)x9",
+   "sku": "TZG2",
+   "barcode": null,
+   "weight": 80,
+   "weight_unit": null
+  },
+  {
+   "id": 41868374245532,
+   "title": "15x158LxM15(P1.5)x9",
+   "sku": "TZG3",
+   "barcode": null,
+   "weight": 80,
+   "weight_unit": null
+  },
+  {
+   "id": 41868374278300,
+   "title": "12x121LxM12(P1.5)x17",
+   "sku": "TZG4",
+   "barcode": null,
+   "weight": 80,
+   "weight_unit": null
+  },
+  {
+   "id": 41868374311068,
+   "title": "12x126LxM12(P1.5)x17",
+   "sku": "TZG5",
+   "barcode": null,
+   "weight": 80,
+   "weight_unit": null
+  },
+  {
+   "id": 41868374343836,
+   "title": "12x128LxM12(P1.5)x12",
+   "sku": "TZG6",
+   "barcode": null,
+   "weight": 80,
+   "weight_unit": null
+  },
+  {
+   "id": 41868374376604,
+   "title": "12x162LxM12(P1.5)x14",
+   "sku": "TZG7",
+   "barcode": null,
+   "weight": 80,
+   "weight_unit": null
+  },
+  {
+   "id": 41868374409372,
+   "title": "12x165LxM12(P1.5)x16",
+   "sku": "TZG8",
+   "barcode": null,
+   "weight": 80,
+   "weight_unit": null
+  },
+  {
+   "id": 41868374442140,
+   "title": "12x171LxM12(P1.5)x19",
+   "sku": "TZG9",
+   "barcode": null,
+   "weight": 80,
+   "weight_unit": null
+  },
+  {
+   "id": 41868374474908,
+   "title": "12x181LxM12(P1.5)x19",
+   "sku": "TZG10",
+   "barcode": null,
+   "weight": 80,
+   "weight_unit": null
+  },
+  {
+   "id": 41868374507676,
+   "title": "12x168LxM12(P1.0)x19",
+   "sku": "TZG11",
+   "barcode": null,
+   "weight": 80,
+   "weight_unit": null
+  },
+  {
+   "id": 41868374540444,
+   "title": "12x175LxM12(P1.75x19",
+   "sku": "TZG12",
+   "barcode": null,
+   "weight": 80,
+   "weight_unit": null
+  },
+  {
+   "id": 41868374573212,
+   "title": "12x177LxM12(P1.5)x19",
+   "sku": "TZG13",
+   "barcode": null,
+   "weight": 80,
+   "weight_unit": null
+  },
+  {
+   "id": 41868374605980,
+   "title": "12x175LxM12(P1.5)x19",
+   "sku": "TZG14",
+   "barcode": null,
+   "weight": 80,
+   "weight_unit": null
+  },
+  {
+   "id": 41868374638748,
+   "title": "15x145LxM14(P1.5)x9",
+   "sku": "TZG15",
+   "barcode": null,
+   "weight": 80,
+   "weight_unit": null
+  },
+  {
+   "id": 41868374671516,
+   "title": "12x183LxM12(P1.75x10",
+   "sku": "TZG16",
+   "barcode": null,
+   "weight": 80,
+   "weight_unit": null
+  },
+  {
+   "id": 41868374704284,
+   "title": "12x160LxM12(P1.0)x15",
+   "sku": "TZG17",
+   "barcode": null,
+   "weight": 80,
+   "weight_unit": null
+  },
+  {
+   "id": 41868374737052,
+   "title": "12x120LxM12(P1.0)x15",
+   "sku": "TZG18",
+   "barcode": null,
+   "weight": 80,
+   "weight_unit": null
+  }
+ ]
+}
