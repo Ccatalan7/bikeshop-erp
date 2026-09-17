@@ -88,6 +88,7 @@ class GlobalSearchAttachment {
     required this.extension,
     required this.contentType,
     required this.origin,
+    this.sizeBytes,
   });
 
   final String storagePath;
@@ -97,6 +98,13 @@ class GlobalSearchAttachment {
 
   /// De dónde salió, dicho como lo diría alguien: «TeknoBike · WhatsApp».
   final String origin;
+
+  /// Cuánto pesa. Un PDF hay que bajarlo entero para dibujar su primera página,
+  /// así que el que no cabe en un vistazo no se previsualiza: se muestra su
+  /// icono, que es instantáneo y no miente.
+  final int? sizeBytes;
+
+  bool get isPdf => extension.toLowerCase() == 'pdf';
 
   bool get isImage => const <String>{
         'jpg',
@@ -129,6 +137,7 @@ class GlobalSearchEntry {
     this.isModuleFrontDoor = false,
     this.attachment,
     this.conversationId,
+    this.imageUrl,
     Set<String> alsoNamed = const <String>{},
     List<BikeFinderSearchField> fields = const <BikeFinderSearchField>[],
   })  : fields = fields.isEmpty
@@ -219,6 +228,16 @@ class GlobalSearchEntry {
   /// sí solo pesa poco. Lo que sí decide es cuál de sus pantallas contesta,
   /// que es para lo que existe [isModuleFrontDoor].
   final Set<String> moduleWords;
+
+  /// La imagen **pública** de esta fila: la foto del producto, el logo del
+  /// proveedor, la cara de la contraparte de un chat.
+  ///
+  /// Una lista de resultados con la foto del producto se lee de un vistazo;
+  /// una con doce iconos iguales hay que leerla palabra por palabra. Sólo van
+  /// acá las URLs que ya son públicas y no cuestan una autorización: lo privado
+  /// —los archivos recibidos— lo resuelve la fila cuando se muestra, y por eso
+  /// no vive en el índice.
+  final String? imageUrl;
 
   /// El archivo que abre este resultado, cuando el destino es un adjunto.
   final GlobalSearchAttachment? attachment;

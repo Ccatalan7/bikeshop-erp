@@ -130,13 +130,16 @@ class GlobalSearchIndex extends ChangeNotifier {
     final results = await Future.wait<List<Map<String, dynamic>>>([
       _selectOrEmpty(
         'customers',
-        'id, name, rut, phone, city, is_active, updated_at',
+        'id, name, rut, phone, city, is_active, updated_at, image_url',
         tenantId,
       ),
       _selectOrEmpty(
         'products',
         'id, name, sku, barcode, brand, model, category_name, '
-            'stock_quantity, is_service, is_active, updated_at',
+            'stock_quantity, is_service, is_active, updated_at, '
+            // La miniatura del catálogo: la variante liviana primero, que es
+            // la misma preferencia que usa la tienda.
+            'image_url, image_url_optimized',
         tenantId,
       ),
       _selectOrEmpty(
@@ -160,7 +163,8 @@ class GlobalSearchIndex extends ChangeNotifier {
       ),
       _selectOrEmpty(
         'suppliers',
-        'id, name, rut, trade_name, legal_name, is_active, updated_at',
+        'id, name, rut, trade_name, legal_name, is_active, updated_at, '
+            'image_url',
         tenantId,
       ),
       // Sólo identidad laboral: ni sueldo, ni banco, ni RUT.
@@ -176,7 +180,7 @@ class GlobalSearchIndex extends ChangeNotifier {
       _selectOrEmpty(
         'messaging_attachments',
         'id, conversation_id, storage_path, original_filename, extension, '
-            'declared_mime_type, attached_at, '
+            'declared_mime_type, attached_at, size_bytes, '
             'conversations(title, counterparty_type, channel, '
             'whatsapp_conversation_bindings(contact_name, '
             'supplier_contacts(name)))',
@@ -190,6 +194,7 @@ class GlobalSearchIndex extends ChangeNotifier {
       _selectOrEmpty(
         'conversations',
         'id, title, type, channel, counterparty_type, status, last_message_at, '
+            'context_type, context_id, '
             'whatsapp_conversation_bindings(contact_name, '
             'external_phone_number, supplier_contacts(name, role))',
         tenantId,
@@ -269,8 +274,32 @@ class GlobalSearchIndex extends ChangeNotifier {
       final entry = globalSearchAttachmentEntry(row);
       if (entry != null) entries.add(entry);
     }
+    // La cara de la contraparte sale de las filas que este mismo índice ya
+    // leyó: la conversación dice a qué proveedor o cliente pertenece, y esa
+    // fila trae su imagen. Resolverlo en memoria evita un embed de tres
+    // niveles y una consulta más por cada tecla.
+    final supplierImages = <String, String>{
+      for (final row in suppliers)
+        if (row['id'] != null && _text(row['image_url']) != null)
+          '${row['id']}': _text(row['image_url'])!,
+    };
+    final customerImages = <String, String>{
+      for (final row in customers)
+        if (row['id'] != null && _text(row['image_url']) != null)
+          '${row['id']}': _text(row['image_url'])!,
+    };
     for (final row in conversations) {
-      final entry = globalSearchConversationEntry(row);
+      final contextId = _text(row['context_id']);
+      final entry = globalSearchConversationEntry(
+        row,
+        counterpartyImageUrl: contextId == null
+            ? null
+            : switch (_text(row['context_type'])) {
+                'supplier' => supplierImages[contextId],
+                'customer' => customerImages[contextId],
+                _ => null,
+              },
+      );
       if (entry != null) entries.add(entry);
     }
 
@@ -394,6 +423,7 @@ GlobalSearchEntry _customerEntry(Map<String, dynamic> row) {
       if (!isActive) 'Inactivo',
     ].join(' · '),
     identifier: rut,
+    imageUrl: _text(row['image_url']),
     route: '/clientes/${row['id']}',
     updatedAt: _timestamp(row['updated_at']),
     fields: <BikeFinderSearchField>[
@@ -428,6 +458,9 @@ GlobalSearchEntry _productEntry(Map<String, dynamic> row) {
       if (isService) 'Servicio',
     ].join(' · '),
     identifier: sku,
+    // La variante optimizada primero: es la misma preferencia de la tienda y
+    // acá se dibuja a 26 px, donde la grande no aporta nada y pesa.
+    imageUrl: _text(row['image_url_optimized']) ?? _text(row['image_url']),
     icon: isService ? Icons.handyman_outlined : null,
     route: '/inventory/products/${row['id']}/edit',
     updatedAt: _timestamp(row['updated_at']),
@@ -593,6 +626,7 @@ GlobalSearchEntry _supplierEntry(Map<String, dynamic> row) {
       if (trade != null && trade != name) trade,
     ].join(' · '),
     identifier: rut,
+    imageUrl: _text(row['image_url']),
     route: '/purchases/suppliers/${row['id']}',
     updatedAt: _timestamp(row['updated_at']),
     fields: <BikeFinderSearchField>[
@@ -654,6 +688,9 @@ GlobalSearchEntry? globalSearchAttachmentEntry(Map<String, dynamic> row) {
       contentType:
           _text(row['declared_mime_type']) ?? 'application/octet-stream',
       origin: origin.isEmpty ? 'Conversación' : origin,
+      sizeBytes: row['size_bytes'] is num
+          ? (row['size_bytes'] as num).toInt()
+          : null,
     ),
     fields: <BikeFinderSearchField>[
       BikeFinderSearchField(name, weight: 135),
@@ -681,7 +718,10 @@ GlobalSearchEntry? globalSearchAttachmentEntry(Map<String, dynamic> row) {
 ///
 /// Devuelve `null` cuando la fila no alcanza para abrir un hilo.
 @visibleForTesting
-GlobalSearchEntry? globalSearchConversationEntry(Map<String, dynamic> row) {
+GlobalSearchEntry? globalSearchConversationEntry(
+  Map<String, dynamic> row, {
+  String? counterpartyImageUrl,
+}) {
   final id = _text(row['id']);
   if (id == null) return null;
 
@@ -732,6 +772,7 @@ GlobalSearchEntry? globalSearchConversationEntry(Map<String, dynamic> row) {
         ? ToolbarTool.supplierMessages
         : ToolbarTool.messages,
     icon: ConversationChannelPresentation.iconForChannel(channel),
+    imageUrl: counterpartyImageUrl,
     updatedAt: lastMessageAt,
     alsoNamed: <String>{if (contact != null) contact},
     fields: <BikeFinderSearchField>[

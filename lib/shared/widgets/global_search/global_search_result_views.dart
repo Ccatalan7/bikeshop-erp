@@ -1,6 +1,10 @@
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
 
 import '../../services/global_search/global_search_entry.dart';
+import '../../services/global_search/global_search_previews.dart';
+import '../../services/image_service.dart';
 import '../../themes/vinabike_theme_roles.dart';
 
 /// Las piezas que dibujan un resultado, compartidas por las dos formas en que
@@ -76,6 +80,7 @@ class GlobalSearchResultRow extends StatefulWidget {
     required this.transition,
     required this.isHighlighted,
     required this.onTap,
+    this.previews,
   });
 
   final GlobalSearchEntry entry;
@@ -84,6 +89,10 @@ class GlobalSearchResultRow extends StatefulWidget {
   final Duration transition;
   final bool isHighlighted;
   final VoidCallback onTap;
+
+  /// Quién resuelve la miniatura de un archivo recibido. `null` en pruebas y
+  /// en superficies que no la necesitan: la fila cae al icono.
+  final GlobalSearchPreviews? previews;
 
   @override
   State<GlobalSearchResultRow> createState() => GlobalSearchResultRowState();
@@ -136,12 +145,10 @@ class GlobalSearchResultRowState extends State<GlobalSearchResultRow> {
             ),
             child: Row(
               children: [
-                Icon(
-                  entry.resolvedIcon,
-                  size: 18,
-                  color: selected
-                      ? theme.colorScheme.primary
-                      : theme.colorScheme.onSurfaceVariant,
+                GlobalSearchThumbnail(
+                  entry: entry,
+                  previews: widget.previews,
+                  selected: selected,
                 ),
                 const SizedBox(width: 10),
                 Expanded(
@@ -304,6 +311,105 @@ class GlobalSearchMessage extends StatelessWidget {
           ),
           if (action != null) ...[const SizedBox(height: 10), action!],
         ],
+      ),
+    );
+  }
+}
+
+/// Lo que identifica a la fila de un vistazo: la foto del producto, el logo del
+/// proveedor, la primera página del PDF — y el icono cuando no hay ninguna.
+///
+/// El icono nunca desaparece del todo: es el estado de carga y es el respaldo
+/// cuando la imagen no llega. Así la fila mide siempre lo mismo y la lista no
+/// salta mientras las miniaturas aparecen.
+class GlobalSearchThumbnail extends StatelessWidget {
+  const GlobalSearchThumbnail({
+    super.key,
+    required this.entry,
+    required this.selected,
+    this.previews,
+    this.size = 26,
+  });
+
+  final GlobalSearchEntry entry;
+  final bool selected;
+  final GlobalSearchPreviews? previews;
+  final double size;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final icon = Icon(
+      entry.resolvedIcon,
+      size: 18,
+      color: selected
+          ? theme.colorScheme.primary
+          : theme.colorScheme.onSurfaceVariant,
+    );
+
+    final url = entry.imageUrl;
+    if (url != null && url.isNotEmpty) {
+      return _frame(
+        context,
+        ImageService.buildCachedImage(
+          imageUrl: url,
+          width: size,
+          height: size,
+          fit: BoxFit.cover,
+          placeholder: icon,
+          errorWidget: icon,
+        ),
+      );
+    }
+
+    final attachment = entry.attachment;
+    final previews = this.previews;
+    if (attachment == null ||
+        previews == null ||
+        !GlobalSearchPreviews.canPreview(attachment)) {
+      return SizedBox(width: size, height: size, child: Center(child: icon));
+    }
+
+    return FutureBuilder<Uint8List?>(
+      future: previews.thumbnail(attachment),
+      builder: (context, snapshot) {
+        final bytes = snapshot.data;
+        if (bytes == null || bytes.isEmpty) {
+          return SizedBox(
+            width: size,
+            height: size,
+            child: Center(child: icon),
+          );
+        }
+        return _frame(
+          context,
+          Image.memory(
+            bytes,
+            width: size,
+            height: size,
+            // Una hoja se muestra por arriba: el membrete dice qué documento
+            // es, el centro de la página no dice nada.
+            fit: BoxFit.cover,
+            alignment: entry.attachment!.isPdf
+                ? Alignment.topCenter
+                : Alignment.center,
+            gaplessPlayback: true,
+            errorBuilder: (_, __, ___) => Center(child: icon),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _frame(BuildContext context, Widget child) {
+    final theme = Theme.of(context);
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(kGlobalSearchRowRadius),
+      child: Container(
+        width: size,
+        height: size,
+        color: theme.colorScheme.surfaceContainerHighest,
+        child: child,
       ),
     );
   }

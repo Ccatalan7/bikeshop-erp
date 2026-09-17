@@ -1654,3 +1654,34 @@ porque el error sólo aparece al elegir el archivo.
   nada en el lugar donde el operador mira a ese proveedor todos los días, que es
   la bandeja. Al agregar un dato a una ficha, la pregunta es dónde se representa
   esa entidad en el resto del ERP.
+
+### Una lista se lee por sus imágenes, y una miniatura no puede costar la velocidad (2026-09-17)
+
+Pedido del dueño, literal: *«dale vida»*. Los resultados del buscador eran doce
+filas con el mismo icono gris, y en un catálogo de 1.674 productos —1.374 con
+foto— eso es tirar la información que la tienda ya tiene.
+
+- **La imagen identifica más rápido que el texto.** Reconocer un pedal morado
+  entre cinco «Pedales …» es instantáneo; leer cinco títulos que empiezan igual,
+  no. Donde el dato exista, la fila lo muestra.
+- **El icono no se va: pasa a ser el respaldo.** Es lo que se ve mientras la
+  miniatura llega, lo que queda si no llega, y lo que hace que la fila mida
+  siempre lo mismo. Una lista que cambia de alto cuando cargan las imágenes es
+  peor que una sin imágenes.
+- **Lo privado no entra al índice.** Un archivo de una conversación necesita una
+  autorización que vence en minutos: guardarla sería guardar algo que ya no
+  sirve. Se resuelve cuando la fila se muestra —cinco por grupo, no el índice
+  entero—, se memoriza el resultado **incluido el fracaso** (si no, cada
+  repintado reintenta lo que ya falló) y los pedidos simultáneos del mismo
+  archivo se funden en uno.
+- **Y una miniatura tiene un presupuesto.** La primera página de un PDF hay que
+  dibujarla, lo que obliga a bajar el archivo entero: para un PDF de 8,7 MB eso
+  es cambiar velocidad por adorno en una superficie cuyo valor entero es
+  contestar por tecla. Sobre 4 MB se muestra el icono, que es inmediato y no
+  miente. El tope se fijó con los datos reales, no a ojo: los ocho PDF recibidos
+  promedian 1,3 MB.
+
+Y el defecto que salió al escribir la prueba, que vale para cualquier caché de
+futuros: **`return future` no es `return await future`**. Sin el `await`, la
+excepción nace fuera del `try` que promete no lanzar, y además el fracaso no
+queda registrado, así que se reintenta en cada repintado.

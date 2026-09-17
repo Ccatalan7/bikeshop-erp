@@ -7,6 +7,7 @@ import 'package:provider/provider.dart';
 
 import '../../services/global_search/global_search_controller.dart';
 import '../../services/global_search/global_search_entry.dart';
+import '../../services/global_search/global_search_previews.dart';
 import '../../services/global_search/global_search_index.dart';
 import '../../services/global_search/global_search_menu_source.dart';
 import '../../../modules/messaging/services/messaging_attachment_service.dart';
@@ -188,6 +189,10 @@ class _GlobalSearchPanelState extends State<_GlobalSearchPanel> {
   /// y Enter se atienden *antes* que los atajos de edición de texto de Flutter,
   /// que son ancestros y consumirían ↑/↓.
   late final FocusNode _fieldFocus = FocusNode(onKeyEvent: _onKey);
+
+  /// Las miniaturas de los archivos recibidos. Vive con el panel: sus
+  /// autorizaciones duran minutos y no tiene sentido guardarlas más allá.
+  final GlobalSearchPreviews _previews = GlobalSearchPreviews();
   final ScrollController _scroll = ScrollController();
   late final GlobalSearchController _controller;
 
@@ -262,6 +267,7 @@ class _GlobalSearchPanelState extends State<_GlobalSearchPanel> {
     if (_ownsText) _text.dispose();
     _fieldFocus.dispose();
     _scroll.dispose();
+    _previews.clear();
     super.dispose();
   }
 
@@ -604,6 +610,7 @@ class _GlobalSearchPanelState extends State<_GlobalSearchPanel> {
             height: _rowHeight,
             radius: _rowRadius,
             transition: _fast,
+            previews: _previews,
             isHighlighted: _controller.highlight == cursor++,
             onTap: () => _openResult(entry),
           ),
@@ -645,6 +652,7 @@ class _GlobalSearchPanelState extends State<_GlobalSearchPanel> {
             height: _rowHeight,
             radius: _rowRadius,
             transition: _fast,
+            previews: _previews,
             isHighlighted: isHighlighted,
             onTap: () => _openResult(result.entry),
           ),
